@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use anyharness_contract::v1::PromptInputBlock;
 
 use super::super::model::{
-    ReviewAssignmentRecord, ReviewKind, ReviewModeVerificationStatus, ReviewRunRecord,
+    ReviewAssignmentRecord, ReviewKind, ReviewLaunchVerificationStatus, ReviewRunRecord,
 };
 use super::super::service::ReviewError;
 use super::launch::{
-    build_reviewer_prompt, map_create_session_error, reviewer_system_prompt_append, verify_mode,
+    build_reviewer_prompt, map_create_session_error, reviewer_system_prompt_append,
 };
 use super::ReviewRuntime;
 use crate::domains::sessions::model::SessionMcpBindingPolicy;
@@ -78,8 +78,7 @@ impl ReviewRuntime {
                             &assignment.id,
                             session_id,
                             session_link_id,
-                            previous.actual_mode_id.as_deref(),
-                            previous.mode_verification_status,
+                            previous.launch_verification_status,
                         )
                         .map_err(ReviewError::Internal)?;
                     if !launched {
@@ -100,12 +99,13 @@ impl ReviewRuntime {
         run: &ReviewRunRecord,
         assignment: &ReviewAssignmentRecord,
     ) -> Result<(), ReviewError> {
+        let control_values = assignment.control_values.clone();
         let child = match self.session_runtime.create_durable_session(
             &run.workspace_id,
             &assignment.agent_kind,
             None,
             assignment.model_id.as_deref(),
-            assignment.requested_mode_id.as_deref(),
+            &control_values,
             Some(vec![reviewer_system_prompt_append()]),
             Vec::new(),
             None,
@@ -133,8 +133,7 @@ impl ReviewRuntime {
             &run.parent_session_id,
             &child.id,
             Some(assignment.persona_label.clone()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         ) {
             Ok(link_id) => link_id,
             Err(ReviewError::RetryNotAllowed) => {
@@ -170,8 +169,11 @@ impl ReviewRuntime {
                 return Err(map_create_session_error(error));
             }
         };
-        let actual_mode_id = started.current_mode_id.as_deref();
-        let mode_status = verify_mode(assignment.requested_mode_id.as_deref(), actual_mode_id);
+        let launch_status = if assignment.control_values.is_empty() {
+            ReviewLaunchVerificationStatus::NotChecked
+        } else {
+            ReviewLaunchVerificationStatus::Verified
+        };
         let launched = self
             .service
             .store()
@@ -179,8 +181,7 @@ impl ReviewRuntime {
                 &assignment.id,
                 &started.id,
                 &session_link_id,
-                actual_mode_id,
-                mode_status,
+                launch_status,
             )
             .map_err(ReviewError::Internal)?;
         if !launched {

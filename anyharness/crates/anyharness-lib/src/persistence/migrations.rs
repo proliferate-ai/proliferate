@@ -252,6 +252,14 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0074_opencode_message_ids",
         include_str!("sql/0074_opencode_message_ids.sql"),
     ),
+    (
+        "0075_workspace_checkpoints",
+        include_str!("sql/0075_workspace_checkpoints.sql"),
+    ),
+    (
+        "0076_harness_launch_options",
+        include_str!("sql/0076_harness_launch_options.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

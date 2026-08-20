@@ -17,7 +17,7 @@ describe("review parent materialization", () => {
         prompt: "Find bugs.",
         agentKind: "codex",
         modelId: "gpt-5.5",
-        modeId: "full-access",
+        controlValues: { mode: "full-access" },
       }],
     };
 

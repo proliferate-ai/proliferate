@@ -102,8 +102,7 @@ There are two supported AnyHarness runtime agent inputs:
 - `catalogs/agents/catalog.json` (the lockfile)
   - supported agent families
   - resolved, sha-pinned install `source` per harness role
-  - model/control metadata + static session-display metadata
-  - optional `session.unattendedModeId` for catalog-curated unattended launches
+  - presentation metadata that never asserts executable options
 - `catalogs/agents/registry.json`
   - supported agent families
   - install method/launch metadata (probe-time discovery config)
@@ -115,14 +114,13 @@ Runtime code projects those bundled inputs into target-local surfaces:
 - `anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`
   - trusted built-in `AgentDescriptor` values
 - `anyharness/crates/anyharness-lib/src/domains/agents/catalog/**`
-  - schema, validation, bundled loading, and model/control projections
+  - distribution schema, validation, bundled loading, and install projections
 - `anyharness/crates/anyharness-lib/src/domains/agents/registry/**`
   - schema, validation, bundled loading, and descriptor/auth-slot projections
 
-There is no separate runtime `catalog.rs` source and no split model/launch
-catalog path. Cloud product catalogs may be newer than these bundled runtime
-inputs; AnyHarness still validates creation against what the target runtime can
-actually launch.
+Executable launch options are not projected from either document. The runtime
+probes the installed harness, persists target-scoped observations, and validates
+creation only against that current observed revision.
 
 Both inputs ride the binary: `catalog.json` and `registry.json` are
 `include_str!`'d, so a new document ships iff a new runtime binary ships —
@@ -133,12 +131,9 @@ mailbox request; Desktop gets a new binary via the app bundle. There is no
 live catalog sync: no served catalog version on the heartbeat and no push
 route on the runtime.
 
-The unattended mode is part of the active catalog rather than the trusted
-registry recipe. Catalog validation requires a non-blank value that exists in
-the agent's `mode` control and in every model-specific mode vocabulary where one
-is declared. The resolved launch-options projection carries the active value to
-both local and remote product clients. An absent catalog value is intentional:
-the runtime and product must not invent a permissive fallback for that agent.
+Neither document carries an unattended mode or executable fallback. Product
+consumers preserve exact target-observed control IDs and omission remains
+omission.
 
 ### Resolution Flow
 
@@ -281,7 +276,8 @@ Important install cases:
 Public HTTP routes include:
 
 - `GET /v1/agents`
-- `GET /v1/agents/launch-options`
+- `GET /v1/agents/{kind}/launch-options`
+- `POST /v1/agents/{kind}/launch-options/refresh`
 - `GET /v1/agents/reconcile`
 - `POST /v1/agents/reconcile`
 - `GET /v1/agents/{kind}`
@@ -291,8 +287,6 @@ Public HTTP routes include:
 - `GET /v1/agents/login-terminals/{id}`
 - `DELETE /v1/agents/login-terminals/{id}`
 - `GET /v1/agents/login-terminals/{id}/ws`
-- `GET /v1/agents/{kind}/model-registry`
-- `POST /v1/agents/{kind}/model-registry/refresh`
 
 `login/start` is a compatibility endpoint for older clients that still show a
 command. New local/Desktop clients use `login/terminal`: AnyHarness resolves
@@ -511,7 +505,7 @@ seeded Claude install.
   sha-verified — ACP-registry resolution is probe-time, see "ACP Registry Flow")
 - readiness computation
 - the final resolved launch surface handed to ACP
-- curated provider/model catalogs used by sessions
+- target-observed `HarnessLaunchOptions` used for exact pre-launch validation
 
 ### Agents Does Not Own
 
@@ -524,20 +518,19 @@ seeded Claude install.
 
 ## Important Distinctions
 
-### Registry vs Catalog
+### Distribution vs Launch Options
 
 These are different:
 
-- the agent registry answers “how does this agent install, authenticate, and
-  launch?”
-- the provider catalog answers “what model IDs can the session domain validate
-  and default, and which optional mode may unattended product flows select?”
+- the registry and distribution catalog answer how the harness installs,
+  authenticates, and launches;
+- the target's `HarnessLaunchOptions` answer which exact `modelId` and generic
+  `controlValues` session create may accept now.
 
-For a product flow explicitly marked unattended, a caller-selected mode wins.
-Otherwise the product may use the selected target's projected
-`unattendedModeId` when the selected model supports it. If either the curation or
-support is absent, session creation omits `mode_id` and leaves the agent's normal
-default intact. This does not change ordinary interactive session creation.
+Interactive and unattended callers both preserve their complete opaque
+selection. Session create reloads the target observation, exact-validates it,
+and atomically stores `ResolvedLaunchIntent`. Omitted values stay omitted; no
+catalog default, unattended-mode table, alias, or first option fills them.
 
 ### Native CLI vs Agent Process
 
@@ -575,7 +568,7 @@ Add behavior here when it changes agent availability, for example:
 - a new credential-discovery mechanism
 - a new managed install strategy
 - a new resolved-pin source kind (binary/archive/npm/git) + its probe resolver
-- a new provider/model catalog surface
+- a new launch-probe observation path or presentation-only model decoration
 
 Do not add behavior here when it belongs to:
 

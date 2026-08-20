@@ -8,7 +8,7 @@ import type { CreateEmptySessionWithResolvedConfigOptions } from "#product/hooks
 import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/caller-selected-session-create";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 
-const STORAGE_KEY_PREFIX = "proliferate.pending-empty-session-creations.v1";
+const STORAGE_KEY_PREFIX = "proliferate.pending-empty-session-creations.v2";
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 export interface PendingEmptySessionCreation {
@@ -17,8 +17,7 @@ export interface PendingEmptySessionCreation {
   runtimeSessionId: string;
   agentKind: string;
   modelId: string;
-  modeId: string | null;
-  launchControlValues?: Record<string, string>;
+  launchControlValues: Record<string, string>;
   frozenLiveControlValues: Record<string, string>;
   subagentsEnabled: boolean;
   replacesSessionId: string | null;
@@ -45,8 +44,7 @@ interface PreparePendingEmptySessionCreationInput {
   runtimeSessionId?: string | null;
   agentKind: string;
   modelId: string;
-  modeId: string | null;
-  launchControlValues?: Record<string, string>;
+  launchControlValues: Record<string, string>;
   frozenLiveControlValues: Record<string, string>;
   subagentsEnabled: boolean;
   replacesSessionId?: string | null;
@@ -110,7 +108,6 @@ function normalizeEntry(value: unknown, workspaceId: string): PendingEmptySessio
     || record.agentKind.length === 0
     || typeof record.modelId !== "string"
     || record.modelId.length === 0
-    || !(record.modeId === null || typeof record.modeId === "string")
     || typeof record.subagentsEnabled !== "boolean"
     || !(record.replacesSessionId === null || typeof record.replacesSessionId === "string")
     || typeof record.createdAt !== "number"
@@ -124,8 +121,7 @@ function normalizeEntry(value: unknown, workspaceId: string): PendingEmptySessio
     runtimeSessionId: record.runtimeSessionId,
     agentKind: record.agentKind,
     modelId: record.modelId,
-    modeId: record.modeId,
-    launchControlValues: normalizeLaunchControlValues(record.launchControlValues),
+    launchControlValues: normalizeLaunchControlValues(record.launchControlValues) ?? {},
     frozenLiveControlValues: normalizeLaunchControlValues(record.frozenLiveControlValues) ?? {},
     subagentsEnabled: record.subagentsEnabled,
     replacesSessionId: record.replacesSessionId,
@@ -245,10 +241,7 @@ export function preparePendingEmptySessionCreation(
     runtimeSessionId,
     agentKind: input.agentKind,
     modelId: input.modelId,
-    modeId: input.modeId,
-    ...(input.launchControlValues
-      ? { launchControlValues: { ...input.launchControlValues } }
-      : {}),
+    launchControlValues: { ...input.launchControlValues },
     frozenLiveControlValues: { ...input.frozenLiveControlValues },
     subagentsEnabled: input.subagentsEnabled,
     replacesSessionId: replacedSession?.materializedSessionId
@@ -376,7 +369,6 @@ export async function resumePendingEmptySessionCreations(
         adoptMaterializedSessionId: true,
         agentKind: entry.agentKind,
         modelId: entry.modelId,
-        resolvedModeId: entry.modeId,
         launchControlValues: entry.launchControlValues,
         frozenLiveControlValues: entry.frozenLiveControlValues,
         subagentsEnabled: entry.subagentsEnabled,

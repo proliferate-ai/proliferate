@@ -1,4 +1,4 @@
-const TRAILING_INCOMPLETE_INLINE_LINK = /\[([^\]\n]+)\]\(([^)\n]*)$/;
+import { stabilizeStreamingFileLink } from "./file-link-markdown";
 
 /**
  * Keep a trailing local-file link parseable while its destination is still
@@ -10,32 +10,13 @@ const TRAILING_INCOMPLETE_INLINE_LINK = /\[([^\]\n]+)\]\(([^)\n]*)$/;
  * render copy lets the injected file-link renderer paint the final mention
  * immediately, so later destination chunks update behavior without replacing
  * a long raw path on screen.
+ *
+ * The decision of what counts as a stabilizable tail belongs to the shared
+ * transcript scanner, so streaming and settled repair cannot disagree about
+ * code spans, fences, images, escapes, titles, or nested parentheses. Only an
+ * explicit local-path prefix qualifies: every URI scheme, `file:` included, is
+ * excluded because a scheme is an authority grant rather than a path.
  */
 export function stabilizeStreamingMarkdown(content: string): string {
-  const match = TRAILING_INCOMPLETE_INLINE_LINK.exec(content);
-  if (!match || (match.index > 0 && content[match.index - 1] === "!")) {
-    return content;
-  }
-
-  const destination = match[2]?.trim() ?? "";
-  const unwrappedDestination = destination.startsWith("<")
-    ? destination.slice(1)
-    : destination;
-  if (!looksLikeLocalFileDestination(unwrappedDestination)) {
-    return content;
-  }
-
-  if (destination.startsWith("<") && !destination.endsWith(">")) {
-    return `${content}>)`;
-  }
-  return `${content})`;
-}
-
-function looksLikeLocalFileDestination(destination: string): boolean {
-  return (destination.startsWith("/") && !destination.startsWith("//"))
-    || destination.startsWith("~/")
-    || destination.startsWith("./")
-    || destination.startsWith("../")
-    || destination.startsWith("file:")
-    || /^[a-zA-Z]:[\\/]/.test(destination);
+  return stabilizeStreamingFileLink(content);
 }

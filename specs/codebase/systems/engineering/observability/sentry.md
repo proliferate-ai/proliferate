@@ -10,7 +10,7 @@ provider state and are not repository law.
 | Source component | Applies when | Data and identity | No-op behavior |
 | --- | --- | --- | --- |
 | Server API and server background processes | `TELEMETRY_MODE=hosted_product`, the SDK is installed, and `SENTRY_DSN` is nonempty | Scrubbed exceptions, traces, log breadcrumbs, `proliferate-server` release, environment, `surface=cloud_api`, telemetry mode, user id, and allowlisted request/product correlation tags | Initialization and capture helpers return without sending when any gate is absent. |
-| Desktop renderer | The runtime resolves to `hosted_product`, build/runtime telemetry is not disabled, and `VITE_PROLIFERATE_SENTRY_DSN` is nonempty | Scrubbed React errors, traces, product breadcrumbs, id-only user, Desktop release/environment, surface and telemetry-mode tags, and error replay | Local-dev/self-managed/disabled routing or a missing DSN leaves the renderer SDK uninitialized. |
+| Desktop renderer | The runtime resolves to `hosted_product`, build/runtime telemetry is not disabled, and `VITE_PROLIFERATE_SENTRY_DSN` is nonempty | Scrubbed React errors, traces, product breadcrumbs, id-only user, Desktop release/environment, and surface and telemetry-mode tags | Local-dev/self-managed/disabled routing or a missing DSN leaves the renderer SDK uninitialized. |
 | Desktop native shell | Native telemetry mode is `hosted_product` and `PROLIFERATE_DESKTOP_SENTRY_DSN` is available at runtime or baked into the build | Native tracing failures and stack traces with Desktop-native release/environment and surface/runtime tags | Other modes or a missing DSN retain console/file logging without Sentry. |
 | Hosted Web | Telemetry is not disabled and `VITE_PROLIFERATE_SENTRY_DSN` is nonempty | Scrubbed React errors, traces, breadcrumbs, id-only user, Web release/environment, and `surface=web` | The SDK remains uninitialized when disabled or unconfigured. |
 | Hosted Mobile | Telemetry is not disabled and `EXPO_PUBLIC_PROLIFERATE_SENTRY_DSN` is nonempty | Scrubbed React Native errors, native crashes, traces, breadcrumbs, id-only user, Mobile release/environment, and `surface=mobile` | The SDK remains uninitialized when disabled or unconfigured. |
@@ -20,7 +20,7 @@ provider state and are not repository law.
 Source owners:
 
 ```text
-server/proliferate/integrations/sentry.py
+server/proliferate/integrations/sentry/{__init__,client,privacy}.py
 server/proliferate/middleware/request_telemetry.py
 server/proliferate/middleware/logging.py
 apps/desktop/src/lib/integrations/telemetry/{client,config,sentry,scrub}.ts
@@ -65,9 +65,51 @@ workflow.
 The server, renderer clients, AnyHarness, Worker, and Supervisor disable
 default PII and scrub sensitive keys and values before sending. The client scrubbers remove
 frame source context and variables, redact request bodies/cookies, reduce users
-to `id`, and sanitize URLs, paths, breadcrumbs, transactions, and spans. Server
-scrubbing redacts request data and cookies, removes user IP addresses, and
-sanitizes headers, URLs, messages, breadcrumbs, tags, and extras.
+to `id`, and sanitize URLs, paths, breadcrumbs, transactions, and spans.
+
+The Server is not a scrubber. `sentry/privacy.py` builds a new outbound event
+from a closed catalog of allowed paths, so an unlisted key is structurally
+absent rather than redacted, and no sanitized route, URL, header, or message
+survives at all. Validation runs at two boundaries that see different data:
+
+- **Pre-SDK public ingress** in `sentry/client.py` validates the caller's
+  original Python objects before any SDK call. A user id must be a canonical
+  UUID or the scope user is set to `None`; a tag or extra must match a
+  validated catalog row or it is dropped; a non-`Exception` value becomes a
+  generic `Exception("Unknown error")` rather than being stringified; callers
+  cannot set a fingerprint.
+- **The serialized-callback boundary.** One shared callable is registered as
+  both `before_send` and `before_send_transaction`, and `_project_breadcrumb`
+  as `before_breadcrumb` plus an embedded backstop. These see only the SDK's
+  already-serialized JSON-compatible representation and cannot recover erased
+  Python provenance, so they revalidate everything structurally and fail
+  closed (return `None`) on any unexpected shape.
+
+Attachments have no init kwarg; the event callback clears them by assigning
+`hint["attachments"] = []` on an exact `dict` hint and reading back an exact
+empty list, dropping the event if either step fails. The only emitted
+fingerprint is the adapter-synthesized
+`["billing", "stripe_webhook_drop", <drop_reason>]`.
+
+Initialization installs exactly eight integrations — Atexit, Celery, Dedupe,
+Excepthook, Logging, Threading, Starlette, FastAPI — with
+`default_integrations=False` and `auto_enabling_integrations=False`, and
+disables ambient trace propagation, Spotlight, client reports, session
+tracking, logs, metrics, profiling, gen-AI span streaming, local variables,
+source context, request bodies, and DB/HTTP query-source capture. Middleware
+spans are off on both ASGI integrations. The only five span ops the Server
+produces are `http.server`, `websocket.server`, `queue.task.celery`,
+`queue.process`, and `queue.publish`; `queue.submit.celery` and every
+`middleware.starlette*` op are explicit negatives and never survive.
+
+`environment` is a closed four-value catalog: `trusted-beta`, `staging`,
+`production`, `Production`. Release and environment are passed to `init` as
+exact empty strings when they do not validate. Under the pinned SDK, `""` is
+the no-discovery sentinel: only `None` triggers ambient `get_default_release()`,
+`SENTRY_RELEASE`, `SENTRY_ENVIRONMENT`, and the literal `production` default.
+Both event callbacks then remove the empty-string sentinel, so an unresolvable
+release or environment is absent from the outbound event rather than guessed
+from the host.
 
 Do not send email, display name, prompt or transcript content, terminal output,
 file contents, repository names, raw file paths, request bodies, cookies,
@@ -102,12 +144,12 @@ not successful provider delivery.
 Two exact, bounded fields are deliberately preserved through the scrubbers
 because they are deployment identity, not a raw process-environment map:
 
-- The top-level Sentry `environment` field (for example `production`). Server
-  `_scrub_event` and the shared ProductClient domain `scrubTelemetryEvent`
-  envelope wrapper (used by the Web, Desktop, and Mobile adapters) snapshot only that
-  top-level string, run the recursive scrubber, then restore the snapshot
-  scrubbed as text. Nested `environment`/`env` keys and raw environment maps
-  stay redacted.
+- The top-level Sentry `environment` field (for example `production`). The
+  Server retains it only when it matches the closed four-value catalog. The
+  shared ProductClient domain `scrubTelemetryEvent` envelope wrapper (used by
+  the Web, Desktop, and Mobile adapters) snapshots only that top-level string,
+  runs the recursive scrubber, then restores the snapshot scrubbed as text.
+  Nested `environment`/`env` keys and raw environment maps stay redacted.
 - The `runtime_env` tag on Worker and Supervisor events, whose only allowed
   live value is `e2b`. Every other env-like tag key stays redacted.
 
@@ -115,22 +157,22 @@ Outside the bounded handled-incident contract above, nothing beyond user ID,
 sandbox ID, target ID, bounded runtime environment, deployment environment,
 release version, and source revision is added to any event.
 
-Replay defaults are deliberately narrow:
+Replay behavior is deliberately narrow:
 
 - Web and Mobile set normal and error replay rates to zero. Mobile also
   disables screenshot and view-hierarchy attachment.
-- Desktop renderer sets normal session replay to zero. Error replay uses
-  `VITE_PROLIFERATE_SENTRY_REPLAY_ON_ERROR_SAMPLE_RATE` (default `1.0`) only
-  when hosted vendor telemetry is enabled; all text and inputs are masked and
-  `[data-telemetry-block]` / `[data-telemetry-mask]` are honored.
+- Desktop renderer replay is source-disabled and absent; no build or runtime
+  configuration can enable it. Re-enablement requires a separately reviewed
+  synthetic privacy proof of the exact route/surface block-and-mask policy,
+  metadata policy, provider arrival, and absence of prompt, transcript,
+  terminal, file, repository, path, token, workspace, session, and workflow
+  identifiers.
 - Server and Rust runtime components do not initialize a replay integration.
 
-Known current privacy gaps: Desktop-native attaches stack traces but does not
-install an explicit before-send event/breadcrumb scrubber, and Desktop renderer
-error replay can retain identifier-bearing route metadata despite text/input
-masking. Callers must keep user content and secrets out of tracing fields.
-AnyHarness, Worker, and Supervisor do have explicit event, breadcrumb, and log
-scrubbers.
+The known current privacy gap is that Desktop-native attaches stack traces but
+does not install an explicit before-send event/breadcrumb scrubber. Callers
+must keep user content and secrets out of tracing fields. AnyHarness, Worker,
+and Supervisor do have explicit event, breadcrumb, and log scrubbers.
 
 ## Correlation
 
@@ -199,19 +241,22 @@ what actually happened, not by convenience — do not `raise` to flag a non-fail
 | Situation | Use | Effect |
 | --- | --- | --- |
 | The operation genuinely failed | let the exception propagate | auto-captured as a `proliferate-server` issue |
-| An anomaly the user didn't feel — latency budget exceeded, invariant violated, unexpected-but-recovered branch | `capture_server_sentry_exception(..., level="warning", fingerprint=[...])` | tracked issue, request still succeeds |
+| An anomaly the user didn't feel — latency budget exceeded, invariant violated, unexpected-but-recovered branch | `capture_server_sentry_exception(..., level="warning", tags={"domain": ..., "action": ...})` | tracked issue, request still succeeds |
 | A page-worthy "must never happen" invariant | `report_critical(...)` | fatal Sentry event **and** the `CRITICAL_FAILURE` log marker that drives the Grafana/CloudWatch alert path |
 
 Conventions that keep issues clean and countable:
 
-- **Set a stable `fingerprint`** for any recurring anomaly. It is the dedup key:
-  one issue accrues occurrences (with user/release/timing) instead of spawning
-  thousands. This — not a metric counter — is how you "count" an anomaly.
+- **Grouping is the exception type plus the catalog tags.** Callers cannot set
+  a fingerprint on the Server; the only synthesized one is the Stripe
+  webhook-drop key. Raise a distinct exception type for a distinct anomaly so
+  one issue accrues occurrences instead of spawning thousands.
 - **Emit on threshold, not per call.** For latency, measure and emit only when a
   budget is exceeded; the budget belongs in code, not in an alert rule.
-- **Tag consistently** so the tracker and rules can slice: `anomaly=<slug>`
-  (e.g. `latency_budget`, `invariant_violation`), `surface=<area>`. Put bounded
-  diagnostic scalars (elapsed_ms, budget_ms, ids) in `extras`.
+- **Tag and extra keys come from the closed catalog** in `sentry/privacy.py`
+  (`domain`, `action`, and the other validated rows). `anomaly`, `elapsed_ms`,
+  and `budget_ms` are not catalog keys and are removed in transit. Surfacing a
+  new slice means adding a validated row with a bounded validator and a test,
+  not passing a new key at the call site.
 - Obey [Privacy and replay](#privacy-and-replay): tags/extras carry identifiers
   and bounded scalars, never message/prompt/transcript content or secrets.
 

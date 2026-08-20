@@ -8,5 +8,5 @@
   },
   "desiredTopology": null,
   "supervisorBridge": null,
-  "modelSnapshotUploadAllowed": true
+  "launchOptionsUploadAllowed": true
 }

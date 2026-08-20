@@ -15,7 +15,6 @@ interface MaterializedCoworkSessionRecordInput {
   workspaceId: string;
   fallbackAgentKind: string;
   fallbackModelId: string;
-  fallbackModeId: string | null;
   fallbackTitle: string | null;
 }
 
@@ -25,16 +24,11 @@ interface RecordCreatedCoworkSessionInput {
   workspaceId: string;
   agentKind: string;
   modelId: string;
-  modeId: string | null;
 }
 
 function materializedCoworkSessionRecord(
   input: MaterializedCoworkSessionRecordInput,
 ): SessionRuntimeRecord {
-  const modeId =
-    input.session.liveConfig?.normalizedControls.mode?.currentValue
-    ?? input.session.modeId
-    ?? input.fallbackModeId;
   const record = createEmptySessionRecord(
     input.clientSessionId,
     input.session.agentKind || input.fallbackAgentKind,
@@ -42,7 +36,6 @@ function materializedCoworkSessionRecord(
       workspaceId: input.workspaceId,
       materializedSessionId: input.session.id,
       modelId: input.session.modelId ?? input.fallbackModelId,
-      modeId,
       title: input.session.title ?? input.fallbackTitle,
       actionCapabilities: input.session.actionCapabilities,
       liveConfig: input.session.liveConfig ?? null,
@@ -72,7 +65,6 @@ export function recordCreatedCoworkSession({
   workspaceId,
   agentKind,
   modelId,
-  modeId,
 }: RecordCreatedCoworkSessionInput): void {
   if (projectedSessionId) {
     const projectedRecord = getSessionRecord(projectedSessionId);
@@ -82,7 +74,6 @@ export function recordCreatedCoworkSession({
       workspaceId,
       fallbackAgentKind: agentKind,
       fallbackModelId: modelId,
-      fallbackModeId: modeId,
       fallbackTitle: projectedRecord?.title ?? modelId,
     });
     materializeSessionRecord(projectedSessionId, launchedSession.id, record);
@@ -100,7 +91,6 @@ export function recordCreatedCoworkSession({
       workspaceId,
       fallbackAgentKind: agentKind,
       fallbackModelId: modelId,
-      fallbackModeId: modeId,
       fallbackTitle: modelId,
     }),
   );

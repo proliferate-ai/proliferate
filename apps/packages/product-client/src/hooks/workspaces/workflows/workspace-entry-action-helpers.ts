@@ -91,7 +91,6 @@ function displayTitleForPendingSession(agentKind: string, modelId: string): stri
 export function buildPendingInitialSession(input: {
   agentKind: string | null | undefined;
   modelId: string | null | undefined;
-  modeId?: string | null;
   launchControlValues?: Record<string, string>;
   displayTitle?: string | null;
 }): PendingWorkspaceInitialSession | null {
@@ -105,8 +104,7 @@ export function buildPendingInitialSession(input: {
     kind: "session",
     agentKind,
     modelId,
-    modeId: input.modeId ?? null,
-    launchControlValues: input.launchControlValues,
+    launchControlValues: { ...(input.launchControlValues ?? {}) },
     displayTitle: input.displayTitle ?? displayTitleForPendingSession(agentKind, modelId),
   };
 }

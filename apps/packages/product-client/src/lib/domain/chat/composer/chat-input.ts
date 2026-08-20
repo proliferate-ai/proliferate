@@ -38,10 +38,6 @@ interface NormalizedModeControlLike {
 }
 
 interface ChatInputActiveSlotLike {
-  modeId?: string | null;
-  transcript?: {
-    currentModeId?: string | null;
-  } | null;
   liveConfig?: {
     normalizedControls?: {
       mode?: NormalizedModeControlLike | null;
@@ -231,8 +227,6 @@ export function resolveCurrentModeLabel(
 ): string | null {
   const currentModeId =
     activeSlot?.liveConfig?.normalizedControls?.mode?.currentValue
-    ?? activeSlot?.modeId
-    ?? activeSlot?.transcript?.currentModeId
     ?? null;
   if (!currentModeId) {
     return null;

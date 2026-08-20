@@ -28,13 +28,9 @@ import type { PlannedCellV1 } from "../runner/result.js";
  * or omitted harness. This remains a legacy diagnostic scenario; it does not
  * claim canonical LOCAL-2 or any target-manifest row.
  *
- * Model-set resolution is catalog-driven, Anthropic-family only for now (per
- * the build task): `catalogHarnesses()` below reads `catalogs/agents/catalog.json`
- * and returns, for each cataloged harness, its cheapest model whose
- * `availability` includes an Anthropic source (`anthropic-api` /
- * `anthropic-oauth` / `bedrock`) — `undefined` when a harness has no such
- * model yet (Codex/Gemini CLI/Grok need their own provider family's key,
- * which does not exist yet). A harness with no compatible model is an
+ * Model-set resolution reads each harness's target-observed launch options.
+ * The distribution catalog contributes only the installed version pin used
+ * by the release assertion. A harness with no compatible observed model is an
  * explicit `blocked` child; a real turn/install/reopen failure is an explicit
  * `failed` child.
  *
@@ -66,7 +62,7 @@ export const t3Chat1: MatrixScenarioDefinition = {
     const harness = cell.dimensions.harness;
     return [
       {
-        description: `[${harness}] resolve cheapest Anthropic-family model from catalogs/agents/catalog.json (blocked child if none)`,
+        description: `[${harness}] resolve cheapest observed Anthropic-family model from target launch options (blocked child if none)`,
       },
       {
         description: `[${harness}] assert installed CLI version == catalog pin (before chat), ${
@@ -315,15 +311,10 @@ export async function withGatewayProbedCandidates(
   return [...new Set(merged)];
 }
 
-const ANTHROPIC_AVAILABILITY_SOURCES = new Set(["anthropic-api", "anthropic-oauth", "bedrock"]);
-
 interface CatalogShape {
   agents?: Array<{
     kind?: string;
     harness?: { native?: { version?: string }; agentProcess?: { version?: string } };
-    session?: {
-      models?: Array<{ id: string; availability?: { anyOf?: string[] } }>;
-    };
   }>;
 }
 
@@ -333,42 +324,28 @@ async function readCatalog(): Promise<CatalogShape> {
 }
 
 /**
- * Reads catalogs/agents/catalog.json and returns, per requested harness kind,
- * its cheapest model with an Anthropic-family availability source — the
- * catalog-driven resolution named in the scenario contract. "Cheapest" reads
- * the catalog's own declared order within `session.models[]` (first
- * Anthropic-eligible entry with `defaultVisible` favoring the smallest/cheap
- * tier by convention — `haiku` sorts first for claude in the current
- * catalog); this is intentionally simple rather than parsing $/Mtok pricing
- * strings, and returns the same shape regardless.
+ * Returns each requested harness's observed model candidates. The static
+ * catalog is consulted only for the install pin; it never authorizes a model.
  */
 export async function catalogHarnesses(
   requestedHarnesses: readonly string[],
 ): Promise<Map<string, HarnessModelChoice>> {
   const catalog = await readCatalog();
+  const runtimeUrl = process.env.RELEASE_E2E_LOCAL_RUNTIME_URL ?? DEFAULT_LOCAL_RUNTIME_URL;
+  const client = new LocalRuntimeClient({ baseUrl: runtimeUrl });
+  const observed = new Map(
+    (await client.getAgentLaunchOptions()).map((agent) => [agent.kind, agent.models]),
+  );
 
   const result = new Map<string, HarnessModelChoice>();
   for (const agent of catalog.agents ?? []) {
     if (!agent.kind || !requestedHarnesses.includes(agent.kind)) {
       continue;
     }
-    const models = agent.session?.models ?? [];
-    const hasAnthropicAvailability = (model: { availability?: { anyOf?: string[] } }): boolean =>
-      (model.availability?.anyOf ?? []).some((source) => ANTHROPIC_AVAILABILITY_SOURCES.has(source));
-    // `availability.anyOf` names an *auth mode*, not a model's provider — for
-    // some harnesses (codex) a non-Anthropic model can carry an
-    // "anthropic-oauth"-named source because that auth mode's subscription
-    // grants access to it too (found running this catalog for real,
-    // 2026-07-08: codex's list otherwise includes `openai.gpt-5.5` etc.).
-    // Claude Code's own bare option ids ("haiku"/"sonnet"/"opus"/"default")
-    // never contain the word "claude", so the harness's own native models
-    // are trusted by availability alone; every other harness additionally
-    // requires the id to name a Claude model (e.g. opencode's
-    // "anthropic/claude-...").
-    const isAnthropicModel = (model: { id: string; availability?: { anyOf?: string[] } }): boolean =>
-      hasAnthropicAvailability(model) && (agent.kind === "claude" || /claude/i.test(model.id));
-
-    const anthropicModels = models.filter(isAnthropicModel);
+    const models = observed.get(agent.kind) ?? [];
+    const anthropicModels = models.filter((model) => (
+      agent.kind === "claude" || /anthropic|claude/i.test(model.id)
+    ));
     if (anthropicModels.length === 0) {
       continue;
     }

@@ -1,133 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
-import {
-  buildHomeModeControlDescriptor,
-  buildHomeSessionConfigControls,
-} from "#product/lib/domain/home/home-composer-controls";
-
-const CODEX_ACCESS_MODES = [
-  {
-    value: "auto",
-    label: "Auto",
-    icon: "edit" as const,
-    isDefault: true,
-  },
-  {
-    value: "full-access",
-    label: "Full Access",
-    icon: "zap" as const,
-  },
-];
+import { buildHomeSessionConfigControls } from "#product/lib/domain/home/home-composer-controls";
 
 describe("home composer controls", () => {
-  it("uses the supplied access label without changing create-time mode semantics", () => {
-    const descriptor = buildHomeModeControlDescriptor({
-      modes: CODEX_ACCESS_MODES,
-      selectedModeId: "auto",
-      label: "Permissions",
-      onSelect: vi.fn(),
-    });
-
-    expect(descriptor).toMatchObject({
-      key: "mode",
-      rawConfigId: "mode",
-      label: "Permissions",
-      options: [
-        { value: "auto", selected: true },
-        { value: "full-access", selected: false },
-      ],
-    });
-  });
-
-  it("keeps Codex collaboration and access controls independent for repository launches", () => {
-    const collaborationMode = descriptor({
+  it("preserves every target-observed control without singleton mode handling", () => {
+    const access = descriptor({ key: "mode", label: "Access" });
+    const collaboration = descriptor({
       key: "collaboration_mode",
-      label: "Collaboration Mode",
-      options: [
-        { value: "default", label: "Default", selected: true },
-        { value: "plan", label: "Plan", selected: false },
-      ],
+      label: "Collaboration",
     });
+    const unknown = descriptor({ key: "unknown", label: "New upstream control" });
 
     expect(buildHomeSessionConfigControls({
-      destination: "repository",
-      agentKind: "codex",
-      modes: CODEX_ACCESS_MODES,
-      selectedModeId: "auto",
-      launchControls: [collaborationMode],
-      onSelectMode: vi.fn(),
-    })).toMatchObject([
-      {
-        key: "mode",
-        label: "Permissions",
-        options: [
-          { value: "auto", selected: true },
-          { value: "full-access", selected: false },
-        ],
-      },
-      {
-        key: "collaboration_mode",
-        options: [
-          { value: "default", selected: true },
-          { value: "plan", selected: false },
-        ],
-      },
-    ]);
-  });
-
-  it("labels Codex access mode as permissions before collaboration mode is available", () => {
-    expect(buildHomeSessionConfigControls({
-      destination: "repository",
-      agentKind: "codex",
-      modes: CODEX_ACCESS_MODES,
-      selectedModeId: "auto",
-      launchControls: [],
-      onSelectMode: vi.fn(),
-    })).toMatchObject([
-      {
-        key: "mode",
-        label: "Permissions",
-      },
-    ]);
-  });
-
-  it("hides Cowork permission mode while retaining independent collaboration mode", () => {
-    const collaborationMode = descriptor({
-      key: "collaboration_mode",
-      label: "Collaboration Mode",
-    });
-    const permissionMode = descriptor({ key: "mode", label: "Permissions" });
-    const effort = descriptor({ key: "effort", label: "Reasoning effort" });
-
-    expect(buildHomeSessionConfigControls({
-      destination: "cowork",
-      agentKind: "codex",
-      modes: CODEX_ACCESS_MODES,
-      selectedModeId: "auto",
-      launchControls: [collaborationMode, permissionMode, effort],
-      onSelectMode: vi.fn(),
-    })).toEqual([collaborationMode, effort]);
+      launchControls: [access, collaboration, unknown],
+    })).toEqual([access, collaboration, unknown]);
   });
 });
 
 function descriptor({
   key,
   label,
-  options = [],
 }: {
-  key: LiveSessionControlDescriptor["key"];
+  key: string;
   label: string;
-  options?: LiveSessionControlDescriptor["options"];
 }): LiveSessionControlDescriptor {
   return {
-    key,
+    key: key as LiveSessionControlDescriptor["key"],
     label,
     detail: null,
     rawConfigId: key,
     settable: true,
     pendingState: null,
     kind: "select",
-    options,
+    options: [],
     onSelect: vi.fn(),
   };
 }

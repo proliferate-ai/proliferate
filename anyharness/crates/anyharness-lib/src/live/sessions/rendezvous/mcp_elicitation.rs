@@ -18,6 +18,8 @@ mod normalize;
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaudeMcpElicitationExtParams {
+    #[serde(default)]
+    pub session_id: Option<String>,
     pub server_name: String,
     pub message: String,
     #[serde(default)]
@@ -405,6 +407,7 @@ mod tests {
     #[test]
     fn normalizes_claude_elicitation_to_shared_payload() {
         let normalized = normalize_claude_mcp_elicitation(ClaudeMcpElicitationExtParams {
+            session_id: None,
             server_name: "calendar".to_string(),
             message: "Pick a calendar".to_string(),
             mode: Some("form".to_string()),

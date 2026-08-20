@@ -224,7 +224,7 @@ pub async fn handoff_plan(
     assert_workspace_mutable(&state, &workspace_id)?;
     state
         .plan_runtime
-        .handoff(&workspace_id, &plan_id, handoff_plan_input(req))
+        .handoff(&workspace_id, &plan_id, handoff_plan_input(req)?)
         .await
         .map(|outcome| Json(handoff_plan_response(outcome)))
         .map_err(map_handoff_error)
@@ -243,15 +243,30 @@ fn plan_decision_response(outcome: PlanDecisionOutcome) -> PlanDecisionResponse 
     PlanDecisionResponse { plan: outcome.plan }
 }
 
-fn handoff_plan_input(request: HandoffPlanRequest) -> PlanHandoffInput {
-    PlanHandoffInput {
+fn handoff_plan_input(request: HandoffPlanRequest) -> Result<PlanHandoffInput, ApiError> {
+    let mut control_values = request.control_values;
+    if let Some(mode_id) = request.mode_id {
+        match control_values.get("mode") {
+            Some(value) if value != &mode_id => {
+                return Err(ApiError::bad_request(
+                    "modeId conflicts with controlValues.mode",
+                    "PLAN_HANDOFF_LAUNCH_VALUE_UNSUPPORTED",
+                ));
+            }
+            Some(_) => {}
+            None => {
+                control_values.insert("mode".to_string(), mode_id);
+            }
+        }
+    }
+    Ok(PlanHandoffInput {
         target_session_id: request.target_session_id,
         agent_kind: request.agent_kind,
         model_id: request.model_id,
-        mode_id: request.mode_id,
+        control_values,
         instruction: request.instruction,
         origin: request.origin.map(OriginContext::from_contract),
-    }
+    })
 }
 
 fn handoff_plan_response(outcome: PlanHandoffOutcome) -> HandoffPlanResponse {
@@ -324,5 +339,48 @@ fn map_handoff_error(error: HandoffPlanError) -> ApiError {
             tracing::error!(error = ?error, "failed to send proposed-plan handoff prompt");
             ApiError::internal("Failed to send handoff prompt")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    fn handoff_request() -> HandoffPlanRequest {
+        HandoffPlanRequest {
+            target_session_id: None,
+            agent_kind: Some("codex".to_string()),
+            model_id: Some("gpt-5.6-sol".to_string()),
+            control_values: BTreeMap::new(),
+            mode_id: None,
+            instruction: None,
+            origin: None,
+        }
+    }
+
+    #[test]
+    fn plan_handoff_translates_legacy_mode_only_at_http_boundary() {
+        let mut request = handoff_request();
+        request.mode_id = Some("agent-full-access".to_string());
+
+        let input = handoff_plan_input(request).expect("translate legacy mode");
+
+        assert_eq!(
+            input.control_values,
+            BTreeMap::from([("mode".to_string(), "agent-full-access".to_string())])
+        );
+    }
+
+    #[test]
+    fn plan_handoff_rejects_conflicting_legacy_and_generic_mode() {
+        let mut request = handoff_request();
+        request.mode_id = Some("agent".to_string());
+        request
+            .control_values
+            .insert("mode".to_string(), "agent-full-access".to_string());
+
+        assert!(handoff_plan_input(request).is_err());
     }
 }

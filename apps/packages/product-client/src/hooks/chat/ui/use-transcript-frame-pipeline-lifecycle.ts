@@ -1,27 +1,28 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import type { ContentHeightScrollAnchor } from "#product/hooks/chat/ui/transcript-row-list-model";
-import type { TranscriptFramePipeline } from "#product/hooks/chat/ui/transcript-frame-pipeline";
+import type {
+  TranscriptFramePassOutcome,
+  TranscriptFramePipeline,
+} from "#product/hooks/chat/ui/transcript-frame-pipeline";
 import type { TranscriptRestoreResolution } from "#product/hooks/chat/ui/transcript-reading-position-store";
 import { resolveEasedFollowStep } from "#product/hooks/chat/ui/transcript-eased-follow";
 
-// While an above-change compensation anchor is live, each estimate-to-measured
-// correction of a freshly-prepended older row grows the total above the reader
-// and must be absorbed into scrollTop. On a slow/CPU-throttled runner those
-// corrections do not all land inside the fixed initial deadline
-// (ABOVE_CHANGE_COMPENSATION_MAX_MS in use-transcript-stick-to-bottom.ts) — they
-// trickle in over a second or more, spaced out by hundreds of ms. So instead of
-// letting the initial deadline end the window while corrections are still
-// arriving, extend it by this quiet window every time a fresh growth is observed
-// (see runFramePass). The window therefore stays open as long as the prepended
-// rows keep correcting taller, and closes only once they go quiet — the fix for
-// the r5 prepend under-compensation (chromium scrollTop 120 vs > 150 / delta 528
-// vs > 576 on the throttled runner, and the severe near-top landing).
+// Each fresh measured-height growth extends prepend compensation by one quiet
+// window so throttled corrections remain anchored after the initial deadline.
 const ABOVE_CHANGE_COMPENSATION_QUIET_EXTENSION_MS = 1_000;
-// Absolute ceiling on the extended window, measured from the anchor's first
-// frame pass, so a pathological never-quiet growth source can never hold the
-// reader anchored forever and later below-the-viewport growth is eventually free
-// to move it again.
+// A pathological never-quiet source must still release the reader. Also the
+// bound on the seat-proof rule: native scroll activity can extend seat
+// ownership only up to this ceiling, never indefinitely.
 const ABOVE_CHANGE_COMPENSATION_ABSOLUTE_MAX_MS = 3_000;
+
+// PREPEND SEAT LIFECYCLE CONTRACT. The seat a non-cancelable prepend owner
+// establishes is acknowledged only when a writer pass observes it HELD in a
+// frame that saw NO native scroll activity. A held read taken while a native
+// scroll is still delivering proves only the main-thread DOM value at that
+// callback: on WebKit a wheel/momentum continuation queued BEFORE the prepend
+// keeps eroding scrollTop afterwards. Erosion is re-corrected through the one
+// existing writer (the corrective continuation re-arms; no second writer, no
+// timer, no retry policy), bounded by the two deadlines above.
 
 export interface UseTranscriptFramePipelineLifecycleOptions {
   /** The single owned per-frame pipeline instance (stable ref). */
@@ -29,16 +30,25 @@ export interface UseTranscriptFramePipelineLifecycleOptions {
   scrollRef: RefObject<HTMLDivElement | null>;
   /** Live pin state. */
   pinnedRef: RefObject<boolean>;
-  /** Active above-change compensation anchor, applied while unpinned + within deadline. */
+  /** Active above-change compensation anchor, including any owed seat acknowledgment. */
   compensationAnchorRef: RefObject<ContentHeightScrollAnchor | null>;
   /**
-   * Deadline (interactionNow ms) past which the compensation anchor is stale.
-   * The single frame pass compensates every measurement correction that arrives
-   * before it — whether the eager glue window is still open or a later, isolated
-   * ResizeObserver growth drives the pass — and clears the anchor once the
-   * deadline passes so ordinary below-the-viewport growth can move the reader.
+   * Growth deadline (interactionNow ms). A displaced seat retains ownership
+   * after this deadline until a later pass acknowledges it or the absolute cap.
    */
   compensationDeadlineRef: RefObject<number>;
+  /** Lifecycle-owned absolute ceiling, keyed to the active anchor. */
+  compensationAbsoluteDeadlineRef: RefObject<{
+    anchor: ContentHeightScrollAnchor | null;
+    deadline: number;
+  }>;
+  /**
+   * Count of scroll events the engine could NOT attribute to one of its own
+   * writes, i.e. observed native scroll activity. Read AND reset by every
+   * writer pass: nonzero means a native scroll was still delivering as of this
+   * frame, so a seated read is not yet seat proof (see the contract above).
+   */
+  nativeScrollActivityRef: RefObject<number>;
   /**
    * FR-2 restore (rung 6): while unpinned on a finalized-session revisit, this
    * resolves the saved reading anchor to a scrollTop (or null when the saved
@@ -87,11 +97,8 @@ export interface UseTranscriptFramePipelineLifecycleOptions {
 
 /**
  * Wire the frame pipeline's single writer and its lifecycle. The writer is the
- * one snap/compensation pass the pipeline drives each frame: snap to the follow
- * target while pinned; apply the above-change compensation delta while unpinned
- * with a live anchor (until its deadline lapses); otherwise do nothing. Every
- * write still flows through
- * the rung-3 ownership markers (WHO wrote) — the pipeline owns only WHEN.
+ * one snap/compensation pass the pipeline drives each frame. Every write still
+ * flows through rung-3 ownership markers (WHO); the pipeline owns only WHEN.
  *
  * Also owns the tab/window resume glue (re-show while pinned collapses the
  * suspended-then-resumed measurement backlog into one jump) and disposal.
@@ -102,6 +109,8 @@ export function useTranscriptFramePipelineLifecycle({
   pinnedRef,
   compensationAnchorRef,
   compensationDeadlineRef,
+  compensationAbsoluteDeadlineRef,
+  nativeScrollActivityRef,
   restoreResolverRef,
   restoreDeadlineRef,
   scrollToBottom,
@@ -138,19 +147,25 @@ export function useTranscriptFramePipelineLifecycle({
     everMounted: boolean;
   }>({ resolver: null, everMounted: false });
 
-  const runFramePass = useCallback(() => {
+  const runFramePass = useCallback((): TranscriptFramePassOutcome => {
     const viewport = scrollRef.current;
+    // Consumed by EVERY pass, not just the compensation branch, so activity
+    // seen while pinned or restoring cannot leak into a later seat proof.
+    const nativeScrollSinceLastPass = nativeScrollActivityRef.current > 0;
+    nativeScrollActivityRef.current = 0;
     if (!viewport) {
-      return;
+      return "settled";
     }
     if (pinnedRef.current) {
+      compensationAnchorRef.current = null;
+      compensationAbsoluteDeadlineRef.current = { anchor: null, deadline: 0 };
       // PRO-168 (rung 12, Q16): flag off takes the original instant path
       // verbatim — byte-identical to pre-rung-12 v1. Flag on substitutes the
       // eased writer, which still writes exclusively through
       // `notifyProgrammaticScroll` (classification is untouched, FR-1).
       if (!easedFollowEnabled) {
         scrollToBottom();
-        return;
+        return "settled";
       }
       const targetTop = resolveFollowTargetTop(viewport);
       const step = resolveEasedFollowStep(viewport.scrollTop, targetTop);
@@ -160,7 +175,7 @@ export function useTranscriptFramePipelineLifecycle({
           viewport.scrollTop = step.nextTop;
         });
       }
-      return;
+      return "settled";
     }
     // PRO-168 (rung 12): unpinned takes over from here; the eased writer's
     // pending flag only ever describes a PINNED catch-up, so clear it rather
@@ -219,20 +234,15 @@ export function useTranscriptFramePipelineLifecycle({
             });
           }
         }
-        return;
+        return "settled";
       }
     }
     const anchor = compensationAnchorRef.current;
     if (!anchor) {
-      return;
+      compensationAbsoluteDeadlineRef.current = { anchor: null, deadline: 0 };
+      return "settled";
     }
-    // Compensate every measurement correction until the deadline, whichever pass
-    // (eager glue tick or a later isolated ResizeObserver growth) drives it. The
-    // freshly-mounted older rows keep correcting their estimated heights taller
-    // for several frames after a prepend — more, and more spread out, on a slow
-    // runner — often past the forced-glue window's quiet-frame end. Gating on the
-    // deadline instead of `isGluing` keeps this single writer absorbing the full
-    // added-above height so the reading row stays fixed on every engine.
+    // Glue ticks and isolated ResizeObserver passes share this same writer.
     const now = typeof performance === "undefined" ? Date.now() : performance.now();
     // Rung 5: composition-derived estimates plus the write-through
     // measured-height cache make the virtualizer's reported total scrollHeight
@@ -252,6 +262,10 @@ export function useTranscriptFramePipelineLifecycle({
       floor.anchor = anchor;
       floor.maxScrollHeight = anchor.scrollHeight;
       floor.absoluteDeadline = now + ABOVE_CHANGE_COMPENSATION_ABSOLUTE_MAX_MS;
+      compensationAbsoluteDeadlineRef.current = {
+        anchor,
+        deadline: floor.absoluteDeadline,
+      };
     }
     // Where the reading row already belongs, computed against the max observed
     // SO FAR (before this pass folds in any new growth). The reader is DISPLACED
@@ -263,15 +277,9 @@ export function useTranscriptFramePipelineLifecycle({
     const seatedTarget = anchor.scrollTop + (floor.maxScrollHeight - anchor.scrollHeight);
     const displacedAboveTarget = seatedTarget - viewport.scrollTop > 1;
     if (now >= compensationDeadlineRef.current) {
-      // Release the anchor once the growth deadline lapses — UNLESS the reader
-      // is still displaced above the already-established seat. On a slow
-      // runner a late downward clamp can land in the same window the growth
-      // deadline lapses; releasing silently then strands the reader near the
-      // freshly-prepended top (CI webkit prepend "scrollTop Received 0"). Emit
-      // one last forward-only corrective write against the established floor
-      // BEFORE releasing, whether or not we are still within the absolute
-      // ceiling, so a late dip can never leave the reader displaced merely
-      // because the window closed on the same tick that observed it.
+      // An ordinary-deadline correction retains the anchor until a later pass
+      // observes the seat held. The absolute ceiling still releases immediately.
+      const topBeforeCorrection = viewport.scrollTop;
       if (displacedAboveTarget) {
         notifyProgrammaticScroll(() => {
           if (seatedTarget > viewport.scrollTop) {
@@ -279,8 +287,24 @@ export function useTranscriptFramePipelineLifecycle({
           }
         });
       }
-      compensationAnchorRef.current = null;
-      return;
+      // Seat proof (module contract). Releasing on a seated read taken while a
+      // momentum continuation is still delivering is the shared WebKit prepend
+      // regression: the release makes the owner dormant AND drops the
+      // non-cancelable protection that would have re-armed glue from the
+      // erosion's later events, so the reader rides the decay to the top.
+      const unproven = displacedAboveTarget || nativeScrollSinceLastPass;
+      const retained = unproven && now < floor.absoluteDeadline;
+      if (!retained) {
+        compensationAnchorRef.current = null;
+        compensationAbsoluteDeadlineRef.current = { anchor: null, deadline: 0 };
+      }
+      // A retained unproven seat is NOT settled even with no read-back advance:
+      // a native scroll's latch (or a dip's clamp) can swallow the write, and
+      // no later scroll/resize signal is guaranteed. Stay scheduled until a
+      // scroll-quiet pass observes the seat held, or the ceiling releases.
+      return viewport.scrollTop > topBeforeCorrection || retained
+        ? "corrective_position_write"
+        : "settled";
     }
     // A fresh above-anchor growth this pass is a late estimate-to-measured
     // correction still arriving; keep the compensation window open past the
@@ -298,6 +322,7 @@ export function useTranscriptFramePipelineLifecycle({
     }
     const effectiveScrollHeight = floor.maxScrollHeight;
     const target = anchor.scrollTop + (effectiveScrollHeight - anchor.scrollHeight);
+    const topBeforeCorrection = viewport.scrollTop;
     notifyProgrammaticScroll(() => {
       // Above-change compensation only ever absorbs growth ABOVE the reader, so
       // the anchored scrollTop moves DOWN (increases) or holds as those rows
@@ -313,9 +338,20 @@ export function useTranscriptFramePipelineLifecycle({
         viewport.scrollTop = target;
       }
     });
+    // Same seat-proof rule as the deadline branch: a write left short of the
+    // seat, or a seated read in a frame that saw native scroll activity, has
+    // not settled. Corrective keeps the one writer scheduled one more frame so
+    // erosion landing after this callback is re-corrected by the same writer.
+    return viewport.scrollTop > topBeforeCorrection
+      || target - viewport.scrollTop > 1
+      || nativeScrollSinceLastPass
+      ? "corrective_position_write"
+      : "settled";
   }, [
     compensationAnchorRef,
+    compensationAbsoluteDeadlineRef,
     compensationDeadlineRef,
+    nativeScrollActivityRef,
     restoreResolverRef,
     restoreDeadlineRef,
     notifyProgrammaticScroll,

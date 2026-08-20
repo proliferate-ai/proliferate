@@ -94,25 +94,25 @@ vi.mock("#product/stores/sessions/session-directory-store", () => {
 });
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
-  useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
-    reference: {
-      rawPath,
-      path: rawPath,
-      line: null,
-      column: null,
-      absolutePath: `/repo/${rawPath}`,
-      workspacePath: rawPath,
-    },
-    openTargets: [],
-    canOpenInSidebar: true,
-    canOpenExternal: true,
-    copyPath: vi.fn(),
-    openInSidebar: vi.fn(),
-    openDefault: vi.fn(),
-    openPrimary: vi.fn(),
-    openWithTarget: vi.fn(),
-    reveal: vi.fn(),
-  }),
+  useFileReferenceActions: ({ rawPath }: { rawPath: string }) => {
+    const locator = { authority: "workspace" as const, workspacePath: rawPath,
+      localCompanionPath: `/repo/${rawPath}`,
+    };
+    return {
+      reference: { rawPath, parsedPath: rawPath, displayPath: rawPath, line: null, column: null,
+        locator },
+      accessState: { status: "settled" as const, locator, kind: "file" as const },
+      nativePathKind: null, openTargets: [], defaultOpenTarget: null,
+      pathKind: "file" as const, pathKindPending: false,
+      canOpenInSidebar: true, canOpenExternal: false,
+      canOpenPrimary: true, canReveal: false,
+      primaryUnavailableReason: null,
+      copyPath: `/repo/${rawPath}`,
+      copyCurrentPath: vi.fn(async () => undefined),
+      openInSidebar: vi.fn(), openDefault: vi.fn(), openPrimary: vi.fn(),
+      openWithTarget: vi.fn(), reveal: vi.fn(),
+    };
+  },
 }));
 
 describe("TranscriptToolCallItemBlock", () => {

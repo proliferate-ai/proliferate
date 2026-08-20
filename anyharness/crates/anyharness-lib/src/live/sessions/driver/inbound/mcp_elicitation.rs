@@ -8,7 +8,7 @@ use super::{raw_ext_response, InboundDoor};
 use crate::live::sessions::rendezvous::mcp_elicitation::{
     claude_ext_response_from_outcome, normalize_claude_mcp_elicitation,
     normalize_standard_mcp_elicitation, standard_elicitation_response_from_outcome,
-    ClaudeMcpElicitationExtParams,
+    ClaudeMcpElicitationExtParams, McpElicitationOutcome,
 };
 
 impl InboundDoor {
@@ -16,6 +16,15 @@ impl InboundDoor {
         &self,
         request: acp::schema::CreateElicitationRequest,
     ) -> acp::Result<acp::schema::CreateElicitationResponse> {
+        let scoped_session_id = match request.scope() {
+            acp::schema::ElicitationScope::Session(scope) => Some(scope.session_id.to_string()),
+            _ => None,
+        };
+        if !self.route_session_request(scoped_session_id.as_deref()) {
+            return Ok(standard_elicitation_response_from_outcome(
+                McpElicitationOutcome::Cancelled,
+            ));
+        }
         let normalized = normalize_standard_mcp_elicitation(request)
             .map_err(|error| acp::Error::invalid_params().data(format!("{error:?}")))?;
 
@@ -80,6 +89,11 @@ impl InboundDoor {
     ) -> acp::Result<acp::schema::ExtResponse> {
         let request = serde_json::from_str::<ClaudeMcpElicitationExtParams>(args.params.get())
             .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
+        if !self.route_session_request(request.session_id.as_deref()) {
+            return raw_ext_response(claude_ext_response_from_outcome(
+                McpElicitationOutcome::Cancelled,
+            ));
+        }
         let normalized = normalize_claude_mcp_elicitation(request)
             .map_err(|error| acp::Error::invalid_params().data(format!("{error:?}")))?;
 

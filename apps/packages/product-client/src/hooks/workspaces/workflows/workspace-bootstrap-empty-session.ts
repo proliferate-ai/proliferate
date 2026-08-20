@@ -1,15 +1,13 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { useWorkspaceBootstrapCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
-import type { useCloudAgentCatalogCache } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import type { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
 import { resolveEffectiveLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
 import type { ChatLaunchPreferences } from "#product/lib/domain/chat/models/model-selector-types";
 import { hasHiddenDismissedWorkspaceSessions } from "#product/lib/domain/workspaces/selection/selection";
 import {
-  mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
+  projectHarnessLaunchOptions,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
-import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
 import { getAgentLaunchOptions } from "#product/lib/access/anyharness/agents";
 import {
   elapsedMs,
@@ -23,9 +21,6 @@ import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug
 import {
   resolveActiveProjectedSessionForPendingWorkspace,
 } from "#product/hooks/workspaces/workflows/pending-workspace-projected-session";
-import {
-  orderBootstrapLaunchAgents,
-} from "#product/lib/domain/workspaces/selection/workspace-bootstrap-selection";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
@@ -38,7 +33,7 @@ import {
 
 export async function handleEmptyWorkspaceBootstrap(
   input: {
-    agentsByKind: Parameters<typeof orderBootstrapLaunchAgents>[1];
+    agentsByKind: ReadonlyMap<string, { readiness: string }>;
     latencyFlowId?: string | null;
     logicalWorkspaceId: string;
     measurementOperationId: MeasurementOperationId | null;
@@ -57,9 +52,6 @@ export async function handleEmptyWorkspaceBootstrap(
     createEmptySessionWithResolvedConfig: ReturnType<
       typeof useSessionCreationActions
     >["createEmptySessionWithResolvedConfig"];
-    ensureCloudAgentCatalog: ReturnType<
-      typeof useCloudAgentCatalogCache
-    >["ensureCloudAgentCatalog"];
     fetchWorkspaceSessions: ReturnType<typeof useWorkspaceBootstrapCache>["fetchWorkspaceSessions"];
     getActiveSessionId: () => string | null;
     getPendingWorkspaceEntry: () => PendingWorkspaceEntry | null;
@@ -117,34 +109,16 @@ export async function handleEmptyWorkspaceBootstrap(
     return { shouldReturn: true };
   }
 
-  const launchCatalogStartedAt = startLatencyTimer();
-  const launchCatalog = await deps.ensureCloudAgentCatalog().catch(() => null);
-
-  logLatency("workspace.select.launch_catalog_loaded", {
-    workspaceId: input.workspaceId,
-    agentCount: launchCatalog?.agents?.length ?? 0,
-    elapsedMs: elapsedMs(launchCatalogStartedAt),
-  });
-  recordMeasurementWorkflowStep({
-    operationId: input.measurementOperationId,
-    step: "workspace.bootstrap.launch_catalog",
-    startedAt: launchCatalogStartedAt,
-    count: launchCatalog?.agents?.length ?? 0,
-  });
-
-  if (!input.isCurrent()) {
-    return { shouldReturn: true };
-  }
-
   const runtimeLaunchOptionsStartedAt = startLatencyTimer();
+  const requestedHarnessKind = input.preferences.defaultChatAgentKind;
   const runtimeLaunchOptions = await getAgentLaunchOptions(
     input.workspaceConnection,
-    input.workspaceConnection.anyharnessWorkspaceId,
+    requestedHarnessKind,
   ).catch(() => null);
 
   logLatency("workspace.select.runtime_launch_options_loaded", {
     workspaceId: input.workspaceId,
-    agentCount: runtimeLaunchOptions?.agents?.length ?? 0,
+    agentCount: runtimeLaunchOptions?.options ? 1 : 0,
     elapsedMs: elapsedMs(runtimeLaunchOptionsStartedAt),
   });
 
@@ -152,13 +126,10 @@ export async function handleEmptyWorkspaceBootstrap(
     return { shouldReturn: true };
   }
 
-  const launchAgents = orderBootstrapLaunchAgents(
-    mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
-      launchCatalog?.agents ?? [],
-      runtimeLaunchOptions?.agents ?? null,
-    ),
-    input.agentsByKind,
-  );
+  const projectedLaunchAgent = runtimeLaunchOptions
+    ? projectHarnessLaunchOptions(runtimeLaunchOptions)
+    : null;
+  const launchAgents = projectedLaunchAgent ? [projectedLaunchAgent] : [];
   const defaultLaunch = resolveEffectiveLaunchSelection(
     launchAgents,
     input.preferences,
@@ -205,11 +176,11 @@ export async function handleEmptyWorkspaceBootstrap(
       agentKind: launchSelection.kind,
       modelId: launchSelection.modelId,
       clientSessionId: reusableProjectedSession?.sessionId ?? null,
-      resolvedModeId: reusableProjectedSession?.modeId ?? undefined,
-      unattendedModeId: resolveUnattendedModeId({
-        agent: launchAgents.find((candidate) => candidate.kind === launchSelection.kind),
-        modelId: launchSelection.modelId,
-      }),
+      launchControlValues: Object.fromEntries(
+        (projectedLaunchAgent?.launchControls ?? [])
+          .filter((control) => control.defaultValue !== null)
+          .map((control) => [control.key, control.defaultValue as string]),
+      ),
       latencyFlowId: input.latencyFlowId,
       preserveProjectedSessionOnCreateFailure: true,
       reuseInFlightEmptySession: true,

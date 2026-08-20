@@ -18,10 +18,13 @@ import {
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import type { WorkspaceFileBuffer } from "#product/stores/editor/workspace-file-buffers-store";
 import { focusChatInput } from "#product/lib/domain/focus-zone";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 
 type RightPanelStateUpdater = (value: SetStateAction<RightPanelWorkspaceState>) => void;
 
 interface UseRightPanelViewerActionsOptions {
+  workspaceId: string | null;
+  shellWorkspaceId: string | null;
   state: RightPanelWorkspaceState;
   isCloudWorkspaceSelected: boolean;
   openViewerTargets: readonly ViewerTarget[];
@@ -33,6 +36,8 @@ interface UseRightPanelViewerActionsOptions {
 }
 
 export function useRightPanelViewerActions({
+  workspaceId,
+  shellWorkspaceId,
   state,
   isCloudWorkspaceSelected,
   openViewerTargets,
@@ -42,6 +47,8 @@ export function useRightPanelViewerActions({
   setActiveViewerTarget,
   clearBuffer,
 }: UseRightPanelViewerActionsOptions) {
+  const { activateViewerTarget } = useWorkspaceShellActivation();
+
   const selectViewer = useCallback((targetKey: RightPanelHeaderEntryKey) => {
     const target = openViewerTargets.find((candidate) =>
       viewerTargetKey(candidate) === targetKey
@@ -49,7 +56,19 @@ export function useRightPanelViewerActions({
     if (!target || target.kind === "allChanges") {
       return;
     }
-    setActiveViewerTarget(targetKey as ViewerTargetKey);
+    if (workspaceId) {
+      // Route through the canonical owner rather than selecting the target
+      // directly: it dismisses any open search with restoration suppressed,
+      // and `preserve-origin` keeps the clicked header entry focused.
+      activateViewerTarget({
+        workspaceId,
+        shellWorkspaceId,
+        target,
+        focus: "preserve-origin",
+      });
+    } else {
+      setActiveViewerTarget(targetKey as ViewerTargetKey);
+    }
     updateState((previous) => ({
       ...previous,
       activeEntryKey: targetKey,
@@ -57,7 +76,14 @@ export function useRightPanelViewerActions({
         ? previous.headerOrder
         : [...previous.headerOrder, targetKey],
     }));
-  }, [openViewerTargets, setActiveViewerTarget, updateState]);
+  }, [
+    activateViewerTarget,
+    openViewerTargets,
+    setActiveViewerTarget,
+    shellWorkspaceId,
+    updateState,
+    workspaceId,
+  ]);
 
   const handleCloseViewer = useCallback((targetKey: RightPanelHeaderEntryKey) => {
     const target = openViewerTargets.find((candidate) =>

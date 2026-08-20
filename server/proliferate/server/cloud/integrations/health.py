@@ -27,6 +27,7 @@ from proliferate.db.store.integrations import tool_cache as tool_cache_store
 from proliferate.db.store.integrations.accounts import IntegrationAccountRecord
 from proliferate.db.store.integrations.definitions import IntegrationDefinitionRecord
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.integrations import transactions as integration_transactions
 from proliferate.server.cloud.integrations.access import ensure_provider_access
 
 logger = logging.getLogger(__name__)
@@ -179,6 +180,8 @@ async def list_integration_health(
         for definition in visible
         if _effective_enabled(definition) and (account := accounts.get(definition.id)) is not None
     ]
+    if probe_targets:
+        await integration_transactions.release_integration_transaction(db)
     probe_semaphore = asyncio.Semaphore(_PROBE_CONCURRENCY)
     probe_outcomes = await asyncio.gather(
         *(

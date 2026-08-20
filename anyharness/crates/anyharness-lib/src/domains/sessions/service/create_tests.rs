@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -7,6 +8,10 @@ use uuid::Uuid;
 use super::{CreateSessionError, CreateSessionOutcome};
 use crate::app::{test_support, AppState};
 use crate::domains::agents::installer::seed::AgentSeedStore;
+use crate::domains::agents::launch_options::{
+    HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions, LaunchSelection,
+};
+use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::runtime::CreateAndStartSessionError;
 use crate::origin::OriginContext;
@@ -62,18 +67,31 @@ impl Drop for EnvVarGuard {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn idempotent_create_reuses_only_the_original_workspace_and_agent() {
+async fn idempotent_create_requires_exact_intent_and_current_observation() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
         .expect("env mutex");
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
+    let runtime_home = TestDir::new("anyharness-idempotent-session-create");
+    let workspace_path = runtime_home.path().join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
+    let agent_auth_dir = runtime_home.path().join("agent-auth");
+    std::fs::create_dir_all(&agent_auth_dir).expect("create agent-auth directory");
+    std::fs::write(
+        agent_auth_dir.join("state.json"),
+        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"grok","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+    )
+    .expect("write gateway route state");
+    let test_executable = std::env::current_exe().expect("current test executable");
+    let _program_guard =
+        EnvVarGuard::set("ANYHARNESS_GROK_AGENT_PROGRAM", test_executable.as_os_str());
+    let _xai_guard = EnvVarGuard::remove("XAI_API_KEY");
+    let _grok_guard = EnvVarGuard::remove("GROK_API_KEY");
+
     let state = AppState::new(
-        std::env::temp_dir().join(format!(
-            "anyharness-idempotent-session-create-{}",
-            Uuid::new_v4()
-        )),
+        runtime_home.path().to_path_buf(),
         "http://127.0.0.1:8457".to_string(),
         Db::open_in_memory().expect("open in-memory db"),
         false,
@@ -84,24 +102,70 @@ async fn idempotent_create_reuses_only_the_original_workspace_and_agent() {
         &state.db,
         "workspace-1",
         "local",
-        "/tmp/workspace",
+        &workspace_path.to_string_lossy(),
     );
+    let started = state
+        .launch_options_service
+        .begin_probe("grok", "2026-08-19T00:00:00Z")
+        .expect("begin observed launch options");
+    state
+        .launch_options_service
+        .record_success(
+            &started,
+            &HarnessLaunchOptions {
+                models: vec![
+                    HarnessLaunchModel {
+                        id: "model-a".to_string(),
+                        observed_name: None,
+                        observed_description: None,
+                    },
+                    HarnessLaunchModel {
+                        id: "model-b".to_string(),
+                        observed_name: None,
+                        observed_description: None,
+                    },
+                ],
+                controls: vec![],
+                defaults: HarnessLaunchDefaults::default(),
+            },
+            "2026-08-19T00:00:00Z",
+        )
+        .expect("record observed launch options");
     let session_id = "01234567-89ab-4def-8123-456789abcdef";
+    let original_selection = LaunchSelection {
+        model_id: Some("model-a".to_string()),
+        control_values: BTreeMap::new(),
+    };
+    let original_intent = ResolvedLaunchIntent {
+        model_id: original_selection.model_id.clone(),
+        control_values: original_selection.control_values.clone(),
+        created_at: "2026-08-19T00:00:00Z".to_string(),
+    };
+    let basis = state.launch_options_service.basis_revision("grok");
+    let basis_revision = || basis.clone();
+    let mut original = session_record(session_id);
+    original.agent_kind = "grok".to_string();
     state
         .session_service
         .store()
-        .insert(&session_record(session_id))
+        .insert_with_launch_intent(
+            &original,
+            &original_intent,
+            "grok",
+            &basis_revision,
+            &original_selection,
+        )
         .expect("insert original session");
 
     let replay = state
         .session_service
         .create_session(
             "workspace-1",
-            "claude",
+            "grok",
             Some(session_id),
             true,
-            None,
-            None,
+            Some("model-a"),
+            &BTreeMap::new(),
             None,
             None,
             SessionMcpBindingPolicy::InheritWorkspace,
@@ -128,11 +192,11 @@ async fn idempotent_create_reuses_only_the_original_workspace_and_agent() {
         .session_service
         .create_session(
             "workspace-1",
-            "codex",
+            "grok",
             Some(session_id),
             true,
-            None,
-            None,
+            Some("model-b"),
+            &BTreeMap::new(),
             None,
             None,
             SessionMcpBindingPolicy::InheritWorkspace,
@@ -140,7 +204,7 @@ async fn idempotent_create_reuses_only_the_original_workspace_and_agent() {
             true,
             OriginContext::api_local_runtime(),
         )
-        .expect_err("cross-agent id reuse must conflict");
+        .expect_err("different immutable launch intent must conflict");
     assert!(matches!(
         conflict,
         CreateSessionError::SessionIdConflict { session_id: id } if id == session_id
@@ -155,11 +219,11 @@ async fn idempotent_create_reuses_only_the_original_workspace_and_agent() {
         .session_service
         .create_session(
             "workspace-1",
-            "claude",
+            "grok",
             Some(session_id),
             true,
-            None,
-            None,
+            Some("model-a"),
+            &BTreeMap::new(),
             None,
             None,
             SessionMcpBindingPolicy::InheritWorkspace,
@@ -171,6 +235,28 @@ async fn idempotent_create_reuses_only_the_original_workspace_and_agent() {
     assert!(matches!(
         dismissed_conflict,
         CreateSessionError::SessionIdConflict { session_id: id } if id == session_id
+    ));
+
+    let refreshed = state
+        .launch_options_service
+        .begin_probe("grok", "2026-08-19T00:01:00Z")
+        .expect("begin changed observation");
+    state
+        .launch_options_service
+        .record_success(
+            &refreshed,
+            &HarnessLaunchOptions::default(),
+            "2026-08-19T00:01:01Z",
+        )
+        .expect("replace observed universe");
+    assert!(matches!(
+        state
+            .session_service
+            .validate_persisted_launch_intent(&original),
+        Err(crate::domains::agents::launch_options::LaunchSelectionUnsupported::Model {
+            model_id,
+            ..
+        }) if model_id == "model-a"
     ));
 }
 
@@ -216,6 +302,18 @@ async fn unsupported_model_refusal_leaves_no_session_row_or_live_process() {
         &workspace_path.to_string_lossy(),
     );
     let attempted_session_id = "01234567-89ab-4def-8123-456789abcdef";
+    let started = state
+        .launch_options_service
+        .begin_probe("grok", "2026-08-19T00:00:00Z")
+        .expect("begin observed launch options");
+    state
+        .launch_options_service
+        .record_success(
+            &started,
+            &HarnessLaunchOptions::default(),
+            "2026-08-19T00:00:00Z",
+        )
+        .expect("record empty observed universe");
 
     let error = state
         .session_runtime
@@ -224,7 +322,7 @@ async fn unsupported_model_refusal_leaves_no_session_row_or_live_process() {
             "grok",
             Some(attempted_session_id),
             Some("grok-4.3"),
-            None,
+            &BTreeMap::new(),
             None,
             vec![],
             None,
@@ -234,20 +332,21 @@ async fn unsupported_model_refusal_leaves_no_session_row_or_live_process() {
         .await
         .expect_err("xai-only model must be refused on a gateway route");
 
-    let CreateAndStartSessionError::ModelUnsupported {
+    let CreateAndStartSessionError::LaunchValueUnsupported {
         agent_kind,
-        model_id,
-        active_universe,
+        key,
+        value,
+        state: launch_options_state,
     } = error
     else {
         panic!("expected the single unsupported-model refusal, got {error:?}");
     };
     assert_eq!(agent_kind, "grok");
-    assert_eq!(model_id, "grok-4.3");
+    assert_eq!(key, "modelId");
+    assert_eq!(value, "grok-4.3");
     assert_eq!(
-        active_universe,
-        crate::domains::agents::catalog::service::ActiveUniverse::CatalogSeed,
-        "no observation exists in this test, so the seed refused"
+        launch_options_state,
+        crate::domains::agents::launch_options::HarnessLaunchOptionsState::ObservedEmpty
     );
     assert!(state
         .session_service

@@ -40,7 +40,7 @@ function createRecovery(id: string, text: string): ChatPromptRecovery {
     workspaceId: "workspace-1",
     agentKind: "claude",
     modelId: "sonnet",
-    modeId: null,
+    controlValues: {},
     errorMessage: "Session creation failed.",
     prompt: createPromptOutboxEntry({
       clientPromptId: id,

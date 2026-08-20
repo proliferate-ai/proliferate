@@ -139,7 +139,7 @@ CREATE TABLE fork_operations (
     native_child_session_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
-);
+, checkpoint_id TEXT);
 
 -- table: goals
 CREATE TABLE goals (
@@ -160,6 +160,22 @@ CREATE TABLE goals (
     native_state_json TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+
+-- table: harness_launch_option_states
+CREATE TABLE harness_launch_option_states (
+    harness_kind TEXT PRIMARY KEY,
+    basis_revision TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    options_json TEXT,
+    observed_at TEXT,
+    probe_state TEXT NOT NULL
+      CHECK (probe_state IN ('probing', 'succeeded', 'failed')),
+    probe_attempted_at TEXT NOT NULL,
+    probe_failure_code TEXT,
+    CHECK ((options_json IS NULL) = (observed_at IS NULL)),
+    CHECK (probe_state <> 'succeeded' OR options_json IS NOT NULL),
+    CHECK ((probe_state = 'failed') = (probe_failure_code IS NOT NULL))
 );
 
 -- table: local_materialization_operation
@@ -325,7 +341,7 @@ CREATE TABLE review_assignments (
     failure_reason TEXT,
     failure_detail TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL, control_values_json TEXT NOT NULL DEFAULT '{}', launch_verification_status TEXT NOT NULL DEFAULT 'pending',
     FOREIGN KEY(review_run_id) REFERENCES review_runs(id) ON DELETE CASCADE,
     FOREIGN KEY(review_round_id) REFERENCES review_rounds(id) ON DELETE CASCADE,
     FOREIGN KEY(reviewer_session_id) REFERENCES sessions(id) ON DELETE SET NULL,
@@ -506,6 +522,14 @@ CREATE TABLE session_events (
     payload_json TEXT NOT NULL
 , item_id TEXT, completion_wake_removal_key TEXT);
 
+-- table: session_launch_intents
+CREATE TABLE session_launch_intents (
+    session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    requested_model_id TEXT,
+    requested_controls_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 -- table: session_link_completion_deliveries
 CREATE TABLE session_link_completion_deliveries (
     delivery_id TEXT PRIMARY KEY,
@@ -575,7 +599,7 @@ CREATE TABLE session_live_config_snapshots (
     raw_config_options_json TEXT NOT NULL,
     normalized_controls_json TEXT NOT NULL,
     updated_at TEXT NOT NULL
-, prompt_capabilities_json TEXT);
+, prompt_capabilities_json TEXT, full_snapshot_json TEXT);
 
 -- table: session_pending_config_changes
 CREATE TABLE session_pending_config_changes (
@@ -724,6 +748,27 @@ CREATE TABLE workspace_access_modes (
     mode TEXT NOT NULL,
     handoff_op_id TEXT,
     updated_at TEXT NOT NULL
+);
+
+-- table: workspace_checkpoints
+CREATE TABLE workspace_checkpoints (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    origin TEXT NOT NULL CHECK (origin IN ('turn_start','fork_boundary','safety')),
+    session_id TEXT,
+    turn_id TEXT,
+    prompt_id TEXT,
+    fork_operation_id TEXT,
+    revert_operation_id TEXT,
+    head_sha TEXT NOT NULL,
+    work_tree_oid TEXT NOT NULL,
+    index_tree_oid TEXT NOT NULL,
+    work_tree_anchored INTEGER NOT NULL,
+    index_tree_anchored INTEGER NOT NULL,
+    notices_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    expired_at TEXT
 );
 
 -- table: workspace_setup_state
@@ -1001,6 +1046,12 @@ CREATE INDEX idx_workflow_run_nodes_run_id ON workflow_run_nodes(run_id);
 
 -- index: idx_workflow_runs_workspace_id
 CREATE INDEX idx_workflow_runs_workspace_id ON workflow_runs(workspace_id);
+
+-- index: idx_workspace_checkpoints_session_turn
+CREATE INDEX idx_workspace_checkpoints_session_turn ON workspace_checkpoints(session_id, turn_id);
+
+-- index: idx_workspace_checkpoints_ws_created
+CREATE INDEX idx_workspace_checkpoints_ws_created ON workspace_checkpoints(workspace_id, created_at);
 
 -- index: idx_workspaces_lifecycle
 CREATE INDEX idx_workspaces_lifecycle

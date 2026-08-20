@@ -1,9 +1,12 @@
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use tokio::time::{sleep, Duration};
 
 use crate::app::{test_support, AppState};
 use crate::domains::agents::installer::seed::AgentSeedStore;
+use crate::domains::agents::launch_options::{HarnessLaunchOptions, LaunchSelection};
+use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::live::sessions::ScriptedSessionSpec;
 use crate::origin::OriginContext;
@@ -17,9 +20,9 @@ use crate::persistence::Db;
 // The `ANYHARNESS_CLAUDE_AGENT_PROGRAM` override (like the scripted-agent
 // suite in `scripted-agent suites`) makes the agent-process
 // artifact resolve as installed without faking the managed npm install
-// layout; `test_state`'s `secrets/global.env` gives claude's required
-// anthropic slot a credential, so `credential_state` is `Ready` and the
-// native-artifact check in `compute_readiness` is never reached.
+// layout; `test_state`'s product-owned API-key route gives Claude its required
+// credential, so `credential_state` is `Ready` and the native-artifact check
+// in `compute_readiness` is never reached.
 struct AgentProgramGuard {
     previous: Option<std::ffi::OsString>,
 }
@@ -53,11 +56,7 @@ async fn create_replay_joins_pending_startup_and_persists_readiness() {
     let _agent_program_guard =
         AgentProgramGuard::set(&state.runtime_home.join("claude-agent-stub"));
     let session_id = "01234567-89ab-4def-8123-456789abcdef";
-    state
-        .session_service
-        .store()
-        .insert(&starting_session(session_id))
-        .expect("insert interrupted create row");
+    seed_starting_session(&state, session_id);
     let readiness = state
         .session_runtime
         .acp_manager_for_test()
@@ -72,7 +71,7 @@ async fn create_replay_joins_pending_startup_and_persists_readiness() {
                 "claude",
                 Some(session_id),
                 None,
-                None,
+                &BTreeMap::new(),
                 None,
                 vec![],
                 None,
@@ -124,11 +123,7 @@ async fn create_replay_persists_ready_handle_when_the_first_request_was_cancelle
     let _agent_program_guard =
         AgentProgramGuard::set(&state.runtime_home.join("claude-agent-stub"));
     let session_id = "11234567-89ab-4def-8123-456789abcdef";
-    state
-        .session_service
-        .store()
-        .insert(&starting_session(session_id))
-        .expect("insert interrupted create row");
+    seed_starting_session(&state, session_id);
     let _scripted = state
         .session_runtime
         .acp_manager_for_test()
@@ -149,7 +144,7 @@ async fn create_replay_persists_ready_handle_when_the_first_request_was_cancelle
             "claude",
             Some(session_id),
             None,
-            None,
+            &BTreeMap::new(),
             None,
             vec![],
             None,
@@ -180,16 +175,9 @@ fn test_state(label: &str) -> AppState {
     ));
     let workspace_path = runtime_home.join("workspace");
     std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
-    // Give claude's required `anthropic` auth slot a credential, and a real
-    // (stub) executable for the `ANYHARNESS_CLAUDE_AGENT_PROGRAM` override,
-    // so `credential_state`/`agent_process.installed` both resolve `Ready`
-    // (Scope C's readiness check).
-    std::fs::create_dir_all(runtime_home.join("secrets")).expect("create secrets directory");
-    std::fs::write(
-        runtime_home.join("secrets/global.env"),
-        "ANTHROPIC_API_KEY=test-not-a-real-key\n",
-    )
-    .expect("write test credential");
+    // Give Claude a product-owned API-key route and a real (stub) executable
+    // for the program override, so credential and artifact readiness agree.
+    test_support::install_scripted_claude_auth(&runtime_home);
     let agent_program = runtime_home.join("claude-agent-stub");
     std::fs::write(&agent_program, "#!/bin/sh\nexit 0\n").expect("write agent stub");
     crate::integrations::agent_cli::executable::make_executable(&agent_program)
@@ -209,6 +197,39 @@ fn test_state(label: &str) -> AppState {
         &workspace_path.to_string_lossy(),
     );
     state
+}
+
+fn seed_starting_session(state: &AppState, session_id: &str) {
+    let started = state
+        .launch_options_service
+        .begin_probe("claude", "2026-08-19T00:00:00Z")
+        .expect("begin replay launch options");
+    state
+        .launch_options_service
+        .record_success(
+            &started,
+            &HarnessLaunchOptions::default(),
+            "2026-08-19T00:00:01Z",
+        )
+        .expect("record replay launch options");
+    let selection = LaunchSelection::default();
+    let intent = ResolvedLaunchIntent {
+        created_at: "2026-08-19T00:00:00Z".to_string(),
+        ..Default::default()
+    };
+    let basis = state.launch_options_service.basis_revision("claude");
+    let basis_revision = || basis.clone();
+    state
+        .session_service
+        .store()
+        .insert_with_launch_intent(
+            &starting_session(session_id),
+            &intent,
+            "claude",
+            &basis_revision,
+            &selection,
+        )
+        .expect("insert interrupted create row with immutable intent");
 }
 
 fn starting_session(id: &str) -> SessionRecord {

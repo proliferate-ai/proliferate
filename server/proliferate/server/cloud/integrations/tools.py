@@ -1,7 +1,7 @@
 """Fetch + cache an account's remote MCP tool schema (``tools/list``).
 
 The tool schema for an account is cached in ``cloud_integration_tool_schema_cache``
-keyed by ``account_id`` and stamped with the account's ``auth_version``. A ready
+keyed by ``account_id`` and stamped with the account's ``grant_version``. A ready
 cache whose version still matches is served directly; otherwise we resolve
 provider access, hit the remote MCP server, and re-cache the result.
 """
@@ -18,12 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.cloud import CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS
 from proliferate.db.store.integrations.tool_cache import (
     get_tool_cache,
-    upsert_tool_cache,
+    upsert_tool_cache_if_grant_current,
 )
 from proliferate.integrations import mcp_remote
 from proliferate.integrations.mcp_remote import McpRemoteError
 from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.integrations import transactions as integration_transactions
 from proliferate.server.cloud.integrations.access import resolve_launch
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ async def get_or_refresh_tool_cache(
 ) -> list[dict[str, Any]]:
     """Return the account's tool schema, refreshing the cache when stale.
 
-    Serves a ``ready`` cache whose ``auth_version`` matches the account and
+    Serves a ``ready`` cache whose ``grant_version`` matches the account and
     whose ``fetched_at`` is within the TTL; else fetches ``tools/list`` from
     the remote MCP server, upserts the cache as ``ready``, and returns it. On
     failure the cache is marked ``error`` and the originating error is
@@ -60,12 +61,13 @@ async def get_or_refresh_tool_cache(
     if (
         cache is not None
         and cache.status == "ready"
-        and cache.auth_version == account_record.auth_version
+        and cache.grant_version == account_record.grant_version
         and cache.fetched_at is not None
         and (now - cache.fetched_at).total_seconds() <= CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS
     ):
         return _decode_tools(cache.tools_json)
 
+    await integration_transactions.release_integration_transaction(db)
     try:
         url, headers, query = await resolve_launch(db, account_record, definition_record)
         tools = await mcp_remote.list_tools(url=url, headers=headers, query=query or None)
@@ -74,10 +76,10 @@ async def get_or_refresh_tool_cache(
         # The failure is recorded either way (status='error' + error_code), so
         # the next call retries the fetch; a usable stale schema just keeps
         # the agent-facing call alive in the meantime.
-        await upsert_tool_cache(
+        await upsert_tool_cache_if_grant_current(
             db,
             account_id=account_record.id,
-            auth_version=account_record.auth_version,
+            expected_grant_version=account_record.grant_version,
             tools_json=cache.tools_json if cache is not None else "[]",
             content_hash=cache.content_hash if cache is not None else None,
             status="error",
@@ -88,7 +90,7 @@ async def get_or_refresh_tool_cache(
             isinstance(exc, McpRemoteError)
             and cache is not None
             and cache.fetched_at is not None
-            and cache.auth_version == account_record.auth_version
+            and cache.grant_version == account_record.grant_version
         ):
             logger.warning(
                 "integration tool refetch failed (%s); serving stale cached schema for account %s",
@@ -99,10 +101,10 @@ async def get_or_refresh_tool_cache(
         raise
 
     tools_json = json.dumps(tools, separators=(",", ":"))
-    await upsert_tool_cache(
+    await upsert_tool_cache_if_grant_current(
         db,
         account_id=account_record.id,
-        auth_version=account_record.auth_version,
+        expected_grant_version=account_record.grant_version,
         tools_json=tools_json,
         content_hash=_content_hash(tools_json),
         status="ready",

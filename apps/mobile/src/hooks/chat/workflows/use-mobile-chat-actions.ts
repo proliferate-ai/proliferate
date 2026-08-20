@@ -99,12 +99,14 @@ export function useMobileChatActions({
 }) {
   const { invalidateWorkspaceLists } = useMobileCloudWorkspaceCache();
   const client = useCloudClient();
-  const agentResources = useMobileCloudAgentResources();
+  const agentResources = useMobileCloudAgentResources({
+    cloudSandboxId: typeof workspace?.targetId === "string" ? workspace.targetId : null,
+    harnessKind: launchSelection.agentKind,
+  });
   const pendingDispatchRunRef = useRef<{ key: string; active: boolean } | null>(null);
   const pendingConfigMutationIdRef = useRef(0);
   const {
     workspaceHarnessAvailability,
-    workspaceLaunchableAgentKinds,
     canStartNewSession,
     liveConfig,
     resolvedLaunchSelection,
@@ -116,7 +118,7 @@ export function useMobileChatActions({
     pendingConfigChanges,
     launchSelection,
     runtimeLabel,
-    catalog: agentResources.agentCatalog.data,
+    launchOptions: agentResources.launchOptions.data,
     updateLaunchSelection: setLaunchSelection,
     onSubmitSessionConfig: (rawConfigId, value) => {
       void submitSessionConfig(rawConfigId, value);
@@ -139,9 +141,8 @@ export function useMobileChatActions({
     isUnclaimed,
     canStartNewSession,
     workspaceHarnessAvailabilityMessage: workspaceHarnessAvailability.message,
-    workspaceLaunchableAgentKinds,
     resolvedLaunchSelection,
-    catalog: agentResources.agentCatalog.data,
+    launchOptions: agentResources.launchOptions.data,
     transcriptItems,
     transcriptRows,
     setDraft,

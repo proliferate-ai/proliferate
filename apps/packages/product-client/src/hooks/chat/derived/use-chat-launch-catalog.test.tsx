@@ -5,318 +5,119 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useChatLaunchCatalog } from "#product/hooks/chat/derived/use-chat-launch-catalog";
-import type {
-  DesktopAgentLaunchAgent,
-  DesktopAgentLaunchCatalog,
-} from "#product/lib/domain/agents/cloud-launch-catalog";
 
 const mocks = vi.hoisted(() => ({
-  useCloudAgentCatalog: vi.fn(),
-  useAgentCatalog: vi.fn(),
-  useWorkspaceAgentLaunchOptionsQuery: vi.fn(),
-  useSelectedCloudRuntimeState: vi.fn(),
-}));
-
-vi.mock("#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
-  useCloudAgentCatalog: mocks.useCloudAgentCatalog,
+  query: { data: undefined as Record<string, unknown> | undefined, isLoading: false, isError: false, error: null as Error | null },
+  otherResponses: [] as Array<Record<string, unknown> | null>,
+  otherKindsRequested: null as readonly string[] | null,
+  readyAgentKinds: new Set(["claude"]),
+  cloudConnectionInfo: null as Record<string, unknown> | null,
 }));
 
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
-  useAgentCatalog: mocks.useAgentCatalog,
+  useAgentCatalog: () => ({
+    readyAgentKinds: mocks.readyAgentKinds, isLoading: false, isError: false, error: null,
+  }),
 }));
-
 vi.mock("#product/hooks/access/anyharness/agents/use-workspace-agent-launch-options", () => ({
-  useWorkspaceAgentLaunchOptionsQuery: mocks.useWorkspaceAgentLaunchOptionsQuery,
+  useWorkspaceAgentLaunchOptionsQuery: () => mocks.query,
+  useWorkspaceAgentsLaunchOptionsListQuery: (args: { harnessKinds: readonly string[] }) => {
+    mocks.otherKindsRequested = args.harnessKinds;
+    return mocks.otherResponses;
+  },
 }));
-
 vi.mock("#product/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
-  useSelectedCloudRuntimeState: mocks.useSelectedCloudRuntimeState,
+  useSelectedCloudRuntimeState: () => ({ connectionInfo: mocks.cloudConnectionInfo }),
 }));
-
-function launchAgent(
-  kind: string,
-  modelId: string,
-  displayName = kind,
-): DesktopAgentLaunchAgent {
-  return {
-    kind,
-    displayName,
-    defaultModelId: modelId,
-    models: [{
-      id: modelId,
-      displayName: modelId,
-      aliases: [],
-      status: "active",
-      isDefault: true,
-    }],
-    launchControls: [],
-  };
-}
-
-function catalog(agents: DesktopAgentLaunchAgent[]): DesktopAgentLaunchCatalog {
-  return {
-    schemaVersion: 2,
-    catalogVersion: "cloud-test",
-    generatedAt: "2026-05-05T00:00:00Z",
-    defaultAgentKind: null,
-    workspaceId: null,
-    agents,
-  };
-}
 
 describe("useChatLaunchCatalog", () => {
   beforeEach(() => {
-    mocks.useCloudAgentCatalog.mockReturnValue({
-      data: catalog([
-        launchAgent("codex", "gpt-5.5", "Codex"),
-        launchAgent("claude", "sonnet", "Claude"),
-      ]),
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
-    mocks.useAgentCatalog.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      error: null,
-      agentsByKind: new Map([
-        ["codex", { readiness: "ready" }],
-        ["claude", { readiness: "ready" }],
-      ]),
-    });
-    mocks.useWorkspaceAgentLaunchOptionsQuery.mockReturnValue({
-      data: null,
-      isLoading: false,
-      isError: false,
-      error: null,
-    });
-    mocks.useSelectedCloudRuntimeState.mockReturnValue({
-      connectionInfo: null,
-    });
-    useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: null,
-      selectedWorkspaceId: "workspace-1",
-      hotPaintGate: null,
-    });
-    useUserPreferencesStore.setState({
-      defaultChatAgentKind: "codex",
-      defaultChatModelIdByAgentKind: { codex: "gpt-5.5" },
-    });
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-  });
-
-  it("uses the cloud agent catalog projection for launch groups and defaults", () => {
-    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
-
-    expect(mocks.useCloudAgentCatalog).toHaveBeenCalledWith(true);
-    expect(mocks.useWorkspaceAgentLaunchOptionsQuery).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      cloudConnectionInfo: null,
-    });
-    expect(result.current.launchAgents.map((agent) => agent.kind)).toEqual([
-      "claude",
-      "codex",
-    ]);
-    expect(result.current.defaultLaunchSelection).toEqual({
-      kind: "codex",
-      modelId: "gpt-5.5",
-    });
-    expect(result.current.groups.map((group) => group.kind)).toEqual([
-      "claude",
-      "codex",
-    ]);
-    expect(result.current.snapshot).toMatchObject({
-      snapshotId: "cloud-launch-catalog:workspace-1:cloud-test",
-      runtimeUrl: null,
-      catalogVersion: "cloud-test",
-    });
-  });
-
-  it("surfaces cloud catalog errors without runtime fallback data", () => {
-    const error = new Error("cloud unavailable");
-    mocks.useCloudAgentCatalog.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      error,
-      refetch: vi.fn(),
-    });
-
-    const { result } = renderHook(() => useChatLaunchCatalog({
-      activeSelection: { kind: "claude", modelId: "opus[1m]" },
-    }));
-
-    expect(result.current.error).toBe(error);
-    expect(result.current.cloudCatalogError).toBe(error);
-    expect(result.current.targetReadinessError).toBeNull();
-    expect(result.current.launchAgents).toEqual([]);
-    expect(result.current.hasLaunchableAgents).toBe(false);
-    expect(result.current.isEmpty).toBe(false);
-  });
-
-  it("filters cloud launch options to target-ready agents", () => {
-    mocks.useAgentCatalog.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      error: null,
-      agentsByKind: new Map([
-        ["codex", { readiness: "ready" }],
-        ["claude", { readiness: "login_required" }],
-      ]),
-    });
-
-    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
-
-    expect(result.current.launchAgents.map((agent) => agent.kind)).toEqual(["codex"]);
-    expect(result.current.groups.map((group) => group.kind)).toEqual(["codex"]);
-    expect(result.current.defaultLaunchSelection).toEqual({
-      kind: "codex",
-      modelId: "gpt-5.5",
-    });
-    expect(result.current.snapshot?.agents.map((agent) => agent.kind)).toEqual(["codex"]);
-  });
-
-  it("uses runtime launch options when the target has refreshed dynamic models", () => {
-    mocks.useCloudAgentCatalog.mockReturnValue({
-      data: catalog([
-        launchAgent("cursor", "auto", "Cursor"),
-      ]),
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
-    mocks.useAgentCatalog.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      error: null,
-      agentsByKind: new Map([["cursor", { readiness: "ready" }]]),
-    });
-    mocks.useWorkspaceAgentLaunchOptionsQuery.mockReturnValue({
-      data: {
-        workspaceId: "workspace-1",
-        agents: [{
-          kind: "cursor",
-          displayName: "Cursor",
-          defaultModelId: "gpt-5.4-medium",
-          models: [{
-            id: "gpt-5.4-medium",
-            displayName: "GPT-5.4 1M",
-            isDefault: true,
-            defaultOptIn: true,
-          }],
-        }],
-      },
-      isLoading: false,
-      isError: false,
-      error: null,
-    });
-    useUserPreferencesStore.setState({
-      defaultChatAgentKind: "cursor",
-      defaultChatModelIdByAgentKind: { cursor: "gpt-5.4-medium" },
-    });
-
-    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
-
-    expect(result.current.launchAgents[0]?.models.map((model) => model.id)).toEqual([
-      "gpt-5.4-medium",
-    ]);
-    expect(result.current.defaultLaunchSelection).toEqual({
-      kind: "cursor",
-      modelId: "gpt-5.4-medium",
-    });
-  });
-
-  it("uses managed cloud runtime launch options instead of stale cloud catalog models", () => {
-    mocks.useCloudAgentCatalog.mockReturnValue({
-      data: catalog([
-        launchAgent("codex", "gpt-5.5", "Codex"),
-        launchAgent("claude", "opus[1m]", "Claude"),
-      ]),
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
-    mocks.useAgentCatalog.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      error: null,
-      agentsByKind: new Map([
-        ["codex", { readiness: "ready" }],
-        ["claude", { readiness: "ready" }],
-      ]),
-    });
-    const cloudConnectionInfo = {
-      runtimeUrl: "https://api.local/v1/gateway/cloud-sandbox/anyharness",
-      accessToken: "product-token",
-      anyharnessWorkspaceId: "cloud-workspace-1",
-      readyAgentKinds: ["codex"],
-    };
-    mocks.useSelectedCloudRuntimeState.mockReturnValue({
-      connectionInfo: cloudConnectionInfo,
-    });
-    mocks.useWorkspaceAgentLaunchOptionsQuery.mockReturnValue({
-      data: {
-        workspaceId: "cloud-workspace-1",
-        agents: [{
-          kind: "claude",
-          displayName: "Claude",
-          defaultModelId: "opus",
-          models: [{
-            id: "opus",
-            displayName: "Opus",
-            isDefault: true,
-            defaultOptIn: true,
-          }],
-        }],
-      },
-      isLoading: false,
-      isError: false,
-      error: null,
-    });
+    mocks.query = { data: response(["fable", "unknown-upstream"]), isLoading: false, isError: false, error: null };
+    mocks.otherResponses = [];
+    mocks.otherKindsRequested = null;
+    mocks.readyAgentKinds = new Set(["claude"]);
+    mocks.cloudConnectionInfo = null;
+    useSessionSelectionStore.setState({ selectedWorkspaceId: "workspace-1" });
     useUserPreferencesStore.setState({
       defaultChatAgentKind: "claude",
-      defaultChatModelIdByAgentKind: { claude: "opus[1m]" },
-    });
-
-    const { result } = renderHook(() => useChatLaunchCatalog({
-      activeSelection: { kind: "claude", modelId: "opus[1m]" },
-    }));
-
-    expect(mocks.useWorkspaceAgentLaunchOptionsQuery).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      cloudConnectionInfo,
-    });
-    expect(result.current.launchAgents.map((agent) => agent.kind)).toEqual(["claude"]);
-    expect(result.current.launchAgents[0]?.models.map((model) => model.id)).toEqual(["opus"]);
-    expect(result.current.defaultLaunchSelection).toEqual({
-      kind: "claude",
-      modelId: "opus",
-    });
-    expect(result.current.selectedLaunchSelection).toEqual({
-      kind: "claude",
-      modelId: "opus",
+      defaultChatModelIdByAgentKind: { claude: "fable" },
     });
   });
+  afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-  it("surfaces target readiness errors distinctly from cloud catalog errors", () => {
-    const error = new Error("runtime unavailable");
-    mocks.useAgentCatalog.mockReturnValue({
-      isLoading: false,
-      isError: true,
-      error,
-      agentsByKind: new Map(),
-    });
-
+  it("maps one target response without adding or dropping executable ids", () => {
     const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+    expect(result.current.groups[0]?.models.map((model) => model.modelId)).toEqual([
+      "fable", "unknown-upstream",
+    ]);
+    expect(result.current.defaultLaunchSelection).toEqual({ kind: "claude", modelId: "fable" });
+    expect(result.current.snapshot?.snapshotId).toContain("harness-launch-options:workspace-1:claude:basis-1:5");
+  });
 
+  it("surfaces a typed target-read error without catalog fallback choices", () => {
+    const error = new Error("target unavailable");
+    mocks.query = { data: undefined, isLoading: false, isError: true, error };
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
     expect(result.current.error).toBe(error);
-    expect(result.current.cloudCatalogError).toBeNull();
-    expect(result.current.targetReadinessError).toBe(error);
     expect(result.current.launchAgents).toEqual([]);
-    expect(result.current.hasLaunchableAgents).toBe(false);
-    expect(result.current.isEmpty).toBe(false);
+  });
+
+  it("renders active session models from the live snapshot even if target options differ", () => {
+    const { result } = renderHook(() => useChatLaunchCatalog({
+      activeSelection: { kind: "claude", modelId: "live-only" },
+      activeModelControl: {
+        kind: "claude",
+        values: [{ value: "live-only", label: "Live only" }],
+      },
+    }));
+    expect(result.current.groups[0]?.models.map((model) => model.modelId)).toEqual(["live-only"]);
+  });
+
+  it("keeps every other ready harness listed while a session is active", () => {
+    mocks.readyAgentKinds = new Set(["claude", "codex"]);
+    mocks.otherResponses = [response(["gpt-5.6-sol"], "codex")];
+    const { result } = renderHook(() => useChatLaunchCatalog({
+      activeSelection: { kind: "claude", modelId: "live-only" },
+      activeModelControl: {
+        kind: "claude",
+        values: [{ value: "live-only", label: "Live only" }],
+      },
+    }));
+    // Negative control against the cutover regression: an active live control
+    // must not collapse the picker to the active harness alone.
+    expect(result.current.groups.map((group) => group.kind)).toEqual(["claude", "codex"]);
+    expect(result.current.groups[0]?.models.map((model) => model.modelId)).toEqual(["live-only"]);
+    expect(result.current.groups[1]?.models.map((model) => model.modelId)).toEqual(["gpt-5.6-sol"]);
+    expect(result.current.groups[1]?.models[0]?.actionKind).toBe("open_new_chat");
+  });
+
+  it("fans out over the sandbox ready list on a cloud workspace, not the local one", () => {
+    mocks.readyAgentKinds = new Set(["claude", "codex"]);
+    mocks.cloudConnectionInfo = { readyAgentKinds: ["claude", "grok"] };
+    mocks.otherResponses = [response(["grok-4.6"], "grok")];
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+    // Negative control: the LOCAL runtime's ready list (codex) must not drive
+    // the cloud fan-out; the sandbox connection's list (grok) is the authority.
+    expect(mocks.otherKindsRequested).toEqual(["grok"]);
+    expect(result.current.groups.map((group) => group.kind)).toEqual(["claude", "grok"]);
+  });
+
+  it("omits an unresolved other harness without failing the catalog", () => {
+    mocks.readyAgentKinds = new Set(["claude", "codex"]);
+    mocks.otherResponses = [null];
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+    expect(result.current.groups.map((group) => group.kind)).toEqual(["claude"]);
+    expect(result.current.error).toBeNull();
   });
 });
+
+function response(ids: string[], harnessKind = "claude") {
+  return {
+    harnessKind, basisRevision: "basis-1", revision: 5, state: "observed",
+    options: {
+      models: ids.map((id) => ({ id, observedName: id === "fable" ? "Fable" : null, observedDescription: null })),
+      controls: [], defaults: { modelId: ids[0] ?? null, controlValues: {} },
+    },
+    observedAt: null, probeAttemptedAt: null, probeFailureCode: null, readiness: "ready",
+  };
+}

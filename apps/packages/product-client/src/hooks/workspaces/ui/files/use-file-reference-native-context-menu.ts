@@ -8,13 +8,15 @@ import type {
 import type { FileReferencePathKind } from "#product/lib/domain/files/path-references";
 
 interface FileReferenceNativeContextMenuActions {
+  accessState: { status: string };
   openTargets: OpenTarget[];
   defaultOpenTarget?: OpenTarget | null;
   pathKind: FileReferencePathKind | null;
   canOpenInSidebar: boolean;
   canOpenExternal: boolean;
   canReveal: boolean;
-  copyPath: () => void;
+  copyPath: string | null;
+  copyCurrentPath: () => void;
   openInSidebar: () => void;
   openDefault: () => void;
   openWithTarget: (targetId: string) => void;
@@ -30,6 +32,7 @@ export function useFileReferenceNativeContextMenu(
 }
 
 export function buildFileReferenceNativeContextMenuItems({
+  accessState,
   openTargets,
   defaultOpenTarget,
   pathKind,
@@ -37,62 +40,70 @@ export function buildFileReferenceNativeContextMenuItems({
   canOpenExternal,
   canReveal,
   copyPath,
+  copyCurrentPath,
   openInSidebar,
   openDefault,
   openWithTarget,
   reveal,
 }: FileReferenceNativeContextMenuActions): NativeMenuItem[] {
+  if (copyPath === null) return [];
+  const copyItem: NativeMenuItem = {
+    id: "copy-path",
+    label: "Copy path",
+    enabled: true,
+    onSelect: copyCurrentPath,
+  };
+  if (accessState.status !== "settled") return [copyItem];
+
   const targets = filterFileReferenceOpenTargets(openTargets);
   const items: NativeMenuItem[] = [];
 
-  if (pathKind !== "directory") {
+  if (pathKind !== "directory" && canOpenInSidebar) {
     items.push({
       id: "open-viewer",
       label: "Open in viewer",
-      enabled: canOpenInSidebar,
+      enabled: true,
       icon: { kind: "native", name: "document" },
       onSelect: openInSidebar,
     });
   }
 
-  items.push({
-    id: "open-default",
-    label: defaultOpenTarget ? `Open in ${defaultOpenTarget.label}` : "Open externally",
-    enabled: canOpenExternal,
-    icon: nativeMenuIconForOpenTarget(defaultOpenTarget) ?? { kind: "native", name: "open" },
-    onSelect: openDefault,
-  });
+  if (canOpenExternal) {
+    items.push({
+      id: "open-default",
+      label: defaultOpenTarget ? `Open in ${defaultOpenTarget.label}` : "Open externally",
+      enabled: true,
+      icon: nativeMenuIconForOpenTarget(defaultOpenTarget) ?? { kind: "native", name: "open" },
+      onSelect: openDefault,
+    });
+  }
 
-  if (targets.length > 0) {
+  if (canOpenExternal && targets.length > 0) {
     items.push({
       kind: "submenu",
       submenuId: "open-with",
       label: "Open with",
-      enabled: canOpenExternal,
+      enabled: true,
       items: targets.map((target): NativeMenuItem => ({
         id: `open-with:${target.id}`,
         label: target.label,
-        enabled: canOpenExternal,
+        enabled: true,
         icon: nativeMenuIconForOpenTarget(target),
         onSelect: () => openWithTarget(target.id),
       })),
     });
   }
 
-  items.push(
-    { kind: "separator" },
-    {
-      id: "copy-path",
-      label: "Copy path",
-      onSelect: copyPath,
-    },
-    {
+  if (items.length > 0) items.push({ kind: "separator" });
+  items.push(copyItem);
+  if (canReveal) {
+    items.push({
       id: "reveal-in-finder",
       label: pathKind === "directory" ? "Reveal folder in Finder" : "Reveal in Finder",
-      enabled: canReveal,
+      enabled: true,
       onSelect: reveal,
-    },
-  );
+    });
+  }
 
   return items;
 }

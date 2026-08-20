@@ -19,35 +19,30 @@ export function useChatLaunchControlActions({
     value: string,
   ) => {
     if (!activeLaunchAgentKind) {
-      updateDefaultLaunchControlPreference(agentKind, controlKey, value);
+      updateDefaultLaunchControlPreference(agentKind, rawConfigId, value);
       return;
     }
 
     void setActiveSessionConfigOption(rawConfigId, value, { controlKey }).catch(() => {
-      updateDefaultLaunchControlPreference(activeLaunchAgentKind, controlKey, value);
+      updateDefaultLaunchControlPreference(activeLaunchAgentKind, rawConfigId, value);
     });
   }, [activeLaunchAgentKind, setActiveSessionConfigOption]);
 }
 
+// Persisted launch defaults are keyed by the RAW target-observed control id
+// (the create seam exact-validates keys against the harness observation), so
+// this must receive `rawConfigId`, never the normalized control key.
 function updateDefaultLaunchControlPreference(
   agentKind: string,
-  controlKey: string,
+  rawConfigId: string,
   value: string,
 ): void {
   const state = useUserPreferencesStore.getState();
-  if (controlKey === "mode") {
-    state.set("defaultSessionModeByAgentKind", {
-      ...state.defaultSessionModeByAgentKind,
-      [agentKind]: value,
-    });
-    return;
-  }
-
   state.set("defaultLiveSessionControlValuesByAgentKind", {
     ...state.defaultLiveSessionControlValuesByAgentKind,
     [agentKind]: {
       ...state.defaultLiveSessionControlValuesByAgentKind[agentKind],
-      [controlKey]: value,
+      [rawConfigId]: value,
     },
   });
 }

@@ -30,9 +30,12 @@ For models whose provider is already configured.
 2. Open the PR. On merge to `main`, `deploy-staging.yml` change-detects
    `server/litellm/**`, rebuilds the image, and redeploys the staging
    service.
-3. Verify on staging, then promote to production via the normal release
-   flow. There is no catalog step after a gateway model change: pickers
-   learn gateway models from the proxy's per-key `GET /v1/models`.
+3. Verify on staging, then promote to production via the normal release flow.
+   There is no catalog step after a gateway model change. The per-key
+   `GET /v1/models` result is used only to materialize routes whose provider
+   config must enumerate models; an override-free harness probe must then
+   report the model in target `HarnessLaunchOptions` before any picker offers
+   it.
 
 Removing a model is the same PR in reverse. Harnesses pinning the removed
 name start receiving 400s, so check spend logs for recent usage first.

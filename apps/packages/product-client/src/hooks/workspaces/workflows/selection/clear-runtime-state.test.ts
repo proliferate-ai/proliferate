@@ -10,6 +10,12 @@ import type {
   PendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import {
+  resetFileTreeStoreForTests,
+  selectFileTreeExpandedPaths,
+  selectFileTreeStateKey,
+  useFileTreeStore,
+} from "#product/stores/editor/file-tree-store";
 
 function buildEntry(attemptId: string): PendingWorkspaceEntry {
   return {
@@ -85,5 +91,49 @@ describe("clearWorkspaceRuntimeState", () => {
 
     expect(clearSelection).not.toHaveBeenCalled();
     expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-b");
+  });
+
+  it("prunes only the disposed workspace's file-tree registry entry and expansion scopes", () => {
+    resetFileTreeStoreForTests();
+    const disposed = { materializedWorkspaceId: "workspace-b", treeStateKey: "repo-root-b" };
+    const survivor = { materializedWorkspaceId: "workspace-a", treeStateKey: "repo-root-a" };
+    const tree = useFileTreeStore.getState();
+    tree.claimFileTreeStateKey("workspace-b", "repo-root-b");
+    tree.claimFileTreeStateKey("workspace-a", "repo-root-a");
+    tree.setPathExpanded(disposed, "src", true);
+    tree.setPathExpanded(
+      { materializedWorkspaceId: "workspace-b", treeStateKey: "other-root" },
+      "docs",
+      true,
+    );
+    tree.setPathExpanded(survivor, "src", true);
+    tree.setDesiredWidth(520);
+    const durableRevision = useFileTreeStore.getState().durableRevision;
+
+    clearWorkspaceRuntimeState(
+      { removeWorkspaceSlots: vi.fn(), clearSelection: vi.fn() },
+      "workspace-b",
+    );
+
+    const state = useFileTreeStore.getState();
+    expect(state.firstTreeStateKeyByMaterializedWorkspace.has("workspace-b")).toBe(false);
+    expect(selectFileTreeExpandedPaths(state, disposed).size).toBe(0);
+    expect(
+      selectFileTreeExpandedPaths(state, {
+        materializedWorkspaceId: "workspace-b",
+        treeStateKey: "other-root",
+      }).size,
+    ).toBe(0);
+    expect(
+      selectFileTreeStateKey(state, {
+        materializedWorkspaceId: "workspace-a",
+        candidateTreeStateKey: "ignored",
+      }),
+    ).toBe("repo-root-a");
+    expect(selectFileTreeExpandedPaths(state, survivor)).toEqual(new Set(["src"]));
+    // Session prune never touches durable dock state.
+    expect(state.durableRevision).toBe(durableRevision);
+    expect(state.desiredWidth).toBe(520);
+    resetFileTreeStoreForTests();
   });
 });

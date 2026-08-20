@@ -32,7 +32,6 @@ export function materializeExistingSession({
   latencyFlowId,
   launchIntentId,
   pendingSessionId,
-  resolvedModeId,
   upsertWorkspaceSessionRecord,
   workspaceId,
 }: {
@@ -42,7 +41,6 @@ export function materializeExistingSession({
   latencyFlowId?: string | null;
   launchIntentId?: string | null;
   pendingSessionId: string;
-  resolvedModeId: string | null;
   upsertWorkspaceSessionRecord: (
     workspaceId: string,
     session: Session,
@@ -57,7 +55,6 @@ export function materializeExistingSession({
     session: existingSession,
     workspaceId,
     fallbackModelId,
-    fallbackModeId: resolvedModeId,
     fallbackTitle: existingProjectedRecord?.title ?? null,
     pendingConfigChanges: {},
   });
@@ -139,7 +136,6 @@ function materializedRecordFromExistingSession({
   session,
   workspaceId,
   fallbackModelId,
-  fallbackModeId,
   fallbackTitle,
   pendingConfigChanges,
 }: {
@@ -147,7 +143,6 @@ function materializedRecordFromExistingSession({
   session: Session;
   workspaceId: string;
   fallbackModelId: string;
-  fallbackModeId: string | null;
   fallbackTitle: string | null;
   pendingConfigChanges: SessionRuntimeRecord["pendingConfigChanges"];
 }): SessionRuntimeRecord {
@@ -157,7 +152,6 @@ function materializedRecordFromExistingSession({
       materializedSessionId: session.id,
       modelId: session.modelId ?? fallbackModelId,
       requestedModelId: session.requestedModelId ?? fallbackModelId,
-      modeId: session.modeId ?? fallbackModeId,
       title: session.title ?? fallbackTitle,
       actionCapabilities: session.actionCapabilities,
       liveConfig: session.liveConfig ?? null,

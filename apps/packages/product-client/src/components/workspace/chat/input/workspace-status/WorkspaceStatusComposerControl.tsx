@@ -131,6 +131,7 @@ export function WorkspaceStatusComposerControl({
           label="Workspace status"
           aria-label="Workspace status"
           title="Workspace status"
+          data-workspace-status-trigger
         />
       )}
       side="top"

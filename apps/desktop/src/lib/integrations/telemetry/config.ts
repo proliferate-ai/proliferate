@@ -24,13 +24,11 @@ export interface DesktopTelemetryConfig {
     dsn: string | null;
     tracesSampleRate: number;
     enableLogs: boolean;
-    replaysOnErrorSampleRate: number;
   };
   posthog: {
     enabled: boolean;
     apiKey: string | null;
     apiHost: string;
-    sessionRecordingEnabled: boolean;
   };
 }
 
@@ -56,10 +54,6 @@ export function getDesktopTelemetryConfig(): DesktopTelemetryConfig {
         import.meta.env.VITE_PROLIFERATE_SENTRY_ENABLE_LOGS,
         true,
       ),
-      replaysOnErrorSampleRate: envFloat(
-        import.meta.env.VITE_PROLIFERATE_SENTRY_REPLAY_ON_ERROR_SAMPLE_RATE,
-        1.0,
-      ),
     },
     posthog: {
       enabled: posthogKey !== null,
@@ -67,10 +61,6 @@ export function getDesktopTelemetryConfig(): DesktopTelemetryConfig {
       apiHost:
         import.meta.env.VITE_PROLIFERATE_POSTHOG_HOST?.trim()
         || "https://us.i.posthog.com",
-      sessionRecordingEnabled: envFlagEnabled(
-        import.meta.env.VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED,
-        false,
-      ),
     },
   };
 }

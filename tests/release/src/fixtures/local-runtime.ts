@@ -145,34 +145,33 @@ export class LocalRuntimeClient {
     return response.agent;
   }
 
-  /**
-   * The runtime's probed gateway model list for a harness
-   * (`GET /v1/agents/{kind}/catalog/gateway-models`) — the models the pushed
-   * gateway key can actually serve, recorded by the runtime's own probe after
-   * an agent-auth state push. Empty when no gateway auth is configured (a
-   * native-login laptop), so callers fall back to catalog-derived candidates.
-   */
+  /** Back-compatible release-helper name over target-observed launch options. */
   async getGatewayModels(kind: string): Promise<Array<{ id: string }>> {
-    const response = await this.request<{ models: Array<{ id: string }> }>(
-      "GET",
-      `/v1/agents/${kind}/catalog/gateway-models`,
-    );
-    return response.models;
+    const response = await this.getHarnessLaunchOptions(kind);
+    return response.options?.models ?? [];
   }
 
-  /**
-   * The runtime's per-agent launch options (`GET /v1/agents/launch-options`) —
-   * the exact source Desktop's composer reads for local launch. An agent only
-   * appears here (with a non-empty `models` list) once its process is installed
-   * and its credentials resolve, so it is the authoritative "is this harness
-   * launchable in the UI yet" signal.
-   */
-  async getAgentLaunchOptions(): Promise<Array<{ kind: string; models: Array<{ id: string }> }>> {
-    const response = await this.request<{ agents: Array<{ kind: string; models: Array<{ id: string }> }> }>(
+  async getHarnessLaunchOptions(kind: string): Promise<{
+    harnessKind: string;
+    options: { models: Array<{ id: string }> } | null;
+  }> {
+    return this.request<{
+      harnessKind: string;
+      options: { models: Array<{ id: string }> } | null;
+    }>(
       "GET",
-      "/v1/agents/launch-options",
+      `/v1/agents/${encodeURIComponent(kind)}/launch-options`,
     );
-    return response.agents;
+  }
+
+  /** Aggregate helper over each harness's target-observed response. */
+  async getAgentLaunchOptions(): Promise<Array<{ kind: string; models: Array<{ id: string }> }>> {
+    const agents = await this.listAgents();
+    const responses = await Promise.all(agents.map(async (agent) => {
+      const response = await this.getHarnessLaunchOptions(agent.kind);
+      return { kind: agent.kind, models: response.options?.models ?? [] };
+    }));
+    return responses;
   }
 
   async createLocalWorkspace(path: string): Promise<CreateWorkspaceResponse> {

@@ -72,6 +72,11 @@ pub struct WorkspaceArchiveService {
     /// the runner (the sweep's tick drains it once the root is quiet); the
     /// enqueue side is purge's, in R5.
     pub(super) deferred_gc: Arc<Mutex<BTreeSet<PathBuf>>>,
+    /// Checkpoints (Lane H): the sweep runs checkpoint retention as an extra
+    /// duty each tick. Held here because the sweep is the natural periodic host
+    /// for retention, and threading a second background loop would duplicate the
+    /// tick cadence and the boot pass.
+    pub(super) checkpoints: Arc<super::checkpoints::WorkspaceCheckpointService>,
     /// The quiesce deadline phase 1 enforces. A seam rather than the constant
     /// because the ONE way quiesce fails is the deadline trip, and no
     /// arrangement of three real planes takes eight seconds on demand.
@@ -91,6 +96,7 @@ impl WorkspaceArchiveService {
         planes: QuiescePlanes,
         session_service: Arc<SessionService>,
         runtime_home: PathBuf,
+        checkpoints: Arc<super::checkpoints::WorkspaceCheckpointService>,
     ) -> Self {
         Self {
             store,
@@ -102,6 +108,7 @@ impl WorkspaceArchiveService {
             tokens: Phase2Tokens::default(),
             inflight: InFlightPaths::default(),
             deferred_gc: Arc::new(Mutex::new(BTreeSet::new())),
+            checkpoints,
             #[cfg(test)]
             quiesce_deadline: Mutex::new(quiesce::QUIESCE_DEADLINE),
             #[cfg(test)]

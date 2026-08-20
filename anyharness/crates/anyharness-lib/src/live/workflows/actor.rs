@@ -22,7 +22,7 @@ use crate::domains::workflows::model::{
 };
 use crate::domains::workflows::projection::RunProjection;
 use crate::domains::workflows::render::{
-    node_session_title, render_envelope, RenderInputs, CONTEXT_DIR_RELATIVE,
+    node_session_title, render_envelope, run_context_dir_relative, RenderInputs,
 };
 use crate::domains::workflows::store::{emit_decision_events, ResolvedSideEffect, WorkflowStore};
 use crate::domains::workflows::transition::{
@@ -280,13 +280,13 @@ impl WorkflowActor {
             }
         };
 
-        let (agent_kind, model_id, mode_id) = launch_model(&node, &definition);
+        let (agent_kind, model_id, control_values) = launch_model(&node, &definition);
 
         let input = InternalSessionCreateInput {
             workspace_id: state.run.workspace_id.clone(),
             agent_kind: agent_kind.clone(),
             model_id,
-            mode_id,
+            control_values,
             origin: OriginContext::system_local_runtime(),
             preselected_session_id: None,
         };
@@ -453,7 +453,7 @@ impl WorkflowActor {
         let arguments: serde_json::Map<String, serde_json::Value> =
             serde_json::from_str(&state.run.arguments_json)?;
         let docs = self.deps.store.list_docs(&self.run_id)?;
-        let context_dir = Path::new(&workspace.path).join(CONTEXT_DIR_RELATIVE);
+        let context_dir = Path::new(&workspace.path).join(run_context_dir_relative(&self.run_id));
         render_envelope(&RenderInputs {
             node_type: node.node_type,
             prompt: &node.prompt,
@@ -510,7 +510,7 @@ impl WorkflowActor {
 pub(super) fn launch_model(
     node: &WorkflowRunNodeRecord,
     definition: &WorkflowDefinition,
-) -> (String, Option<String>, Option<String>) {
+) -> (String, Option<String>, std::collections::BTreeMap<String, String>) {
     let model = node.model.clone().or_else(|| {
         node.definition_node_id
             .as_deref()
@@ -518,7 +518,7 @@ pub(super) fn launch_model(
             .and_then(|node| node.model.clone())
     });
     match model {
-        Some(model) => (model.agent_kind, model.model_id, model.mode_id),
-        None => (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, None),
+        Some(model) => (model.agent_kind, model.model_id, model.control_values),
+        None => (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, Default::default()),
     }
 }

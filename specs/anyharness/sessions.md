@@ -55,11 +55,14 @@ It includes:
 - `workspace_id`
 - `agent_kind`
 - `native_session_id`
-- requested / current model and mode fields
+- legacy requested/current model and mode compatibility projections
 - status
 - timestamps
 
-This is the durable identity surface for a session.
+This is the durable identity surface for a session, not the launch-config
+authority. The complete explicit selection lives in the session's atomic
+`ResolvedLaunchIntent`; current executable options and values live in its
+`SessionLiveConfigSnapshot`.
 
 ### `SessionEventRecord` (`anyharness/crates/anyharness-lib/src/domains/sessions/model.rs`)
 
@@ -125,7 +128,8 @@ boundary.
 There are two durable config-related record types:
 
 - `SessionLiveConfigSnapshotRecord`
-  - the last normalized ACP-exposed config surface
+  - the latest complete ACP-exposed models, generic controls, allowed values,
+    current values, and monotonic source sequence
 - `PendingConfigChangeRecord`
   - config changes requested while a session was busy
 
@@ -348,20 +352,42 @@ Fork invariants:
 - adapters with durable fork ids may fork on the parent actor and then start the
   child with `load_session`
 - adapters whose fork ids are process-local until first prompt, such as Claude,
-  start the child actor with `fork_from_native`; that child actor calls ACP
-  `session/fork` from the parent native id and owns the resulting live fork
+  start the child actor with `fork_from_native`; on that child's fresh adapter
+  process, the actor initializes ACP, loads the exact parent native session,
+  and only then calls `session/fork` on the same connection. The load carries
+  ordinary startup metadata, while a targeted provider anchor is fork-only.
+  The parent session is never closed by this hydration path
 - for adapters that cannot replay the forked transcript through child
   `load_session`, AnyHarness snapshots the parent's durable `session_events`
   into the child before startup and appends child events after that prefix
 - raw ACP notifications are not copied into fork children
 - generic ACP fork support (`action_capabilities.fork`) means tip fork only;
   targeted fork requires the separate `action_capabilities.targeted_fork`
-  capability. The OpenCode side-door bridge derives `targeted_fork` from the
-  runtime-owned qualification registry (an exact vendor version pin) AND a
-  loopback-only, fail-closed side-door readiness check; it stays off unless the
-  registry qualifies the resolved vendor version and the side-door proves
-  loopback-authenticated and off-host-unreachable. Every other adapter remains
-  absent until its own per-harness bridge lands
+  capability, derived per adapter family. ACP-native schema parsing recognizes
+  the strict `message_id`/`turn_id`/`user_message_index` target vocabulary, but
+  syntax recognition is not dispatch readiness. The current native dispatch
+  matrix enables only Claude with `message_id`; Claude advertisements for the
+  other target kinds stay off, and Codex `turn_id` stays off until the bridge
+  provides native turn ids. Unknown, malformed, and legacy advertisements also
+  stay off. Before allocating a fork operation, the runtime asks the live actor
+  to verify the required generic or targeted capability; the persisted
+  capability JSON is a cache and cannot authorize dispatch when a live
+  handshake update failed to persist. The OpenCode side-door bridge derives
+  `targeted_fork` from the runtime-owned qualification registry (an exact
+  vendor version pin) AND a loopback-only, fail-closed side-door readiness
+  check; it stays off unless the registry qualifies the resolved vendor version
+  and the side-door proves loopback-authenticated and off-host-unreachable.
+  Every other adapter remains absent until its own per-harness bridge lands
+- native `session/fork` rejection messages and data are provider-controlled and
+  may contain transcript identifiers, so they never enter logs or public error
+  chains; the runtime records only a fixed bounded failure class and detail.
+  Process-local fork connections permanently use a header-only transport tee.
+  Parent replay, delayed parent frames, unknown sessions, and all legacy ACP
+  extension requests are quarantined; rejected requests receive only fixed
+  typed cancellation-success shapes. Protocol-scoped requests are denied until
+  the exact child is durably ready. Protected response ids are bounded,
+  single-use, and must match a client request before ACP dispatch; malformed or
+  unowned envelopes fail closed with fixed diagnostics
 
 ### Fork boundary and the durable operation record
 
@@ -381,9 +407,17 @@ recovery; nothing load-bearing lives in opaque adapter `_meta`.
   recorded anchor or it fails.
 - Provenance. The record stores the product anchor, the provider anchor
   (kind/value and inclusivity rule), the exact copied-prefix terminal `seq` and
-  its digest, and the adapter/native versions. It is written atomically with the
-  child session row, the `fork` link, and (for snapshot adapters) the copied
-  event prefix.
+  its digest, the adapter/native versions, and a nullable
+  `fork_operations.checkpoint_id`. For a targeted fork, checkpoint linkage is
+  an exact lookup of the newest unexpired checkpoint at
+  `(parent_session_id, anchor_turn_id)`: the fork path never captures a new
+  checkpoint, chooses a nearest boundary, or joins through `prompt_id`.
+  `checkpoint_id = NULL` therefore means that no checkpoint sat at that exact
+  boundary, an explicit no-checkpoint state rather than an inferred fallback.
+  The operation is inserted first in `prepared`, before any native call. For a
+  process-local fork, child session + `fork` link + copied event prefix +
+  resolved operation provenance are then one transaction that keeps the
+  operation `prepared`; the child actor alone may claim the wire call.
 - Identity/idempotency. The operation key is the caller's `child_session_id` or
   an `Idempotency-Key`, bound to a canonical request digest. Same key + same
   payload resumes the in-flight operation or returns the same child; same key +
@@ -392,6 +426,14 @@ recovery; nothing load-bearing lives in opaque adapter `_meta`.
   leaves the record `native_outcome_unknown`, which blocks blind redispatch and
   preserves an orphan candidate for audited reconciliation rather than
   speculatively re-forking (surfaced as `FORK_NATIVE_OUTCOME_UNKNOWN`).
+  Process-local dispatch uses strict operation-id + child-id transitions:
+  `prepared -> native_call_in_flight` immediately before the wire call; a
+  successful response atomically writes `sessions.native_session_id` and
+  `native_result_known`; final readiness atomically writes session `idle` and
+  operation `completed`. `fork_operations.native_child_session_id` remains
+  nullable because the child session row owns Claude's process-local id. An
+  explicit provider error becomes `failed`; a disconnect, malformed response,
+  invalid child id, or locally ambiguous error becomes `native_outcome_unknown`.
 
 ### Restart and recovery
 
@@ -406,12 +448,11 @@ On a child cold start:
 - if the child recorded its own durable native id (durable-fork adapter, or a
   process-local child with `last_prompt_at` set), it loads that id with no
   fallback — re-forking would drop the child's own turns.
-- otherwise it runs the exact-prefix recovery recipe: re-fork from the parent
-  native id, reproduce the copied prefix, and verify the reproduced prefix
-  digest against the `fork_operations` provenance before going live. A mismatch
-  fails visibly (`FORK_RECOVERY_PREFIX_MISMATCH`); the child never re-forks the
-  parent's later tip. If no parent native id resolves, it falls back to the
-  child's own (possibly stale) native id rather than failing the launch.
+- otherwise it fails closed without `load_session`, `session/fork`, or fallback.
+  Exact-prefix recovery is not implemented in this slice; R1 must provide and
+  verify that proof before cold redispatch can be enabled. A prepared,
+  in-flight, known-result, or unknown-outcome operation never authorizes a
+  second native fork.
 
 AnyHarness exposes fork through typed contract fields. ACP `_meta.anyharness`
 is reserved for private runtime-to-adapter extensions and must not leak into
@@ -478,14 +519,19 @@ It:
 3. verifies the workspace exists
 4. verifies the requested agent kind exists in the built-in registry
 5. resolves the agent and requires it to be ready
-6. validates the requested model id against the curated provider catalog
-7. atomically creates the durable `SessionRecord` in `starting` state, or
-   returns the concurrently inserted row for the same idempotent request
+6. reloads the selected harness's current matching-basis
+   `HarnessLaunchOptions`
+7. exact-validates the optional `modelId` and every generic
+   `controlValues` key/value without aliasing, filtering, or fallback
+8. atomically creates the durable `SessionRecord` in `starting` state together
+   with its complete `ResolvedLaunchIntent`, or returns the concurrently
+   inserted row and its immutable intent for the same idempotent request
 
-This path does not start ACP directly. It only produces a valid durable session
-record. Omitting `sessionId` preserves ordinary server-minted identity. Internal
-preselected ids remain strict fresh-create inputs unless their caller explicitly
-uses the idempotent public create seam.
+This path does not start ACP directly. It commits the valid durable session and
+the exact launch promise the actor must later apply and confirm. Omitting
+`sessionId` preserves ordinary server-minted identity. Internal preselected ids
+remain strict fresh-create inputs unless their caller explicitly uses the
+idempotent public create seam.
 
 ### Read and History
 
@@ -579,19 +625,21 @@ The session domain owns:
 
 - the durable live-config snapshot
 - the queue of pending config changes
-- normalized control metadata exposed back to clients
+- the exact models, generic controls, allowed values, and complete current
+  values exposed back to clients
 
 `live_config/**`
 (`anyharness/crates/anyharness-lib/src/domains/sessions/live_config/**`)
-is the normalization layer from ACP config options into the runtime-owned
-`SessionLiveConfigSnapshot` shape.
+maps the native handshake into the runtime-owned
+`SessionLiveConfigSnapshot` shape without dropping unknown identifiers.
 
 It:
 
-- flattens ACP select options into raw config options
-- groups known controls into normalized buckets such as model, mode, reasoning,
-  effort, and fast mode
-- preserves everything else as extras
+- preserves exact ordered model and control rows plus all allowed values
+- records the complete current model and control-value map
+- advances a monotonic source sequence and replaces the prior full snapshot
+- may expose compatibility presentation groupings, but never uses them as the
+  validation or mutation authority
 
 ### What the ACP runtime owns
 
@@ -603,60 +651,54 @@ The ACP runtime owns:
 
 ### End-to-end config flow
 
-1. client requests a config change
-2. `SessionRuntime` ensures the actor is live
-3. the actor tries to apply the change through ACP
-4. if the session is busy, the change is queued durably
-5. ACP config updates rebuild the normalized snapshot
-6. the snapshot is persisted durably
-7. queued changes are replayed when the actor becomes idle
+1. the client sends an exact model or control key/value from the current full
+   snapshot
+2. `SessionRuntime` ensures the actor is live and validates against the latest
+   snapshot
+3. the actor applies the raw value through the harness's supported ACP surface
+4. if the session is busy, the exact change is queued durably
+5. success requires positive exact-value confirmation from the live harness
+6. the next complete `SessionLiveConfigSnapshot` is persisted and published
+7. queued changes are revalidated against the latest snapshot before idle replay
 
 ### Model selection specifics
 
-Model changes have extra logic because agents expose models in different ways.
+Model changes have protocol-specific transport because harnesses may expose a
+raw model config control or a direct ACP model setter. The selected ID itself is
+never rewritten: it must be an exact member of the current live snapshot and
+must be read back exactly after application. A legacy direct setter is usable
+only when the canonical snapshot advertises that model and the setter can
+positively confirm the response-carried current value. There is no catalog alias
+or optimistic acknowledgement path.
 
-The runtime tries:
-
-1. direct ACP model APIs
-2. curated Claude alias handling when needed
-3. generic config-option setters as a fallback
-
-That is why model configuration spans both:
+Model configuration spans both:
 
 - `anyharness/crates/anyharness-lib/src/domains/sessions/live_config/**`
 - `anyharness/crates/anyharness-lib/src/live/sessions/actor/config/**`
 
 #### Same-session model changes
 
-The current active catalog authorizes a catalog model against the recorded auth
-contexts captured when the session was created. Legacy sessions without those
-recorded auth contexts gain no extra catalog authorization: advertised options
-govern when present. The legacy direct setter may defer to the harness only
-when there is no model config option and no direct model control—both
-`current_model_id` and `available_models` are empty.
+The current canonical live snapshot authorizes a model for the active session.
+That snapshot, rather than a catalog or the original launch observation, owns
+the session's executable model membership. The legacy direct setter is attempted
+only when there is no raw model config option and no direct model control.
 
 The runtime will start or resume a live actor before applying a model change.
-What happens next depends on actor state and authorization:
+What happens next depends on actor state and confirmation:
 
-- When the actor is idle, an accepted update applies to the live process.
-- When the actor immediately rejects a catalog-authorized model, the runtime
-  persists the requested model, retires the agent process, and attempts to
-  relaunch it under the same session ID.
-- Persistence occurs before retirement and relaunch. If relaunch fails, the
-  request returns an internal error and the durable model selection remains
-  updated; it is not rolled back.
-- An immediate rejection that is not catalog-authorized returns
-  `SESSION_CONFIG_REJECTED` and does not relaunch the process.
+- When the actor is idle, it applies the update to the live process and reports
+  success only after exact current-value readback.
+- Transport acknowledgement without exact readback returns
+  `SESSION_CONFIG_REJECTED`; the runtime does not mutate local current state or
+  relaunch the process to manufacture success.
 - During an active turn, the actor persists the change and returns `Queued`.
-  It replays the change when idle. A replay rejection removes the pending
-  change inside the actor. The requested model remains persisted; current
-  model remains the last accepted value, and the rejection does not reach the
-  runtime relaunch arm or retroactively fail the original request. This is a
-  current gap rather than a universal relaunch contract.
+  Before replaying it when idle, the actor reloads the latest canonical live
+  snapshot and removes the pending change if model membership has disappeared.
+  Setter rejection also removes the pending change without changing current
+  model state.
 
-Every path preserves the durable session identity. A same-session model change
-may therefore keep or replace the live agent process without creating a new
-session.
+Every path preserves both the durable session identity and the existing live
+agent process.
 
 ## SSE and Event Flow
 

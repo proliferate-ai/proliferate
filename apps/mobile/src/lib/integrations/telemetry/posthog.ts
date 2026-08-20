@@ -1,6 +1,5 @@
 import { PostHog } from "posthog-react-native";
 import type { PostHogOptions } from "posthog-react-native";
-import type { AuthUser } from "@proliferate/cloud-sdk";
 import { scrubTelemetryData } from "@proliferate/product-client/internal/domain/telemetry/scrub";
 
 import type { MobileTelemetryConfig } from "./config";
@@ -40,17 +39,10 @@ export function initializeMobilePostHog(config: MobilePostHogInitConfig): void {
     host: config.posthog.apiHost,
     captureAppLifecycleEvents: false,
     before_send: scrubPostHogCapture,
-    enableSessionReplay: config.posthog.sessionReplayEnabled,
-    sessionReplayConfig: config.posthog.sessionReplayEnabled
-      ? {
-        maskAllTextInputs: true,
-        maskAllImages: true,
-        maskAllSandboxedViews: true,
-        captureLog: false,
-        captureNetworkTelemetry: false,
-        throttleDelayMs: 1000,
-      }
-      : undefined,
+    // Source-owned fail-closed assertion (CP-C1PM): not a configuration
+    // surface. No build variable, provider setting, or runtime value reaches
+    // this literal. Re-enabling Mobile replay needs a new reviewed source PR.
+    enableSessionReplay: false,
   });
 
   void posthogClient.register({
@@ -69,17 +61,9 @@ export function trackMobilePostHogScreenView(screen: MobileTelemetryScreen): voi
   }));
 }
 
-export function identifyMobilePostHogUser(user: AuthUser): void {
+export function identifyMobilePostHogUser(userId: string): void {
   if (!posthogClient) return;
-  const properties: Record<string, string> = { email: user.email };
-  if (user.display_name) {
-    properties.display_name = user.display_name;
-  }
-
-  posthogClient.identify(
-    user.id,
-    scrubTelemetryData(properties),
-  );
+  posthogClient.identify(userId);
 }
 
 export function resetMobilePostHogUser(): void {

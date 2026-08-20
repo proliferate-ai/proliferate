@@ -14,6 +14,12 @@ impl InboundDoor {
         &self,
         args: acp::schema::ExtRequest,
     ) -> acp::Result<acp::schema::ExtResponse> {
+        if !self.route_session_request(None) {
+            return raw_ext_response(CodexRequestUserInputExtResponse {
+                outcome: CodexRequestUserInputExtOutcome::Cancelled,
+                answers: Vec::new(),
+            });
+        }
         let request = serde_json::from_str::<CodexRequestUserInputParams>(args.params.get())
             .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
 
@@ -98,6 +104,13 @@ impl InboundDoor {
     ) -> acp::Result<acp::schema::ExtResponse> {
         let request = serde_json::from_str::<ClaudeRequestUserInputParams>(args.params.get())
             .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
+
+        if !self.route_session_request(request.session_id.as_deref()) {
+            return raw_ext_response(ClaudeRequestUserInputExtResponse {
+                outcome: ClaudeRequestUserInputExtOutcome::Cancelled,
+                answers: Vec::new(),
+            });
+        }
 
         let response = self
             .request_user_input(request.questions, "Input requested")
@@ -199,6 +212,8 @@ struct CodexRequestUserInputParams {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ClaudeRequestUserInputParams {
+    #[serde(default)]
+    session_id: Option<String>,
     questions: Vec<UserInputQuestion>,
 }
 

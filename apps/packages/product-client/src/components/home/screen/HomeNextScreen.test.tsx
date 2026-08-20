@@ -241,21 +241,21 @@ describe("HomeNextScreen model availability notices", () => {
 
   it("renders setup guidance only for no launchable model", () => {
     screenMocks.homeNext.modelAvailabilityState = "no_launchable_model";
-
     render(<HomeNextScreen />);
-
     expect(screen.getByText("Finish agent setup to start a chat.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-settings");
     expect(screen.queryByText(/configured/i)).toBeNull();
   });
 
-  it("renders neutral load-error copy with no setup CTA", () => {
-    screenMocks.homeNext.modelAvailabilityState = "load_error";
-
+  it.each([
+    ["load_error", "Models are unavailable right now. Try again in a moment."],
+    ["target_unobserved", "This cloud target hasn't reported launch options yet."],
+  ] as const)("renders %s copy with no local setup CTA", (availabilityState, notice) => {
+    screenMocks.homeNext.modelAvailabilityState = availabilityState;
     render(<HomeNextScreen />);
-
-    expect(screen.getByText("Models are unavailable right now. Try again in a moment.")).toBeTruthy();
+    expect(screen.getByText(notice)).toBeTruthy();
+    expect(screen.queryByText(/Finish agent setup/i)).toBeNull();
     expect(screen.queryByRole("button", { name: "Agents" })).toBeNull();
   });
 

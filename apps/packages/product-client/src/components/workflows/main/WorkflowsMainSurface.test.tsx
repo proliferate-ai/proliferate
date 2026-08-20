@@ -23,8 +23,8 @@ vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
 // `WorkflowMainExecutionsGroup` virtualizes its rows (`@tanstack/react-virtual`),
 // which measures the scrollport via `offsetHeight` — always 0 in jsdom (no
 // layout engine), so the real virtualizer renders zero rows here regardless of
-// list length. Stub it to render every row, the same fake `FileTreeOverlay`'s
-// own virtualized-list test uses for the identical reason.
+// list length. Stub it to render every row, the same fake the docked file
+// tree's own virtualized-list test uses for the identical reason.
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
     getTotalSize: () => count * 52,

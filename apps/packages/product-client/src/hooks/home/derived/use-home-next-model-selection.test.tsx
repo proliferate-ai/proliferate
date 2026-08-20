@@ -2,378 +2,147 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentSummary } from "@anyharness/sdk";
-import type { AgentModelRegistry as ModelRegistry } from "#product/lib/domain/agents/model-options";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useHomeNextModelSelection } from "#product/hooks/home/derived/use-home-next-model-selection";
 
-const selectionMocks = vi.hoisted(() => ({
-  agentCatalog: {
-    readyAgents: [] as AgentSummary[],
-    isLoading: false,
-    isError: false,
-    error: null as Error | null,
+const mocks = vi.hoisted(() => ({
+  args: null as Record<string, unknown> | null,
+  data: undefined as Record<string, unknown> | undefined,
+  otherResponses: [] as Array<Record<string, unknown> | null>,
+  readyAgents: [] as Array<{ kind: string }>,
+  isTargetUnobserved: false,
+}));
+
+vi.mock("#product/hooks/home/derived/use-home-target-agent-launch-options", () => ({
+  useHomeTargetAgentLaunchOptions: (args: Record<string, unknown>) => {
+    mocks.args = args;
+    return {
+      data: mocks.data,
+      isLoading: false,
+      isError: false,
+      error: null,
+      isTargetUnobserved: mocks.isTargetUnobserved,
+    };
   },
-  modelRegistriesQuery: {
-    data: [] as ModelRegistry[],
-    isLoading: false,
-    isError: false,
-    error: null as Error | null,
-  },
-  runtimeLaunchOptions: {
-    data: null as { agents: unknown[] } | null,
-    isLoading: false,
-    isError: false,
-    error: null as Error | null,
-  },
+  useHomeTargetOtherAgentsLaunchOptions: () => mocks.otherResponses,
 }));
 
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
-  useAgentCatalog: () => selectionMocks.agentCatalog,
+  useAgentCatalog: () => ({ readyAgents: mocks.readyAgents, isLoading: false, isError: false, error: null }),
 }));
 
-vi.mock("#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
-  useCloudLaunchModelRegistries: () => selectionMocks.modelRegistriesQuery,
-}));
+describe("useHomeNextModelSelection", () => {
+  beforeEach(() => {
+    mocks.args = null;
+    mocks.data = undefined;
+    mocks.otherResponses = [];
+    mocks.readyAgents = [];
+    mocks.isTargetUnobserved = false;
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "claude",
+      defaultChatModelIdByAgentKind: {},
+    });
+  });
+  afterEach(cleanup);
 
-vi.mock("@anyharness/sdk-react", () => ({
-  useAgentLaunchOptionsQuery: () => selectionMocks.runtimeLaunchOptions,
-}));
+  it("uses the exact observed default and keeps an unknown upstream id reachable", () => {
+    mocks.data = response();
+    const launchTarget = { kind: "local", sourceRoot: "/repo", existingWorkspaceId: null } as const;
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget,
+    }));
+    expect(result.current.modelAvailabilityState).toBe("launchable");
+    expect(mocks.args).toEqual({ harnessKind: "claude", launchTarget });
+    expect(result.current.effectiveModelSelection).toEqual({ kind: "claude", modelId: "fable" });
+    expect(result.current.modelGroups[0]?.models.map((model) => model.modelId)).toEqual([
+      "fable",
+      "unknown-upstream",
+    ]);
+  });
 
-function agent(kind: string): AgentSummary {
+  it("keeps every other ready harness pickable from the launch composer", () => {
+    mocks.data = response();
+    mocks.readyAgents = [{ kind: "claude" }, { kind: "codex" }];
+    mocks.otherResponses = [codexResponse()];
+    const launchTarget = { kind: "local", sourceRoot: "/repo", existingWorkspaceId: null } as const;
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget,
+    }));
+    // Negative control against the cutover regression: the launch picker must
+    // not collapse to the requested harness alone.
+    expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["claude", "codex"]);
+    expect(result.current.modelGroups[1]?.models.map((model) => model.modelId)).toEqual(["gpt-5.6-sol"]);
+    expect(result.current.effectiveModelSelection).toEqual({ kind: "claude", modelId: "fable" });
+  });
+
+  it("omits an unresolved other harness without failing the launch picker", () => {
+    mocks.data = response();
+    mocks.readyAgents = [{ kind: "claude" }, { kind: "codex" }];
+    mocks.otherResponses = [null];
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: { kind: "local", sourceRoot: "/repo", existingWorkspaceId: null },
+    }));
+    expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["claude"]);
+    expect(result.current.modelAvailabilityState).toBe("launchable");
+  });
+
+  it("offers no explicit model before the target has an observation", () => {
+    mocks.isTargetUnobserved = true;
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: {
+        kind: "cloud",
+        gitOwner: "owner",
+        gitRepoName: "repo",
+        baseBranch: "main",
+      },
+    }));
+    expect(result.current.modelAvailabilityState).toBe("target_unobserved");
+    expect(result.current.effectiveModelSelection).toBeNull();
+  });
+
+  it("offers no explicit model when no launch target is selected", () => {
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: null,
+    }));
+    expect(result.current.modelAvailabilityState).toBe("no_launchable_model");
+    expect(result.current.effectiveModelSelection).toBeNull();
+  });
+});
+
+function codexResponse() {
   return {
-    kind,
-    displayName: kind,
-    readiness: "ready",
-    installState: "installed",
-    credentialState: "ready",
-    expectedEnvVars: [],
-    nativeRequired: false,
-    supportsLogin: true,
-    agentProcess: {
-      installed: true,
-      role: "agent",
+    ...response(),
+    harnessKind: "codex",
+    options: {
+      models: [{ id: "gpt-5.6-sol", observedName: "GPT-5.6 Sol", observedDescription: null }],
+      controls: [],
+      defaults: { modelId: "gpt-5.6-sol", controlValues: {} },
     },
   };
 }
 
-
-function registry(kind: string): ModelRegistry {
+function response() {
   return {
-    kind,
-    displayName: kind,
-    defaultModelId: "default-model",
-    models: [
-      {
-        id: "default-model",
-        displayName: "Default Model",
-        isDefault: true,
-        status: "active",
-      },
-    ],
+    harnessKind: "claude",
+    basisRevision: "basis-1",
+    revision: 2,
+    state: "observed",
+    options: {
+      models: [
+        { id: "fable", observedName: "Fable", observedDescription: null },
+        { id: "unknown-upstream", observedName: null, observedDescription: null },
+      ],
+      controls: [],
+      defaults: { modelId: "fable", controlValues: {} },
+    },
+    observedAt: "2026-08-19T00:00:00Z",
+    probeAttemptedAt: "2026-08-19T00:00:00Z",
+    probeFailureCode: null,
+    readiness: "ready",
   };
 }
-
-function registryWithModels(
-  kind: string,
-  models: ModelRegistry["models"],
-  defaultModelId = models[0]?.id ?? null,
-): ModelRegistry {
-  return {
-    kind,
-    displayName: kind,
-    defaultModelId,
-    models,
-  };
-}
-
-function resetMocks() {
-  selectionMocks.agentCatalog.readyAgents = [];
-  selectionMocks.agentCatalog.isLoading = false;
-  selectionMocks.agentCatalog.isError = false;
-  selectionMocks.agentCatalog.error = null;
-  selectionMocks.modelRegistriesQuery.data = [];
-  selectionMocks.modelRegistriesQuery.isLoading = false;
-  selectionMocks.modelRegistriesQuery.isError = false;
-  selectionMocks.modelRegistriesQuery.error = null;
-  selectionMocks.runtimeLaunchOptions.data = null;
-  selectionMocks.runtimeLaunchOptions.isLoading = false;
-  selectionMocks.runtimeLaunchOptions.isError = false;
-  selectionMocks.runtimeLaunchOptions.error = null;
-  useUserPreferencesStore.setState({
-    defaultChatAgentKind: "codex",
-    defaultChatModelIdByAgentKind: {},
-    chatModelVisibilityOverridesByAgentKind: {},
-  });
-}
-
-describe("useHomeNextModelSelection", () => {
-
-  beforeEach(() => {
-    resetMocks();
-  });
-
-  afterEach(() => {
-    cleanup();
-  });
-
-  it("keeps launchable catalog models usable while runtime details refresh", () => {
-    selectionMocks.agentCatalog.readyAgents = [agent("codex")];
-    selectionMocks.agentCatalog.isLoading = true;
-    selectionMocks.modelRegistriesQuery.isError = true;
-    selectionMocks.modelRegistriesQuery.data = [registry("codex")];
-
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-    }));
-
-    expect(result.current.modelAvailabilityState).toBe("launchable");
-  });
-
-  it("treats agent and registry errors as load errors", () => {
-    selectionMocks.agentCatalog.isError = true;
-    let rendered = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-    }));
-    expect(rendered.result.current.modelAvailabilityState).toBe("load_error");
-    rendered.unmount();
-
-    resetMocks();
-    selectionMocks.modelRegistriesQuery.isError = true;
-    rendered = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-    }));
-    expect(rendered.result.current.modelAvailabilityState).toBe("load_error");
-  });
-
-  it("marks a ready agent without a launchable registry model as no-launchable-model", () => {
-    selectionMocks.agentCatalog.readyAgents = [agent("codex")];
-
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-    }));
-
-    expect(result.current.modelAvailabilityState).toBe("no_launchable_model");
-  });
-
-  it("marks ready registry-backed models as launchable", () => {
-    selectionMocks.agentCatalog.readyAgents = [agent("codex")];
-    selectionMocks.modelRegistriesQuery.data = [registry("codex")];
-
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-    }));
-
-    expect(result.current.modelAvailabilityState).toBe("launchable");
-  });
-
-  it("does not block launchable catalog models on runtime launch option errors", () => {
-    selectionMocks.agentCatalog.readyAgents = [agent("codex")];
-    selectionMocks.modelRegistriesQuery.data = [registry("codex")];
-    selectionMocks.runtimeLaunchOptions.isError = true;
-    selectionMocks.runtimeLaunchOptions.error = new Error("runtime refresh failed");
-
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-    }));
-
-    expect(result.current.modelAvailabilityState).toBe("launchable");
-    expect(result.current.effectiveModelSelection).toEqual({
-      kind: "codex",
-      modelId: "default-model",
-    });
-  });
-
-  it("uses visible model preferences for the home default launch selection", () => {
-    selectionMocks.agentCatalog.readyAgents = [agent("codex")];
-    selectionMocks.modelRegistriesQuery.data = [
-      registryWithModels("codex", [
-        {
-          id: "default-model",
-          displayName: "Default Model",
-          isDefault: true,
-          status: "active",
-        },
-        {
-          id: "fast-model",
-          displayName: "Fast Model",
-          isDefault: false,
-          status: "active",
-        },
-      ], "default-model"),
-    ];
-    useUserPreferencesStore.setState({
-      defaultChatAgentKind: "codex",
-      defaultChatModelIdByAgentKind: { codex: "default-model" },
-      chatModelVisibilityOverridesByAgentKind: {
-        codex: {
-          "default-model": false,
-        },
-      },
-    });
-
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-    }));
-
-    expect(result.current.effectiveModelSelection).toEqual({
-      kind: "codex",
-      modelId: "fast-model",
-    });
-    expect(result.current.modelGroups[0]?.models.map((model) => model.modelId))
-      .toEqual(["fast-model"]);
-  });
-
-  it("uses runtime-refreshed dynamic models for home launch defaults", () => {
-    selectionMocks.agentCatalog.readyAgents = [agent("cursor")];
-    selectionMocks.modelRegistriesQuery.data = [
-      registryWithModels("cursor", [
-        {
-          id: "auto",
-          displayName: "Auto",
-          isDefault: true,
-          status: "active",
-        },
-      ], "auto"),
-    ];
-    selectionMocks.runtimeLaunchOptions.data = {
-      agents: [{
-        kind: "cursor",
-        displayName: "Cursor",
-        defaultModelId: "anthropic/claude-sonnet-4-6",
-        models: [{
-          id: "anthropic/claude-sonnet-4-6",
-          displayName: "Claude Sonnet 4.6",
-          isDefault: true,
-          defaultOptIn: true,
-        }],
-      }],
-    };
-    useUserPreferencesStore.setState({
-      defaultChatAgentKind: "cursor",
-      defaultChatModelIdByAgentKind: {
-        cursor: "anthropic/claude-sonnet-4-6",
-      },
-      chatModelVisibilityOverridesByAgentKind: {},
-    });
-
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-    }));
-
-    expect(result.current.effectiveModelSelection).toEqual({
-      kind: "cursor",
-      modelId: "anthropic/claude-sonnet-4-6",
-    });
-    expect(result.current.modelGroups[0]?.models.map((model) => model.modelId))
-      .toEqual(["anthropic/claude-sonnet-4-6"]);
-  });
-
-  it("offers a launch-ready gateway agent even when native readiness is login_required", () => {
-    // A gateway-only actor: `GET /v1/agents` reports claude login_required (no
-    // vendor-CLI login), so readyAgents is empty, but the runtime's launch
-    // options list claude with models — the enrolled route supplies the launch
-    // credential. The composer must offer those models rather than "No agents".
-    selectionMocks.agentCatalog.readyAgents = [];
-    selectionMocks.runtimeLaunchOptions.data = {
-      agents: [{
-        kind: "claude",
-        displayName: "Claude",
-        defaultModelId: "claude-haiku-4-5",
-        models: [{
-          id: "claude-haiku-4-5",
-          displayName: "Haiku 4.5",
-          isDefault: true,
-          defaultOptIn: true,
-        }],
-      }],
-    };
-
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-    }));
-
-    expect(result.current.modelAvailabilityState).toBe("launchable");
-    expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["claude"]);
-    expect(result.current.modelGroups[0]?.models.map((model) => model.modelId))
-      .toEqual(["claude-haiku-4-5"]);
-  });
-
-  it("does not resurrect an agent absent from launch options (e.g. not installed)", () => {
-    selectionMocks.agentCatalog.readyAgents = [];
-    selectionMocks.runtimeLaunchOptions.data = { agents: [] };
-
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-    }));
-
-    expect(result.current.modelAvailabilityState).toBe("no_launchable_model");
-    expect(result.current.modelGroups).toEqual([]);
-  });
-
-  it("treats all catalog registries as launchable for cloud launches", () => {
-    selectionMocks.agentCatalog.readyAgents = [agent("codex"), agent("claude")];
-    selectionMocks.modelRegistriesQuery.data = [registry("codex"), registry("claude")];
-    useUserPreferencesStore.setState({
-      defaultChatAgentKind: "claude",
-      defaultChatModelIdByAgentKind: { claude: "default-model" },
-      chatModelVisibilityOverridesByAgentKind: {},
-    });
-
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      repoLaunchKind: "cloud",
-    }));
-
-    expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["claude", "codex"]);
-    expect(result.current.effectiveModelSelection).toEqual({
-      kind: "claude",
-      modelId: "default-model",
-    });
-  });
-
-  it("ignores local runtime-refreshed models for cloud launches", () => {
-    selectionMocks.modelRegistriesQuery.data = [
-      registryWithModels("cursor", [
-        {
-          id: "cloud-safe-model",
-          displayName: "Cloud Safe",
-          isDefault: true,
-          status: "active",
-        },
-      ], "cloud-safe-model"),
-    ];
-    selectionMocks.runtimeLaunchOptions.data = {
-      agents: [{
-        kind: "cursor",
-        displayName: "Cursor",
-        defaultModelId: "local-only-model",
-        models: [{
-          id: "local-only-model",
-          displayName: "Local Only",
-          isDefault: true,
-          defaultOptIn: true,
-        }],
-      }],
-    };
-    useUserPreferencesStore.setState({
-      defaultChatAgentKind: "cursor",
-      defaultChatModelIdByAgentKind: {
-        cursor: "local-only-model",
-      },
-      chatModelVisibilityOverridesByAgentKind: {},
-    });
-
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      repoLaunchKind: "cloud",
-    }));
-
-    expect(result.current.modelGroups[0]?.models.map((model) => model.modelId))
-      .toEqual(["cloud-safe-model"]);
-    expect(result.current.effectiveModelSelection).toEqual({
-      kind: "cursor",
-      modelId: "cloud-safe-model",
-    });
-  });
-});

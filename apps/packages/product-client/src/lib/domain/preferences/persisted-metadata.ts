@@ -4,8 +4,6 @@ export type PersistedUserPreferencesMetadata = Record<string, unknown>;
 
 export const WORKTREE_AUTO_DELETE_LIMIT_ADOPTION_PENDING_KEY =
   "worktreeAutoDeleteLimitBackfilled";
-export const MODEL_VISIBILITY_DEFAULTS_RESET_KEY =
-  "modelVisibilityDefaults20260531Reset";
 
 export function hasPendingWorktreeAutoDeleteLimitAdoption(
   metadata: PersistedUserPreferencesMetadata,
@@ -23,24 +21,6 @@ export function clearWorktreeAutoDeleteLimitAdoption(
   return next;
 }
 
-export function hasAppliedModelVisibilityDefaultsReset(
-  metadata: PersistedUserPreferencesMetadata,
-): boolean {
-  return metadata[MODEL_VISIBILITY_DEFAULTS_RESET_KEY] === true;
-}
-
-export function markModelVisibilityDefaultsReset(
-  metadata: PersistedUserPreferencesMetadata,
-): PersistedUserPreferencesMetadata {
-  if (hasAppliedModelVisibilityDefaultsReset(metadata)) {
-    return metadata;
-  }
-  return {
-    ...metadata,
-    [MODEL_VISIBILITY_DEFAULTS_RESET_KEY]: true,
-  };
-}
-
 export function selectPersistedUserPreferencesSlice(
   preferences: UserPreferences,
 ): UserPreferences {
@@ -52,9 +32,6 @@ export function selectPersistedUserPreferencesSlice(
     windowZoomId: preferences.windowZoomId,
     defaultChatAgentKind: preferences.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: preferences.defaultChatModelIdByAgentKind,
-    chatModelVisibilityOverridesByAgentKind:
-      preferences.chatModelVisibilityOverridesByAgentKind,
-    defaultSessionModeByAgentKind: preferences.defaultSessionModeByAgentKind,
     defaultLiveSessionControlValuesByAgentKind:
       preferences.defaultLiveSessionControlValuesByAgentKind,
     defaultOpenInTargetId: preferences.defaultOpenInTargetId,

@@ -15,7 +15,7 @@ reason = "managed Cloud, GitHub App, and Workflow flags extend the centralized d
 
 [[max_lines]]
 path = "server/proliferate/db/models/cloud/agent_gateway.py"
-max_lines = 651
+max_lines = 551
 reason = "C-train composition: C-2 agent_auth_delivery_ack model joins the B/D cut; agent_gateway_enrollment_key model added for per-(subject,harness) scoped virtual keys (B2), then the agent_model_snapshot re-key (B4) documented why its scope carries NO unique key and what that costs the reader (the active row is plural in principle, so reads tie-break on id); AgentApiKey gains a kind column (D1); a module split is deferred to the model-taxonomy pass rather than done mid-stack; typed-config write gate loosens ck_agent_auth_selection_api_key_shape with a why-not-tighter comment; SG12 keeps the base docstring intact while the direct wall-clock owner import adds one line ; +8: FR-3 adds the three nullable gateway-verification columns (status, delta, verified_at) on the enrollment_key model"
 
 [[max_lines]]
@@ -55,8 +55,8 @@ reason = "sandbox connect/ready choreography (attempt CAS, usage convergence) + 
 
 [[max_lines]]
 path = "server/proliferate/server/cloud/workspaces/service.py"
-max_lines = 1173
-reason = "workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + scratch/repo-less read guards) + PR 5 exact-ref managed-Cloud creation and association path + cold-access repairing runtime-access resolution (S2); AnyHarness provisioning handoff split out per guides/domains.md; + git_identity_required translation (C3) + after-commit worktree retire and lost-status derivation (C7) + worker-staleness degraded surfacing (_worker_degraded, S3)"
+max_lines = 1123
+reason = "workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + scratch/repo-less read guards) + PR 5 exact-ref managed-Cloud creation and association path + cold-access repairing runtime-access resolution (S2); AnyHarness provisioning handoff split out per guides/domains.md; + git_identity_required translation (C3) + lost-status derivation (C7) + worker-staleness degraded surfacing (_worker_degraded, S3)"
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_api.py"
@@ -75,7 +75,7 @@ reason = "NEW in D-3: the legacy-enrollment migration proofs (D6) + the org-only
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_store.py"
-max_lines = 714
+max_lines = 652
 reason = "store-level agent_gateway suite; +create_agent_provider_config/get_agent_provider_config_decrypted kind-scoped fetch symmetry coverage (D1) D-3 deletes the personal-enrollment discovery test, adds the migration feed coverage; typed-config write gate reworks the bad-shape case for the kind-aware gate"
 
 [[max_lines]]

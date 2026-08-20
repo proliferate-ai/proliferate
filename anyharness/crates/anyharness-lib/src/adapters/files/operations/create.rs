@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use super::super::safety::resolve_safe_path;
+use super::super::safety::{resolve_safe_entry_path, resolve_safe_path, SafetyError};
 use super::super::types::{
     CreateWorkspaceFileEntryKind, CreateWorkspaceFileEntryResult, FileServiceError,
 };
@@ -25,22 +25,39 @@ pub fn create_entry(
         ));
     }
 
-    let abs = resolve_safe_path(workspace_root, relative_path).map_err(FileServiceError::Safety)?;
-    if abs.exists() {
-        return Err(FileServiceError::AlreadyExists(relative_path.to_string()));
-    }
+    let abs = resolve_safe_entry_path(workspace_root, relative_path)
+        .map_err(|error| FileServiceError::from_safety(error, relative_path))?;
     let parent = abs
         .parent()
         .ok_or_else(|| FileServiceError::NotADirectory(relative_path.to_string()))?;
-    if !parent.is_dir() {
-        return Err(FileServiceError::NotADirectory(
-            parent
-                .strip_prefix(workspace_root)
-                .ok()
-                .and_then(|path| path.to_str())
-                .unwrap_or(relative_path)
-                .to_string(),
-        ));
+    let parent_metadata = match parent.metadata() {
+        Ok(metadata) => metadata,
+        Err(error) => match FileServiceError::from_io(error, relative_path) {
+            FileServiceError::NotFound(_) => {
+                return Err(FileServiceError::NotADirectory(relative_path.to_string()));
+            }
+            error => return Err(error),
+        },
+    };
+    if !parent_metadata.is_dir() {
+        return Err(FileServiceError::NotADirectory(relative_path.to_string()));
+    }
+    match abs.symlink_metadata() {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            match resolve_safe_path(workspace_root, relative_path) {
+                Ok(_) | Err(SafetyError::NotFound) => {
+                    return Err(FileServiceError::AlreadyExists(relative_path.to_string()));
+                }
+                Err(error) => {
+                    return Err(FileServiceError::from_safety(error, relative_path));
+                }
+            }
+        }
+        Ok(_) => return Err(FileServiceError::AlreadyExists(relative_path.to_string())),
+        Err(error) => match FileServiceError::from_io(error, relative_path) {
+            FileServiceError::NotFound(_) => {}
+            error => return Err(error),
+        },
     }
 
     match kind {
@@ -52,9 +69,9 @@ pub fn create_entry(
                 .open(&abs)
                 .map_err(|e| map_create_io_error(e, relative_path))?;
             file.write_all(bytes)
-                .map_err(|e| FileServiceError::Io(e.to_string()))?;
+                .map_err(|error| FileServiceError::from_io(error, relative_path))?;
             file.sync_all()
-                .map_err(|e| FileServiceError::Io(e.to_string()))?;
+                .map_err(|error| FileServiceError::from_io(error, relative_path))?;
             let entry = entry_for_path(relative_path, &abs)?;
             let file = read_file(workspace_root, relative_path)?;
             Ok(CreateWorkspaceFileEntryResult {
@@ -76,5 +93,5 @@ fn map_create_io_error(error: std::io::Error, relative_path: &str) -> FileServic
     if error.kind() == std::io::ErrorKind::AlreadyExists {
         return FileServiceError::AlreadyExists(relative_path.to_string());
     }
-    FileServiceError::Io(error.to_string())
+    FileServiceError::from_io(error, relative_path)
 }

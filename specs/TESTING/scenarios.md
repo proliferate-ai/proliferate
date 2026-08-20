@@ -154,22 +154,22 @@ Negatives: member setting org-scope secret → 403.
 
 ---
 
-## Tier 2 — integrations (connect + toggle, real definition, no outbound)
+## Tier 2 — integrations (catalog + policy, real definition, no outbound)
 
-### T2-INT-1: api_key connect + org policy toggle
+### T2-INT-1: cataloged provider + org policy toggle
 Ruled 2026-07-08: **no stub/fake integration provider** — same posture as
 no-fake-sandbox/no-mock-LLM. Use a **real cataloged api_key-kind integration
-definition**; the stored key is a placeholder value (connect/CRUD paths never
-validate it against the provider). No outbound call leaves the stack in
-tier 2 — the real tool call through the gateway is T3-INT-1's job.
-Steps: user connects via `POST /integrations/authentications`
-(authKind api_key) → account created. Org admin toggles
+definition. API-key authentication validates staged credentials against the
+real provider boundary, so Tier 2 does not submit a placeholder credential or
+fake that boundary. Mocked tier-1 server tests own stage/validate/swap; the real
+provider proof remains T3-INT-1.
+Steps: resolve the real seed through product data, read it from the catalog,
+assert its no-account health projection, then have an org admin toggle
 `PATCH /integrations/admin/organizations/{id}/definitions/{id}/enabled` off.
-Assert: `effective_enabled` reflects all three layers (org policy override >
-definition default, AND account enabled) — assert the composed value the UI
-shows, off then on again.
-Negatives: OAuth-kind connect is asserted only to the seam: flow row created,
-`authorizationUrl` returned (no real provider round-trip in tier 2).
+Assert: the catalog and health surfaces agree on the exact definition;
+`effective_enabled` reflects the org policy override over the definition
+default, off then on again; the health state remains `needs_auth` with no
+fabricated account. Authentication/provider validation is deliberately absent.
 
 ---
 
@@ -473,10 +473,9 @@ a new runtime-dependent spec, respectively:
   `seedIncompleteEnabledOrgSsoConnection` helper (`tests/intent/stack/seed.ts`).
 - `tests/intent/specs/gateway-eligibility.spec.ts` (new): after pushing a
   gateway-only agent-auth state (no native credential), session creation
-  REJECTS a bare native model selector (`"default"`) and ACCEPTS a real
-  gateway-catalog id — the runtime-level half of `catalog::service_tests::
-  gateway_context_gates_native_ids_and_offers_only_gateway_models`, proven
-  against the real AnyHarness HTTP API with no LLM call ever made. Needs the
+  REJECTS an ID absent from the target's current `HarnessLaunchOptions` and
+  ACCEPTS an exact observed ID, proven against the real AnyHarness HTTP API
+  with no LLM call ever made. Needs the
   local runtime, which the CURRENT CI profile skips
   (`TIER2_INTENT_SKIP_RUNTIME=1`) — self-skips (not fails) when unreachable,
   matching `workspace-entry.spec.ts`'s documented precedent for the identical
@@ -549,10 +548,11 @@ Budget (ruled 2026-07-08): on an already-running sandbox, worktree creation
 completes in **≤ 1 s** measured at the runtime operation (sandbox wake time,
 if any, is T3-PROV-2's budget, not this one).
 
-### T3-CHAT-1: every harness × its cheapest model, via the gateway
-For **each cataloged harness**, in **both lanes**, using the harness's
-cheapest model served through the gateway (dedicated test key; model set
-below): create session, send one message, await turn end.
+### T3-CHAT-1: every harness × an observed qualification model, via the gateway
+For **each cataloged harness**, in **both lanes**, use a qualification model
+whose exact ID is present in that target's current `HarnessLaunchOptions`
+(dedicated test key; provider candidates below): create session, send one
+message, await turn end.
 Assert (outcomes, not transcripts):
 - non-empty assistant reply arrives;
 - **installed harness CLI version == catalog pin, asserted before the chat**
@@ -562,9 +562,10 @@ Assert (outcomes, not transcripts):
 Per-harness failure = per-harness red (feeds the catalog-bump gate), not
 whole-suite red.
 
-Gateway test-model set — one cheapest model per provider family the harnesses
-need, pinned in the test key's allowlist (exact IDs resolved against the
-catalog at build time):
+Gateway qualification candidates — one low-cost model per provider family the
+harnesses need, pinned in the test key's allowlist. The test selects a candidate
+only after the target probe reports that exact ID; an absent candidate blocks
+that qualification cell rather than being aliased or replaced:
 - Anthropic: Haiku-class (Claude Code; also OpenCode's default lane)
 - OpenAI: exact `gpt-5.2` for Codex qualification (no fallback)
 - Google: Flash-class (Gemini CLI)
@@ -580,15 +581,15 @@ totals. Its `T3-AUTHROUTE-1` user-key coverage remains required.
 
 ### T3-CFG-1: live config options apply in an existing session
 Added 2026-07-08 (Pablo: "occasionally this breaks"). In an **existing** chat
-session (not a fresh one), per harness: enumerate the harness's exposed
-configuration options from the catalog/harness contract and cycle each one —
-every selectable model (switch → send a message → the reply is attributed to
-the switched model), every mode/approval-policy-style enum (switch → the
-session accepts it and behaves accordingly, asserted at the harness-contract
-level, e.g. the option readback/state event — not by interpreting prose).
-Assert: each option value round-trips (set → readback matches) and the session
-survives every switch. Options are **enumerated from the catalog at build
-time, never hardcoded**, so a new option is automatically in scope.
+session (not a fresh one), per harness: enumerate the complete current
+`SessionLiveConfigSnapshot` and cycle every advertised model and generic
+control value. A model switch must apply before the next turn; each control
+must be confirmed by exact live readback rather than prose interpretation.
+Assert: each value round-trips (set → current value matches), the returned
+snapshot continues to include all available options, and the session survives
+every switch. Values are enumerated from the live snapshot at run time, never
+from a catalog or hardcoded table, so a newly observed option is automatically
+in scope.
 Per-harness × per-option red. Runs in the local lane by default (cheap);
 sandbox lane on the release train.
 
@@ -751,8 +752,9 @@ template (`apps/packages/product-client/src/config/workflows/
 starter-templates.ts`) verbatim: one `agent` node ("research") whose prompt
 uses `@input:question` and writes findings into `@doc:findings`, then one
 `human_in_loop` node ("review") gating completion. Model resolution reuses
-T3-CHAT-1's catalog-driven cheapest-Anthropic-family picker against the fixed
-starting harness `claude` (T3-SESSION-1's single-fixed-harness-cell pattern).
+T3-CHAT-1's cheapest eligible model from the selected target's exact
+`HarnessLaunchOptions` against the fixed starting harness `claude`
+(T3-SESSION-1's single-fixed-harness-cell pattern).
 Steps: `PUT /v1/workflow-runs/{run_id}` with the frozen invocation body
 (`{schemaVersion: 2, workflowDefinitionId, definition, arguments,
 placement}`) → node 1 (research) runs a real turn → the review gate parks the
@@ -761,7 +763,7 @@ Assert: the PUT materializes a workspace and starts node 1; the research
 node's underlying session prompt carries the runtime's wrapped preamble
 around the raw node prompt (assert the wrapper's presence, not its exact
 text); the findings doc materializes as a real file under
-`.proliferate/context/` in the workspace; the run parks at
+`.proliferate/context/<run_id>/` in the workspace; the run parks at
 `run.status=awaiting_human` with the gate node `awaiting_human` and HOLDS —
 no auto-advance; approving the gate advances the run to `completed`; every
 command (PUT, GET, approve) returns the full projection

@@ -66,10 +66,12 @@ impl ActivityRuntime {
             {
                 Ok(response) => match serde_json::from_value::<ActivityListWireResult>(response) {
                     Ok(list) => list,
-                    Err(error) => {
+                    Err(_) => {
                         tracing::warn!(
                             session_id,
-                            error = %error,
+                            method_class = "activity",
+                            failure_stage = "list_result_decode",
+                            failure_class = "invalid_provider_result",
                             "activity/list returned an unexpected result shape"
                         );
                         ActivityListWireResult::default()
@@ -92,15 +94,18 @@ impl ActivityRuntime {
             processes: listed.processes,
             agents: listed.subagents,
         });
-        let reply = handle.run_domain_op(op).await.map_err(|error| match error {
-            LiveSessionCommandError::ActorUnavailable => {
-                anyhow::anyhow!("session actor unavailable for activity reconcile")
-            }
-            LiveSessionCommandError::ResponseDropped => {
-                anyhow::anyhow!("session actor dropped activity reconcile response")
-            }
-            LiveSessionCommandError::Rejected(infallible) => match infallible {},
-        })?;
+        let reply = handle
+            .run_domain_op(op)
+            .await
+            .map_err(|error| match error {
+                LiveSessionCommandError::ActorUnavailable => {
+                    anyhow::anyhow!("session actor unavailable for activity reconcile")
+                }
+                LiveSessionCommandError::ResponseDropped => {
+                    anyhow::anyhow!("session actor dropped activity reconcile response")
+                }
+                LiveSessionCommandError::Rejected(infallible) => match infallible {},
+            })?;
         let output = reply
             .downcast::<ActivityReconcileOpOutput>()
             .map_err(|_| anyhow::anyhow!("activity reconcile op returned unexpected reply"))?;

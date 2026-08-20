@@ -44,6 +44,7 @@ interface RightPanelTerminalsQuery {
 
 interface UseRightPanelEntryActionsOptions {
   workspaceId: string | null;
+  shellWorkspaceId: string | null;
   shouldRenderContent: boolean;
   isCloudWorkspaceSelected: boolean;
   state: RightPanelWorkspaceState;
@@ -62,6 +63,7 @@ interface UseRightPanelEntryActionsOptions {
 
 export function useRightPanelEntryActions({
   workspaceId,
+  shellWorkspaceId,
   shouldRenderContent,
   isCloudWorkspaceSelected,
   state,
@@ -86,6 +88,8 @@ export function useRightPanelEntryActions({
   const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
   const activationApplicationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const { selectViewer, handleCloseViewer } = useRightPanelViewerActions({
+    workspaceId,
+    shellWorkspaceId,
     state,
     isCloudWorkspaceSelected,
     openViewerTargets,

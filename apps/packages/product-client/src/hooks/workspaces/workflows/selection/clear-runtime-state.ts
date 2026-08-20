@@ -18,6 +18,7 @@ import {
   getSessionStreamHandle,
 } from "#product/lib/access/anyharness/session-stream-handles";
 import { clearWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import { useFileTreeStore } from "#product/stores/editor/file-tree-store";
 import type { WorkspaceSelectionDeps } from "#product/hooks/workspaces/workflows/selection/types";
 
 const sessionStreamDetachDeps: SessionStreamDetachDeps = {
@@ -54,6 +55,10 @@ export function clearWorkspaceRuntimeState(
     useChatPlanAttachmentStore.getState().clearPlanAttachments(options.clearDraftUiKey);
   }
   clearWorkspaceBootstrappedInSession(workspaceId);
+  // Materialized-workspace disposal: one synchronous transaction drops this
+  // workspace's first tree-state-key claim together with all of its expansion
+  // scopes, leaving every other live workspace's session state intact.
+  useFileTreeStore.getState().pruneFileTreeSessionState(workspaceId);
 
   if (options?.clearSelection && selectedWorkspaceId === workspaceId) {
     // Scoped to one workspace, so it deselects without touching the other

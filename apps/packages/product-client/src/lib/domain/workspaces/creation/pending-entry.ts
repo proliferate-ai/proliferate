@@ -15,7 +15,7 @@ export type PendingWorkspaceStage =
 export interface PendingCoworkRequestInput {
   agentKind: string;
   modelId: string;
-  modeId?: string;
+  controlValues: Record<string, string>;
   draftText?: string | null;
   sourceWorkspaceId?: string | null;
 }
@@ -77,8 +77,7 @@ export type PendingWorkspaceInitialSession =
     kind: "session";
     agentKind: string;
     modelId: string;
-    modeId?: string | null;
-    launchControlValues?: Record<string, string>;
+    launchControlValues: Record<string, string>;
     displayTitle?: string | null;
   };
 

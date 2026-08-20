@@ -1,5 +1,4 @@
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use anyharness_contract::v1::PromptInputBlock;
 
@@ -7,130 +6,60 @@ use crate::domains::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_D
 use crate::domains::sessions::model::PromptAttachmentState;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_live_config;
 use crate::domains::sessions::prompt::prepare::prepare_prompt;
-use crate::domains::sessions::prompt::provenance::{AgentSessionPromptSource, PromptProvenance};
+use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::sessions::prompt::PromptPrepareContext;
 use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
 
+use super::prompt_dispatch::{classify_text_prompt_command_error, TextPromptDispatchError};
+use super::prompt_lease::PromptWorkspaceLeaseMode;
 use super::{
     SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionRuntime, StartSessionError,
 };
 
 impl SessionRuntime {
-    /// Persist-first cross-agent delivery. The pending-row sequence is the
-    /// acceptance linearization point. Actor startup and the bounded queue wake
-    /// are detached after that commit (see below) and are best-effort because
-    /// startup queue replay owns eventual processing.
-    pub(crate) async fn enqueue_agent_message(
-        self: Arc<Self>,
-        session_id: &str,
-        message: String,
-        source: AgentSessionPromptSource,
-    ) -> Result<i64, SendPromptError> {
-        self.access_gate
-            .assert_can_mutate_for_session(session_id)
-            .map_err(|error| SendPromptError::Internal(anyhow::anyhow!(error.to_string())))?;
-        if message.trim().is_empty() {
-            return Err(SendPromptError::EmptyPrompt);
-        }
-        let record = self
-            .get_session_or_not_found(session_id)
-            .map_err(map_lifecycle_error_to_prompt)?;
-        if super::launch_policy::session_is_closed(&record) {
-            return Err(SendPromptError::SessionClosed);
-        }
-        let payload = crate::domains::sessions::prompt::PromptPayload::text(message)
-            .with_provenance(source.into_provenance());
-        let pending = self
-            .session_service
-            .store()
-            .insert_pending_prompt_payload(session_id, &payload, None)
-            .map_err(SendPromptError::Internal)?;
-
-        // Detach activation after the durable commit. The pending row above is
-        // the acceptance linearization point and startup queue replay owns
-        // eventual processing, so activation is strictly best-effort. Awaiting
-        // it inline would block the caller (an MCP `send_message` tool call)
-        // for up to the shared startup-readiness timeout (60s in prod) while a
-        // cold target boots, even though the receipt is already durable.
-        //
-        // Lease invariant: the spawned task runs WITHOUT the caller's
-        // target-workspace shared `SessionPrompt` lease (that lease is dropped
-        // when `send_message` returns, right after this fn). This is deliberate
-        // and mirrors the startup-replay path, which activates consumers
-        // without holding any caller lease: the pending row is already durable,
-        // so no lease is required to guarantee eventual delivery, and
-        // re-acquiring one here would reintroduce the block this detach removes.
-        let queue_seq = pending.seq;
-        let session_id = session_id.to_string();
-        tokio::spawn(async move {
-            self.activate_durable_prompt_consumer(&session_id, payload, queue_seq)
-                .await;
-        });
-
-        Ok(queue_seq)
-    }
-
-    pub(crate) async fn activate_durable_prompt_consumer(
-        &self,
-        session_id: &str,
-        payload: crate::domains::sessions::prompt::PromptPayload,
-        queue_seq: i64,
-    ) {
-        const WAKE_ACK_TIMEOUT: Duration = Duration::from_secs(1);
-
-        let record = match self.get_session_or_not_found(session_id) {
-            Ok(record) => record,
-            Err(error) => {
-                tracing::warn!(
-                    session_id = %session_id,
-                    queue_seq,
-                    error = ?error,
-                    "durable prompt consumer activation skipped; pending prompt will replay"
-                );
-                return;
-            }
-        };
-        let handle = match self.ensure_live_session_handle(&record, None).await {
-            Ok(handle) => handle,
-            Err(error) => {
-                tracing::warn!(
-                    session_id = %session_id,
-                    queue_seq,
-                    failure_code = durable_prompt_start_failure_code(&error),
-                    "durable prompt consumer startup failed; pending prompt will replay"
-                );
-                return;
-            }
-        };
-
-        match tokio::time::timeout(
-            WAKE_ACK_TIMEOUT,
-            handle.send_queued_prompt(payload, queue_seq),
-        )
-        .await
-        {
-            Ok(Ok(_)) => {}
-            Ok(Err(error)) => tracing::warn!(
-                session_id = %session_id,
-                queue_seq,
-                error = ?error,
-                "durable prompt wake acknowledgement was lost; pending prompt will replay"
-            ),
-            Err(_) => tracing::warn!(
-                session_id = %session_id,
-                queue_seq,
-                timeout_ms = WAKE_ACK_TIMEOUT.as_millis(),
-                "durable prompt wake acknowledgement timed out; pending prompt will replay"
-            ),
-        }
-    }
-
     #[tracing::instrument(skip_all, fields(session_id = %session_id))]
     pub async fn send_prompt(
         &self,
         session_id: &str,
         blocks: Vec<PromptInputBlock>,
         prompt_id: Option<String>,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.send_prompt_with_lease_mode(
+            session_id,
+            blocks,
+            prompt_id,
+            PromptWorkspaceLeaseMode::Acquire,
+        )
+        .await
+    }
+
+    /// Prompt twin for a caller that already owns a shared workspace operation
+    /// lease across this full dispatch. Skipping a nested read is required for
+    /// Tokio's fair RwLock: a queued writer between two reads would otherwise
+    /// wait on the outer read while the inner read waited on that writer. The
+    /// supplied key is checked against the session before dispatch.
+    pub(crate) async fn send_prompt_under_workspace_lease(
+        &self,
+        leased_workspace_id: &str,
+        session_id: &str,
+        blocks: Vec<PromptInputBlock>,
+        prompt_id: Option<String>,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.send_prompt_with_lease_mode(
+            session_id,
+            blocks,
+            prompt_id,
+            PromptWorkspaceLeaseMode::AlreadyHeld(leased_workspace_id),
+        )
+        .await
+    }
+
+    async fn send_prompt_with_lease_mode(
+        &self,
+        session_id: &str,
+        blocks: Vec<PromptInputBlock>,
+        prompt_id: Option<String>,
+        lease_mode: PromptWorkspaceLeaseMode<'_>,
     ) -> Result<SendPromptOutcome, SendPromptError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
@@ -146,9 +75,7 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.prompt.request_received"
         );
 
-        let record = self
-            .get_session_or_not_found(session_id)
-            .map_err(map_lifecycle_error_to_prompt)?;
+        let (record, _workspace_lease) = self.resolve_prompt_record(session_id, lease_mode).await?;
 
         let ensure_started = Instant::now();
         let handle = self
@@ -186,38 +113,72 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.prompt.live_handle_ready"
         );
 
+        // Turn-start checkpoint (Lane H), just before dispatch. A capture failure
+        // under the abort policy returns here and the turn never starts. Unlike
+        // the two text-prompt sites (which carry no attachments), this site has
+        // already persisted `prepared`'s attachments, so an abort must clean them
+        // up first — same discipline as the EnqueueFailed / ProductContextUnavailable
+        // arms below (cleanup error ignored, exactly as they do).
+        let checkpoint_id = match self
+            .capture_turn_start_checkpoint(
+                &record.workspace_id,
+                session_id,
+                &handle,
+                prompt_id_for_trace.as_deref(),
+            )
+            .await
+        {
+            Ok(checkpoint_id) => checkpoint_id,
+            Err(error) => {
+                let _ = prepared.cleanup_attachments(
+                    self.session_service.store(),
+                    self.session_service.attachment_storage(),
+                    session_id,
+                );
+                return Err(error);
+            }
+        };
+
         // Invariant 1/2: the actor is the sole writer of `busy` and the queue.
         // The runtime no longer precaptures `busy`; it just forwards the command
         // and awaits the actor's decision (Started vs Queued).
-        let acceptance = handle
+        let command_outcome = handle
             .send_prompt(prepared.payload.clone(), prompt_id)
-            .await
-            .map_err(|error| match error {
-                LiveSessionCommandError::ActorUnavailable => {
-                    SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
-                }
-                LiveSessionCommandError::ResponseDropped => {
-                    SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
-                }
-                LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
-                    let _ = prepared.cleanup_attachments(
-                        self.session_service.store(),
-                        self.session_service.attachment_storage(),
-                        session_id,
-                    );
-                    SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
-                }
-                LiveSessionCommandError::Rejected(
-                    PromptAcceptError::ProductContextUnavailable { incident_id, error },
-                ) => {
-                    let _ = prepared.cleanup_attachments(
-                        self.session_service.store(),
-                        self.session_service.attachment_storage(),
-                        session_id,
-                    );
-                    SendPromptError::ProductContextUnavailable { incident_id, error }
-                }
-            })?;
+            .await;
+        self.settle_turn_start_checkpoint(checkpoint_id, &command_outcome)
+            .await;
+        let acceptance = command_outcome.map_err(|error| match error {
+            LiveSessionCommandError::ActorUnavailable => {
+                let _ = prepared.cleanup_attachments(
+                    self.session_service.store(),
+                    self.session_service.attachment_storage(),
+                    session_id,
+                );
+                SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
+            }
+            LiveSessionCommandError::ResponseDropped => {
+                SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
+            }
+            LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
+                let _ = prepared.cleanup_attachments(
+                    self.session_service.store(),
+                    self.session_service.attachment_storage(),
+                    session_id,
+                );
+                SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
+            }
+            LiveSessionCommandError::Rejected(PromptAcceptError::ProductContextUnavailable {
+                incident_id,
+                error,
+            }) => {
+                let _ = prepared.cleanup_attachments(
+                    self.session_service.store(),
+                    self.session_service.attachment_storage(),
+                    session_id,
+                );
+                SendPromptError::ProductContextUnavailable { incident_id, error }
+            }
+        })?;
         tracing::info!(
             session_id = %session_id,
             total_elapsed_ms = started.elapsed().as_millis(),
@@ -261,21 +222,35 @@ impl SessionRuntime {
         text: String,
         prompt_id: String,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
-        self.send_text_prompt_with_id_inner(session_id, text, prompt_id, None)
-            .await
+        self.send_text_prompt_with_id_inner(
+            session_id,
+            text,
+            prompt_id,
+            None,
+            PromptWorkspaceLeaseMode::Acquire,
+        )
+        .await
     }
 
     /// Creation-only variant carrying trusted agent-session provenance without
-    /// activating the general cross-agent message surface.
-    pub(crate) async fn send_text_prompt_with_id_and_provenance(
+    /// activating the general cross-agent message surface. The supplied key is
+    /// checked against the new session before dispatch.
+    pub(crate) async fn send_text_prompt_with_id_and_provenance_under_workspace_lease(
         &self,
+        leased_workspace_id: &str,
         session_id: &str,
         text: String,
         prompt_id: String,
         provenance: PromptProvenance,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
-        self.send_text_prompt_with_id_inner(session_id, text, prompt_id, Some(provenance))
-            .await
+        self.send_text_prompt_with_id_inner(
+            session_id,
+            text,
+            prompt_id,
+            Some(provenance),
+            PromptWorkspaceLeaseMode::AlreadyHeld(leased_workspace_id),
+        )
+        .await
     }
 
     /// Workflow-owned multi-block twin of [`Self::send_text_prompt_with_id`]:
@@ -295,8 +270,13 @@ impl SessionRuntime {
                 SendPromptError::EmptyPrompt,
             ));
         }
-        self.send_payload_prompt_with_id(session_id, payload, prompt_id)
-            .await
+        self.send_payload_prompt_with_id(
+            session_id,
+            payload,
+            prompt_id,
+            PromptWorkspaceLeaseMode::Acquire,
+        )
+        .await
     }
 
     async fn send_text_prompt_with_id_inner(
@@ -305,6 +285,7 @@ impl SessionRuntime {
         text: String,
         prompt_id: String,
         provenance: Option<PromptProvenance>,
+        lease_mode: PromptWorkspaceLeaseMode<'_>,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
         if text.trim().is_empty() {
             return Err(TextPromptDispatchError::Dispatch(
@@ -315,7 +296,7 @@ impl SessionRuntime {
         if let Some(provenance) = provenance {
             payload = payload.with_provenance(provenance);
         }
-        self.send_payload_prompt_with_id(session_id, payload, prompt_id)
+        self.send_payload_prompt_with_id(session_id, payload, prompt_id, lease_mode)
             .await
     }
 
@@ -324,6 +305,7 @@ impl SessionRuntime {
         session_id: &str,
         payload: crate::domains::sessions::prompt::PromptPayload,
         prompt_id: String,
+        lease_mode: PromptWorkspaceLeaseMode<'_>,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
@@ -332,17 +314,29 @@ impl SessionRuntime {
                     error.to_string()
                 )))
             })?;
-        let record = self.get_session_or_not_found(session_id).map_err(|error| {
-            TextPromptDispatchError::Dispatch(map_lifecycle_error_to_prompt(error))
-        })?;
+        let (record, _workspace_lease) = self
+            .resolve_prompt_record(session_id, lease_mode)
+            .await
+            .map_err(TextPromptDispatchError::Dispatch)?;
         let handle = self
             .ensure_live_session_handle(&record, None)
             .await
             .map_err(|error| TextPromptDispatchError::Dispatch(map_start_error_to_prompt(error)))?;
-        let acceptance = handle
-            .send_prompt(payload, Some(prompt_id))
+        // Turn-start checkpoint (Lane H). A capture failure under the abort
+        // policy maps into a failed dispatch here, exactly like a start failure.
+        let checkpoint_id = self
+            .capture_turn_start_checkpoint(
+                &record.workspace_id,
+                session_id,
+                &handle,
+                Some(prompt_id.as_str()),
+            )
             .await
-            .map_err(classify_text_prompt_command_error)?;
+            .map_err(TextPromptDispatchError::Dispatch)?;
+        let command_outcome = handle.send_prompt(payload, Some(prompt_id)).await;
+        self.settle_turn_start_checkpoint(checkpoint_id, &command_outcome)
+            .await;
+        let acceptance = command_outcome.map_err(classify_text_prompt_command_error)?;
         // The prompt is accepted at this point; the re-read only refreshes the
         // returned snapshot. A failure here must not become a dispatch error
         // (the caller would terminalize a prompt that is actually running), so
@@ -367,38 +361,106 @@ impl SessionRuntime {
         text: String,
         provenance: PromptProvenance,
     ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.send_text_prompt_with_provenance_inner(
+            session_id,
+            text,
+            provenance,
+            PromptWorkspaceLeaseMode::Acquire,
+            None,
+        )
+        .await
+    }
+
+    /// Provenance-bearing prompt twin for a caller that already owns the
+    /// session workspace's shared operation lease.
+    pub(crate) async fn send_text_prompt_with_provenance_under_workspace_lease(
+        &self,
+        leased_workspace_id: &str,
+        session_id: &str,
+        text: String,
+        provenance: PromptProvenance,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.send_text_prompt_with_provenance_inner(
+            session_id,
+            text,
+            provenance,
+            PromptWorkspaceLeaseMode::AlreadyHeld(leased_workspace_id),
+            None,
+        )
+        .await
+    }
+
+    /// Live-only prompt twin for schedulers that already resolved the exact
+    /// actor allowed to receive this command. The handle is never replaced or
+    /// cold-started while this method waits on workspace coordination.
+    pub(crate) async fn send_text_prompt_with_provenance_on_existing_handle(
+        &self,
+        session_id: &str,
+        text: String,
+        provenance: PromptProvenance,
+        handle: std::sync::Arc<crate::live::sessions::LiveSessionHandle>,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.send_text_prompt_with_provenance_inner(
+            session_id,
+            text,
+            provenance,
+            PromptWorkspaceLeaseMode::Acquire,
+            Some(handle),
+        )
+        .await
+    }
+
+    async fn send_text_prompt_with_provenance_inner(
+        &self,
+        session_id: &str,
+        text: String,
+        provenance: PromptProvenance,
+        lease_mode: PromptWorkspaceLeaseMode<'_>,
+        existing_handle: Option<std::sync::Arc<crate::live::sessions::LiveSessionHandle>>,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
             .map_err(|error| SendPromptError::Internal(anyhow::anyhow!(error.to_string())))?;
         if text.trim().is_empty() {
             return Err(SendPromptError::EmptyPrompt);
         }
-        let record = self
-            .get_session_or_not_found(session_id)
-            .map_err(map_lifecycle_error_to_prompt)?;
-        let handle = self
-            .ensure_live_session_handle(&record, None)
-            .await
-            .map_err(map_start_error_to_prompt)?;
+        let (record, _workspace_lease) = self.resolve_prompt_record(session_id, lease_mode).await?;
+        let handle = match existing_handle {
+            Some(handle) if handle.session_id == session_id => handle,
+            Some(_) => {
+                return Err(SendPromptError::Internal(anyhow::anyhow!(
+                    "existing prompt handle does not match the target session"
+                )))
+            }
+            None => self
+                .ensure_live_session_handle(&record, None)
+                .await
+                .map_err(map_start_error_to_prompt)?,
+        };
+        // Turn-start checkpoint (Lane H) before dispatch.
+        let checkpoint_id = self
+            .capture_turn_start_checkpoint(&record.workspace_id, session_id, &handle, None)
+            .await?;
         let payload =
             crate::domains::sessions::prompt::PromptPayload::text(text).with_provenance(provenance);
-        let acceptance = handle
-            .send_prompt(payload, None)
-            .await
-            .map_err(|error| match error {
-                LiveSessionCommandError::ActorUnavailable => {
-                    SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
-                }
-                LiveSessionCommandError::ResponseDropped => {
-                    SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
-                }
-                LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
-                    SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
-                }
-                LiveSessionCommandError::Rejected(
-                    PromptAcceptError::ProductContextUnavailable { incident_id, error },
-                ) => SendPromptError::ProductContextUnavailable { incident_id, error },
-            })?;
+        let command_outcome = handle.send_prompt(payload, None).await;
+        self.settle_turn_start_checkpoint(checkpoint_id, &command_outcome)
+            .await;
+        let acceptance = command_outcome.map_err(|error| match error {
+            LiveSessionCommandError::ActorUnavailable => {
+                SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
+            }
+            LiveSessionCommandError::ResponseDropped => {
+                SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
+            }
+            LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
+                SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
+            }
+            LiveSessionCommandError::Rejected(PromptAcceptError::ProductContextUnavailable {
+                incident_id,
+                error,
+            }) => SendPromptError::ProductContextUnavailable { incident_id, error },
+        })?;
         let session = self
             .session_service
             .get_session(session_id)
@@ -413,71 +475,12 @@ impl SessionRuntime {
     }
 }
 
-/// Typed failure for the deterministic-prompt-id seam. `AcknowledgementLost`
-/// means the command was accepted into the actor's mailbox but the reply
-/// channel dropped before an acknowledgement arrived: the actor may or may
-/// not have processed the prompt, so callers must not record a terminal
-/// failure (mirror of the spec rule "never claim completion" — never claim
-/// failure on an ambiguous acknowledgement either).
-#[derive(Debug)]
-pub(crate) enum TextPromptDispatchError {
-    /// The prompt command was enqueued to the actor but its acknowledgement
-    /// was lost; whether the actor processed it is unknown.
-    AcknowledgementLost,
-    /// The dispatch verifiably failed before or at command delivery.
-    Dispatch(SendPromptError),
-}
-
-/// Pure classification of a live-session command failure for the text-prompt
-/// seam: `ResponseDropped` is the one ambiguous case — it proves the command
-/// was enqueued to the actor's mailbox, not that the actor processed it, and
-/// the reply was lost either way; `ActorUnavailable` (command never enqueued)
-/// and an explicit rejection are safe to report as failed dispatch.
-fn classify_text_prompt_command_error(
-    error: LiveSessionCommandError<PromptAcceptError>,
-) -> TextPromptDispatchError {
-    match error {
-        LiveSessionCommandError::ResponseDropped => TextPromptDispatchError::AcknowledgementLost,
-        LiveSessionCommandError::ActorUnavailable => TextPromptDispatchError::Dispatch(
-            SendPromptError::Internal(anyhow::anyhow!("session actor channel closed")),
-        ),
-        LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
-            TextPromptDispatchError::Dispatch(SendPromptError::Internal(anyhow::anyhow!(
-                "failed to enqueue prompt: {detail}"
-            )))
-        }
-        LiveSessionCommandError::Rejected(PromptAcceptError::ProductContextUnavailable {
-            incident_id,
-            error,
-        }) => TextPromptDispatchError::Dispatch(SendPromptError::ProductContextUnavailable {
-            incident_id,
-            error,
-        }),
-    }
-}
-
-fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptError {
+pub(super) fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptError {
     match error {
         SessionLifecycleError::SessionNotFound(session_id) => {
             SendPromptError::SessionNotFound(session_id)
         }
         SessionLifecycleError::Internal(error) => SendPromptError::Internal(error),
-    }
-}
-
-fn durable_prompt_start_failure_code(error: &StartSessionError) -> &'static str {
-    match error {
-        StartSessionError::WorkspaceNotFound => "workspace_not_found",
-        StartSessionError::WorkspaceDirectoryMissing { .. } => "workspace_directory_missing",
-        StartSessionError::AgentDescriptorNotFound(_) => "agent_descriptor_not_found",
-        StartSessionError::Closed => "session_closed",
-        StartSessionError::MissingDataKey => "missing_data_key",
-        StartSessionError::RestartRequired(_) => "restart_required",
-        StartSessionError::WorkspaceMcpAttachmentFailed(_) => "workspace_mcp_attachment_failed",
-        StartSessionError::RouteAuth(_) => "route_auth",
-        StartSessionError::AgentNotReady { .. } => "agent_not_ready",
-        StartSessionError::Internal(_) => "internal",
-        StartSessionError::AcpStart(_) => "acp_start",
     }
 }
 
@@ -492,6 +495,40 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             SendPromptError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))
         }
+        StartSessionError::LaunchOptionsUnavailable { agent_kind, state } => {
+            SendPromptError::InvalidPrompt(
+                crate::domains::sessions::prompt::PromptValidationError::new(
+                    "SESSION_LAUNCH_OPTIONS_UNAVAILABLE",
+                    format!(
+                        "launch options are not available for agent '{agent_kind}' (state: {state:?})"
+                    ),
+                ),
+            )
+        }
+        StartSessionError::LaunchValueUnsupported {
+            agent_kind,
+            key,
+            value,
+            state,
+        } => SendPromptError::InvalidPrompt(
+            crate::domains::sessions::prompt::PromptValidationError::new(
+                "SESSION_LAUNCH_VALUE_UNSUPPORTED",
+                format!(
+                    "launch value '{value}' for '{key}' is no longer supported for agent '{agent_kind}' (state: {state:?})"
+                ),
+            ),
+        ),
+        StartSessionError::AgentEnvOverrideUnsupported {
+            agent_kind,
+            env_var_name,
+        } => SendPromptError::InvalidPrompt(
+            crate::domains::sessions::prompt::PromptValidationError::new(
+                "SESSION_AGENT_ENV_OVERRIDE_UNSUPPORTED",
+                format!(
+                    "workspace/session environment cannot override agent-owned key '{env_var_name}' for '{agent_kind}'"
+                ),
+            ),
+        ),
         StartSessionError::Closed => SendPromptError::SessionClosed,
         StartSessionError::MissingDataKey | StartSessionError::RestartRequired(_) => {
             SendPromptError::Internal(anyhow::anyhow!(SESSION_RESTART_REQUIRED_DETAIL))
@@ -532,78 +569,5 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
             SendPromptError::Internal(error)
         }
-    }
-}
-
-#[cfg(test)]
-mod dispatch_classification_tests {
-    use super::*;
-    use crate::domains::agents::model::ResolvedAgentStatus;
-
-    #[test]
-    fn send_message_start_failure_codes_do_not_expose_details() {
-        let cases = [
-            (
-                StartSessionError::WorkspaceDirectoryMissing {
-                    path: "/secret/workspace".into(),
-                },
-                "workspace_directory_missing",
-            ),
-            (
-                StartSessionError::AgentNotReady {
-                    agent_kind: "secret-agent".into(),
-                    status: ResolvedAgentStatus::Error,
-                    detail: Some("secret readiness detail".into()),
-                },
-                "agent_not_ready",
-            ),
-            (
-                StartSessionError::Internal(anyhow::anyhow!("secret")),
-                "internal",
-            ),
-            (
-                StartSessionError::AcpStart(anyhow::anyhow!("secret")),
-                "acp_start",
-            ),
-        ];
-
-        for (error, expected) in cases {
-            assert_eq!(durable_prompt_start_failure_code(&error), expected);
-        }
-    }
-
-    #[test]
-    fn response_dropped_is_a_lost_acknowledgement() {
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::ResponseDropped),
-            TextPromptDispatchError::AcknowledgementLost
-        ));
-    }
-
-    #[test]
-    fn actor_unavailable_and_rejection_are_failed_dispatch() {
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::ActorUnavailable),
-            TextPromptDispatchError::Dispatch(SendPromptError::Internal(_))
-        ));
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::Rejected(
-                PromptAcceptError::EnqueueFailed("queue closed".to_string())
-            )),
-            TextPromptDispatchError::Dispatch(SendPromptError::Internal(_))
-        ));
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::Rejected(
-                PromptAcceptError::ProductContextUnavailable {
-                    incident_id: "incident-1".to_string(),
-                    error: crate::live::sessions::product_context::AgentProductContextResolutionError::new(
-                        anyhow::anyhow!("private")
-                    ),
-                }
-            )),
-            TextPromptDispatchError::Dispatch(
-                SendPromptError::ProductContextUnavailable { incident_id, .. }
-            ) if incident_id == "incident-1"
-        ));
     }
 }

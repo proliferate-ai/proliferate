@@ -1,6 +1,8 @@
 pub(in crate::live::sessions) mod connection;
+pub(in crate::live::sessions) mod frame_observer;
 pub(in crate::live::sessions) mod frame_tee;
 pub(in crate::live::sessions) mod inbound;
+pub(in crate::live::sessions) mod native_fork;
 pub mod native_session;
 pub mod opencode_sidedoor;
 pub mod process;

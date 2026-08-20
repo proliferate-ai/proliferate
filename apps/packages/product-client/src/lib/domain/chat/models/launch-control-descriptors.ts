@@ -9,27 +9,15 @@ import {
 } from "#product/domain/sessions/pending-config";
 import type {
   DesktopAgentLaunchControl,
-  DesktopModelTuningControlValues,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
-
-export interface LaunchControlPreferences {
-  defaultSessionModeByAgentKind: Record<string, string>;
-  defaultLiveSessionControlValuesByAgentKind: Record<string, Partial<Record<string, string>>>;
-}
 
 export interface BuildLaunchControlDescriptorsInput {
   selection: { kind: string; modelId: string } | null;
   launchAgents: Array<{
     kind: string;
     launchControls?: DesktopAgentLaunchControl[];
-    models: Array<{
-      id: string;
-      aliases?: string[];
-      modeValues?: string[] | null;
-      tuningControlValues?: DesktopModelTuningControlValues | null;
-    }>;
+    models: Array<{ id: string }>;
   }>;
-  preferences: LaunchControlPreferences;
   pendingConfigChanges: PendingSessionConfigChanges | null;
   onSelect: (
     agentKind: string,
@@ -51,37 +39,19 @@ export function buildLaunchControlDescriptors(
     return [];
   }
 
-  const selectedModelId = input.selection.modelId;
-  const selectedModel = agent.models.find((candidate) =>
-    candidate.id === selectedModelId || (candidate.aliases ?? []).includes(selectedModelId));
-  const selectedModelModeValues = selectedModel?.modeValues ?? null;
-  const selectedModelTuningControlValues = selectedModel?.tuningControlValues ?? null;
-
   return (agent.launchControls ?? [])
     .flatMap((control) => launchControlToDescriptor({
       agentKind: agent.kind,
       control,
-      modelModeValues: selectedModelModeValues,
-      modelTuningControlValues: selectedModelTuningControlValues,
       pendingConfigChanges: input.pendingConfigChanges,
-      preferences: input.preferences,
       onSelect: input.onSelect,
     }));
 }
 
-const MODEL_SCOPED_TUNING_KEYS = new Set<SupportedLiveControlKey>([
-  "reasoning",
-  "effort",
-  "fast_mode",
-]);
-
 function launchControlToDescriptor(input: {
   agentKind: string;
   control: DesktopAgentLaunchControl;
-  modelModeValues?: string[] | null;
-  modelTuningControlValues?: DesktopModelTuningControlValues | null;
   pendingConfigChanges: PendingSessionConfigChanges | null;
-  preferences: LaunchControlPreferences;
   onSelect: (
     agentKind: string,
     controlKey: SupportedLiveControlKey,
@@ -93,39 +63,11 @@ function launchControlToDescriptor(input: {
   if (!key || input.control.values.length === 0) {
     return [];
   }
-  // Tuning controls (effort/reasoning/fast_mode) are gated by the selected
-  // model's own controls matrix: a model without a matrix entry does not
-  // support the control at all (sonnet has no fast_mode), so the agent-level
-  // launch control must not render for it.
-  const modelTuningValues = MODEL_SCOPED_TUNING_KEYS.has(key) && input.modelTuningControlValues
-    ? input.modelTuningControlValues[key as keyof DesktopModelTuningControlValues] ?? null
-    : null;
-  if (
-    MODEL_SCOPED_TUNING_KEYS.has(key)
-    && input.modelTuningControlValues
-    && (!modelTuningValues || modelTuningValues.length === 0)
-  ) {
-    return [];
-  }
-  const rawConfigId = input.control.createField === "modeId"
-    ? "mode"
-    : input.control.apply.liveConfigId?.trim();
+  const rawConfigId = input.control.apply.liveConfigId?.trim();
   if (!rawConfigId) {
     return [];
   }
-  // Scope control values to what the selected model actually supports (the
-  // agent-level vocabulary is a superset — e.g. gateway/bedrock models reject
-  // `auto`; sonnet's effort caps at `max` while opus adds `xhigh`). Fall back
-  // to the full list if scoping would empty it.
-  const modelScopedValues = key === "mode" ? input.modelModeValues : modelTuningValues;
-  const controlValues = modelScopedValues && modelScopedValues.length > 0
-    ? (() => {
-      const scoped = input.control.values.filter(
-        (value) => modelScopedValues.includes(value.value),
-      );
-      return scoped.length > 0 ? scoped : input.control.values;
-    })()
-    : input.control.values;
+  const controlValues = input.control.values;
   const pendingChange = getPendingSessionConfigChange(
     input.pendingConfigChanges,
     rawConfigId,
@@ -134,20 +76,12 @@ function launchControlToDescriptor(input: {
     key,
   );
 
-  // Only honour a stored/default preference if the selected model still
-  // supports it, so a persisted `auto` mode or `xhigh` effort doesn't survive
-  // onto a model whose scoped vocabulary rejects it.
   const supports = (value: string | null | undefined): boolean =>
     !!value && controlValues.some((candidate) => candidate.value === value);
-  const preferredValue = key === "mode"
-    ? input.preferences.defaultSessionModeByAgentKind[input.agentKind]
-    : input.preferences.defaultLiveSessionControlValuesByAgentKind[input.agentKind]?.[key];
   const selectedValue =
     (supports(pendingChange?.value) ? pendingChange?.value : null)
-    || (supports(preferredValue) ? preferredValue : null)
     || (supports(input.control.defaultValue) ? input.control.defaultValue : null)
     || controlValues.find((value) => value.isDefault)?.value
-    || controlValues[0]?.value
     || null;
   const detail =
     controlValues.find((value) => value.value === selectedValue)?.label
@@ -206,17 +140,9 @@ function launchControlToDescriptor(input: {
 function normalizeLaunchControlKey(
   key: string,
 ): SupportedLiveControlKey | null {
-  if (key === "access_mode") {
-    return "mode";
-  }
-  if (
-    key === "mode"
-    || key === "collaboration_mode"
-    || key === "reasoning"
-    || key === "effort"
-    || key === "fast_mode"
-  ) {
-    return key;
-  }
-  return null;
+  // The observed id is executable truth. The type predates arbitrary ACP
+  // controls, but dropping an unknown id here would turn a rendering helper
+  // into an availability filter. Preserve it until the view-model types are
+  // generalized in their owning package.
+  return key as SupportedLiveControlKey;
 }

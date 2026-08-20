@@ -73,7 +73,6 @@ export function useCloseActiveWorkspaceTab(headerTabs: WorkspaceTabActionsContex
             workspaceId: headerTabs.selectedWorkspaceId,
             shellWorkspaceId: headerTabs.workspaceUiKey,
             target: fallback.target,
-            mode: "focus-existing",
           });
         }
       } else if (headerTabs.selectedWorkspaceId) {

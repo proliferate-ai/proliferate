@@ -1,11 +1,14 @@
 import {
-  useCloudAgentCatalog,
+  useCloudHarnessLaunchOptions,
 } from "@proliferate/cloud-sdk-react";
 
-export function useMobileCloudAgentResources() {
-  const agentCatalog = useCloudAgentCatalog();
+export function useMobileCloudAgentResources(input: {
+  cloudSandboxId: string | null | undefined;
+  harnessKind: string | null | undefined;
+}) {
+  const launchOptions = useCloudHarnessLaunchOptions(input);
 
   return {
-    agentCatalog,
+    launchOptions,
   };
 }

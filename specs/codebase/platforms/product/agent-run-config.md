@@ -8,38 +8,35 @@ agent work resolves through it. Owning code:
 `server/proliferate/db/models/cloud/agent_run_config.py`, store in
 `server/proliferate/db/store/cloud_agent_run_config.py`.
 
-## The catalog is the source of truth
+## Target-observed launch options are the source of truth
 
-`catalogs/agents/v1/catalog.json` defines which agent kinds exist, which
-models each kind accepts (`session.models[]`), and which controls each kind
-accepts (`session.controls[]`). A `cloud_agent_run_config` row stores one
-`model_id` plus non-model `control_values_json` under a human-readable name.
-There is no separate options or validity subsystem: validity is always a
-function of the current catalog.
+A `cloud_agent_run_config` row stores an opaque agent kind, exact `model_id`,
+and exact non-model `control_values_json` under a human-readable name. The row
+does not claim that those values are executable. Executable model and control
+IDs come only from the selected target runtime's
+`GET /v1/agents/{kind}/launch-options` response.
 
 Deliberate anti-decisions: no `validation_status`, no
 `catalog_version_pinned_at`, no `is_starter_preset` column, no `revision`, no
-background reconciler. A row key the catalog no longer recognizes is ignored
-at render time and at run time — never repaired in the background.
+background reconciler. Stale values remain visible and editable, but execution
+never silently drops, aliases, intersects, or repairs them.
 
 ## Three-phase validation
 
-- **Write time** (create/patch): reject a `model_id` that is not an active
-  catalog model for the agent kind; reject control keys outside the catalog's
-  allowed set (the catalog `model` control is excluded — `model_id` owns that
-  value); inline values must match `control.values[]`; dynamic values validate
-  through the owning catalog helper, never hard-coded rules.
-- **Read time** (selector render): intersect the row with the current catalog
-  and render only the intersection; stale keys are ignored, surfaced only as
-  an informational "unused settings" badge.
-- **Run time**: intersect again — the catalog may have moved between render
-  and dispatch. A missing kind/model fails with typed
-  `agent_run_config_model_unavailable`; a required control with no value and
-  no catalog default fails with `agent_run_config_missing_required`.
+- **Write time** (create/patch): validate only the durable structure: non-empty
+  exact IDs and JSON value shape. Saving is target-independent and therefore
+  cannot assert launchability.
+- **Read time** (selector render): when a target is selected, render its current
+  target-observed models and controls. Preserve a stale saved value as stale;
+  do not substitute a catalog alias or first-row fallback.
+- **Run time**: refresh the same target runtime's options and validate the
+  complete stored selection against one returned revision. Missing, omitted,
+  or mismatched values fail with typed launch-option errors before execution.
 
-The selector and the run-time check share one pure helper:
-`domain/resolve.py::resolve_runtime_values(catalog, config_row)` →
-`ResolvedAgentRunConfig` (no I/O; `ignored_keys` reports dropped stale keys).
+The structural resolver is
+`domain/resolve.py::resolve_runtime_values(config_row)` →
+`ResolvedAgentRunConfig` (no I/O). Target validation remains at the runtime
+boundary that owns the observation.
 
 ## Defaults
 
@@ -69,10 +66,11 @@ release. System rows are not writable through the API.
 
 ## Snapshot pattern
 
-Every consumer that starts a run captures the resolved, post-intersection
-values at trigger time as `agent_run_config_snapshot_json` (including
-`ignored_keys`). The snapshot is the audit record: later edits to the config
-row never affect in-flight or completed runs.
+Every consumer that starts a run captures the complete exact intended values at
+trigger time as `agent_run_config_snapshot_json`. The snapshot is the audit
+record: later edits to the config row never affect in-flight or completed runs.
+At execution, that snapshot is validated without filtering against the chosen
+target's current launch-options revision.
 
 ## Authorization
 

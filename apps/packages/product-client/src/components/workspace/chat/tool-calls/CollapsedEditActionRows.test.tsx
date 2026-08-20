@@ -23,8 +23,9 @@ function render(ui: ReactElement) {
   return testingRender(ui, { wrapper: WebProductHostWrapper });
 }
 
-const { openPrimaryMock, fileReferenceOpenState } = vi.hoisted(() => ({
+const { openPrimaryMock, fileReferenceOpenState, fileReferenceActionsCalls } = vi.hoisted(() => ({
   openPrimaryMock: vi.fn(),
+  fileReferenceActionsCalls: [] as Array<{ rawPath: string; workspacePath?: string | null }>,
   fileReferenceOpenState: {
     canOpenPrimary: true,
     canOpenInSidebar: true,
@@ -35,25 +36,38 @@ const { openPrimaryMock, fileReferenceOpenState } = vi.hoisted(() => ({
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
-  useFileReferenceActions: (args: { rawPath: string; workspacePath?: string | null }) => ({
-    reference: {
+  useFileReferenceActions: (args: { rawPath: string; workspacePath?: string | null }) => {
+    fileReferenceActionsCalls.push(args);
+    const locator = {
+      authority: "workspace" as const,
+      workspacePath: typeof args.workspacePath === "string" ? args.workspacePath : args.rawPath,
+      localCompanionPath: null,
+    };
+    return {
+      reference: {
       rawPath: args.rawPath,
-      path: args.rawPath,
+      parsedPath: args.rawPath,
+      displayPath: args.rawPath || "File",
       line: null,
       column: null,
-      absolutePath: `/repo/${args.rawPath}`,
-      workspacePath: args.rawPath,
-    },
-    openTargets: [],
-    defaultOpenTarget: null,
-    ...fileReferenceOpenState,
-    copyPath: vi.fn(),
-    openInSidebar: vi.fn(),
-    openDefault: vi.fn(),
-    openPrimary: openPrimaryMock,
-    openWithTarget: vi.fn(),
-    reveal: vi.fn(),
-  }),
+      locator,
+      },
+      accessState: { status: "settled", locator, kind: "file" },
+      nativePathKind: null,
+      openTargets: [],
+      defaultOpenTarget: null,
+      pathKindPending: false,
+      primaryUnavailableReason: null,
+      copyPath: args.rawPath || null,
+      copyCurrentPath: vi.fn(),
+      ...fileReferenceOpenState,
+      openInSidebar: vi.fn(),
+      openDefault: vi.fn(),
+      openPrimary: openPrimaryMock,
+      openWithTarget: vi.fn(),
+      reveal: vi.fn(),
+    };
+  },
 }));
 
 afterEach(() => {
@@ -64,6 +78,7 @@ afterEach(() => {
   fileReferenceOpenState.canOpenExternal = true;
   fileReferenceOpenState.canReveal = true;
   fileReferenceOpenState.pathKind = "file";
+  fileReferenceActionsCalls.length = 0;
 });
 
 function editItem({ patch = false }: { patch?: boolean } = {}) {
@@ -116,5 +131,75 @@ describe("CollapsedEditActionRows", () => {
     expect(screen.getByRole("menuitem", { name: "Copy path" })).toBeTruthy();
     expect(openPrimaryMock).not.toHaveBeenCalled();
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("preserves a blank new structured path beside the raw new path", () => {
+    const item = editItem();
+    const part = item.contentParts[0];
+    if (part?.type === "file_change") {
+      part.path = "old/raw.ts";
+      part.workspacePath = "old/workspace.ts";
+      part.newPath = "new/raw.ts";
+      part.newWorkspacePath = "";
+    }
+    render(<EditRows item={item} />);
+    expect(fileReferenceActionsCalls).toContainEqual({
+      rawPath: "new/raw.ts",
+      workspacePath: "",
+    });
+  });
+
+  it("routes a move outside the workspace to its destination, not the source", () => {
+    const item = editItem();
+    const part = item.contentParts[0];
+    if (part?.type === "file_change") {
+      part.path = "src/a.ts";
+      part.workspacePath = "src/a.ts";
+      part.newPath = "/tmp/a.ts";
+      part.newWorkspacePath = null;
+    }
+    render(<EditRows item={item} />);
+    expect(fileReferenceActionsCalls).toContainEqual({
+      rawPath: "/tmp/a.ts",
+      workspacePath: null,
+    });
+  });
+
+  it("keeps an unavailable filename as inert text, not a pointer dead zone over the row's toggle layer", () => {
+    fileReferenceOpenState.canOpenPrimary = false;
+
+    render(<EditRows item={editItem({ patch: true })} />);
+
+    // Unavailable: the filename is inert text, not a button — clicking it
+    // does not open the file.
+    expect(screen.queryByRole("button", { name: "edit-1.ts" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open edit-1.ts" })).toBeNull();
+    const filenameLabel = screen.getByText("edit-1.ts");
+    expect(filenameLabel.tagName).toBe("SPAN");
+    // Never re-enables pointer events over the row's toggle layer: the
+    // ancestor wraps everything in `pointer-events-none`, and only the
+    // actionable Button variants opt back in with `pointer-events-auto`.
+    // The inert label carries no such override, so a real click on its
+    // screen position still hits the toggle overlay underneath.
+    expect(filenameLabel.className).not.toContain("pointer-events-auto");
+
+    fireEvent.click(filenameLabel);
+    expect(openPrimaryMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps workspacePath for a plain edit with no newPath", () => {
+    const item = editItem();
+    const part = item.contentParts[0];
+    if (part?.type === "file_change") {
+      part.path = "src/a.ts";
+      part.workspacePath = "src/a.ts";
+      part.newPath = null;
+      part.newWorkspacePath = null;
+    }
+    render(<EditRows item={item} />);
+    expect(fileReferenceActionsCalls).toContainEqual({
+      rawPath: "src/a.ts",
+      workspacePath: "src/a.ts",
+    });
   });
 });

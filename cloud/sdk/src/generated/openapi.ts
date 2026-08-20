@@ -1546,78 +1546,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-models/{harness_kind}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent Models Endpoint
-         * @description The layered read: own snapshot, else the shipped catalog's models as the
-         *     read-time seed, with the override patch applied.
-         *
-         *     No ``authContextId`` and no ``surface`` params (model-catalog.md §Cloud
-         *     routes): one composed observation per harness, cloud-sandbox observations
-         *     only.
-         */
-        get: operations["get_agent_models_endpoint_v1_cloud_agent_models__harness_kind__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/agent-models/{harness_kind}/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Ingest Agent Model Snapshot Endpoint
-         * @description The single ingest route: a Worker-uploaded machine document.
-         *
-         *     Absorbs the former ``refresh``-with-payload and ``mirror`` endpoints, which
-         *     were two names for the same write, and the server-side gateway discovery
-         *     that used to live inside ``refresh`` — the server never generates snapshots.
-         *
-         *     The body is the worker's wire shape verbatim — ``snapshotJson`` (the whole
-         *     schemaVersion-2 document) plus ``probedAt``, nothing else. The owner is
-         *     resolved from the Worker's sandbox row, so the body carries no user
-         *     identity to spoof.
-         */
-        post: operations["ingest_agent_model_snapshot_endpoint_v1_cloud_agent_models__harness_kind__refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/agent-models/{harness_kind}/override": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Upsert Agent Model Override Endpoint */
-        put: operations["upsert_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_put"];
-        post?: never;
-        /** Delete Agent Model Override Endpoint */
-        delete: operations["delete_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cloud/agent-run-configs": {
         parameters: {
             query?: never;
@@ -1687,6 +1615,40 @@ export interface paths {
         head?: never;
         /** Update Agent Run Config Endpoint */
         patch: operations["update_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__patch"];
+        trace?: never;
+    };
+    "/v1/cloud/harness-launch-options/{harness_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest Launch Options */
+        post: operations["ingest_launch_options_v1_cloud_harness_launch_options__harness_kind__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/harness-launch-options/sandboxes/{cloud_sandbox_id}/{harness_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Launch Options */
+        get: operations["get_launch_options_v1_cloud_harness_launch_options_sandboxes__cloud_sandbox_id___harness_kind__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/cloud/workers/desktop/enrollment": {
@@ -2007,6 +1969,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/integrations/management": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Integration Management Endpoint */
+        get: operations["list_integration_management_endpoint_v1_cloud_integrations_management_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integrations/authentications": {
         parameters: {
             query?: never;
@@ -2069,6 +2048,23 @@ export interface paths {
         put?: never;
         /** Cancel Integration Oauth Flow Endpoint */
         post: operations["cancel_integration_oauth_flow_endpoint_v1_cloud_integrations_oauth_flows__flow_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/authorization-attempts/{attempt_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Integration Authorization Attempt Endpoint */
+        post: operations["cancel_integration_authorization_attempt_endpoint_v1_cloud_integrations_authorization_attempts__attempt_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3114,6 +3110,8 @@ export interface components {
              * Format: uuid
              */
             integrationAccountId: string;
+            /** Integrationaccountgrantversion */
+            integrationAccountGrantVersion: number;
             /** Integrationaccountauthversion */
             integrationAccountAuthVersion: number;
             /** Organizationid */
@@ -3415,8 +3413,6 @@ export interface components {
              * @default []
              */
             runs: components["schemas"]["AgentCatalogProbeRun"][];
-        } & {
-            [key: string]: unknown;
         };
         /** AgentCatalogArtifactPin */
         AgentCatalogArtifactPin: {
@@ -3435,16 +3431,8 @@ export interface components {
             version: string;
             /** Title */
             title?: string | null;
-        } & {
-            [key: string]: unknown;
         };
-        /**
-         * AgentCatalogAuthContext
-         * @description Ordered auth context; ``"baseline"`` is reserved and carries no auth slot.
-         *
-         *     ``signals`` is the externally tagged detection-signature algebra
-         *     (``env | envFlag | discovery | anyOf | allOf``); served opaquely.
-         */
+        /** AgentCatalogAuthContext */
         AgentCatalogAuthContext: {
             /** Id */
             id: string;
@@ -3456,16 +3444,6 @@ export interface components {
             signals?: {
                 [key: string]: unknown;
             } | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * AgentCatalogAvailability
-         * @description Observed-set availability: the auth contexts whose probe runs contained the model.
-         */
-        AgentCatalogAvailability: {
-            /** Anyof */
-            anyOf: string[];
         };
         /**
          * AgentCatalogChannel
@@ -3482,25 +3460,7 @@ export interface components {
             /** Artifactbaseurl */
             artifactBaseUrl: string;
         };
-        /** AgentCatalogControlMapping */
-        AgentCatalogControlMapping: {
-            /** Createfield */
-            createField?: string | null;
-            /** Liveconfigid */
-            liveConfigId?: string | null;
-            /** Switchvia */
-            switchVia?: ("setSessionModel" | "configOption") | null;
-            /** Variantsyntax */
-            variantSyntax?: string | null;
-            /** Missingliveconfigpolicy */
-            missingLiveConfigPolicy?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * AgentCatalogDataPin
-         * @description Pinned data dependency that gates model lists (e.g. opencode models.dev).
-         */
+        /** AgentCatalogDataPin */
         AgentCatalogDataPin: {
             /** Id */
             id?: string | null;
@@ -3511,86 +3471,23 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * AgentCatalogHarnessPins
-         * @description The pin block: exact versions the probe validated.
-         */
+        /** AgentCatalogHarnessPins */
         AgentCatalogHarnessPins: {
             agentProcess: components["schemas"]["AgentCatalogArtifactPin"];
             native?: components["schemas"]["AgentCatalogArtifactPin"] | null;
             data?: components["schemas"]["AgentCatalogDataPin"] | null;
-        } & {
-            [key: string]: unknown;
         };
-        /** AgentCatalogModel */
-        AgentCatalogModel: {
+        /**
+         * AgentCatalogPresentationModel
+         * @description Display-only metadata joined by exact observed model id.
+         */
+        AgentCatalogPresentationModel: {
             /** Id */
             id: string;
             /** Displayname */
             displayName: string;
             /** Description */
             description?: string | null;
-            /**
-             * Aliases
-             * @default []
-             */
-            aliases: string[];
-            /** Family */
-            family?: string | null;
-            availability: components["schemas"]["AgentCatalogAvailability"];
-            /**
-             * Defaultvisible
-             * @default false
-             */
-            defaultVisible: boolean;
-            /**
-             * Controls
-             * @default {}
-             */
-            controls: {
-                [key: string]: components["schemas"]["AgentCatalogModelControl"];
-            };
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "active" | "candidate" | "deprecated" | "hidden";
-            provenance?: components["schemas"]["AgentCatalogModelProvenance"] | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * AgentCatalogModelControl
-         * @description Per-model option matrix entry: exactly the values this model supports.
-         */
-        AgentCatalogModelControl: {
-            /** Values */
-            values: string[];
-            /** Default */
-            default?: string | null;
-            /** Observedvalue */
-            observedValue?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** AgentCatalogModelProvenance */
-        AgentCatalogModelProvenance: {
-            /**
-             * Observedin
-             * @default []
-             */
-            observedIn: string[];
-            /** Observedinallcontexts */
-            observedInAllContexts?: boolean | null;
-            /** Viatrialonly */
-            viaTrialOnly?: boolean | null;
-            /**
-             * Variantids
-             * @default []
-             */
-            variantIds: string[];
-        } & {
-            [key: string]: unknown;
         };
         /** AgentCatalogProbeRun */
         AgentCatalogProbeRun: {
@@ -3598,13 +3495,8 @@ export interface components {
             id: string;
             /** Snapshotpath */
             snapshotPath?: string | null;
-        } & {
-            [key: string]: unknown;
         };
-        /**
-         * AgentCatalogProbedAgainst
-         * @description Pairing with the registry document the probe ran against.
-         */
+        /** AgentCatalogProbedAgainst */
         AgentCatalogProbedAgainst: {
             /** Registryversion */
             registryVersion?: string | null;
@@ -3621,8 +3513,6 @@ export interface components {
             probedAgainst?: components["schemas"]["AgentCatalogProbedAgainst"] | null;
             /** Generatedat */
             generatedAt: string;
-            /** Defaultagentkind */
-            defaultAgentKind?: string | null;
             /** Agents */
             agents: components["schemas"]["AgentCatalogAgent"][];
         };
@@ -3633,52 +3523,11 @@ export interface components {
              * @default false
              */
             supportsGoals: boolean;
-            /** Unattendedmodeid */
-            unattendedModeId?: string | null;
             /**
-             * Controls
+             * Presentationmodels
              * @default []
              */
-            controls: components["schemas"]["AgentCatalogSessionControl"][];
-            /**
-             * Models
-             * @default []
-             */
-            models: components["schemas"]["AgentCatalogModel"][];
-            /**
-             * Defaults
-             * @default {}
-             */
-            defaults: {
-                [key: string]: string;
-            };
-            /**
-             * Observeddefaults
-             * @default {}
-             */
-            observedDefaults: {
-                [key: string]: string;
-            };
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * AgentCatalogSessionControl
-         * @description One key of the control universe; per-model matrices are subsets of this.
-         */
-        AgentCatalogSessionControl: {
-            /** Key */
-            key: string;
-            /** Label */
-            label?: string | null;
-            /**
-             * Values
-             * @default []
-             */
-            values: string[];
-            mapping?: components["schemas"]["AgentCatalogControlMapping"] | null;
-        } & {
-            [key: string]: unknown;
+            presentationModels: components["schemas"]["AgentCatalogPresentationModel"][];
         };
         /** AgentGatewayCapabilitiesResponse */
         AgentGatewayCapabilitiesResponse: {
@@ -3727,69 +3576,6 @@ export interface components {
             /** Verifiedat */
             verifiedAt?: string | null;
         };
-        /** AgentModelOverrideResponse */
-        AgentModelOverrideResponse: {
-            /** Id */
-            id: string;
-            /** Harnesskind */
-            harnessKind: string;
-            /** Patchjson */
-            patchJson: string;
-            /** Createdat */
-            createdAt: string;
-            /** Updatedat */
-            updatedAt: string;
-        };
-        /** AgentModelOverrideUpsertRequest */
-        AgentModelOverrideUpsertRequest: {
-            /** Patchjson */
-            patchJson: string;
-        };
-        /**
-         * AgentModelSnapshotIngestRequest
-         * @description A Worker's upload of one changed machine document.
-         *
-         *     Deliberately carries no user identity: the server resolves the owner from
-         *     the Worker's sandbox row. And no ``authContextId``: one composed
-         *     observation per harness (the harness is in the path). ``snapshotJson`` is
-         *     the whole schemaVersion-2 document verbatim (camelCase
-         *     ``probedAt``/``models``/``modes``/``attestation``/``installIdentity``/
-         *     ``stateRevision``/``warnings``/``lastAttempt``), stored as-is so the cloud
-         *     tier serves exactly what the machine observed.
-         */
-        AgentModelSnapshotIngestRequest: {
-            /** Snapshotjson */
-            snapshotJson: string;
-            /** Probedat */
-            probedAt: string;
-        };
-        /**
-         * AgentModelsResponse
-         * @description The layered read: owner's snapshot else shipped seed, + caller override.
-         */
-        AgentModelsResponse: {
-            /** Harnesskind */
-            harnessKind: string;
-            /** Models */
-            models: {
-                [key: string]: unknown;
-            }[];
-            /** Modes */
-            modes: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Origin
-             * @enum {string}
-             */
-            origin: "snapshot" | "catalog";
-            /** Snapshotid */
-            snapshotId: string | null;
-            /** Probedat */
-            probedAt: string | null;
-            /** Overrideapplied */
-            overrideApplied: boolean;
-        };
         /**
          * AgentProviderConfigCreateRequest
          * @description Create a typed vault entry (D2's ``ProviderConfigCreatorSubmit`` shape).
@@ -3824,7 +3610,7 @@ export interface components {
             modelId: string;
             /** Controlvalues */
             controlValues?: {
-                [key: string]: unknown;
+                [key: string]: string;
             };
             /**
              * Usableinpersonalsandboxes
@@ -3891,7 +3677,7 @@ export interface components {
             modelId: string;
             /** Controlvalues */
             controlValues: {
-                [key: string]: unknown;
+                [key: string]: string;
             };
             /** Ignoredkeys */
             ignoredKeys: string[];
@@ -3919,7 +3705,7 @@ export interface components {
             modelId: string;
             /** Controlvalues */
             controlValues: {
-                [key: string]: unknown;
+                [key: string]: string;
             };
             /** Usableinpersonalsandboxes */
             usableInPersonalSandboxes: boolean;
@@ -3950,7 +3736,7 @@ export interface components {
             modelId?: string | null;
             /** Controlvalues */
             controlValues?: {
-                [key: string]: unknown;
+                [key: string]: string;
             } | null;
             /** Usableinpersonalsandboxes */
             usableInPersonalSandboxes?: boolean | null;
@@ -4156,7 +3942,11 @@ export interface components {
         };
         /** AuthenticateIntegrationResponse */
         AuthenticateIntegrationResponse: {
-            account: components["schemas"]["IntegrationAccountResponse"];
+            account?: components["schemas"]["IntegrationAccountResponse"] | null;
+            /** Attemptid */
+            attemptId?: string | null;
+            /** Attemptgeneration */
+            attemptGeneration?: number | null;
             /** Oauthflowid */
             oauthFlowId?: string | null;
             /** Authorizationurl */
@@ -4374,6 +4164,10 @@ export interface components {
         BudgetLimitsResponse: {
             /** Limits */
             limits: components["schemas"]["BudgetLimit"][];
+        };
+        /** CancelIntegrationAuthorizationAttemptResponse */
+        CancelIntegrationAuthorizationAttemptResponse: {
+            attempt: components["schemas"]["IntegrationAuthorizationAttemptSummary"];
         };
         /** ClientDailyActivityRequest */
         ClientDailyActivityRequest: {
@@ -4643,6 +4437,32 @@ export interface components {
              * @enum {string}
              */
             source: "persisted" | "default";
+        };
+        /** CopiedLaunchOptionsResponse */
+        CopiedLaunchOptionsResponse: {
+            /** Harnesskind */
+            harnessKind: string;
+            /** Basisrevision */
+            basisRevision: string;
+            /** Revision */
+            revision: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "detecting" | "refreshing" | "observed" | "observed_empty" | "last_good_after_failure" | "failed_without_observation";
+            options: components["schemas"]["LaunchOptions"] | null;
+            /** Observedat */
+            observedAt: string | null;
+            /** Probeattemptedat */
+            probeAttemptedAt: string;
+            /** Probefailurecode */
+            probeFailureCode: string | null;
+            /**
+             * Readiness
+             * @enum {string}
+             */
+            readiness: "ready" | "install_required" | "credentials_required" | "login_required" | "unsupported" | "error";
         };
         /** CreateAdminIntegrationDefinitionRequest */
         CreateAdminIntegrationDefinitionRequest: {
@@ -4987,6 +4807,40 @@ export interface components {
             /** Enabled */
             enabled: boolean;
         };
+        /** IntegrationAuthorizationAttemptSummary */
+        IntegrationAuthorizationAttemptSummary: {
+            /**
+             * Attemptid
+             * Format: uuid
+             */
+            attemptId: string;
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "connect" | "reauthorize" | "rotate";
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "oauth2" | "api_key" | "none";
+            /** Generation */
+            generation: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "exchanging" | "validating" | "succeeded" | "failed" | "cancelled" | "expired" | "superseded";
+            /** Authorizationurl */
+            authorizationUrl: string | null;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Failurecode */
+            failureCode: string | null;
+        };
         /** IntegrationCatalogItem */
         IntegrationCatalogItem: {
             /**
@@ -5063,6 +4917,26 @@ export interface components {
              */
             settingsFields: components["schemas"]["IntegrationCatalogSettingField"][];
         };
+        /** IntegrationConnectionSummary */
+        IntegrationConnectionSummary: {
+            /**
+             * Accountid
+             * Format: uuid
+             */
+            accountId: string;
+            /** Status */
+            status: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Health */
+            health: string;
+            /** Toolcount */
+            toolCount: number | null;
+            /** Tokenexpiresat */
+            tokenExpiresAt: string | null;
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+        };
         /**
          * IntegrationGatewayConfig
          * @description The AnyHarness-facing gateway config the worker writes to a dotfile.
@@ -5108,6 +4982,42 @@ export interface components {
             /** Items */
             items: components["schemas"]["IntegrationHealthItem"][];
         };
+        /** IntegrationManagementActions */
+        IntegrationManagementActions: {
+            /**
+             * Primary
+             * @enum {string}
+             */
+            primary: "connect" | "reconnect" | "open_authorization" | "none";
+            /** Secondary */
+            secondary: ("cancel" | "disconnect")[];
+        };
+        /** IntegrationManagementItem */
+        IntegrationManagementItem: {
+            /**
+             * Definitionid
+             * Format: uuid
+             */
+            definitionId: string;
+            /** Namespace */
+            namespace: string;
+            /** Displayname */
+            displayName: string;
+            /** Description */
+            description: string | null;
+            /** Authkind */
+            authKind: string;
+            connectSchema: components["schemas"]["IntegrationConnectSchema"];
+            availability: components["schemas"]["IntegrationProviderAvailability"];
+            connection: components["schemas"]["IntegrationConnectionSummary"] | null;
+            attempt: components["schemas"]["IntegrationAuthorizationAttemptSummary"] | null;
+            actions: components["schemas"]["IntegrationManagementActions"];
+        };
+        /** IntegrationManagementResponse */
+        IntegrationManagementResponse: {
+            /** Items */
+            items: components["schemas"]["IntegrationManagementItem"][];
+        };
         /** IntegrationOAuthFlowStatusResponse */
         IntegrationOAuthFlowStatusResponse: {
             /**
@@ -5130,6 +5040,66 @@ export interface components {
             callbackSurface: string;
             /** Finalsurface */
             finalSurface: string;
+        };
+        /** IntegrationProviderAvailability */
+        IntegrationProviderAvailability: {
+            /** Available */
+            available: boolean;
+            /** Reason */
+            reason: string | null;
+        };
+        /** LaunchControl */
+        LaunchControl: {
+            /** Id */
+            id: string;
+            /** Observedlabel */
+            observedLabel: string | null;
+            /** Observeddescription */
+            observedDescription: string | null;
+            /** Values */
+            values: components["schemas"]["LaunchControlValue"][];
+        };
+        /** LaunchControlValue */
+        LaunchControlValue: {
+            /** Value */
+            value: string;
+            /** Observedlabel */
+            observedLabel: string | null;
+            /** Observeddescription */
+            observedDescription: string | null;
+        };
+        /** LaunchDefaults */
+        LaunchDefaults: {
+            /** Modelid */
+            modelId: string | null;
+            /** Controlvalues */
+            controlValues: {
+                [key: string]: string;
+            };
+        };
+        /** LaunchModel */
+        LaunchModel: {
+            /** Id */
+            id: string;
+            /** Observedname */
+            observedName: string | null;
+            /** Observeddescription */
+            observedDescription: string | null;
+        };
+        /** LaunchOptions */
+        LaunchOptions: {
+            /** Models */
+            models: components["schemas"]["LaunchModel"][];
+            /** Controls */
+            controls: components["schemas"]["LaunchControl"][];
+            defaults: components["schemas"]["LaunchDefaults"];
+        };
+        /** LaunchOptionsCopyRequest */
+        LaunchOptionsCopyRequest: {
+            /** Sourcerevision */
+            sourceRevision: number;
+            /** Payloadjson */
+            payloadJson: string;
         };
         /** LlmBalance */
         LlmBalance: {
@@ -7090,8 +7060,8 @@ export interface components {
             /** Desiredtopology */
             desiredTopology?: string | null;
             supervisorBridge?: components["schemas"]["WorkerSupervisorBridge"] | null;
-            /** Modelsnapshotuploadallowed */
-            modelSnapshotUploadAllowed: boolean;
+            /** Launchoptionsuploadallowed */
+            launchOptionsUploadAllowed: boolean;
         };
         /**
          * WorkerSupervisorBridge
@@ -7479,8 +7449,10 @@ export interface components {
             agentKind: string;
             /** Modelid */
             modelId?: string | null;
-            /** Modeid */
-            modeId?: string | null;
+            /** Controlvalues */
+            controlValues?: {
+                [key: string]: string;
+            };
         };
         /** WorkflowNodeV2 */
         WorkflowNodeV2: {
@@ -7514,7 +7486,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "stage_count_not_supported" | "step_count_not_supported" | "goal_not_supported" | "agent_catalog_selection_unavailable" | "model_catalog_selection_unavailable" | "effort_catalog_selection_unavailable" | "default_repository_unavailable";
+            code: "stage_count_not_supported" | "step_count_not_supported" | "goal_not_supported" | "default_repository_unavailable";
             /** Path */
             path: string;
             /** Message */
@@ -11010,136 +10982,6 @@ export interface operations {
             };
         };
     };
-    get_agent_models_endpoint_v1_cloud_agent_models__harness_kind__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentModelsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    ingest_agent_model_snapshot_endpoint_v1_cloud_agent_models__harness_kind__refresh_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentModelSnapshotIngestRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentModelsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentModelOverrideUpsertRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentModelOverrideResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_agent_model_override_endpoint_v1_cloud_agent_models__harness_kind__override_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_agent_run_configs_endpoint_v1_cloud_agent_run_configs_get: {
         parameters: {
             query?: {
@@ -11362,6 +11204,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentRunConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_launch_options_v1_cloud_harness_launch_options__harness_kind__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchOptionsCopyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_launch_options_v1_cloud_harness_launch_options_sandboxes__cloud_sandbox_id___harness_kind__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+                cloud_sandbox_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopiedLaunchOptionsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11929,6 +11836,37 @@ export interface operations {
             };
         };
     };
+    list_integration_management_endpoint_v1_cloud_integrations_management_get: {
+        parameters: {
+            query?: {
+                organizationId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationManagementResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     authenticate_integration_endpoint_v1_cloud_integrations_authentications_post: {
         parameters: {
             query?: never;
@@ -12040,6 +11978,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntegrationOAuthFlowStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_integration_authorization_attempt_endpoint_v1_cloud_integrations_authorization_attempts__attempt_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelIntegrationAuthorizationAttemptResponse"];
                 };
             };
             /** @description Validation Error */

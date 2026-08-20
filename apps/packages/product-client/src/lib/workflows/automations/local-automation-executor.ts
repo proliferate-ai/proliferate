@@ -8,7 +8,6 @@ import {
   type LocalAutomationRepoCandidate,
   type LocalAutomationWorktreePlan,
 } from "#product/lib/domain/automations/local-executor/plan";
-import { cadence } from "@proliferate/design/cadence";
 
 const AUTOMATION_LOCAL_ORIGIN = { kind: "system", entrypoint: "desktop" } as const;
 // Named exception (does not sit on the `cadence` scale): 2s falls strictly between `cadence.fastMs` (1s) and `cadence.standardMs`
@@ -16,8 +15,6 @@ const AUTOMATION_LOCAL_ORIGIN = { kind: "system", entrypoint: "desktop" } as con
 // setup detection against a 360s deadline for no benefit. Kept as its own named constant per the ADR §4.7 Rung 6 (Q8) exception convention.
 const SETUP_POLL_INTERVAL_MS = 2_000;
 const SETUP_TIMEOUT_MS = 360_000;
-const LIVE_CONFIG_POLL_INTERVAL_MS = cadence.fastMs;
-const LIVE_CONFIG_TIMEOUT_MS = 30_000;
 
 export class LocalAutomationExecutorError extends Error {
   constructor(public readonly code: string, message?: string) {
@@ -55,8 +52,8 @@ export async function executeLocalAutomationRun(
   input: ExecuteLocalAutomationInput,
 ): Promise<void> {
   ensureClaimActive(input);
-  const agentKind = input.claim.agentKindSnapshot;
-  if (!agentKind) {
+  const launchSelection = readAgentRunConfigSnapshot(input.claim.agentRunConfigSnapshot);
+  if (!launchSelection) {
     throw new LocalAutomationExecutorError("agent_not_configured");
   }
 
@@ -64,16 +61,8 @@ export async function executeLocalAutomationRun(
   ensureClaimActive(input);
   await prepareWorkspace(input, workspace.id);
   ensureClaimActive(input);
-  const session = await createOrReuseSession(input, workspace.id, agentKind);
+  const session = await createOrReuseSession(input, workspace.id, launchSelection);
   ensureClaimActive(input);
-  await applyReasoningEffort(
-    input.client,
-    session.id,
-    input.claim.reasoningEffortSnapshot,
-    () => isClaimActive(input),
-  );
-  ensureClaimActive(input);
-
   const dispatching = await input.transitions.markDispatching();
   if (!dispatching.accepted) {
     return;
@@ -217,7 +206,7 @@ async function prepareWorkspace(
 async function createOrReuseSession(
   input: ExecuteLocalAutomationInput,
   workspaceId: string,
-  agentKind: string,
+  launchSelection: AutomationLaunchSelection,
 ): Promise<Session> {
   const creating = await input.transitions.markCreatingSession(workspaceId);
   if (!creating.accepted) {
@@ -226,7 +215,11 @@ async function createOrReuseSession(
   const attachedSessionId = creating.run?.anyharnessSessionId ?? input.claim.anyharnessSessionId;
   if (attachedSessionId) {
     const session = await input.client.sessions.get(attachedSessionId).catch(() => null);
-    if (session && session.workspaceId === workspaceId && session.agentKind === agentKind) {
+    if (
+      session
+      && session.workspaceId === workspaceId
+      && session.agentKind === launchSelection.agentKind
+    ) {
       return session;
     }
     throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.sessionCreateFailed);
@@ -236,9 +229,9 @@ async function createOrReuseSession(
   try {
     session = await input.client.sessions.create({
       workspaceId,
-      agentKind,
-      modelId: input.claim.modelIdSnapshot,
-      modeId: input.claim.modeIdSnapshot,
+      agentKind: launchSelection.agentKind,
+      modelId: launchSelection.modelId,
+      controlValues: launchSelection.controlValues,
       origin: AUTOMATION_LOCAL_ORIGIN,
     });
   } catch {
@@ -251,54 +244,39 @@ async function createOrReuseSession(
   return session;
 }
 
-async function applyReasoningEffort(
-  client: AnyHarnessClient,
-  sessionId: string,
-  reasoningEffort: string | null,
-  shouldContinue: () => boolean,
-): Promise<void> {
-  if (!reasoningEffort) {
-    return;
+interface AutomationLaunchSelection {
+  agentKind: string;
+  modelId: string | null;
+  controlValues: Record<string, string>;
+}
+
+function readAgentRunConfigSnapshot(
+  snapshot: Record<string, unknown> | null,
+): AutomationLaunchSelection | null {
+  if (!snapshot) {
+    return null;
   }
-  const deadline = Date.now() + LIVE_CONFIG_TIMEOUT_MS;
-  let attemptedApply = false;
-  while (Date.now() < deadline) {
-    if (!shouldContinue()) {
-      throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.staleClaim);
-    }
-    const response = await client.sessions.getLiveConfig(sessionId).catch(() => null);
-    const effort = response?.liveConfig?.normalizedControls.effort ?? null;
-    if (!effort) {
-      await delay(LIVE_CONFIG_POLL_INTERVAL_MS);
-      continue;
-    }
-    if (effort.currentValue === reasoningEffort) {
-      return;
-    }
-    if (!effort.values.some((value) => value.value === reasoningEffort)) {
-      throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.configApplyFailed);
-    }
-    if (attemptedApply) {
-      await delay(LIVE_CONFIG_POLL_INTERVAL_MS);
-      continue;
-    }
-    const result = await client.sessions.setConfigOption(sessionId, {
-      configId: effort.rawConfigId,
-      value: reasoningEffort,
-    }).catch(() => null);
-    if (!result) {
-      throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.configApplyFailed);
-    }
-    if (result.applyState === "applied") {
-      return;
-    }
-    if (result.applyState !== "queued") {
-      throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.configApplyFailed);
-    }
-    attemptedApply = true;
-    await delay(LIVE_CONFIG_POLL_INTERVAL_MS);
+  const agentKind = readNonEmptyString(snapshot.agentKind ?? snapshot.agent_kind);
+  if (!agentKind) {
+    return null;
   }
-  throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.configApplyFailed);
+  const modelId = readNonEmptyString(snapshot.modelId ?? snapshot.model_id) ?? null;
+  const rawControls = snapshot.controlValues ?? snapshot.control_values;
+  const controlValues: Record<string, string> = {};
+  if (rawControls && typeof rawControls === "object" && !Array.isArray(rawControls)) {
+    for (const [controlId, value] of Object.entries(rawControls)) {
+      const normalizedId = controlId.trim();
+      const normalizedValue = readNonEmptyString(value);
+      if (normalizedId && normalizedValue) {
+        controlValues[normalizedId] = normalizedValue;
+      }
+    }
+  }
+  return { agentKind, modelId, controlValues };
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 async function waitForSetup(

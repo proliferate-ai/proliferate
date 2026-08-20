@@ -1,6 +1,12 @@
 use std::ffi::OsString;
+use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
+use crate::domains::agents::launch_options::{
+    HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions, HarnessLaunchOptionsService,
+    HarnessLaunchOptionsState,
+};
+use crate::domains::agents::route_auth::{apply_state_file, AgentAuthState};
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
@@ -23,6 +29,7 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
         queue: Arc::new(store.clone()),
         background: Arc::new(store.clone()),
         state: Arc::new(store.clone()),
+        fork_dispatch: Arc::new(store.clone()),
         attachments: Arc::new(SessionAttachmentSource::new(
             store.clone(),
             attachment_storage,
@@ -30,7 +37,86 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
         product_context: Arc::new(TestAgentProductContextResolver),
         observers: Vec::new(),
         permission_advisor: None,
+        launch_observation_invalidator: None,
     }
+}
+
+/// Seed the successful Claude observation reported by the scripted session
+/// harness used throughout actor and workflow tests.
+pub(crate) fn seed_scripted_claude_launch_options(service: &HarnessLaunchOptionsService) {
+    seed_observed_launch_options(service, "claude");
+}
+
+/// Seed one target-observed launch-option statement for `harness_kind` so
+/// intent validation at the start seam has a current-basis observation.
+///
+/// A stored row whose basis no longer matches projects as `Detecting`, so the
+/// guard tests observation state rather than row presence: a fixture that
+/// swaps the harness program after boot must be able to re-observe the new
+/// basis instead of silently keeping a stale statement.
+pub(crate) fn seed_observed_launch_options(
+    service: &HarnessLaunchOptionsService,
+    harness_kind: &str,
+) {
+    if service
+        .read(harness_kind)
+        .expect("read launch options")
+        .is_some_and(|response| response.state == HarnessLaunchOptionsState::Observed)
+    {
+        return;
+    }
+    let started = service
+        .begin_probe(harness_kind, "2026-08-10T23:58:00Z")
+        .expect("begin launch-option observation");
+    service
+        .record_success(
+            &started,
+            &HarnessLaunchOptions {
+                models: vec![HarnessLaunchModel {
+                    id: "haiku".to_string(),
+                    observed_name: Some("Haiku".to_string()),
+                    observed_description: None,
+                }],
+                controls: Vec::new(),
+                defaults: HarnessLaunchDefaults {
+                    model_id: Some("haiku".to_string()),
+                    control_values: Default::default(),
+                },
+            },
+            "2026-08-10T23:58:01Z",
+        )
+        .expect("record scripted launch-option observation");
+}
+
+/// Install the product-owned API-key route used by scripted Claude fixtures.
+/// Capability-affecting credentials must never ride the global/workspace env
+/// that launch admission deliberately rejects.
+///
+/// Route-provided credentials never clear a native-CLI `InstallRequired` the
+/// way env credentials do (`compute_readiness` checks the native artifact only
+/// on the not-env-ready branch), so the fixture also installs a managed native
+/// CLI stub — CI has no real `claude` on PATH.
+pub(crate) fn install_scripted_claude_auth(runtime_home: &Path) {
+    let native_dir = runtime_home.join("agents/claude/native");
+    std::fs::create_dir_all(&native_dir).expect("create managed native dir");
+    let native_stub = native_dir.join("claude");
+    std::fs::write(&native_stub, "#!/bin/sh\nexit 0\n").expect("write native claude stub");
+    crate::integrations::agent_cli::executable::make_executable(&native_stub)
+        .expect("make native claude stub executable");
+    let state: AgentAuthState = serde_json::from_value(serde_json::json!({
+        "version": 2,
+        "revision": 1,
+        "harnesses": [{
+            "harness_kind": "claude",
+            "sources": [{
+                "kind": "api_key",
+                "env_var_name": "ANTHROPIC_API_KEY",
+                "value": "test-not-a-real-key"
+            }]
+        }]
+    }))
+    .expect("scripted Claude agent-auth state");
+    apply_state_file(runtime_home, &state).expect("install scripted Claude agent-auth state");
 }
 
 struct TestAgentProductContextResolver;
@@ -175,6 +261,7 @@ pub(crate) fn insert_session_row(
         origin: Some(crate::origin::OriginContext::system_local_runtime()),
     };
     store.insert(&record).expect("insert session row");
+    store.seed_empty_launch_intent(session_id);
 }
 
 pub(crate) fn seed_repo_root(db: &Db, repo_root_id: &str, path: &str) {

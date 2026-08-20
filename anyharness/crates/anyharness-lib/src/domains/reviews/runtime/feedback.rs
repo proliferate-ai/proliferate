@@ -11,8 +11,9 @@ use crate::domains::sessions::runtime::SendPromptOutcome;
 const FEEDBACK_RETRY_DELAY_SECS: i64 = 30;
 
 impl ReviewRuntime {
-    pub async fn submit_review_result(
+    pub async fn submit_review_result_under_workspace_lease(
         &self,
+        leased_workspace_id: &str,
         reviewer_session_id: &str,
         pass: bool,
         summary: String,
@@ -41,7 +42,8 @@ impl ReviewRuntime {
                 .map_err(ReviewError::Internal)?
                 .ok_or_else(|| ReviewError::RunNotFound(job.review_run_id.clone()))?;
             if run.auto_iterate || run.status == ReviewRunStatus::Passed {
-                self.send_feedback_job(job).await?;
+                self.send_feedback_job_under_workspace_lease(job, leased_workspace_id)
+                    .await?;
             }
         }
         Ok(job)
@@ -133,6 +135,23 @@ impl ReviewRuntime {
         &self,
         job: &ReviewFeedbackJobRecord,
     ) -> Result<(), ReviewError> {
+        self.send_feedback_job_inner(job, None).await
+    }
+
+    async fn send_feedback_job_under_workspace_lease(
+        &self,
+        job: &ReviewFeedbackJobRecord,
+        leased_workspace_id: &str,
+    ) -> Result<(), ReviewError> {
+        self.send_feedback_job_inner(job, Some(leased_workspace_id))
+            .await
+    }
+
+    async fn send_feedback_job_inner(
+        &self,
+        job: &ReviewFeedbackJobRecord,
+        leased_workspace_id: Option<&str>,
+    ) -> Result<(), ReviewError> {
         if job.state == ReviewFeedbackJobState::Sent || job.sent_prompt_seq.is_some() {
             return Ok(());
         }
@@ -145,19 +164,33 @@ impl ReviewRuntime {
             return Ok(());
         };
         self.emit_review_run_updated_for_job(&job).await;
-        let outcome = self
-            .session_runtime
-            .send_text_prompt_with_provenance(
-                &job.parent_session_id,
-                job.prompt_text.clone(),
-                PromptProvenance::ReviewFeedback {
-                    review_run_id: job.review_run_id.clone(),
-                    review_round_id: job.review_round_id.clone(),
-                    feedback_job_id: job.id.clone(),
-                    label: None,
-                },
-            )
-            .await;
+        let provenance = PromptProvenance::ReviewFeedback {
+            review_run_id: job.review_run_id.clone(),
+            review_round_id: job.review_round_id.clone(),
+            feedback_job_id: job.id.clone(),
+            label: None,
+        };
+        let outcome = match leased_workspace_id {
+            Some(workspace_id) => {
+                self.session_runtime
+                    .send_text_prompt_with_provenance_under_workspace_lease(
+                        workspace_id,
+                        &job.parent_session_id,
+                        job.prompt_text.clone(),
+                        provenance,
+                    )
+                    .await
+            }
+            None => {
+                self.session_runtime
+                    .send_text_prompt_with_provenance(
+                        &job.parent_session_id,
+                        job.prompt_text.clone(),
+                        provenance,
+                    )
+                    .await
+            }
+        };
         match outcome {
             Ok(SendPromptOutcome::Queued { seq, .. }) => {
                 self.service

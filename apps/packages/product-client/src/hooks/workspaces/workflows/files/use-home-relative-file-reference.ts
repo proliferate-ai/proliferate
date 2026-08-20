@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DesktopFilesBridge } from "@proliferate/product-client/host/desktop-bridge";
-import { isHomeRelativeFileReference } from "#product/lib/domain/files/path-references";
+import { normalizeRuntimeWorkspaceRoot } from "#product/lib/domain/files/path-references";
 
 const cachedHomeDirectoryPromises = new WeakMap<DesktopFilesBridge, Promise<string>>();
 
@@ -8,11 +8,9 @@ function loadHomeDirectory(files: DesktopFilesBridge): Promise<string> {
   let promise = cachedHomeDirectoryPromises.get(files);
   if (!promise) {
     promise = files.getHomeDirectory().then((path) => {
-      const trimmed = path.trim();
-      if (!trimmed) {
-        throw new Error("Desktop home directory is unavailable.");
-      }
-      return trimmed;
+      const normalized = normalizeRuntimeWorkspaceRoot(path);
+      if (!normalized) throw new Error("Desktop home directory is unavailable.");
+      return normalized;
     });
     cachedHomeDirectoryPromises.set(files, promise);
     void promise.catch(() => {
@@ -24,59 +22,104 @@ function loadHomeDirectory(files: DesktopFilesBridge): Promise<string> {
   return promise;
 }
 
-export function useHomeRelativeFileReference(
-  files: DesktopFilesBridge | null,
-  rawPath: string,
-) {
-  const needsHomeDirectory = isHomeRelativeFileReference(rawPath);
-  const [homeDirectory, setHomeDirectory] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+interface HomeResolution {
+  files: DesktopFilesBridge;
+  candidatePath: string;
+  homeDirectory: string | null;
+  pending: boolean;
+  rejected: boolean;
+}
+
+/** Resolve only an already authority-gated home-relative candidate. */
+export function useHomeRelativeFileReference({
+  files,
+  candidatePath,
+}: {
+  files: DesktopFilesBridge | null;
+  candidatePath: string | null;
+}) {
+  const routeRef = useRef({ files, candidatePath });
+  routeRef.current = { files, candidatePath };
+  const [resolution, setResolution] = useState<HomeResolution | null>(null);
+  const current = files
+    && candidatePath
+    && resolution?.files === files
+    && resolution.candidatePath === candidatePath
+    ? resolution
+    : null;
 
   useEffect(() => {
     let cancelled = false;
-    if (!needsHomeDirectory || !files) {
-      setHomeDirectory(null);
-      setPending(false);
+    if (!candidatePath || !files) {
+      setResolution(null);
       return;
     }
 
-    setHomeDirectory(null);
-    setPending(true);
+    const pending: HomeResolution = {
+      files,
+      candidatePath,
+      homeDirectory: null,
+      pending: true,
+      rejected: false,
+    };
+    setResolution(pending);
     void loadHomeDirectory(files).then(
-      (path) => {
-        if (!cancelled) setHomeDirectory(path);
+      (homeDirectory) => {
+        if (!cancelled) setResolution({ ...pending, homeDirectory, pending: false });
       },
       () => {
-        if (!cancelled) setHomeDirectory(null);
+        if (!cancelled) setResolution({ ...pending, pending: false, rejected: true });
       },
-    ).finally(() => {
-      if (!cancelled) setPending(false);
-    });
+    );
     return () => {
       cancelled = true;
     };
-  }, [files, needsHomeDirectory]);
+  }, [candidatePath, files]);
 
   const resolveHomeDirectory = useCallback(async () => {
-    if (!needsHomeDirectory || !files) {
-      return null;
-    }
-    if (homeDirectory) {
-      return homeDirectory;
-    }
+    const route = routeRef.current;
+    if (!route.candidatePath || !route.files) return null;
+    const active = resolution?.files === route.files
+      && resolution.candidatePath === route.candidatePath
+      ? resolution
+      : null;
+    if (active?.rejected) return null;
+    if (active?.homeDirectory) return active.homeDirectory;
     try {
-      const path = await loadHomeDirectory(files);
-      setHomeDirectory(path);
-      return path;
+      const homeDirectory = await loadHomeDirectory(route.files);
+      if (
+        routeRef.current.files !== route.files
+        || routeRef.current.candidatePath !== route.candidatePath
+      ) return null;
+      setResolution({
+        files: route.files,
+        candidatePath: route.candidatePath,
+        homeDirectory,
+        pending: false,
+        rejected: false,
+      });
+      return homeDirectory;
     } catch {
+      if (
+        routeRef.current.files === route.files
+        && routeRef.current.candidatePath === route.candidatePath
+      ) {
+        setResolution({
+          files: route.files,
+          candidatePath: route.candidatePath,
+          homeDirectory: null,
+          pending: false,
+          rejected: true,
+        });
+      }
       return null;
     }
-  }, [files, homeDirectory, needsHomeDirectory]);
+  }, [resolution]);
 
   return {
-    homeDirectory,
-    needsHomeDirectory,
-    pending,
+    homeDirectory: current?.homeDirectory ?? null,
+    pending: Boolean(files && candidatePath && (!current || current.pending)),
+    rejected: current?.rejected ?? false,
     resolveHomeDirectory,
   };
 }

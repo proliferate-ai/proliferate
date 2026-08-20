@@ -31,7 +31,6 @@ const mocks = vi.hoisted(() => {
         enabled: true,
         apiKey: "phc_test",
         apiHost: "https://us.i.posthog.com",
-        sessionRecordingEnabled: false,
       },
     })),
     isBuildTelemetryDisabledMock: vi.fn(() => false),
@@ -169,7 +168,7 @@ describe("desktop telemetry client", () => {
     expect(mocks.captureDesktopSentryExceptionMock).not.toHaveBeenCalled();
   });
 
-  it("sends only user id to Sentry while keeping the full user for PostHog", async () => {
+  it("sends only user id to Sentry and PostHog", async () => {
     const client = await loadTelemetryClient();
     const user: AuthUser = {
       id: "user-123",
@@ -185,7 +184,19 @@ describe("desktop telemetry client", () => {
     expect(mocks.setDesktopSentryUserMock).toHaveBeenCalledOnce();
     expect(mocks.setDesktopSentryUserMock).toHaveBeenCalledWith("user-123");
     expect(mocks.identifyDesktopPostHogUserMock).toHaveBeenCalledOnce();
-    expect(mocks.identifyDesktopPostHogUserMock).toHaveBeenCalledWith(user);
+    expect(mocks.identifyDesktopPostHogUserMock).toHaveBeenCalledWith("user-123");
+    expect(
+      JSON.stringify([
+        mocks.setDesktopSentryUserMock.mock.calls,
+        mocks.identifyDesktopPostHogUserMock.mock.calls,
+      ]),
+    ).not.toContain("user@example.com");
+    expect(
+      JSON.stringify([
+        mocks.setDesktopSentryUserMock.mock.calls,
+        mocks.identifyDesktopPostHogUserMock.mock.calls,
+      ]),
+    ).not.toContain("Test User");
   });
 
   it("emits desktop_keychain_access_failed to PostHog", async () => {
@@ -197,12 +208,15 @@ describe("desktop telemetry client", () => {
 
     client.trackProductEvent("desktop_keychain_access_failed", {
       operation: "get_auth_session",
-      error_message: "keychain access denied",
+      failure_kind: "permission_error",
     });
 
     expect(mocks.trackDesktopPostHogEventMock).toHaveBeenCalledWith(
       "desktop_keychain_access_failed",
-      expect.objectContaining({ operation: "get_auth_session" }),
+      {
+        operation: "get_auth_session",
+        failure_kind: "permission_error",
+      },
     );
   });
 });

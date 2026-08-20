@@ -18,8 +18,7 @@ export interface ChatLaunchRetryInput {
   text: string;
   attachmentSnapshots?: PromptAttachmentSnapshot[];
   modelSelection: HomeNextModelSelection;
-  modeId: string | null;
-  launchControlValues?: Record<string, string>;
+  launchControlValues: Record<string, string>;
   target: HomeLaunchTarget;
 }
 
@@ -44,8 +43,7 @@ export interface ChatLaunchIntent {
   catalogSnapshotId?: string | null;
   agentKind?: string | null;
   modelId?: string | null;
-  modeId?: string | null;
-  launchControlValues?: Record<string, string>;
+  launchControlValues: Record<string, string>;
   promptId: string;
   queuedPromptBlocks?: PromptInputBlock[];
   optimisticContentParts?: ContentPart[];

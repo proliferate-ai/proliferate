@@ -18,6 +18,9 @@ impl InboundDoor {
         &self,
         args: acp::schema::RequestPermissionRequest,
     ) -> acp::Result<acp::schema::RequestPermissionResponse> {
+        if !self.route_session_request(Some(&args.session_id.to_string())) {
+            return Ok(cancelled_permission_response());
+        }
         let request_id = uuid::Uuid::new_v4().to_string();
 
         let title = args
@@ -169,4 +172,9 @@ impl InboundDoor {
 
         Ok(acp::schema::RequestPermissionResponse::new(acp_outcome))
     }
+}
+
+pub(in crate::live::sessions::driver) fn cancelled_permission_response(
+) -> acp::schema::RequestPermissionResponse {
+    acp::schema::RequestPermissionResponse::new(acp::schema::RequestPermissionOutcome::Cancelled)
 }

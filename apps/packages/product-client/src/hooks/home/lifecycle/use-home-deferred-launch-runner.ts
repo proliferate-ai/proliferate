@@ -216,7 +216,6 @@ export function useHomeDeferredLaunchRunner() {
         ...promptAttachmentSendFields(launch.promptText, launch.attachmentSnapshots),
         activateOnCreate: attended,
         targetWorkspaceUiKey: attended ? null : launch.workspaceId,
-        ...(launch.modeId ? { modeId: launch.modeId } : {}),
         // A create carrying a prompt resolves at enqueue, so a send that fails
         // downstream never reaches the catch below. Attended, the composer copy
         // the creation workflow raises is right and stays. Unattended it is

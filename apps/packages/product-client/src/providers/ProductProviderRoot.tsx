@@ -3,7 +3,7 @@ import {
   AnyHarnessWorkspace,
 } from "@anyharness/sdk-react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { resolveRouteScopedWorkspaceProviderId } from "#product/lib/domain/workspaces/selection/workspace-provider-scope";
 import { useResolveWorkspaceConnection } from "#product/hooks/workspaces/cache/use-resolve-workspace-connection";
@@ -13,6 +13,10 @@ import type { AuthClientStatus } from "#product/lib/domain/auth/auth-state-mappi
 import { buildAnyHarnessCacheScopeKey } from "#product/lib/domain/auth/anyharness-cache-scope";
 import { useCloudWorkspaceMaterializationCacheBoundary } from "#product/hooks/workspaces/cache/use-cloud-workspace-materialization-cache-boundary";
 import { TelemetryProvider } from "#product/providers/TelemetryProvider";
+import {
+  ProductWorkspaceConnectionProvider,
+} from "#product/providers/ProductWorkspaceConnectionProvider";
+import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 
 /**
  * Product-owned provider root. Wraps the AnyHarness/workspace product scope and
@@ -58,7 +62,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
   });
-  const resolveConnection = useResolveWorkspaceConnection({
+  const resolveProductConnection = useResolveWorkspaceConnection({
     ssh,
     cloudClient,
     runtimeUrl,
@@ -67,16 +71,23 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
     cacheScopeKey,
     selectedWorkspaceId,
   });
+  const resolveAnyHarnessConnection = useCallback(async (workspaceId: string) => (
+    await resolveProductConnection(workspaceId)
+  ).connection, [resolveProductConnection]);
 
   return (
     <AnyHarnessRuntime runtimeUrl={readyRuntimeUrl || null} cacheScopeKey={cacheScopeKey}>
       <CloudWorkspaceMaterializationCacheBoundary>
-        <AnyHarnessWorkspace
-          workspaceId={providerWorkspaceId}
-          resolveConnection={resolveConnection}
+        <ProductWorkspaceConnectionProvider
+          resolveConnection={resolveProductConnection}
         >
-          {children}
-        </AnyHarnessWorkspace>
+          <AnyHarnessWorkspace
+            workspaceId={providerWorkspaceId}
+            resolveConnection={resolveAnyHarnessConnection}
+          >
+            <WorkspacePathProvider>{children}</WorkspacePathProvider>
+          </AnyHarnessWorkspace>
+        </ProductWorkspaceConnectionProvider>
       </CloudWorkspaceMaterializationCacheBoundary>
     </AnyHarnessRuntime>
   );

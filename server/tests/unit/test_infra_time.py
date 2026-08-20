@@ -64,10 +64,20 @@ def test_every_migrated_orm_wall_clock_default_remains_a_deferred_owner_referenc
 
     wall_clock_references, other_references = _split_datetime_default_owners(Base.metadata)
 
-    assert len(wall_clock_references) == 224
+    lifecycle_references = {
+        ("cloud_integration_definition_security_revision", "created_at", "default"),
+        ("cloud_integration_authorization_attempt", "created_at", "default"),
+        ("cloud_integration_authorization_attempt", "updated_at", "default"),
+        ("cloud_integration_authorization_attempt", "updated_at", "onupdate"),
+        ("cloud_integration_revocation_job", "created_at", "default"),
+        ("cloud_integration_revocation_job", "updated_at", "default"),
+    }
+    assert lifecycle_references.issubset(wall_clock_references)
+    assert len(wall_clock_references) == 227
     assert other_references == [
         ("cloud_integration_action_approval", "updated_at", "onupdate"),
         ("cloud_integration_action_approval_event", "updated_at", "onupdate"),
+        ("cloud_integration_revocation_job", "updated_at", "onupdate"),
     ]
 
 

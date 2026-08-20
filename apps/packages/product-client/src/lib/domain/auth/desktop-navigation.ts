@@ -1,4 +1,4 @@
-import type { ProductEntry } from "@proliferate/product-client/host/product-host";
+import type { ProductEntry } from "@proliferate/product-client/host/product-host-entry";
 
 import {
   appendQuery,

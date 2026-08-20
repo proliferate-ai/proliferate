@@ -66,6 +66,7 @@ describe("runWorkspaceSelection staleness abort", () => {
       workspaceConnection: {
         runtimeUrl: "http://runtime.test",
         anyharnessWorkspaceId: "ah-workspace",
+        runtimeGeneration: 0,
       },
     });
 

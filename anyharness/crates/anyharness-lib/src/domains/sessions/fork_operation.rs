@@ -44,10 +44,38 @@ impl ForkOperationPhase {
         })
     }
 
-    /// A parked, non-terminal phase whose native outcome is unknown. Redispatch
-    /// on the same idempotency key is refused while a record is in this phase.
+    /// A non-terminal phase that cannot authorize a same-key native replay.
+    /// Prepared, in-flight, known-result, and unknown-outcome rows all require
+    /// reconciliation rather than another wire call.
     pub fn blocks_redispatch(self) -> bool {
-        matches!(self, ForkOperationPhase::NativeOutcomeUnknown)
+        matches!(
+            self,
+            ForkOperationPhase::Prepared
+                | ForkOperationPhase::NativeCallInFlight
+                | ForkOperationPhase::NativeResultKnown
+                | ForkOperationPhase::NativeOutcomeUnknown
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ForkOperationPhase;
+
+    #[test]
+    fn every_unreconciled_native_phase_blocks_redispatch() {
+        use ForkOperationPhase::*;
+        for phase in [
+            Prepared,
+            NativeCallInFlight,
+            NativeResultKnown,
+            NativeOutcomeUnknown,
+        ] {
+            assert!(phase.blocks_redispatch(), "phase={}", phase.as_str());
+        }
+        for phase in [ChildPersisted, Completed, Failed] {
+            assert!(!phase.blocks_redispatch(), "phase={}", phase.as_str());
+        }
     }
 }
 
@@ -73,6 +101,11 @@ pub struct ForkOperationRecord {
     pub adapter_version: Option<String>,
     pub native_version: Option<String>,
     pub native_child_session_id: Option<String>,
+    /// Checkpoints ADR (Q-H4): the boundary checkpoint this fork was taken at,
+    /// looked up by `(parent_session_id, anchor_turn_id)` when the operation is
+    /// prepared. `None` when checkpoint capture was off or no unexpired
+    /// checkpoint existed at the anchor.
+    pub checkpoint_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

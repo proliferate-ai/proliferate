@@ -8,6 +8,7 @@ from proliferate.background.config import (
     BACKGROUND_RELAY_TASK,
     CLOUD_SANDBOX_ORPHAN_REAP_TASK,
     CUSTOMERIO_ENGAGEMENT_SYNC_TASK,
+    INTEGRATION_REVOCATION_SWEEP_TASK,
 )
 from proliferate.config import Settings, settings
 
@@ -17,6 +18,7 @@ BeatSchedule = dict[str, dict[str, object]]
 # a lone Beat process owns outbox relay scheduling; RedBeat preserves this entry
 # across restarts and prevents duplicate schedule ownership.
 RELAY_SCHEDULE_ENTRY = "background-outbox-relay"
+INTEGRATION_REVOCATION_SWEEP_SCHEDULE_ENTRY = "integration-revocation-deadline-sweep"
 
 
 def build_beat_schedule(config: Settings = settings) -> BeatSchedule:
@@ -31,6 +33,10 @@ def build_beat_schedule(config: Settings = settings) -> BeatSchedule:
         RELAY_SCHEDULE_ENTRY: {
             "task": BACKGROUND_RELAY_TASK,
             "schedule": config.background_relay_interval_seconds,
+        },
+        INTEGRATION_REVOCATION_SWEEP_SCHEDULE_ENTRY: {
+            "task": INTEGRATION_REVOCATION_SWEEP_TASK,
+            "schedule": crontab(minute="*/15"),
         },
     }
 

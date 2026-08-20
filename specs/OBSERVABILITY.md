@@ -7,6 +7,24 @@ in the PR description. System depth lives in
 [`specs/codebase/systems/engineering/observability/`](codebase/systems/engineering/observability/README.md);
 this page is the per-PR decision layer over it.
 
+## Harness launch-option authority events
+
+The observation → create → actor → live-mutation chain emits these bounded
+records:
+
+| Event | Required safe fields |
+| --- | --- |
+| `agent.launch_options_probe.completed` | harness kind, basis/revision, result/state, counts, duration, bounded failure code |
+| `agent.launch_options.served` | harness kind, basis/revision, state, counts |
+| `session.launch_selection.validated` | session/correlation identity, harness kind, result, selected key names/counts, bounded rejection code |
+| `session.initial_config.apply` | session identity, config key, membership/apply/confirmation result (`confirmed`, `unconfirmed`, `membership_rejected`, `membership_dropped`, `apply_failed`, `final_mismatch`) |
+| `session.initial_config.dropped` | session identity, config key |
+| `session.live_config.changed` | session identity, source sequence, changed key, apply result |
+
+These events never contain selected values, model IDs, descriptions, provider
+output, credentials, prompts, environment values, or filesystem paths. Probe
+materialization errors use bounded codes rather than error bodies.
+
 ## The model
 
 Four signal surfaces, deliberately separate:
@@ -27,8 +45,9 @@ Four signal surfaces, deliberately separate:
 
 Sentry and logs correlate through release and request/product identifiers —
 never by copying evidence bodies between systems. Server request telemetry
-binds a generated request id, sanitized route, id-only user, and allowlisted
-correlation fields, and clears the Sentry user at request teardown. The
+binds a generated request id, id-only user, and allowlisted correlation
+fields, and clears the Sentry user at request teardown. No route string —
+sanitized or otherwise — survives onto a Server Sentry event. The
 logical cloud sandbox is `target_id`; the provider sandbox is `sandbox_id`;
 the two must remain distinct.
 
@@ -95,8 +114,8 @@ anomaly that fires constantly trains everyone to ignore the fatal ones.
 
 | Signal | Where it goes | How it's named | What enforces it |
 | --- | --- | --- | --- |
-| Server operation genuinely failed | Let the exception propagate; auto-captured as a `proliferate-server` Sentry issue | Release/environment/surface tags attached by the SDK init | Scrubber in `server/proliferate/integrations/sentry.py` |
-| Anomaly the user didn't feel (latency budget exceeded, invariant violated, unexpected-but-recovered branch) | `capture_server_sentry_exception(..., level="warning", fingerprint=[...])` — request still succeeds; emit on threshold, not per call (the budget lives in code, not in an alert rule) | Stable `fingerprint` is the dedup key — one issue accrues occurrences instead of spawning thousands; tags `anomaly=<slug>`, `surface=<area>`; bounded scalars in `extras` | Review |
+| Server operation genuinely failed | Let the exception propagate; auto-captured as a `proliferate-server` Sentry issue | Release/environment/surface tags attached by the SDK init | Closed-catalog projection in `server/proliferate/integrations/sentry/**` |
+| Anomaly the user didn't feel (latency budget exceeded, invariant violated, unexpected-but-recovered branch) | `capture_server_sentry_exception(..., level="warning", tags={"domain": ..., "action": ...})` — request still succeeds; emit on threshold, not per call (the budget lives in code, not in an alert rule) | Grouping comes from the exception type plus the catalog tags; callers cannot set `fingerprint`, and `anomaly`, `elapsed_ms`, and `budget_ms` are not catalog keys. Adding a new tag or extra means adding a validated row to the closed catalog in `sentry/privacy.py` | Closed catalog + `tests/unit/test_sentry_transport_privacy.py` |
 | Page-worthy "must never happen" invariant | `report_critical(...)` — fatal Sentry event tagged `critical_failure=true` **and** the `CRITICAL_FAILURE` structured-log marker | The marker is the exact log identity | Grafana rule `bfrmh7e7x2k8wd` alerts on the marker in `/ecs/proliferate-prod` |
 | Rust runtime diagnostics | One `#[tracing::instrument]` span per use-case entry; phase timings are span events, not hand-rolled `Instant::now()` pairs; log where an error is *handled*, not at every hop | Fields (`flow_id`/`flow_kind`/`prompt_id`) declared once on the span; observability context never appears in a function signature | Review (span doctrine); `tracing_error_reaches_the_sentry_client` tests guard Sentry delivery |
 | Frontend product analytics | Typed catalog `apps/packages/product-client/src/lib/domain/telemetry/events.ts` → `trackProductEvent(...)` fanout (vendor, anonymous, or both) | Stable event names; payloads are enums, booleans, counts, versions, provider kinds — never arbitrary string bags | Typed event map; hosted PostHog events are explicitly permitted, others become at most Sentry breadcrumbs |
@@ -126,21 +145,46 @@ change sits on:
   all install explicit before-send scrubbers. **Desktop-native does not** —
   it transmits stack traces without an explicit scrubber (known gap, needs a
   separate implementation PR).
-- **Deliberately preserved through scrubbing:** the top-level Sentry
-  `environment` field (snapshot, scrub, restore) and the `runtime_env` tag on
-  Worker/Supervisor events whose only allowed live value is `e2b`. Every
-  other env-like key stays redacted; raw environment maps never pass.
+- **The Server is a closed catalog, not a scrubber:** `sentry/privacy.py`
+  builds a new event from an allowlist rather than deleting from the SDK's
+  event, so an unlisted key is structurally absent instead of merely redacted.
+  Validation runs twice: pre-SDK public ingress in `sentry/client.py` sees the
+  original Python objects, and the shared `before_send` /
+  `before_send_transaction` projector sees only the SDK's already-serialized
+  JSON representation and cannot recover erased provenance. Attachments are
+  cleared in the callback (`hint["attachments"] = []`, read back and proved, or
+  the event is dropped). The only emitted fingerprint is the adapter-synthesized
+  `["billing", "stripe_webhook_drop", <drop_reason>]`. Init installs exactly
+  eight integrations with `default_integrations=False` and
+  `auto_enabling_integrations=False`, and disables ambient trace propagation,
+  Spotlight, client reports, sessions, logs, metrics, profiles, gen-AI span
+  streaming, and DB/HTTP source context. Middleware spans are off; the only
+  five span ops produced are `http.server`, `websocket.server`,
+  `queue.task.celery`, `queue.process`, and `queue.publish` — notably **not**
+  `queue.submit.celery`. `environment` is a closed four-value catalog
+  (`trusted-beta`, `staging`, `production`, `Production`). Release and
+  environment are passed as exact empty strings when unresolvable, which is
+  the pinned SDK's no-discovery sentinel (`None` would trigger ambient
+  `SENTRY_RELEASE` / `SENTRY_ENVIRONMENT` discovery and a `production`
+  default); both callbacks then remove the sentinel.
+- **Deliberately preserved:** the top-level Sentry `environment` field and the
+  `runtime_env` tag on Worker/Supervisor events whose only allowed live value
+  is `e2b`. The Server keeps `environment` only when it matches its closed
+  four-value catalog; the client wrappers still use the snapshot/scrub/restore
+  mechanic for it. Every other env-like key stays redacted; raw environment
+  maps never pass.
 - **Structural, not length, bounds:** client payload scrubbing bounds depth,
   array positions, and object properties (`[circular]`, `[truncated]`) but
   does not truncate strings by length — what you put in a string field ships.
-- **Replay:** Web and Mobile set both replay rates to zero. Desktop sets
-  normal session replay to zero; masked error replay can still retain
-  identifier-bearing route metadata (known gap). PostHog replay is off by
-  default; when explicitly enabled, recorded page metadata can contain route
-  ids even though capture-event URL properties are stripped. A new surface
-  that can display prompts, files, paths, or credentials gets
-  `[data-telemetry-block]` / `[data-telemetry-mask]` unless there is a
-  reviewed reason not to.
+- **Replay is off everywhere, in source:** Web/Mobile Sentry replay rates are
+  zero; Desktop renderer Sentry replay and Desktop/Web/Mobile PostHog session
+  recording are source-disabled and absent. No build value, environment value,
+  optional native package, or provider-side setting can start a recording, so
+  the recorded page-URL route-id gap is closed because nothing records.
+  Re-enablement anywhere requires the reviewed synthetic privacy proof in
+  [`frontend/telemetry.md`](frontend/telemetry.md); a new surface that can
+  display prompts, files, paths, or credentials gets `[data-telemetry-block]` /
+  `[data-telemetry-mask]` unless there is a reviewed reason not to.
 - **Child-agent stderr never reaches Sentry:** AnyHarness marks it with a
   dedicated tracing target the Sentry layer ignores; a startup failure keeps
   at most eight lines / 1,024 UTF-8 bytes per line locally and returns a
@@ -168,7 +212,8 @@ the fallback evidence source.
    anomaly with a stable fingerprint, or `report_critical`.
 2. New user-visible flow? Decide whether it earns a typed product event and
    whether that event is permitted for PostHog.
-3. New surface rendering user content? Apply the replay block/mask selectors.
+3. New surface rendering user content? Apply the block/mask selectors; they
+   stand even though no surface records today.
 4. New identifier worth correlating on? It must join the server request
    telemetry allowlist — it is not automatically forwarded.
 5. Touched a scrubber, telemetry gate, DSN wiring, or the Sentry crate pins?

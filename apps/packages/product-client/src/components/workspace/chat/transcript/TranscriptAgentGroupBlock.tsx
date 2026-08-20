@@ -14,6 +14,10 @@ import { ChevronRight } from "#product/primitives/icons/core";
 import { Robot } from "#product/primitives/icons/product";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
+import {
+  renderTranscriptInlineCode,
+  renderTranscriptLink,
+} from "#product/components/workspace/chat/transcript/transcript-markdown";
 import { AgentIdentityChip } from "#product/components/patterns/AgentIdentityChip";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { SubagentLaunchLedger } from "#product/components/workspace/chat/transcript/SubagentLaunchLedger";
@@ -357,6 +361,8 @@ function AgentResultBlock({ content }: { content: string }) {
             content={content}
             className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
             renderCodeBlock={renderDesktopCodeBlock}
+            renderLink={renderTranscriptLink}
+            renderInlineCode={renderTranscriptInlineCode}
           />
         </div>
         {!resultExpanded && needsTruncation && (

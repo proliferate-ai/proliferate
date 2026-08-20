@@ -9,7 +9,9 @@ them, and lets org admins manage which definitions their organization exposes.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -18,12 +20,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings as app_settings
 from proliferate.db.store import organizations as organization_store
+from proliferate.db.store.integrations import action_approvals as action_approvals_store
 from proliferate.db.store.integrations.accounts import (
     IntegrationAccountRecord,
     delete_account,
     get_account,
-    set_account_credentials,
-    upsert_account,
+    get_account_for_owner_locked,
+    get_account_for_user_definition,
+)
+from proliferate.db.store.integrations.authorization_attempts import (
+    acquire_authorization_attempt_lock,
+    commit_authorization_attempt,
+    create_authorization_attempt,
+    supersede_authorization_attempts,
+    terminalize_authorization_attempt,
+)
+from proliferate.db.store.integrations.definition_security_revisions import (
+    ensure_current_definition_security_revision,
 )
 from proliferate.db.store.integrations.definitions import (
     IntegrationDefinitionRecord,
@@ -32,22 +45,29 @@ from proliferate.db.store.integrations.definitions import (
     list_definitions_visible_to_org,
     list_seed_definitions,
 )
+from proliferate.db.store.integrations.oauth_flows import cancel_active_oauth_flows
 from proliferate.db.store.integrations.policies import (
+    get_policy,
     list_policies_for_org,
     upsert_policy,
 )
 from proliferate.db.store.integrations.tool_cache import delete_tool_cache
+from proliferate.integrations.integration_oauth import normalize_resource_url
 from proliferate.integrations.integration_oauth.discovery import (
     discover_protected_resource_metadata,
 )
 from proliferate.integrations.integration_oauth.errors import IntegrationOAuthProviderError
+from proliferate.integrations.mcp_remote import list_tools as list_remote_tools
 from proliferate.lib.infra.encryption.json import encrypt_json
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.integrations import transactions as integration_transactions
+from proliferate.server.cloud.integrations.access import render_candidate_api_key_launch
 from proliferate.server.cloud.integrations.config import (
     HeaderTemplate,
     IntegrationConfig,
     StaticUrl,
     parse_definition_config,
+    render_mcp_url,
     serialize_definition_config,
 )
 from proliferate.server.cloud.integrations.models import (
@@ -69,6 +89,9 @@ from proliferate.server.cloud.integrations.oauth import (
     get_oauth_flow_status,
     start_oauth_flow,
 )
+from proliferate.server.cloud.integrations.revocation import (
+    stage_revocation_for_disconnect,
+)
 from proliferate.server.organizations.domain.policy import organization_admin_roles
 
 _DEFAULT_SECRET_FIELD_ID = "api_key"
@@ -78,6 +101,7 @@ _NAMESPACE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 # Bound on the create-time OAuth probe so slow/unreachable MCP URLs can never
 # block definition creation for long.
 _OAUTH_PROBE_TIMEOUT_SECONDS = 5.0
+_AUTHORIZATION_ATTEMPT_TTL = timedelta(minutes=10)
 
 # Same shape seeds.py's ``_oauth_bearer_header`` builds for seed oauth2
 # definitions: the gateway substitutes the account's access token at call time.
@@ -165,7 +189,7 @@ def _first_secret_field_id(definition: IntegrationDefinitionRecord) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def _connect_schema(definition: IntegrationDefinitionRecord) -> IntegrationConnectSchema:
+def build_connect_schema(definition: IntegrationDefinitionRecord) -> IntegrationConnectSchema:
     """Derive the connect-time field schema from a definition's config codec.
 
     Only field *metadata* (ids, labels, hints) is exposed — never any stored
@@ -210,7 +234,7 @@ def _catalog_item(definition: IntegrationDefinitionRecord) -> IntegrationCatalog
         display_name=definition.display_name,
         description=definition.description,
         auth_kind=definition.auth_kind,
-        connect_schema=_connect_schema(definition),
+        connect_schema=build_connect_schema(definition),
     )
 
 
@@ -259,79 +283,186 @@ async def authenticate_integration(
     final_surface: str | None = None,
     return_path: str | None = None,
 ) -> AuthenticateIntegrationResponse:
-    """Authenticate ``user_id`` against ``definition_id``.
-
-    - ``none``: mark the account ready immediately.
-    - ``api_key``: store the key under the definition's first secret field and
-      mark the account ready.
-    - ``oauth2``: create the account in ``setup_required`` and start an OAuth
-      flow, returning the authorization URL for the browser handoff.
-    """
+    """Stage and commit a first connection or credential replacement."""
     definition = await get_definition(db, definition_id)
-    if definition is None:
+    if definition is None or definition.archived_at is not None:
         raise CloudApiError("not_found", "Integration was not found.", status_code=404)
+    if definition.organization_id is not None:
+        membership = await organization_store.get_active_membership(
+            db,
+            organization_id=definition.organization_id,
+            user_id=user_id,
+        )
+        if membership is None:
+            # Definition ids are not an authorization boundary. Preserve the
+            # same not-found surface as an unknown id so another organization
+            # cannot be enumerated or connected through the generic route.
+            raise CloudApiError("not_found", "Integration was not found.", status_code=404)
+        policy = await get_policy(db, definition.organization_id, definition.id)
+        if not (policy.enabled if policy is not None else definition.enabled_by_default):
+            raise CloudApiError(
+                "integration_provider_unavailable",
+                "This integration is disabled by your organization.",
+                status_code=400,
+                extra_detail={"reason": "disabled_by_org"},
+            )
     if auth_kind != definition.auth_kind:
         raise CloudApiError(
             "invalid_payload",
             "Requested auth kind does not match this integration.",
             status_code=400,
         )
+    candidate_settings = settings or {}
+    settings_json = json.dumps(candidate_settings, separators=(",", ":"), sort_keys=True)
+    account = await get_account_for_user_definition(db, user_id, definition.id)
 
     if auth_kind == "none":
-        account = await upsert_account(
+        try:
+            config = parse_definition_config(definition.config_json)
+            audience = normalize_resource_url(render_mcp_url(config, candidate_settings))
+        except ValueError as exc:
+            raise CloudApiError("invalid_payload", str(exc), status_code=400) from exc
+        security_revision = await ensure_current_definition_security_revision(db, definition.id)
+        if security_revision is None:
+            raise CloudApiError("not_found", "Integration was not found.", status_code=404)
+        attempt = await create_authorization_attempt(
             db,
-            user_id=user_id,
+            owner_user_id=user_id,
             definition_id=definition.id,
-            auth_kind="none",
-            status="ready",
+            account_id=account.id if account is not None else None,
+            purpose="reauthorize" if account is not None else "connect",
+            method="none",
+            starting_grant_version=account.grant_version if account is not None else None,
+            starting_credential_version=(
+                account.credential_version if account is not None else None
+            ),
+            definition_security_revision_id=security_revision.id,
+            provider_client_id=None,
+            credential_audience=audience,
+            settings_json=settings_json,
+            requested_scopes_json="[]",
+            effective_scopes_json="[]",
+            staged_credential_ciphertext=None,
+            staged_credential_format=None,
+            status="validating",
+            expires_at=datetime.now(UTC) + _AUTHORIZATION_ATTEMPT_TTL,
         )
-        return AuthenticateIntegrationResponse(account=_account_response(account, definition))
+        committed = await commit_authorization_attempt(
+            db,
+            attempt_id=attempt.id,
+            token_expires_at=None,
+        )
+        if committed is None:
+            await integration_transactions.release_integration_transaction(db)
+            raise CloudApiError(
+                "integration_attempt_superseded",
+                "A newer integration authorization attempt won.",
+                status_code=409,
+            )
+        return AuthenticateIntegrationResponse(
+            account=_account_response(committed, definition),
+            attempt_id=attempt.id,
+            attempt_generation=attempt.generation,
+        )
 
     if auth_kind == "api_key":
         secret = (api_key or "").strip()
         if not secret:
             raise CloudApiError("invalid_payload", "API key is required.", status_code=400)
-        account = await upsert_account(
-            db,
-            user_id=user_id,
-            definition_id=definition.id,
-            auth_kind="api_key",
-            status="setup_required",
-        )
+        try:
+            config = parse_definition_config(definition.config_json)
+        except ValueError as exc:
+            raise CloudApiError("invalid_payload", str(exc), status_code=400) from exc
+        if config.credential_validation != "mcp_tools_list":
+            raise CloudApiError(
+                "integration_credential_validation_unavailable",
+                "This integration cannot safely validate credentials.",
+                status_code=400,
+            )
         field_id = _first_secret_field_id(definition)
-        updated = await set_account_credentials(
+        secret_fields = {field_id: secret}
+        url, headers, query = render_candidate_api_key_launch(
+            config,
+            secret_fields=secret_fields,
+            settings=candidate_settings,
+        )
+        security_revision = await ensure_current_definition_security_revision(db, definition.id)
+        if security_revision is None:
+            raise CloudApiError("not_found", "Integration was not found.", status_code=404)
+        attempt = await create_authorization_attempt(
             db,
-            account_id=account.id,
-            credential_ciphertext=encrypt_json(
-                {"secretFields": {field_id: secret}}, secret=app_settings.cloud_secret_key
+            owner_user_id=user_id,
+            definition_id=definition.id,
+            account_id=account.id if account is not None else None,
+            purpose="rotate" if account is not None else "connect",
+            method="api_key",
+            starting_grant_version=account.grant_version if account is not None else None,
+            starting_credential_version=(
+                account.credential_version if account is not None else None
             ),
-            credential_format="secret-fields-v1",
-            auth_status="ready",
+            definition_security_revision_id=security_revision.id,
+            provider_client_id=None,
+            credential_audience=normalize_resource_url(url),
+            settings_json=settings_json,
+            requested_scopes_json="[]",
+            effective_scopes_json="[]",
+            staged_credential_ciphertext=encrypt_json(
+                {"secretFields": secret_fields},
+                secret=app_settings.cloud_secret_key,
+            ),
+            staged_credential_format="secret-fields-v1",
+            status="validating",
+            expires_at=datetime.now(UTC) + _AUTHORIZATION_ATTEMPT_TTL,
+        )
+        await integration_transactions.release_integration_transaction(db)
+        try:
+            await list_remote_tools(url=url, headers=headers, query=query or None)
+        except Exception as exc:  # noqa: BLE001 - provider failures use one safe code
+            await terminalize_authorization_attempt(
+                db,
+                attempt_id=attempt.id,
+                status="failed",
+                failure_code="credential_validation_failed",
+            )
+            await integration_transactions.release_integration_transaction(db)
+            raise CloudApiError(
+                "integration_credential_validation_failed",
+                "The integration credentials could not be validated.",
+                status_code=400,
+            ) from exc
+        committed = await commit_authorization_attempt(
+            db,
+            attempt_id=attempt.id,
             token_expires_at=None,
         )
-        account = updated or account
-        return AuthenticateIntegrationResponse(account=_account_response(account, definition))
+        if committed is None:
+            await integration_transactions.release_integration_transaction(db)
+            raise CloudApiError(
+                "integration_attempt_superseded",
+                "A newer integration authorization attempt won.",
+                status_code=409,
+            )
+        return AuthenticateIntegrationResponse(
+            account=_account_response(committed, definition),
+            attempt_id=attempt.id,
+            attempt_generation=attempt.generation,
+        )
 
     # oauth2
-    account = await upsert_account(
-        db,
-        user_id=user_id,
-        definition_id=definition.id,
-        auth_kind="oauth2",
-        status="setup_required",
-    )
     flow = await start_oauth_flow(
         db,
         user_id=user_id,
         definition=definition,
-        account_id=account.id,
-        settings=settings or {},
+        account_id=account.id if account is not None else None,
+        settings=candidate_settings,
         callback_surface=callback_surface,
         final_surface=final_surface,
         return_path=return_path,
     )
     return AuthenticateIntegrationResponse(
-        account=_account_response(account, definition),
+        account=_account_response(account, definition) if account is not None else None,
+        attempt_id=flow.attempt_id,
+        attempt_generation=flow.attempt_generation,
         oauth_flow_id=str(flow.flow_id),
         authorization_url=flow.authorization_url,
         expires_at=flow.expires_at,
@@ -344,10 +475,60 @@ async def remove_integration_account(
     user_id: UUID,
     account_id: UUID,
 ) -> None:
-    """Delete an integration account (and its tool-schema cache) owned by ``user_id``."""
-    account = await get_account(db, account_id)
-    if account is None or account.owner_user_id != user_id:
+    """Commit an immediate local cutoff and stage bounded upstream revocation."""
+
+    identity = await get_account(db, account_id)
+    if identity is None or identity.owner_user_id != user_id:
         raise CloudApiError("not_found", "Integration account was not found.", status_code=404)
+    await acquire_authorization_attempt_lock(
+        db,
+        owner_user_id=user_id,
+        definition_id=identity.definition_id,
+    )
+    account = await get_account_for_owner_locked(
+        db,
+        account_id=account_id,
+        owner_user_id=user_id,
+    )
+    if account is None:
+        raise CloudApiError("not_found", "Integration account was not found.", status_code=404)
+    definition = await get_definition(db, account.definition_id)
+    if definition is None:
+        raise CloudApiError("not_found", "Integration was not found.", status_code=404)
+
+    await supersede_authorization_attempts(
+        db,
+        owner_user_id=user_id,
+        definition_id=account.definition_id,
+        failure_code="disconnected",
+    )
+    await cancel_active_oauth_flows(
+        db,
+        owner_user_id=user_id,
+        definition_id=account.definition_id,
+        failure_code="disconnected",
+    )
+    revoked_approvals = await action_approvals_store.revoke_active_for_account(
+        db,
+        integration_account_id=account_id,
+    )
+    for transition in revoked_approvals:
+        await action_approvals_store.record_event(
+            db,
+            approval_id=transition.approval.id,
+            event_type="revoked",
+            from_status=transition.from_status,
+            to_status="revoked",
+            actor_type="user",
+            actor_user_id=user_id,
+            actor_runtime_worker_id=None,
+            safe_action_summary=transition.approval.safe_summary,
+        )
+    await stage_revocation_for_disconnect(
+        db,
+        account=account,
+        definition=definition,
+    )
     await delete_tool_cache(db, account_id)
     await delete_account(db, account_id)
 

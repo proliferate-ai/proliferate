@@ -58,7 +58,13 @@ export type {
   AgentCredentialState,
   AgentCliAuthState,
   AgentReadinessState,
-  AgentLaunchOptionsResponse,
+  HarnessLaunchModel,
+  HarnessLaunchControlValue,
+  HarnessLaunchControl,
+  HarnessLaunchDefaults,
+  HarnessLaunchOptions,
+  HarnessLaunchOptionsState,
+  HarnessLaunchOptionsResponse,
   ArtifactStatus,
   AgentSummary,
   InstallAgentRequest,
@@ -77,19 +83,6 @@ export type {
   ReconcileAgentResult,
   ReconcileAgentsResponse,
 } from "./types/agents.js";
-
-export type {
-  GatewayModelEntry,
-  GatewayModelSource,
-  GatewayModelsResponse,
-  ModelEffort,
-  RefreshGatewayModelsResponse,
-} from "./types/agent-gateway-catalog.js";
-
-export type {
-  ModelSnapshotLiveState,
-  ModelSnapshotStatus,
-} from "./types/model-snapshot.js";
 
 export type {
   RepoRootKind,
@@ -329,7 +322,7 @@ export type {
   ReviewRoundStatus,
   ReviewAssignmentStatus,
   ReviewFeedbackDeliveryState,
-  ReviewModeVerificationStatus,
+  ReviewLaunchVerificationStatus,
   ReviewPersonaRequest,
   StartPlanReviewRequest,
   StartCodeReviewRequest,

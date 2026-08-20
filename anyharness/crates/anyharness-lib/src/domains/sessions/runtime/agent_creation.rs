@@ -1,12 +1,15 @@
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
-use crate::domains::sessions::links::service::{CreateSessionLinkError, CreateSessionLinkInput};
+use crate::domains::sessions::links::service::{
+    CreateSessionLinkError, CreateSessionLinkInput, CreateSubagentSessionAndLinkError,
+};
 use crate::domains::sessions::mcp_bindings::crypto::encrypt_bindings;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 use crate::origin::OriginContext;
+use std::collections::BTreeMap;
 
 use super::creation::{map_create_session_service_error, map_encrypt_bindings_error_to_create};
 use super::{CreateAndStartSessionError, SessionRuntime};
@@ -45,7 +48,7 @@ impl SessionRuntime {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &BTreeMap<String, String>,
         task: Option<String>,
         source_session_id: String,
         source_label: String,
@@ -61,7 +64,7 @@ impl SessionRuntime {
                 agent_kind,
                 None,
                 model_id,
-                mode_id,
+                control_values,
                 None,
                 vec![],
                 None,
@@ -92,7 +95,7 @@ impl SessionRuntime {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &BTreeMap<String, String>,
         task: String,
         parent_session_id: &str,
         source_label: &str,
@@ -101,7 +104,7 @@ impl SessionRuntime {
             workspace_id,
             agent_kind,
             model_id,
-            mode_id,
+            control_values,
             parent_session_id,
             None,
         )?;
@@ -126,7 +129,7 @@ impl SessionRuntime {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &BTreeMap<String, String>,
         parent_session_id: &str,
         link_label: Option<String>,
     ) -> Result<(SessionRecord, SessionLinkRecord), CreateSubagentAgentSessionError> {
@@ -162,18 +165,19 @@ impl SessionRuntime {
             None,
             false,
             model_id,
-            mode_id,
+            control_values,
             mcp_bindings_ciphertext,
             None,
             SessionMcpBindingPolicy::InheritWorkspace,
             None,
             false,
             OriginContext::system_local_runtime(),
-            |record| {
-                let link = self
+            |record, intent, basis_revision, selection| {
+                let (link, validated_state) = self
                     .session_link_service
                     .create_subagent_session_and_link_with_child_limit(
                         record,
+                        intent,
                         CreateSessionLinkInput {
                             relation: SessionLinkRelation::Subagent,
                             parent_session_id: parent_session_id.to_string(),
@@ -184,14 +188,27 @@ impl SessionRuntime {
                             created_by_tool_call_id: None,
                         },
                         MAX_ACTIVE_SUBAGENTS_PER_PARENT,
+                        agent_kind,
+                        basis_revision,
+                        selection,
                     )
-                    .map_err(|error| {
-                        crate::domains::sessions::service::CreateSessionError::Internal(
-                            anyhow::Error::new(error),
-                        )
+                    .map_err(|error| match error {
+                        CreateSubagentSessionAndLinkError::LaunchSelection(unsupported) => {
+                            crate::domains::sessions::service::create::map_selection_unsupported(
+                                workspace_id,
+                                None,
+                                agent_kind,
+                                unsupported,
+                            )
+                        }
+                        CreateSubagentSessionAndLinkError::Link(error) => {
+                            crate::domains::sessions::service::CreateSessionError::Internal(
+                                anyhow::Error::new(error),
+                            )
+                        }
                     })?;
                 created_link = Some(link);
-                Ok(())
+                Ok(validated_state)
             },
         );
         let record = match outcome {
@@ -243,7 +260,8 @@ impl SessionRuntime {
             return Ok(started);
         };
         match self
-            .send_text_prompt_with_id_and_provenance(
+            .send_text_prompt_with_id_and_provenance_under_workspace_lease(
+                &record.workspace_id,
                 &record.id,
                 task,
                 format!("agent-create-{}", uuid::Uuid::new_v4()),
@@ -291,7 +309,10 @@ impl SessionRuntime {
     /// Close and delete one freshly minted session that failed to start or to
     /// take its first prompt. Shared with the workflow engine's node launch,
     /// which compensates a half-born session through the same steps.
-    pub(crate) async fn compensate_new_agent_session(&self, session_id: &str) -> anyhow::Result<()> {
+    pub(crate) async fn compensate_new_agent_session(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<()> {
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
             let _ = handle.close().await;
         }

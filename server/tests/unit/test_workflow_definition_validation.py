@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from proliferate.server.catalogs.models import AgentCatalogResponse
 from proliferate.server.workflows.domain.validation import (
     DefinitionIssue,
     ValidatedDefinitionDocument,
@@ -15,104 +14,6 @@ from proliferate.server.workflows.models import WorkflowDefinitionResponse
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = REPO_ROOT / "fixtures" / "contracts" / "workflow-definition"
-
-
-def _model(
-    model_id: str,
-    *,
-    aliases: list[str] | None = None,
-    controls: dict[str, list[str]] | None = None,
-) -> dict[str, object]:
-    return {
-        "id": model_id,
-        "displayName": model_id,
-        "aliases": aliases or [],
-        "availability": {"anyOf": ["baseline"]},
-        "defaultVisible": True,
-        "controls": {key: {"values": values} for key, values in (controls or {}).items()},
-        "status": "active",
-    }
-
-
-def _agent(
-    kind: str,
-    *,
-    supports_goals: bool,
-    controls: list[dict[str, object]],
-    models: list[dict[str, object]],
-) -> dict[str, object]:
-    return {
-        "kind": kind,
-        "displayName": kind.title(),
-        "harness": {"agentProcess": {"version": "test"}},
-        "authContexts": [{"id": "baseline"}],
-        "session": {
-            "supportsGoals": supports_goals,
-            "controls": controls,
-            "models": models,
-        },
-        "provenance": {"probedAt": "2026-07-12T00:00:00Z"},
-    }
-
-
-def _catalog() -> AgentCatalogResponse:
-    return AgentCatalogResponse.model_validate(
-        {
-            "schemaVersion": 2,
-            "catalogVersion": "test-workflow-catalog",
-            "generatedAt": "2026-07-12T00:00:00Z",
-            "agents": [
-                _agent(
-                    "claude",
-                    supports_goals=True,
-                    controls=[
-                        {
-                            "key": "effort",
-                            "values": ["default", "low", "medium", "high", "xhigh", "max"],
-                            "mapping": {"liveConfigId": "effort"},
-                        }
-                    ],
-                    models=[
-                        _model(
-                            "sonnet",
-                            aliases=["claude-sonnet"],
-                            controls={"effort": ["default", "low", "medium", "high", "max"]},
-                        ),
-                        _model("haiku"),
-                    ],
-                ),
-                _agent(
-                    "codex",
-                    supports_goals=True,
-                    controls=[
-                        {
-                            "key": "reasoning_effort",
-                            "values": ["low", "medium", "high", "xhigh", "max", "ultra"],
-                            "mapping": {"liveConfigId": "reasoning_effort"},
-                        }
-                    ],
-                    models=[
-                        _model(
-                            "gpt-5.5",
-                            controls={"reasoning_effort": ["low", "medium", "high", "xhigh"]},
-                        )
-                    ],
-                ),
-                _agent(
-                    "cursor",
-                    supports_goals=False,
-                    controls=[
-                        {
-                            "key": "reasoning_effort",
-                            "values": ["medium"],
-                            "mapping": None,
-                        }
-                    ],
-                    models=[_model("composer", controls={"reasoning_effort": ["medium"]})],
-                ),
-            ],
-        }
-    )
 
 
 def _stage(
@@ -159,26 +60,23 @@ def test_contract_fixture_parses_as_workflow_definition_response(fixture_name: s
         ("codex", "gpt-5.5", "ultra"),
     ],
 )
-def test_effort_must_come_from_the_exact_model_matrix(
+def test_saved_launch_intent_does_not_require_catalog_membership(
     agent_kind: str,
     model_id: str,
     effort: str,
 ) -> None:
     result = validate_definition_document(
-        _catalog(),
         inputs=_inputs("ticket"),
         stages=[_stage(agent_kind, model_id=model_id, effort=effort)],
     )
 
-    assert isinstance(result, DefinitionIssue)
-    assert result.path == "stages.0.harnessConfig.effort"
+    assert isinstance(result, ValidatedDefinitionDocument)
 
 
-def test_alias_is_canonicalized_without_mutating_the_request() -> None:
+def test_model_id_is_preserved_without_catalog_canonicalization() -> None:
     stages = [_stage("claude", model_id="claude-sonnet", effort="high")]
 
     result = validate_definition_document(
-        _catalog(),
         inputs=_inputs("ticket"),
         stages=stages,
     )
@@ -186,7 +84,7 @@ def test_alias_is_canonicalized_without_mutating_the_request() -> None:
     assert isinstance(result, ValidatedDefinitionDocument)
     assert result.stages[0]["harnessConfig"] == {
         "agentKind": "claude",
-        "modelId": "sonnet",
+        "modelId": "claude-sonnet",
         "effort": "high",
     }
     assert stages[0]["harnessConfig"] == {
@@ -196,43 +94,25 @@ def test_alias_is_canonicalized_without_mutating_the_request() -> None:
     }
 
 
-def test_goal_requires_catalog_capability() -> None:
-    unsupported = validate_definition_document(
-        _catalog(),
+def test_goal_intent_is_preserved_for_runtime_capability_validation() -> None:
+    result = validate_definition_document(
         inputs=_inputs("ticket"),
         stages=[_stage("cursor", model_id="composer", goal="Resolve the ticket.")],
     )
-    supported = validate_definition_document(
-        _catalog(),
-        inputs=_inputs("ticket"),
-        stages=[_stage("claude", model_id="sonnet", goal="Resolve {{inputs.ticket}}.")],
-    )
-
-    assert unsupported == DefinitionIssue(
-        path="stages.0.steps.0.goal",
-        message="Cursor does not support workflow goals.",
-        kind="catalog_selection_unavailable",
-    )
-    assert isinstance(supported, ValidatedDefinitionDocument)
+    assert isinstance(result, ValidatedDefinitionDocument)
 
 
-def test_raw_effort_metadata_without_application_mapping_is_not_authorable() -> None:
+def test_raw_effort_intent_is_preserved() -> None:
     result = validate_definition_document(
-        _catalog(),
         inputs=_inputs("ticket"),
         stages=[_stage("cursor", model_id="composer", effort="medium")],
     )
 
-    assert result == DefinitionIssue(
-        path="stages.0.harnessConfig.effort",
-        message="Model 'composer' does not expose an authorable effort control.",
-        kind="catalog_selection_unavailable",
-    )
+    assert isinstance(result, ValidatedDefinitionDocument)
 
 
 def test_input_names_must_be_unique() -> None:
     result = validate_definition_document(
-        _catalog(),
         inputs=_inputs("ticket", "ticket"),
         stages=[_stage("claude", model_id="sonnet")],
     )
@@ -240,6 +120,18 @@ def test_input_names_must_be_unique() -> None:
     assert result == DefinitionIssue(
         path="inputs.1.name",
         message="Input name 'ticket' is duplicated.",
+    )
+
+
+def test_effort_without_model_is_rejected() -> None:
+    result = validate_definition_document(
+        inputs=_inputs("ticket"),
+        stages=[_stage("claude", effort="high")],
+    )
+
+    assert result == DefinitionIssue(
+        path="stages.0.harnessConfig.effort",
+        message="Choose a specific model before setting reasoning effort.",
     )
 
 
@@ -271,7 +163,6 @@ def test_prompt_templates_only_accept_exact_declared_input_references(
     expected_message: str,
 ) -> None:
     result = validate_definition_document(
-        _catalog(),
         inputs=_inputs("ticket"),
         stages=[_stage("claude", model_id="sonnet", prompt=prompt)],
     )

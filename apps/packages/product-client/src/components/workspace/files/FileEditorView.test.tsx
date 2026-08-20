@@ -10,7 +10,7 @@ import {
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
-import { useFileTreeStore } from "#product/stores/editor/file-tree-store";
+import { resetFileTreeStoreForTests } from "#product/stores/editor/file-tree-store";
 import { FileEditorView } from "#product/components/workspace/files/FileEditorView";
 import { ContentSearchPill } from "#product/components/workspace/search/ContentSearchPill";
 
@@ -48,8 +48,11 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", 
       column: null,
       absolutePath: "/repo/package.json",
       workspacePath: "package.json",
+      locator: { authority: "workspace", workspacePath: "package.json", localCompanionPath: null },
     },
     openTargets: [],
+    defaultOpenTarget: null,
+    nativePathKind: null,
     canOpenInSidebar: true,
     canOpenExternal: true,
     copyPath: vi.fn(),
@@ -158,10 +161,7 @@ describe("FileEditorView", () => {
       isLoading: false,
     });
     useWorkspaceViewerTabsStore.getState().reset();
-    useFileTreeStore.setState({
-      width: 400,
-      expandedPaths: new Set(),
-    });
+    resetFileTreeStoreForTests();
     useContentSearchStore.setState({
       open: false,
       query: "",
@@ -248,7 +248,7 @@ describe("FileEditorView", () => {
     expect(container.querySelector(".file-source-scroll")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("File viewer options"));
     // Native menu resolves unavailable async before the DOM fallback opens.
-    expect(await screen.findByText("Word wrap")).toBeTruthy();
+    expect(await screen.findByText("Enable word wrap")).toBeTruthy();
     fireEvent.click(screen.getByText("Copy content"));
     expect(writeTextMock).toHaveBeenCalledWith("{\"ok\":true}");
   });
@@ -283,106 +283,6 @@ describe("FileEditorView", () => {
 
     expect(screen.getByText("unique first line")).toBeTruthy();
     expect(container.querySelectorAll("[data-source-line]").length).toBeLessThan(lines.length);
-  });
-
-  it("overlays the file browser without replacing the source view", () => {
-    const target = fileViewerTarget("package.json");
-    const targetKey = viewerTargetKey(target);
-    useWorkspaceViewerTabsStore.setState({
-      materializedWorkspaceId: "workspace-1",
-    });
-    useWorkspaceViewerTabsStore.getState().openTarget(target);
-    readWorkspaceFileQuery.mockReturnValue({
-      data: {
-        content: "{\"ok\":true}",
-        isText: true,
-        path: "package.json",
-        sizeBytes: 11,
-        tooLarge: false,
-        versionToken: "v1",
-      },
-      error: null,
-      isLoading: false,
-    });
-
-    const { container } = render(createElement(FileEditorView, {
-      filePath: "package.json",
-      targetKey,
-    }));
-
-    // Closed by default
-    expect(container.querySelector("[data-file-tree-overlay]")).toBeNull();
-
-    fireEvent.click(screen.getByLabelText("Show files"));
-
-    expect(screen.getByRole("dialog", { name: "Browse files" })).toBeTruthy();
-    expect(container.querySelector("[data-file-tree-overlay]")).toBeTruthy();
-    // Code viewer stays mounted behind the overlay
-    expect(screen.getByText("{\"ok\":true}")).toBeTruthy();
-    expect(screen.getByText("README.md")).toBeTruthy();
-    expect(screen.getByPlaceholderText("Filter files…")).toBeTruthy();
-    expect(workspaceFilesQuery).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      path: "",
-      enabled: true,
-    });
-
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(container.querySelector("[data-file-tree-overlay]")).toBeNull();
-  });
-
-  it("groups filter matches by parent directory as a tree", () => {
-    const target = fileViewerTarget("package.json");
-    const targetKey = viewerTargetKey(target);
-    useWorkspaceViewerTabsStore.setState({
-      materializedWorkspaceId: "workspace-1",
-    });
-    useWorkspaceViewerTabsStore.getState().openTarget(target);
-    readWorkspaceFileQuery.mockReturnValue({
-      data: {
-        content: "{\"ok\":true}",
-        isText: true,
-        path: "package.json",
-        sizeBytes: 11,
-        tooLarge: false,
-        versionToken: "v1",
-      },
-      error: null,
-      isLoading: false,
-    });
-    searchWorkspaceFilesQuery.mockReturnValue({
-      data: {
-        results: [
-          { name: "Button.tsx", path: "src/components/Button.tsx" },
-          { name: "Badge.tsx", path: "src/components/Badge.tsx" },
-          { name: "button.css", path: "src/styles/button.css" },
-        ],
-      },
-      isLoading: false,
-    });
-
-    render(createElement(FileEditorView, {
-      filePath: "package.json",
-      targetKey,
-    }));
-
-    fireEvent.click(screen.getByLabelText("Show files"));
-    fireEvent.change(screen.getByPlaceholderText("Filter files…"), {
-      target: { value: "b" },
-    });
-
-    // Directory group rows
-    const componentsGroup = screen.getByRole("treeitem", { name: /src\/components/ });
-    expect(componentsGroup.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("treeitem", { name: /src\/styles/ })).toBeTruthy();
-    // Nested matched files
-    expect(screen.getByText("Button.tsx")).toBeTruthy();
-    expect(screen.getByText("button.css")).toBeTruthy();
-
-    // Collapsing the group hides its files
-    fireEvent.click(componentsGroup);
-    expect(screen.queryByText("Button.tsx")).toBeNull();
-    expect(screen.getByText("button.css")).toBeTruthy();
   });
 
   it("opens pane-local content search from the file viewer toolbar", () => {
@@ -526,6 +426,86 @@ describe("FileEditorView", () => {
       useContentSearchStore.getState().openSearch("file");
     });
 
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
+  });
+
+  it("forces a rendered target to source once on a location request, without fighting a later user toggle", () => {
+    const target = fileViewerTarget("README.md");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "# Hello\n\nBody line.\n",
+        isText: true,
+        path: "README.md",
+        sizeBytes: 20,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    render(createElement(FileEditorView, {
+      filePath: "README.md",
+      targetKey,
+    }));
+
+    // Markdown defaults to the rendered view until a location request forces
+    // source mode once, because rendered Markdown has no source-line geometry.
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("rendered");
+
+    act(() => {
+      useWorkspaceViewerTabsStore.getState().requestViewerLocation(targetKey, 2);
+    });
+
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
+    // The consuming FileSourceView applies and clears the request itself.
+    expect(useWorkspaceViewerTabsStore.getState().viewerLocationRequest).toBeNull();
+
+    // A later explicit user choice back to rendered is never fought.
+    act(() => {
+      useWorkspaceViewerTabsStore.getState().setTargetMode(targetKey, "rendered");
+    });
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("rendered");
+  });
+
+  it("forces source mode on mount when a location request is already pending (closed-target reopen)", () => {
+    const target = fileViewerTarget("README.md");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    // Mirrors useFileReferenceActions.openViewer: the location request token
+    // is minted synchronously with activation, so by the time FileEditorView
+    // mounts (e.g. RightPanelContent remounting it for a previously closed
+    // target) a non-zero token is already present on first render.
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    useWorkspaceViewerTabsStore.getState().requestViewerLocation(targetKey, 3);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "# Hello\n\nBody line.\n",
+        isText: true,
+        path: "README.md",
+        sizeBytes: 20,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    render(createElement(FileEditorView, {
+      filePath: "README.md",
+      targetKey,
+    }));
+
+    // With the old ref seeding (useRef(viewerLocationRequestToken)), the
+    // pending token at mount is indistinguishable from "already seen" and the
+    // force never fires, leaving rendered Markdown stuck with no source-line
+    // geometry to jump to.
     expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
   });
 });

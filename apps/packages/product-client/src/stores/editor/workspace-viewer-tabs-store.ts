@@ -13,6 +13,53 @@ import {
   type ViewerTargetKey,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
+/**
+ * A session-only request that the mounted viewer frame take keyboard focus.
+ *
+ * It carries the canonical target key plus a monotonic number and nothing
+ * else: the key is path-bearing session memory, so it is never persisted,
+ * rendered, logged, or emitted. Any active-target change before the frame
+ * consumes the request invalidates it.
+ */
+export interface ViewerFocusRequest {
+  targetKey: ViewerTargetKey;
+  token: number;
+}
+
+function focusRequestForActiveTarget(
+  request: ViewerFocusRequest | null,
+  activeTargetKey: ViewerTargetKey | null,
+): ViewerFocusRequest | null {
+  return request && request.targetKey === activeTargetKey ? request : null;
+}
+
+/**
+ * A session-only request that the mounted `FileSourceView` for the active
+ * target perform a one-shot source-line jump.
+ *
+ * Unlike `ViewerFocusRequest` (consumed by the frame the instant it names the
+ * active target, even before content loads), this request can only be
+ * applied by a mounted source view that already has file content and a
+ * requested source row to scroll to — so it is deliberately left pending
+ * across a loading target instead of being invalidated. It carries the
+ * target key, the 1-based line, and a monotonic token; nothing path-bearing
+ * beyond the key is persisted, rendered, logged, or emitted. Any active-target
+ * change before a source view consumes it invalidates it the same way a
+ * focus request does.
+ */
+export interface ViewerLocationRequest {
+  targetKey: ViewerTargetKey;
+  line: number;
+  token: number;
+}
+
+function locationRequestForActiveTarget(
+  request: ViewerLocationRequest | null,
+  activeTargetKey: ViewerTargetKey | null,
+): ViewerLocationRequest | null {
+  return request && request.targetKey === activeTargetKey ? request : null;
+}
+
 export interface WorkspaceViewerRestoreMarker {
   workspaceUiKey: string;
   materializedWorkspaceId: string;
@@ -29,6 +76,10 @@ interface WorkspaceViewerTabsState {
   activeTargetKey: ViewerTargetKey | null;
   modeByTargetKey: Record<ViewerTargetKey, FileViewerMode>;
   layoutByTargetKey: Record<ViewerTargetKey, DiffViewerLayout>;
+  viewerFocusRequest: ViewerFocusRequest | null;
+  viewerFocusRequestSeq: number;
+  viewerLocationRequest: ViewerLocationRequest | null;
+  viewerLocationRequestSeq: number;
 
   prepareWorkspace: (args: {
     workspaceUiKey: string;
@@ -43,6 +94,10 @@ interface WorkspaceViewerTabsState {
   closePathReferences: (path: string) => void;
   reorderOpenTargets: (orderedTargetKeys: readonly ViewerTargetKey[]) => void;
   setActiveTarget: (targetKey: ViewerTargetKey | null) => void;
+  requestViewerFocus: (targetKey: ViewerTargetKey) => void;
+  consumeViewerFocusRequest: (token: number) => void;
+  requestViewerLocation: (targetKey: ViewerTargetKey, line: number) => void;
+  consumeViewerLocationRequest: (token: number) => void;
   setTargetMode: (targetKey: ViewerTargetKey, mode: FileViewerMode) => void;
   setTargetLayout: (targetKey: ViewerTargetKey, layout: DiffViewerLayout) => void;
 }
@@ -53,6 +108,8 @@ function emptyViewerState() {
     activeTargetKey: null as ViewerTargetKey | null,
     modeByTargetKey: {} as Record<ViewerTargetKey, FileViewerMode>,
     layoutByTargetKey: {} as Record<ViewerTargetKey, DiffViewerLayout>,
+    viewerFocusRequest: null as ViewerFocusRequest | null,
+    viewerLocationRequest: null as ViewerLocationRequest | null,
   };
 }
 
@@ -68,6 +125,8 @@ export const useWorkspaceViewerTabsStore = create<WorkspaceViewerTabsState>((set
   materializedWorkspaceId: null,
   initVersion: 0,
   viewerRestoreMarker: null,
+  viewerFocusRequestSeq: 0,
+  viewerLocationRequestSeq: 0,
   ...emptyViewerState(),
 
   prepareWorkspace: (args) => {
@@ -118,6 +177,8 @@ export const useWorkspaceViewerTabsStore = create<WorkspaceViewerTabsState>((set
     set((current) => ({
       openTargets: exists ? current.openTargets : [...current.openTargets, target],
       activeTargetKey: targetKey,
+      viewerFocusRequest: focusRequestForActiveTarget(current.viewerFocusRequest, targetKey),
+      viewerLocationRequest: locationRequestForActiveTarget(current.viewerLocationRequest, targetKey),
       modeByTargetKey: current.modeByTargetKey[targetKey]
         ? current.modeByTargetKey
         : {
@@ -144,6 +205,8 @@ export const useWorkspaceViewerTabsStore = create<WorkspaceViewerTabsState>((set
       activeTargetKey: nextActive,
       modeByTargetKey: nextModes,
       layoutByTargetKey: nextLayouts,
+      viewerFocusRequest: focusRequestForActiveTarget(get().viewerFocusRequest, nextActive),
+      viewerLocationRequest: locationRequestForActiveTarget(get().viewerLocationRequest, nextActive),
     });
   },
 
@@ -177,6 +240,14 @@ export const useWorkspaceViewerTabsStore = create<WorkspaceViewerTabsState>((set
       activeTargetKey: nextActiveTargetKey,
       modeByTargetKey: nextModes,
       layoutByTargetKey: nextLayouts,
+      viewerFocusRequest: focusRequestForActiveTarget(
+        current.viewerFocusRequest,
+        nextActiveTargetKey,
+      ),
+      viewerLocationRequest: locationRequestForActiveTarget(
+        current.viewerLocationRequest,
+        nextActiveTargetKey,
+      ),
     });
   },
 
@@ -209,6 +280,8 @@ export const useWorkspaceViewerTabsStore = create<WorkspaceViewerTabsState>((set
       activeTargetKey: nextActive,
       modeByTargetKey: nextModes,
       layoutByTargetKey: nextLayouts,
+      viewerFocusRequest: focusRequestForActiveTarget(current.viewerFocusRequest, nextActive),
+      viewerLocationRequest: locationRequestForActiveTarget(current.viewerLocationRequest, nextActive),
     });
   },
 
@@ -236,7 +309,51 @@ export const useWorkspaceViewerTabsStore = create<WorkspaceViewerTabsState>((set
     if (targetKey && !parseViewerTargetKey(targetKey)) {
       return;
     }
-    set({ activeTargetKey: targetKey });
+    set((current) => ({
+      activeTargetKey: targetKey,
+      viewerFocusRequest: focusRequestForActiveTarget(current.viewerFocusRequest, targetKey),
+      viewerLocationRequest: locationRequestForActiveTarget(current.viewerLocationRequest, targetKey),
+    }));
+  },
+
+  // Sole caller is the canonical shell activation path; a fresh number is
+  // minted on every request so re-activating the already-selected target
+  // cannot be swallowed.
+  requestViewerFocus: (targetKey) => {
+    set((current) => ({
+      viewerFocusRequestSeq: current.viewerFocusRequestSeq + 1,
+      viewerFocusRequest: { targetKey, token: current.viewerFocusRequestSeq + 1 },
+    }));
+  },
+
+  consumeViewerFocusRequest: (token) => {
+    set((current) => (
+      current.viewerFocusRequest?.token === token
+        ? { viewerFocusRequest: null }
+        : current
+    ));
+  },
+
+  // Sole caller is the file-reference activation seam
+  // (useFileReferenceActions.openViewer); a fresh number is minted on every
+  // enqueue so repeat-activating the same line still retriggers the jump.
+  requestViewerLocation: (targetKey, line) => {
+    set((current) => ({
+      viewerLocationRequestSeq: current.viewerLocationRequestSeq + 1,
+      viewerLocationRequest: { targetKey, line, token: current.viewerLocationRequestSeq + 1 },
+    }));
+  },
+
+  // Consumed only by a mounted FileSourceView that has already applied the
+  // scroll — unlike the focus token, this is deliberately not consumed by a
+  // loading/error placeholder, so a request may remain pending across a slow
+  // file read.
+  consumeViewerLocationRequest: (token) => {
+    set((current) => (
+      current.viewerLocationRequest?.token === token
+        ? { viewerLocationRequest: null }
+        : current
+    ));
   },
 
   setTargetMode: (targetKey, mode) => {

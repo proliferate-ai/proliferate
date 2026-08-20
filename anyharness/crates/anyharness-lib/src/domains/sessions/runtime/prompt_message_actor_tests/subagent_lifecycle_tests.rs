@@ -31,6 +31,10 @@ async fn reversible_open_cold_starts_the_same_native_conversation_without_replay
             .store()
             .insert(&record)
             .expect("session");
+        state
+            .session_service
+            .store()
+            .seed_empty_launch_intent(&record.id);
     }
     state
         .subagent_service
@@ -129,6 +133,10 @@ async fn live_promotion_preserves_the_running_turn_and_removes_all_parent_behavi
             .store()
             .insert(&record)
             .expect("session");
+        state
+            .session_service
+            .store()
+            .seed_empty_launch_intent(&record.id);
     }
     let link = state
         .subagent_service
@@ -230,6 +238,10 @@ async fn startup_refuses_an_unrepaired_turn_then_starts_after_atomic_repair() {
         .insert(&parent)
         .expect("parent");
     state
+        .session_service
+        .store()
+        .seed_empty_launch_intent(&parent.id);
+    state
         .subagent_service
         .link_child("repair-parent", "target", Some("worker".into()), None, None)
         .expect("link");
@@ -311,6 +323,10 @@ async fn concurrent_start_joins_pending_repair_and_drains_one_queued_prompt_in_s
         .store()
         .insert(&parent)
         .expect("parent");
+    state
+        .session_service
+        .store()
+        .seed_empty_launch_intent(&parent.id);
     state
         .subagent_service
         .link_child("repair-parent", "target", Some("worker".into()), None, None)

@@ -4,6 +4,16 @@ import type {
   NativeMenuItem,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { clearContextualWordSelection } from "#product/primitives/overlays/contextual-word-selection";
+
+export interface UseNativeContextMenuOptions {
+  /**
+   * Skip clearing WebKit's contextual word selection once this handler
+   * commits to replacing the browser menu. Default false (clear). Set true
+   * only over real selectable content (e.g. the file viewer).
+   */
+  preserveContextualSelection?: boolean;
+}
 
 /**
  * Attach the host-provided native context menu to an element. Returns a
@@ -18,7 +28,11 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
  * `buildItems` runs only when the menu is actually opened, so transient data
  * (e.g. which tab was right-clicked) can be captured via closure.
  */
-export function useNativeContextMenu(buildItems: () => NativeMenuItem[]) {
+export function useNativeContextMenu(
+  buildItems: () => NativeMenuItem[],
+  options: UseNativeContextMenuOptions = {},
+) {
+  const { preserveContextualSelection = false } = options;
   const { buildRef, disabledRef, nativeUi, showNativeMenu } = useNativeMenuController(buildItems);
 
   const onContextMenuCapture = useCallback((event: MouseEvent) => {
@@ -35,12 +49,19 @@ export function useNativeContextMenu(buildItems: () => NativeMenuItem[]) {
     const fallbackEvent = event.nativeEvent;
     event.preventDefault();
     event.stopPropagation();
+    // Committed to replacing the browser menu (non-empty items, native UI
+    // present) — clear before awaiting the bridge. If it rejects, the
+    // synthetic fallback re-dispatches to the DOM path, which re-clears
+    // against its own currentTarget: already-cleared state stays safe.
+    if (!preserveContextualSelection) {
+      clearContextualWordSelection(event.currentTarget);
+    }
     void showNativeMenu(undefined, items).then((shown) => {
       if (!shown) {
         dispatchFallbackContextMenu(fallbackTarget, fallbackEvent);
       }
     });
-  }, [buildRef, disabledRef, nativeUi, showNativeMenu]);
+  }, [buildRef, disabledRef, nativeUi, preserveContextualSelection, showNativeMenu]);
 
   return { onContextMenuCapture, showNativeMenu };
 }

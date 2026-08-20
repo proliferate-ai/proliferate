@@ -128,34 +128,124 @@ apps/packages/product-client/src/components/workspace/chat/transcript/ProviderLi
   (isExternalHttpLink, linkHost); rendered by MarkdownBody's default anchor, so
   every surface (web + cloud chat included) gets icon links
 
+apps/packages/product-client/src/lib/domain/chat/transcript/file-link-markdown.ts
+  the one transcript scanner: complete balanced inline links, code/image
+  context, escape counting, CommonMark title grammar, eligible local-path
+  grammar, the pure render-copy repair, and streaming-tail stabilization
+  (markdown-code-context.ts holds the code mask it builds on)
+
 apps/packages/product-client/src/lib/domain/files/path-detection.ts
   pure path heuristics (looksLikePath, looksLikeFileReferenceHref,
   splitPathLineSuffix); move to product-client/src/domain/files only when
   Mobile also needs the same rule
+
+apps/packages/product-client/src/lib/domain/files/path-references.ts
+  the shared reference resolution seam, including the one raw-reference
+  decode (decodeFileReferenceSpaces) that every mention and card goes through
 
 anyharness .../domains/sessions/response_formatting.rs
   the prompt-side instruction (FILE_REFERENCE_INSTRUCTIONS) requiring markdown
   file links with the complete workspace-root path, never abbreviated
 ```
 
+`transcript-markdown.tsx`'s `renderTranscriptLink`/`renderTranscriptInlineCode`
+pair is injected across every current transcript-owned Markdown surface, with
+the injection matched to whether the surface's text is assistant/skill-authored
+or user-authored. Assistant/skill-authored bodies wire both renderers, so
+path-like inline code becomes a file reference the same as an explicit link.
+User-authored bodies wire `renderLink` only, so a link a user actually typed
+still opens the file but a backticked path a user typed stays inert code —
+never reinterpreted without a separate product decision:
+
+```text
+apps/packages/product-client/src/components/workspace/chat/tool-calls/SkillsToolResultRow.tsx
+  assistant/skill-authored — instructions and resource-body MarkdownBody
+  calls wire both renderLink and renderInlineCode
+
+apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptAgentGroupBlock.tsx
+  assistant-authored — the delegated-agent result MarkdownBody wires both
+  renderLink and renderInlineCode
+
+apps/packages/product-client/src/components/workspace/chat/tool-calls/cowork/CoworkCodingToolLedger.tsx
+  user-authored — the disclosed coding prompt wires renderLink only
+
+apps/packages/product-client/src/components/workspace/activity/background-pane/BackgroundSubagentView.tsx
+  user-authored — the "Initial prompt" panel wires renderLink only;
+  SubagentLaunchLedger no longer owns any prompt Markdown
+
+apps/packages/product-client/src/components/workspace/chat/content/PromptContentRenderer.tsx
+  user-authored precedent the matrix above follows — wires renderLink only
+```
+
 Rules:
 
 - Detection happens at render time from raw markdown; do not store parsed file
   references in transcript items.
+- File-read and file-change callers keep raw wire paths separate from structured
+  workspace-path metadata. Any structured string, including empty or
+  whitespace, is supplied and authoritative; `null`/`undefined` alone permits
+  raw classification. Human-readable labels may fall back to a nonblank raw
+  path without changing that access decision.
+- Streaming file-change identity uses only the raw `path` and `newPath`
+  channels. A later supplied `workspacePath` or `newWorkspacePath` string is
+  merged verbatim, so structured refinement—including an invalid blank
+  value—updates one logical part instead of splitting it.
 - A leading `~/` is an external Desktop file reference, not a workspace-relative
   path. Resolve it through the Desktop host's home-directory bridge before
   classifying or opening it; Web keeps the reference unavailable. Hidden path
   segments such as `~/.config` follow the same rule as any other home-relative
-  path.
+  path. A rejected home lookup remains unavailable and never substitutes
+  `/tmp` for inspection, target discovery, open, or reveal.
 - Once the assistant reveal frontier settles, the final unique Markdown file
   reference also renders as a compact end-resource card after prose. Its
   default subtitle identifies `Document · MD`; hover/focus changes that
   subtitle to `Open preview`. It remains completion chrome: never expose it
-  while transport text is still buffered or its final opacity is settling.
+  while transport text is still buffered or its final opacity is settling. Its
+  trigger consumes the file-reference action's `canOpenPrimary` capability and
+  stays disabled, with a guarded handler, until that capability is true. It
+  forwards the resource's raw path through the same canonical locator hook and
+  never opens an optimistic preview before exact access settles.
 - While prose is streaming, a trailing incomplete local-file link is closed
   only in the Markdown render copy so its file mention appears as soon as the
   destination begins. Never persist the synthetic delimiter or expose the raw
   partial absolute destination while waiting for the real closing delimiter.
+  A tail is stabilized only when it is unambiguous: outside code and image
+  syntax, on an explicit local-path prefix, with no open title, no unmatched
+  nested parenthesis, and no line break.
+- An explicit local-file Markdown link whose destination carries literal
+  U+0020 spaces is repaired in the render copy: the destination is wrapped in
+  angle brackets and only its literal spaces become `%20`, with a valid
+  complete title moved outside the wrapper. Anything ambiguous, malformed,
+  multiline, already wrapped, image-shaped, or non-local is left byte-identical
+  rather than partially repaired. The repair is pure and idempotent, and the
+  stored transcript, stream buffer, search source, clipboard source, and
+  persisted history keep the original bytes.
+- Eligible local syntax is `/` (not `//`), `~/`, `./`, `../`, or an exact
+  drive root of one ASCII letter plus `:` plus one slash. Every URI scheme is
+  excluded, `file:` included, because a scheme is an authority grant rather
+  than path syntax. Glob metacharacters disqualify a destination; `?` and `#`
+  are literal path characters in this grammar and are never treated as query
+  or fragment delimiters.
+- Both transformations run only for `surface="message"`, and stabilization
+  additionally only while `isStreaming`. A `surface="file-content"` body runs
+  neither: a Markdown file viewer shows the file's own bytes and must never
+  silently rewrite them.
+- A raw file reference gets exactly one decode on its way to the canonical
+  locator: trim once, replace `%20` case-insensitively once, do not trim
+  again, then split the terminal `:line[:column]`. Nothing else is decoded, so
+  `%2F`, `%5C`, `%2E%2E`, `%00`, `%23`, `+`, and `%2520` stay literal and no
+  encoding can manufacture a separator or traversal. The accepted tradeoff is
+  that a real filename containing the literal characters `%20` resolves as a
+  space-bearing name. An authoritative structured `workspacePath` skips this
+  decode entirely and stays byte-identical.
+- Syntax repair and href detection grant no filesystem authority. Every
+  accepted reference still enters the canonical locator, which is what rejects
+  a repaired `../My Notes.md` as traversal and decides whether a drive-root
+  reference resolves at all.
+- The end-resource card reads the same settled repaired copy, the same
+  complete-balanced-link scan, and the same raw-reference decoder as the
+  inline mentions, so prose and card can never name different documents. It
+  never sees a synthetic streaming closure.
 - Mention labels display the workspace-relative path plus a `(line N)` suffix;
   raw absolute hrefs must not be shown as label text.
 - External/web link hrefs render as a shared inline provider-icon mention
@@ -487,6 +577,16 @@ stats for `Review changes` on hover/focus. File headers retain the shared diff
 line-wrap context menu. Aggregate and file-row stats use the semantic dark-theme
 green/red tokens (`#40c977` and `#fa423e`) and roll changed digits over 300ms
 with the standard enter curve; reduced-motion users receive no digit transition.
+Right-clicking a transcript file reference, edit filename, or diff line-wrap
+trigger clears any WebKit contextual word selection synchronously in the
+`contextmenu` handler before the replacement menu opens, since macOS WebKit
+selects the word under the pointer inside its own context-menu path and
+`preventDefault` cannot stop it. The clear only fires when both the
+selection's anchor and focus nodes are contained by the right-clicked
+element; a selection made elsewhere, or one with an endpoint outside that
+element, is left untouched. This is chrome behavior; it does not apply to
+selecting or right-clicking transcript prose or code-block text itself.
+
 Single-file cards put the filename in the header and do not duplicate a file
 row underneath. Expanded multi-file cards collapse through `Collapse files`.
 The shell follows a restrained three-level surface hierarchy: its header
@@ -572,6 +672,19 @@ would bump the viewport as the 360px estimate corrects. The virtualized list
 holds the anchored content with the measured `scrollHeight` delta in a
 stability-gated loop; the non-virtualized list relies on native browser scroll
 anchoring (`overflow-anchor`, left at its default) for the small seam.
+
+An older-history prepend installs the same kind of anchor, but as a
+non-cancelable owner: it holds the reading row's seat against upward intent and
+against the frame scheduler draining. That seat is acknowledged, and the owner
+released, only when a writer pass observes the seat held in a frame that saw no
+native scroll activity. A seated read taken while a native scroll is still
+delivering proves only the main-thread `scrollTop` at that callback — a wheel or
+momentum continuation queued before the prepend can keep eroding the position
+afterwards, and releasing on that read both stops the writer and drops the
+protection that would have re-armed it, stranding the reader at the top. Erosion
+is re-corrected through the same single writer; the retention is bounded by the
+existing quiet-extension and absolute compensation deadlines, which release the
+anchor regardless.
 
 Cards mounted above the composer (permission/question panels, slash-command
 trays, queued messages, goals, and similar dock slots) are overlays, not a

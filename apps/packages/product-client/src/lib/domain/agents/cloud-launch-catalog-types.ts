@@ -1,5 +1,3 @@
-import type { ModelAvailability } from "#product/lib/domain/agents/model-availability";
-
 export type DesktopAgentCatalogStatus = "candidate" | "active" | "deprecated" | "hidden";
 
 export interface DesktopAgentLaunchControlSurfaces {
@@ -76,8 +74,6 @@ export interface DesktopLaunchModelRegistryModel {
   aliases?: string[];
   status?: DesktopAgentCatalogStatus;
   isDefault: boolean;
-  /** v2 availability gate (`anyOf` auth context ids); null when unknown. */
-  availability?: ModelAvailability | null;
   sessionDefaultControls?: DesktopSessionDefaultControl[];
   /**
    * The `mode` control vocabulary this model actually supports (per-model
@@ -114,8 +110,6 @@ export interface DesktopAgentLaunchAgent {
   displayName: string;
   description?: string | null;
   defaultModelId: string | null;
-  /** Catalog-owned unattended permission mode; null means the family declares none. */
-  unattendedModeId?: string | null;
   models: DesktopAgentLaunchModel[];
   launchControls: DesktopAgentLaunchControl[];
 }
@@ -140,8 +134,6 @@ export interface RuntimeAgentLaunchOptions {
   kind: string;
   displayName: string;
   defaultModelId?: string | null;
-  /** Present-null is authoritative; missing permits cloud-catalog compatibility fallback. */
-  unattendedModeId?: string | null;
   models: Array<{
     id: string;
     displayName: string;
@@ -152,106 +144,4 @@ export interface RuntimeAgentLaunchOptions {
     /** Runtime-resolved provider namespace (`AgentLaunchModelOption.provider`); already joined server-side. */
     provider?: string | null;
   }>;
-}
-
-/**
- * The raw schemaVersion-2 agent catalog document
- * (`catalogs/agents/catalog.json`, also served by the cloud catalog
- * endpoint). Mirrors the runtime read surface in
- * `anyharness-lib/src/domains/agents/catalog/schema.rs`.
- */
-export interface CloudAgentCatalogResponseInput {
-  schemaVersion: 2;
-  catalogVersion: string;
-  generatedAt: string;
-  defaultAgentKind?: string | null;
-  probedAgainst?: Record<string, unknown> | null;
-  agents: CloudAgentCatalogAgentInput[];
-}
-
-export interface CloudAgentCatalogAgentInput {
-  kind: string;
-  displayName: string;
-  description?: string | null;
-  harness?: Record<string, unknown> | null;
-  authContexts?: CloudAgentCatalogAuthContextInput[];
-  session: CloudAgentCatalogSessionInput;
-  settings?: CloudAgentCatalogSettingInput[];
-  provenance?: Record<string, unknown> | null;
-}
-
-/**
- * A harness-specific toggle declared in catalog.json (`agents[].settings[]`).
- * The settings pane reads these from the bundled catalog copy rather than a
- * re-literalled table; `mapping` names how the runtime applies the value
- * (e.g. claude's `--chrome` cli_flag) and is carried through untouched.
- */
-export interface CloudAgentCatalogSettingInput {
-  key: string;
-  type: "boolean";
-  label: string;
-  description?: string | null;
-  default: boolean;
-  surfaces: ("local" | "cloud")[];
-  mapping?: CloudAgentCatalogSettingMappingInput | null;
-}
-
-export interface CloudAgentCatalogSettingMappingInput {
-  kind: "cli_flag" | "env";
-  flag?: string | null;
-  env?: string | null;
-}
-
-export interface CloudAgentCatalogAuthContextInput {
-  id: string;
-  authSlotId?: string | null;
-  description?: string | null;
-  signals?: unknown;
-}
-
-export interface CloudAgentCatalogSessionInput {
-  controls?: CloudAgentCatalogControlInput[];
-  models: CloudAgentCatalogModelInput[];
-  /** Curation-owned mode for unattended product/runtime surfaces. */
-  unattendedModeId?: string | null;
-  /** Curation default per auth context id (contextId -> modelId). */
-  defaults?: Record<string, string> | null;
-  observedDefaults?: Record<string, string> | null;
-}
-
-export interface CloudAgentCatalogControlMappingInput {
-  createField?: "modelId" | "modeId" | null;
-  switchVia?: string | null;
-  liveConfigId?: string | null;
-  variantSyntax?: string | null;
-}
-
-export interface CloudAgentCatalogControlInput {
-  key: string;
-  label?: string | null;
-  values?: string[];
-  mapping?: CloudAgentCatalogControlMappingInput | null;
-}
-
-export interface CloudAgentCatalogModelControlInput {
-  values?: string[];
-  default?: string | null;
-  observedValue?: string | null;
-}
-
-export interface CloudAgentCatalogModelInput {
-  id: string;
-  displayName: string;
-  description?: string | null;
-  aliases?: string[];
-  family?: string | null;
-  availability?: { anyOf?: string[] } | null;
-  defaultVisible?: boolean;
-  controls?: Record<string, CloudAgentCatalogModelControlInput> | null;
-  status?: DesktopAgentCatalogStatus;
-  provenance?: Record<string, unknown> | null;
-}
-
-export interface ProjectCloudAgentCatalogOptions {
-  workspaceId?: string | null;
 }

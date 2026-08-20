@@ -27,7 +27,6 @@ export type TrackChatSessionCreated = (
 export function publishCreatedSessionMaterialization(input: {
   agentKind: string;
   configIntentSettlement: ConfigIntentSettlementPlan;
-  fallbackModeId: string | null;
   fallbackModelId: string;
   launchIntentId?: string | null;
   pendingSessionId: string;
@@ -62,7 +61,6 @@ export function publishCreatedSessionMaterialization(input: {
     workspaceId: input.workspaceId,
     agentKind: input.agentKind,
     modelId: input.session.modelId ?? input.fallbackModelId,
-    modeId: input.session.modeId ?? input.fallbackModeId,
     status: input.record.status,
     executionPhase: input.session.executionSummary?.phase ?? null,
     pendingInteractionCount:

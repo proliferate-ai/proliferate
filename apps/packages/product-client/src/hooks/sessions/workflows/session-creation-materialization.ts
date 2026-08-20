@@ -3,8 +3,6 @@ import type {
   DesktopRuntimeBridge,
   DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
-import { applySessionLaunchDefaults } from "#product/lib/workflows/sessions/session-launch-defaults";
-import { createSessionLaunchDefaultsClient } from "#product/lib/access/anyharness/session-launch-defaults-client";
 import { resolveRuntimeTargetForWorkspace } from "#product/lib/access/anyharness/runtime-target";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { resolveStatusFromExecutionSummary } from "#product/domain/sessions/activity";
@@ -12,7 +10,6 @@ import {
   findCompatibleExistingSession,
   shouldProbeCompatibleRuntimeSessions,
 } from "#product/lib/domain/sessions/creation/compatible-session";
-import { mergeLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
 import type { ErrorContext } from "@proliferate/product-client/host/product-host";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
@@ -38,15 +35,13 @@ import {
   sessionIntentsForSession,
 } from "#product/domain/sessions/intents/session-intent-state";
 import {
-  configValuesFromIntentSnapshot,
   planCreationConfigIntentSettlement,
   rawConfigValuesFromIntentSnapshot,
-  resolvePreMaterializationConfigIntentControlKeys,
   snapshotPreMaterializationConfigIntents,
 } from "#product/lib/domain/sessions/creation/config-intent-settlement";
+import { filterControlValuesToObservation } from "#product/lib/domain/sessions/creation/launch-control-observation-filter";
+import { getAgentLaunchOptions } from "#product/lib/access/anyharness/agents";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
-import { buildDesktopLaunchModelRegistries } from "#product/lib/domain/agents/cloud-launch-catalog";
-import { resolveSubmitAgentCatalog } from "#product/lib/domain/agents/agent-catalog-submit-gate";
 import type { CreateSessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
 import { resolveDesktopRuntimeUrlForWorkspace } from "#product/hooks/sessions/workflows/session-creation-runtime";
 import { annotateLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
@@ -57,7 +52,6 @@ import { scheduleCreatedRuntimeSessionCleanup } from "#product/hooks/sessions/wo
 import {
   discardCreatedRuntimeSession,
   discardIfSuperseded,
-  runInterruptibleSessionCreationStep,
   type MaterializationLifecycle,
 } from "#product/hooks/sessions/workflows/session-creation-materialization-interruption";
 import {
@@ -75,9 +69,6 @@ type CaptureException = (error: unknown, context?: ErrorContext) => void;
 interface MaterializeSessionCreationInput {
   trackProductEvent: TrackChatSessionCreated;
   captureException: CaptureException;
-  ensureCloudAgentCatalog: () => Promise<{
-    agents: Parameters<typeof buildDesktopLaunchModelRegistries>[0];
-  }>;
   existingProjectedRecord: SessionRuntimeRecord | null;
   frozenDefaultLiveSessionControlValuesByAgentKind: Record<string, Record<string, string>>;
   localRuntime: DesktopRuntimeBridge | null;
@@ -85,7 +76,6 @@ interface MaterializeSessionCreationInput {
   cloudClient: CloudSandboxGatewayUrlSource | null;
   options: CreateSessionWithResolvedConfigOptions;
   pendingSessionId: string;
-  resolvedModeId: string | null;
   upsertWorkspaceSessionRecord: (
     workspaceId: string,
     session: Session,
@@ -117,7 +107,6 @@ export async function materializeSessionCreation(
 async function runSessionCreationMaterialization({
   trackProductEvent,
   captureException,
-  ensureCloudAgentCatalog,
   existingProjectedRecord,
   frozenDefaultLiveSessionControlValuesByAgentKind,
   localRuntime,
@@ -125,7 +114,6 @@ async function runSessionCreationMaterialization({
   cloudClient,
   options,
   pendingSessionId,
-  resolvedModeId,
   upsertWorkspaceSessionRecord,
   workspaceId,
   onRuntimeSessionCreated,
@@ -137,7 +125,6 @@ async function runSessionCreationMaterialization({
     workspaceId,
     agentKind: options.agentKind,
     modelId: options.modelId,
-    modeId: resolvedModeId,
   });
   const runtimeUrl = await resolveDesktopRuntimeUrlForWorkspace(workspaceId, localRuntime);
   logLatency("session.create.materialize.runtime_url_resolved", {
@@ -196,7 +183,6 @@ async function runSessionCreationMaterialization({
             fallbackModelId: options.modelId,
             latencyFlowId: options.latencyFlowId,
             pendingSessionId,
-            resolvedModeId,
             upsertWorkspaceSessionRecord,
             workspaceId,
             launchIntentId: options.launchIntentId,
@@ -209,13 +195,36 @@ async function runSessionCreationMaterialization({
 
   const subagentsEnabled = options.subagentsEnabled
     ?? useUserPreferencesStore.getState().subagentsEnabled;
+  const configIntentSnapshot = snapshotPreMaterializationConfigIntents(
+    sessionIntentsForSession(useSessionIntentStore.getState(), pendingSessionId),
+  );
+  // Run-time refresh of the target's observed launch options: the runtime
+  // exact-validates control keys against raw observed ids, so the merged
+  // selection (which may carry pre-cutover normalized keys from persisted
+  // preferences) is filtered to the current observation. Omission remains
+  // omission; on fetch failure nothing validatable exists, so send none.
+  const launchOptionsObservation = await getAgentLaunchOptions(
+    targetConnection,
+    options.agentKind,
+    requestOptions,
+  ).catch(() => null);
+  const controlValues = filterControlValuesToObservation({
+    ...(frozenDefaultLiveSessionControlValuesByAgentKind[options.agentKind] ?? {}),
+    ...(options.launchControlValues ?? {}),
+    ...rawConfigValuesFromIntentSnapshot(configIntentSnapshot),
+  }, launchOptionsObservation);
+  // The options fetch widened the window since the last supersession check;
+  // re-check before committing a runtime session.
+  if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+    return pendingSessionId;
+  }
   assertDirectSessionCreateSupported(target);
   const session: Session = await createSession(targetConnection, {
     ...(options.runtimeSessionId ? { sessionId: options.runtimeSessionId } : {}),
     workspaceId: target.anyharnessWorkspaceId,
     agentKind: options.agentKind,
     modelId: options.modelId,
-    ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
+    controlValues,
     subagentsEnabled,
     origin: DESKTOP_ORIGIN,
   }, requestOptions);
@@ -228,7 +237,7 @@ async function runSessionCreationMaterialization({
       captureException,
     });
   };
-  let sessionToRetain = session;
+  const sessionToRetain = session;
   lifecycle.retainCreatedSession = () => {
     if (!getSessionRecord(pendingSessionId)) {
       putSessionRecord(createEmptySessionRecord(
@@ -239,7 +248,6 @@ async function runSessionCreationMaterialization({
           materializedSessionId: null,
           modelId: sessionToRetain.modelId ?? options.modelId,
           requestedModelId: sessionToRetain.requestedModelId ?? options.modelId,
-          modeId: sessionToRetain.modeId ?? resolvedModeId,
           title: sessionToRetain.title ?? existingProjectedRecord?.title ?? null,
           sessionRelationship: { kind: "root" },
         },
@@ -252,7 +260,6 @@ async function runSessionCreationMaterialization({
       latencyFlowId: options.latencyFlowId,
       launchIntentId: options.launchIntentId,
       pendingSessionId,
-      resolvedModeId,
       upsertWorkspaceSessionRecord,
       workspaceId,
     });
@@ -274,55 +281,8 @@ async function runSessionCreationMaterialization({
     targetSessionId: session.id,
   });
 
-  const catalogStep = await runInterruptibleSessionCreationStep({
-    sessionId: pendingSessionId,
-    step: resolveSubmitAgentCatalog(ensureCloudAgentCatalog),
-    onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
-  });
-  if (catalogStep.discarded) {
-    return pendingSessionId;
-  }
-  const cloudLaunchCatalog = catalogStep.value;
-  const modelRegistries = buildDesktopLaunchModelRegistries(
-    cloudLaunchCatalog?.agents ?? [],
-  );
-  const configIntentSnapshot = resolvePreMaterializationConfigIntentControlKeys({
-    snapshot: snapshotPreMaterializationConfigIntents(
-      sessionIntentsForSession(useSessionIntentStore.getState(), pendingSessionId),
-    ),
-    launchControls: cloudLaunchCatalog?.agents.find(
-      (agent) => agent.kind === options.agentKind,
-    )?.launchControls ?? [],
-  });
-  const liveDefaultsForLaunch = mergeLiveDefaultLaunchControls({
-    defaults: frozenDefaultLiveSessionControlValuesByAgentKind,
-    agentKind: options.agentKind,
-    values: configValuesFromIntentSnapshot(configIntentSnapshot),
-  });
-  const launchDefaultsStep = await runInterruptibleSessionCreationStep({
-    sessionId: pendingSessionId,
-    step: applySessionLaunchDefaults({
-      client: createSessionLaunchDefaultsClient(targetConnection),
-      session,
-      agentKind: options.agentKind,
-      modelRegistries,
-      defaultLiveSessionControlValuesByAgentKind: liveDefaultsForLaunch,
-      rawLiveSessionControlValues: rawConfigValuesFromIntentSnapshot(configIntentSnapshot),
-    }),
-    onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
-  });
-  if (launchDefaultsStep.discarded) {
-    return pendingSessionId;
-  }
-  const launchDefaults = launchDefaultsStep.value;
-  const launchedSession = launchDefaults.session;
-  const launchedLiveConfig = launchDefaults.liveConfig
-    ?? launchedSession.liveConfig
-    ?? null;
-  sessionToRetain = {
-    ...launchedSession,
-    liveConfig: launchedLiveConfig,
-  };
+  const launchedSession = session;
+  const launchedLiveConfig = session.liveConfig ?? null;
   const configIntentSettlement = planCreationConfigIntentSettlement({
     snapshot: configIntentSnapshot,
     liveConfig: launchedLiveConfig,
@@ -336,7 +296,6 @@ async function runSessionCreationMaterialization({
       materializedSessionId: launchedSession.id,
       modelId: launchedSession.modelId ?? options.modelId,
       requestedModelId: launchedSession.requestedModelId ?? options.modelId,
-      modeId: launchedSession.modeId ?? resolvedModeId,
       title: launchedSession.title ?? existingProjectedRecord?.title ?? null,
       actionCapabilities: launchedSession.actionCapabilities,
       liveConfig: launchedLiveConfig,
@@ -361,7 +320,6 @@ async function runSessionCreationMaterialization({
     publish: () => {
       publishCreatedSessionMaterialization({
         agentKind: options.agentKind,
-        fallbackModeId: resolvedModeId,
         fallbackModelId: options.modelId,
         launchIntentId: options.launchIntentId,
         configIntentSettlement,

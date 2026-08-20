@@ -63,8 +63,30 @@ vi.mock("#product/hooks/access/cloud/workflows/use-workflow-definitions-v2-acces
   }),
 }));
 
-vi.mock("#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
-  useCloudLaunchModelRegistries: () => mocks.registriesQuery,
+vi.mock("@proliferate/cloud-sdk-react", () => ({
+  useCloudSandbox: () => ({ data: { id: "sandbox-1" }, isError: false }),
+  useCloudHarnessLaunchOptions: ({ harnessKind }: { harnessKind: string }) => ({
+    data: harnessKind === "claude" ? {
+      harnessKind: "claude",
+      basisRevision: "basis-1",
+      revision: 1,
+      state: "observed",
+      options: {
+        models: mocks.registriesQuery.data[0].models.map((model) => ({
+          id: model.id,
+          observedName: model.displayName,
+          observedDescription: null,
+        })),
+        controls: [],
+        defaults: { modelId: "sonnet", controlValues: {} },
+      },
+      observedAt: "2026-08-19T00:00:00Z",
+      probeAttemptedAt: "2026-08-19T00:00:00Z",
+      probeFailureCode: null,
+      readiness: "ready",
+    } : undefined,
+    isError: false,
+  }),
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({

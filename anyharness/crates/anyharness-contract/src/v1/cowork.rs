@@ -94,6 +94,9 @@ pub struct CreateCoworkThreadRequest {
     pub agent_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub control_values: std::collections::BTreeMap<String, String>,
+    /// N-1 HTTP compatibility only. First-party clients send `controlValues.mode`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

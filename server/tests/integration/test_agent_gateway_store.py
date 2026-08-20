@@ -625,68 +625,6 @@ async def test_usage_import_cursor_roundtrip(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_model_snapshot_and_override(db_session: AsyncSession) -> None:
-    user_id = await _create_user(db_session)
-    first = await store.create_model_snapshot(
-        db_session,
-        harness_kind="claude",
-        owner_user_id=user_id,
-        snapshot_json='{"schemaVersion": 2, "models": ["claude-sonnet-4-5"]}',
-    )
-    newer = await store.create_model_snapshot(
-        db_session,
-        harness_kind="claude",
-        owner_user_id=user_id,
-        snapshot_json='{"schemaVersion": 2, "models": ["claude-sonnet-4-5", "claude-haiku-4-5"]}',
-    )
-    latest = await store.get_active_model_snapshot(
-        db_session,
-        harness_kind="claude",
-        owner_user_id=user_id,
-    )
-    assert latest is not None
-    assert latest.id == newer.id
-    assert latest.id != first.id
-
-    # Another harness for the same owner is a separate scope, not a rewrite.
-    other_harness = await store.create_model_snapshot(
-        db_session,
-        harness_kind="codex",
-        owner_user_id=user_id,
-        snapshot_json='{"schemaVersion": 2, "models": ["gpt-5.2-codex"]}',
-    )
-    still_claude = await store.get_active_model_snapshot(
-        db_session,
-        harness_kind="claude",
-        owner_user_id=user_id,
-    )
-    assert still_claude is not None
-    assert still_claude.id == newer.id
-    assert other_harness.id != newer.id
-
-    override = await store.upsert_catalog_override(
-        db_session,
-        harness_kind="claude",
-        patch_json='{"hidden": ["claude-haiku-4-5"]}',
-        owner_user_id=user_id,
-    )
-    replaced = await store.upsert_catalog_override(
-        db_session,
-        harness_kind="claude",
-        patch_json='{"hidden": []}',
-        owner_user_id=user_id,
-    )
-    assert replaced.id == override.id
-    fetched = await store.get_catalog_override(
-        db_session,
-        harness_kind="claude",
-        owner_user_id=user_id,
-    )
-    assert fetched is not None
-    assert fetched.patch_json == '{"hidden": []}'
-
-
-@pytest.mark.asyncio
 async def test_org_agent_policy_get_set(db_session: AsyncSession) -> None:
     from proliferate.db.models.organizations import Organization
 

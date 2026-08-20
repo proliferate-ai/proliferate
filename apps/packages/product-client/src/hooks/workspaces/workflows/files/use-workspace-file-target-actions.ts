@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import type { ViewerActivationFocus } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
 import type { WorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
 import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 import { rightPanelToolHeaderKey } from "#product/lib/domain/workspaces/shell/right-panel-model";
@@ -24,14 +25,20 @@ export function useWorkspaceFileTargetActions(fileContext: WorkspaceFileContext)
   const requestGitPanelMode = useGitPanelUiStore((state) => state.requestModeForWorkspace);
   const { activateViewerTarget } = useWorkspaceShellActivation();
 
-  const openViewerTarget = useCallback((target: ViewerTarget) => {
+  // External origins (chat, transcript, command palette, Changes) leave
+  // `focus` unset and take the canonical `"viewer"` default; only origins that
+  // own a control the user is standing on pass `"preserve-origin"`.
+  const openViewerTarget = useCallback((
+    target: ViewerTarget,
+    options?: { focus?: ViewerActivationFocus },
+  ) => {
     openTarget(target);
     if (fileContext.materializedWorkspaceId) {
       activateViewerTarget({
         workspaceId: fileContext.materializedWorkspaceId,
         shellWorkspaceId: fileContext.workspaceUiKey,
         target,
-        mode: "open-or-focus",
+        focus: options?.focus,
       });
     }
   }, [
@@ -41,14 +48,18 @@ export function useWorkspaceFileTargetActions(fileContext: WorkspaceFileContext)
     openTarget,
   ]);
 
-  const openFile = useCallback(async (filePath: string) => {
-    openViewerTarget(fileViewerTarget(filePath));
+  const openFile = useCallback(async (
+    filePath: string,
+    options?: { focus?: ViewerActivationFocus },
+  ) => {
+    openViewerTarget(fileViewerTarget(filePath), options);
   }, [openViewerTarget]);
 
   const openFileDiff = useCallback(async (filePath: string, options?: {
     scope?: FileDiffViewerScope | null;
     baseRef?: string | null;
     oldPath?: string | null;
+    focus?: ViewerActivationFocus;
   }) => {
     const scope = options?.scope ?? "unstaged";
     openViewerTarget(fileDiffViewerTarget({
@@ -56,7 +67,7 @@ export function useWorkspaceFileTargetActions(fileContext: WorkspaceFileContext)
       scope,
       baseRef: options?.baseRef ?? null,
       oldPath: options?.oldPath ?? null,
-    }));
+    }), { focus: options?.focus });
   }, [openViewerTarget]);
 
   const openGitReviewPane = useCallback((options?: { mode?: GitPanelMode }) => {

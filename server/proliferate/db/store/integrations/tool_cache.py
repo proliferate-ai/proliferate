@@ -1,7 +1,7 @@
 """Persistence helpers for cached ``tools/list`` schemas per account.
 
 One row per account (account_id PK) snapshotting the tool schema fetched under
-a given auth_version; a version mismatch means the cache is stale.
+a given grant_version; a version mismatch means the cache is stale.
 """
 
 from __future__ import annotations
@@ -13,14 +13,17 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.integrations import CloudIntegrationToolSchemaCache
+from proliferate.db.models.cloud.integrations import (
+    CloudIntegrationAccount,
+    CloudIntegrationToolSchemaCache,
+)
 from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 @dataclass(frozen=True)
 class ToolSchemaCacheRecord:
     account_id: UUID
-    auth_version: int
+    grant_version: int
     tools_json: str
     content_hash: str | None
     status: str
@@ -33,7 +36,7 @@ class ToolSchemaCacheRecord:
 def _record(cache: CloudIntegrationToolSchemaCache) -> ToolSchemaCacheRecord:
     return ToolSchemaCacheRecord(
         account_id=cache.account_id,
-        auth_version=cache.auth_version,
+        grant_version=cache.grant_version,
         tools_json=cache.tools_json,
         content_hash=cache.content_hash,
         status=cache.status,
@@ -62,7 +65,7 @@ async def upsert_tool_cache(
     db: AsyncSession,
     *,
     account_id: UUID,
-    auth_version: int,
+    grant_version: int,
     tools_json: str,
     content_hash: str | None,
     status: str,
@@ -80,7 +83,7 @@ async def upsert_tool_cache(
     if cache is None:
         cache = CloudIntegrationToolSchemaCache(
             account_id=account_id,
-            auth_version=auth_version,
+            grant_version=grant_version,
             tools_json=tools_json,
             content_hash=content_hash,
             status=status,
@@ -91,7 +94,7 @@ async def upsert_tool_cache(
         )
         db.add(cache)
     else:
-        cache.auth_version = auth_version
+        cache.grant_version = grant_version
         cache.tools_json = tools_json
         cache.content_hash = content_hash
         cache.status = status
@@ -101,6 +104,43 @@ async def upsert_tool_cache(
     await db.flush()
     await db.refresh(cache)
     return _record(cache)
+
+
+async def upsert_tool_cache_if_grant_current(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    expected_grant_version: int,
+    tools_json: str,
+    content_hash: str | None,
+    status: str,
+    fetched_at: datetime | None,
+    error_code: str | None,
+) -> ToolSchemaCacheRecord | None:
+    """Write post-I/O cache state only while the admitted grant still exists."""
+
+    account = await db.scalar(
+        select(CloudIntegrationAccount)
+        .where(CloudIntegrationAccount.id == account_id)
+        .with_for_update()
+    )
+    if (
+        account is None
+        or not account.enabled
+        or account.status != "ready"
+        or account.grant_version != expected_grant_version
+    ):
+        return None
+    return await upsert_tool_cache(
+        db,
+        account_id=account_id,
+        grant_version=expected_grant_version,
+        tools_json=tools_json,
+        content_hash=content_hash,
+        status=status,
+        fetched_at=fetched_at,
+        error_code=error_code,
+    )
 
 
 async def delete_tool_cache(

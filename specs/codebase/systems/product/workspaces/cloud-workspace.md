@@ -94,15 +94,13 @@ runtime-connecting takeover line in the composer.
 
 ## Archive, delete, unarchive
 
-- Archive and unarchive are row-lifecycle writes surfaced in the sidebar;
-  archived rows show "Archived chats are available in Settings." Archiving
-  pairs with a worktree retire on the sandbox (content spec's paired
-  reclaim); the branch and pushed work are untouched.
-- Delete removes the workspace from the product and retires its worktree.
-  The confirmation states what survives: git commits, branches, pull
-  requests. Deleting the *sandbox* (settings-level action) never deletes
-  workspace rows — workspaces are marked lost and render as such (content
-  spec, "When the VM dies").
+- Archive, unarchive, and delete are Cloud row-lifecycle writes surfaced in
+  the sidebar. They do not archive, purge, rename, or delete the AnyHarness
+  workspace or its checkout. Archived rows show "Archived chats are available
+  in Settings."
+- Delete removes the workspace from the Cloud product. Deleting the *sandbox*
+  (settings-level action) never deletes workspace rows — workspaces are marked
+  lost and render as such (content spec, "When the VM dies").
 - All three clear cached gateway connections and collections entries
   ([use-cloud-workspace-actions.ts](../../../../../apps/packages/product-client/src/hooks/cloud/workflows/use-cloud-workspace-actions.ts)).
 
@@ -133,11 +131,12 @@ is the one resource surface, for local and cloud targets alike:
    request — no screen for this.
 3. Credits run out mid-week: the panel shows the blocked mode with the
    exact reason; nothing is lost, nothing retries client-side.
-4. Disk pressure crosses the threshold: the status card offers the
-   worktree list; the user deletes two stale workspaces — each delete
-   retires its worktree and frees the space.
-5. The user archives the workspace; weeks later deletes it. The branch and
-   PR history remain on GitHub; the confirmation said exactly that.
+4. Disk pressure crosses the threshold: the status card offers the runtime
+   worktree list; the user explicitly purges two stale AnyHarness workspaces
+   and frees the space.
+5. The user archives the Cloud workspace; weeks later deletes its product
+   row. Those row operations do not mutate the AnyHarness checkout, branch,
+   or PR history.
 
 ## Code map
 

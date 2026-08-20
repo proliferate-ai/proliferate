@@ -113,7 +113,10 @@ impl GoalRuntime {
             serde_json::Value::String(native_session_id),
         );
         if let Some(objective) = objective.clone() {
-            params.insert("objective".to_string(), serde_json::Value::String(objective));
+            params.insert(
+                "objective".to_string(),
+                serde_json::Value::String(objective),
+            );
         }
         if let Some(status) = request.status {
             let status = match status {
@@ -129,7 +132,8 @@ impl GoalRuntime {
             params.insert("tokenBudget".to_string(), serde_json::json!(token_budget));
         }
 
-        self.goal_service.mark_pending(session_id, GoalPendingOp::Set)?;
+        self.goal_service
+            .mark_pending(session_id, GoalPendingOp::Set)?;
         let mut events = handle.subscribe();
         let response = match handle
             .call_agent_ext_method(
@@ -148,10 +152,12 @@ impl GoalRuntime {
         // landed; the mirror still transitions only via the notification.
         let response_goal = match serde_json::from_value::<GoalWireEnvelope>(response) {
             Ok(envelope) => envelope.goal,
-            Err(error) => {
+            Err(_) => {
                 tracing::warn!(
                     session_id,
-                    error = %error,
+                    method_class = "goal",
+                    failure_stage = "set_result_decode",
+                    failure_class = "invalid_provider_result",
                     "goal/set returned an unexpected result shape"
                 );
                 None
@@ -270,10 +276,12 @@ impl GoalRuntime {
         };
         let envelope: GoalWireEnvelope = match serde_json::from_value(response) {
             Ok(envelope) => envelope,
-            Err(error) => {
+            Err(_) => {
                 tracing::warn!(
                     session_id,
-                    error = %error,
+                    method_class = "goal",
+                    failure_stage = "get_result_decode",
+                    failure_class = "invalid_provider_result",
                     "goal/get returned an unexpected result shape"
                 );
                 return Ok(());
@@ -291,18 +299,21 @@ impl GoalRuntime {
             goal_service: self.goal_service.clone(),
             wire,
         });
-        let reply = handle.run_domain_op(op).await.map_err(|error| match error {
-            LiveSessionCommandError::ActorUnavailable => {
-                anyhow::anyhow!("session actor is not available for goal reconcile")
-            }
-            LiveSessionCommandError::ResponseDropped => {
-                anyhow::anyhow!("session actor dropped goal reconcile response")
-            }
-            LiveSessionCommandError::Rejected(infallible) => match infallible {},
-        })?;
-        let output = reply.downcast::<GoalReconcileOpOutput>().map_err(|_| {
-            anyhow::anyhow!("goal reconcile op returned an unexpected reply type")
-        })?;
+        let reply = handle
+            .run_domain_op(op)
+            .await
+            .map_err(|error| match error {
+                LiveSessionCommandError::ActorUnavailable => {
+                    anyhow::anyhow!("session actor is not available for goal reconcile")
+                }
+                LiveSessionCommandError::ResponseDropped => {
+                    anyhow::anyhow!("session actor dropped goal reconcile response")
+                }
+                LiveSessionCommandError::Rejected(infallible) => match infallible {},
+            })?;
+        let output = reply
+            .downcast::<GoalReconcileOpOutput>()
+            .map_err(|_| anyhow::anyhow!("goal reconcile op returned an unexpected reply type"))?;
         output.result
     }
 
@@ -406,9 +417,8 @@ fn goal_event_objective(event: &SessionEvent) -> Option<&str> {
 /// boundary (`nativeStatus == pending_injection`), meaning no confirming
 /// notification will arrive within the confirmation window.
 fn deferred_pending_injection(response_goal: Option<&GoalWire>) -> Option<&GoalWire> {
-    response_goal.filter(|goal| {
-        goal.native_status.as_deref() == Some(GOAL_PENDING_INJECTION_NATIVE_STATUS)
-    })
+    response_goal
+        .filter(|goal| goal.native_status.as_deref() == Some(GOAL_PENDING_INJECTION_NATIVE_STATUS))
 }
 
 /// A transient contract goal for a deferred set — returned to the caller so it
@@ -523,8 +533,16 @@ mod tests {
         let fresh = goal_updated_envelope("new objective");
         // A stale accounting echo for the old objective must NOT confirm an
         // edit to a new objective; only the edit's own echo does.
-        assert!(!goal_event_matches(&stale, GOAL_EVENT_TYPES, Some("new objective")));
-        assert!(goal_event_matches(&fresh, GOAL_EVENT_TYPES, Some("new objective")));
+        assert!(!goal_event_matches(
+            &stale,
+            GOAL_EVENT_TYPES,
+            Some("new objective")
+        ));
+        assert!(goal_event_matches(
+            &fresh,
+            GOAL_EVENT_TYPES,
+            Some("new objective")
+        ));
     }
 
     fn pending_injection_wire(objective: &str) -> GoalWire {

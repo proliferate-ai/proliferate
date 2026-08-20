@@ -68,12 +68,8 @@ function modeControl(): DesktopAgentLaunchControl {
   };
 }
 
-describe("buildLaunchControlDescriptors mode scoping", () => {
-  it("scopes the mode control to the selected model's supported modes and never defaults to an unsupported mode", () => {
-    // Regression: gateway/bedrock Claude models exclude `auto` from their
-    // per-model mode vocabulary. The composer must not offer or default to
-    // `auto` for such a model — AnyHarness rejects it at session creation with
-    // SESSION_MODE_UNSUPPORTED.
+describe("buildLaunchControlDescriptors observed vocabulary", () => {
+  it("preserves the complete observed control vocabulary without static per-model filtering", () => {
     const [mode] = buildLaunchControlDescriptors({
       selection: { kind: "claude", modelId: "claude-haiku-4-5" },
       launchAgents: [
@@ -89,8 +85,6 @@ describe("buildLaunchControlDescriptors mode scoping", () => {
         },
       ],
       preferences: {
-        // Even a persisted `auto` preference must not survive onto this model.
-        defaultSessionModeByAgentKind: { claude: "auto" },
         defaultLiveSessionControlValuesByAgentKind: {},
       },
       pendingConfigChanges: null,
@@ -98,9 +92,14 @@ describe("buildLaunchControlDescriptors mode scoping", () => {
     });
 
     expect(mode?.key).toBe("mode");
-    expect(mode?.options.map((option) => option.value)).not.toContain("auto");
+    expect(mode?.options.map((option) => option.value)).toEqual([
+      "auto",
+      "default",
+      "acceptEdits",
+      "plan",
+    ]);
     const selected = mode?.options.find((option) => option.selected);
-    expect(selected?.value).toBe("default");
+    expect(selected).toBeUndefined();
   });
 
   it("keeps the full agent-level mode vocabulary when the model has no per-model modes", () => {
@@ -114,7 +113,6 @@ describe("buildLaunchControlDescriptors mode scoping", () => {
         },
       ],
       preferences: {
-        defaultSessionModeByAgentKind: {},
         defaultLiveSessionControlValuesByAgentKind: {},
       },
       pendingConfigChanges: null,
@@ -127,14 +125,10 @@ describe("buildLaunchControlDescriptors mode scoping", () => {
 
 describe("buildLaunchControlDescriptors tuning-control scoping", () => {
   const preferences = {
-    defaultSessionModeByAgentKind: {},
     defaultLiveSessionControlValuesByAgentKind: {},
   };
 
-  it("drops fast_mode when the selected model's controls matrix has no fast_mode entry", () => {
-    // Regression: sonnet carries no `fast_mode` in its per-model matrix, but
-    // the agent-level claude launch controls list one. Rendering it produced a
-    // clickable toggle the session could never honour.
+  it("keeps every observed control regardless of retired static model matrices", () => {
     const controls = buildLaunchControlDescriptors({
       selection: { kind: "claude", modelId: "sonnet" },
       launchAgents: [
@@ -157,10 +151,10 @@ describe("buildLaunchControlDescriptors tuning-control scoping", () => {
       onSelect: () => {},
     });
 
-    expect(controls.map((candidate) => candidate.key)).toEqual(["effort"]);
+    expect(controls.map((candidate) => candidate.key)).toEqual(["effort", "fast_mode"]);
   });
 
-  it("scopes effort values to the model's vocabulary and ignores an unsupported persisted preference", () => {
+  it("keeps every observed value and ignores retired preference defaults", () => {
     const [effort] = buildLaunchControlDescriptors({
       selection: { kind: "claude", modelId: "sonnet" },
       launchAgents: [
@@ -176,7 +170,6 @@ describe("buildLaunchControlDescriptors tuning-control scoping", () => {
         },
       ],
       preferences: {
-        defaultSessionModeByAgentKind: {},
         // `off` exists in the agent-level vocabulary but not in the model's
         // scoped effort list — it must not be selected.
         defaultLiveSessionControlValuesByAgentKind: { claude: { effort: "off" } },
@@ -185,7 +178,7 @@ describe("buildLaunchControlDescriptors tuning-control scoping", () => {
       onSelect: () => {},
     });
 
-    expect(effort?.options.map((option) => option.value)).toEqual(["medium", "high"]);
+    expect(effort?.options.map((option) => option.value)).toEqual(["medium", "high", "off", "on"]);
     expect(effort?.options.find((option) => option.selected)?.value).toBe("medium");
   });
 
@@ -230,7 +223,6 @@ describe("buildLaunchControlDescriptors", () => {
         },
       ],
       preferences: {
-        defaultSessionModeByAgentKind: {},
         defaultLiveSessionControlValuesByAgentKind: {},
       },
       pendingConfigChanges: null,
@@ -288,7 +280,6 @@ describe("buildLaunchControlDescriptors", () => {
         },
       ],
       preferences: {
-        defaultSessionModeByAgentKind: {},
         defaultLiveSessionControlValuesByAgentKind: {},
       },
       pendingConfigChanges: null,
@@ -325,7 +316,6 @@ describe("buildLaunchControlDescriptors", () => {
         },
       ],
       preferences: {
-        defaultSessionModeByAgentKind: {},
         defaultLiveSessionControlValuesByAgentKind: {},
       },
       pendingConfigChanges: null,
@@ -354,7 +344,6 @@ describe("buildLaunchControlDescriptors", () => {
         models: [{ id: "claude-fable-5" }],
       }],
       preferences: {
-        defaultSessionModeByAgentKind: {},
         defaultLiveSessionControlValuesByAgentKind: {},
       },
       pendingConfigChanges: null,
@@ -378,7 +367,6 @@ describe("buildLaunchControlDescriptors", () => {
         models: [{ id: "gpt-5.5" }],
       }],
       preferences: {
-        defaultSessionModeByAgentKind: {},
         defaultLiveSessionControlValuesByAgentKind: {},
       },
       pendingConfigChanges: null,
@@ -395,7 +383,6 @@ describe("buildLaunchControlDescriptors", () => {
         models: [{ id: "gpt-5.5" }],
       }],
       preferences: {
-        defaultSessionModeByAgentKind: {},
         defaultLiveSessionControlValuesByAgentKind: {},
       },
       pendingConfigChanges: {

@@ -1,10 +1,15 @@
 use super::*;
+use crate::domains::sessions::runtime::fork_anchor::ProviderForkAnchor;
+use crate::live::sessions::driver::inbound::InboundDoor;
+use crate::live::sessions::driver::native_fork::hydrate_parent_and_fork;
 use crate::live::sessions::driver::session_lifecycle::start_new_session;
 use crate::live::sessions::driver::types::{
     NativeSessionStartupDisposition, NativeSessionStartupState,
 };
+use crate::live::sessions::fork_dispatch::ForkDispatchDurable;
 use crate::live::sessions::model::SessionStartupStrategy;
 use anyharness_contract::v1::SessionActionCapabilities;
+use std::sync::Arc;
 
 pub(in crate::live::sessions) fn build_system_prompt_meta(
     system_prompt_append: Option<&str>,
@@ -20,6 +25,43 @@ pub(in crate::live::sessions) fn build_system_prompt_meta(
             "append": append,
         }),
     )]))
+}
+
+/// Merges a targeted fork's provider anchor into the base meta (built from
+/// `system_prompt_append`). The system-prompt key is `"systemPrompt"`, so it
+/// never collides with the anchor's `"anyharness"` key.
+pub(in crate::live::sessions) fn merge_targeted_fork_anchor_meta(
+    base: Option<acp::schema::Meta>,
+    provider_anchor: Option<&ProviderForkAnchor>,
+) -> Option<acp::schema::Meta> {
+    let Some(anchor) = provider_anchor else {
+        return base;
+    };
+    let serde_json::Value::Object(anchor_entry) = anchor.anchor_meta_json() else {
+        unreachable!("anchor_meta_json always returns an object");
+    };
+    let mut meta = base.unwrap_or_default();
+    meta.extend(anchor_entry);
+    Some(meta)
+}
+
+/// A provider anchor may ride an ACP-native fork only when the current live
+/// handshake advertises targeted readiness. Tip forks have no anchor and keep
+/// the ordinary `fork` capability gate at their dispatch seam.
+pub(in crate::live::sessions) fn native_fork_anchor_is_dispatch_ready(
+    action_capabilities: SessionActionCapabilities,
+    provider_anchor: Option<&ProviderForkAnchor>,
+) -> bool {
+    provider_anchor.is_none() || action_capabilities.targeted_fork
+}
+
+/// Reduce an ACP `session/fork` rejection to diagnostics that are safe for
+/// logs and user-facing error chains. Provider messages/data may carry prompt
+/// content and identifiers, so neither value crosses this boundary.
+pub(in crate::live::sessions) fn sanitized_native_fork_failure(
+    _error: &acp::Error,
+) -> (&'static str, &'static str) {
+    ("ACP session/fork request failed", "provider_request_failed")
 }
 
 pub(in crate::live::sessions) fn is_missing_load_session_resource(
@@ -60,6 +102,77 @@ mod tests {
     }
 
     #[test]
+    fn merge_targeted_fork_anchor_meta_carries_both_keys_when_both_present() {
+        let base = build_system_prompt_meta(Some("Rename the branch"));
+        let anchor = ProviderForkAnchor::UpToMessageId("msg-1".to_string());
+        let merged = merge_targeted_fork_anchor_meta(base, Some(&anchor)).expect("meta");
+        assert_eq!(
+            serde_json::to_value(&merged).ok(),
+            Some(serde_json::json!({
+                "systemPrompt": {"append": "Rename the branch"},
+                "anyharness": {"upToMessageId": "msg-1"},
+            }))
+        );
+    }
+
+    #[test]
+    fn merge_targeted_fork_anchor_meta_carries_only_anchor_when_no_system_prompt() {
+        let anchor = ProviderForkAnchor::LastTurnId("turn-1".to_string());
+        let merged = merge_targeted_fork_anchor_meta(None, Some(&anchor)).expect("meta");
+        assert_eq!(
+            serde_json::to_value(&merged).ok(),
+            Some(serde_json::json!({"anyharness": {"lastTurnId": "turn-1"}}))
+        );
+    }
+
+    #[test]
+    fn native_fork_anchor_requires_current_targeted_readiness() {
+        let anchor = ProviderForkAnchor::UpToMessageId("msg-1".to_string());
+        let tip_only = SessionActionCapabilities {
+            fork: true,
+            ..SessionActionCapabilities::default()
+        };
+        assert!(native_fork_anchor_is_dispatch_ready(tip_only, None));
+        assert!(!native_fork_anchor_is_dispatch_ready(
+            tip_only,
+            Some(&anchor)
+        ));
+
+        let targeted = SessionActionCapabilities {
+            targeted_fork: true,
+            ..tip_only
+        };
+        assert!(native_fork_anchor_is_dispatch_ready(
+            targeted,
+            Some(&anchor)
+        ));
+    }
+
+    #[test]
+    fn native_fork_failure_diagnostics_omit_provider_message_and_data() {
+        let sentinels = [
+            "anchor-msg-secret",
+            "provider-message-secret",
+            "provider-session-secret",
+        ];
+        let error = acp::Error::new(-32603, sentinels[1]).data(serde_json::json!({
+            "upToMessageId": sentinels[0],
+            "sessionId": sentinels[2],
+        }));
+        let provider_display = error.to_string();
+        assert!(sentinels
+            .iter()
+            .all(|value| provider_display.contains(value)));
+
+        let (detail, error_class) = sanitized_native_fork_failure(&error);
+        assert_eq!(detail, "ACP session/fork request failed");
+        assert_eq!(error_class, "provider_request_failed");
+        assert!(sentinels
+            .iter()
+            .all(|value| !detail.contains(value) && !error_class.contains(value)));
+    }
+
+    #[test]
     fn build_system_prompt_meta_skips_blank_values() {
         assert!(build_system_prompt_meta(None).is_none());
         assert!(build_system_prompt_meta(Some("   ")).is_none());
@@ -85,42 +198,178 @@ mod tests {
         }));
         assert!(!is_missing_load_session_resource(&error, "session-123"));
     }
+
+    fn meta_from_json(value: serde_json::Value) -> acp::schema::Meta {
+        match value {
+            serde_json::Value::Object(map) => map,
+            other => panic!("expected a JSON object for Meta, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn targeted_fork_extension_cases() {
+        struct Case {
+            label: &'static str,
+            meta: serde_json::Value,
+            expected: Option<TargetedForkExtensionTarget>,
+        }
+        let cases = [
+            Case {
+                label: "strict shape target message_id",
+                meta: serde_json::json!({
+                    "anyharness": {
+                        "schemaVersion": 1,
+                        "targetedFork": {"fileEffects": "none", "target": "message_id"},
+                    },
+                }),
+                expected: Some(TargetedForkExtensionTarget::MessageId),
+            },
+            Case {
+                label: "strict shape target turn_id",
+                meta: serde_json::json!({
+                    "anyharness": {
+                        "schemaVersion": 1,
+                        "targetedFork": {"fileEffects": "none", "target": "turn_id"},
+                    },
+                }),
+                expected: Some(TargetedForkExtensionTarget::TurnId),
+            },
+            Case {
+                label: "strict shape target user_message_index",
+                meta: serde_json::json!({
+                    "anyharness": {
+                        "schemaVersion": 1,
+                        "targetedFork": {"fileEffects": "none", "target": "user_message_index"},
+                    },
+                }),
+                expected: Some(TargetedForkExtensionTarget::UserMessageIndex),
+            },
+            Case {
+                label: "legacy shipped Claude shape",
+                meta: serde_json::json!({
+                    "anyharness": {"fork": {"version": 1, "anchor": "upToMessageId"}},
+                }),
+                expected: None,
+            },
+            Case {
+                label: "legacy shipped Codex shape (empty meta)",
+                meta: serde_json::json!({}),
+                expected: None,
+            },
+            Case {
+                label: "wrong schemaVersion",
+                meta: serde_json::json!({
+                    "anyharness": {
+                        "schemaVersion": 2,
+                        "targetedFork": {"fileEffects": "none", "target": "message_id"},
+                    },
+                }),
+                expected: None,
+            },
+            Case {
+                label: "fileEffects workspace",
+                meta: serde_json::json!({
+                    "anyharness": {
+                        "schemaVersion": 1,
+                        "targetedFork": {"fileEffects": "workspace", "target": "message_id"},
+                    },
+                }),
+                expected: None,
+            },
+            Case {
+                label: "unknown target",
+                meta: serde_json::json!({
+                    "anyharness": {
+                        "schemaVersion": 1,
+                        "targetedFork": {"fileEffects": "none", "target": "item_id"},
+                    },
+                }),
+                expected: None,
+            },
+            Case {
+                label: "missing targetedFork",
+                meta: serde_json::json!({
+                    "anyharness": {"schemaVersion": 1},
+                }),
+                expected: None,
+            },
+            Case {
+                label: "missing anyharness",
+                meta: serde_json::json!({"other": {}}),
+                expected: None,
+            },
+        ];
+
+        for case in cases {
+            let meta = meta_from_json(case.meta);
+            assert_eq!(
+                parse_anyharness_targeted_fork_extension(&meta),
+                case.expected,
+                "case failed: {}",
+                case.label
+            );
+        }
+    }
 }
 
-pub(in crate::live::sessions) fn has_anyharness_targeted_fork_extension(
+/// A syntactically valid target in the ACP `_meta.anyharness.targetedFork`
+/// extension. Recognition does not imply that a given adapter can dispatch
+/// the target; the actor capability owner makes that separate decision.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::live::sessions) enum TargetedForkExtensionTarget {
+    MessageId,
+    TurnId,
+    UserMessageIndex,
+}
+
+impl TargetedForkExtensionTarget {
+    pub(in crate::live::sessions) fn as_str(self) -> &'static str {
+        match self {
+            Self::MessageId => "message_id",
+            Self::TurnId => "turn_id",
+            Self::UserMessageIndex => "user_message_index",
+        }
+    }
+}
+
+pub(in crate::live::sessions) fn parse_anyharness_targeted_fork_extension(
     meta: &acp::schema::Meta,
-) -> bool {
+) -> Option<TargetedForkExtensionTarget> {
     let Some(anyharness) = meta.get("anyharness").and_then(|value| value.as_object()) else {
-        return false;
+        return None;
     };
     if anyharness
         .get("schemaVersion")
         .and_then(|value| value.as_u64())
         != Some(1)
     {
-        return false;
+        return None;
     }
     let Some(targeted_fork) = anyharness
         .get("targetedFork")
         .and_then(|value| value.as_object())
     else {
-        return false;
+        return None;
     };
     if targeted_fork
         .get("fileEffects")
         .and_then(|value| value.as_str())
         != Some("none")
     {
-        return false;
+        return None;
     }
-    matches!(
-        targeted_fork.get("target").and_then(|value| value.as_str()),
-        Some("message_id" | "user_message_index")
-    )
+    match targeted_fork.get("target").and_then(|value| value.as_str()) {
+        Some("message_id") => Some(TargetedForkExtensionTarget::MessageId),
+        Some("turn_id") => Some(TargetedForkExtensionTarget::TurnId),
+        Some("user_message_index") => Some(TargetedForkExtensionTarget::UserMessageIndex),
+        _ => None,
+    }
 }
 
 pub(in crate::live::sessions) async fn start_native_session(
     conn: &acp::ConnectionTo<acp::Agent>,
+    inbound: Arc<InboundDoor>,
+    fork_dispatch: Arc<dyn ForkDispatchDurable>,
     workspace_path: &std::path::PathBuf,
     mcp_servers: &[SessionMcpServer],
     system_prompt_append: Option<&str>,
@@ -251,59 +500,26 @@ pub(in crate::live::sessions) async fn start_native_session(
             }
         }
         SessionStartupStrategy::ForkFromNative {
+            fork_operation_id,
             parent_native_session_id,
+            provider_anchor,
         } => {
-            if !action_capabilities.fork {
-                let error = anyhow::anyhow!(
-                    "agent does not advertise ACP session/fork with load_session support"
-                );
-                let _ = ready_tx.send(Err(anyhow::anyhow!("{error}")));
-                return Err(error);
-            }
-
-            let fork_started = std::time::Instant::now();
-            let mut request = acp::schema::ForkSessionRequest::new(
-                parent_native_session_id.clone(),
-                workspace_path.clone(),
+            hydrate_parent_and_fork(
+                conn,
+                inbound,
+                fork_dispatch,
+                workspace_path,
+                mcp_servers,
+                system_prompt_append,
+                action_capabilities,
+                fork_operation_id,
+                parent_native_session_id,
+                provider_anchor.as_ref(),
+                session_id,
+                workspace_id,
+                ready_tx,
             )
-            .mcp_servers(to_acp_servers(mcp_servers))
-            .meta(build_system_prompt_meta(system_prompt_append));
-            if mcp_servers.is_empty() {
-                request.mcp_servers.clear();
-            }
-
-            match conn.send_request(request).block_task().await {
-                Ok(resp) => {
-                    tracing::info!(
-                        session_id = %session_id,
-                        workspace_id = %workspace_id,
-                        parent_native_session_id = %parent_native_session_id,
-                        native_session_id = %resp.session_id,
-                        startup_strategy = startup_strategy_label,
-                        native_startup_disposition = NativeSessionStartupDisposition::CreatedFresh.as_str(),
-                        elapsed_ms = fork_started.elapsed().as_millis(),
-                        "[workspace-latency] session.actor.fork_session.completed"
-                    );
-                    Ok((
-                        resp.session_id.to_string(),
-                        NativeSessionStartupState::from_fork_session(&resp),
-                        NativeSessionStartupDisposition::CreatedFresh,
-                    ))
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        session_id = %session_id,
-                        workspace_id = %workspace_id,
-                        parent_native_session_id = %parent_native_session_id,
-                        startup_strategy = startup_strategy_label,
-                        elapsed_ms = fork_started.elapsed().as_millis(),
-                        error = %error,
-                        "[workspace-latency] session.actor.fork_session.failed"
-                    );
-                    let _ = ready_tx.send(Err(anyhow::anyhow!("ACP fork_session: {error}")));
-                    Err(anyhow::anyhow!("ACP fork_session: {error}"))
-                }
-            }
+            .await
         }
     }
 }

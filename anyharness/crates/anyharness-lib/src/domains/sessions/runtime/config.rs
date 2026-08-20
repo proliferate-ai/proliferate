@@ -8,6 +8,30 @@ use super::{
     SessionLifecycleError, SessionRuntime, SetSessionConfigOptionError, StartSessionError,
 };
 
+fn map_live_config_apply_result(
+    result: Result<
+        ConfigApplyState,
+        LiveSessionCommandError<SetConfigOptionCommandError>,
+    >,
+) -> Result<ConfigApplyState, SetSessionConfigOptionError> {
+    match result {
+        Ok(apply_state) => Ok(apply_state),
+        Err(LiveSessionCommandError::ActorUnavailable) => {
+            Err(SetSessionConfigOptionError::Internal(anyhow::anyhow!(
+                "session actor channel closed"
+            )))
+        }
+        Err(LiveSessionCommandError::ResponseDropped) => {
+            Err(SetSessionConfigOptionError::Internal(anyhow::anyhow!(
+                "session actor dropped config update response"
+            )))
+        }
+        Err(LiveSessionCommandError::Rejected(SetConfigOptionCommandError::Rejected(
+            detail,
+        ))) => Err(SetSessionConfigOptionError::Rejected(detail)),
+    }
+}
+
 impl SessionRuntime {
     pub async fn set_live_session_config_option(
         &self,
@@ -55,6 +79,25 @@ impl SessionRuntime {
                         "agent descriptor not found: {agent_kind}"
                     ))
                 }
+                StartSessionError::LaunchOptionsUnavailable { agent_kind, state } => {
+                    SetSessionConfigOptionError::Rejected(format!(
+                        "launch options are not available for agent '{agent_kind}' (state: {state:?})"
+                    ))
+                }
+                StartSessionError::LaunchValueUnsupported {
+                    agent_kind,
+                    key,
+                    value,
+                    state,
+                } => SetSessionConfigOptionError::Rejected(format!(
+                    "launch value '{value}' for '{key}' is no longer supported for agent '{agent_kind}' (state: {state:?})"
+                )),
+                StartSessionError::AgentEnvOverrideUnsupported {
+                    agent_kind,
+                    env_var_name,
+                } => SetSessionConfigOptionError::Rejected(format!(
+                    "workspace/session environment cannot override agent-owned key '{env_var_name}' for '{agent_kind}'"
+                )),
                 StartSessionError::Closed => {
                     SetSessionConfigOptionError::Rejected("session is closed".to_string())
                 }
@@ -89,10 +132,10 @@ impl SessionRuntime {
                 }
             })?;
 
-        // Catalog authorization for model switches: a value outside the
-        // harness-advertised option list still applies when the catalog
-        // validates it for this session's recorded auth contexts.
-        let catalog_authorized_model = self
+        // Active-session model authorization comes only from this session's
+        // latest full live snapshot. Target observations and catalogs cannot
+        // add a value to the running session.
+        let live_snapshot_authorized_model = self
             .session_service
             .live_model_switch_authorized(&record, value);
 
@@ -102,43 +145,14 @@ impl SessionRuntime {
             .set_config_option(
                 config_id.to_string(),
                 value.to_string(),
-                catalog_authorized_model,
+                live_snapshot_authorized_model,
             )
             .await;
-        let apply_state = match live_result {
-            Ok(apply_state) => apply_state,
-            // A catalog-authorized immediate live rejection may replace the
-            // agent process, never the durable session: persist the requested
-            // model, retire the process, and relaunch under the same session
-            // with the new launch environment. Queued replay rejection stays
-            // inside the actor and does not reach this relaunch arm.
-            Err(LiveSessionCommandError::Rejected(SetConfigOptionCommandError::Rejected(
-                detail,
-            ))) if catalog_authorized_model => {
-                tracing::info!(
-                    session_id,
-                    config_id,
-                    value,
-                    detail,
-                    "live model apply unavailable; switching via relaunch"
-                );
-                self.relaunch_session_with_model(&record, value).await?;
-                ConfigApplyState::Applied
-            }
-            Err(LiveSessionCommandError::ActorUnavailable) => {
-                return Err(SetSessionConfigOptionError::Internal(anyhow::anyhow!(
-                    "session actor channel closed"
-                )))
-            }
-            Err(LiveSessionCommandError::ResponseDropped) => {
-                return Err(SetSessionConfigOptionError::Internal(anyhow::anyhow!(
-                    "session actor dropped config update response"
-                )))
-            }
-            Err(LiveSessionCommandError::Rejected(SetConfigOptionCommandError::Rejected(
-                detail,
-            ))) => return Err(SetSessionConfigOptionError::Rejected(detail)),
-        };
+        // A live refusal is terminal for this mutation. Relaunching from a
+        // rewritten session row would execute a model/control state that was
+        // never confirmed by the active harness and differs from the immutable
+        // launch intent validated at the common start seam.
+        let apply_state = map_live_config_apply_result(live_result)?;
 
         // The actor persists any applied/queued changes. Reload the durable
         // session summary and latest live-config snapshot before returning.
@@ -154,38 +168,23 @@ impl SessionRuntime {
 
         Ok((updated, live_config, apply_state))
     }
+}
 
-    /// The relaunch arm of live-or-relaunch: persist the new model on the
-    /// record, retire the live agent process, and bring the SAME session
-    /// back up — the relaunch composes its launch env (and startup model
-    /// preference) from the persisted selection.
-    async fn relaunch_session_with_model(
-        &self,
-        record: &crate::domains::sessions::model::SessionRecord,
-        model_id: &str,
-    ) -> Result<(), SetSessionConfigOptionError> {
-        self.session_service
-            .store()
-            .update_model_selection(&record.id, model_id, &chrono::Utc::now().to_rfc3339())
-            .map_err(SetSessionConfigOptionError::Internal)?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        if let Some(handle) = self.acp_manager.get_handle(&record.id).await {
-            let _ = handle.close().await;
-        }
-        for _ in 0..40 {
-            if !self.has_live_session(&record.id).await {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
+    #[test]
+    fn live_refusal_is_terminal_even_for_snapshot_authorized_model() {
+        let error = map_live_config_apply_result(Err(LiveSessionCommandError::Rejected(
+            SetConfigOptionCommandError::Rejected("agent kept its current model".to_string()),
+        )))
+        .expect_err("a live refusal must not be converted into Applied");
 
-        self.ensure_live_session(&record.id, None)
-            .await
-            .map_err(|error| {
-                SetSessionConfigOptionError::Internal(anyhow::anyhow!(
-                    "failed to relaunch session with new model: {error:?}"
-                ))
-            })?;
-        Ok(())
+        assert!(matches!(
+            error,
+            SetSessionConfigOptionError::Rejected(detail)
+                if detail == "agent kept its current model"
+        ));
     }
 }

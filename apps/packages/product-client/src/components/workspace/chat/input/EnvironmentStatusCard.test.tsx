@@ -82,7 +82,7 @@ describe("WorkspaceStatusComposerControl (resources + advanced)", () => {
   });
 
   it("shows advanced controls as sections with codex option labels", () => {
-    render(
+    const { container } = render(
       <WorkspaceStatusComposerControl
         model={statusModel()}
         environmentState={targetState()}
@@ -97,6 +97,11 @@ describe("WorkspaceStatusComposerControl (resources + advanced)", () => {
     expect(screen.getByText("Read Only")).toBeTruthy();
     expect(screen.getByText("Auto")).toBeTruthy();
     expect(screen.getByText("Full Access")).toBeTruthy();
+    expect(container.querySelector("[data-workspace-status-trigger]")).toBeTruthy();
+    expect(document.querySelector('[data-session-advanced-option="mode:read-only"]'))
+      .toBeTruthy();
+    expect(document.querySelector('[data-session-advanced-selected="auto"]'))
+      .toBeTruthy();
   });
 
   it("keeps the card open on advanced option select (multi-adjust)", () => {

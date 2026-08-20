@@ -121,7 +121,7 @@ describe("resolveEffectiveChatDefaults", () => {
     });
   });
 
-  it("falls back to the first eligible candidate when preferences are empty", () => {
+  it("does not invent a first-row default when preferences are empty", () => {
     const result = resolveEffectiveChatDefaults(
       [
         registry({
@@ -138,9 +138,9 @@ describe("resolveEffectiveChatDefaults", () => {
     );
 
     expect(result).toMatchObject({
-      agentKind: "codex",
-      modelId: "gpt-5.4",
-      degraded: false,
+      agentKind: "",
+      modelId: "",
+      degraded: true,
     });
   });
 });

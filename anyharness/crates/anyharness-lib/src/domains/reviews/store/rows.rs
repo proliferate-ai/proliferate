@@ -2,7 +2,7 @@ use rusqlite::params;
 
 use super::super::model::{
     ReviewAssignmentRecord, ReviewAssignmentStatus, ReviewFeedbackJobRecord,
-    ReviewFeedbackJobState, ReviewKind, ReviewModeVerificationStatus, ReviewParseError,
+    ReviewFeedbackJobState, ReviewKind, ReviewLaunchVerificationStatus, ReviewParseError,
     ReviewRoundRecord, ReviewRoundStatus, ReviewRunRecord, ReviewRunStatus,
 };
 
@@ -78,14 +78,16 @@ pub(super) fn insert_assignment(
     conn: &rusqlite::Connection,
     assignment: &ReviewAssignmentRecord,
 ) -> rusqlite::Result<()> {
+    let control_values_json = serde_json::to_string(&assignment.control_values)
+        .expect("string control map must serialize");
     conn.execute(
         "INSERT INTO review_assignments (
             id, review_run_id, review_round_id, reviewer_session_id, session_link_id,
             persona_id, persona_label, persona_prompt, agent_kind, model_id,
-            requested_mode_id, actual_mode_id, mode_verification_status, status,
+            control_values_json, launch_verification_status, status,
             pass, summary, critique_markdown, critique_artifact_path, submitted_at, deadline_at,
             reminder_count, failure_reason, failure_detail, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
         params![
             assignment.id,
             assignment.review_run_id,
@@ -97,9 +99,8 @@ pub(super) fn insert_assignment(
             assignment.persona_prompt,
             assignment.agent_kind,
             assignment.model_id,
-            assignment.requested_mode_id,
-            assignment.actual_mode_id,
-            assignment.mode_verification_status.as_str(),
+            control_values_json,
+            assignment.launch_verification_status.as_str(),
             assignment.status.as_str(),
             assignment.pass.map(|value| if value { 1 } else { 0 }),
             assignment.summary,
@@ -199,7 +200,15 @@ pub(super) fn map_round(row: &rusqlite::Row) -> rusqlite::Result<ReviewRoundReco
 }
 
 pub(super) fn map_assignment(row: &rusqlite::Row) -> rusqlite::Result<ReviewAssignmentRecord> {
-    let mode_status: String = row.get("mode_verification_status")?;
+    let launch_status: String = row.get("launch_verification_status")?;
+    let control_values_json: String = row.get("control_values_json")?;
+    let control_values = serde_json::from_str(&control_values_json).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            0,
+            rusqlite::types::Type::Text,
+            Box::new(error),
+        )
+    })?;
     let status: String = row.get("status")?;
     Ok(ReviewAssignmentRecord {
         id: row.get("id")?,
@@ -212,9 +221,8 @@ pub(super) fn map_assignment(row: &rusqlite::Row) -> rusqlite::Result<ReviewAssi
         persona_prompt: row.get("persona_prompt")?,
         agent_kind: row.get("agent_kind")?,
         model_id: row.get("model_id")?,
-        requested_mode_id: row.get("requested_mode_id")?,
-        actual_mode_id: row.get("actual_mode_id")?,
-        mode_verification_status: parse_mode_status(&mode_status)?,
+        control_values,
+        launch_verification_status: parse_launch_status(&launch_status)?,
         status: parse_assignment_status(&status)?,
         pass: row.get::<_, Option<i64>>("pass")?.map(|value| value != 0),
         summary: row.get("summary")?,
@@ -266,8 +274,8 @@ fn parse_assignment_status(value: &str) -> rusqlite::Result<ReviewAssignmentStat
     ReviewAssignmentStatus::parse(value).map_err(map_parse_error)
 }
 
-fn parse_mode_status(value: &str) -> rusqlite::Result<ReviewModeVerificationStatus> {
-    ReviewModeVerificationStatus::parse(value).map_err(map_parse_error)
+fn parse_launch_status(value: &str) -> rusqlite::Result<ReviewLaunchVerificationStatus> {
+    ReviewLaunchVerificationStatus::parse(value).map_err(map_parse_error)
 }
 
 fn parse_feedback_state(value: &str) -> rusqlite::Result<ReviewFeedbackJobState> {

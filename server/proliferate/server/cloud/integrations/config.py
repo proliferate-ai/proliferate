@@ -18,6 +18,7 @@ from typing import Any, Literal, cast, get_args
 
 Transport = Literal["http", "stdio"]
 OAuthScopePolicy = Literal["provider", "exact"]
+CredentialValidation = Literal["mcp_tools_list"]
 SettingKind = Literal["string", "boolean", "select", "url"]
 ArgKind = Literal["static", "workspace_path", "secret", "setting"]
 EnvKind = Literal["static", "secret", "setting"]
@@ -138,6 +139,8 @@ class IntegrationConfig:
     oauth_scopes: tuple[str, ...] = ()
     oauth_scopes_required: bool = False
     oauth_scope_policy: OAuthScopePolicy = "provider"
+    oauth_revocation_endpoint: str | None = None
+    credential_validation: CredentialValidation | None = None
     headers: tuple[HeaderTemplate, ...] = ()
     query: tuple[QueryTemplate, ...] = ()
     secret_fields: tuple[SecretField, ...] = ()
@@ -215,6 +218,7 @@ def serialize_definition_config(cfg: IntegrationConfig) -> str:
         "oauthScopes": list(cfg.oauth_scopes),
         "oauthScopesRequired": cfg.oauth_scopes_required,
         "oauthScopePolicy": cfg.oauth_scope_policy,
+        "credentialValidation": cfg.credential_validation,
         "headers": [_header_to_json(h) for h in cfg.headers],
         "query": [_query_to_json(q) for q in cfg.query],
         "secretFields": [_secret_field_to_json(f) for f in cfg.secret_fields],
@@ -224,6 +228,11 @@ def serialize_definition_config(cfg: IntegrationConfig) -> str:
         "args": [_arg_to_json(a) for a in cfg.args],
         "env": [_env_to_json(e) for e in cfg.env],
     }
+    # Keep existing definition-security snapshots byte-stable when revocation
+    # is unsupported. Only providers with an endpoint gain a new security
+    # shape and require a new revision.
+    if cfg.oauth_revocation_endpoint is not None:
+        payload["oauthRevocationEndpoint"] = cfg.oauth_revocation_endpoint
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
 
@@ -306,6 +315,15 @@ def _oauth_scope_policy_from_json(raw: object) -> OAuthScopePolicy:
     return cast(OAuthScopePolicy, policy)
 
 
+def _credential_validation_from_json(raw: object) -> CredentialValidation | None:
+    if raw is None:
+        return None
+    validation = str(raw)
+    if validation not in get_args(CredentialValidation):
+        raise IntegrationConfigError(f"unsupported credential validation: {validation!r}")
+    return cast(CredentialValidation, validation)
+
+
 def _setting_field_from_json(raw: dict[str, Any]) -> SettingField:
     options = tuple(
         SettingOption(value=str(o["value"]), label=str(o["label"])) for o in raw.get("options", ())
@@ -357,6 +375,10 @@ def parse_definition_config(config_json_str: str) -> IntegrationConfig:
         oauth_scopes=tuple(str(scope) for scope in raw.get("oauthScopes", ())),
         oauth_scopes_required=bool(raw.get("oauthScopesRequired", False)),
         oauth_scope_policy=_oauth_scope_policy_from_json(raw.get("oauthScopePolicy", "provider")),
+        oauth_revocation_endpoint=(
+            str(raw["oauthRevocationEndpoint"]) if raw.get("oauthRevocationEndpoint") else None
+        ),
+        credential_validation=_credential_validation_from_json(raw.get("credentialValidation")),
         headers=tuple(_header_from_json(h) for h in raw.get("headers", ())),
         query=tuple(_query_from_json(q) for q in raw.get("query", ())),
         secret_fields=tuple(_secret_field_from_json(f) for f in raw.get("secretFields", ())),

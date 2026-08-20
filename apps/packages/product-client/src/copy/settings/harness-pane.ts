@@ -65,7 +65,7 @@ export const HARNESS_PANE_COPY = {
   allModelsSeedSuffix: "shipped catalog, not probed yet",
   allModelsRefresh: "Refresh",
   allModelsRefreshing: "Refreshing...",
-  allModelsEmpty: "No models in the catalog for this surface yet.",
+  allModelsEmpty: "No models detected yet.",
   allModelsLoading: "Loading model catalog...",
   // Shown while an empty list has a probe in flight.
   allModelsProbing: "Probing…",

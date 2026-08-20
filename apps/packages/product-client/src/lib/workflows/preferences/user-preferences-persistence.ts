@@ -16,8 +16,6 @@ import {
 import { isValidWorktreeAutoDeleteLimit } from "#product/lib/domain/preferences/user/worktree-auto-delete";
 import {
   buildPersistedUserPreferencesRecord,
-  hasAppliedModelVisibilityDefaultsReset,
-  markModelVisibilityDefaultsReset,
   WORKTREE_AUTO_DELETE_LIMIT_ADOPTION_PENDING_KEY,
   type PersistedUserPreferencesMetadata,
 } from "#product/lib/domain/preferences/persisted-metadata";
@@ -27,9 +25,6 @@ import {
   writePersistedJson,
   type ProductStorageContext,
 } from "#product/lib/infra/persistence/product-storage";
-import {
-  resetFrontierModelVisibilityOverrides,
-} from "#product/lib/domain/preferences/user/session-defaults";
 
 const USER_PREFERENCES_KEY = "user_preferences";
 const LEGACY_THEME_KEY = "proliferate-theme";
@@ -106,7 +101,6 @@ async function readLegacyUserPreferences(
       : {}),
     defaultChatModelIdByAgentKind:
       legacyDefaultChatModelIdByAgentKind ?? defaults.defaultChatModelIdByAgentKind,
-    defaultSessionModeByAgentKind: defaults.defaultSessionModeByAgentKind,
     defaultLiveSessionControlValuesByAgentKind:
       defaults.defaultLiveSessionControlValuesByAgentKind,
     defaultOpenInTargetId: legacyDefaultOpenInTargetId ?? defaults.defaultOpenInTargetId,
@@ -131,7 +125,6 @@ async function readPersistedUserPreferences(
   shouldPersist: boolean;
   persistedMetadata: PersistedUserPreferencesMetadata;
   deferWorktreeAutoDeleteLimitPersist: boolean;
-  resetModelVisibilityDefaults: boolean;
 }> {
   const persisted =
     await readPersistedJsonValue<Record<string, unknown>>(context, USER_PREFERENCES_KEY);
@@ -148,18 +141,14 @@ async function readPersistedUserPreferences(
       shouldPersist: hasDeprecatedUserPreferenceKeys(persisted),
       persistedMetadata,
       deferWorktreeAutoDeleteLimitPersist: needsWorktreeAdoption,
-      resetModelVisibilityDefaults: !hasAppliedModelVisibilityDefaultsReset(
-        persistedMetadata,
-      ),
     };
   }
 
   return {
     preferences: await readLegacyUserPreferences(context),
     shouldPersist: false,
-    persistedMetadata: markModelVisibilityDefaultsReset({}),
+    persistedMetadata: {},
     deferWorktreeAutoDeleteLimitPersist: false,
-    resetModelVisibilityDefaults: false,
   };
 }
 
@@ -167,29 +156,13 @@ export async function loadUserPreferences(
   context: ProductStorageContext,
 ): Promise<LoadedUserPreferences> {
   const persisted = await readPersistedUserPreferences(context);
-  let migrated = migrateUserPreferences(persisted.preferences);
-  let persistedMetadata = persisted.persistedMetadata;
-  let shouldPersist = (
+  const migrated = migrateUserPreferences(persisted.preferences);
+  const persistedMetadata = persisted.persistedMetadata;
+  const shouldPersist = (
     persisted.deferWorktreeAutoDeleteLimitPersist
     || migrated.changed
     || persisted.shouldPersist
   );
-
-  if (persisted.resetModelVisibilityDefaults) {
-    const reset = resetFrontierModelVisibilityOverrides(
-      migrated.preferences.chatModelVisibilityOverridesByAgentKind,
-    );
-    migrated = {
-      preferences: {
-        ...migrated.preferences,
-        chatModelVisibilityOverridesByAgentKind:
-          reset.chatModelVisibilityOverridesByAgentKind,
-      },
-      changed: migrated.changed || reset.changed,
-    };
-    persistedMetadata = markModelVisibilityDefaultsReset(persistedMetadata);
-    shouldPersist = true;
-  }
 
   return {
     preferences: migrated.preferences,

@@ -16,8 +16,10 @@ import {
 } from "#product/stores/chat/chat-diff-preferences-store";
 import {
   resetFileTreeStoreForTests,
+  selectFileTreeDesiredWidth,
   useFileTreeStore,
 } from "#product/stores/editor/file-tree-store";
+import { resetFileTreeDockPersistenceForTests } from "#product/hooks/workspaces/lifecycle/files/file-tree-dock-persistence-coordinator";
 import {
   readHomeNextTargetSelectionState,
   resetHomeNextTargetSelectionForTests,
@@ -46,6 +48,7 @@ beforeEach(() => {
   cleanup();
   resetChatDiffPreferencesForTests();
   resetFileTreeStoreForTests();
+  resetFileTreeDockPersistenceForTests();
   resetHomeNextTargetSelectionForTests();
   resetCloudDisplayNameSuppressionForTests();
   resetReplacedSessionTombstonesForTests();
@@ -57,6 +60,7 @@ afterEach(() => {
   cleanup();
   resetChatDiffPreferencesForTests();
   resetFileTreeStoreForTests();
+  resetFileTreeDockPersistenceForTests();
   resetHomeNextTargetSelectionForTests();
   resetCloudDisplayNameSuppressionForTests();
   resetReplacedSessionTombstonesForTests();
@@ -77,7 +81,9 @@ describe("useProductStoragePersistenceLifecycle", () => {
 
     await waitFor(() => {
       expect(useChatDiffPreferencesStore.getState().wrapLongLines).toBe(true);
-      expect(useFileTreeStore.getState().width).toBe(512);
+      // The dedicated dock lifecycle owns this key: it migrates the legacy
+      // `{ width }` payload into the v1 record instead of a one-shot read.
+      expect(selectFileTreeDesiredWidth(useFileTreeStore.getState())).toBe(512);
       expect(readHomeNextTargetSelectionState().destination).toBe("repository");
       expect(isCloudDisplayNameBackfillSuppressed("cloud-1")).toBe(true);
       expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(true);

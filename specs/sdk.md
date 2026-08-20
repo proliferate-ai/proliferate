@@ -12,6 +12,18 @@ Cloud SDK speaks to the Proliferate control plane; the AnyHarness SDK speaks to
 an AnyHarness runtime. Neither SDK owns app-specific orchestration or product
 policy.
 
+## Harness launch options
+
+The AnyHarness SDK owns the local target contract and client methods for
+`HarnessLaunchOptionsResponse`, refresh, `LaunchSelection.controlValues`, and
+the full `SessionLiveConfigSnapshot`. SDK React exposes query/mutation hooks
+and keys scoped by runtime, cache scope, and harness.
+
+The Cloud SDK owns the copied target response and reads it by cloud sandbox ID
+plus harness kind. Cloud React keys include both values. Neither SDK composes,
+seeds, aliases, or filters executable membership; wire types and clients
+preserve exact ordered IDs and unknown values.
+
 ## 1. File Tree
 
 ```text
@@ -118,6 +130,10 @@ not move product workflows into either SDK.
 - Support-window timestamp handling in `@anyharness/sdk` accepts only canonical-equivalent UTC spellings and sends canonical `Z` text on the wire, retaining 3, 6, or 9 digit fractions as given. It is not a compensation layer for a caller that emits a non-canonical window: a producer that needs fixed-millisecond output fixes that at the producer, and this normalization stays as it is.
 - Generic React providers, query hooks, mutation hooks, and query keys stay in
   `@anyharness/sdk-react`.
+- `useStatWorkspaceFileQuery` treats `path: ""` as an enabled workspace-root
+  stat and treats only `path: null` as disabled (subject to workspace id and
+  caller `enabled`). `useReadWorkspaceFileQuery` keeps its nonempty-path gate;
+  workspace root is not a readable file.
 
 ## 3. Ownership Model
 

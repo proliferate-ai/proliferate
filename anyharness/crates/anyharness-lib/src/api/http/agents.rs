@@ -2,23 +2,21 @@
 //! ride `?` through agents_errors.rs, wire mapping lives in agents_contract.rs.
 
 use anyharness_contract::v1::{
-    AgentLaunchOptionsResponse, AgentLoginTerminalRecord, AgentSummary, InstallAgentRequest,
+    AgentLoginTerminalRecord, AgentSummary, InstallAgentRequest,
     InstallAgentResponse, LoginCommand, ProblemDetails, ReconcileAgentsRequest,
     ReconcileAgentsResponse, StartAgentLoginRequest, StartAgentLoginResponse,
     StartAgentLoginTerminalResponse,
 };
 use axum::{
-    extract::Query,
     extract::{Path, State},
     http::StatusCode,
     Json,
 };
 
 use super::agents_contract::{
-    agent_login_terminal_to_contract, install_request, launch_options_response,
+    agent_login_terminal_to_contract, install_request,
     reconcile_snapshot_to_contract, to_installed_artifact_status, to_summary,
 };
-use super::agents_errors::map_launch_options_error;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::agents::auth::login_terminal::{
@@ -27,7 +25,7 @@ use crate::domains::agents::auth::login_terminal::{
     start_agent_login_terminal_session,
 };
 use crate::domains::agents::auth_state::AuthRuntimeInputs;
-use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
+use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 
 #[utoipa::path(
     get,
@@ -40,14 +38,14 @@ use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 pub async fn list_agents(State(state): State<AppState>) -> Json<Vec<AgentSummary>> {
     let snapshot = state.agent_runtime.list_agents().await;
     let now = chrono::Utc::now();
-    // The auth runtime inputs are read from the in-memory model-snapshot service
+    // The auth runtime inputs are read from the in-memory launch-probe service
     // before the blocking hop, so the closure below owns everything it needs.
     let auth_runtimes: Vec<AuthRuntimeInputs> = snapshot
         .agents
         .iter()
         .map(|agent| {
             state
-                .model_snapshot_service
+                .launch_probe_service
                 .auth_runtime_inputs(agent.descriptor.kind.as_str(), now)
         })
         .collect();
@@ -84,7 +82,7 @@ pub async fn get_agent(
 ) -> Result<Json<AgentSummary>, ApiError> {
     let snapshot = state.agent_runtime.get_agent(&kind).await?;
     let auth_runtime = state
-        .model_snapshot_service
+        .launch_probe_service
         .auth_runtime_inputs(&kind, chrono::Utc::now());
     let summary = tokio::task::spawn_blocking(move || {
         to_summary(
@@ -125,13 +123,13 @@ pub async fn install_agent(
     // is exactly when a harness's entries can have gone stale — and onboarding's
     // "checking for latest models" step is this poke rendered, not a separate
     // trigger. Fire-and-forget, after the response body is already decided.
-    ModelSnapshotService::poke_optional(
+    LaunchProbeService::poke_optional(
         &state.automatic_poke_engine,
         &kind,
         PokeReason::InstallCompleted,
     );
     let auth_runtime = state
-        .model_snapshot_service
+        .launch_probe_service
         .auth_runtime_inputs(&kind, chrono::Utc::now());
     Ok(Json(InstallAgentResponse {
         agent: to_summary(&outcome.agent, None, &auth_runtime),
@@ -250,7 +248,7 @@ pub async fn close_agent_login_terminal(
     // harness's own credentials, so terminal exit pokes the probe. Fire-and-forget
     // after the close is already decided. (A login performed entirely outside the
     // product has no event; the unconditional startup pass is the safety net.)
-    ModelSnapshotService::poke_optional(
+    LaunchProbeService::poke_optional(
         &state.automatic_poke_engine,
         &terminal.kind,
         PokeReason::LoginTerminal,
@@ -294,29 +292,4 @@ pub async fn reconcile_agents(
         StatusCode::ACCEPTED,
         Json(reconcile_snapshot_to_contract(&snapshot)),
     ))
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct AgentLaunchOptionsQuery {
-    pub workspace_id: Option<String>,
-}
-
-#[utoipa::path(
-    get,
-    path = "/v1/agents/launch-options",
-    params(("workspace_id" = Option<String>, Query, description = "Optional workspace scope: composes the workspace env into auth-context classification")),
-    responses(
-        (status = 200, description = "List launchable agents and model options", body = AgentLaunchOptionsResponse),
-    ),
-    tag = "agents"
-)]
-pub async fn get_agent_launch_options(
-    State(state): State<AppState>,
-    Query(query): Query<AgentLaunchOptionsQuery>,
-) -> Result<Json<AgentLaunchOptionsResponse>, ApiError> {
-    let options = state
-        .session_service
-        .resolved_workspace_launch_options(query.workspace_id.as_deref())
-        .map_err(map_launch_options_error)?;
-    Ok(Json(launch_options_response(query.workspace_id, options)))
 }

@@ -55,6 +55,11 @@ async def _start_slack_flow(
     assert definition is not None
 
     monkeypatch.setattr(oauth_clients.app_settings, "cloud_mcp_slack_enabled", True)
+    monkeypatch.setattr(
+        oauth_clients.app_settings,
+        "cloud_mcp_slack_distribution_ready",
+        True,
+    )
     monkeypatch.setattr(oauth_clients.app_settings, "cloud_mcp_slack_client_id", "slack-client")
     monkeypatch.setattr(
         oauth_clients.app_settings,
@@ -93,8 +98,19 @@ async def _start_slack_flow(
     )
     assert response.status_code == 200, response.text
     body = response.json()
+    assert body["account"] is None
     state = parse_qs(urlsplit(body["authorizationUrl"]).query)["state"][0]
     return auth, body, state
+
+
+async def _slack_account(db_session: AsyncSession, auth: AuthSession):
+    definition = await definitions_store.get_seed_by_namespace(db_session, "slack")
+    assert definition is not None
+    return await accounts_store.get_account_for_user_definition(
+        db_session,
+        uuid.UUID(auth.user_id),
+        definition.id,
+    )
 
 
 @pytest.mark.asyncio
@@ -129,9 +145,7 @@ async def test_slack_http_callback_persists_only_exact_scope_grant(
     assert flow.json()["status"] == "completed"
 
     await db_session.rollback()
-    account = await accounts_store.get_account(
-        db_session, uuid.UUID(str(started["account"]["accountId"]))
-    )
+    account = await _slack_account(db_session, auth)
     assert account is not None
     assert account.status == "ready"
     assert account.credential_ciphertext is not None
@@ -178,12 +192,8 @@ async def test_slack_http_callback_rejects_invalid_scope_grant(
     assert flow.json()["failureCode"] == "oauth_scope_mismatch"
 
     await db_session.rollback()
-    account = await accounts_store.get_account(
-        db_session, uuid.UUID(str(started["account"]["accountId"]))
-    )
-    assert account is not None
-    assert account.status == "setup_required"
-    assert account.credential_ciphertext is None
+    account = await _slack_account(db_session, auth)
+    assert account is None
 
 
 @pytest.mark.asyncio
@@ -232,9 +242,5 @@ async def test_slack_http_callback_translates_2xx_error_without_persisting(
     assert flow.json()["failureCode"] == "invalid_grant"
 
     await db_session.rollback()
-    account = await accounts_store.get_account(
-        db_session, uuid.UUID(str(started["account"]["accountId"]))
-    )
-    assert account is not None
-    assert account.status == "setup_required"
-    assert account.credential_ciphertext is None
+    account = await _slack_account(db_session, auth)
+    assert account is None

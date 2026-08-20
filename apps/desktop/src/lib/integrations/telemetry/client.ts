@@ -143,7 +143,7 @@ export function setTelemetryUser(user: AuthUser): void {
   }
 
   setDesktopSentryUser(user.id);
-  identifyDesktopPostHogUser(user);
+  identifyDesktopPostHogUser(user.id);
 }
 
 export function clearTelemetryUser(): void {

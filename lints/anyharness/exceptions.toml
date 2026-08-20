@@ -115,12 +115,6 @@ reason = "1 wire type import below the mapper boundary; target = agents domain t
 
 [[exception]]
 rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/cowork/mcp/calls_helpers.rs"
-site = "fn mode_options_to_json::anyharness_contract::v1::NormalizedSessionControl"
-reason = "1 inline wire path (:31 NormalizedSessionControl fn param) below the mapper boundary; target = cowork domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
 path = "anyharness/crates/anyharness-lib/src/domains/cowork/mcp/definition.rs"
 site = "anyharness_contract::v1::SessionMcpBindingNotAppliedReason"
 reason = "1 wire type import below the mapper boundary; target = cowork domain twins (grid plan PR 10.x)"
@@ -219,12 +213,6 @@ reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline w
 rule = "AH-CONTRACT-1"
 path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
 site = "fn loop_event_loop_id::anyharness_contract::v1::SessionEvent#2"
-reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
-site = "mod tests::anyharness_contract::v1::Loop"
 reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
 
 [[exception]]
@@ -718,48 +706,6 @@ rule = "AH-LIVE-5"
 path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs"
 site = "crate::live::terminals::StartAgentLoginTerminalOptions"
 reason = "agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
-
-[[exception]]
-rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/entry.rs"
-site = "fn document_from_snapshot::crate::live::sessions::probe"
-reason = "inline fully-qualified live probe type in a fn signature; target = agents runtime valve (grid plan PR 6c)"
-
-[[exception]]
-rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/probe.rs"
-site = "crate::live::sessions::probe::probe_agent"
-reason = "model snapshot calls live session probe directly (3 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
-
-[[exception]]
-rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/probe.rs"
-site = "crate::live::sessions::probe::ProbeOptions"
-reason = "model snapshot calls live session probe directly (3 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
-
-[[exception]]
-rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/probe.rs"
-site = "crate::live::sessions::probe::ProbeSnapshot"
-reason = "model snapshot calls live session probe directly (3 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
-
-[[exception]]
-rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/test_support.rs"
-site = "crate::live::sessions::probe::ProbeModelEntry"
-reason = "test-fixture support file (not excluded by should_skip) builds live probe snapshots; target = agents runtime valve or move under tests/ (grid plan PR 6c)"
-
-[[exception]]
-rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/test_support.rs"
-site = "crate::live::sessions::probe::ProbeSnapshot"
-reason = "test-fixture support file (not excluded by should_skip) builds live probe snapshots; target = agents runtime valve or move under tests/ (grid plan PR 6c)"
-
-[[exception]]
-rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/test_support.rs"
-site = "fn snapshot::crate::live::sessions::probe"
-reason = "test-fixture support file (not excluded by should_skip) builds live probe snapshots; target = agents runtime valve or move under tests/ (grid plan PR 6c)"
 
 [[exception]]
 rule = "AH-LIVE-5"

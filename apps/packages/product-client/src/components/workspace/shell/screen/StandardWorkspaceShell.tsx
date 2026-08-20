@@ -38,7 +38,6 @@ import { useWorkspaceActivityAcknowledgement } from "#product/hooks/workspaces/l
 import {
   resolveStandardWorkspaceChromeClasses,
 } from "#product/lib/domain/preferences/workspace-chrome";
-import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
@@ -140,6 +139,12 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const workspaceRemoteAccessActions = useWorkspaceRemoteAccessActions();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
+  const ensureRightPanelWidth = useCallback(
+    (minRailWidth: number) => {
+      layout.setRightPanelWidth((current) => Math.max(current, minRailWidth));
+    },
+    [layout.setRightPanelWidth],
+  );
   const shellActions = useMemo(() => ({
     openTerminalPanel: actions.openTerminalPanel,
     openRightPanelTool: actions.onSetRightPanelTool,
@@ -149,6 +154,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
       : actions.handlePrOpen,
     workspaceWebActions,
     workspaceRemoteAccessActions,
+    ensureRightPanelWidth,
   }), [
     actions.handlePrOpen,
     actions.handleViewPr,
@@ -156,6 +162,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     actions.openPublishDialog,
     actions.openTerminalPanel,
     data.existingPr,
+    ensureRightPanelWidth,
     workspaceRemoteAccessActions,
     workspaceWebActions,
   ]);
@@ -219,10 +226,9 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   return (
     <DebugProfiler id="workspace-shell">
       <WorkspaceShellActionsProvider value={shellActions}>
-        <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}>
-          <WorkspaceHeaderTabsViewModelProvider
-            enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell}
-          >
+        <WorkspaceHeaderTabsViewModelProvider
+          enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell}
+        >
             {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? (
               <WorkspaceShellShortcuts enabled={visible} />
             ) : null}
@@ -288,7 +294,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                         {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
                           <GlobalHeader
                             selectedWorkspace={selectedWorkspace}
-                            workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}
+                            displayWorkspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}
                             runDisabled={!runCommand.canRun}
                             runLoading={runCommand.isLaunching}
                             runLabel={runCommand.runLabel}
@@ -377,10 +383,14 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                 />
               </div>
 
-              {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? <ContentSearchPill /> : null}
+              {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? (
+                <ContentSearchPill
+                  rightPanelOpen={rightPanelOpen}
+                  rightPanelWidth={rightPanelWidth}
+                />
+              ) : null}
             </div>
-          </WorkspaceHeaderTabsViewModelProvider>
-        </WorkspacePathProvider>
+        </WorkspaceHeaderTabsViewModelProvider>
       </WorkspaceShellActionsProvider>
     </DebugProfiler>
   );

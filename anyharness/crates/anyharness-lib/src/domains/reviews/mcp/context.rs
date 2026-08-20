@@ -11,6 +11,7 @@ pub enum ReviewMcpRole {
 #[derive(Debug, Clone)]
 pub struct ReviewMcpContext {
     pub session_id: String,
+    pub workspace_id: String,
     pub role: ReviewMcpRole,
 }
 
@@ -51,6 +52,7 @@ pub fn resolve_context(
 
     Ok(ReviewMcpContext {
         session_id: request.session_id.clone(),
+        workspace_id: request.workspace_id.clone(),
         role,
     })
 }

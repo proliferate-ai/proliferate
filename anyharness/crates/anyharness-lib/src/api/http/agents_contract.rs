@@ -7,9 +7,9 @@ use anyharness_contract::v1::{
     AgentAuthLoginHandoff, AgentAuthNextAction, AgentAuthProbeLifecycle, AgentAuthProbePhase,
     AgentAuthSelectionFact, AgentAuthStateSummary, AgentCliAuthState, AgentCredentialState,
     AgentInstallProgress, AgentInstallProgressComponent, AgentInstallProgressPhase,
-    AgentInstallState, AgentLaunchModelOption, AgentLaunchOption, AgentLaunchOptionsResponse,
+    AgentInstallState,
     AgentLoginTerminalRecord, AgentLoginTerminalStatus, AgentReadinessState, AgentReconcileSummary,
-    AgentSummary, ArtifactStatus, InstallAgentRequest, ModelCatalogStatus, ModelEffort,
+    AgentSummary, ArtifactStatus, InstallAgentRequest,
     ReconcileAgentResult, ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
 };
 
@@ -491,58 +491,6 @@ pub(super) fn to_installed_artifact_status(artifact: &InstalledArtifactResult) -
         version: artifact.version.clone(),
         path: Some(artifact.path.display().to_string()),
         message: None,
-    }
-}
-
-/// Map the runtime-owned model lifecycle status to the wire enum.
-fn model_catalog_status_to_contract(
-    status: crate::domains::agents::model::ModelCatalogStatus,
-) -> ModelCatalogStatus {
-    use crate::domains::agents::model::ModelCatalogStatus as Domain;
-    match status {
-        Domain::Candidate => ModelCatalogStatus::Candidate,
-        Domain::Active => ModelCatalogStatus::Active,
-        Domain::Deprecated => ModelCatalogStatus::Deprecated,
-        Domain::Hidden => ModelCatalogStatus::Hidden,
-    }
-}
-
-pub(super) fn launch_options_response(
-    workspace_id: Option<String>,
-    options: crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions,
-) -> AgentLaunchOptionsResponse {
-    AgentLaunchOptionsResponse {
-        workspace_id,
-        agents: options
-            .agents
-            .into_iter()
-            .map(|agent| AgentLaunchOption {
-                kind: agent.kind,
-                display_name: agent.display_name,
-                default_model_id: agent.default_model_id,
-                unattended_mode_id: agent.unattended_mode_id,
-                models: agent
-                    .models
-                    .into_iter()
-                    .map(|model| AgentLaunchModelOption {
-                        id: model.id,
-                        display_name: model.display_name,
-                        aliases: model.aliases,
-                        is_default: model.is_default,
-                        default_opt_in: model.default_opt_in,
-                        description: model.description,
-                        provider: model.provider,
-                        status: model.status.map(model_catalog_status_to_contract),
-                        effort: model.effort.map(|effort| ModelEffort {
-                            values: effort.values,
-                            default: effort.default,
-                        }),
-                        fast_mode: Some(model.fast_mode),
-                        modes: model.modes,
-                    })
-                    .collect(),
-            })
-            .collect(),
     }
 }
 

@@ -39,7 +39,6 @@ interface HomeNextLaunchInput {
   text: string;
   attachmentSnapshots?: PromptAttachmentSnapshot[];
   modelSelection: HomeNextModelSelection;
-  modeId: string | null;
   launchControlValues?: Record<string, string>;
   target: HomeLaunchTarget;
 }
@@ -82,7 +81,6 @@ export function useHomeNextLaunch() {
     text,
     attachmentSnapshots,
     modelSelection,
-    modeId,
     launchControlValues,
     target,
   }: HomeNextLaunchInput): Promise<HomeNextLaunchOutcome> => {
@@ -113,7 +111,6 @@ export function useHomeNextLaunch() {
     } = beginHomeNextLaunch(beginLaunchIntent, {
       prompt,
       modelSelection,
-      modeId,
       launchControlValues,
       target,
     });
@@ -130,7 +127,6 @@ export function useHomeNextLaunch() {
           attemptId,
           agentKind: modelSelection.kind,
           modelId: modelSelection.modelId,
-          modeId,
           launchControlValues: resolvedLaunchControlValues,
           draftText: null,
           sourceWorkspaceId: null,
@@ -250,7 +246,6 @@ export function useHomeNextLaunch() {
             workspaceId,
             projectedSessionId,
             modelSelection,
-            modeId,
             launchControlValues: resolvedLaunchControlValues,
             text: prompt,
             attachmentSnapshots,
@@ -312,7 +307,6 @@ export function useHomeNextLaunch() {
             workspaceId,
             projectedSessionId,
             modelSelection,
-            modeId,
             launchControlValues: resolvedLaunchControlValues,
             text: prompt,
             attachmentSnapshots,
@@ -340,7 +334,6 @@ export function useHomeNextLaunch() {
         promptId,
         launchIntentId,
         modelSelection,
-        modeId,
         launchControlValues: resolvedLaunchControlValues,
         initialSession,
         createdAt: Date.now(),

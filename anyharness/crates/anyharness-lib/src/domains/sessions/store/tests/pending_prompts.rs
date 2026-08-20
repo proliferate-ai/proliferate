@@ -42,6 +42,7 @@ fn batched_page_queries_match_single_session_queries() {
             raw_config_options_json: "[]".to_string(),
             normalized_controls_json: "{}".to_string(),
             prompt_capabilities_json: None,
+            full_snapshot_json: None,
             updated_at: "2026-04-11T00:00:05Z".to_string(),
         })
         .expect("upsert live config");

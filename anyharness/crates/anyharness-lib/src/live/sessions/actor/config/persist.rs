@@ -1,15 +1,13 @@
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
-    ConfigOptionUpdatePayload, CurrentModeUpdatePayload, NormalizedSessionControl,
-    SessionLiveConfigSnapshot,
+    ConfigOptionUpdatePayload, CurrentModeUpdatePayload, SessionLiveConfigSnapshot,
 };
 use tokio::sync::Mutex;
 
-use crate::domains::agents::model::AgentKind;
 use crate::domains::sessions::live_config::{
-    build_live_config_snapshot, normalized_key_rank, snapshot_from_record, snapshot_to_record,
-    NormalizedControlKind,
+    build_live_config_snapshot, snapshot_from_record, snapshot_to_record,
+    validate_canonical_live_config_current,
 };
 use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
 use crate::live::sessions::actor::state::SessionStartupState;
@@ -126,6 +124,15 @@ pub(in crate::live::sessions::actor) async fn emit_live_config_update(
         next_seq,
         updated_at.clone(),
     );
+    validate_canonical_live_config_current(&snapshot)?;
+    let source_seq = snapshot.source_seq;
+    let current_control_keys = snapshot
+        .current
+        .control_values
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    let current_model_present = snapshot.current.model_id.is_some();
     if let Some(model_id) = snapshot
         .normalized_controls
         .model
@@ -144,6 +151,15 @@ pub(in crate::live::sessions::actor) async fn emit_live_config_update(
     }
 
     store.upsert_live_config_snapshot(&snapshot_to_record(session_id, &snapshot)?)?;
+    tracing::info!(
+        session_id,
+        harness_kind = source_agent_kind,
+        source_seq,
+        current_model_present,
+        current_control_keys = ?current_control_keys,
+        event = "session.live_config.changed",
+        "persisted a higher-sequence full live configuration snapshot"
+    );
     persist_current_config_state_from_startup(
         store,
         event_sink,
@@ -164,21 +180,23 @@ pub(in crate::live::sessions::actor) async fn emit_live_config_update(
 pub(in crate::live::sessions::actor) fn load_startup_restore_snapshot(
     store: &dyn SessionStateDurable,
     session_id: &str,
-    source_agent_kind: &str,
     resumes_durable_history: bool,
 ) -> anyhow::Result<Option<SessionLiveConfigSnapshot>> {
-    let restores_persisted_config = matches!(
-        AgentKind::parse(source_agent_kind),
-        Some(AgentKind::Claude) | Some(AgentKind::Codex)
-    );
-    if !resumes_durable_history || !restores_persisted_config {
+    if !resumes_durable_history {
         return Ok(None);
     }
 
-    store
-        .find_live_config_snapshot(session_id)?
-        .map(|record| snapshot_from_record(&record))
-        .transpose()
+    let Some(record) = store.find_live_config_snapshot(session_id)? else {
+        return Ok(None);
+    };
+    // Rows created before the canonical snapshot column existed contain only
+    // presentation/rollback projections. They are not confirmed live
+    // authority: treating one as a restore snapshot would skip the migrated
+    // immutable launch intent and ready on handshake defaults.
+    if record.full_snapshot_json.is_none() {
+        return Ok(None);
+    }
+    snapshot_from_record(&record).map(Some)
 }
 
 pub(in crate::live::sessions::actor) fn emit_startup_state(
@@ -192,95 +210,37 @@ pub(in crate::live::sessions::actor) fn emit_startup_state(
     }
 }
 
-pub(in crate::live::sessions::actor) fn persisted_control_values(
-    controls: &anyharness_contract::v1::NormalizedSessionControls,
-) -> Vec<(usize, String, String)> {
-    let mut values = Vec::new();
-    push_persisted_control(
-        &mut values,
-        controls.model.as_ref(),
-        NormalizedControlKind::Model,
-    );
-    push_persisted_control(
-        &mut values,
-        controls.collaboration_mode.as_ref(),
-        NormalizedControlKind::CollaborationMode,
-    );
-    push_persisted_control(
-        &mut values,
-        controls.mode.as_ref(),
-        NormalizedControlKind::Mode,
-    );
-    push_persisted_control(
-        &mut values,
-        controls.reasoning.as_ref(),
-        NormalizedControlKind::Reasoning,
-    );
-    push_persisted_control(
-        &mut values,
-        controls.effort.as_ref(),
-        NormalizedControlKind::Effort,
-    );
-    push_persisted_control(
-        &mut values,
-        controls.fast_mode.as_ref(),
-        NormalizedControlKind::FastMode,
-    );
-    values.extend(controls.extras.iter().filter_map(|control| {
-        control.current_value.as_ref().map(|value| {
-            (
-                normalized_key_rank(NormalizedControlKind::Extra),
-                control.raw_config_id.clone(),
-                value.clone(),
-            )
-        })
-    }));
-    values.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1)));
-    values
-}
-
-pub(in crate::live::sessions::actor) fn push_persisted_control(
-    values: &mut Vec<(usize, String, String)>,
-    control: Option<&NormalizedSessionControl>,
-    kind: NormalizedControlKind,
-) {
-    let Some(control) = control else {
-        return;
-    };
-    let Some(current_value) = control.current_value.as_ref() else {
-        return;
-    };
-
-    values.push((
-        normalized_key_rank(kind),
-        control.raw_config_id.clone(),
-        current_value.clone(),
-    ));
-}
-
 /// Shared startup-stage logging for `emit_live_config_update`/
 /// `restore_persisted_live_config_if_needed` call sites: a failed call logs
 /// both a short warning and the `[workspace-latency]` failure record; success
 /// logs the matching completion record. `stage` names the metric
 /// (`session.actor.<stage>.{failed,completed}`).
-pub(in crate::live::sessions::actor) fn log_config_stage_result<E: std::fmt::Display>(
+pub(in crate::live::sessions::actor) fn log_config_stage_result<E>(
     session_id: &str,
     workspace_id: &str,
     result: &Result<(), E>,
     elapsed: std::time::Duration,
     short_failure_message: &str,
-    stage: &str,
+    stage: super::diagnostics::ConfigFailureStage,
 ) {
     match result {
         Err(error) => {
-            tracing::warn!(session_id = %session_id, error = %error, "{}", short_failure_message);
+            let failure = super::diagnostics::fixed_config_failure(error, stage);
+            tracing::warn!(
+                session_id = %session_id,
+                failure_class = failure.failure_class,
+                failure_stage = failure.failure_stage,
+                "{}",
+                short_failure_message
+            );
             tracing::warn!(
                 session_id = %session_id,
                 workspace_id = %workspace_id,
-                error = %error,
+                failure_class = failure.failure_class,
+                failure_stage = failure.failure_stage,
                 elapsed_ms = elapsed.as_millis(),
                 "[workspace-latency] session.actor.{}.failed",
-                stage
+                stage.as_str()
             );
         }
         Ok(()) => {
@@ -289,7 +249,7 @@ pub(in crate::live::sessions::actor) fn log_config_stage_result<E: std::fmt::Dis
                 workspace_id = %workspace_id,
                 elapsed_ms = elapsed.as_millis(),
                 "[workspace-latency] session.actor.{}.completed",
-                stage
+                stage.as_str()
             );
         }
     }

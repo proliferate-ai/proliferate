@@ -19,6 +19,10 @@
       "types": "./dist/host/product-host.d.ts",
       "import": "./dist/host/product-host.js"
     },
+    "./host/product-host-entry": {
+      "types": "./dist/host/product-host-entry.d.ts",
+      "import": "./dist/host/product-host-entry.js"
+    },
     "./host/desktop-bridge": {
       "types": "./dist/host/desktop-bridge.d.ts",
       "import": "./dist/host/desktop-bridge.js"
@@ -55,8 +59,11 @@
     "typecheck": "node scripts/copy-product-client-assets.mjs && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && tsc -p tsconfig.domain.json && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "build:scroll-physics-fixture": "vite build --config qualification/scroll-physics/vite.config.ts",
+    "build:file-viewer-fixture": "vite build --config qualification/file-viewer/vite.config.ts",
     "build:workflow-canvas-fixture": "vite build --config qualification/workflow-canvas/vite.config.ts",
+    "typecheck:file-viewer": "tsc --noEmit -p qualification/file-viewer/tsconfig.json",
     "typecheck:workflow-canvas": "tsc --noEmit -p qualification/workflow-canvas/tsconfig.json",
+    "test:file-viewer": "pnpm --workspace-root shared:build && pnpm run build:file-viewer-fixture && playwright test --config qualification/file-viewer/playwright.config.ts",
     "test:workflow-canvas": "pnpm run build:workflow-canvas-fixture && playwright test --config qualification/workflow-canvas/playwright.config.ts",
     "typecheck:scroll-physics": "tsc --noEmit -p qualification/scroll-physics/tsconfig.json",
     "test:scroll-physics": "pnpm run build:scroll-physics-fixture && playwright test --config qualification/scroll-physics/playwright.config.ts"

@@ -1,3 +1,4 @@
+mod agent_launch;
 mod agent_operations;
 mod config;
 mod materialization;
@@ -5,6 +6,7 @@ mod mobility;
 mod product_mcp;
 mod sessions;
 mod workflows;
+mod workspaces;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,13 +21,12 @@ use crate::domains::activity::service::ActivityService;
 use crate::domains::activity::store::ActivityStore;
 use crate::domains::agent_operations::mcp::auth::WorkspaceMcpAuth;
 use crate::domains::agent_operations::runtime::AgentOperations;
-use crate::domains::agents::catalog::gateway_plan::GatewayModelPlanner;
 use crate::domains::agents::catalog::service::AgentCatalogService;
 use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
-use crate::domains::agents::model_snapshot::targets::RuntimeProbeTargets;
-use crate::domains::agents::model_snapshot::ModelSnapshotService;
+use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
+use crate::domains::agents::launch_probe::LaunchProbeService;
 use crate::domains::agents::runtime::AgentRuntime;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
@@ -67,14 +68,14 @@ use crate::domains::sessions::mcp_bindings::product_registry::ProductMcpEndpoint
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::SessionStore;
-use crate::domains::workflows::session_extension::WorkflowSessionExtension;
-use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::terminals::store::TerminalStore;
+use crate::domains::workflows::session_extension::WorkflowSessionExtension;
+use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
-use crate::domains::workspaces::archive::quiesce::QuiescePlanes;
 use crate::domains::workspaces::archive::WorkspaceArchiveService;
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
 use crate::domains::workspaces::deletion::purge::WorkspacePurgeService;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
@@ -90,8 +91,8 @@ use crate::domains::workspaces::setup_runtime::WorkspaceSetupRuntime;
 use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
 use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::live::sessions::LiveSessionManager;
-use crate::live::workflows::WorkflowManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
+use crate::live::workflows::WorkflowManager;
 use crate::persistence::Db;
 
 #[cfg(test)]
@@ -122,9 +123,10 @@ pub struct AppState {
     pub agent_seed_store: AgentSeedStore,
     pub agent_runtime: Arc<AgentRuntime>,
     pub catalog_sync_service: Arc<CatalogSyncService>,
+    pub launch_options_service: Arc<HarnessLaunchOptionsService>,
     /// The probe engine, for READS and for the user-initiated refresh: the status
     /// route and the launch-validation universe.
-    pub model_snapshot_service: Arc<ModelSnapshotService>,
+    pub launch_probe_service: Arc<LaunchProbeService>,
     /// The same engine, for the AUTOMATIC pokes — `None` under `cfg(test)`.
     ///
     /// A second field rather than a flag at each call site, so "may this site fire a
@@ -134,7 +136,7 @@ pub struct AppState {
     /// its ACP requests would otherwise see someone else's probe in their assertions.
     /// Reads and the manual refresh keep the real engine above, because nothing there
     /// fires on its own.
-    pub automatic_poke_engine: Option<Arc<ModelSnapshotService>>,
+    pub automatic_poke_engine: Option<Arc<LaunchProbeService>>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
@@ -166,6 +168,7 @@ pub struct AppState {
     pub checkout_deletion_gate: Arc<CheckoutDeletionGate>,
     pub workspace_purge_service: Arc<WorkspacePurgeService>,
     pub workspace_archive_service: Arc<WorkspaceArchiveService>,
+    pub workspace_checkpoint_service: Arc<WorkspaceCheckpointService>,
     pub worktree_inventory_service: Arc<WorktreeInventoryService>,
     pub mobility_runtime: Arc<MobilityRuntime>,
     pub materialization_runtime: Arc<MaterializationRuntime>,
@@ -217,8 +220,9 @@ impl AppState {
             runtime_home.clone(),
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
-        let catalog_sync_service =
-            Arc::new(CatalogSyncService::from_bundled_and_staged_via_env(&runtime_home));
+        let catalog_sync_service = Arc::new(CatalogSyncService::from_bundled_and_staged_via_env(
+            &runtime_home,
+        ));
         let agent_runtime_without_probes = AgentRuntime::new(
             runtime_home.clone(),
             agent_reconcile_service.clone(),
@@ -229,42 +233,21 @@ impl AppState {
             // would put a process-global read inside the reconcile loop.
             crate::domains::agents::runtime::RuntimeSurface::from_env(),
         );
-        // The RENDER plane's plan producer: catalog gatewayPolicy plus a memoized
-        // live `GET /v1/models`. It replaces the resolver on the render path
-        // because the resolver read its model list from the revision-keyed
-        // `gateway_model_probe` rows — which the machine snapshot replaces, and
-        // which would make an opencode gateway probe observe only the seed ids its
-        // own config was written with.
-        let gateway_model_planner = Arc::new(GatewayModelPlanner::new(
-            catalog_sync_service.clone(),
-            runtime_home.clone(),
-        ));
-        // The machine model-snapshot engine. Constructed here so exactly ONE engine
-        // exists per process: every poke site below holds this same handle, and its
-        // single-flight gate is per-instance, so a second engine would mean two
-        // independent probe schedulers over one document.
-        //
-        // Its lock decides ownership at construction: a second RUNTIME over the same
-        // home comes up read-only and reports so on the status surface.
-        let model_snapshot_service = Arc::new(ModelSnapshotService::new(
-            runtime_home.clone(),
-            gateway_model_planner.clone(),
-            Arc::new(RuntimeProbeTargets::new(runtime_home.clone())),
-        ));
+        let (launch_options_service, launch_probe_service, gateway_model_planner) =
+            agent_launch::build_services(&db, &runtime_home);
         // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
-        // why it is separate; every one of the six sites reads THIS, so the
-        // suppression is a property of the wiring rather than of which sites happened
-        // to be threaded.
+        // why it is separate; the suppression is a property of the wiring rather
+        // than of which event sites happened to be threaded.
         #[cfg(not(test))]
-        let automatic_poke_engine = Some(model_snapshot_service.clone());
+        let automatic_poke_engine = Some(launch_probe_service.clone());
         #[cfg(test)]
-        let automatic_poke_engine: Option<Arc<ModelSnapshotService>> = None;
+        let automatic_poke_engine: Option<Arc<LaunchProbeService>> = None;
         // The agent runtime carries the engine for its startup and install-completed
         // pokes. Attached rather than constructor-injected because the engine needs the
         // catalog service the runtime also takes; building the runtime first and
         // attaching second keeps both constructors acyclic.
         let agent_runtime = Arc::new(match automatic_poke_engine.clone() {
-            Some(engine) => agent_runtime_without_probes.with_model_snapshot(engine),
+            Some(engine) => agent_runtime_without_probes.with_launch_probe(engine),
             None => agent_runtime_without_probes,
         });
         let process_service = Arc::new(ProcessService::new());
@@ -288,7 +271,7 @@ impl AppState {
             file_protection_registry,
             workspace_file_search_cache.clone(),
         ));
-        let session_service = Arc::new(SessionService::with_observed_universe(
+        let session_service = Arc::new(SessionService::with_launch_options(
             SessionStore::new(db.clone()),
             session_delete_workflow.clone(),
             WorkspaceStore::new(db.clone()),
@@ -297,7 +280,7 @@ impl AppState {
             // (model-catalog.md, "Launch validation"). A runtime IS the surface with a
             // snapshot, so the engine is the source here; surfaces without one keep
             // the shipped-catalog-only universe.
-            model_snapshot_service.clone(),
+            launch_options_service.clone(),
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
@@ -354,6 +337,7 @@ impl AppState {
             loop_service: loop_service.clone(),
             activity_service: activity_service.clone(),
             product_context: agent_product_context,
+            automatic_poke_engine: automatic_poke_engine.clone(),
         });
         let cowork_delegation_service = CoworkDelegationService::new(
             (*cowork_service).clone(),
@@ -417,7 +401,7 @@ impl AppState {
             acp_manager.clone(),
             session_admission.clone(),
         ));
-        let loop_scheduler = Arc::new(LoopScheduler::new(loop_fire_executor));
+        let loop_scheduler = Arc::new(LoopScheduler::new(loop_fire_executor.clone()));
         let loop_runtime = Arc::new(LoopRuntime::new(
             loop_service.clone(),
             session_service.clone(),
@@ -452,6 +436,9 @@ impl AppState {
             activity_session_hooks,
             workflow_session_extension.clone(),
         ];
+        // Checkpoints precede SessionRuntime; workspace lifecycle wraps it later.
+        let workspace_checkpoint_service =
+            workspaces::wire_checkpoints(&db, workspace_operation_gate.clone());
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
             session_link_service.clone(),
@@ -462,13 +449,16 @@ impl AppState {
             session_extensions,
             product_mcp_launch_catalog,
             workspace_access_gate.clone(),
+            workspace_operation_gate.clone(),
             plan_service.clone(),
             plan_service.clone(),
             gateway_model_planner.clone(),
             goal_service.clone(),
             loop_service.clone(),
             activity_service.clone(),
+            workspace_checkpoint_service.clone(),
         ));
+        loop_fire_executor.bind_session_runtime(&session_runtime);
         completion_delivery_wiring.spawn(&session_runtime);
         // Workflows gen-2, in this order: fence first (no actor may accept a
         // command against un-fenced rows), manager second, late-bind third.
@@ -480,43 +470,22 @@ impl AppState {
             WorkspaceStore::new(db.clone()),
         ));
         workflow_session_extension.bind_manager(&workflow_manager);
-        // Destructive workspace family: the archive orchestrator and the
-        // row-dies-last purge orchestrator, constructed directly here. There
-        // is no wiring family struct left for this pair once the shared
-        // retire preflight checker and the old tombstone purge are gone —
-        // `app/workspaces.rs` died with them (R5).
-        let workspace_archive_service = Arc::new(WorkspaceArchiveService::new(
-            WorkspaceStore::new(db.clone()),
-            RepoRootStore::new(db.clone()),
-            workspace_operation_gate.clone(),
-            QuiescePlanes {
-                setup: workspace_setup_runtime.clone(),
-                sessions: session_runtime.clone(),
-                terminals: terminal_service.clone(),
-            },
-            session_service.clone(),
-            runtime_home.clone(),
-        ));
-        let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
-            WorkspaceStore::new(db.clone()),
-            SessionStore::new(db.clone()),
-            session_delete_workflow.clone(),
-            workspace_setup_runtime.clone(),
-            session_runtime.clone(),
-            terminal_service.clone(),
-            (*repo_root_service).clone(),
-            workspace_operation_gate.clone(),
-            workspace_archive_service.clone(),
-            session_admission.clone(),
-            runtime_home.clone(),
-        ));
-        // The leftover sweep's boot pass and its slow periodic tick. Suppressed
-        // under `cfg(test)` for the same reason `automatic_poke_engine` is: a
-        // background pass that removes directories would otherwise land in the
-        // middle of suites that build real worktrees and count what is on disk.
-        // In production boots it runs unconditionally.
-        #[cfg(not(test))]
-        workspace_archive_service.clone().spawn_startup_pass();
+        let workspace_lifecycle =
+            workspaces::wire_workspace_lifecycle(workspaces::WorkspaceLifecycleWiringDeps {
+                db: db.clone(),
+                runtime_home: runtime_home.clone(),
+                checkpoint_service: workspace_checkpoint_service.clone(),
+                operation_gate: workspace_operation_gate.clone(),
+                setup_runtime: workspace_setup_runtime.clone(),
+                session_runtime: session_runtime.clone(),
+                session_service: session_service.clone(),
+                session_delete_workflow: session_delete_workflow.clone(),
+                session_admission: session_admission.clone(),
+                terminal_service: terminal_service.clone(),
+                repo_root_service: repo_root_service.clone(),
+            });
+        let workspace_archive_service = workspace_lifecycle.archive;
+        let workspace_purge_service = workspace_lifecycle.purge;
         let workspace_worktree_runtime = Arc::new(WorkspaceWorktreeRuntime::new(
             workspace_runtime.clone(),
             workspace_setup_runtime.clone(),
@@ -544,6 +513,7 @@ impl AppState {
             db: db.clone(),
             runtime_home: runtime_home.clone(),
             workspace_runtime: workspace_runtime.clone(),
+            checkpoint_service: workspace_checkpoint_service.clone(),
             session_service: session_service.clone(),
             session_runtime: session_runtime.clone(),
             session_link_service: Arc::new(session_link_service.clone()),
@@ -614,7 +584,8 @@ impl AppState {
             agent_seed_store,
             agent_runtime,
             catalog_sync_service,
-            model_snapshot_service,
+            launch_options_service,
+            launch_probe_service,
             automatic_poke_engine,
             agent_reconcile_service,
             repo_root_service,
@@ -647,6 +618,7 @@ impl AppState {
             checkout_deletion_gate,
             workspace_purge_service,
             workspace_archive_service,
+            workspace_checkpoint_service,
             worktree_inventory_service,
             mobility_runtime,
             materialization_runtime,

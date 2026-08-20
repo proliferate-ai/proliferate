@@ -22,16 +22,37 @@ use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
 mod agent_creation;
+#[cfg(test)]
+mod checkpoint_dispatch_tests;
+mod checkpoint_hook;
+#[cfg(test)]
+mod checkpoint_linkage_tests;
+#[cfg(test)]
+mod checkpoint_queue_settlement_tests;
 mod config;
 mod creation;
+#[cfg(test)]
+mod dispatch_classification_tests;
 mod fork;
+pub(crate) mod fork_anchor;
+#[cfg(test)]
+mod fork_anchor_gate_tests;
 pub(crate) mod fork_boundary;
+#[cfg(test)]
+mod fork_dispatch_and_restart_tests;
+#[cfg(test)]
+mod fork_process_local_lifecycle_tests;
+#[cfg(test)]
+mod fork_prompt_terminal_protection_tests;
 pub(crate) mod fork_qualification;
-pub(crate) mod opencode_sidedoor_client;
+#[cfg(test)]
+mod fork_scenario_fixtures_tests;
 #[cfg(test)]
 mod idempotent_creation_tests;
 mod interactions;
@@ -42,17 +63,22 @@ mod launch_policy;
 mod lifecycle;
 #[cfg(test)]
 mod lifecycle_tests;
+pub(crate) mod opencode_sidedoor_client;
 mod pending_prompts;
 mod prompt;
+mod prompt_dispatch;
+mod prompt_lease;
 #[cfg(test)]
 pub(crate) mod prompt_message_actor_tests;
 #[cfg(test)]
 mod prompt_message_cold_start_tests;
 #[cfg(test)]
 mod prompt_message_tests;
+mod prompt_queue;
 mod replay;
 mod startup;
 mod startup_errors;
+mod startup_facts;
 mod subagent_lifecycle;
 #[cfg(test)]
 mod tests;
@@ -62,7 +88,7 @@ mod workspace_mcp_attachment;
 pub use agent_creation::{CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError};
 pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
 pub(crate) use lifecycle::LiveTurnCancelOutcome;
-pub(crate) use prompt::TextPromptDispatchError;
+pub(crate) use prompt_dispatch::TextPromptDispatchError;
 
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
@@ -74,6 +100,7 @@ pub struct SessionRuntime {
     session_extensions: Vec<Arc<dyn SessionExtension>>,
     product_mcp_launch_catalog: ProductMcpLaunchCatalog,
     access_gate: Arc<WorkspaceAccessGate>,
+    workspace_operation_gate: Arc<WorkspaceOperationGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
     /// Catalog-driven gateway model planner: supplies the render plane's
@@ -82,6 +109,10 @@ pub struct SessionRuntime {
     active_goal_resolver: Arc<dyn ActiveGoalResolver>,
     loops_resolver: Arc<dyn LoopsResolver>,
     activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
+    /// Checkpoints (Lane H): the turn-start capture hook lives at the prompt
+    /// dispatch seam (`prompt.rs`), and fork linkage reads the boundary
+    /// checkpoint through this handle. Behind `ANYHARNESS_CHECKPOINT_CAPTURE`.
+    checkpoint_service: Arc<WorkspaceCheckpointService>,
 }
 
 impl SessionRuntime {
@@ -100,17 +131,19 @@ impl SessionRuntime {
 #[derive(Debug)]
 pub enum CreateAndStartSessionError {
     Invalid(String),
-    /// The requested model cannot launch under the active universe — the one
-    /// typed refusal for every unservable model intent
-    /// (`SESSION_MODEL_UNSUPPORTED`).
-    ModelUnsupported {
+    LaunchOptionsUnavailable {
         agent_kind: String,
-        model_id: String,
-        active_universe: crate::domains::agents::catalog::service::ActiveUniverse,
+        state: Option<crate::domains::agents::launch_options::HarnessLaunchOptionsState>,
     },
-    ModeUnsupported {
+    LaunchValueUnsupported {
         agent_kind: String,
-        mode_id: String,
+        key: String,
+        value: String,
+        state: crate::domains::agents::launch_options::HarnessLaunchOptionsState,
+    },
+    AgentEnvOverrideUnsupported {
+        agent_kind: String,
+        env_var_name: String,
     },
     WorkspaceNotFound,
     /// The workspace's local checkout directory has been deleted from disk.
@@ -201,6 +234,13 @@ pub enum SendPromptError {
     ProductContextUnavailable {
         incident_id: String,
         error: crate::live::sessions::product_context::AgentProductContextResolutionError,
+    },
+    /// Checkpoints (Lane H, Q-H1 abort policy): a turn-start checkpoint capture
+    /// failed and [`TURN_START_CAPTURE_FAILURE_POLICY`](crate::domains::workspaces::checkpoints::flags::TURN_START_CAPTURE_FAILURE_POLICY)
+    /// is `Abort`, so the prompt is refused rather than run uncheckpointed. The
+    /// turn never started; the caller may retry.
+    CheckpointCaptureFailed {
+        failure: crate::domains::workspaces::checkpoints::capture::CheckpointCaptureFailure,
     },
     Internal(anyhow::Error),
 }
@@ -391,6 +431,20 @@ pub(super) enum StartSessionError {
         path: String,
     },
     AgentDescriptorNotFound(String),
+    LaunchOptionsUnavailable {
+        agent_kind: String,
+        state: Option<crate::domains::agents::launch_options::HarnessLaunchOptionsState>,
+    },
+    LaunchValueUnsupported {
+        agent_kind: String,
+        key: String,
+        value: String,
+        state: crate::domains::agents::launch_options::HarnessLaunchOptionsState,
+    },
+    AgentEnvOverrideUnsupported {
+        agent_kind: String,
+        env_var_name: String,
+    },
     Closed,
     MissingDataKey,
     RestartRequired(String),
@@ -423,12 +477,14 @@ impl SessionRuntime {
         session_extensions: Vec<Arc<dyn SessionExtension>>,
         product_mcp_launch_catalog: ProductMcpLaunchCatalog,
         access_gate: Arc<WorkspaceAccessGate>,
+        workspace_operation_gate: Arc<WorkspaceOperationGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
         gateway_model_resolver: Arc<dyn GatewayModelResolve>,
         active_goal_resolver: Arc<dyn ActiveGoalResolver>,
         loops_resolver: Arc<dyn LoopsResolver>,
         activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
+        checkpoint_service: Arc<WorkspaceCheckpointService>,
     ) -> Self {
         Self {
             session_service,
@@ -440,12 +496,14 @@ impl SessionRuntime {
             session_extensions,
             product_mcp_launch_catalog,
             access_gate,
+            workspace_operation_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
             gateway_model_resolver,
             active_goal_resolver,
             loops_resolver,
             activity_roster_resolver,
+            checkpoint_service,
         }
     }
 

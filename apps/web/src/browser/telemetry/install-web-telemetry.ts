@@ -46,7 +46,6 @@ interface WebTelemetryConfig {
     enabled: boolean;
     apiKey: string | null;
     apiHost: string;
-    sessionRecordingEnabled: boolean;
   };
 }
 
@@ -101,10 +100,6 @@ function getWebTelemetryConfig(): WebTelemetryConfig {
       apiHost:
         import.meta.env.VITE_PROLIFERATE_POSTHOG_HOST?.trim()
         || "https://us.i.posthog.com",
-      sessionRecordingEnabled: envFlagEnabled(
-        import.meta.env.VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED,
-        false,
-      ),
     },
   };
 }
@@ -326,15 +321,13 @@ function initializeWebPostHog(config: WebTelemetryConfig): void {
     capture_pageleave: false,
     person_profiles: "identified_only",
     before_send: scrubPostHogCapture,
-    disable_session_recording: !config.posthog.sessionRecordingEnabled,
-    session_recording: {
-      maskAllInputs: true,
-      maskTextSelector: "[data-telemetry-mask]",
-      blockSelector: "[data-telemetry-block]",
-      recordHeaders: false,
-      recordBody: false,
-      maskCapturedNetworkRequestFn: () => null,
-    },
+    // Source-disabled (CP-C1PW): no build value, environment value, or
+    // PostHog provider-side replay setting can start Web session recording.
+    // Re-enablement is a separate founder-approved source change that must
+    // first prove a synthetic route, masking, metadata, and provider-arrival
+    // contract. Do not add a recorder options object, a `loaded` callback, or
+    // any recorder start call here.
+    disable_session_recording: true,
   });
   posthog.register({
     app: "proliferate-web",

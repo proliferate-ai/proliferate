@@ -108,6 +108,7 @@ SEED_DEFINITIONS: tuple[SeedDefinition, ...] = (
             transport="http",
             url=StaticUrl("https://mcp.context7.com/mcp"),
             display_url="https://mcp.context7.com/mcp",
+            credential_validation="mcp_tools_list",
             headers=(_bearer_header("api_key"),),
             cloud_secret_sync=True,
             secret_fields=(
@@ -134,6 +135,7 @@ SEED_DEFINITIONS: tuple[SeedDefinition, ...] = (
             transport="http",
             url=StaticUrl("https://mcp.exa.ai/mcp"),
             display_url="https://mcp.exa.ai/mcp",
+            credential_validation="mcp_tools_list",
             query=(_secret_query("exaApiKey", "api_key"),),
             cloud_secret_sync=True,
             secret_fields=(
@@ -159,6 +161,7 @@ SEED_DEFINITIONS: tuple[SeedDefinition, ...] = (
             transport="http",
             url=StaticUrl("https://mcp.tavily.com/mcp"),
             display_url="https://mcp.tavily.com/mcp",
+            credential_validation="mcp_tools_list",
             headers=(_bearer_header("api_key"),),
             cloud_secret_sync=True,
             secret_fields=(
@@ -293,6 +296,7 @@ SEED_DEFINITIONS: tuple[SeedDefinition, ...] = (
             ),
             oauth_scopes_required=True,
             oauth_scope_policy="exact",
+            oauth_revocation_endpoint="https://slack.com/api/auth.revoke",
             headers=(_oauth_bearer_header(),),
         ),
     ),
@@ -378,6 +382,7 @@ SEED_DEFINITIONS: tuple[SeedDefinition, ...] = (
             transport="http",
             url=StaticUrl("https://mcp.render.com/mcp"),
             display_url="https://mcp.render.com/mcp",
+            credential_validation="mcp_tools_list",
             headers=(_bearer_header("api_key"),),
             cloud_secret_sync=True,
             secret_fields=(
@@ -404,6 +409,7 @@ SEED_DEFINITIONS: tuple[SeedDefinition, ...] = (
             transport="http",
             url=StaticUrl("https://mcp.neon.tech/mcp"),
             display_url="https://mcp.neon.tech/mcp",
+            credential_validation="mcp_tools_list",
             headers=(
                 _bearer_header("api_key"),
                 HeaderTemplate("x-read-only", "true"),

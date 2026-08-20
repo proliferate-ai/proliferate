@@ -12,6 +12,8 @@ from proliferate.background.config import (
     CUSTOMERIO_ENGAGEMENT_SYNC_TASK,
     DEFAULT_QUEUE,
     HEALTH_NOOP_TASK,
+    INTEGRATION_REVOCATION_PROCESS_TASK,
+    INTEGRATION_REVOCATION_SWEEP_TASK,
     NOTIFICATIONS_QUEUE,
     NOTIFICATIONS_SEND_SLACK_TASK,
     PERIODIC_DEFAULT_QUEUE,
@@ -21,7 +23,11 @@ from proliferate.background.config import (
     build_celery_config,
     enabled_worker_queues,
 )
-from proliferate.background.beat_schedule import RELAY_SCHEDULE_ENTRY, build_beat_schedule
+from proliferate.background.beat_schedule import (
+    INTEGRATION_REVOCATION_SWEEP_SCHEDULE_ENTRY,
+    RELAY_SCHEDULE_ENTRY,
+    build_beat_schedule,
+)
 from proliferate.config import Settings
 
 
@@ -48,6 +54,8 @@ def test_celery_app_import_registers_noop_task_without_broker_connection() -> No
     assert WORKFLOW_DELIVER_TASK in celery_app.tasks
     assert WORKFLOW_OBSERVE_TASK in celery_app.tasks
     assert WORKFLOW_CANCEL_TASK in celery_app.tasks
+    assert INTEGRATION_REVOCATION_PROCESS_TASK in celery_app.tasks
+    assert INTEGRATION_REVOCATION_SWEEP_TASK in celery_app.tasks
     assert celery_app.tasks[HEALTH_NOOP_TASK].run() == "ok"
 
 
@@ -69,6 +77,8 @@ def test_celery_routes_and_queues_match_ratified_names() -> None:
         WORKFLOW_DELIVER_TASK: {"queue": DEFAULT_QUEUE},
         WORKFLOW_OBSERVE_TASK: {"queue": DEFAULT_QUEUE},
         WORKFLOW_CANCEL_TASK: {"queue": DEFAULT_QUEUE},
+        INTEGRATION_REVOCATION_PROCESS_TASK: {"queue": DEFAULT_QUEUE},
+        INTEGRATION_REVOCATION_SWEEP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     }
     assert (
         celery_app.amqp.router.route({}, HEALTH_NOOP_TASK, args=(), kwargs={})["queue"].name
@@ -81,12 +91,20 @@ def test_celery_routes_and_queues_match_ratified_names() -> None:
 def test_beat_schedule_has_exactly_one_relay_entry_by_default() -> None:
     schedule = build_beat_schedule(_test_settings())
 
-    assert set(schedule) == {RELAY_SCHEDULE_ENTRY}
+    assert set(schedule) == {
+        RELAY_SCHEDULE_ENTRY,
+        INTEGRATION_REVOCATION_SWEEP_SCHEDULE_ENTRY,
+    }
     relay_entries = [
         name for name, entry in schedule.items() if entry["task"] == BACKGROUND_RELAY_TASK
     ]
     assert relay_entries == [RELAY_SCHEDULE_ENTRY]
     assert schedule[RELAY_SCHEDULE_ENTRY]["schedule"] == 1.0
+    sweep = schedule[INTEGRATION_REVOCATION_SWEEP_SCHEDULE_ENTRY]
+    assert sweep["task"] == INTEGRATION_REVOCATION_SWEEP_TASK
+    sweep_schedule = sweep["schedule"]
+    assert isinstance(sweep_schedule, crontab)
+    assert sweep_schedule.minute == {0, 15, 30, 45}
 
 
 def test_beat_schedule_keeps_single_relay_entry_with_customerio_enabled() -> None:

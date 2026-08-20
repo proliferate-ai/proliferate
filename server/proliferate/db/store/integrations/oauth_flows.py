@@ -14,6 +14,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.integrations import CloudIntegrationOAuthFlow
+from proliferate.db.store.integrations.authorization_attempts import (
+    acquire_authorization_attempt_lock,
+)
 from proliferate.lib.infra.time.wall_clock import utcnow
 
 
@@ -21,6 +24,7 @@ from proliferate.lib.infra.time.wall_clock import utcnow
 class IntegrationOAuthFlowRecord:
     id: UUID
     account_id: UUID | None
+    attempt_id: UUID | None
     owner_user_id: UUID
     definition_id: UUID
     state_hash: str
@@ -29,6 +33,7 @@ class IntegrationOAuthFlowRecord:
     resource: str | None
     client_id: str
     token_endpoint: str | None
+    revocation_endpoint: str | None
     requested_scopes: str
     redirect_uri: str
     authorization_url: str
@@ -48,6 +53,7 @@ def _record(flow: CloudIntegrationOAuthFlow) -> IntegrationOAuthFlowRecord:
     return IntegrationOAuthFlowRecord(
         id=flow.id,
         account_id=flow.account_id,
+        attempt_id=flow.attempt_id,
         owner_user_id=flow.owner_user_id,
         definition_id=flow.definition_id,
         state_hash=flow.state_hash,
@@ -56,6 +62,7 @@ def _record(flow: CloudIntegrationOAuthFlow) -> IntegrationOAuthFlowRecord:
         resource=flow.resource,
         client_id=flow.client_id,
         token_endpoint=flow.token_endpoint,
+        revocation_endpoint=flow.revocation_endpoint,
         requested_scopes=flow.requested_scopes,
         redirect_uri=flow.redirect_uri,
         authorization_url=flow.authorization_url,
@@ -76,6 +83,7 @@ async def create_oauth_flow_canceling_existing(
     db: AsyncSession,
     *,
     account_id: UUID | None,
+    attempt_id: UUID,
     owner_user_id: UUID,
     definition_id: UUID,
     state_hash: str,
@@ -84,6 +92,7 @@ async def create_oauth_flow_canceling_existing(
     resource: str | None,
     client_id: str,
     token_endpoint: str | None,
+    revocation_endpoint: str | None,
     requested_scopes: str,
     redirect_uri: str,
     authorization_url: str,
@@ -100,7 +109,7 @@ async def create_oauth_flow_canceling_existing(
                 .where(
                     CloudIntegrationOAuthFlow.owner_user_id == owner_user_id,
                     CloudIntegrationOAuthFlow.definition_id == definition_id,
-                    CloudIntegrationOAuthFlow.status == "active",
+                    CloudIntegrationOAuthFlow.status.in_({"active", "exchanging"}),
                 )
                 .with_for_update()
             )
@@ -115,6 +124,7 @@ async def create_oauth_flow_canceling_existing(
         flow.updated_at = now
     created = CloudIntegrationOAuthFlow(
         account_id=account_id,
+        attempt_id=attempt_id,
         owner_user_id=owner_user_id,
         definition_id=definition_id,
         state_hash=state_hash,
@@ -123,6 +133,7 @@ async def create_oauth_flow_canceling_existing(
         resource=resource,
         client_id=client_id,
         token_endpoint=token_endpoint,
+        revocation_endpoint=revocation_endpoint,
         requested_scopes=requested_scopes,
         redirect_uri=redirect_uri,
         authorization_url=authorization_url,
@@ -168,6 +179,65 @@ async def get_oauth_flow_for_user(
     return _record(flow) if flow is not None else None
 
 
+async def cancel_active_oauth_flows(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    definition_id: UUID,
+    failure_code: str,
+) -> tuple[IntegrationOAuthFlowRecord, ...]:
+    rows = list(
+        (
+            await db.scalars(
+                select(CloudIntegrationOAuthFlow)
+                .where(
+                    CloudIntegrationOAuthFlow.owner_user_id == owner_user_id,
+                    CloudIntegrationOAuthFlow.definition_id == definition_id,
+                    CloudIntegrationOAuthFlow.status.in_({"active", "exchanging"}),
+                )
+                .with_for_update()
+            )
+        ).all()
+    )
+    now = utcnow()
+    for row in rows:
+        row.status = "cancelled"
+        row.cancelled_at = now
+        row.failure_code = failure_code
+        row.updated_at = now
+    await db.flush()
+    return tuple(_record(row) for row in rows)
+
+
+async def get_oauth_flow_for_attempt(
+    db: AsyncSession,
+    attempt_id: UUID,
+) -> IntegrationOAuthFlowRecord | None:
+    flow = await db.scalar(
+        select(CloudIntegrationOAuthFlow)
+        .where(CloudIntegrationOAuthFlow.attempt_id == attempt_id)
+        .order_by(CloudIntegrationOAuthFlow.created_at.desc())
+        .limit(1)
+    )
+    return _record(flow) if flow is not None else None
+
+
+async def list_oauth_flows_for_attempts(
+    db: AsyncSession,
+    attempt_ids: tuple[UUID, ...],
+) -> tuple[IntegrationOAuthFlowRecord, ...]:
+    if not attempt_ids:
+        return ()
+    flows = (
+        await db.scalars(
+            select(CloudIntegrationOAuthFlow)
+            .where(CloudIntegrationOAuthFlow.attempt_id.in_(attempt_ids))
+            .order_by(CloudIntegrationOAuthFlow.created_at.desc())
+        )
+    ).all()
+    return tuple(_record(flow) for flow in flows)
+
+
 async def get_oauth_flow_by_state_hash(
     db: AsyncSession,
     state_hash: str,
@@ -187,6 +257,18 @@ async def claim_active_oauth_flow_by_state_hash(
     db: AsyncSession,
     state_hash: str,
 ) -> IntegrationOAuthFlowRecord | None:
+    identity = await db.scalar(
+        select(CloudIntegrationOAuthFlow).where(
+            CloudIntegrationOAuthFlow.state_hash == state_hash,
+        )
+    )
+    if identity is None:
+        return None
+    await acquire_authorization_attempt_lock(
+        db,
+        owner_user_id=identity.owner_user_id,
+        definition_id=identity.definition_id,
+    )
     flow = (
         await db.execute(
             select(CloudIntegrationOAuthFlow)
@@ -246,7 +328,7 @@ async def cancel_oauth_flow_for_user(
     ).scalar_one_or_none()
     if flow is None:
         return None
-    if flow.status == "active":
+    if flow.status in {"active", "exchanging"}:
         now = utcnow()
         flow.status = "cancelled"
         flow.cancelled_at = now

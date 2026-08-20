@@ -24,8 +24,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.db import session_ops
-from proliferate.db.store.integrations.accounts import set_account_credentials
-from proliferate.db.store.integrations.oauth_clients import get_oauth_client
+from proliferate.db.store.integrations.accounts import (
+    compare_and_swap_oauth_refresh,
+    get_account,
+)
+from proliferate.db.store.integrations.oauth_clients import (
+    get_oauth_client,
+    get_oauth_client_by_id,
+)
 from proliferate.integrations.integration_oauth.tokens import refresh_token
 from proliferate.lib.infra.encryption.fernet import decrypt_text
 from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
@@ -64,6 +70,21 @@ class ProviderAccess:
     headers: dict[str, str]
     query: dict[str, str]
     token_expires_at: datetime | None
+
+
+def render_candidate_api_key_launch(
+    cfg: IntegrationConfig,
+    *,
+    secret_fields: dict[str, str],
+    settings: dict[str, object],
+) -> tuple[str, dict[str, str], dict[str, str]]:
+    """Render validation-only request material for staged API-key credentials."""
+
+    return (
+        render_mcp_url(cfg, settings),
+        _render_headers(cfg.headers, secrets=secret_fields, settings=settings),
+        _render_query(cfg.query, secrets=secret_fields, settings=settings),
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -222,6 +243,14 @@ def _scope_policy_reauth() -> CloudApiError:
     )
 
 
+def _grant_changed() -> CloudApiError:
+    return CloudApiError(
+        "integration_grant_changed",
+        "Integration authority changed; retry the operation.",
+        status_code=409,
+    )
+
+
 # --------------------------------------------------------------------------- #
 # OAuth token refresh
 # --------------------------------------------------------------------------- #
@@ -263,10 +292,25 @@ async def _refresh_oauth_bundle(
         # Read (and close) before the network call so the connection is back
         # in the pool while we wait on the provider.
         async with session_ops.open_async_session() as read_db:
-            oauth_client = await get_oauth_client(
-                read_db, str(issuer), str(redirect_uri), account.definition_id
+            oauth_client = (
+                await get_oauth_client_by_id(read_db, account.provider_client_id)
+                if account.provider_client_id is not None
+                else await get_oauth_client(
+                    read_db,
+                    str(issuer),
+                    str(redirect_uri),
+                    account.definition_id,
+                )
             )
         if oauth_client is not None:
+            if (
+                oauth_client.definition_id != account.definition_id
+                or oauth_client.issuer != str(issuer)
+                or oauth_client.redirect_uri != str(redirect_uri)
+                or (oauth_client.resource or "") != str(bundle.get("resource") or "")
+                or oauth_client.client_id != str(bundle.get("clientId", ""))
+            ):
+                raise _scope_policy_reauth()
             token_endpoint_auth_method = oauth_client.token_endpoint_auth_method
             if oauth_client.client_secret_ciphertext:
                 client_secret = decrypt_text(
@@ -311,6 +355,18 @@ async def _refresh_oauth_bundle(
     except OAuthScopePolicyError as exc:
         raise _scope_policy_reauth() from exc
 
+    stored_scopes = _bundle_scopes(bundle)
+    stored_scope_set = set(stored_scopes)
+    refreshed_scope_set = set(scopes)
+    if refreshed_scope_set - stored_scope_set:
+        # A refresh may preserve or narrow authority, never silently expand it.
+        # Legacy empty metadata is unknown authority, so a newly reported scope
+        # set also requires explicit reauthorization instead of being trusted.
+        raise _scope_policy_reauth()
+    grant_changed = refreshed_scope_set != stored_scope_set
+    # Scope order carries no authority. Preserve the committed order to avoid
+    # grant churn when a provider returns the same set in a different order.
+    scopes = tuple(scope for scope in stored_scopes if scope in refreshed_scope_set)
     new_bundle = {
         **bundle,
         "accessToken": access_token,
@@ -318,20 +374,60 @@ async def _refresh_oauth_bundle(
         "expiresAt": expires_at.isoformat() if expires_at is not None else None,
         "scopes": list(scopes),
     }
-    # Fresh session for the write: the expected_auth_version optimistic check
-    # guards against a concurrent refresh having won the race.
+    effective_scopes_json = json.dumps(list(scopes), separators=(",", ":"))
+    # Fresh session for the write: exact grant + credential revisions ensure a
+    # disconnect, replacement, or concurrent refresh can never be overwritten.
     async with session_ops.open_async_session() as write_db:
-        await set_account_credentials(
+        updated = await compare_and_swap_oauth_refresh(
             write_db,
             account_id=account.id,
+            expected_grant_version=account.grant_version,
+            expected_credential_version=account.credential_version,
+            expected_definition_security_revision_id=(account.definition_security_revision_id),
+            expected_provider_client_id=account.provider_client_id,
             credential_ciphertext=encrypt_json(new_bundle, secret=settings.cloud_secret_key),
-            credential_format="oauth-bundle-v1",
-            auth_status="ready",
             token_expires_at=expires_at,
-            expected_auth_version=account.auth_version,
+            effective_scopes_json=effective_scopes_json,
+            advance_grant=grant_changed,
         )
         await session_ops.commit_session(write_db)
-    return access_token, expires_at
+    if updated is not None:
+        if grant_changed:
+            # The provider legitimately narrowed authority. Persist it, then
+            # force the caller through a fresh operation admission.
+            raise _grant_changed()
+        return access_token, expires_at
+
+    # Another refresher may have won. Reuse only an exact committed winner;
+    # never replay a rotated/disconnected grant under this admission.
+    async with session_ops.open_async_session() as read_db:
+        winner = await get_account(read_db, account.id)
+    if winner is None or not winner.enabled or winner.status != "ready":
+        raise _scope_policy_reauth()
+    if (
+        winner.grant_version != account.grant_version
+        or winner.definition_security_revision_id != account.definition_security_revision_id
+        or winner.provider_client_id != account.provider_client_id
+    ):
+        raise _grant_changed()
+    if winner.credential_version <= account.credential_version:
+        raise _scope_policy_reauth()
+    winner_bundle = _decode_bundle(winner)
+    try:
+        validate_stored_oauth_scopes(
+            stored_scopes=_bundle_scopes(winner_bundle),
+            configured_scopes=cfg.oauth_scopes,
+            scope_policy=cfg.oauth_scope_policy,
+        )
+    except OAuthScopePolicyError as exc:
+        raise _scope_policy_reauth() from exc
+    winner_token = winner_bundle.get("accessToken")
+    winner_expiry = _parse_expires_at(winner_bundle.get("expiresAt"))
+    if not winner_token or (
+        winner_expiry is not None and winner_expiry <= utcnow() + _EXPIRY_SKEW
+    ):
+        raise _scope_policy_reauth()
+    return str(winner_token), winner_expiry
 
 
 # --------------------------------------------------------------------------- #

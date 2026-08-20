@@ -58,13 +58,7 @@ class WorkflowNodeModelConfigV2(WorkflowDefinitionWireModel):
         ]
         | None
     ) = None
-    mode_id: (
-        Annotated[
-            str,
-            StringConstraints(strip_whitespace=True, min_length=1, max_length=64),
-        ]
-        | None
-    ) = None
+    control_values: dict[str, str] = Field(default_factory=dict)
 
 
 class WorkflowNodeV2(WorkflowDefinitionWireModel):

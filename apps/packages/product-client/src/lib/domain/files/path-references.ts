@@ -1,12 +1,50 @@
 import { splitPathLineSuffix } from "#product/lib/domain/files/path-detection";
 
+export type WorkspaceFilesystemOrigin = "desktop-local" | "remote";
+
+export type WorkspaceFilesystemOriginState =
+  | { status: "pending"; origin: null }
+  | { status: "settled"; origin: WorkspaceFilesystemOrigin }
+  | { status: "rejected"; origin: null };
+
+export type RuntimeWorkspaceRootState =
+  | { status: "pending"; path: null }
+  | { status: "settled"; path: string }
+  | { status: "unavailable"; path: null };
+
+export type FileReferenceUnavailableLocatorReason =
+  | "empty"
+  | "invalid"
+  | "traversal"
+  | "native_host_required"
+  | "remote_filesystem"
+  | "home_unavailable"
+  | "filesystem_origin_unavailable"
+  | "workspace_root_unavailable";
+
+export type ResolvedFileLocator =
+  | {
+      authority: "workspace";
+      workspacePath: string;
+      localCompanionPath: string | null;
+    }
+  | {
+      authority: "desktop";
+      absolutePath: string;
+      syntax: "absolute" | "home-relative";
+    }
+  | {
+      authority: "unavailable";
+      reason: FileReferenceUnavailableLocatorReason;
+    };
+
 export interface ResolvedFileReference {
   rawPath: string;
-  path: string;
+  parsedPath: string;
+  displayPath: string;
   line: number | null;
   column: number | null;
-  absolutePath: string | null;
-  workspacePath: string | null;
+  locator: ResolvedFileLocator;
 }
 
 export type FileReferencePathKind = "file" | "directory";
@@ -16,27 +54,62 @@ export type FileReferencePrimaryAction =
   | "reveal"
   | "unavailable";
 
-export function resolveWorkspaceStatPathKind(stat: {
-  kind: "file" | "directory" | "symlink";
-  sizeBytes?: number | null;
-} | undefined): FileReferencePathKind | null {
-  if (!stat) {
-    return null;
-  }
-  if (stat.kind !== "symlink") {
-    return stat.kind;
-  }
-  // AnyHarness stats symlinks after following the target: file targets carry
-  // a byte size (including zero), while directory targets do not.
-  return typeof stat.sizeBytes === "number" ? "file" : "directory";
+interface ResolveFileReferenceInput {
+  rawPath: string;
+  workspacePathOverride?: string | null;
+  workspaceRoot: RuntimeWorkspaceRootState;
+  filesystemOrigin: WorkspaceFilesystemOriginState;
+  desktopBridgeAvailable: boolean;
+  homeDirectory?: string | null;
 }
 
 /**
- * Keep primary file-reference behavior host-independent and fail closed while
- * the path kind is unknown. A directory must never be routed through the file
- * viewer, and an external file must use the configured external open target
- * rather than silently falling back to Finder.
+ * The one decode a raw file reference gets: a single case-insensitive `%20`
+ * pass, nothing else.
+ *
+ * A Markdown destination that survives the transcript repair carries its spaces
+ * as `%20`, so this is what turns a rendered mention back into the name the
+ * author wrote. It is deliberately not `decodeURIComponent`: general URI
+ * decoding would let `%2F`, `%5C`, `%2E%2E`, and `%00` manufacture separators,
+ * traversal, or NUL out of an inert literal. `+` is not a space here, and
+ * nothing is decoded twice, so `%2520` stays `%2520`.
+ *
+ * Accepted compatibility tradeoff: a real filename containing the literal
+ * characters `%20` resolves as a space-bearing name at this seam. That
+ * ambiguity is narrower and safer than general decoding, and it is the only
+ * meaning-changing case.
  */
+export function decodeFileReferenceSpaces(rawReference: string): string {
+  return rawReference.replace(/%20/gi, " ");
+}
+
+/** Classify one rendered reference into exactly one filesystem authority. */
+export function resolveFileReference(args: ResolveFileReferenceInput): ResolvedFileReference {
+  // Ordered exactly: trim once, decode `%20` once, never trim again, then split
+  // the terminal `:line[:column]`. Skipping the second trim is what lets an
+  // encoded terminal filename space survive into the parsed path.
+  const decodedReference = decodeFileReferenceSpaces(args.rawPath.trim());
+  const { path: parsedPath, line, column } = splitPathLineSuffix(decodedReference);
+  const locator = typeof args.workspacePathOverride === "string"
+    ? classifyStructuredWorkspacePath(args.workspacePathOverride, args)
+    : classifyRawPath(parsedPath, args);
+
+  return {
+    rawPath: args.rawPath,
+    parsedPath,
+    displayPath: displayPathForLocator(locator, parsedPath),
+    line,
+    column,
+    locator,
+  };
+}
+
+export function resolveWorkspaceStatPathKind(stat: {
+  kind: "file" | "directory" | "symlink";
+} | undefined): FileReferencePathKind | null {
+  return stat?.kind === "file" || stat?.kind === "directory" ? stat.kind : null;
+}
+
 export function resolveFileReferencePrimaryAction(args: {
   pathKind: FileReferencePathKind | null;
   canOpenViewer: boolean;
@@ -44,9 +117,7 @@ export function resolveFileReferencePrimaryAction(args: {
   canReveal: boolean;
 }): FileReferencePrimaryAction {
   if (args.pathKind === "file") {
-    if (args.canOpenViewer) {
-      return "open-viewer";
-    }
+    if (args.canOpenViewer) return "open-viewer";
     return args.canOpenExternal ? "open-external" : "unavailable";
   }
   if (args.pathKind === "directory") {
@@ -55,74 +126,37 @@ export function resolveFileReferencePrimaryAction(args: {
   return "unavailable";
 }
 
-export function resolveFileReference(args: {
-  rawPath: string;
-  workspaceRoot: string | null;
-  resolveAbsolute: (rawPath: string) => string | null;
-  homeDirectory?: string | null;
-  workspacePathOverride?: string | null;
-}): ResolvedFileReference {
-  const trimmed = args.rawPath.trim();
-  const { path, line, column } = splitPathLineSuffix(trimmed);
-  // The SDK normalizes both an omitted wire field and an explicit null to
-  // `null`, so absence cannot safely mean "authoritatively external" here.
-  // Use a non-empty override when supplied; otherwise classify the raw path.
-  const workspacePath = normalizeWorkspacePathOverride(args.workspacePathOverride)
-    ?? resolveWorkspacePathFromReference(path, args.workspaceRoot);
-
-  return {
-    rawPath: args.rawPath,
-    path,
-    line,
-    column,
-    absolutePath: resolveAbsoluteFileReferencePath(
-      path,
-      args.homeDirectory,
-      args.resolveAbsolute,
-    ),
-    workspacePath,
-  };
-}
-
 export function isHomeRelativeFileReference(value: string): boolean {
   const { path } = splitPathLineSuffix(value.trim());
   return path === "~" || path.startsWith("~/");
 }
 
-function resolveAbsoluteFileReferencePath(
-  path: string,
-  homeDirectory: string | null | undefined,
-  resolveAbsolute: (rawPath: string) => string | null,
-): string | null {
-  if (!isHomeRelativeFileReference(path)) {
-    return resolveAbsolute(path);
-  }
-  const trimmedHome = homeDirectory?.trim();
-  if (!trimmedHome) {
-    return null;
-  }
-  const homeRoot = trimmedHome === "/" ? "" : trimmedHome.replace(/\/+$/, "");
-  const suffix = path === "~" ? "" : path.slice(1);
-  return `${homeRoot}${suffix}` || "/";
+export function normalizeRuntimeWorkspaceRoot(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!isSupportedAbsolutePath(trimmed) || hasTraversalSegment(trimmed)) return null;
+  return normalizeLexicalPath(trimmed, true);
 }
 
-/**
- * Best-effort correction for a workspace file path that does not resolve to a
- * real file (e.g. an agent dropped leading directories): given candidate paths
- * from a basename search, return the single candidate whose path equals or ends
- * with the target path. Returns null when the target already appears among the
- * candidates (it exists), or when the suffix match is absent or ambiguous.
- */
+export function fileReferenceCopyPath(reference: ResolvedFileReference): string | null {
+  switch (reference.locator.authority) {
+    case "workspace":
+      return reference.locator.localCompanionPath
+        ?? (reference.locator.workspacePath || ".");
+    case "desktop":
+      return reference.locator.absolutePath;
+    case "unavailable":
+      return reference.parsedPath.trim() || null;
+  }
+}
+
+/** Return the one suffix match, including an exact match, with runtime casing. */
 export function pickFuzzyPathMatch(
   targetPath: string,
   candidatePaths: readonly string[],
 ): string | null {
-  // Compare case-insensitively (the workspace search is case-insensitive, and
-  // a ref may differ in case from the real file) but return the real casing.
   const target = targetPath.toLowerCase();
-  if (!target || candidatePaths.some((candidate) => candidate.toLowerCase() === target)) {
-    return null;
-  }
+  if (!target) return null;
   const suffix = `/${target}`;
   const matches = candidatePaths.filter((candidate) => {
     const lower = candidate.toLowerCase();
@@ -131,24 +165,11 @@ export function pickFuzzyPathMatch(
   return matches.length === 1 ? matches[0] : null;
 }
 
-/**
- * Human-readable label for an inline file reference.
- *
- * A line-anchored reference reads as `basename (line N)`: the raw `path:line`
- * form (and the absolute directory chain in front of it) is machine syntax, and
- * what matters about a jump target is the file and the line. References without
- * a line keep their path — with no line to anchor on, the path is what
- * identifies the file. Either way this is display only; the reference's raw
- * path stays the click target and the tooltip.
- */
 export function inlineFileReferenceLabel(
-  reference: Pick<ResolvedFileReference, "path" | "workspacePath" | "line">,
+  reference: Pick<ResolvedFileReference, "displayPath" | "line">,
 ): string {
-  const path = reference.workspacePath ?? reference.path;
-  if (reference.line === null) {
-    return path;
-  }
-  return `${fileReferenceBasename(path)} (line ${reference.line})`;
+  if (reference.line === null) return reference.displayPath;
+  return `${fileReferenceBasename(reference.displayPath)} (line ${reference.line})`;
 }
 
 export function fileReferenceBasename(path: string): string {
@@ -156,88 +177,166 @@ export function fileReferenceBasename(path: string): string {
   return segments[segments.length - 1] ?? path;
 }
 
-function normalizeWorkspacePathOverride(path: string | null | undefined): string | null {
-  if (!path) {
-    return null;
+function classifyStructuredWorkspacePath(
+  suppliedPath: string,
+  args: ResolveFileReferenceInput,
+): ResolvedFileLocator {
+  const validation = validateWorkspacePath(suppliedPath);
+  if (validation.kind === "invalid") {
+    return { authority: "unavailable", reason: validation.reason };
   }
-  const trimmed = stripRelativePrefix(path.trim());
-  if (trimmed === "~" || trimmed.startsWith("~/")) {
-    return null;
-  }
-  const normalized = normalizeLexicalPath(trimmed);
-  return normalized && !normalized.startsWith("/") ? normalized : null;
+  return workspaceLocator(validation.path, args);
 }
 
-function resolveWorkspacePathFromReference(
-  path: string,
-  workspaceRoot: string | null,
-): string | null {
+function classifyRawPath(
+  parsedPath: string,
+  args: ResolveFileReferenceInput,
+): ResolvedFileLocator {
+  const trimmed = parsedPath.trim();
+  if (!trimmed) return { authority: "unavailable", reason: "empty" };
+  if (containsNul(trimmed) || hasUnsupportedPrefix(trimmed)) {
+    return { authority: "unavailable", reason: "invalid" };
+  }
+  if (hasTraversalSegment(trimmed)) {
+    return { authority: "unavailable", reason: "traversal" };
+  }
+  if (isHomeRelativeFileReference(trimmed)) return classifyHomeRelativePath(trimmed, args);
+  if (trimmed.startsWith("/")) return classifyAbsolutePath(trimmed, args);
+
+  const normalized = normalizeLexicalPath(trimmed, false);
+  return workspaceLocator(normalized ?? "", args);
+}
+
+function classifyAbsolutePath(
+  absolutePath: string,
+  args: ResolveFileReferenceInput,
+): ResolvedFileLocator {
+  if (args.workspaceRoot.status !== "settled") {
+    return { authority: "unavailable", reason: "workspace_root_unavailable" };
+  }
+  const normalizedRoot = normalizeRuntimeWorkspaceRoot(args.workspaceRoot.path);
+  const normalizedPath = normalizeRuntimeWorkspaceRoot(absolutePath);
+  if (!normalizedRoot || !normalizedPath) {
+    return { authority: "unavailable", reason: "workspace_root_unavailable" };
+  }
+
+  const workspacePath = workspacePathBelowRoot(normalizedPath, normalizedRoot);
+  if (workspacePath !== null) return workspaceLocator(workspacePath, args);
+
+  const originRefusal = nativeAuthorityRefusal(args);
+  if (originRefusal) return originRefusal;
+  return { authority: "desktop", absolutePath: normalizedPath, syntax: "absolute" };
+}
+
+function classifyHomeRelativePath(
+  homePath: string,
+  args: ResolveFileReferenceInput,
+): ResolvedFileLocator {
+  const originRefusal = nativeAuthorityRefusal(args);
+  if (originRefusal) return originRefusal;
+
+  const homeDirectory = normalizeRuntimeWorkspaceRoot(args.homeDirectory);
+  if (!homeDirectory) {
+    return { authority: "unavailable", reason: "home_unavailable" };
+  }
+  const suffix = homePath === "~" ? "" : homePath.slice(2);
+  const absolutePath = suffix ? lexicalJoin(homeDirectory, suffix) : homeDirectory;
+  return { authority: "desktop", absolutePath, syntax: "home-relative" };
+}
+
+function nativeAuthorityRefusal(
+  args: ResolveFileReferenceInput,
+): Extract<ResolvedFileLocator, { authority: "unavailable" }> | null {
+  if (args.filesystemOrigin.status !== "settled") {
+    return { authority: "unavailable", reason: "filesystem_origin_unavailable" };
+  }
+  if (args.filesystemOrigin.origin === "remote") {
+    return { authority: "unavailable", reason: "remote_filesystem" };
+  }
+  if (!args.desktopBridgeAvailable) {
+    return { authority: "unavailable", reason: "native_host_required" };
+  }
+  return null;
+}
+
+function workspaceLocator(
+  workspacePath: string,
+  args: ResolveFileReferenceInput,
+): Extract<ResolvedFileLocator, { authority: "workspace" }> {
+  let localCompanionPath: string | null = null;
+  if (
+    args.filesystemOrigin.status === "settled"
+    && args.filesystemOrigin.origin === "desktop-local"
+    && args.desktopBridgeAvailable
+    && args.workspaceRoot.status === "settled"
+  ) {
+    const root = normalizeRuntimeWorkspaceRoot(args.workspaceRoot.path);
+    if (root) localCompanionPath = workspacePath ? lexicalJoin(root, workspacePath) : root;
+  }
+  return { authority: "workspace", workspacePath, localCompanionPath };
+}
+
+function validateWorkspacePath(path: string):
+  | { kind: "valid"; path: string }
+  | { kind: "invalid"; reason: "invalid" | "traversal" } {
   const trimmed = path.trim();
-  if (!trimmed) {
-    return null;
+  if (
+    !trimmed
+    || containsNul(trimmed)
+    || hasUnsupportedPrefix(trimmed)
+    || trimmed.startsWith("/")
+    || isHomeRelativeFileReference(trimmed)
+  ) {
+    return { kind: "invalid", reason: "invalid" };
   }
-
-  if (trimmed === "~" || trimmed.startsWith("~/")) {
-    return null;
+  if (hasTraversalSegment(trimmed)) {
+    return { kind: "invalid", reason: "traversal" };
   }
-
-  const normalizedPath = normalizeLexicalPath(trimmed);
-  if (!normalizedPath) {
-    return null;
-  }
-
-  const normalizedRoot = normalizeRoot(workspaceRoot);
-  if (normalizedPath.startsWith("/")) {
-    if (!normalizedRoot) {
-      return null;
-    }
-    if (normalizedPath === normalizedRoot) {
-      return null;
-    }
-    const prefix = normalizedRoot === "/" ? "/" : `${normalizedRoot}/`;
-    return normalizedPath.startsWith(prefix)
-      ? normalizedPath.slice(prefix.length)
-      : null;
-  }
-
-  return normalizedPath;
+  return { kind: "valid", path: normalizeLexicalPath(trimmed, false) ?? "" };
 }
 
-function stripRelativePrefix(path: string): string {
-  let next = path;
-  while (next.startsWith("./")) {
-    next = next.slice(2);
-  }
-  return next;
+function displayPathForLocator(locator: ResolvedFileLocator, parsedPath: string): string {
+  if (locator.authority === "workspace") return locator.workspacePath || ".";
+  if (locator.authority === "desktop") return locator.absolutePath;
+  return parsedPath.trim() || "File";
 }
 
-function normalizeRoot(root: string | null): string | null {
-  if (!root) {
-    return null;
-  }
-  const normalized = normalizeLexicalPath(root.trim());
-  return normalized?.startsWith("/") ? normalized : null;
+function hasUnsupportedPrefix(path: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9+.-]*:/.test(path)
+    || path.startsWith("//")
+    || path.startsWith("\\")
+    || path.startsWith("#")
+    || (/^~/.test(path) && path !== "~" && !path.startsWith("~/"));
 }
 
-function normalizeLexicalPath(path: string): string | null {
-  const absolute = path.startsWith("/");
-  const segments: string[] = [];
-  for (const segment of path.split("/")) {
-    if (!segment || segment === ".") {
-      continue;
-    }
-    if (segment === "..") {
-      if (segments.length === 0) {
-        return null;
-      }
-      segments.pop();
-      continue;
-    }
-    segments.push(segment);
-  }
+function hasTraversalSegment(path: string): boolean {
+  return path.split("/").some((segment) => segment === "..");
+}
 
-  if (segments.length === 0) {
-    return absolute ? "/" : null;
-  }
+function containsNul(path: string): boolean {
+  return path.includes("\0");
+}
+
+function isSupportedAbsolutePath(path: string): boolean {
+  return path.startsWith("/")
+    && !path.startsWith("//")
+    && !containsNul(path)
+    && !hasUnsupportedPrefix(path);
+}
+
+function normalizeLexicalPath(path: string, absolute: boolean): string | null {
+  const segments = path.split("/").filter((segment) => segment && segment !== ".");
+  if (segments.length === 0) return absolute ? "/" : null;
   return `${absolute ? "/" : ""}${segments.join("/")}`;
+}
+
+function workspacePathBelowRoot(path: string, root: string): string | null {
+  if (path === root) return "";
+  const prefix = root === "/" ? "/" : `${root}/`;
+  return path.startsWith(prefix) ? path.slice(prefix.length) : null;
+}
+
+function lexicalJoin(root: string, child: string): string {
+  if (!child) return root;
+  return root === "/" ? `/${child}` : `${root}/${child}`;
 }

@@ -13,7 +13,6 @@ import { sessionIntentsForSession } from "#product/domain/sessions/intents/sessi
 import type { SessionEventEnvelope, SessionLiveConfigSnapshot, TranscriptState } from "@anyharness/sdk";
 import { useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { resolveCurrentModeLabel } from "#product/lib/domain/chat/composer/chat-input";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
@@ -152,7 +151,6 @@ export function useActiveSessionConfigState() {
     return {
       agentKind: entry?.agentKind ?? null,
       materializedSessionId: entry?.materializedSessionId ?? null,
-      modeId: entry?.modeId ?? null,
       workspaceId: entry?.workspaceId ?? null,
       liveConfig: entry?.liveConfig ?? null,
       normalizedControls: entry?.liveConfig?.normalizedControls ?? null,
@@ -185,19 +183,13 @@ export function useActiveSessionModeState(): {
   const directory = useSessionDirectoryStore((state) =>
     activeSessionId ? state.entriesById[activeSessionId] ?? null : null
   );
-  return useSessionTranscriptStore(useShallow((state) => {
-    const transcript = activeSessionId ? state.entriesById[activeSessionId]?.transcript ?? null : null;
-    return {
-      currentModeId: transcript?.currentModeId ?? directory?.modeId ?? null,
-      currentModeLabel: resolveCurrentModeLabel(directory
-        ? {
-          modeId: directory.modeId,
-          transcript,
-          liveConfig: directory.liveConfig,
-        }
-        : null),
-    };
-  }));
+  const modeControl = directory?.liveConfig?.normalizedControls.mode ?? null;
+  const currentModeId = modeControl?.currentValue ?? null;
+  return {
+    currentModeId,
+    currentModeLabel: modeControl?.values.find((value) => value.value === currentModeId)?.label
+      ?? currentModeId,
+  };
 }
 
 // Drop an optimistic intent change once the authoritative live config already

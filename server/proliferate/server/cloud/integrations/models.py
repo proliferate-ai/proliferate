@@ -12,6 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
+from typing_extensions import TypedDict
 
 AuthKind = Literal["oauth2", "api_key", "none"]
 Surface = Literal["desktop", "web"]
@@ -52,7 +53,9 @@ class IntegrationAccountResponse(_CamelModel):
 
 
 class AuthenticateIntegrationResponse(_CamelModel):
-    account: IntegrationAccountResponse
+    account: IntegrationAccountResponse | None = None
+    attempt_id: UUID | None = None
+    attempt_generation: int | None = None
     oauth_flow_id: str | None = None
     authorization_url: str | None = None
     expires_at: datetime | None = None
@@ -130,6 +133,78 @@ class IntegrationHealthItem(_CamelModel):
 
 class IntegrationHealthResponse(_CamelModel):
     items: list[IntegrationHealthItem]
+
+
+# --------------------------------------------------------------------------- #
+# Authoritative management projection (route and assembler land in PR2)
+# --------------------------------------------------------------------------- #
+
+
+IntegrationPrimaryAction = Literal["connect", "reconnect", "open_authorization", "none"]
+IntegrationSecondaryAction = Literal["cancel", "disconnect"]
+IntegrationAttemptPurpose = Literal["connect", "reauthorize", "rotate"]
+IntegrationAttemptStatus = Literal[
+    "active",
+    "exchanging",
+    "validating",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "expired",
+    "superseded",
+]
+
+
+class IntegrationProviderAvailability(TypedDict):
+    available: bool
+    reason: str | None
+
+
+class IntegrationConnectionSummary(TypedDict):
+    accountId: UUID
+    status: str
+    enabled: bool
+    health: str
+    toolCount: int | None
+    tokenExpiresAt: datetime | None
+    lastErrorCode: str | None
+
+
+class IntegrationAuthorizationAttemptSummary(TypedDict):
+    attemptId: UUID
+    purpose: IntegrationAttemptPurpose
+    method: AuthKind
+    generation: int
+    status: IntegrationAttemptStatus
+    authorizationUrl: str | None
+    expiresAt: datetime
+    failureCode: str | None
+
+
+class IntegrationManagementActions(TypedDict):
+    primary: IntegrationPrimaryAction
+    secondary: list[IntegrationSecondaryAction]
+
+
+class IntegrationManagementItem(TypedDict):
+    definitionId: UUID
+    namespace: str
+    displayName: str
+    description: str | None
+    authKind: str
+    connectSchema: IntegrationConnectSchema
+    availability: IntegrationProviderAvailability
+    connection: IntegrationConnectionSummary | None
+    attempt: IntegrationAuthorizationAttemptSummary | None
+    actions: IntegrationManagementActions
+
+
+class IntegrationManagementResponse(TypedDict):
+    items: list[IntegrationManagementItem]
+
+
+class CancelIntegrationAuthorizationAttemptResponse(TypedDict):
+    attempt: IntegrationAuthorizationAttemptSummary
 
 
 # --------------------------------------------------------------------------- #

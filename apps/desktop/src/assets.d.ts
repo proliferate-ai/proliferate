@@ -19,7 +19,6 @@ interface ImportMetaEnv {
   readonly VITE_PROLIFERATE_SENTRY_ENABLE_LOGS?: string;
   readonly VITE_PROLIFERATE_POSTHOG_KEY?: string;
   readonly VITE_PROLIFERATE_POSTHOG_HOST?: string;
-  readonly VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED?: string;
 }
 
 interface ImportMeta {

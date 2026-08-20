@@ -139,9 +139,20 @@ still succeeds. The artifact is atomically staged under an owner-only root with
 a durable job-bound opaque ID, exact size, and SHA-256; no path or capability is
 returned to JavaScript.
 
-**Save a copy…** writes a user-chosen ZIP containing exactly those staged
-`diagnostics.json` bytes. The archive is never enqueued as an attachment and is
-not removed by queue cleanup.
+One serialized **Save a copy…** action owns preparation, the native archive,
+and settlement of exact staged-artifact deletion. Save and Send remain
+unavailable for that whole action. The user-chosen ZIP and cleanup confirmation
+are independent: cancelling the native save dialog is not an error, a written
+ZIP remains successful when deletion rejects, and deletion rejection means
+durable cleanup is unconfirmed rather than proving bytes remain. The archive is
+never enqueued as an attachment and is not removed by queue cleanup.
+
+Cleanup-unconfirmed and an admitted preparation cancellation conservatively
+block further consented snapshot work for the same modal and client job. This
+does not add an in-session cleanup retry or guarantee later reconciliation.
+Clearing consent still permits the existing text-only Send path. Cleanup truth
+is internal-only here: it adds no user message, log, lifecycle record, metric,
+Sentry event, PostHog event, or other telemetry signal.
 
 ## Artifact contents at a glance
 

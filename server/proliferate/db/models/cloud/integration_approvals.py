@@ -48,7 +48,12 @@ class CloudIntegrationActionApproval(Base):
     owner_user_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     integration_account_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
-    integration_account_auth_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Keep the PR2 physical name through the mixed-version rollout window. New
+    # code uses the authority-correct grant vocabulary while N-1 API tasks can
+    # still read and write the same column after this migration lands.
+    integration_account_grant_version: Mapped[int] = mapped_column(
+        "integration_account_auth_version", Integer, nullable=False
+    )
     runtime_worker_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     gateway_session_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     workspace_id: Mapped[str] = mapped_column(String(255), nullable=False)

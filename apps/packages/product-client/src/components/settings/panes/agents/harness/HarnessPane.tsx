@@ -24,7 +24,6 @@ import {
 import { HarnessProvidersSection } from "#product/components/settings/panes/agents/harness/HarnessProvidersSection";
 import { HarnessConfigIssueBanner } from "#product/components/settings/panes/agents/harness/HarnessConfigIssueBanner";
 import { HarnessManagedNotice } from "#product/components/settings/panes/agents/harness/HarnessManagedNotice";
-import { HarnessSettingsSection } from "#product/components/settings/panes/agents/harness/HarnessSettingsSection";
 import { useHarnessAuthEditor } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-harness-install-action";
 import { getAgentStatusDisplay } from "#product/lib/domain/agents/status-presentation";
@@ -311,7 +310,6 @@ function HarnessAuthSurface({
 
       {/* Harness-specific options, AFTER auth: these are options on top of
           a working harness, so they sit below the thing that makes it work. */}
-      <HarnessSettingsSection harnessKind={harnessKind} surface={surface} />
 
       {/* Model list, auto-collapsed. */}
       <HarnessAllModelsSection

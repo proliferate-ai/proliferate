@@ -12,6 +12,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Slot } from "@radix-ui/react-slot";
 import { Popover, PopoverTrigger } from "./Popover";
 import { useNativeOverlayRegistration } from "#product/primitives/overlays/overlay-presence";
+import { clearContextualWordSelection } from "#product/primitives/overlays/contextual-word-selection";
 import { POPOVER_SURFACE_CLASS } from "./popover-surface";
 
 type PopoverAlign = "start" | "end";
@@ -56,6 +57,13 @@ interface PopoverButtonProps {
   externalOpen?: boolean;
   /** Called when the popover closes (for controlled mode). */
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Skip clearing WebKit's contextual word selection on `contextMenu`
+   * triggers. Default false (clear). Set true only over real selectable
+   * content, e.g. the file viewer's content area, where select-word-then-menu
+   * is normal platform behavior rather than a chrome flash.
+   */
+  preserveContextualSelection?: boolean;
 }
 
 export function PopoverButton({
@@ -70,6 +78,7 @@ export function PopoverButton({
   triggerMode = "click",
   externalOpen,
   onOpenChange,
+  preserveContextualSelection = false,
 }: PopoverButtonProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLElement>(null);
@@ -143,6 +152,9 @@ export function PopoverButton({
       event.stopPropagation();
     }
     if (triggerMode === "contextMenu") {
+      if (!preserveContextualSelection) {
+        clearContextualWordSelection(event.currentTarget);
+      }
       pointRef.current =
         typeof event.clientX === "number" && typeof event.clientY === "number"
           ? { x: event.clientX, y: event.clientY }

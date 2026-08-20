@@ -13,13 +13,16 @@ impl SessionStore {
                 "INSERT INTO session_live_config_snapshots (
                     session_id, source_seq, raw_config_options_json, normalized_controls_json,
                     prompt_capabilities_json, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                    , full_snapshot_json
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                  ON CONFLICT(session_id) DO UPDATE SET
                     source_seq = excluded.source_seq,
                     raw_config_options_json = excluded.raw_config_options_json,
                     normalized_controls_json = excluded.normalized_controls_json,
                     prompt_capabilities_json = excluded.prompt_capabilities_json,
-                    updated_at = excluded.updated_at",
+                    updated_at = excluded.updated_at,
+                    full_snapshot_json = excluded.full_snapshot_json
+                 WHERE excluded.source_seq > session_live_config_snapshots.source_seq",
                 params![
                     record.session_id,
                     record.source_seq,
@@ -27,6 +30,7 @@ impl SessionStore {
                     record.normalized_controls_json,
                     record.prompt_capabilities_json,
                     record.updated_at,
+                    record.full_snapshot_json,
                 ],
             )?;
             Ok(())
@@ -130,6 +134,7 @@ pub(super) fn map_live_config_snapshot(
         raw_config_options_json: row.get("raw_config_options_json")?,
         normalized_controls_json: row.get("normalized_controls_json")?,
         prompt_capabilities_json: row.get("prompt_capabilities_json")?,
+        full_snapshot_json: row.get("full_snapshot_json")?,
         updated_at: row.get("updated_at")?,
     })
 }
@@ -153,13 +158,16 @@ pub(super) fn upsert_live_config_snapshot_row(
         "INSERT INTO session_live_config_snapshots (
             session_id, source_seq, raw_config_options_json, normalized_controls_json,
             prompt_capabilities_json, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            , full_snapshot_json
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
          ON CONFLICT(session_id) DO UPDATE SET
             source_seq = excluded.source_seq,
             raw_config_options_json = excluded.raw_config_options_json,
             normalized_controls_json = excluded.normalized_controls_json,
             prompt_capabilities_json = excluded.prompt_capabilities_json,
-            updated_at = excluded.updated_at",
+            updated_at = excluded.updated_at,
+            full_snapshot_json = excluded.full_snapshot_json
+         WHERE excluded.source_seq > session_live_config_snapshots.source_seq",
         params![
             record.session_id,
             record.source_seq,
@@ -167,6 +175,7 @@ pub(super) fn upsert_live_config_snapshot_row(
             record.normalized_controls_json,
             record.prompt_capabilities_json,
             record.updated_at,
+            record.full_snapshot_json,
         ],
     )?;
     Ok(())

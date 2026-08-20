@@ -1,5 +1,6 @@
 import {
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -71,21 +72,66 @@ export function useAgentsQuery(options?: RuntimeQueryOptions) {
 }
 
 export function useAgentLaunchOptionsQuery(options?: RuntimeQueryOptions & {
-  workspaceId?: string | null;
+  harnessKind?: string | null;
 }) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
   const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
-  const workspaceId = options?.workspaceId ?? null;
+  const harnessKind = options?.harnessKind?.trim() ?? "";
 
   return useQuery({
-    queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, workspaceId, cacheScopeKey),
-    enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
+    queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, harnessKind, cacheScopeKey),
+    enabled: (options?.enabled ?? true) && runtimeUrl.length > 0 && harnessKind.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.agents.getLaunchOptions(
-        workspaceId,
-        requestOptionsWithSignal(undefined, signal),
+      return client.agents.getLaunchOptions(harnessKind, requestOptionsWithSignal(undefined, signal));
+    },
+  });
+}
+
+/**
+ * Launch options for several harnesses at once, sharing the per-kind cache
+ * entries of [`useAgentLaunchOptionsQuery`]. Returns one response (or `null`
+ * while unresolved/failed) per requested kind, in request order; `combine`
+ * keeps the array reference stable across renders while the data is unchanged.
+ */
+export function useAgentLaunchOptionsListQuery(options?: RuntimeQueryOptions & {
+  harnessKinds?: readonly string[];
+}) {
+  const runtime = useAnyHarnessRuntimeContext();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
+  const harnessKinds = (options?.harnessKinds ?? [])
+    .map((kind) => kind.trim())
+    .filter((kind) => kind.length > 0);
+
+  return useQueries({
+    queries: harnessKinds.map((harnessKind) => ({
+      queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, harnessKind, cacheScopeKey),
+      enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
+      queryFn: async ({ signal }: { signal: AbortSignal }) => {
+        const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+        return client.agents.getLaunchOptions(harnessKind, requestOptionsWithSignal(undefined, signal));
+      },
+    })),
+    combine: (results) => results.map((result) => result.data ?? null),
+  });
+}
+
+export function useRefreshHarnessLaunchOptionsMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
+  return useMutation({
+    mutationFn: async (harnessKind: string) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.agents.refreshLaunchOptions(harnessKind);
+    },
+    onSuccess: async (response) => {
+      queryClient.setQueryData(
+        anyHarnessAgentLaunchOptionsKey(runtimeUrl, response.harnessKind, cacheScopeKey),
+        response,
       );
     },
   });

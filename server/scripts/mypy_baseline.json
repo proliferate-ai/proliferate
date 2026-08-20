@@ -783,24 +783,6 @@
       "count": 1
     },
     {
-      "path": "proliferate/server/cloud/agent_models/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 7
-    },
-    {
-      "path": "proliferate/server/cloud/agent_models/overrides.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 5
-    },
-    {
-      "path": "proliferate/server/cloud/agent_models/snapshots.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 11
-    },
-    {
       "path": "proliferate/server/cloud/agent_run_config/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",

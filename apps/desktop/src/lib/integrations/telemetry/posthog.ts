@@ -27,19 +27,7 @@ export function initializeDesktopPostHog(config: DesktopPostHogInitConfig): void
     capture_pageleave: false,
     person_profiles: "identified_only",
     before_send: scrubPostHogPayload,
-    disable_session_recording: !config.posthog.sessionRecordingEnabled,
-    session_recording: config.posthog.sessionRecordingEnabled
-      ? {
-        maskAllInputs: true,
-        maskTextSelector: "[data-telemetry-mask]",
-        blockSelector: "[data-telemetry-block]",
-      }
-      : undefined,
-    loaded: config.posthog.sessionRecordingEnabled
-      ? (client) => {
-        client.startSessionRecording();
-      }
-      : undefined,
+    disable_session_recording: true,
   });
 
   posthog.register({
@@ -58,20 +46,10 @@ export function trackDesktopPostHogEvent<E extends keyof DesktopProductEventMap>
   posthog.capture(name, scrubTelemetryData(properties));
 }
 
-export function identifyDesktopPostHogUser(user: {
-  id: string;
-  email: string;
-  display_name: string | null;
-}): void {
+export function identifyDesktopPostHogUser(userId: string): void {
   if (!posthogInitialized) return;
 
-  posthog.identify(
-    user.id,
-    scrubTelemetryData({
-      email: user.email,
-      display_name: user.display_name ?? undefined,
-    }),
-  );
+  posthog.identify(userId);
 }
 
 export function resetDesktopPostHogUser(): void {

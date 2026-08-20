@@ -137,6 +137,11 @@ export function AdvancedControlSections({
               // Intentionally does not close the surface — multi-adjust,
               // same contract the old overflow menu had.
               onSelect={() => control.onSelect(option.value)}
+              dataAttributes={{
+                "data-session-advanced-control": control.key,
+                "data-session-advanced-option": `${control.key}:${option.value}`,
+                "data-session-advanced-selected": option.selected ? option.value : undefined,
+              }}
             />
           ))}
         </StatusSection>

@@ -204,6 +204,7 @@ async fn app_state_launches_and_serves_workspace_mcp_for_an_eligible_session() {
         AgentSeedStore::not_configured_dev(),
     )
     .expect("expected app state");
+    test_support::seed_scripted_claude_launch_options(&state.launch_options_service);
     test_support::seed_workspace_with_repo_root(
         &state.db,
         "workspace-1",
@@ -386,9 +387,22 @@ async fn app_state_launches_and_serves_workspace_mcp_for_an_eligible_session() {
         launch_options["result"]["structuredContent"]["workspace"]["workspaceId"],
         "workspace-1"
     );
-    assert!(launch_options["result"]["structuredContent"]["agents"]
+    let observed_claude = launch_options["result"]["structuredContent"]["launchOptions"]
         .as_array()
-        .is_some_and(|agents| !agents.is_empty()));
+        .expect("target-observed launch options")
+        .iter()
+        .find(|response| response["harnessKind"] == "claude")
+        .expect("seeded Claude launch options")
+        .clone();
+    assert_eq!(observed_claude["state"], "observed");
+    assert!(observed_claude["options"]["models"]
+        .as_array()
+        .is_some_and(|models| models.iter().any(|model| model["id"] == "haiku")));
+    assert!(launch_options["result"]["structuredContent"]["presentation"]
+        .as_array()
+        .is_some_and(|harnesses| harnesses
+            .iter()
+            .any(|harness| harness["harnessKind"] == "claude")));
 
     let config_options = endpoint
         .dispatch(

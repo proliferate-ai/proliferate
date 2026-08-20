@@ -1,5 +1,8 @@
 use agent_client_protocol as acp;
-use anyharness_contract::v1::{ConfigApplyState, PromptCapabilities, SessionLiveConfigSnapshot};
+use anyharness_contract::v1::{
+    ConfigApplyState, HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchModel,
+    PromptCapabilities, SessionLiveConfigCurrent, SessionLiveConfigSnapshot,
+};
 
 use crate::domains::sessions::model::SessionLiveConfigSnapshotRecord;
 
@@ -47,6 +50,54 @@ pub fn effective_config_apply_state(state: ConfigApplyState) -> EffectiveConfigA
         ConfigApplyState::Applied => EffectiveConfigApplyState::Applied,
         ConfigApplyState::Queued => EffectiveConfigApplyState::Queued,
     }
+}
+
+/// Validate the full snapshot's sole authoritative current-value statement.
+/// Compatibility projections are deliberately excluded: a reported current
+/// model and every control current value must be exact members of the saved
+/// option rows. Model remains nullable in the frozen wire contract.
+pub fn validate_canonical_live_config_current(
+    snapshot: &SessionLiveConfigSnapshot,
+) -> anyhow::Result<()> {
+    if let Some(model_id) = snapshot.current.model_id.as_deref() {
+        anyhow::ensure!(
+            snapshot.models.iter().any(|model| model.id == model_id),
+            "saved current model '{model_id}' is absent from the saved live model options"
+        );
+    }
+
+    let mut control_ids = std::collections::BTreeSet::new();
+    for control in &snapshot.controls {
+        anyhow::ensure!(
+            control_ids.insert(control.id.clone()),
+            "saved live snapshot contains duplicate control '{}'",
+            control.id
+        );
+        let value = snapshot
+            .current
+            .control_values
+            .get(&control.id)
+            .ok_or_else(|| {
+                anyhow::anyhow!("saved live control '{}' has no current value", control.id)
+            })?;
+        anyhow::ensure!(
+            control
+                .values
+                .iter()
+                .any(|candidate| &candidate.value == value),
+            "saved current value '{value}' is absent from saved live control '{}'",
+            control.id
+        );
+    }
+
+    for config_id in snapshot.current.control_values.keys() {
+        anyhow::ensure!(
+            control_ids.contains(config_id),
+            "saved current value references absent live control '{config_id}'"
+        );
+    }
+
+    Ok(())
 }
 
 pub fn effective_live_config_snapshot(
@@ -144,8 +195,86 @@ pub fn build_live_config_snapshot(
         available_models,
         legacy_mode_state,
     );
+    let models = normalized_controls
+        .model
+        .as_ref()
+        .map(|control| {
+            control
+                .values
+                .iter()
+                .map(|model| HarnessLaunchModel {
+                    id: model.value.clone(),
+                    observed_name: Some(model.label.clone()),
+                    observed_description: model.description.clone(),
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let mut live_controls = raw_config_options
+        .iter()
+        .filter(|option| {
+            option.id != ACP_MODEL_COMPAT_CONFIG_ID && option.category.as_deref() != Some("model")
+        })
+        .map(|option| HarnessLaunchControl {
+            id: option.id.clone(),
+            observed_label: Some(option.name.clone()),
+            observed_description: option.description.clone(),
+            values: option
+                .options
+                .iter()
+                .map(|value| HarnessLaunchControlValue {
+                    value: value.value.clone(),
+                    observed_label: Some(value.name.clone()),
+                    observed_description: value.description.clone(),
+                })
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    if !live_controls
+        .iter()
+        .any(|control| control.id == LEGACY_MODE_COMPAT_CONFIG_ID)
+    {
+        if let Some(legacy) = legacy_mode_state {
+            live_controls.push(HarnessLaunchControl {
+                id: LEGACY_MODE_COMPAT_CONFIG_ID.to_string(),
+                observed_label: Some("Mode".to_string()),
+                observed_description: None,
+                values: legacy
+                    .available_modes
+                    .iter()
+                    .map(|value| HarnessLaunchControlValue {
+                        value: value.id.clone(),
+                        observed_label: Some(value.name.clone()),
+                        observed_description: value.description.clone(),
+                    })
+                    .collect(),
+            });
+        }
+    }
+    let mut current_control_values = raw_config_options
+        .iter()
+        .filter(|option| {
+            option.id != ACP_MODEL_COMPAT_CONFIG_ID && option.category.as_deref() != Some("model")
+        })
+        .map(|option| (option.id.clone(), option.current_value.clone()))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    if let Some(legacy) = legacy_mode_state {
+        current_control_values
+            .entry(LEGACY_MODE_COMPAT_CONFIG_ID.to_string())
+            .or_insert_with(|| legacy.current_mode_id.clone());
+    }
 
     SessionLiveConfigSnapshot {
+        models,
+        controls: live_controls,
+        current: SessionLiveConfigCurrent {
+            model_id: normalized_controls
+                .model
+                .as_ref()
+                .and_then(|control| control.current_value.clone())
+                .or_else(|| current_model_id.map(str::to_string)),
+            control_values: current_control_values,
+        },
         raw_config_options,
         normalized_controls,
         prompt_capabilities,
@@ -171,6 +300,7 @@ pub fn snapshot_to_record(
         raw_config_options_json: serde_json::to_string(&snapshot.raw_config_options)?,
         normalized_controls_json: serde_json::to_string(&snapshot.normalized_controls)?,
         prompt_capabilities_json: Some(serde_json::to_string(&snapshot.prompt_capabilities)?),
+        full_snapshot_json: Some(serde_json::to_string(snapshot)?),
         updated_at: snapshot.updated_at.clone(),
     })
 }
@@ -178,7 +308,13 @@ pub fn snapshot_to_record(
 pub fn snapshot_from_record(
     record: &SessionLiveConfigSnapshotRecord,
 ) -> anyhow::Result<SessionLiveConfigSnapshot> {
+    if let Some(full_snapshot_json) = record.full_snapshot_json.as_deref() {
+        return Ok(serde_json::from_str(full_snapshot_json)?);
+    }
     Ok(SessionLiveConfigSnapshot {
+        models: Vec::new(),
+        controls: Vec::new(),
+        current: SessionLiveConfigCurrent::default(),
         raw_config_options: serde_json::from_str(&record.raw_config_options_json)?,
         normalized_controls: serde_json::from_str(&record.normalized_controls_json)?,
         prompt_capabilities: record

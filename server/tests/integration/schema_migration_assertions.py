@@ -15,7 +15,9 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "billing_grant",
         "billing_subject",
         "cloud_integration_account",
+        "cloud_integration_authorization_attempt",
         "cloud_integration_definition",
+        "cloud_integration_definition_security_revision",
         "cloud_integration_gateway_token",
         "cloud_integration_oauth_client",
         "cloud_integration_oauth_flow",
@@ -269,6 +271,207 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         }
     )
     assert "cloud_integration_account" in tool_cache_foreign_keys
+
+    integration_account_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("cloud_integration_account")
+        }
+    )
+    assert {
+        "grant_version",
+        "credential_version",
+        "definition_security_revision_id",
+        "provider_client_id",
+        "credential_audience",
+        "effective_scopes_json",
+    } <= integration_account_columns
+    integration_account_foreign_keys = await conn.run_sync(
+        lambda sync_conn: {
+            tuple(foreign_key["constrained_columns"]): foreign_key["referred_table"]
+            for foreign_key in inspect(sync_conn).get_foreign_keys("cloud_integration_account")
+        }
+    )
+    assert integration_account_foreign_keys[("definition_security_revision_id",)] == (
+        "cloud_integration_definition_security_revision"
+    )
+    assert integration_account_foreign_keys[("provider_client_id",)] == (
+        "cloud_integration_oauth_client"
+    )
+
+    oauth_client_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("cloud_integration_oauth_client")
+        }
+    )
+    assert {"revision", "lifecycle_state"} <= oauth_client_columns
+    oauth_client_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "cloud_integration_oauth_client"
+            )
+        }
+    )
+    assert {
+        "ck_cloud_integration_oauth_client_revision_positive",
+        "ck_cloud_integration_oauth_client_lifecycle_state",
+    } <= oauth_client_checks
+    oauth_client_uniques = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_unique_constraints(
+                "cloud_integration_oauth_client"
+            )
+        }
+    )
+    assert "uq_cloud_integration_oauth_client_revision" in oauth_client_uniques
+    oauth_client_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("cloud_integration_oauth_client")
+        }
+    )
+    assert "ux_cloud_integration_oauth_client_active" in oauth_client_indexes
+
+    oauth_flow_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("cloud_integration_oauth_flow")
+        }
+    )
+    assert "attempt_id" in oauth_flow_columns
+    oauth_flow_foreign_keys = await conn.run_sync(
+        lambda sync_conn: {
+            tuple(foreign_key["constrained_columns"]): foreign_key["referred_table"]
+            for foreign_key in inspect(sync_conn).get_foreign_keys("cloud_integration_oauth_flow")
+        }
+    )
+    assert oauth_flow_foreign_keys[("attempt_id",)] == ("cloud_integration_authorization_attempt")
+
+    attempt_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("cloud_integration_authorization_attempt")
+        }
+    )
+    assert {
+        "owner_user_id",
+        "definition_id",
+        "account_id",
+        "purpose",
+        "method",
+        "generation",
+        "status",
+        "starting_grant_version",
+        "starting_credential_version",
+        "definition_security_revision_id",
+        "provider_client_id",
+        "credential_audience",
+        "settings_json",
+        "requested_scopes_json",
+        "effective_scopes_json",
+        "staged_credential_ciphertext",
+        "staged_credential_format",
+        "failure_code",
+        "expires_at",
+        "closed_at",
+    } <= attempt_columns
+    attempt_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "cloud_integration_authorization_attempt"
+            )
+        }
+    )
+    assert {
+        "ck_cloud_integration_authorization_attempt_purpose",
+        "ck_cloud_integration_authorization_attempt_method",
+        "ck_cloud_integration_authorization_attempt_status",
+        "ck_cloud_integration_authorization_attempt_generation_positive",
+        "ck_cloud_int_auth_attempt_grant_version_positive",
+        "ck_cloud_int_auth_attempt_credential_version_positive",
+        "ck_cloud_integration_authorization_attempt_staged_pair",
+        "ck_cloud_integration_authorization_attempt_audience",
+        "ck_cloud_int_auth_attempt_starting_connection",
+        "ck_cloud_int_auth_attempt_terminal_time",
+    } <= attempt_checks
+    attempt_uniques = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_unique_constraints(
+                "cloud_integration_authorization_attempt"
+            )
+        }
+    )
+    assert "uq_cloud_integration_authorization_attempt_generation" in attempt_uniques
+    attempt_foreign_keys = await conn.run_sync(
+        lambda sync_conn: {
+            tuple(foreign_key["constrained_columns"]): (
+                foreign_key["referred_table"],
+                foreign_key["options"].get("ondelete"),
+            )
+            for foreign_key in inspect(sync_conn).get_foreign_keys(
+                "cloud_integration_authorization_attempt"
+            )
+        }
+    )
+    assert attempt_foreign_keys[("owner_user_id",)] == ("user", "CASCADE")
+    assert attempt_foreign_keys[("definition_id",)][0] == "cloud_integration_definition"
+    assert attempt_foreign_keys[("account_id",)] == (
+        "cloud_integration_account",
+        "CASCADE",
+    )
+    assert attempt_foreign_keys[("definition_security_revision_id",)][0] == (
+        "cloud_integration_definition_security_revision"
+    )
+    assert attempt_foreign_keys[("provider_client_id",)][0] == ("cloud_integration_oauth_client")
+    attempt_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("cloud_integration_authorization_attempt")
+        }
+    )
+    assert "ux_cloud_integration_authorization_attempt_nonterminal" in attempt_indexes
+
+    security_revision_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "cloud_integration_definition_security_revision"
+            )
+        }
+    )
+    assert {
+        "ck_cloud_integration_definition_security_revision_positive",
+        "ck_cloud_integration_definition_security_revision_auth_kind",
+    } <= security_revision_checks
+    security_revision_uniques = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_unique_constraints(
+                "cloud_integration_definition_security_revision"
+            )
+        }
+    )
+    assert "uq_cloud_integration_definition_security_revision" in security_revision_uniques
+    security_revision_foreign_keys = await conn.run_sync(
+        lambda sync_conn: {
+            tuple(foreign_key["constrained_columns"]): (
+                foreign_key["referred_table"],
+                foreign_key["options"].get("ondelete"),
+            )
+            for foreign_key in inspect(sync_conn).get_foreign_keys(
+                "cloud_integration_definition_security_revision"
+            )
+        }
+    )
+    assert security_revision_foreign_keys[("definition_id",)] == (
+        "cloud_integration_definition",
+        "CASCADE",
+    )
 
     github_app_installation_columns = await conn.run_sync(
         lambda sync_conn: {

@@ -29,9 +29,9 @@ describe("session control preferences", () => {
       workspaceSurface: "standard",
     });
 
-    expect(useUserPreferencesStore.getState().defaultSessionModeByAgentKind).toEqual({
-      claude: "bypassPermissions",
-    });
+    expect(
+      useUserPreferencesStore.getState().defaultLiveSessionControlValuesByAgentKind,
+    ).toEqual({ claude: { mode: "bypassPermissions" } });
   });
 
   it("persists an applied model as the last-used agent selection", () => {
@@ -50,7 +50,7 @@ describe("session control preferences", () => {
     });
   });
 
-  it("persists Codex effort and speed using their stable preference keys", () => {
+  it("persists controls under their exact target-observed ids", () => {
     const effortConfig = liveConfig({
       effort: control("effort", "reasoning_effort", "xhigh"),
       fastMode: control("fast_mode", "fast_mode", "off"),
@@ -79,7 +79,7 @@ describe("session control preferences", () => {
       useUserPreferencesStore.getState().defaultLiveSessionControlValuesByAgentKind,
     ).toEqual({
       codex: {
-        effort: "xhigh",
+        reasoning_effort: "xhigh",
         fast_mode: "on",
       },
     });

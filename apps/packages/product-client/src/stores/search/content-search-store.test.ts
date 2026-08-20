@@ -14,6 +14,7 @@ function resetStore() {
     unitsById: {},
     nextUnitOrder: 0,
     surfaceAvailability: { file: false, review: false },
+    closeSuppressRestoreToken: 0,
   });
 }
 
@@ -181,5 +182,29 @@ describe("content search store", () => {
 
     useContentSearchStore.getState().setSurfaceAvailability("file", false);
     expect(useContentSearchStore.getState().open).toBe(true);
+  });
+
+  it("bumps the close-suppression token only when restoreFocus is false", () => {
+    resetStore();
+    useContentSearchStore.getState().openSearch("chat");
+    const initialToken = useContentSearchStore.getState().closeSuppressRestoreToken;
+
+    useContentSearchStore.getState().closeSearch();
+    expect(useContentSearchStore.getState().closeSuppressRestoreToken).toBe(initialToken);
+    expect(useContentSearchStore.getState().open).toBe(false);
+
+    useContentSearchStore.getState().openSearch("chat");
+    useContentSearchStore.getState().closeSearch({ restoreFocus: false });
+    expect(useContentSearchStore.getState().closeSuppressRestoreToken).toBe(initialToken + 1);
+    expect(useContentSearchStore.getState().open).toBe(false);
+  });
+
+  it("defaults closeSearch to restoreFocus:true when called with no options", () => {
+    resetStore();
+    useContentSearchStore.getState().openSearch("chat");
+    const initialToken = useContentSearchStore.getState().closeSuppressRestoreToken;
+
+    useContentSearchStore.getState().closeSearch({});
+    expect(useContentSearchStore.getState().closeSuppressRestoreToken).toBe(initialToken);
   });
 });

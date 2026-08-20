@@ -5,7 +5,7 @@ use super::detail::{
 };
 use super::{ReviewError, ReviewService, StartReviewInput};
 use crate::domains::reviews::model::{
-    ReviewModeVerificationStatus, ReviewRoundRecord, ReviewRoundStatus, ReviewRunRecord,
+    ReviewLaunchVerificationStatus, ReviewRoundRecord, ReviewRoundStatus, ReviewRunRecord,
     ReviewRunStatus,
 };
 use crate::domains::sessions::links::model::{SessionLinkRelation, SessionLinkWorkspaceRelation};
@@ -102,8 +102,7 @@ impl ReviewService {
         parent_session_id: &str,
         reviewer_session_id: &str,
         label: Option<String>,
-        actual_mode_id: Option<&str>,
-        mode_status: ReviewModeVerificationStatus,
+        launch_status: ReviewLaunchVerificationStatus,
     ) -> Result<String, ReviewError> {
         let link = self
             .link_service
@@ -123,8 +122,7 @@ impl ReviewService {
                 assignment_id,
                 reviewer_session_id,
                 &link.id,
-                actual_mode_id,
-                mode_status,
+                launch_status,
             )
             .map_err(ReviewError::Internal)?;
         if !launched {
