@@ -1,14 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "#product/primitives/icons/core";
 
-import { Button } from "#product/primitives/Button";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import type { CloudSecretsPanelModel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
-import type {
-  SecretMaterializationView,
-  SecretMetadata,
-} from "#product/lib/domain/secrets/secret-management-panel";
+import type { SecretMetadata } from "#product/lib/domain/secrets/secret-management-panel";
 import {
   SecretDeleteDialog,
   type SecretDeleteDialogState,
@@ -32,7 +27,6 @@ export function SecretManagementPanel({
   files,
   materialization = null,
   canManage = true,
-  loading = false,
   saving = false,
   error = null,
   onSaveEnvVar,
@@ -55,7 +49,6 @@ export function SecretManagementPanel({
   );
   const existingEnvKeys = useMemo(() => envItems.map((item) => item.label), [envItems]);
   const existingFileKeys = useMemo(() => fileItems.map((item) => item.label), [fileItems]);
-  const status = error ? "error" : materialization?.status ?? "pending";
 
   function handleEditorSave(input: SecretEditorSaveInput) {
     if (input.kind === "env") {
@@ -105,22 +98,7 @@ export function SecretManagementPanel({
         <SettingsRow
           label={title}
           description={<SecretScopeNotice description={description} />}
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-ui-sm text-muted-foreground">{statusLabel(status, loading)}</span>
-            {canManage ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setEditorState({ mode: "create", kind: "env" })}
-              >
-                <Plus className="icon-paired" />
-                Add secret
-              </Button>
-            ) : null}
-          </div>
-        </SettingsRow>
+        />
 
         <SettingsRow
           label="Environment variables"
@@ -208,18 +186,3 @@ function formatDate(value: string): string {
   return date.toLocaleString();
 }
 
-function statusLabel(status: SecretMaterializationView["status"], loading: boolean): string {
-  if (loading) {
-    return "Loading";
-  }
-  switch (status) {
-    case "ready":
-      return "Materialized";
-    case "running":
-      return "Syncing";
-    case "error":
-      return "Error";
-    case "pending":
-      return "Pending";
-  }
-}
