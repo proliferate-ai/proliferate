@@ -59,11 +59,15 @@ async def test_engine(migrated_test_database):  # type: ignore[no-untyped-def]
 
 @pytest_asyncio.fixture(autouse=True)
 async def reset_test_database(test_engine) -> AsyncGenerator[None, None]:  # type: ignore[no-untyped-def]
+    # Truncating only before each test (not after) is sufficient for isolation:
+    # every test already starts from a clean slate via this same call. The
+    # after-test truncate only left the DB clean at process exit, which the
+    # CI job never reads (the Postgres service container is torn down with
+    # the runner, and the session-scoped `migrated_test_database` fixture
+    # drops the whole database unconditionally regardless of its contents).
     await _cancel_test_background_tasks()
     await truncate_all_tables(test_engine)
     yield
-    await _cancel_test_background_tasks()
-    await truncate_all_tables(test_engine)
 
 
 @pytest_asyncio.fixture
