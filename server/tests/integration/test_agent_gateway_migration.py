@@ -56,6 +56,8 @@ from proliferate.server.cloud.materialization.materialize.agent_auth import (
 )
 from proliferate.lib.infra.time.wall_clock import utcnow
 
+pytestmark = pytest.mark.migration
+
 # Two harness kinds keep the mint/revoke ledgers legible; the mechanism is
 # per-harness and identical for the full four-kind tuple.
 _HARNESSES = ("claude", "codex")

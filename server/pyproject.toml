@@ -125,6 +125,7 @@ markers = [
     "cloud_e2e: live cloud lifecycle tests that require real provider credentials",
     "e2b: tests specific to the E2B provider",
     "live_webhook: tests that require a real externally reachable E2B webhook target",
+    "migration: alembic migration round-trip tests that guard deploy-time upgrade/downgrade behavior, not PR correctness",
 ]
 
 [tool.hatch.build.targets.wheel]

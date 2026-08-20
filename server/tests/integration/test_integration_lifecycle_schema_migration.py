@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from proliferate.db.migrations import build_alembic_config
 from tests.postgres import temporary_database
 
+pytestmark = pytest.mark.migration
+
 _REVISION = "a21c34d56e78"
 _DOWN_REVISION = "e7f1a3c9d20b"
 

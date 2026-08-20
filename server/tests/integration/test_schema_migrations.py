@@ -16,6 +16,8 @@ from proliferate.main import create_app
 from tests.integration.schema_migration_assertions import assert_current_schema
 from tests.postgres import run_migrations_async, temporary_database
 
+pytestmark = pytest.mark.migration
+
 HEAD_REVISION = get_head_revision()
 
 

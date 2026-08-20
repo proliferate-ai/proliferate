@@ -70,8 +70,8 @@ reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_migration.py"
-max_lines = 619
-reason = "NEW in D-3: the legacy-enrollment migration proofs (D6) + the org-only grep-gates (D8)"
+max_lines = 621
+reason = "NEW in D-3: the legacy-enrollment migration proofs (D6) + the org-only grep-gates (D8); +2: server-ci migration-marker experiment adds a module-level pytestmark = pytest.mark.migration so this file's round-trips can be deselected on pull_request"
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_store.py"
