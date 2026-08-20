@@ -420,7 +420,7 @@ jobs:
       - name: Enforce /login runtime budget
         run: node scripts/measure-login-runtime-budget.mjs
 
-  # EXPERIMENT (exp/frontend-shard): housekeeping that "Test product client"
+  # Housekeeping that "Test product client"
   # does not need (typecheck, the python-only checks, and the two other
   # focused vitest invocations) lives in its own job here so every matrix
   # shard below is pure install+build+test. Runs in parallel with the shards;
@@ -475,10 +475,10 @@ jobs:
       - name: Test workflow authoring surface
         run: pnpm --filter @proliferate/product-client exec vitest run src/components/workflows/builder-v2/WorkflowBuilderSurface.test.tsx src/components/workflows/main/WorkflowsMainSurface.test.tsx
 
-  # EXPERIMENT (exp/frontend-shard): "Test product client" was the pole of the
-  # combined job (~338s of ~8m38s-9m13s wall clock). Sharded 4-way via
-  # vitest's native --shard (3-way landed at 227s max shard wall clock, still
-  # over the 3-minute target — see PR body for the measured numbers). Every
+  # "Test product client" was the pole of the combined job (~338s of
+  # ~8m38s-9m13s wall clock). Sharded 4-way via vitest's native --shard
+  # (3-way still exceeded the 3-minute target; measured numbers in PR #2120).
+  # Every
   # other step this job used to run (typecheck, python checks, the two other
   # focused vitest invocations) moved to shared-frontend-checks above, so
   # every shard here is pure install+build+test. "Install dependencies" and
