@@ -242,6 +242,10 @@ path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-menu-navigat
 reason = "pre-existing non-transcript scroller: composer menu keyboard-nav scrollTo/scrollIntoView; held so no net-new writer is added"
 
 [[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/files/viewer/FileSourceView.tsx"
+reason = "non-transcript scroller: file-viewer line-navigation scrollIntoView on the non-virtualized source path (frozen spec 03D ruling 5); the virtualized path uses the virtualizer's own scrollToIndex"
+
+[[transcript_scroll_writer]]
 path = "apps/packages/product-client/src/hooks/chat/ui/use-model-picker-keyboard-nav.ts"
 reason = "pre-existing non-transcript scroller: model-picker keyboard-nav scrollIntoView; held so no net-new writer is added"
 
