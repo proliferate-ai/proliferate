@@ -13,7 +13,7 @@ use crate::live::sessions::actor::config::diagnostics::ConfigFailureStage;
 use crate::live::sessions::actor::config::handle::apply_resolved_launch_intent;
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, emit_startup_state, load_startup_restore_snapshot,
-    log_config_stage_result,
+    log_config_stage_result, persist_session_config_state_if_changed,
 };
 use crate::live::sessions::actor::config::restore::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
@@ -340,7 +340,7 @@ impl SessionActor {
         // Established sessions instead restore their already-confirmed full
         // snapshot so later live mutations remain authoritative.
         if startup_restore_snapshot.is_none() {
-            if let Err(error) = apply_resolved_launch_intent(
+            match apply_resolved_launch_intent(
                 &conn,
                 &native_session_id,
                 &session_id,
@@ -350,10 +350,35 @@ impl SessionActor {
             )
             .await
             {
-                tracing::warn!(session_id = %session_id, error = %error, "failed to apply and confirm launch intent");
-                queue_launch_observation_refresh(&config.caps, &source_agent_kind, &session_id);
-                let _ = ready_tx.send(Err(startup_config_failure(&startup_strategy, &error)));
-                return Err(error);
+                Err(error) => {
+                    tracing::warn!(session_id = %session_id, error = %error, "failed to apply and confirm launch intent");
+                    queue_launch_observation_refresh(&config.caps, &source_agent_kind, &session_id);
+                    let _ = ready_tx.send(Err(startup_config_failure(&startup_strategy, &error)));
+                    return Err(error);
+                }
+                Ok(dropped_control_ids) => {
+                    // A dropped mode leaves no pending change behind, so the
+                    // requested projection must not keep stating the dropped
+                    // value forever against a diverging current value.
+                    if dropped_control_ids.iter().any(|id| id == "mode") {
+                        let mut next = persisted_config_state.clone();
+                        next.requested_mode_id = None;
+                        if let Err(error) = persist_session_config_state_if_changed(
+                            config.caps.state.as_ref(),
+                            &event_sink,
+                            &session_id,
+                            &mut persisted_config_state,
+                            next,
+                            chrono::Utc::now().to_rfc3339(),
+                        )
+                        .await
+                        {
+                            let _ = ready_tx
+                                .send(Err(startup_config_failure(&startup_strategy, &error)));
+                            return Err(error);
+                        }
+                    }
+                }
             }
         }
         // This is the first snapshot write for a newly-created session. At this

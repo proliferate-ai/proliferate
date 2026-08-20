@@ -17,7 +17,8 @@ records:
 | `agent.launch_options_probe.completed` | harness kind, basis/revision, result/state, counts, duration, bounded failure code |
 | `agent.launch_options.served` | harness kind, basis/revision, state, counts |
 | `session.launch_selection.validated` | session/correlation identity, harness kind, result, selected key names/counts, bounded rejection code |
-| `session.initial_config.apply` | session identity, config key, membership/apply/confirmation result |
+| `session.initial_config.apply` | session identity, config key, membership/apply/confirmation result (`confirmed`, `unconfirmed`, `membership_rejected`, `membership_dropped`, `apply_failed`) |
+| `session.initial_config.dropped` | session identity, config key |
 | `session.live_config.changed` | session identity, source sequence, changed key, apply result |
 
 These events never contain selected values, model IDs, descriptions, provider

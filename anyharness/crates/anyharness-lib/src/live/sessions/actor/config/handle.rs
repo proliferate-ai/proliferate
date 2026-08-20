@@ -26,7 +26,7 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
     agent_kind: &str,
     intent: &ResolvedLaunchIntent,
     startup_state: &mut SessionStartupState,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<String>> {
     if let Some(model_id) = intent.model_id.as_deref() {
         if !live_model_ids(startup_state).iter().any(|value| value == model_id) {
             log_initial_config_apply(session_id, agent_kind, "model", "membership_rejected");
@@ -69,6 +69,25 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
         let Some(value) = pending.remove(&config_id) else {
             continue;
         };
+        match initial_control_disposition(startup_state, &config_id, &value) {
+            InitialControlDisposition::AlreadyLive => {
+                log_initial_config_apply(session_id, agent_kind, &config_id, "confirmed");
+                continue;
+            }
+            InitialControlDisposition::Drop => {
+                log_initial_config_apply(session_id, agent_kind, &config_id, "membership_dropped");
+                tracing::warn!(
+                    session_id,
+                    harness_kind = agent_kind,
+                    control_id = %config_id,
+                    event = "session.initial_config.dropped",
+                    "requested control value is absent from the live session; launching with its default"
+                );
+                dropped_control_ids.push(config_id);
+                continue;
+            }
+            InitialControlDisposition::Apply => {}
+        }
         let outcome = match try_apply_config_option_by_id(
             conn,
             native_session_id,
@@ -84,24 +103,6 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
                 return Err(error);
             }
         };
-        // Create-time validation runs against the harness-level observation,
-        // but some harnesses narrow a control's value set per model (codex
-        // reasoning_effort). A value the live session no longer offers after
-        // the model applied is dropped to the session default rather than
-        // failing the whole start; a refusal of an offered value stays fatal.
-        if matches!(outcome, ConfigApplyOutcome::NotApplied) {
-            log_initial_config_apply(session_id, agent_kind, &config_id, "membership_dropped");
-            tracing::warn!(
-                session_id,
-                harness_kind = agent_kind,
-                control_id = %config_id,
-                value = %value,
-                event = "session.initial_config.dropped",
-                "requested control value is absent from the live session; launching with its default"
-            );
-            dropped_control_ids.push(config_id);
-            continue;
-        }
         log_initial_config_apply(
             session_id,
             agent_kind,
@@ -123,13 +124,12 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
                 session_id,
                 harness_kind = agent_kind,
                 control_id = "mode",
-                value = %value,
                 event = "session.initial_config.dropped",
                 "requested control value is absent from the live session; launching with its default"
             );
             dropped_control_ids.push("mode".to_string());
         } else {
-        let outcome = match apply_mode_via_direct_setter_legacy(
+            let outcome = match apply_mode_via_direct_setter_legacy(
                 conn,
                 native_session_id,
                 startup_state,
@@ -157,13 +157,12 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
     }
     // A control id the live statement never surfaced at all is the same
     // per-model narrowing class: drop it rather than failing the start.
-    for (config_id, value) in pending {
+    for (config_id, _value) in pending {
         log_initial_config_apply(session_id, agent_kind, &config_id, "membership_dropped");
         tracing::warn!(
             session_id,
             harness_kind = agent_kind,
             control_id = %config_id,
-            value = %value,
             event = "session.initial_config.dropped",
             "requested control is absent from the live session; launching with its default"
         );
@@ -182,7 +181,41 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
         event = "session.launch_intent.confirmed",
         "confirmed every applicable explicit launch intent value"
     );
-    Ok(())
+    Ok(dropped_control_ids)
+}
+
+/// How the start path treats one explicit control value against the live
+/// statement. Create-time validation runs against the harness-level
+/// observation, but some harnesses narrow a control's value set per model
+/// (codex reasoning_effort). A value the live session does not OFFER after the
+/// model applied is dropped to the session default rather than failing the
+/// whole start. The membership check runs before anything is sent; an OFFERED
+/// value whose setter read-back refuses it stays fatal — the same invariant
+/// the legacy mode branch keeps.
+#[derive(Debug, PartialEq, Eq)]
+pub(in crate::live::sessions::actor) enum InitialControlDisposition {
+    AlreadyLive,
+    Apply,
+    Drop,
+}
+
+pub(in crate::live::sessions::actor) fn initial_control_disposition(
+    startup_state: &SessionStartupState,
+    config_id: &str,
+    value: &str,
+) -> InitialControlDisposition {
+    if config_value_matches_current_state(startup_state, config_id, value) {
+        return InitialControlDisposition::AlreadyLive;
+    }
+    let offered = find_select_option_for_request(&startup_state.config_options, config_id)
+        .is_some_and(|option| {
+            select_option_values(option).iter().any(|candidate| candidate == value)
+        });
+    if offered {
+        InitialControlDisposition::Apply
+    } else {
+        InitialControlDisposition::Drop
+    }
 }
 
 pub(in crate::live::sessions::actor) fn intent_without_dropped_controls(

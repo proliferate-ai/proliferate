@@ -182,9 +182,18 @@ then:
 4. publishes ready only when the complete live current statement matches the
    explicit intent.
 
-Missing, rejected, timed-out, or unconfirmed values fail startup and clean up
-the incomplete native session. A contradiction queues a new override-free
-target probe; configured session values never become target defaults.
+The explicit model stays fail-closed: an absent or unconfirmed model fails
+startup and cleans up the incomplete native session. Controls carry one
+carve-out for per-model narrowing: some harnesses shrink a control's allowed
+values under the applied model (codex `reasoning_effort`), so a control value
+the live statement does not offer is dropped to the live session default with a
+`membership_dropped` result and a `session.initial_config.dropped` event, and
+the final aggregate check runs against the intent minus the dropped controls. A
+dropped mode also clears the session's requested-mode projection. An OFFERED
+value that is rejected, timed out, or unconfirmed by its setter read-back still
+fails startup and cleans up the incomplete native session. A contradiction
+queues a new override-free target probe; configured session values never become
+target defaults.
 
 ## Active session configuration
 
@@ -212,6 +221,7 @@ credentials, descriptions, provider output, or filesystem paths:
 - `agent.launch_options.served`
 - `session.launch_selection.validated`
 - `session.initial_config.apply`
+- `session.initial_config.dropped`
 - `session.live_config.changed`
 
 Events include safe identifiers, basis/revision or source sequence, state,

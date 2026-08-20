@@ -72,3 +72,46 @@ fn intent_without_dropped_controls_keeps_undropped_values() {
     );
     assert!(!confirmed.control_values.contains_key("reasoning_effort"));
 }
+
+#[test]
+fn disposition_drops_only_values_the_live_statement_does_not_offer() {
+    let effort = acp::schema::SessionConfigOption::select(
+        "reasoning_effort",
+        "Reasoning effort",
+        "xhigh",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("low", "Low"),
+            acp::schema::SessionConfigSelectOption::new("xhigh", "Xhigh"),
+        ],
+    );
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: vec![effort],
+        current_model_id: Some("gpt-5.5".to_string()),
+        available_models: session_model_options(&["gpt-5.5"]),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+
+    // Negative control: an OFFERED value must go through the setter path so a
+    // read-back refusal stays fatal; it must never be silently dropped.
+    assert_eq!(
+        initial_control_disposition(&startup_state, "reasoning_effort", "low"),
+        InitialControlDisposition::Apply,
+    );
+    // A value the live statement already states needs no round-trip.
+    assert_eq!(
+        initial_control_disposition(&startup_state, "reasoning_effort", "xhigh"),
+        InitialControlDisposition::AlreadyLive,
+    );
+    // The per-model narrowing class: not offered under the applied model.
+    assert_eq!(
+        initial_control_disposition(&startup_state, "reasoning_effort", "max"),
+        InitialControlDisposition::Drop,
+    );
+    // A control the live statement never surfaced at all.
+    assert_eq!(
+        initial_control_disposition(&startup_state, "fast-mode", "on"),
+        InitialControlDisposition::Drop,
+    );
+}
