@@ -183,6 +183,10 @@ jobs:
   test-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
       DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
       JWT_SECRET: test-jwt-secret
@@ -260,8 +264,37 @@ jobs:
           docker exec "$container" psql -U proliferate -d proliferate \
             -c 'SHOW max_locks_per_transaction;'
 
-      - name: Run integration tests
-        run: pytest tests/integration tests/e2e/cloud/test_e2b_webhooks.py -n 4 -q --durations=20
+      # Deterministic file-level partition: list every integration test file
+      # plus the one e2e file this lane also carries, sort them (independent
+      # of filesystem traversal order), and take every third file starting at
+      # this shard's offset. Whole files stay together -- xdist distributes
+      # within a shard -- so no test can land in two shards or in none, and
+      # the partition is identical across workers, runs, and reruns because
+      # it depends only on the sorted file list, never on collection or
+      # runtime order.
+      - name: Partition integration test files (shard ${{ matrix.shard }} of 3)
+        id: partition
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(
+            { find tests/integration -type f \( -name 'test_*.py' -o -name '*_test.py' \); \
+              echo tests/e2e/cloud/test_e2b_webhooks.py; } | sort -u
+          )
+          echo "Total integration test files: ${#files[@]}"
+          shard_files=()
+          for i in "${!files[@]}"; do
+            if (( i % 3 == SHARD - 1 )); then
+              shard_files+=("${files[$i]}")
+            fi
+          done
+          echo "Shard ${SHARD} owns ${#shard_files[@]} files:"
+          printf '  %s\n' "${shard_files[@]}"
+          printf '%s\n' "${shard_files[@]}" > shard_files.txt
+
+      - name: Run integration tests (shard ${{ matrix.shard }} of 3)
+        run: xargs -a shard_files.txt pytest -n 4 -q --durations=20
 
   docker:
     runs-on: ubuntu-latest
