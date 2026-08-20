@@ -1,0 +1,58 @@
+# TEMPORARY EXPERIMENT — REMOVE BEFORE MERGE
+#
+# Measures the effect of (a) collapsing the four separate `cargo build
+# --release -p <pkg>` steps in release-desktop.yml into one combined
+# invocation and (b) adding Swatinem/rust-cache@v2, without dispatching a
+# real desktop release (no signing secrets, no bundling, no notarization).
+#
+# Mirrors ONLY: toolchain setup -> rust-cache -> the combined cargo build,
+# for the aarch64-apple-darwin target on macos-15, matching the ARM leg of
+# release-desktop.yml's build-desktop job. Two pushes to this branch give a
+# cold-cache run and a warm-cache run to compare against the 12.5m four-step
+# baseline measured on nightly train run 32167413474.
+#
+# This workflow and this comment block must be deleted before this branch
+# merges to main.
+name: EXPERIMENT Desktop build speed (TEMPORARY)
+
+on:
+  push:
+    branches: [exp/desktop-build-speed]
+
+concurrency:
+  group: exp-desktop-build-speed
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  measure-combined-build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: aarch64-apple-darwin
+
+      - name: Build Rust binaries for target (combined)
+        shell: bash
+        run: |
+          time cargo build --release --target aarch64-apple-darwin \
+            -p anyharness \
+            -p proliferate-diagnostics-collector \
+            -p proliferate-debug \
+            -p proliferate-worker
+
+      - name: Report built artifacts
+        shell: bash
+        run: |
+          ls -la target/aarch64-apple-darwin/release/ | grep -E 'anyharness$|proliferate-diagnostics-collector$|proliferate-debug$|proliferate-worker$'
