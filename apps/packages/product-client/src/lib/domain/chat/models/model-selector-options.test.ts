@@ -32,6 +32,45 @@ describe("buildModelSelectorGroups target authority", () => {
     expect(group?.models.map((model) => model.modelId)).toEqual(["live-only"]);
   });
 
+  it("keeps every other observed harness while a session is active", () => {
+    const codexAgent = {
+      ...observedAgent,
+      kind: "codex",
+      displayName: "Codex",
+      defaultModelId: "gpt-5.6-sol",
+      models: [{ id: "gpt-5.6-sol", displayName: "GPT-5.6 Sol", aliases: [] }],
+    };
+    const groups = buildModelSelectorGroups(
+      [observedAgent, codexAgent] as never,
+      { kind: "claude", modelId: "live-only" },
+      { kind: "claude", modelId: "live-only" },
+      {
+        kind: "claude",
+        values: [{ value: "live-only", label: "Live only" }],
+      },
+    );
+    // Negative control against the cutover regression: the active live control
+    // must not collapse the picker to the active harness alone.
+    expect(groups.map((group) => group.kind)).toEqual(["claude", "codex"]);
+    expect(groups[0]?.models.map((model) => model.modelId)).toEqual(["live-only"]);
+    expect(groups[1]?.models.map((model) => model.modelId)).toEqual(["gpt-5.6-sol"]);
+    expect(groups[1]?.models[0]?.actionKind).toBe("open_new_chat");
+  });
+
+  it("synthesizes a group when the live control's harness is unobserved", () => {
+    const groups = buildModelSelectorGroups(
+      [observedAgent] as never,
+      { kind: "grok", modelId: "grok-4.6" },
+      { kind: "grok", modelId: "grok-4.6" },
+      {
+        kind: "grok",
+        values: [{ value: "grok-4.6", label: "Grok 4.6" }],
+      },
+    );
+    expect(groups.map((group) => group.kind)).toEqual(["grok", "claude"]);
+    expect(groups[0]?.models.map((model) => model.modelId)).toEqual(["grok-4.6"]);
+  });
+
   it("marks a refused exact value without dropping the row", () => {
     const [group] = buildModelSelectorGroups(
       [observedAgent] as never,
