@@ -415,7 +415,7 @@ jobs:
           version=$(grep -m1 '^  playwright-core@' pnpm-lock.yaml | sed -E 's/^  playwright-core@([0-9.]+):.*/\1/')
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # EXPERIMENT (exp/playwright-cache): cache the downloaded browser
+      # Cache the downloaded browser
       # binaries so a cache hit skips the network download; the key is the
       # exact playwright-core version resolved above so a bump auto-busts it.
       # The install step below still installs OS dependencies unconditionally
@@ -535,8 +535,7 @@ jobs:
           version=$(grep -m1 '^  playwright-core@' pnpm-lock.yaml | sed -E 's/^  playwright-core@([0-9.]+):.*/\1/')
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # EXPERIMENT (exp/playwright-cache): see login-budget's cache step for
-      # rationale. Keyed separately (chromium-webkit) from the chromium-only
+      # See login-budget's cache step for rationale. Keyed separately (chromium-webkit) from the chromium-only
       # jobs since this job installs a superset of browsers.
       - name: Cache Playwright browsers
         id: playwright-cache
@@ -626,8 +625,7 @@ jobs:
           version=$(grep -m1 '^  playwright-core@' pnpm-lock.yaml | sed -E 's/^  playwright-core@([0-9.]+):.*/\1/')
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # EXPERIMENT (exp/playwright-cache): see login-budget's cache step for
-      # rationale.
+      # See login-budget's cache step for rationale.
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
