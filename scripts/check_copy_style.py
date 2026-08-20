@@ -9,11 +9,14 @@ rule's neighbours in that doc (the type ramp, design attribution, toast copy)
 are each mechanically enforced; this one was not, so it had drifted into ten
 shipped strings by the time this guard was written.
 
-This engine scans only *string literals* under the product copy trees. An em
-dash inside a `//` or `/* */` comment, or in prose describing a rule, is left
-alone: a comment is not product text. The rule itself is the record under
-`lints/product/copy-style.toml`; diagnostics are rendered from it via
-`scripts/lint_records.py`, the same shared loader the sibling checks use.
+This engine flags an em dash that lands in a *string or template literal* under
+the product copy trees, and ignores one inside a `//` or `/* */` comment: a
+comment is not product text. It is a small state machine rather than a regex so
+it stays correct through the cases a regex gets wrong — a `//` sequence inside a
+string is not a comment, and a nested template literal inside a `${...}`
+interpolation does not end the outer template early. The rule itself is the
+record under `lints/product/copy-style.toml`; diagnostics are rendered from it
+via `scripts/lint_records.py`, the shared loader the sibling checks use.
 """
 
 from __future__ import annotations
@@ -41,58 +44,106 @@ SCANNED_ROOTS = ["apps/packages/product-client/src/copy"]
 EXTENSIONS = {".ts", ".tsx"}
 SKIPPED_DIR_NAMES = {"node_modules", "dist", "build", ".next", "generated", "__fixtures__"}
 
+# Lexer states. A stack models nesting: a template literal can hold a `${...}`
+# expression (EXPR), and that expression can open another string or template.
+CODE, EXPR, SQ, DQ, TMPL, LINE_COMMENT, BLOCK_COMMENT = range(7)
+COPY_STATES = frozenset({SQ, DQ, TMPL})  # em dash here is product text
 
-def string_literal_spans(text: str):
-    """Yield (start, end) of every string-literal body, skipping comments.
 
-    A hand-rolled scanner rather than a regex: it has to track escapes and skip
-    `//` and `/* */` comments so an em dash in a comment is never seen. Template
-    literals are included (they hold copy too); `${...}` insides are copy-bearing
-    and left in the span, which is fine — we only look for the em-dash char.
+def em_dash_lines(text: str) -> list[int]:
+    """Return the 1-based line of every em dash that lands in a string literal.
+
+    Em dashes inside comments are ignored. The scanner tracks `${...}` depth so
+    a nested template does not end its parent early.
     """
+    stack = [CODE]
+    brace_depth = [0]  # parallel to EXPR frames; index by position in stack
+    hits: list[int] = []
+    line = 1
     i, n = 0, len(text)
     while i < n:
         c = text[i]
-        if c == "\\":
-            i += 2
-            continue
-        if c == "/" and i + 1 < n:
-            if text[i + 1] == "/":
-                j = text.find("\n", i)
-                i = n if j < 0 else j
+        nxt = text[i + 1] if i + 1 < n else ""
+        top = stack[-1]
+
+        if top in (CODE, EXPR):
+            if c == "/" and nxt == "/":
+                stack.append(LINE_COMMENT)
+                i += 2
                 continue
-            if text[i + 1] == "*":
-                j = text.find("*/", i + 2)
-                i = n if j < 0 else j + 2
+            if c == "/" and nxt == "*":
+                stack.append(BLOCK_COMMENT)
+                i += 2
                 continue
-        if c in "\"'`":
-            quote = c
-            start = i + 1
-            k = start
-            while k < n:
-                if text[k] == "\\":
-                    k += 2
-                    continue
-                if text[k] == quote:
-                    break
-                if quote != "`" and text[k] == "\n":
-                    break
-                k += 1
-            yield start, min(k, n)
-            i = k + 1
-            continue
+            if c == "'":
+                stack.append(SQ)
+            elif c == '"':
+                stack.append(DQ)
+            elif c == "`":
+                stack.append(TMPL)
+            elif top == EXPR and c == "{":
+                brace_depth[-1] += 1
+            elif top == EXPR and c == "}":
+                if brace_depth[-1] == 0:
+                    stack.pop()
+                    brace_depth.pop()
+                else:
+                    brace_depth[-1] -= 1
+            elif c == "\n":
+                line += 1
+        elif top == LINE_COMMENT:
+            if c == "\n":
+                stack.pop()
+                line += 1
+        elif top == BLOCK_COMMENT:
+            if c == "*" and nxt == "/":
+                stack.pop()
+                i += 2
+                continue
+            if c == "\n":
+                line += 1
+        elif top in (SQ, DQ):
+            if c == "\\":
+                i += 2
+                continue
+            if (top == SQ and c == "'") or (top == DQ and c == '"'):
+                stack.pop()
+            elif c == "\n":
+                stack.pop()  # unterminated single-line string; recover
+                line += 1
+            elif c == EM_DASH:
+                hits.append(line)
+        elif top == TMPL:
+            if c == "\\":
+                i += 2
+                continue
+            if c == "`":
+                stack.pop()
+            elif c == "$" and nxt == "{":
+                stack.append(EXPR)
+                brace_depth.append(0)
+                i += 2
+                continue
+            elif c == "\n":
+                line += 1
+            elif c == EM_DASH:
+                hits.append(line)
         i += 1
+    return hits
 
 
 @dataclass(frozen=True)
 class Finding:
     path: Path
     lineno: int
-    snippet: str
 
     @property
     def relative_path(self) -> str:
         return str(self.path.relative_to(REPO_ROOT))
+
+
+def scan_text(path: Path, text: str) -> list[Finding]:
+    return [Finding(path, ln) for ln in em_dash_lines(text)]
 
 
 def iter_files():
@@ -105,34 +156,23 @@ def iter_files():
                 continue
             if any(part in SKIPPED_DIR_NAMES for part in path.parts):
                 continue
-            if path.name.endswith(".test.ts") or path.name.endswith(".test.tsx"):
+            if path.name.endswith((".test.ts", ".test.tsx")):
                 continue
             yield path
-
-
-def scan_text(path: Path, text: str) -> list[Finding]:
-    findings: list[Finding] = []
-    for start, end in string_literal_spans(text):
-        body = text[start:end]
-        if EM_DASH in body:
-            lineno = text.count("\n", 0, start) + 1
-            findings.append(Finding(path, lineno, body.strip()[:100]))
-    return findings
 
 
 def main() -> int:
     if RULE_ID not in OWNED_RULE_IDS:
         print(f"{CHECKER}: rule record {RULE_ID} missing from lints/product", file=sys.stderr)
         return 2
+    rule = RULES.rules[RULE_ID]
     findings: list[Finding] = []
     for path in iter_files():
         findings.extend(scan_text(path, path.read_text(encoding="utf-8")))
     if not findings:
         return 0
-    rule = RULES.rules[RULE_ID]
     for f in findings:
-        location = f"{f.relative_path}:{f.lineno}"
-        print(lint_records.render_diagnostic(rule, location, f.snippet))
+        print(lint_records.render_diagnostic(rule, f"{f.relative_path}:{f.lineno}"))
     print(f"\n{len(findings)} em-dash violation(s) in product copy.", file=sys.stderr)
     return 1
 

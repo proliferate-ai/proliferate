@@ -36,5 +36,6 @@ text. Every neighbouring rule in that doc is enforced by a checker; leaving this
 one as prose is why it drifted into ten shipped strings. Enforcing it keeps the
 product's voice out of the uncanny valley its own taste doc names."""
 
-example_bad = "\"Showing shipped catalog models — not yet verified by a probe.\""
-example_good = "\"Showing shipped catalog models. Not yet verified by a probe.\""
+[rule.example]
+bad = "\"Showing shipped catalog models — not yet verified by a probe.\""
+good = "\"Showing shipped catalog models. Not yet verified by a probe.\""
