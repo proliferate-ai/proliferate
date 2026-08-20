@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
 from alembic import command
 from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from proliferate.db.migrations import build_alembic_config
 from tests.postgres import run_migrations_async, temporary_database
+
+pytestmark = pytest.mark.migration
 
 _REVISION = "6f545e279264"
 _DOWN_REVISION = "ecffa1106847"

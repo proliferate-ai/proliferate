@@ -165,7 +165,17 @@ jobs:
       - name: Install dependencies
         run: uv pip install --system -e ".[dev]"
 
-      - name: Run tests
+      # Migration round-trip tests (marker: migration) re-run full alembic
+      # chains and guard deploy-time upgrade/downgrade promises, not PR
+      # correctness. They're ~7% of this job's runtime (20 of the 20 slowest
+      # tests, 16-30s each), so PRs skip them and push-to-main / release
+      # builds (workflow_call) still run the full suite.
+      - name: Run tests (pull request - migration round-trips deferred to push)
+        if: github.event_name == 'pull_request'
+        run: pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py -q --durations=20 -m "not migration"
+
+      - name: Run tests (full suite)
+        if: github.event_name != 'pull_request'
         run: pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py -q --durations=20
 
   docker:

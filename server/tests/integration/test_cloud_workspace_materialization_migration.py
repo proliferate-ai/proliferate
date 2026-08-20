@@ -22,6 +22,7 @@ import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -29,6 +30,8 @@ from alembic import command
 from proliferate.db.migrations import build_alembic_config
 from proliferate.server.cloud.workspaces.service import MATERIALIZATION_STALL_SECONDS
 from tests.postgres import temporary_database
+
+pytestmark = pytest.mark.migration
 
 _REVISION = "c705e3784eb4"
 _DOWN_REVISION = "c3a7b8d9e0f1"

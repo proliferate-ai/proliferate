@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
 from alembic import command
 from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -27,6 +28,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from proliferate.db.migrations import build_alembic_config
 from proliferate.db.models.base import Base
 from tests.postgres import temporary_database
+
+pytestmark = pytest.mark.migration
 
 _REVISION = "ab5316095737"
 _DOWN_REVISION = "a1c2f4d6b8e0"

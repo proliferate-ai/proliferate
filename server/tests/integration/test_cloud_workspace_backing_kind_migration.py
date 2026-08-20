@@ -30,6 +30,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from proliferate.db.migrations import build_alembic_config
 from tests.postgres import run_migrations_async, temporary_database
 
+pytestmark = pytest.mark.migration
+
 _REVISION = "c3a7b8d9e0f1"
 _DOWN_REVISION = "6f545e279264"
 _BRANCH_INDEX = "ux_cloud_workspace_active_repo_environment_branch"

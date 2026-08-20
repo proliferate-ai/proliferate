@@ -18,12 +18,15 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 
+import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import command
 from proliferate.db.migrations import build_alembic_config
 from tests.postgres import temporary_database
+
+pytestmark = pytest.mark.migration
 
 _REVISION = "b7c1e4d9f082"
 _DOWN_REVISION = "28adf1a9e376"
