@@ -268,7 +268,11 @@ jobs:
       # EXPERIMENT (exp/rust-build-timings, never merge): capture per-crate
       # compile timing data to inform a future split of anyharness-lib.
       - name: Cargo build with timings
-        run: cargo build --workspace --tests --timings=html,json
+        # Stable cargo's --timings flag takes no value (the FMTS=html,json
+        # argument is nightly-only, behind -Z unstable-options); it always
+        # writes an HTML report (with embedded per-unit JSON data) to
+        # target/cargo-timings/.
+        run: cargo build --workspace --tests --timings
 
       - name: Cargo test
         run: cargo test --workspace
