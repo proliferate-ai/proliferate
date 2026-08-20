@@ -409,6 +409,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: |
+          version=$(grep -m1 '^  playwright-core@' pnpm-lock.yaml | sed -E 's/^  playwright-core@([0-9.]+):.*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # EXPERIMENT (exp/playwright-cache): cache the downloaded browser
+      # binaries so a cache hit skips the network download; the key is the
+      # exact playwright-core version resolved above so a bump auto-busts it.
+      # --with-deps still runs unconditionally below because the OS-level apt
+      # packages it installs live outside this cache dir and would not
+      # survive on the ephemeral runner anyway; playwright's own installer
+      # already no-ops the binary download when the target revision is
+      # already present, so this only removes the download, not the apt step.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-chromium
+
       - name: Install Playwright chromium
         run: |
           sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"
@@ -507,6 +528,22 @@ jobs:
       - name: Typecheck scroll-physics fixture
         run: pnpm --filter @proliferate/product-client typecheck:scroll-physics
 
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: |
+          version=$(grep -m1 '^  playwright-core@' pnpm-lock.yaml | sed -E 's/^  playwright-core@([0-9.]+):.*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # EXPERIMENT (exp/playwright-cache): see login-budget's cache step for
+      # rationale. Keyed separately (chromium-webkit) from the chromium-only
+      # jobs since this job installs a superset of browsers.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-chromium-webkit
+
       - name: Install Playwright chromium + webkit
         run: |
           sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"
@@ -581,6 +618,21 @@ jobs:
 
       - name: Verify generated cloud SDK artifacts are committed
         run: git diff --exit-code -- cloud/sdk/src/generated/openapi.ts
+
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: |
+          version=$(grep -m1 '^  playwright-core@' pnpm-lock.yaml | sed -E 's/^  playwright-core@([0-9.]+):.*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # EXPERIMENT (exp/playwright-cache): see login-budget's cache step for
+      # rationale.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-chromium
 
       - name: Install Playwright chromium
         run: |
