@@ -533,6 +533,16 @@ stats for `Review changes` on hover/focus. File headers retain the shared diff
 line-wrap context menu. Aggregate and file-row stats use the semantic dark-theme
 green/red tokens (`#40c977` and `#fa423e`) and roll changed digits over 300ms
 with the standard enter curve; reduced-motion users receive no digit transition.
+Right-clicking a transcript file reference, edit filename, or diff line-wrap
+trigger clears any WebKit contextual word selection synchronously in the
+`contextmenu` handler before the replacement menu opens, since macOS WebKit
+selects the word under the pointer inside its own context-menu path and
+`preventDefault` cannot stop it. The clear only fires when both the
+selection's anchor and focus nodes are contained by the right-clicked
+element; a selection made elsewhere, or one with an endpoint outside that
+element, is left untouched. This is chrome behavior; it does not apply to
+selecting or right-clicking transcript prose or code-block text itself.
+
 Single-file cards put the filename in the header and do not duplicate a file
 row underneath. Expanded multi-file cards collapse through `Collapse files`.
 The shell follows a restrained three-level surface hierarchy: its header

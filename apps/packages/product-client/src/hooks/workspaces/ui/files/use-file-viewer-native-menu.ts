@@ -61,7 +61,14 @@ export function useFileViewerNativeMenu(actions: FileViewerNativeMenuActions) {
   return useNativeMenu(() => buildFileViewerNativeMenuItems(actions));
 }
 
-/** Right-click variant for the viewer content area. */
+/**
+ * Right-click variant for the viewer content area. Source/rendered file text
+ * is content, not chrome: the contextual word selection is normal platform
+ * behavior here, so this opts out of the default clearing.
+ */
 export function useFileViewerNativeContextMenu(actions: FileViewerNativeMenuActions) {
-  return useNativeContextMenu(() => buildFileViewerNativeMenuItems(actions));
+  return useNativeContextMenu(
+    () => buildFileViewerNativeMenuItems(actions),
+    { preserveContextualSelection: true },
+  );
 }
