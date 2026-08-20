@@ -418,11 +418,12 @@ jobs:
       # EXPERIMENT (exp/playwright-cache): cache the downloaded browser
       # binaries so a cache hit skips the network download; the key is the
       # exact playwright-core version resolved above so a bump auto-busts it.
-      # --with-deps still runs unconditionally below because the OS-level apt
-      # packages it installs live outside this cache dir and would not
-      # survive on the ephemeral runner anyway; playwright's own installer
-      # already no-ops the binary download when the target revision is
-      # already present, so this only removes the download, not the apt step.
+      # The install step below still installs OS dependencies unconditionally
+      # (see its own run block) because those apt packages live outside this
+      # cache dir and would not survive on the ephemeral runner anyway;
+      # playwright's own installer already no-ops the binary download when
+      # the target revision is already present, so this only removes the
+      # download, not the apt step.
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
