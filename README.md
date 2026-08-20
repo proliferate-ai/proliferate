@@ -41,13 +41,24 @@ Each task gets an isolated git worktree — branch, terminal, conversation, and 
 
 <br />
 
-Proliferate is a desktop and web app for running coding agents in parallel.
+Proliferate is a desktop app for running coding agents in parallel.
 
 - **Run any mix of agents in parallel**, each in its own isolated worktree, with native tools, auth, and config intact
 - **Let your agents manage each other**, like having Codex hand design work to Claude Code
 - **Set up MCPs and skills once**, shared across every agent
 
-## Bring Your Agent
+## Features
+
+- 🤖 **[Native harnesses](https://proliferate.com/docs/product/agents)** - Claude Code, Codex, OpenCode, Cursor, Grok, and more
+- 🌳 **[Worktree workspaces](https://proliferate.com/docs/product/workspaces)** - an isolated branch and working directory for every task
+- 🔍 **[Git & diff review](https://proliferate.com/docs/product/workspaces/review-and-publish)** - inspect and edit agent changes without leaving the app
+- 🛡️ **[Plan & code review agents](https://proliferate.com/docs/product/workspaces/review-and-publish)** - reviewer agents check plans, diffs, risks, and branch readiness before you do
+- 🪆 **[Parallel agents & subagents](https://proliferate.com/docs/product/workspaces/parallel-agents)** - run agents side by side, or let them delegate scoped work to other agents
+- 🧩 **[Integrations](https://proliferate.com/docs/product/integrations)** - MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
+- ⏰ **[Workflows](https://proliferate.com/docs/product/workflows)** - recurring and event-driven agent runs: nightly review passes, triage on alerts, dependency bumps
+- 🖼️ **[Artifacts](https://proliferate.com/docs/product/learn/cowork-and-artifacts)** - docs, UI, demos, and components rendered inline as agents produce them
+
+## Supported agents
 
 Each agent runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact. New harness features show up in Proliferate the day they ship.
 
@@ -85,78 +96,12 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
   </tr>
 </table>
 
-## Features
-
-- 🤖 **[Native harnesses](https://proliferate.com/docs/product/agents)** - Claude Code, Codex, OpenCode, Cursor, Grok, and more
-- 🌳 **[Worktree workspaces](https://proliferate.com/docs/product/workspaces)** - an isolated branch and working directory for every task
-- 🔍 **[Git & diff review](https://proliferate.com/docs/product/workspaces/review-and-publish)** - inspect and edit agent changes without leaving the app
-- 🛡️ **[Plan & code review agents](https://proliferate.com/docs/product/workspaces/review-and-publish)** - reviewer agents check plans, diffs, risks, and branch readiness before you do
-- 🪆 **[Parallel agents & subagents](https://proliferate.com/docs/product/workspaces/parallel-agents)** - run agents side by side, or let them delegate scoped work to other agents
-- 🧩 **[Integrations](https://proliferate.com/docs/product/integrations)** - MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
-- ⏰ **[Workflows](https://proliferate.com/docs/product/workflows)** - recurring and event-driven agent runs: nightly review passes, triage on alerts, dependency bumps
-- 🖼️ **[Artifacts](https://proliferate.com/docs/product/learn/cowork-and-artifacts)** - docs, UI, demos, and components rendered inline as agents produce them
-
-## Open Source
+## Self-hosting
 
 Proliferate is AGPL-3.0 — the whole stack: desktop client, web app, and cloud
-control plane. See [Self-hosting](#self-hosting) below.
-
-## Getting Started
-
-### Quick Start
-
-Download Proliferate from [proliferate.com](https://proliferate.com) or follow
-the [quickstart](https://proliferate.com/docs/product/quickstart).
-
-<details>
-<summary>Run from source</summary>
-
-### Run Locally From Source
-
-Requirements:
-
-- Rust stable
-- Node.js 22+
-- pnpm
-
-Run the desktop app with the bundled local AnyHarness runtime:
-
-```bash
-make install
-make dev-local
-```
-
-### Local Full-Stack Development
-
-Requirements:
-
-- Rust stable
-- Node.js 22+
-- pnpm
-- Python 3.12+
-- `uv`
-- Docker, for the local control plane database
-
-Use named dev profiles for full-stack development when multiple worktrees run at
-the same time.
-
-```bash
-make server-install
-make setup PROFILE=main
-make build # first clean worktree, or after generated/Rust/frontend artifacts change
-make dev-list
-make run PROFILE=main
-```
-
-See [dev profiles](./guides/local/dev-profiles.md) for profile state, ports,
-generated Tauri config, and app labels.
-
-</details>
-
-<details id="self-hosting">
-<summary>Self-host Proliferate</summary>
-
-### Self-hosting
+control plane. Download the app from [proliferate.com](https://proliferate.com)
+or follow the [quickstart](https://proliferate.com/docs/product/quickstart) to
+get going in a minute.
 
 The full Proliferate control plane is self-hostable. Start with the
 [deployment docs](https://proliferate.com/docs/deployment) — Docker, AWS, GCP,
@@ -175,9 +120,42 @@ Point the desktop app at your control plane by following
 [Discord](https://discord.gg/2RVNNzEZnj) if you hit problems, and see
 [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 
+<details>
+<summary>Run from source</summary>
+
+<br />
+
+Requirements:
+
+- Rust stable
+- Node.js 22+
+- pnpm
+
+Run the desktop app with the bundled local AnyHarness runtime:
+
+```bash
+make install
+make dev-local
+```
+
+**Local full-stack development** additionally requires Python 3.12+, `uv`, and
+Docker for the local control plane database. Use named dev profiles when
+multiple worktrees run at the same time.
+
+```bash
+make server-install
+make setup PROFILE=main
+make build # first clean worktree, or after generated/Rust/frontend artifacts change
+make dev-list
+make run PROFILE=main
+```
+
+See [dev profiles](./guides/local/dev-profiles.md) for profile state, ports,
+generated Tauri config, and app labels.
+
 </details>
 
-## Proliferate Cloud (Coming Soon)
+## Cloud Sandbox
 
 > Proliferate Cloud is not part of the initial launch — we're rebuilding the
 > sandbox infrastructure to remove the E2B dependency and will ship Cloud in a
