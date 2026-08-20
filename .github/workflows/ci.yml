@@ -263,6 +263,9 @@ jobs:
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup mold linker
+        uses: rui314/setup-mold@v1
+
       - uses: Swatinem/rust-cache@v2
 
       - name: Cargo test
