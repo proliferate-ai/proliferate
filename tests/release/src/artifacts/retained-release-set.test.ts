@@ -128,11 +128,17 @@ test("rejects each required target block missing independently", () => {
   }
 });
 
-test("rejects a missing supported desktop platform", () => {
+test("rejects a missing required desktop platform (darwin-aarch64)", () => {
   assert.throws(
-    () => validateRetainedReleaseReceiptShape(mutated((r) => void r.desktop.packages.pop(), true)),
-    /missing supported platform/,
+    () => validateRetainedReleaseReceiptShape(mutated((r) => void r.desktop.packages.shift(), true)),
+    /missing required platform/,
   );
+});
+
+test("accepts an arm-only desktop receipt while Intel is paused", () => {
+  const receipt = validateRetainedReleaseReceiptShape(mutated((r) => void r.desktop.packages.pop(), true));
+  assert.equal(receipt.desktop.packages.length, 1);
+  assert.equal(receipt.desktop.packages[0]?.platform, "darwin-aarch64");
 });
 
 test("rejects undeclared fields", () => {

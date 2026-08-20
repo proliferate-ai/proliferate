@@ -9,12 +9,15 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const generator = path.join(repoRoot, "scripts/generate-updater-manifest.mjs");
 
-function writeArtifacts(root) {
+// Intel (x86_64) desktop builds are paused 2026-08-20 (release-desktop.yml
+// build-desktop matrix); `armOnly` simulates that paused build producing no
+// x86_64 artifacts.
+function writeArtifacts(root, { armOnly = false } = {}) {
   const artifacts = path.join(root, "artifacts");
   const fixtures = [
     ["desktop-aarch64-apple-darwin", "Proliferate_aarch64.app.tar.gz"],
     ["desktop-x86_64-apple-darwin", "Proliferate_x64.app.tar.gz"],
-  ];
+  ].filter(([directory]) => !armOnly || directory === "desktop-aarch64-apple-darwin");
 
   for (const [directory, artifact] of fixtures) {
     const target = path.join(artifacts, directory);
@@ -26,7 +29,7 @@ function writeArtifacts(root) {
   return artifacts;
 }
 
-function generateManifest(t, notes) {
+function generateManifest(t, notes, { armOnly = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "proliferate-updater-manifest-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const output = path.join(root, "latest.json");
@@ -35,7 +38,7 @@ function generateManifest(t, notes) {
     "--version",
     "1.2.3",
     "--artifacts-dir",
-    writeArtifacts(root),
+    writeArtifacts(root, { armOnly }),
     "--base-url",
     "https://downloads.proliferate.com/desktop/stable",
     "--output",
@@ -55,6 +58,15 @@ test("writes a trimmed release title as top-level notes", (t) => {
   assert.equal(manifest.version, "1.2.3");
   assert.equal(manifest.notes, "Introducing Grok");
   assert.deepEqual(Object.keys(manifest.platforms).sort(), ["darwin-aarch64", "darwin-x86_64"]);
+});
+
+test("generates an arm-only manifest while Intel is paused", (t) => {
+  const { output, result } = generateManifest(t, undefined, { armOnly: true });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /Skipping darwin-x86_64: no artifacts found \(optional platform\)\./);
+  const manifest = JSON.parse(fs.readFileSync(output, "utf8"));
+  assert.deepEqual(Object.keys(manifest.platforms), ["darwin-aarch64"]);
 });
 
 test("omits notes when the release title is absent or blank", (t) => {
