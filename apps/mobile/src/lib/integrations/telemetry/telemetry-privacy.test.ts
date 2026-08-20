@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
     capture: vi.fn(),
     identify: vi.fn(),
     reset: vi.fn(),
+    screen: vi.fn(),
+    startSessionRecording: vi.fn(),
+    startSessionReplay: vi.fn(),
   },
 }));
 
@@ -251,6 +254,53 @@ describe("mobile telemetry privacy", () => {
     expect(mocks.sentrySetUser).toHaveBeenLastCalledWith(null);
   });
 
+  it("constructs PostHog with session replay source-disabled", async () => {
+    vi.resetModules();
+    const adapter = await import("./posthog");
+    adapter.initializeMobilePostHog({
+      environment: "production",
+      release: "proliferate-mobile@1.2.3+abcdef123456",
+      posthog: {
+        enabled: true,
+        apiKey: "phc_test",
+        apiHost: "https://us.i.posthog.com",
+      },
+    });
+
+    expect(mocks.posthogConstructor).toHaveBeenCalledOnce();
+    const [apiKey, options] = mocks.posthogConstructor.mock.calls[0]! as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(apiKey).toBe("phc_test");
+    expect(options.host).toBe("https://us.i.posthog.com");
+    expect(options.enableSessionReplay).toBe(false);
+    expect(typeof options.before_send).toBe("function");
+    expect(options.captureAppLifecycleEvents).toBe(false);
+    expect(Object.keys(options).filter((k) => /replay|record/i.test(k))).toEqual([
+      "enableSessionReplay",
+    ]);
+
+    // A second initialization is a no-op: the idempotency guard stands.
+    adapter.initializeMobilePostHog({
+      environment: "production",
+      release: "proliferate-mobile@1.2.3+abcdef123456",
+      posthog: { enabled: true, apiKey: "phc_test", apiHost: "https://us.i.posthog.com" },
+    });
+    expect(mocks.posthogConstructor).toHaveBeenCalledOnce();
+
+    adapter.trackMobilePostHogScreenView("work");
+    expect(mocks.posthogClient.capture).toHaveBeenCalledOnce();
+    expect(mocks.posthogClient.capture).toHaveBeenCalledWith("mobile_screen_viewed", {
+      screen: "work",
+      surface: "mobile",
+    });
+
+    expect(mocks.posthogClient.screen).not.toHaveBeenCalled();
+    expect(mocks.posthogClient.startSessionRecording).not.toHaveBeenCalled();
+    expect(mocks.posthogClient.startSessionReplay).not.toHaveBeenCalled();
+  });
+
   it("identifies PostHog with the authenticated user id only", async () => {
     vi.resetModules();
     const adapter = await import("./posthog");
@@ -261,7 +311,6 @@ describe("mobile telemetry privacy", () => {
         enabled: true,
         apiKey: "phc_test",
         apiHost: "https://us.i.posthog.com",
-        sessionReplayEnabled: false,
       },
     });
 
@@ -293,13 +342,33 @@ describe("mobile telemetry privacy", () => {
 
     vi.resetModules();
     const posthog = await import("./posthog");
+    posthog.initializeMobilePostHog({
+      environment: "production",
+      release: "proliferate-mobile@1.2.3+abcdef123456",
+      posthog: {
+        enabled: false,
+        apiKey: "phc_test",
+        apiHost: "https://us.i.posthog.com",
+      },
+    });
+    posthog.initializeMobilePostHog({
+      environment: "production",
+      release: "proliferate-mobile@1.2.3+abcdef123456",
+      posthog: { enabled: true, apiKey: null, apiHost: "https://us.i.posthog.com" },
+    });
+    posthog.trackMobilePostHogScreenView("home");
     posthog.identifyMobilePostHogUser("user-123");
     posthog.resetMobilePostHogUser();
 
     expect(mocks.sentryInit).not.toHaveBeenCalled();
     expect(mocks.sentrySetUser).not.toHaveBeenCalled();
     expect(mocks.posthogConstructor).not.toHaveBeenCalled();
+    expect(mocks.posthogClient.register).not.toHaveBeenCalled();
+    expect(mocks.posthogClient.capture).not.toHaveBeenCalled();
     expect(mocks.posthogClient.identify).not.toHaveBeenCalled();
     expect(mocks.posthogClient.reset).not.toHaveBeenCalled();
+    expect(mocks.posthogClient.screen).not.toHaveBeenCalled();
+    expect(mocks.posthogClient.startSessionRecording).not.toHaveBeenCalled();
+    expect(mocks.posthogClient.startSessionReplay).not.toHaveBeenCalled();
   });
 });
