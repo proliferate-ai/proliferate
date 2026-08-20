@@ -481,7 +481,7 @@ jobs:
         run: pnpm --filter @proliferate/product-client exec vitest run src/domain
 
       - name: Test product client
-        run: pnpm --filter @proliferate/product-client test -- --shard=${{ matrix.shard }}/3
+        run: pnpm --filter @proliferate/product-client exec vitest run --shard=${{ matrix.shard }}/3
 
       # Focused Tier-1 gate for the workflow authoring surface: builder save
       # gating (title + unresolved-reference blocks), schema-version refusal,
