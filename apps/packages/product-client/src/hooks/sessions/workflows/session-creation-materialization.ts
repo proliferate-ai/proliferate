@@ -213,6 +213,11 @@ async function runSessionCreationMaterialization({
     ...(options.launchControlValues ?? {}),
     ...rawConfigValuesFromIntentSnapshot(configIntentSnapshot),
   }, launchOptionsObservation);
+  // The options fetch widened the window since the last supersession check;
+  // re-check before committing a runtime session.
+  if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+    return pendingSessionId;
+  }
   assertDirectSessionCreateSupported(target);
   const session: Session = await createSession(targetConnection, {
     ...(options.runtimeSessionId ? { sessionId: options.runtimeSessionId } : {}),

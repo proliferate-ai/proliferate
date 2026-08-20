@@ -87,16 +87,6 @@ export function resolvePreMaterializationConfigIntentControlKeys(input: {
   });
 }
 
-export function configValuesFromIntentSnapshot(
-  snapshot: PreMaterializationConfigIntentSnapshot,
-): Record<string, string> {
-  const values: Record<string, string> = {};
-  for (const entry of snapshot) {
-    values[entry.controlKey] = entry.value;
-  }
-  return values;
-}
-
 export function rawConfigValuesFromIntentSnapshot(
   snapshot: PreMaterializationConfigIntentSnapshot,
 ): Record<string, string> {

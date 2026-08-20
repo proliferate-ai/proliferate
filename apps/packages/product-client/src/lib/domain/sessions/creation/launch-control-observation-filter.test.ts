@@ -90,7 +90,7 @@ describe("filterControlValuesToObservation", () => {
     ).toEqual({});
   });
 
-  it("sends nothing while the target is not currently observed", () => {
+  it("sends nothing when no options were ever observed", () => {
     expect(
       filterControlValuesToObservation(
         { reasoning_effort: "xhigh" },
@@ -100,8 +100,21 @@ describe("filterControlValuesToObservation", () => {
     expect(
       filterControlValuesToObservation(
         { reasoning_effort: "xhigh" },
-        observation({ state: "failed_without_observation" }),
+        observation({ state: "failed_without_observation", options: null }),
       ),
     ).toEqual({});
+  });
+
+  it("keeps valid raw keys during refreshing and last-good-after-failure", () => {
+    // The runtime validates against `options` whenever present regardless of
+    // state; dropping here would silently lose picks it would accept.
+    for (const state of ["refreshing", "last_good_after_failure"] as const) {
+      expect(
+        filterControlValuesToObservation(
+          { reasoning_effort: "xhigh", effort: "xhigh" },
+          observation({ state }),
+        ),
+      ).toEqual({ reasoning_effort: "xhigh" });
+    }
   });
 });

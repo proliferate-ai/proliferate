@@ -9,18 +9,19 @@ import type { HarnessLaunchOptionsResponse } from "@anyharness/sdk";
  * observed, values outside the observed set) must be dropped before create.
  * Omission remains omission: dropped entries fall back to observed defaults.
  *
- * When the observation is unavailable (fetch failure upstream passes `null`)
- * or not currently observed, no key can be validated, so nothing is sent.
+ * When the observation is unavailable (fetch failure upstream passes `null`,
+ * or a state whose `options` is null), no key can be validated, so nothing is
+ * sent. The gate is options presence, not state: the runtime validates against
+ * `options` whenever present (including `refreshing` and
+ * `last_good_after_failure`), so dropping valid raw keys in those states would
+ * silently lose user picks the runtime would accept.
  */
 export function filterControlValuesToObservation(
   controlValues: Record<string, string>,
   observation: HarnessLaunchOptionsResponse | null,
 ): Record<string, string> {
   const controls = observation?.options?.controls;
-  if (
-    !controls
-    || (observation.state !== "observed" && observation.state !== "observed_empty")
-  ) {
+  if (!controls) {
     return {};
   }
   const filtered: Record<string, string> = {};
