@@ -22,7 +22,7 @@ describe("SecretManagementPanel actions", () => {
       />,
     );
 
-    expect(screen.getByText("Pending")).toBeTruthy();
+    expect(screen.queryByText("Pending")).toBeNull();
     expect(screen.getByRole("button", { name: "Add variable" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add file" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add secret" })).toBeNull();
