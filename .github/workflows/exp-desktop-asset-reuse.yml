@@ -1,0 +1,205 @@
+# EXPERIMENTAL — measurement scaffolding only. DO NOT merge to main.
+#
+# This workflow mirrors exactly three steps from release-desktop.yml's
+# build-desktop job (macos-15 / aarch64-apple-darwin leg only):
+#   - "Build bundled agent seed"
+#   - "Generate and build SDK"
+#   - "Build frontend"
+# and wraps each in actions/cache, keyed on the actual inputs that can change
+# that step's output. Goal: measure a cold (cache-miss) run against a warm
+# (cache-hit) run and decide whether folding this into release-desktop.yml is
+# worth it.
+#
+# Explicitly OUT OF SCOPE (owned by the sibling exp/desktop-build-speed
+# experiment, which covers the cargo/rustc build steps): the release cargo
+# builds for anyharness/proliferate-worker/proliferate-debug/diagnostics-
+# collector. This workflow does perform ONE uncached `cargo build --release
+# -p anyharness` because "Build bundled agent seed" needs that binary as an
+# input — that build is a prerequisite, not something this experiment
+# measures or caches, and its duration is excluded from the reported numbers.
+#
+# This file is temporary and must be deleted before any real merge of the
+# caching approach into release-desktop.yml.
+name: "EXPERIMENTAL - Desktop asset reuse probe"
+
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: "Optional note for this probe run (e.g. cold/warm)"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    env:
+      TARGET: aarch64-apple-darwin
+      NODE_OPTIONS: --max-old-space-size=8192
+      # Deliberately NOT setting VITE_PROLIFERATE_SENTRY_DSN / SENTRY_AUTH_TOKEN
+      # / SENTRY_ORG / SENTRY_PROJECT here: apps/desktop/vite.config.ts only
+      # enables the Sentry vite plugin (release creation + sourcemap upload)
+      # when all of those are truthy, and the explicit Sentry-reachability
+      # check inside "Build frontend" only runs when the DSN is set. Leaving
+      # them unset keeps this probe from writing anything to production
+      # Sentry.
+      PROLIFERATE_RELEASE_VERSION: "asset-reuse-probe-${{ github.run_id }}"
+    steps:
+      - name: Note
+        run: |
+          echo "Probe note: ${{ inputs.note }}"
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.TARGET }}
+
+      - name: Install seed packaging tools
+        run: brew install zstd
+
+      # --- Prerequisite, NOT measured/cached (exp/desktop-build-speed's turf) ---
+      - name: "[prereq] Build AnyHarness runtime for target (uncached, out of scope)"
+        run: cargo build --release -p anyharness --target "${{ env.TARGET }}"
+
+      # ---------------------------------------------------------------------
+      # Cache 1: bundled agent seed archive.
+      #
+      # Inputs that can change this step's output:
+      #   - scripts/build-agent-seed.mjs (the builder itself)
+      #   - apps/desktop/src-tauri/agent-seed.inputs.json (pinned Node
+      #     archive URL/sha256 per target)
+      #   - apps/desktop/package.json (desktop app version, baked into the
+      #     seed manifest's appVersion/seedVersion)
+      #   - the anyharness binary's behavior (its `install-agents` subcommand
+      #     is what actually populates the seed's claude/codex payload).
+      #     Rust binaries are not reproducible byte-for-byte across builds
+      #     (paths/timestamps/codegen ordering), so instead of hashing the
+      #     compiled binary we hash the Rust SOURCE that produces it:
+      #     Cargo.lock, root Cargo.toml (workspace profile/members), and the
+      #     full anyharness/crates/** tree. This over-includes (e.g. changes
+      #     to proliferate-worker, which anyharness doesn't depend on) but
+      #     never under-includes, per the correctness-first mandate.
+      # ---------------------------------------------------------------------
+      - name: Restore bundled agent seed cache
+        id: seed-cache
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/src-tauri/agent-seeds
+          key: "seed-v1-${{ runner.os }}-${{ env.TARGET }}-${{ hashFiles('scripts/build-agent-seed.mjs', 'apps/desktop/src-tauri/agent-seed.inputs.json', 'apps/desktop/package.json', 'Cargo.lock', 'Cargo.toml', 'anyharness/crates/**') }}"
+
+      - name: Build bundled agent seed
+        if: steps.seed-cache.outputs.cache-hit != 'true'
+        run: |
+          TMP_SEED_RUNTIME="$(mktemp -d)"
+          node scripts/build-agent-seed.mjs \
+            --target "${{ env.TARGET }}" \
+            --anyharness-bin "$PWD/target/${{ env.TARGET }}/release/anyharness" \
+            --runtime-home "$TMP_SEED_RUNTIME" \
+            --output-dir "$PWD/apps/desktop/src-tauri/agent-seeds"
+
+          test -s "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ env.TARGET }}.tar.zst"
+          test -s "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ env.TARGET }}.sha256"
+          seed_count=$(find apps/desktop/src-tauri/agent-seeds -maxdepth 1 -type f -name 'agent-seed-*.tar.zst' | wc -l | tr -d ' ')
+          [[ "$seed_count" == "1" ]] || { echo "::error::Expected one target seed archive, found $seed_count"; exit 1; }
+          NODE_BIN="$TMP_SEED_RUNTIME/node/${{ env.TARGET }}/bin/node"
+          codesign --verify --verbose "$NODE_BIN"
+          spctl --assess --verbose=4 --type open --context context:primary-signature "$NODE_BIN"
+
+          TMP_SEED_EXTRACT="$(mktemp -d)"
+          zstd -dc "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ env.TARGET }}.tar.zst" | tar -xf - -C "$TMP_SEED_EXTRACT"
+          EXTRACTED_NODE_BIN="$TMP_SEED_EXTRACT/node/${{ env.TARGET }}/bin/node"
+          codesign --verify --verbose "$EXTRACTED_NODE_BIN"
+          spctl --assess --verbose=4 --type open --context context:primary-signature "$EXTRACTED_NODE_BIN"
+
+      - name: pnpm install
+        run: pnpm install
+
+      # ---------------------------------------------------------------------
+      # Cache 2: anyharness SDK generated types + dist, and sdk-react dist.
+      #
+      # Inputs: pnpm-lock.yaml (typescript/openapi-typescript/etc versions),
+      # anyharness/sdk's hand-written src + package.json + tsconfig, and
+      # anyharness/sdk-react's src + package.json + tsconfig. `pnpm run
+      # generate` also shells out to `cargo run --bin anyharness --
+      # print-openapi`, so the OpenAPI surface depends on the same Rust
+      # source captured above — reuse that same source hash.
+      # ---------------------------------------------------------------------
+      - name: Restore SDK dist cache
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            anyharness/sdk/generated
+            anyharness/sdk/dist
+            anyharness/sdk-react/dist
+          key: "sdk-v1-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'anyharness/sdk/src/**', 'anyharness/sdk/package.json', 'anyharness/sdk/tsconfig.json', 'anyharness/sdk-react/src/**', 'anyharness/sdk-react/package.json', 'anyharness/sdk-react/tsconfig.json', 'Cargo.lock', 'Cargo.toml', 'anyharness/crates/**') }}"
+
+      - name: Generate and build SDK
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          cd anyharness/sdk && pnpm run generate && pnpm run build
+          cd ../sdk-react && pnpm run build
+
+      # ---------------------------------------------------------------------
+      # Cache 3: frontend build output.
+      #
+      # apps/desktop's `pnpm run build` script cascades through
+      # @anyharness/sdk, @anyharness/sdk-react, @proliferate/cloud-sdk,
+      # @proliferate/cloud-sdk-react, @proliferate/design, and
+      # @proliferate/product-client (via `pnpm --filter`) before running
+      # `tsc && vite build` in apps/desktop itself. The key below covers
+      # every one of those packages' source, plus apps/desktop's own src,
+      # public assets, index.html, and build config (vite/tailwind/tsconfig),
+      # plus the lockfile and the same Rust source hash (since the SDK
+      # package it rebuilds is itself derived from print-openapi).
+      # cloud/sdk and cloud/sdk-react commit their generated OpenAPI client
+      # to git (no codegen step at build time), so no separate "cloud
+      # backend schema" input is needed beyond their checked-in src.
+      # ---------------------------------------------------------------------
+      - name: Restore frontend dist cache
+        id: frontend-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            cloud/sdk/dist
+            cloud/sdk-react/dist
+            apps/packages/design/dist
+            apps/packages/product-client/dist
+            apps/desktop/dist
+          key: "frontend-v1-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'cloud/sdk/src/**', 'cloud/sdk/package.json', 'cloud/sdk/tsconfig.json', 'cloud/sdk-react/src/**', 'cloud/sdk-react/package.json', 'cloud/sdk-react/tsconfig.json', 'apps/packages/design/src/**', 'apps/packages/design/scripts/**', 'apps/packages/design/package.json', 'apps/packages/design/tsconfig.json', 'apps/packages/product-client/src/**', 'apps/packages/product-client/scripts/**', 'apps/packages/product-client/package.json', 'apps/packages/product-client/tsconfig.json', 'apps/packages/product-client/tsconfig.domain.json', 'anyharness/sdk/src/**', 'anyharness/sdk/package.json', 'anyharness/sdk-react/src/**', 'anyharness/sdk-react/package.json', 'apps/desktop/src/**', 'apps/desktop/public/**', 'apps/desktop/index.html', 'apps/desktop/package.json', 'apps/desktop/tsconfig.json', 'apps/desktop/vite.config.ts', 'apps/desktop/tailwind.config.ts', 'Cargo.lock', 'Cargo.toml', 'anyharness/crates/**') }}"
+
+      - name: Build frontend
+        if: steps.frontend-cache.outputs.cache-hit != 'true'
+        working-directory: apps/desktop
+        run: pnpm run build
+
+      - name: Summarize cache outcomes
+        if: always()
+        run: |
+          {
+            echo "### Desktop asset reuse probe"
+            echo ""
+            echo "| cache | cache-hit |"
+            echo "|---|---|"
+            echo "| seed | ${{ steps.seed-cache.outputs.cache-hit }} |"
+            echo "| sdk | ${{ steps.sdk-cache.outputs.cache-hit }} |"
+            echo "| frontend | ${{ steps.frontend-cache.outputs.cache-hit }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
