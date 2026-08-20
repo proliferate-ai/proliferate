@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
-import { useHomeTargetAgentLaunchOptions } from "#product/hooks/home/derived/use-home-target-agent-launch-options";
+import {
+  useHomeTargetAgentLaunchOptions,
+  useHomeTargetOtherAgentsLaunchOptions,
+} from "#product/hooks/home/derived/use-home-target-agent-launch-options";
 import {
   projectHarnessLaunchOptions,
   type DesktopLaunchModelRegistry as ModelRegistry,
@@ -45,19 +48,34 @@ export function useHomeNextModelSelection({
     harnessKind: requestedHarnessKind,
     launchTarget,
   });
+  // Every OTHER ready harness on the same target stays pickable too; the
+  // requested kind's query keeps driving loading/error/availability. Additive
+  // best-effort: an unresolved kind is absent until its observation arrives.
+  const otherReadyHarnessKinds = useMemo(
+    () => readyAgents
+      .map((agent) => agent.kind)
+      .filter((kind) => kind !== requestedHarnessKind),
+    [readyAgents, requestedHarnessKind],
+  );
+  const otherLaunchOptions = useHomeTargetOtherAgentsLaunchOptions({
+    harnessKinds: otherReadyHarnessKinds,
+    launchTarget,
+  });
   const modelRegistries = useMemo(
     () => {
-      const agent = targetLaunchOptions.data
-        ? projectHarnessLaunchOptions(targetLaunchOptions.data)
-        : null;
-      return agent ? [{
-        kind: agent.kind,
-        displayName: agent.displayName,
-        defaultModelId: agent.defaultModelId,
-        models: agent.models,
-      }] : EMPTY_MODEL_REGISTRIES;
+      const registries = [targetLaunchOptions.data, ...otherLaunchOptions]
+        .flatMap((response) => {
+          const agent = response ? projectHarnessLaunchOptions(response) : null;
+          return agent ? [{
+            kind: agent.kind,
+            displayName: agent.displayName,
+            defaultModelId: agent.defaultModelId,
+            models: agent.models,
+          }] : [];
+        });
+      return registries.length > 0 ? registries : EMPTY_MODEL_REGISTRIES;
     },
-    [targetLaunchOptions.data],
+    [otherLaunchOptions, targetLaunchOptions.data],
   );
   const readyAgentsForLaunch = useMemo(() => modelRegistries.map((registry) => ({
     kind: registry.kind,
