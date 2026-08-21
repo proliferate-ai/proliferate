@@ -6,6 +6,7 @@ import type {
 } from "@anyharness/sdk";
 import { useRefreshHarnessLaunchOptionsMutation } from "@anyharness/sdk-react";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useRefetchAgentLaunchOptionsKind } from "#product/hooks/access/anyharness/agents/use-refetch-agent-launch-options-kind";
 import {
   useHomeTargetAgentLaunchOptions,
   useHomeTargetOtherAgentsLaunchOptions,
@@ -15,6 +16,7 @@ import {
   type DesktopLaunchModelRegistry as ModelRegistry,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
+  isSettledUnobservedHarness,
   resolveHomeModelGate,
   type HomeModelGateObservation,
 } from "#product/lib/domain/home/home-model-gate";
@@ -46,6 +48,7 @@ export function useHomeNextModelSelection({
     error: agentsQueryError,
     isReconciling,
     installingAgents,
+    refetch: refetchAgents,
   } = useAgentCatalog();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
@@ -161,6 +164,9 @@ export function useHomeNextModelSelection({
   ]);
 
   const isCloudTarget = launchTarget?.kind === "cloud";
+  // The agent catalog is a different query from every launch-option read, so
+  // its failure is a different thing to repair.
+  const hasCatalogError = !isCloudTarget && agentsError;
   const agentReadiness = useMemo(
     // A cloud launch runs against the sandbox's agents, so the desktop
     // catalog's readiness says nothing about it and must not block it.
@@ -183,11 +189,11 @@ export function useHomeNextModelSelection({
     agentReadiness,
     isInstalling: !isCloudTarget && (isReconciling || installingAgents.length > 0),
     isCatalogLoading: !isCloudTarget && agentsLoading,
-    hasCatalogError: !isCloudTarget && agentsError,
+    hasCatalogError,
   }), [
     agentReadiness,
-    agentsError,
     agentsLoading,
+    hasCatalogError,
     effectiveModelSelection,
     installingAgents.length,
     isCloudTarget,
@@ -201,27 +207,66 @@ export function useHomeNextModelSelection({
 
   const refreshLaunchOptions = useRefreshHarnessLaunchOptionsMutation();
   const refetchTargetLaunchOptions = targetLaunchOptions.refetch;
+  const refetchLaunchOptionsKind = useRefetchAgentLaunchOptionsKind();
   const refreshMutate = refreshLaunchOptions.mutate;
   /**
    * The cure behind every blocked notice's action (ruling 5: a state must
    * never disable the control that would cure it).
    *
-   * A harness that failed without an observation needs a NEW probe — refetching
-   * would just re-read the recorded failure — while a request that never landed
-   * needs the request again.
+   * Three different things can be broken, and each needs its own repair aimed
+   * at the query that actually failed — a Retry that re-asks something which
+   * was never the problem leaves the notice on screen forever:
+   *
+   *  - A harness that failed without an observation, or one that settled
+   *    without ever being probed, needs a NEW probe. Refetching would just
+   *    re-read the recorded failure, or re-read the same "nobody looked".
+   *  - A read that failed at the transport layer needs THAT read again: the
+   *    requested kind through its own query, a fanned-out kind through its
+   *    shared cache key.
+   *  - The agent catalog's own read is a third query entirely, and it is the
+   *    one `hasCatalogError` reports. Nothing else here touches it.
    */
   const retryModelObservation = useCallback(() => {
-    const failedKinds = observations
-      .filter((observation) => observation.state === "failed_without_observation")
-      .map((observation) => observation.harnessKind);
-    if (!isCloudTarget && failedKinds.length > 0) {
-      for (const harnessKind of failedKinds) {
-        refreshMutate(harnessKind);
+    let repaired = false;
+    for (const observation of observations) {
+      if (
+        !isCloudTarget
+        && (observation.state === "failed_without_observation"
+          || isSettledUnobservedHarness(observation))
+      ) {
+        refreshMutate(observation.harnessKind);
+        repaired = true;
+        continue;
       }
-      return;
+      if (!observation.isError) {
+        continue;
+      }
+      if (observation.harnessKind === requestedHarnessKind) {
+        refetchTargetLaunchOptions();
+      } else {
+        refetchLaunchOptionsKind(observation.harnessKind);
+      }
+      repaired = true;
     }
-    refetchTargetLaunchOptions();
-  }, [isCloudTarget, observations, refetchTargetLaunchOptions, refreshMutate]);
+    if (hasCatalogError) {
+      void refetchAgents();
+      repaired = true;
+    }
+    // Nothing named itself: the cloud "Check again", whose whole story is that
+    // the target has not answered at all, so re-asking the target IS the cure.
+    if (!repaired) {
+      refetchTargetLaunchOptions();
+    }
+  }, [
+    hasCatalogError,
+    isCloudTarget,
+    observations,
+    refetchAgents,
+    refetchLaunchOptionsKind,
+    refetchTargetLaunchOptions,
+    refreshMutate,
+    requestedHarnessKind,
+  ]);
 
   return {
     modelGroups,
@@ -233,8 +278,17 @@ export function useHomeNextModelSelection({
      * difference. */
     isCatalogLoading: !isCloudTarget && agentsLoading,
     /** The catalog knows of at least one agent. Independent of whether any of
-     * them has reported models yet. */
-    hasKnownAgents: isCloudTarget ? modelGroups.length > 0 : agents.length > 0,
+     * them has reported models yet.
+     *
+     * A cloud sandbox's agents are not in the desktop catalog, so their
+     * existence has to come from the sandbox's own answer — the presence of a
+     * response, not the rows in it. Reading it off `modelGroups.length` said
+     * "No agents" for an `observed_empty` sandbox, which is exactly the state
+     * ruling 3 keeps the picker ENABLED for, and which is false: the agents
+     * are there, they reported nothing. */
+    hasKnownAgents: isCloudTarget
+      ? targetLaunchOptions.data !== undefined
+      : agents.length > 0,
     error: (isCloudTarget ? null : agentsQueryError) ?? targetLaunchOptions.error,
     modelGate,
     retryModelObservation,

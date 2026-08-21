@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "#product/components/home/screen/HomeNextScreen";
 import { installLocalStorageMock } from "#product/components/home/screen/HomeNextScreen.test-support";
+import { resolveModelSelectorEnabled } from "#product/lib/domain/chat/models/model-selector-types";
 
 /**
  * Home's model gate at the screen seam: which notice each gate renders, which
@@ -143,10 +144,21 @@ vi.mock("#product/components/workspace/chat/input/ChatInputControlRow", () => ({
     // Stands in for ComposerModelSelectorControl's trigger. The real control's
     // ownership of this attribute is pinned in
     // ComposerModelSelectorControl.test.tsx; here it is the focus destination
-    // a refused Enter must land on.
+    // a refused Enter must land on — and it honours the SAME enablement rule
+    // the real control does, because an always-enabled stand-in would hide
+    // exactly the bug where a refusal focuses a control the user cannot use.
+    const enabled = resolveModelSelectorEnabled({
+      disabled: false,
+      connectionState: props.modelSelectorProps?.connectionState ?? "healthy",
+      isLoading: props.modelSelectorProps?.isLoading ?? false,
+      hasAgents: props.modelSelectorProps?.hasAgents ?? true,
+      availability: props.modelSelectorProps?.availability ?? "ready",
+    });
     return (
       <div data-testid="composer-leading-controls">
-        <button type="button" data-composer-model-trigger>Select model</button>
+        <button type="button" data-composer-model-trigger disabled={!enabled}>
+          Select model
+        </button>
       </div>
     );
   },
@@ -358,5 +370,77 @@ describe("HomeNextScreen model gate", () => {
     expect(second.trim()).toBe("Choose a model before sending");
     expect(/\d/.test(second)).toBe(false);
     expect(prompt.value).toBe("Add retry logic to the sync worker");
+  });
+
+  it("clears the refusal sentence once a model can be launched", () => {
+    screenMocks.homeNext.modelGate = { kind: "selection_required" };
+    const view = render(<HomeNextScreen />);
+    const prompt = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+    fireEvent.change(prompt, { target: { value: "ship it" } });
+    fireEvent.keyDown(prompt, { key: "Enter" });
+
+    const region = document.querySelector("[data-home-model-gate-announcement]") as HTMLElement;
+    expect((region.textContent ?? "").trim()).toBe("Choose a model before sending");
+
+    // A sentence that stays in the accessibility tree after the reason is gone
+    // is read out on every subsequent visit to the region.
+    screenMocks.homeNext.modelGate = { kind: "launchable" };
+    view.rerender(<HomeNextScreen />);
+    expect(document.querySelector("[data-home-model-gate-announcement]")?.textContent).toBe("");
+  });
+
+  it("does not refuse an EMPTY composer out of the editor", () => {
+    // Home autofocuses the composer, so Enter before typing is a real first
+    // keystroke. It did nothing before this slice and must keep doing nothing:
+    // parking the caret on a button turns the next keypress into a menu.
+    screenMocks.homeNext.modelGate = { kind: "selection_required" };
+    render(<HomeNextScreen />);
+    const prompt = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+    prompt.focus();
+    fireEvent.keyDown(prompt, { key: "Enter" });
+
+    expect(document.activeElement).toBe(prompt);
+    expect(document.querySelector("[data-home-model-gate-announcement]")?.textContent).toBe("");
+    // The Send button is disabled because it is EMPTY, so it must not claim
+    // the unchosen model is the reason — this string is its accessible name.
+    expect(screen.queryByRole("button", { name: "Choose a model" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Submit" })).toBeTruthy();
+  });
+
+  it("does not announce an unchoosable model or focus a disabled trigger", () => {
+    // agent_setup_required has no model to choose and a DISABLED trigger, so
+    // "Choose a model before sending" would be false and `focus()` a no-op.
+    // The state's own notice is already on screen and says the true thing.
+    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "agent_setup_required" };
+    screenMocks.homeNext.hasKnownAgents = true;
+    render(<HomeNextScreen />);
+    const prompt = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+    fireEvent.change(prompt, { target: { value: "ship it" } });
+    prompt.focus();
+
+    const trigger = document.querySelector(
+      "[data-composer-model-trigger]",
+    ) as HTMLButtonElement;
+    expect(trigger.disabled).toBe(true);
+
+    fireEvent.keyDown(prompt, { key: "Enter" });
+
+    expect(document.activeElement).toBe(prompt);
+    expect(document.querySelector("[data-home-model-gate-announcement]")?.textContent).toBe("");
+    expect(screen.getByText("Finish agent setup to start a chat.")).toBeTruthy();
+    expect(screenMocks.launch).not.toHaveBeenCalled();
+  });
+
+  it("renders observation_idle with an honest sentence and a Refresh that probes", () => {
+    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "observation_idle" };
+    render(<HomeNextScreen />);
+    expect(screen.getByText("Models haven't been detected yet.")).toBeTruthy();
+    // Never "Probing…": nothing is probing, which is the whole problem.
+    expect(screen.queryByText(/Probing/i)).toBeNull();
+    expect(screen.queryByText(/Finish agent setup/i)).toBeNull();
+    const cure = screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement;
+    expect(cure.disabled).toBe(false);
+    fireEvent.click(cure);
+    expect(screenMocks.retryModelObservation).toHaveBeenCalled();
   });
 });
