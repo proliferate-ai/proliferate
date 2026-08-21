@@ -3,8 +3,9 @@
 Status: current procedure
 
 Use this procedure to verify hosted-client analytics without changing project
-configuration. Session replay is source-disabled on every client surface, so
-there is no replay routing to verify or flip. The system contract is
+configuration. Session replay is source-disabled on Web and Mobile and
+internal-audience-only on Desktop, so the only replay that can appear belongs
+to an internal account. The system contract is
 [PostHog](../../../specs/codebase/systems/engineering/analytics/posthog.md).
 
 ## Applicability
@@ -14,7 +15,7 @@ there is no replay routing to verify or flip. The system contract is
 - **Self-hosters:** packaged Desktop does not initialize PostHog when pointed
   at a self-managed API. A fork that supplies its own Web/Mobile PostHog
   configuration owns its provider project and should still preserve the code
-  privacy posture and the source-disabled replay boundary.
+  privacy posture and the replay boundary.
 
 ## Secret Safety
 
@@ -28,7 +29,9 @@ network requests in screenshots.
 
 1. Identify the exact client build and surface. Record its canonical release
    id, environment, and whether the telemetry gate was enabled, without
-   recording any secret value. There is no replay gate on any surface.
+   recording any secret value. The only replay gate is the Desktop internal
+   audience plus the PostHog project's own replay setting; neither is a build
+   or environment value.
 2. For a named Desktop local profile, inspect only the non-secret runtime
    routing fields in:
 
@@ -49,10 +52,17 @@ network requests in screenshots.
    - sign-out produces a new anonymous identity on the next session;
    - no prompt, transcript, repo name, file path, raw URL, terminal text,
      token, or raw error is present.
-5. Replay is expected to be absent on every surface. Desktop, Web, and Mobile
-   PostHog session recording are all source-disabled and expose no toggle in any
-   build, environment, or project setting, so replay observed in the provider is
-   a code-or-provider truth mismatch to triage.
+5. Replay expectations by surface. Web and Mobile PostHog session recording
+   are source-disabled and expose no toggle in any build, environment, or
+   project setting, so replay observed there is a code-or-provider truth
+   mismatch to triage. Desktop replay is expected only for a signed-in internal
+   account and only while the PostHog project has replay enabled; a Desktop
+   replay attributed to a customer account is a truth mismatch to triage
+   immediately. In any Desktop replay, every recorded URL must read as a
+   bounded route template such as `/workflows/:workflowId` or `/unknown`. A raw
+   identifier in a recorded URL is a privacy regression: capture the release
+   and route template, stop replay in the PostHog project, and route it as a
+   defect.
 
 ## Diagnose Missing Evidence
 
@@ -62,11 +72,14 @@ network requests in screenshots.
   in `apps/desktop/src/lib/integrations/telemetry/client.ts`.
 - Web/Mobile views missing: verify the provider initialized and the normalized
   route/screen hook ran; raw paths are intentionally not capture values.
-- Replay missing anywhere: expected, not a defect; there is no gate to confirm.
+- Replay missing on Web or Mobile: expected, not a defect; there is no gate to
+  confirm. Replay missing on Desktop: check that the account is in the internal
+  audience list and that the PostHog project has replay enabled.
 - Provider data differs from checked-in behavior: capture event name, surface,
   environment, release, observed time, and a redacted provider URL. Route
   ingestion or deduplication defects to Issue Lifecycle.
 
 Any project setting, retention, person/profile, or provider write requires a
-separate reviewed change; re-enabling replay additionally requires a synthetic
-privacy qualification. This procedure does not authorize one.
+separate reviewed change; widening Desktop replay beyond the internal audience,
+or re-enabling Web or Mobile replay, additionally requires a synthetic privacy
+qualification. This procedure does not authorize one.

@@ -8,6 +8,7 @@ import {
   resolveDesktopTelemetryRoutingState,
 } from "@proliferate/product-client/internal/lib/domain/telemetry/mode";
 import type { AuthUser } from "@proliferate/product-client/internal/lib/domain/auth/auth-user";
+import { isInternalReplayAudience } from "@proliferate/product-client/internal/domain/telemetry/replay-audience";
 import {
   getProliferateApiBaseUrl,
   getProliferateApiOrigin,
@@ -22,6 +23,8 @@ import {
   initializeDesktopPostHog,
   getDesktopPostHogSupportRefs,
   resetDesktopPostHogUser,
+  startDesktopPostHogSessionReplay,
+  stopDesktopPostHogSessionReplay,
   trackDesktopPostHogEvent,
 } from "./posthog";
 import {
@@ -152,6 +155,15 @@ export function setTelemetryUser(user: AuthUser): void {
 
   setDesktopSentryUser(user.id);
   identifyDesktopPostHogUser(user.id);
+
+  // Session replay is staged: the route-identifier leak that caused the
+  // 2026-08-18 disable is fixed and proven at the payload level, but the live
+  // synthetic qualification #2093/#2096 required has not run, so recording is
+  // limited to the internal audience. The address is read locally to make this
+  // decision and is never sent: PostHog identity stays UUID-only above.
+  if (isInternalReplayAudience(user.email)) {
+    startDesktopPostHogSessionReplay();
+  }
 }
 
 export function clearTelemetryUser(): void {
@@ -159,6 +171,8 @@ export function clearTelemetryUser(): void {
     return;
   }
 
+  // Stop before reset so no frames are recorded against a signed-out session.
+  stopDesktopPostHogSessionReplay();
   clearDesktopSentryUser();
   resetDesktopPostHogUser();
 }
