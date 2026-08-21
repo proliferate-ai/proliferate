@@ -135,19 +135,19 @@ type AbsentFromTheSchema = Exclude<
 >;
 
 /** A schema field no consumer can see, because this interface never declared it. */
-type _NoUndeclaredSchemaField = Expect<
+export type _NoUndeclaredSchemaField = Expect<
   MissingFromHandWritten extends KnownMissingFromHandWritten ? true : false
 >;
 
 /** The other direction: a field consumers rely on that the wire no longer carries. */
-type _NoFieldTheWireDoesNotCarry = Expect<ExactlyEqual<AbsentFromTheSchema, never>>;
+export type _NoFieldTheWireDoesNotCarry = Expect<ExactlyEqual<AbsentFromTheSchema, never>>;
 
 /**
  * Shape, not just names: every field the two DO share must still agree on its
  * type, so a `string` that becomes an enum, or a nullability change, is caught
  * here too rather than at the first `undefined` in a component.
  */
-type _SharedFieldsAgree = Expect<
+export type _SharedFieldsAgree = Expect<
   Pick<HarnessLaunchOptionsResponse, keyof HarnessLaunchOptionsResponse> extends Pick<
     GeneratedHarnessLaunchOptionsResponse,
     Exclude<
