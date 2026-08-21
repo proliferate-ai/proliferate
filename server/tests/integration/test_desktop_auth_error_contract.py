@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 import pytest
@@ -11,6 +12,7 @@ from proliferate.auth.tokens import REFRESH_TOKEN_AUDIENCE
 from proliferate.config import settings
 from proliferate.constants.auth import REFRESH_TOKEN_LIFETIME_SECONDS
 from proliferate.db.models.auth import User
+from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 
 def _signed_refresh_token(claims: dict[str, object]) -> str:
@@ -163,3 +165,59 @@ async def test_stale_refresh_generation_keeps_raw_detail(
         status_code=401,
         detail="Refresh token has been revoked",
     )
+
+
+@pytest.mark.asyncio
+async def test_token_exchange_logs_sign_in_failure_outcome(
+    client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The sign-in success-rate SLI depends on this log line existing.
+
+    See `server/proliferate/auth/sign_in_observability.py` and
+    `guides/operating/production-alerts.md#sign-in-success-rate`.
+    """
+    caplog.set_level(logging.INFO, logger="proliferate.auth.sign_in")
+
+    response = await client.post(
+        "/auth/desktop/token",
+        json={
+            "code": "missing-code",
+            "code_verifier": "unused-verifier",
+            "grant_type": "authorization_code",
+        },
+    )
+
+    assert response.status_code == 400
+    records = [r for r in caplog.records if r.name == "proliferate.auth.sign_in"]
+    assert len(records) == 1
+    record = records[0]
+    assert record.event == "auth.sign_in.outcome"
+    assert record.auth_sign_in_outcome == "failure"
+    assert record.auth_sign_in_surface == "desktop"
+    assert record.auth_sign_in_failure_code == "desktop_auth_code_invalid"
+
+
+@pytest.mark.asyncio
+async def test_token_exchange_logs_sign_in_success_outcome(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="proliferate.auth.sign_in")
+    user = await _create_active_user(db_session)
+
+    payload = await mint_desktop_token_payload(
+        client,
+        user_id=user.id,
+        state_prefix="sli-success",
+    )
+
+    assert "access_token" in payload
+    records = [r for r in caplog.records if r.name == "proliferate.auth.sign_in"]
+    assert len(records) == 1
+    record = records[0]
+    assert record.event == "auth.sign_in.outcome"
+    assert record.auth_sign_in_outcome == "success"
+    assert record.auth_sign_in_surface == "desktop"
+    assert not hasattr(record, "auth_sign_in_failure_code")

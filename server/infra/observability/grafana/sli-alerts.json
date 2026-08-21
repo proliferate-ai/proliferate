@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "phase": "observability-overnight-2026-08-20-lane-d",
+  "description": "Checked-in, checksum-verified record of the sign-in success-rate SLI alert rule on the NEW workspace (proliferate-ops-rebuild). This is a separate ruleGroup ('sli-alerts') from the five-rule production-alerts.json allowlist and the rebuild copy of it in production-alerts-rebuild.json, so scripts/ops/grafana-sli-alerts.mjs can create/verify it without touching those rules, their contact point, or the notification policy. queryChecksum is sha256 of the canonical JSON serialization of the same {title, condition, data, noDataState, execErrState, for, ruleGroup, folderUID, isPaused} shape used by scripts/ops/grafana-alerting.mjs, captured 2026-08-21 via a live POST to /api/v1/provisioning/alert-rules followed by a GET read-back on the NEW workspace with the ADMIN rebuild token. Delivery for this rule rides the same default notification policy / SNS contact point that Lane A3 wired up for the five production rules (see guides/operating/production-alerts.md) -- this file does not define or touch a contact point.",
+  "target": {
+    "awsAccount": "157466816238",
+    "awsRegion": "us-east-1",
+    "grafanaWorkspaceId": "g-48655e6419",
+    "grafanaWorkspaceName": "proliferate-ops-rebuild",
+    "grafanaVersion": "10.4"
+  },
+  "component": "proliferate-server",
+  "runbook": "guides/operating/production-alerts.md",
+  "runbookUrlBase": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md",
+  "rules": [
+    {
+      "uid": "ffvtx33lbo5c0e",
+      "title": "Sign-in failures > 5 in 10m",
+      "severity": "warning",
+      "labels": {
+        "proliferate_component": "proliferate-server",
+        "severity": "warning"
+      },
+      "annotations": {
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md#sign-in-success-rate"
+      },
+      "queryModel": {
+        "title": "Sign-in failures > 5 in 10m",
+        "condition": "threshold",
+        "data": [
+          {
+            "refId": "A",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "cfvtvusw9bd34d",
+            "model": {
+              "dimensions": {},
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "metricName": "SignInFailureCount",
+              "namespace": "Proliferate/Prod",
+              "period": "600",
+              "queryMode": "Metrics",
+              "refId": "A",
+              "region": "us-east-1",
+              "statistics": [
+                "Sum"
+              ]
+            }
+          },
+          {
+            "refId": "B",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "expression": "A",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "reducer": "last",
+              "refId": "B",
+              "settings": {
+                "mode": "dropNN"
+              },
+              "type": "reduce"
+            }
+          },
+          {
+            "refId": "threshold",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "conditions": [
+                {
+                  "evaluator": {
+                    "params": [
+                      5
+                    ],
+                    "type": "gt"
+                  },
+                  "operator": {
+                    "type": "and"
+                  },
+                  "reducer": {
+                    "type": "last"
+                  }
+                }
+              ],
+              "expression": "B",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "refId": "threshold",
+              "type": "threshold"
+            }
+          }
+        ],
+        "noDataState": "OK",
+        "execErrState": "Alerting",
+        "for": "10m",
+        "ruleGroup": "sli-alerts",
+        "folderUID": "ops-folder",
+        "isPaused": false
+      },
+      "queryChecksum": "4867f7c60185b939dee8e5c340f927af01f290717f7f3e7245b2e9f457f6185a"
+    }
+  ]
+}

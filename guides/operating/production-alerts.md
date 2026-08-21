@@ -359,3 +359,146 @@ real topic, which the confirmed subscription then emails. This was run once
 live during the 2026-08-21 bootstrap with result `status: "ok"`; treat further
 test notifications (e.g. to close out the D2 acceptance criterion) as
 additional confirmations, not a first proof.
+
+## Sign-in success rate (SLI)
+
+Status: authoritative for the sign-in success-rate SLI alert rule, a separate
+`sli-alerts` rule group from the six rules above. Built 2026-08-20/21 as part
+of the observability overnight push (Lane D). This rule lives on the **NEW**
+Grafana workspace, `proliferate-ops-rebuild` (`g-48655e6419`), not the OLD
+workspace this runbook otherwise documents. See the accounts-and-wiring
+context doc for that workspace's own state; the essentials are repeated here
+so this runbook stays self-contained for on-call.
+
+### What it measures
+
+The token-exchange endpoints (`/auth/web/token`, `/auth/mobile/token`,
+`/auth/desktop/token`) previously emitted no outcome log line at all, so
+sign-in success/failure had no signal anywhere. `server/proliferate/auth/sign_in_observability.py`
+adds exactly one: every successful or failed token exchange now emits a
+structured JSON log line via `log_sign_in_success(surface)` /
+`log_sign_in_failure(surface, failure_code=...)`, called from
+`server/proliferate/server/accounts/identity/api.py` (`web_token`,
+`mobile_token`) and `server/proliferate/server/accounts/desktop/api.py`
+(`exchange_token`). Fields, stable and consumed by the metric filters below:
+
+- `event`: always `"auth.sign_in.outcome"`
+- `auth_sign_in_outcome`: `"success"` or `"failure"`
+- `auth_sign_in_surface`: `"web"`, `"mobile"`, or `"desktop"`
+- `auth_sign_in_failure_code`: the bounded `AuthFlowError.code` (failure only,
+  e.g. `identity_auth_code_invalid`, `desktop_pkce_verification_failed`) --
+  never the auth code, PKCE verifier, tokens, or the user's email.
+
+### CloudWatch metric filters
+
+Two Logs metric filters on `/ecs/proliferate-prod`, namespace `Proliferate/Prod`
+(same namespace as `CriticalFailureCount`/`ServerErrorLines` above):
+
+| Filter name | Pattern | Metric |
+| --- | --- | --- |
+| `sign-in-success` | `{ $.auth_sign_in_outcome = "success" }` | `SignInSuccessCount` |
+| `sign-in-failure` | `{ $.auth_sign_in_outcome = "failure" }` | `SignInFailureCount` |
+
+Live-verified 2026-08-21: two canary log events (`observability_canary_2026-08-21`,
+`"canary": true`) were injected into
+`observability-canary/sign-in-sli/2026-08-21` and both metrics registered a
+real `Sum=1.0` datapoint via `aws cloudwatch get-metric-statistics`. Ignore
+these two canary datapoints in triage; they are test artifacts, not real
+sign-ins, and predate any rotated build shipping real traffic.
+
+### Grafana alert rule
+
+`Sign-in failures > 5 in 10m` (uid `ffvtx33lbo5c0e`, rule group `sli-alerts`,
+folder `ops-folder`, severity `warning`): fires when `SignInFailureCount`
+(Sum, 10m window) exceeds 5. Live-verified 2026-08-21: rule created via
+`POST /api/v1/provisioning/alert-rules`, read back with the checksum matching
+the checked-in definition, and evaluating (`health: "ok"`, `state: "inactive"`,
+i.e. correctly not currently past threshold) per
+`GET /api/prometheus/grafana/api/v1/rules`.
+
+Delivery: this rule has no contact point or route of its own. The NEW
+workspace's root notification policy has no child routes, so every rule
+(including this one) routes to the workspace's one default receiver, which
+Lane A3 repointed at the real, confirmed SNS topic
+`arn:aws:sns:us-east-1:157466816238:grafana-proliferate-ops-alerts`
+(subscription: protocol `email`, endpoint `pablo@pablohansen.com`, confirmed --
+`aws sns get-subscription-attributes` shows `PendingConfirmation: false`).
+Independently re-verified 2026-08-21 by sending a second, separate test
+notification through that exact receiver
+(`POST /api/alertmanager/grafana/config/api/v1/receivers/test`), result
+`status: "ok"`. An alert on this rule, or on any of the five rules above once
+they are live on this workspace, reaches Pablo's email today.
+
+Repository artifacts:
+
+```text
+server/infra/observability/grafana/sli-alerts.json   # rule identity + query model, checksum-verified
+scripts/ops/grafana-sli-alerts.mjs                   # check / apply / verify (this rule only)
+```
+
+`grafana-sli-alerts.mjs` never touches the `production-alerts` rule group, the
+contact point, or the notification policy -- it assumes the `ops-folder`
+folder and the CloudWatch data source already exist (Lane A3's job) and only
+creates/verifies rules inside its own `sli-alerts` group:
+
+```bash
+node scripts/ops/grafana-sli-alerts.mjs check
+GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-sli-alerts.mjs apply
+GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-sli-alerts.mjs verify
+```
+
+`check` is offline: validates the target, the rule group, the runbook
+annotation, and that the checksum reproduces from the query model. `apply` is
+live and idempotent (creates only what is missing; a live rule that has
+drifted from the checked-in definition fails loudly rather than being
+overwritten). `verify` is live and read-only: reads the rule back, recomputes
+its checksum, and reports per-rule health/state from the Prometheus-shaped
+rules API.
+
+### What to do when it fires
+
+Look first at the correlated `auth.sign_in.outcome` log lines in
+`/ecs/proliferate-prod` (filter `auth_sign_in_outcome = "failure"`), grouped by
+`auth_sign_in_failure_code` and `auth_sign_in_surface`, to identify whether one
+surface or one failure code dominates. A spike concentrated in one
+`failure_code` usually points at a specific upstream cause (e.g. an expired
+client secret, a clock-skew-sensitive PKCE check, or a revoked-refresh
+cascade); a spike spread evenly across codes and surfaces more often points at
+an infra-level problem (DB connectivity, a bad deploy) rather than the auth
+logic itself.
+
+### Independent re-verification (Lane D continuation, 2026-08-21 ~01:xx PDT)
+
+Re-checked everything above from a fresh process, not by trusting the prior
+agent's write-up:
+
+- `aws logs describe-metric-filters --log-group-name /ecs/proliferate-prod`
+  shows both `sign-in-success` and `sign-in-failure` live, same shapes as
+  above. Neither the pre-existing `critical-failure`/`server-error-lines`
+  filters nor these two are Terraform-managed (`server/infra/*.tf` has no
+  matching resource for any of the four), so this is consistent with existing
+  practice, not a new gap.
+- `aws cloudwatch get-metric-statistics` for both `SignInSuccessCount` and
+  `SignInFailureCount` over the last 6h returned a real `Sum=1.0` datapoint at
+  `2026-08-21T00:30:00-07:00` for each (the canary pair) — the pipe carries a
+  real, non-zero number end to end, not just a rule with no data behind it.
+- `node scripts/ops/grafana-sli-alerts.mjs verify` (live, read-only): rule
+  `ffvtx33lbo5c0e` checksum `match`, health `ok`, state `inactive`.
+- Pulled the live alertmanager config directly
+  (`GET /api/alertmanager/grafana/config/api/v1/alerts`): the root route's
+  receiver is `grafana-default-sns`, and that receiver's one
+  `grafana_managed_receiver_configs` entry (name `sns receiver`, uid
+  `bfvtw9if8c3cwd`) has `settings.topic` =
+  `arn:aws:sns:us-east-1:157466816238:grafana-proliferate-ops-alerts` — the
+  same confirmed-subscription topic, not a different or drifted one. The
+  nested `__grafana_autogenerated__` route tree all resolves to this same
+  receiver, so a rule with no labels of its own (this one) inherits it.
+- Fired a fresh, independent test notification for this exact rule (not
+  reusing the prior agent's result) via
+  `POST /api/alertmanager/grafana/config/api/v1/receivers/test`, alert labels
+  `alertname: "Sign-in failures > 5 in 10m"`: HTTP 200,
+  `receivers[0].grafana_managed_receiver_configs[0].status: "ok"`,
+  `notified_at: "2026-08-21T08:02:55.226292503Z"`. This is proof that this
+  specific rule's notification path, not just the workspace's default path in
+  the abstract, reaches the SNS topic with Pablo's confirmed email
+  subscription.
