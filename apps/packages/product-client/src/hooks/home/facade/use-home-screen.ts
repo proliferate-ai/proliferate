@@ -26,9 +26,12 @@ export function useHomeScreen() {
   const navigate = useNavigate();
   const { isAddingRepo } = useAddRepo();
   const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
+  // readyAgentCount below is used only for the "configure default
+  // harnesses" onboarding card; the readiness card lives in its own hook
+  // (useHomeInstallationReadiness), sourced from the live reconcile job
+  // snapshot rather than this catalog (D-R1/D-R2).
   const {
     readyAgents,
-    installingAgents,
     isLoading: agentsLoading,
   } = useAgentCatalog();
   const { cloudActive } = useCloudAvailabilityState();
@@ -125,10 +128,5 @@ export function useHomeScreen() {
     authSetupEvidence,
     isAddingRepo,
     handleHomeAction,
-    // Per-agent readiness (UX spec §10 revision, ruling 4): the screen binds
-    // these to the model gate to resolve the readiness card via
-    // resolveHomeReadinessCardModel.
-    readyAgents,
-    installingAgents,
   };
 }

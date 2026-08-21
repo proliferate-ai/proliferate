@@ -6,7 +6,6 @@ import { useHomeScreen } from "#product/hooks/home/facade/use-home-screen";
 
 const mocks = vi.hoisted(() => ({
   readyAgents: [{ kind: "claude", displayName: "Claude" }],
-  installingAgents: [{ kind: "codex", displayName: "Codex" }],
   agentsLoading: false,
   navigate: vi.fn(),
   openAddRepoFlow: vi.fn(),
@@ -26,7 +25,6 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => ({
     readyAgents: mocks.readyAgents,
-    installingAgents: mocks.installingAgents,
     isLoading: mocks.agentsLoading,
   }),
 }));
@@ -72,11 +70,10 @@ vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
   ) => selector({ hiddenRepoRootIds: [] }),
 }));
 
-describe("useHomeScreen per-agent readiness passthrough", () => {
+describe("useHomeScreen", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.readyAgents = [{ kind: "claude", displayName: "Claude" }];
-    mocks.installingAgents = [{ kind: "codex", displayName: "Codex" }];
     mocks.agentsLoading = false;
   });
 
@@ -84,17 +81,22 @@ describe("useHomeScreen per-agent readiness passthrough", () => {
     cleanup();
   });
 
-  it("exposes the catalog's ready and installing agents for the readiness card", () => {
-    const { result } = renderHook(() => useHomeScreen());
-
-    expect(result.current.readyAgents).toEqual([{ kind: "claude", displayName: "Claude" }]);
-    expect(result.current.installingAgents).toEqual([{ kind: "codex", displayName: "Codex" }]);
-  });
-
   it("carries no dismissal state — the readiness card has no dismiss affordance", () => {
     const { result } = renderHook(() => useHomeScreen());
 
     expect(result.current).not.toHaveProperty("modelProbeInputs");
     expect(result.current).not.toHaveProperty("dismissModelProbeCard");
+  });
+
+  // D-R1/D-R2 fix: the readiness card now lives in its own hook
+  // (useHomeInstallationReadiness), sourced from the reconcile job
+  // snapshot rather than this facade's stale agents-list read. This facade
+  // no longer carries readyAgents/installingAgents at all — asserting their
+  // absence catches a regression back to the removed, job-blind source.
+  it("no longer exposes readyAgents/installingAgents — the readiness card is sourced elsewhere", () => {
+    const { result } = renderHook(() => useHomeScreen());
+
+    expect(result.current).not.toHaveProperty("readyAgents");
+    expect(result.current).not.toHaveProperty("installingAgents");
   });
 });

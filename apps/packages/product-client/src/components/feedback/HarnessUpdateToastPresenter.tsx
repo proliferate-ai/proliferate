@@ -8,7 +8,7 @@ import type {
 import { dismissToast, showToast } from "#product/primitives/utils/show-toast";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { formatDownloadedMegabytesLine } from "#product/lib/domain/updates/byte-progress";
-import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
+import { getAgentDisplayLabel } from "#product/lib/domain/agents/provider-display";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 import type { SettingsSection } from "#product/config/settings";
@@ -56,10 +56,6 @@ function harnessSettingsSection(kind: string): SettingsSection {
   return KNOWN_HARNESS_SETTINGS_SECTIONS[kind] ?? "agent-claude";
 }
 
-function agentDisplayLabel(kind: string): string {
-  return kind === "claude" ? "Claude Code" : getProviderDisplayName(kind);
-}
-
 /** "A" | "A and B" | "A, B and C" — never an Oxford comma, matching prose copy. */
 function joinNames(names: readonly string[]): string {
   if (names.length <= 1) {
@@ -82,8 +78,8 @@ function describePartialFailure(results: readonly ReconcileAgentResult[]): strin
   const installed = results.filter((result) =>
     result.outcome === "installed" || result.outcome === "already_installed"
   );
-  const failedNames = failed.map((result) => agentDisplayLabel(result.kind));
-  const installedNames = installed.map((result) => agentDisplayLabel(result.kind));
+  const failedNames = failed.map((result) => getAgentDisplayLabel(result.kind));
+  const installedNames = installed.map((result) => getAgentDisplayLabel(result.kind));
   const kinds = new Set(
     failed
       .map((result) => result.failureKind)
@@ -109,6 +105,20 @@ function describePartialFailure(results: readonly ReconcileAgentResult[]): strin
  */
 function isFreshInstallJob(results: readonly ReconcileAgentResult[]): boolean {
   return results.some((result) => result.outcome === "installed");
+}
+
+/**
+ * Whether the job's outcomes say anything happened at all. An empty result
+ * set or a job whose every result is `skipped` changed nothing — neither
+ * "ready" nor "updated" is true of it, and the outcomes cannot distinguish
+ * which one it would have been (D-R6). Per the ready-vs-updated ruling, an
+ * outcome set that cannot decide is reported honestly rather than
+ * improvised: this job raises no success receipt at all.
+ */
+function hasAnyMeaningfulOutcome(results: readonly ReconcileAgentResult[]): boolean {
+  return results.some((result) =>
+    result.outcome === "installed" || result.outcome === "already_installed"
+  );
 }
 
 function findCurrentComponent(
@@ -145,14 +155,17 @@ function useHarnessProgressToast({
         const sameJob = snapshotJobId === activeJobId.current;
         const wasDismissed = dismissedJobId.current === activeJobId.current;
         const isTerminal = snapshot?.status === "completed" || snapshot?.status === "failed";
-        if (sameJob && isTerminal && !wasDismissed) {
+        if (sameJob && isTerminal) {
           const results = snapshot?.results ?? [];
           const failed = snapshot?.status === "failed"
             || results.some((result) => result.outcome === "failed")
             || false;
           // The outcome is a resolution, so it gets the weight its content
           // earns: a success is a one-line receipt, a failure is a decision
-          // (who failed, why, what still works, where to go).
+          // (who failed, why, what still works, where to go). A failure is
+          // always shown, dismissed progress or not (D-R4): swiping away
+          // "Downloading Claude Code" is not consent to silently lose the
+          // "your agent tools aren't ready" report.
           if (failed) {
             const failedResult = results.find((result) => result.outcome === "failed");
             showToast({
@@ -171,12 +184,19 @@ function useHarnessProgressToast({
                 },
               },
             });
-          } else {
-            showToast({
-              id: toastId,
-              message: isFreshInstallJob(results) ? "Agent tools ready" : "Agent tools updated",
-              tone: "success",
-            });
+          } else if (!wasDismissed) {
+            if (hasAnyMeaningfulOutcome(results)) {
+              showToast({
+                id: toastId,
+                message: isFreshInstallJob(results) ? "Agent tools ready" : "Agent tools updated",
+                tone: "success",
+              });
+            } else {
+              // Nothing installed and nothing confirmed present (D-R6): an
+              // empty or all-skipped result changed nothing, so close
+              // quietly rather than raise a false "ready"/"updated" receipt.
+              dismissToast(toastId);
+            }
           }
         } else if (!wasDismissed) {
           dismissToast(toastId);
@@ -193,7 +213,7 @@ function useHarnessProgressToast({
     }
     const current = findCurrentComponent(progress.components);
     const currentAgent = current?.agent ?? snapshot?.currentAgent ?? null;
-    const currentAgentLabel = currentAgent ? agentDisplayLabel(currentAgent) : "agent tools";
+    const currentAgentLabel = currentAgent ? getAgentDisplayLabel(currentAgent) : "agent tools";
     const phase = current?.phase ?? "queued";
     const phaseVerb = PHASE_VERB[phase] ?? "Preparing";
 

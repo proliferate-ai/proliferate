@@ -18,6 +18,7 @@ import { useHomeComposerAttachments } from "#product/hooks/home/ui/use-home-comp
 import { useHomeNextLaunchControls } from "#product/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeCloudRepoSettingsNavigation } from "#product/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
 import { useHomeNextTargetSelectionState } from "#product/hooks/home/ui/use-home-next-target-selection-state";
+import { useHomeInstallationReadiness } from "#product/hooks/home/derived/use-home-installation-readiness";
 import { useHomeNextState } from "#product/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "#product/hooks/home/facade/use-home-screen";
 import {
@@ -26,7 +27,6 @@ import {
 } from "#product/lib/domain/home/home-composer-controls";
 import { resolveHomeModelGateNotice } from "#product/lib/domain/home/home-model-gate";
 import { type HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
-import { resolveHomeReadinessCardModel } from "#product/lib/domain/home/home-screen";
 import { resolveHomeTargetLaunchKindForRepository } from "#product/lib/domain/home/home-target-picker";
 
 export function HomeNextScreen() {
@@ -48,8 +48,6 @@ export function HomeNextScreen() {
     handleHomeAction,
     authSetupStep,
     authSetupEvidence,
-    readyAgents,
-    installingAgents,
   } = useHomeScreen();
   const homeNext = useHomeNextState({
     desktopTargetsAvailable,
@@ -116,13 +114,11 @@ export function HomeNextScreen() {
     : null;
   // Readiness card (UX spec §10 revision, ruling 4): bound to per-agent
   // readiness and the two gate values it may consume (selection_required,
-  // launchable). Unmounts entirely once the install job resolves — there is
-  // no "done" state, so a null result just omits the card.
-  const readinessCard = resolveHomeReadinessCardModel({
-    gateKind: homeNext.modelGate.kind,
-    readyAgents,
-    installingAgents,
-  });
+  // launchable), sourced from the live reconcile job snapshot rather than
+  // the agents list (D-R1/D-R2). Unmounts entirely once the install job
+  // resolves — there is no "done" state, so a null result just omits the
+  // card.
+  const readinessCard = useHomeInstallationReadiness(homeNext.modelGate.kind);
   const homeOnboardingVisible = onboardingCards.length > 0
     || authSetupStep === "settingUp"
     || (authSetupEvidence !== undefined && authSetupEvidence !== null)

@@ -1,5 +1,6 @@
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
+import { getAgentDisplayLabel } from "#product/lib/domain/agents/provider-display";
 import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 
 export type HomeActionId =
@@ -37,6 +38,61 @@ export interface HomeReadinessCardModel {
 }
 
 /**
+ * One entry of the live reconcile job's per-component progress (D-R1/D-R2
+ * fix). This — not the general agents list — is the card's input: the
+ * agents list is a stale sample taken before the job starts and refetched
+ * only after it ends, so it is blind for the entire install window, and its
+ * own per-agent "installing" flag can only ever point at whichever single
+ * agent the runtime is currently executing. The reconcile job's component
+ * array carries one entry per component of every agent the job touches,
+ * each with its own phase, and is the same live snapshot
+ * HarnessUpdateToastPresenter already polls.
+ */
+export interface HomeInstallProgressComponent {
+  agent: string;
+  phase: string;
+}
+
+const READY_COMPONENT_PHASES = new Set(["completed", "skipped"]);
+
+/**
+ * Groups a job's components by agent to find who has fully settled (every
+ * component completed or skipped) versus who still has a component in an
+ * active phase. An agent with any `failed` component is excluded from both
+ * sets — a failure is the terminal toast's decision to report, not this
+ * card's; showing it as "still installing" would be false, and as "ready"
+ * would be worse.
+ */
+function groupInstallProgressByAgent(
+  components: readonly HomeInstallProgressComponent[],
+): { readyAgents: HomeReadinessAgent[]; installingAgents: HomeReadinessAgent[] } {
+  const phasesByAgent = new Map<string, string[]>();
+  for (const component of components) {
+    const phases = phasesByAgent.get(component.agent);
+    if (phases) {
+      phases.push(component.phase);
+    } else {
+      phasesByAgent.set(component.agent, [component.phase]);
+    }
+  }
+
+  const readyAgents: HomeReadinessAgent[] = [];
+  const installingAgents: HomeReadinessAgent[] = [];
+  for (const [agentKind, phases] of phasesByAgent) {
+    if (phases.some((phase) => phase === "failed")) {
+      continue;
+    }
+    const agent = { kind: agentKind, displayName: getAgentDisplayLabel(agentKind) };
+    if (phases.every((phase) => READY_COMPONENT_PHASES.has(phase))) {
+      readyAgents.push(agent);
+    } else {
+      installingAgents.push(agent);
+    }
+  }
+  return { readyAgents, installingAgents };
+}
+
+/**
  * Names the still-installing agents for the readiness card's secondary line.
  *
  * Names always; a count is only the OVERFLOW past the first name — so two
@@ -65,28 +121,35 @@ function describeStillInstalling(installingNames: readonly string[]): string {
  * count: it exists only while the gate has resolved to something launchable
  * (or a selection away from it) AND the install job is still partially
  * running. There is no "done" state — the card unmounts entirely once every
- * agent has settled, which is the caller's job (this only returns null).
+ * agent has settled (readyAgents empty, or installingAgents empty because
+ * the job resolved), which falls out of the grouping above rather than
+ * needing its own check.
  */
 export function resolveHomeReadinessCardModel(args: {
   gateKind: "launchable" | "selection_required" | "blocked";
-  readyAgents: readonly HomeReadinessAgent[];
-  installingAgents: readonly HomeReadinessAgent[];
+  progressComponents: readonly HomeInstallProgressComponent[];
 }): HomeReadinessCardModel | null {
   if (args.gateKind !== "selection_required" && args.gateKind !== "launchable") {
     return null;
   }
-  const [firstReady] = args.readyAgents;
-  if (!firstReady || args.installingAgents.length === 0) {
+  const { readyAgents, installingAgents } = groupInstallProgressByAgent(args.progressComponents);
+  const [firstReady] = readyAgents;
+  if (!firstReady || installingAgents.length === 0) {
     return null;
   }
-  const startNowPrefix = args.gateKind === "selection_required"
+  // Spec correction (coordinator ruling): "You can start now." is true only
+  // once the gate itself says launchable — selection_required means a model
+  // still needs picking, so the claim is false exactly there. The gate's own
+  // notice already owns the "pick a model" instruction; this card adds only
+  // the still-installing sentence in that state.
+  const startNowPrefix = args.gateKind === "launchable"
     ? "You can start now. "
     : "";
   return {
     agentKind: firstReady.kind,
     title: `${firstReady.displayName} is ready.`,
     description:
-      `${startNowPrefix}${describeStillInstalling(args.installingAgents.map((agent) => agent.displayName))}`,
+      `${startNowPrefix}${describeStillInstalling(installingAgents.map((agent) => agent.displayName))}`,
   };
 }
 

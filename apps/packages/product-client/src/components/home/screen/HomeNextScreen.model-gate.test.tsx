@@ -100,9 +100,14 @@ vi.mock("#product/hooks/home/facade/use-home-screen", () => ({
     onboardingCards: screenMocks.onboardingCards,
     isAddingRepo: false,
     handleHomeAction: screenMocks.handleHomeAction,
-    readyAgents: [],
-    installingAgents: [],
   }),
+}));
+
+// The readiness card is sourced from its own hook now (D-R1/D-R2), not from
+// useHomeScreen; these files don't exercise readiness-card behavior, so it
+// stays off here (covered by use-home-installation-readiness.test.tsx).
+vi.mock("#product/hooks/home/derived/use-home-installation-readiness", () => ({
+  useHomeInstallationReadiness: () => null,
 }));
 
 vi.mock("#product/stores/home/home-draft-handoff-store", () => ({

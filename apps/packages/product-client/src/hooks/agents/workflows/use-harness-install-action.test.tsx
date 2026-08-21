@@ -60,17 +60,6 @@ it("force-installs a missing managed harness from its settings action without ra
   expect(showToast).not.toHaveBeenCalled();
 });
 
-it("does not raise its own start toast for the shared Cloud surface either", async () => {
-  const { result } = renderHook(() => useHarnessInstallAction(agent, "cloud"));
-
-  await act(async () => {
-    result.current?.onInstall();
-    await vi.waitFor(() => expect(reconcileAgents).toHaveBeenCalledOnce());
-  });
-
-  expect(showToast).not.toHaveBeenCalled();
-});
-
 it("uses the kind-scoped install endpoint for an older runtime", async () => {
   actionState.supportsScopedReconcile = false;
   const { result } = renderHook(() => useHarnessInstallAction(agent));

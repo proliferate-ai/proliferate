@@ -312,6 +312,43 @@ describe("terminal triple", () => {
     });
   });
 
+  // D-R6: isFreshInstallJob(results) is false for both an empty result set
+  // and an all-skipped job, which used to fall through to "Agent tools
+  // updated" — a settled receipt for a job that changed nothing. Per the
+  // ready-vs-updated ruling, outcomes that cannot distinguish must not be
+  // improvised into a claim; the toast should close quietly instead.
+  it("closes quietly with no success toast when every outcome was skipped", () => {
+    const { rerender } = render(<HarnessUpdateToastPresenter />);
+    vi.clearAllMocks();
+
+    state.localSnapshot = {
+      ...state.defaultLocalSnapshot,
+      status: "completed",
+      results: [
+        { kind: "codex", outcome: "skipped", installedArtifacts: [] },
+      ],
+    };
+    rerender(<HarnessUpdateToastPresenter />);
+
+    expect(toastMocks.showToast).not.toHaveBeenCalled();
+    expect(toastMocks.dismissToast).toHaveBeenCalledWith(HARNESS_UPDATE_TOAST_ID);
+  });
+
+  it("closes quietly with no success toast when the result set is empty", () => {
+    const { rerender } = render(<HarnessUpdateToastPresenter />);
+    vi.clearAllMocks();
+
+    state.localSnapshot = {
+      ...state.defaultLocalSnapshot,
+      status: "completed",
+      results: [],
+    };
+    rerender(<HarnessUpdateToastPresenter />);
+
+    expect(toastMocks.showToast).not.toHaveBeenCalled();
+    expect(toastMocks.dismissToast).toHaveBeenCalledWith(HARNESS_UPDATE_TOAST_ID);
+  });
+
   it("names the failed and installed agents on partial failure, with a route to settings", () => {
     const { rerender } = render(<HarnessUpdateToastPresenter />);
     vi.clearAllMocks();
@@ -378,6 +415,54 @@ describe("dismissal persistence", () => {
   });
 });
 
+describe("dismissed progress must not cost a failure report (D-R4)", () => {
+  it("still shows the failure toast even though the in-progress toast was dismissed", () => {
+    const { rerender } = render(<HarnessUpdateToastPresenter />);
+    const toastInput = toastMocks.showToast.mock.calls[0]?.[0] as unknown as {
+      onDismiss: () => void;
+    };
+    toastInput.onDismiss();
+    vi.clearAllMocks();
+
+    // Same job, now resolved with a failure. Dismissing the download bar is
+    // not consent to silently drop the "your agent tools aren't ready"
+    // report — that decision (who failed, why, what to do) must still land.
+    state.localSnapshot = {
+      ...state.defaultLocalSnapshot,
+      status: "failed",
+      results: [
+        { kind: "codex", outcome: "failed", failureKind: "network", installedArtifacts: [] },
+      ],
+    };
+    rerender(<HarnessUpdateToastPresenter />);
+
+    expect(raisedWithId(HARNESS_UPDATE_TOAST_ID)).toMatchObject({
+      tone: "warning",
+      title: "Some agent tools aren't ready",
+    });
+  });
+
+  it("still stays quiet on a dismissed job's plain success (contrast case)", () => {
+    const { rerender } = render(<HarnessUpdateToastPresenter />);
+    const toastInput = toastMocks.showToast.mock.calls[0]?.[0] as unknown as {
+      onDismiss: () => void;
+    };
+    toastInput.onDismiss();
+    vi.clearAllMocks();
+
+    state.localSnapshot = {
+      ...state.defaultLocalSnapshot,
+      status: "completed",
+      results: [
+        { kind: "codex", outcome: "installed", installedArtifacts: [] },
+      ],
+    };
+    rerender(<HarnessUpdateToastPresenter />);
+
+    expect(toastMocks.showToast).not.toHaveBeenCalled();
+  });
+});
+
 describe("cloud vs local toast ids", () => {
   it("shows shared Cloud progress under its own id, with no workspace target label", async () => {
     state.cloudActive = true;
@@ -407,7 +492,11 @@ describe("cloud vs local toast ids", () => {
     });
     const toastInput = raisedWithId(CLOUD_HARNESS_UPDATE_TOAST_ID) as { title: string };
     expect(toastInput.title).toBe("Installing Claude Code");
-    expect(JSON.stringify(toastInput)).not.toMatch(/workspace/i);
+    // The label this test names — a workspace target suffix like
+    // "· This machine" — was "Proliferate Cloud", not the literal word
+    // "workspace" (D-R3: the old assertion could never fail against any
+    // version of this presenter).
+    expect(JSON.stringify(toastInput)).not.toMatch(/Proliferate Cloud/i);
   });
 
   it("can keep deterministic playground progress local-only", async () => {

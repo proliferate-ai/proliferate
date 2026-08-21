@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from "react";
 import type { AgentSummary } from "@anyharness/sdk";
-import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { useAgentInstallationActions } from "#product/hooks/agents/workflows/use-agent-installation-actions";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -14,7 +13,6 @@ export interface HarnessInstallAction {
 
 export function useHarnessInstallAction(
   agent: AgentSummary | null,
-  surface: AgentAuthSurface = "local",
 ): HarnessInstallAction | null {
   const showToast = useToastStore((state) => state.show);
   const {
@@ -65,7 +63,6 @@ export function useHarnessInstallAction(
     reconcileAgents,
     showToast,
     supportsScopedReconcile,
-    surface,
   ]);
 
   const reconcileActive = Boolean(

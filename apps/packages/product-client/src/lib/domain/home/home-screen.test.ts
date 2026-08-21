@@ -132,81 +132,154 @@ describe("findHomeUnconfiguredGitHubRepository", () => {
 });
 
 describe("resolveHomeReadinessCardModel", () => {
-  const grok = { kind: "grok", displayName: "Grok" };
-  const claude = { kind: "claude", displayName: "Claude" };
-  const codex = { kind: "codex", displayName: "Codex" };
-  const opencode = { kind: "opencode", displayName: "OpenCode" };
-  const cursor = { kind: "cursor", displayName: "Cursor" };
+  // Sourced from the live reconcile job's per-component progress (D-R1/D-R2
+  // fix), not hand-built ready/installing agent lists: this is the exact
+  // shape the runtime hands back, one entry per component per agent, and
+  // grouping-by-agent is part of what this function must get right. The
+  // ready agent is always "cursor" (a kind with a proper mapped display
+  // name) so title assertions read cleanly; a fourth installing agent uses
+  // "grok" — unmapped in PROVIDER_DISPLAY_NAMES (a separate, already
+  // quarantined gap) — deliberately kept out of the visible name slot so its
+  // raw-kind fallback never leaks into an assertion.
+  const cursorComponent = (phase: string) => ({ agent: "cursor", phase });
+  const claudeComponent = (phase: string) => ({ agent: "claude", phase });
+  const codexComponent = (phase: string) => ({ agent: "codex", phase });
+  const opencodeComponent = (phase: string) => ({ agent: "opencode", phase });
+  const grokComponent = (phase: string) => ({ agent: "grok", phase });
 
   it("is null for a blocked gate, regardless of readiness", () => {
     expect(resolveHomeReadinessCardModel({
       gateKind: "blocked",
-      readyAgents: [grok],
-      installingAgents: [claude],
+      progressComponents: [cursorComponent("completed"), claudeComponent("downloading")],
     })).toBeNull();
   });
 
   it("is null while nothing is ready yet", () => {
     expect(resolveHomeReadinessCardModel({
       gateKind: "selection_required",
-      readyAgents: [],
-      installingAgents: [claude],
+      progressComponents: [claudeComponent("downloading")],
     })).toBeNull();
   });
 
   it("is null once every agent has settled (ruling 4: no 'done' card)", () => {
     expect(resolveHomeReadinessCardModel({
       gateKind: "launchable",
-      readyAgents: [grok],
-      installingAgents: [],
+      progressComponents: [cursorComponent("completed")],
+    })).toBeNull();
+  });
+
+  it("is null with no components at all (idle, no active job)", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "selection_required",
+      progressComponents: [],
+    })).toBeNull();
+  });
+
+  it("groups multiple components of the same agent — ready only once every one of them settles", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "selection_required",
+      progressComponents: [
+        { agent: "cursor", phase: "completed" },
+        { agent: "cursor", phase: "installing" },
+        claudeComponent("downloading"),
+      ],
+    })).toBeNull();
+
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "selection_required",
+      progressComponents: [
+        { agent: "cursor", phase: "completed" },
+        { agent: "cursor", phase: "skipped" },
+        claudeComponent("downloading"),
+      ],
+    })).toMatchObject({ agentKind: "cursor" });
+  });
+
+  it("excludes a failed agent from both ready and installing (the terminal toast's concern, not this card's)", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "selection_required",
+      progressComponents: [cursorComponent("completed"), claudeComponent("failed")],
     })).toBeNull();
   });
 
   it("names the lone still-installing agent", () => {
     expect(resolveHomeReadinessCardModel({
       gateKind: "selection_required",
-      readyAgents: [grok],
-      installingAgents: [claude],
+      progressComponents: [cursorComponent("completed"), claudeComponent("downloading")],
     })).toEqual({
-      agentKind: "grok",
-      title: "Grok is ready.",
-      description: "You can start now. Claude is still installing.",
+      agentKind: "cursor",
+      title: "Cursor is ready.",
+      description: "Claude Code is still installing.",
     });
   });
 
   it("names both still-installing agents when there are exactly two", () => {
     expect(resolveHomeReadinessCardModel({
       gateKind: "selection_required",
-      readyAgents: [grok],
-      installingAgents: [claude, codex],
+      progressComponents: [
+        cursorComponent("completed"),
+        claudeComponent("downloading"),
+        codexComponent("queued"),
+      ],
     })).toEqual({
-      agentKind: "grok",
-      title: "Grok is ready.",
-      description: "You can start now. Claude and Codex are still installing.",
+      agentKind: "cursor",
+      title: "Cursor is ready.",
+      description: "Claude Code and Codex are still installing.",
     });
   });
 
   it("names the first and overflows the rest as a count (the artifact's 4-agent shape)", () => {
     expect(resolveHomeReadinessCardModel({
       gateKind: "selection_required",
-      readyAgents: [grok],
-      installingAgents: [claude, codex, opencode, cursor],
+      progressComponents: [
+        cursorComponent("completed"),
+        claudeComponent("downloading"),
+        codexComponent("queued"),
+        opencodeComponent("queued"),
+        grokComponent("queued"),
+      ],
     })).toEqual({
-      agentKind: "grok",
-      title: "Grok is ready.",
-      description: "You can start now. Claude and 3 others are still installing.",
+      agentKind: "cursor",
+      title: "Cursor is ready.",
+      description: "Claude Code and 3 others are still installing.",
     });
   });
 
-  it("drops 'You can start now.' once the gate is launchable", () => {
+  // Spec correction (coordinator ruling): the frozen spec had this
+  // backwards. selection_required means a model still needs picking, so
+  // "You can start now." is false exactly there; launchable means ready to
+  // start, so it is true exactly there.
+  it("omits 'You can start now.' at selection_required — a model still needs picking", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "selection_required",
+      progressComponents: [
+        cursorComponent("completed"),
+        claudeComponent("downloading"),
+        codexComponent("queued"),
+        opencodeComponent("queued"),
+        grokComponent("queued"),
+      ],
+    })).toEqual({
+      agentKind: "cursor",
+      title: "Cursor is ready.",
+      description: "Claude Code and 3 others are still installing.",
+    });
+  });
+
+  it("adds 'You can start now.' once the gate is launchable", () => {
     expect(resolveHomeReadinessCardModel({
       gateKind: "launchable",
-      readyAgents: [grok],
-      installingAgents: [claude, codex, opencode, cursor],
+      progressComponents: [
+        cursorComponent("completed"),
+        claudeComponent("downloading"),
+        codexComponent("queued"),
+        opencodeComponent("queued"),
+        grokComponent("queued"),
+      ],
     })).toEqual({
-      agentKind: "grok",
-      title: "Grok is ready.",
-      description: "Claude and 3 others are still installing.",
+      agentKind: "cursor",
+      title: "Cursor is ready.",
+      description: "You can start now. Claude Code and 3 others are still installing.",
     });
   });
 });

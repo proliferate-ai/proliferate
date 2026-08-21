@@ -144,6 +144,11 @@ describe("manual update start-toast dedup", () => {
       await vi.waitFor(() => expect(reconcileAgentsCall).toHaveBeenCalledOnce());
     });
 
+    // Headline assertion: the old duplicate went through
+    // showToast({message, tone}) with no id, so an id-filtered count alone
+    // (D-R5) could never see it come back. Counting every call to the
+    // primitive is what actually observes the regression.
+    expect(showToastSpy).toHaveBeenCalledTimes(1);
     expect(startToastCalls()).toHaveLength(1);
     // The old manual "started" toast never reaches the primitive either.
     expect(showToastSpy).not.toHaveBeenCalledWith(
