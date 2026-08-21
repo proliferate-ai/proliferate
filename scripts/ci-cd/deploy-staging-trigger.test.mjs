@@ -163,10 +163,17 @@ test("deploy environment inputs use the exact casing the AWS resource paths use"
   // But the same string becomes `DEPLOY_ENVIRONMENT`, which is interpolated
   // raw into SSM parameter paths (`/proliferate/${DEPLOY_ENVIRONMENT}/litellm/...`
   // in _deploy-litellm.yml, `/proliferate/${DEPLOY_ENVIRONMENT}/support/...` in
-  // _deploy-server.yml) and into the CloudWatch log group name. Those resources
-  // exist only under the lowercase spelling, and the deploy role's IAM policy is
-  // scoped to it, so a capitalized input fails with AccessDeniedException at
-  // deploy time. Release run 32450223908 lost its LiteLLM deploy to exactly this.
+  // _deploy-server.yml) and into Sentry environment values on the server task
+  // definition. Every live SSM parameter uses the lowercase spelling and the
+  // deploy role's IAM policy is scoped to it case-sensitively, so a capitalized
+  // input fails with AccessDeniedException at deploy time. Release run
+  // 32450223908 lost its LiteLLM deploy to exactly this, and shipped a server
+  // task definition carrying SENTRY_ENVIRONMENT=Production.
+  //
+  // Not covered by this test: _deploy-server.yml's CloudWatch derivations
+  // (`Proliferate/Background/${DEPLOY_ENVIRONMENT}`, `/ecs/proliferate-server-${DEPLOY_ENVIRONMENT}`)
+  // match no real resource under EITHER spelling; the live log group is
+  // `/ecs/proliferate-prod`. That is a separate defect.
   //
   // The canonical spelling is the environment key in the hosted contract, which
   // is the same token the AWS resources are named after.
@@ -176,16 +183,40 @@ test("deploy environment inputs use the exact casing the AWS resource paths use"
   const canonical = new Set(Object.keys(contract.environments));
   assert.ok(canonical.size > 0, "the hosted contract must declare environments");
 
-  for (const name of ["release.yml", "deploy-staging.yml"]) {
+  // Every `environment:` line is inspected at any indentation, with an inline
+  // comment stripped, surrounding quotes removed, and trailing whitespace
+  // trimmed, so none of those spellings can smuggle a capitalized value past
+  // the check. Expression-valued inputs (`${{ ... }}`) are resolved at run time
+  // by the caller, which is itself one of the files checked here.
+  for (const [name, expected] of [
+    ["release.yml", 3],
+    ["deploy-staging.yml", 4],
+  ]) {
     const source = read(name);
-    const passed = [...source.matchAll(/^      environment: (\S+)$/gm)].map((match) => match[1]);
-    assert.ok(passed.length > 0, `${name}: expected at least one environment input`);
-    for (const value of passed) {
+    const lines = source.split("\n").filter((line) => /^\s*environment:\s*\S/.test(line));
+    // Pin the count so a refactor that renames or drops the key trips this test
+    // instead of vacuously passing on an empty match set.
+    assert.equal(
+      lines.length,
+      expected,
+      `${name}: expected ${expected} environment inputs, found ${lines.length}. ` +
+        `Update this test deliberately when the deploy lanes change.`,
+    );
+
+    for (const line of lines) {
+      const raw = line
+        .replace(/^\s*environment:\s*/, "")
+        .replace(/\s+#.*$/, "")
+        .trim()
+        .replace(/^["'](.*)["']$/, "$1");
+      if (raw.includes("${{")) {
+        continue;
+      }
       assert.ok(
-        canonical.has(value),
-        `${name}: environment input '${value}' is not a hosted contract environment key ` +
-          `(${[...canonical].join(", ")}). The input is interpolated into SSM paths, so the ` +
-          `casing must match the AWS resources exactly.`,
+        canonical.has(raw),
+        `${name}: environment input '${raw}' is not a hosted contract environment key ` +
+          `(${[...canonical].join(", ")}). The input is interpolated into SSM paths and ` +
+          `Sentry environment values, so the casing must match the AWS resources exactly.`,
       );
     }
   }
