@@ -8,9 +8,11 @@ import {
   resolveHomeModelGateRefusalAnnouncement,
   resolveHomeModelSelectorAvailability,
   type HomeModelGate,
+  type HomeModelGateBlockedReason,
   type HomeModelGateInput,
   type HomeModelGateObservation,
 } from "#product/lib/domain/home/home-model-gate";
+import { resolveModelSelectorEnabled } from "#product/lib/domain/chat/models/model-selector-types";
 
 function input(overrides: Partial<HomeModelGateInput> = {}): HomeModelGateInput {
   return {
@@ -123,20 +125,64 @@ describe("resolveHomeModelGate precedence", () => {
     }))).toEqual({ kind: "blocked", reason: "observation_pending" });
   });
 
-  it("does not treat a settled detecting harness as pending", () => {
-    // A manual-refresh-only harness sits `detecting` by design. Reporting that
-    // as in-flight is the 32-minute "Probing..." bug.
-    expect(resolveHomeModelGate(input({
+  it("reports a settled detecting harness as observation_idle, with a cure", () => {
+    // A harness excluded from automatic probing sits `detecting` + `idle`
+    // forever. Calling that in-flight is the "Probing…" that never ends;
+    // calling it `querying` is a silent dead end with nothing to press.
+    const gate = resolveHomeModelGate(input({
       observations: [observation({ state: "detecting", probePhase: "idle" })],
-    }))).toEqual({ kind: "blocked", reason: "querying" });
+    }));
+    expect(gate).toEqual({ kind: "blocked", reason: "observation_idle" });
+    expect(resolveHomeModelSelectorAvailability(gate)).not.toBe("observation_pending");
+    const notice = resolveHomeModelGateNotice(gate);
+    expect(notice).toEqual({
+      text: "Models haven't been detected yet.",
+      actionLabel: "Refresh",
+      action: "retry_probe",
+    });
   });
 
-  it("reports agent_setup_required only for install_required or login_required", () => {
-    for (const readiness of ["install_required", "login_required"] as const) {
+  it("leaves no gate silent and actionless", () => {
+    // The whole point of the slice: every state either shows a notice whose
+    // action cures it, or leaves a control enabled that does.
+    for (const gate of ALL_GATES) {
+      const notice = resolveHomeModelGateNotice(gate);
+      const availability = resolveHomeModelSelectorAvailability(gate);
+      const pickerUsable = availability === "ready" || availability === "observed_empty";
+      const inFlight = gate.kind === "blocked"
+        && (gate.reason === "querying" || gate.reason === "observation_pending");
+      const noTarget = gate.kind === "blocked" && gate.reason === "target_missing";
+      expect(
+        notice !== null || pickerUsable || inFlight || noTarget,
+        `gate ${JSON.stringify(gate)} is silent with nothing to press`,
+      ).toBe(true);
+    }
+  });
+
+  it("resolves the residual to observation_idle rather than a query nobody is running", () => {
+    // Nothing loading, nothing failed, nothing observed, and an all-unsupported
+    // catalog that will never produce a model: the honest answer is "ask me".
+    expect(resolveHomeModelGate(input({ agentReadiness: ["unsupported"] })))
+      .toEqual({ kind: "blocked", reason: "observation_idle" });
+  });
+
+  it("reports agent_setup_required for every readiness the Agents pane can cure", () => {
+    // The product's own `getAgentsNeedingSetup` rule: not ready, not
+    // unsupported. `credentials_required` was missing before, which regressed
+    // against main — those users used to get the notice and its Agents link.
+    for (const readiness of [
+      "install_required",
+      "login_required",
+      "credentials_required",
+      "error",
+    ] as const) {
       expect(resolveHomeModelGate(input({ agentReadiness: [readiness] })))
         .toEqual({ kind: "blocked", reason: "agent_setup_required" });
     }
-    for (const readiness of ["ready", "credentials_required", "unsupported", "error"] as const) {
+    // `unsupported` is not setup and can never be cured, so it must not speak
+    // for the catalog — one unsupported agent alongside working ones would
+    // otherwise pin Home to a setup notice forever.
+    for (const readiness of ["ready", "unsupported"] as const) {
       expect(resolveHomeModelGate(input({ agentReadiness: [readiness] })))
         .not.toEqual({ kind: "blocked", reason: "agent_setup_required" });
     }
@@ -167,6 +213,8 @@ describe("resolveHomeModelGate precedence", () => {
       input({ observations: [observation({ state: "observed_empty" })] }),
       input({ observations: [observation({ state: "failed_without_observation" })] }),
       input({ observations: [observation({ isError: true })] }),
+      input({ observations: [observation({ state: "detecting", probePhase: "idle" })] }),
+      input({ isCatalogLoading: true }),
     ];
     for (const testCase of cases) {
       const gate = resolveHomeModelGate(testCase);
@@ -183,8 +231,15 @@ describe("home model gate presentation", () => {
     for (const gate of ALL_GATES) {
       const availability = resolveHomeModelSelectorAvailability(gate);
       const notice = resolveHomeModelGateNotice(gate);
-      const selectorEnabled =
-        availability !== "observation_pending" && availability !== "unavailable";
+      // The component's own expression, imported rather than restated, so the
+      // assertion cannot quietly agree with a copy of the rule.
+      const selectorEnabled = resolveModelSelectorEnabled({
+        disabled: false,
+        connectionState: "healthy",
+        isLoading: false,
+        hasAgents: true,
+        availability,
+      });
       expect(
         selectorEnabled && notice?.text === HOME_MODEL_GATE_AGENT_SETUP_NOTICE,
         `gate ${JSON.stringify(gate)} produced a coexistence`,
@@ -221,6 +276,12 @@ describe("home model gate presentation", () => {
         actionLabel: "Retry",
         action: "refetch_launch_options",
       });
+    expect(resolveHomeModelGateNotice({ kind: "blocked", reason: "observation_idle" }))
+      .toEqual({
+        text: "Models haven't been detected yet.",
+        actionLabel: "Refresh",
+        action: "retry_probe",
+      });
     expect(resolveHomeModelGateNotice({ kind: "blocked", reason: "target_unobserved" }))
       .toEqual({
         text: "Proliferate Cloud hasn't reported launch options yet.",
@@ -235,7 +296,14 @@ describe("home model gate presentation", () => {
       .toBe("observed_empty");
     expect(resolveHomeModelSelectorAvailability({ kind: "blocked", reason: "observation_pending" }))
       .toBe("observation_pending");
-    for (const reason of ["observation_failed", "transport_error", "target_unobserved"] as const) {
+    for (
+      const reason of [
+        "observation_failed",
+        "transport_error",
+        "target_unobserved",
+        "observation_idle",
+      ] as const satisfies readonly HomeModelGateBlockedReason[]
+    ) {
       expect(resolveHomeModelSelectorAvailability({ kind: "blocked", reason }))
         .toBe("unavailable");
     }

@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   targetIsLoading: false,
   targetIsError: false,
   refetch: vi.fn(),
+  refetchKind: vi.fn(),
+  refetchAgents: vi.fn(),
   refreshMutate: vi.fn(),
   otherEntries: [] as Array<{
     harnessKind: string;
@@ -42,6 +44,10 @@ vi.mock("#product/hooks/home/derived/use-home-target-agent-launch-options", () =
   useHomeTargetOtherAgentsLaunchOptions: () => mocks.otherEntries,
 }));
 
+vi.mock("#product/hooks/access/anyharness/agents/use-refetch-agent-launch-options-kind", () => ({
+  useRefetchAgentLaunchOptionsKind: () => mocks.refetchKind,
+}));
+
 vi.mock("@anyharness/sdk-react", () => ({
   useRefreshHarnessLaunchOptionsMutation: () => ({ mutate: mocks.refreshMutate }),
 }));
@@ -55,6 +61,7 @@ vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
     isLoading: mocks.agentsLoading,
     isError: mocks.agentsError,
     error: null,
+    refetch: mocks.refetchAgents,
   }),
 }));
 
@@ -73,6 +80,8 @@ describe("useHomeNextModelSelection", () => {
     mocks.targetIsLoading = false;
     mocks.targetIsError = false;
     mocks.refetch = vi.fn();
+    mocks.refetchKind = vi.fn();
+    mocks.refetchAgents = vi.fn();
     mocks.refreshMutate = vi.fn();
     mocks.otherEntries = [];
     mocks.agents = [];
@@ -209,7 +218,12 @@ describe("useHomeNextModelSelection", () => {
       modelSelectionOverride: null,
       launchTarget: CLOUD_TARGET,
     }));
-    expect(result.current.modelGate).toEqual({ kind: "blocked", reason: "querying" });
+    // Neither the local readiness nor the local catalog's failure reaches it:
+    // the honest answer is that nothing has looked at the sandbox yet.
+    expect(result.current.modelGate).toEqual({
+      kind: "blocked",
+      reason: "observation_idle",
+    });
   });
 
   it("keeps rows offered and nothing selected when no valid default resolves", () => {
@@ -308,6 +322,92 @@ describe("useHomeNextModelSelection", () => {
     });
     broken.result.current.retryModelObservation();
     expect(mocks.refetch).toHaveBeenCalled();
+  });
+
+  it("reports a settled unprobed harness as observation_idle and refreshes it", () => {
+    // A harness excluded from automatic probing answers `detecting` + `idle`
+    // and stays there. Nothing is in flight, so the cure is a NEW probe.
+    mocks.agents = [{ kind: "cursor", readiness: "ready" }];
+    mocks.readyAgents = [{ kind: "cursor" }];
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "cursor",
+      defaultChatModelIdByAgentKind: {},
+    });
+    mocks.data = {
+      ...response(),
+      harnessKind: "cursor",
+      state: "detecting",
+      probePhase: "idle",
+      options: null,
+    };
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: LOCAL_TARGET,
+    }));
+    expect(result.current.modelGate).toEqual({
+      kind: "blocked",
+      reason: "observation_idle",
+    });
+    result.current.retryModelObservation();
+    expect(mocks.refreshMutate).toHaveBeenCalledWith("cursor");
+    expect(mocks.refetch).not.toHaveBeenCalled();
+  });
+
+  it("repairs the query that actually failed, not the one it can reach", () => {
+    // A FAN-OUT kind's read failed. Re-asking the requested kind would re-read
+    // an endpoint that was never the problem and leave the notice up.
+    mocks.agents = [
+      { kind: "claude", readiness: "ready" },
+      { kind: "codex", readiness: "ready" },
+    ];
+    mocks.readyAgents = [{ kind: "claude" }, { kind: "codex" }];
+    mocks.data = {
+      ...response(),
+      state: "observed_empty",
+      options: { models: [], controls: [], defaults: { modelId: null, controlValues: {} } },
+    };
+    mocks.otherEntries = [entry("codex", null, { isError: true })];
+    const fanout = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: LOCAL_TARGET,
+    }));
+    fanout.result.current.retryModelObservation();
+    expect(mocks.refetchKind).toHaveBeenCalledWith("codex");
+    expect(mocks.refetch).not.toHaveBeenCalled();
+    fanout.unmount();
+
+    // The AGENT CATALOG's own read failed. It is a third query, and nothing in
+    // the launch-options family can repair it.
+    mocks.otherEntries = [];
+    mocks.data = undefined;
+    mocks.agentsError = true;
+    const catalog = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: LOCAL_TARGET,
+    }));
+    expect(catalog.result.current.modelGate).toEqual({
+      kind: "blocked",
+      reason: "transport_error",
+    });
+    catalog.result.current.retryModelObservation();
+    expect(mocks.refetchAgents).toHaveBeenCalled();
+  });
+
+  it("keeps a cloud sandbox that reported no models from claiming it has no agents", () => {
+    // `observed_empty` is the one blocked state ruling 3 keeps the picker
+    // ENABLED for, and an enabled picker labelled "No agents" is false: the
+    // sandbox's agents are there, they reported nothing.
+    mocks.data = {
+      ...response(),
+      state: "observed_empty",
+      options: { models: [], controls: [], defaults: { modelId: null, controlValues: {} } },
+    };
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: CLOUD_TARGET,
+    }));
+    expect(result.current.modelGate).toEqual({ kind: "blocked", reason: "observed_empty" });
+    expect(result.current.hasKnownAgents).toBe(true);
   });
 
   it("reports observed_empty when the harness answered with no models", () => {

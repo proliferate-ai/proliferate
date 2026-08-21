@@ -111,6 +111,51 @@ it("keeps the trigger enabled for observed_empty and disabled for a failed obser
   ).toBe(true);
 });
 
+it("never says 'No agents' about a sandbox the gate already explained", () => {
+  // The cloud shape: `hasAgents` is derived from an answer that carried zero
+  // rows, so it can be false in exactly the states the gate has a truer story
+  // for. "No agents" is a claim about the CATALOG, and beside a notice saying
+  // the cloud has not reported yet it is the second of two contradictory
+  // stories about the same sandbox.
+  for (const availability of ["observed_empty", "unavailable"] as const) {
+    const { container } = render(
+      <MemoryRouter>
+        <ComposerModelSelectorControl
+          modelSelectorProps={availabilityProps({ hasAgents: false, availability })}
+        />
+      </MemoryRouter>,
+    );
+    const trigger = container.querySelector<HTMLButtonElement>(
+      "[data-composer-model-trigger]",
+    )!;
+    expect(trigger.textContent).not.toContain("No agents");
+    expect(trigger.textContent).toContain("Select model");
+    cleanup();
+  }
+});
+
+it("keeps an observed_empty cloud picker openable once its agents are known", () => {
+  // Ruling 3 depends on `hasAgents`, which is outside the gate: an
+  // `observed_empty` sandbox whose agents were counted from its (empty) rows
+  // produced a DISABLED picker, turning the one cure path into a dead end.
+  const { container } = render(
+    <MemoryRouter>
+      <ComposerModelSelectorControl
+        modelSelectorProps={availabilityProps({
+          hasAgents: true,
+          availability: "observed_empty",
+        })}
+      />
+    </MemoryRouter>,
+  );
+  const trigger = container.querySelector<HTMLButtonElement>(
+    "[data-composer-model-trigger]",
+  )!;
+  expect(trigger.disabled).toBe(false);
+  openModelOptions(container);
+  expect(document.body.textContent).toContain("Your agents reported no models yet.");
+});
+
 it("says the agents reported nothing in the observed_empty picker body", () => {
   const { container } = render(
     <MemoryRouter>

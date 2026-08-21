@@ -34,6 +34,15 @@ export type HomeModelGateBlockedReason =
   | "observed_empty"
   /** The probe ran and failed without ever producing an observation. */
   | "observation_failed"
+  /**
+   * The target settled without ever observing this harness, and nothing will
+   * change that on its own: the read answered, no probe is queued or running,
+   * and the runtime is not going to schedule one. Harnesses excluded from
+   * automatic probing (`AUTO_PROBE_EXCLUDED_HARNESSES`) live here permanently
+   * until a user asks. Reporting it as in-flight is the "Probing…" that never
+   * ends; reporting nothing at all is a dead end with no cure on screen.
+   */
+  | "observation_idle"
   /** The launch-option request itself failed; there is no state to read. */
   | "transport_error";
 
@@ -133,17 +142,71 @@ export function resolveHomeModelGate(input: HomeModelGateInput): HomeModelGate {
   if (input.hasCatalogError || input.observations.some((observation) => observation.isError)) {
     return blocked("transport_error");
   }
+  if (input.observations.some(isSettledUnobservedHarness)) {
+    return blocked("observation_idle");
+  }
 
-  // Residual: a target exists, nothing is loading, nothing failed, and no
-  // harness has said anything. The runtime lists every supported agent with a
-  // readiness state, so this is the gap before the first answer arrives, not a
-  // settled emptiness — and it must never be reported as one.
-  return blocked("querying");
+  // Residual: a target exists, nothing is in flight, nothing failed, and no
+  // harness has produced an observation. Whatever combination of inputs got
+  // here, the world is not going to move without the user, so the residual is
+  // the state that says exactly that AND offers the cure. It is deliberately
+  // NOT `querying`: a silent, actionless "still asking" that no longer asks is
+  // the dead end this gate exists to remove.
+  return blocked("observation_idle");
 }
 
-/** `readiness` values that make "Finish agent setup to start a chat." true. */
+/**
+ * A harness the target has settled on without ever observing it.
+ *
+ * `detecting` is the runtime's pre-observation state, and `probePhase` is what
+ * says whether anything is still working on it. `idle` means nothing is: no
+ * probe is queued, none is running, and none will be scheduled automatically
+ * for an excluded harness. Combined with a read that has answered and did not
+ * fail, that is an unambiguous "ask me and I will look".
+ */
+export function isSettledUnobservedHarness(
+  observation: HomeModelGateObservation,
+): boolean {
+  return observation.state === "detecting"
+    && observation.probePhase === "idle"
+    && !observation.isPending
+    && !observation.isError;
+}
+
+/**
+ * `readiness` values that make "Finish agent setup to start a chat." true.
+ *
+ * Deliberately an exhaustive `switch` with NO `default:` arm: a new
+ * `AgentReadinessState` variant must fail to compile here rather than fall
+ * silently into whichever residual happens to be last. The mapping below is
+ * today's answer; the exhaustiveness is the durable part.
+ *
+ * The rule is the product's own `getAgentsNeedingSetup` rule — not ready and
+ * not unsupported — and it is the same rule for the same reason: every one of
+ * these four states is a thing the user resolves in the Agents pane, which is
+ * exactly where the notice's action sends them.
+ *
+ *  - `credentials_required`: the user holds the missing key. Leaving it out
+ *    was a regression against main, which said "Finish agent setup" here.
+ *  - `error`: the runtime could not evaluate the agent. Re-probing it would
+ *    loop on the same failure; the Agents pane is where the error is shown.
+ *  - `unsupported`: NOT setup. Nothing the user can do makes this agent run on
+ *    this machine, so it must never speak for the whole catalog — a single
+ *    unsupported agent alongside working ones would otherwise pin Home to a
+ *    setup notice forever. It falls through to `observation_idle`, which has
+ *    a real cure, so it is never silent.
+ */
 export function readinessNeedsSetup(readiness: AgentReadinessState): boolean {
-  return readiness === "install_required" || readiness === "login_required";
+  switch (readiness) {
+    case "install_required":
+    case "login_required":
+    case "credentials_required":
+    case "error":
+      return true;
+    case "ready":
+    case "unsupported":
+      return false;
+  }
 }
 
 function isProbeInFlight(observation: HomeModelGateObservation): boolean {
@@ -163,16 +226,21 @@ export const HOME_MODEL_GATE_BLOCKED_REASONS = [
   "agent_setup_required",
   "observed_empty",
   "observation_failed",
+  "observation_idle",
   "transport_error",
 ] as const satisfies readonly HomeModelGateBlockedReason[];
 
 /**
  * What the picker trigger is allowed to claim, derived from the gate.
  *
- * Keeping this a function OF the gate is what makes ruling 2 structural: an
- * enabled trigger and a "Finish agent setup" notice cannot both be rendered,
- * because `agent_setup_required` maps to `unavailable` here and to the notice
- * in `resolveHomeModelGateNotice`, and `unavailable` disables the trigger.
+ * Both this and `resolveHomeModelGateNotice` are functions of the SAME gate,
+ * which is what keeps ruling 2 checkable in one place: `agent_setup_required`
+ * maps to `unavailable` here and to the setup notice there. That is a property
+ * of these two mappings, ENFORCED BY TESTS at both seams — the notice/trigger
+ * pairing and the trigger's own enablement rule — not by the union's shape.
+ * Nothing in the types stops a caller passing no `availability` at all (it
+ * defaults to `"ready"`) or passing `hasAgents: false` next to a notice, so
+ * the tests, not the compiler, are the guarantee.
  */
 export type HomeModelSelectorAvailability =
   /** Rows are exactly what the target observed; choose freely. */
@@ -200,6 +268,7 @@ export function resolveHomeModelSelectorAvailability(
     case "target_unobserved":
     case "agent_setup_required":
     case "observation_failed":
+    case "observation_idle":
     case "transport_error":
       return "unavailable";
   }
@@ -245,6 +314,15 @@ export function resolveHomeModelGateNotice(gate: HomeModelGate): HomeModelGateNo
       return {
         text: "Couldn't check your models.",
         actionLabel: "Retry",
+        action: "retry_probe",
+      };
+    // Same words and the same cure as the Settings models section, which
+    // solved this state first: an honest "nobody has looked yet" plus a
+    // Refresh that looks. Never "Probing…" — nothing is probing.
+    case "observation_idle":
+      return {
+        text: "Models haven't been detected yet.",
+        actionLabel: "Refresh",
         action: "retry_probe",
       };
     case "transport_error":
