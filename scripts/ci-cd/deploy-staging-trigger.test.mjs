@@ -71,6 +71,36 @@ test("release.yml is the only entrypoint into a production deploy lane", () => {
   assert.deepEqual(coordinators, ["release.yml"]);
 });
 
+test("release refs resolve to a full commit SHA before checkout", () => {
+  // Release run 32452508826 failed before prepare because actions/checkout
+  // treated the abbreviated commit SHA as a ref name. Keep the lower-tier
+  // contract explicit: resolve every accepted spelling through the commits API,
+  // write the returned full SHA, and give checkout only that output.
+  const release = read("release.yml");
+  const resolveStart = release.indexOf(
+    "- name: Resolve the release ref to a full commit SHA",
+  );
+  const checkoutStart = release.indexOf("- uses: actions/checkout@", resolveStart);
+  const setupNodeStart = release.indexOf("- uses: actions/setup-node@", checkoutStart);
+
+  assert.notEqual(resolveStart, -1, "release.yml must resolve its input ref");
+  assert.notEqual(checkoutStart, -1, "release.yml must still check out the release commit");
+  assert.notEqual(setupNodeStart, -1, "release.yml prepare step boundaries changed");
+  assert.ok(resolveStart < checkoutStart, "release ref resolution must precede checkout");
+
+  const resolver = release.slice(resolveStart, checkoutStart);
+  assert.match(resolver, /INPUT_REF: \$\{\{ github\.event\.inputs\.ref \|\| 'main' \}\}/);
+  assert.match(
+    resolver,
+    /gh api "repos\/\$\{GITHUB_REPOSITORY\}\/commits\/\$\{INPUT_REF\}" --jq \.sha/,
+  );
+  assert.match(resolver, /echo "sha=\$sha" >> "\$GITHUB_OUTPUT"/);
+
+  const checkout = release.slice(checkoutStart, setupNodeStart);
+  assert.match(checkout, /ref: \$\{\{ steps\.ref\.outputs\.sha \}\}/);
+  assert.doesNotMatch(checkout, /github\.event\.inputs\.ref/);
+});
+
 test("staging never targets the production environment", () => {
   assert.doesNotMatch(workflow, PRODUCTION_ENVIRONMENT);
   assert.match(workflow, /environment: staging/);
