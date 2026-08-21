@@ -39,9 +39,19 @@ export function ComposerModelSelectorControl({
     hasAgents,
     isLoading,
     onSelect,
+    availability = "ready",
     unsupportedSelectionMessage = null,
   } = modelSelectorProps;
-  const selectorEnabled = !disabled && connectionState === "healthy" && !isLoading && hasAgents;
+  // `observed_empty` deliberately stays ENABLED (owner revision r3): the picker
+  // is that state's cure path, and greying out the one control that explains
+  // what happened turns a recoverable state into a dead end. Only a missing or
+  // failed observation disables the trigger — those have nothing to show.
+  const selectorEnabled = !disabled
+    && connectionState === "healthy"
+    && !isLoading
+    && hasAgents
+    && availability !== "observation_pending"
+    && availability !== "unavailable";
   // The picker opens itself after a refusal so the marked rows are in front of
   // the user rather than one click away. Nonce-driven: two refusals in a row
   // each reopen it, and nothing has to reset a flag.
@@ -147,6 +157,16 @@ export function ComposerModelSelectorControl({
             aria-describedby={unsupportedSelectionMessage
               ? MODEL_UNSUPPORTED_MESSAGE_ID
               : undefined}
+            onKeyDown={(event) => {
+              // Escape from the closed trigger hands the caret back to the
+              // editor: a refused Enter parks focus here, and Escape is how
+              // the user says "not now" without losing their place.
+              if (event.key !== "Escape" || pickerOpen || !keyboardFocusRestoreEnabled) {
+                return;
+              }
+              event.preventDefault();
+              focusChatInput();
+            }}
             className="max-w-[min(15rem,100%)]"
           />
         )}
@@ -160,6 +180,7 @@ export function ComposerModelSelectorControl({
         {(close) => (
           <ComposerModelPickerPopover
             groups={groups}
+            availability={availability}
             currentModel={currentModel}
             onKeyboardClose={handleKeyboardClose}
             onSelect={(selection) => {
@@ -193,6 +214,7 @@ const MODEL_UNSUPPORTED_MESSAGE_ID = "composer-model-unsupported";
 
 function resolveTriggerLabel(modelSelectorProps: ModelSelectorProps): string {
   const {
+    availability = "ready",
     connectionState,
     currentModel,
     hasAgents,
@@ -202,12 +224,20 @@ function resolveTriggerLabel(modelSelectorProps: ModelSelectorProps): string {
   if (connectionState === "connecting") {
     return "Connecting...";
   }
+  // "Loading agents..." belongs to a genuine catalog HTTP read and nothing
+  // else. An install in flight is not the catalog loading.
   if (isLoading && !currentModel) {
     return "Loading agents...";
   }
   if (currentModel?.displayName) {
     // Show only the leaf name on the pill — the provider icon already carries harness identity.
     return splitProviderDisplayName(currentModel.displayName).leaf;
+  }
+  // Before the first observation the disabled trigger reads "Select model":
+  // "No agents" would be false (they are installing) and "Loading agents..."
+  // would misname an install as a catalog fetch.
+  if (availability === "observation_pending") {
+    return CHAT_MODEL_SELECTOR_LABELS.empty;
   }
   if (!hasAgents) {
     return "No agents";

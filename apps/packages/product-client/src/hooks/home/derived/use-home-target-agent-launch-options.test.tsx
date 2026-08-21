@@ -2,7 +2,10 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useHomeTargetAgentLaunchOptions } from "#product/hooks/home/derived/use-home-target-agent-launch-options";
+import {
+  useHomeTargetAgentLaunchOptions,
+  useHomeTargetOtherAgentsLaunchOptions,
+} from "#product/hooks/home/derived/use-home-target-agent-launch-options";
 
 const mocks = vi.hoisted(() => ({
   cloudLaunchArgs: null as Record<string, unknown> | null,
@@ -19,6 +22,8 @@ const mocks = vi.hoisted(() => ({
     isError: false,
     isLoading: false,
   },
+  listArgs: null as Record<string, unknown> | null,
+  listEntries: [] as unknown[],
   localArgs: null as Record<string, unknown> | null,
   localResult: {
     data: undefined as unknown,
@@ -32,6 +37,10 @@ vi.mock("@anyharness/sdk-react", () => ({
   useAgentLaunchOptionsQuery: (args: Record<string, unknown>) => {
     mocks.localArgs = args;
     return mocks.localResult;
+  },
+  useAgentLaunchOptionsListQuery: (args: Record<string, unknown>) => {
+    mocks.listArgs = args;
+    return mocks.listEntries;
   },
 }));
 
@@ -57,6 +66,8 @@ describe("useHomeTargetAgentLaunchOptions", () => {
       isError: false,
       isLoading: false,
     };
+    mocks.listArgs = null;
+    mocks.listEntries = [];
     mocks.localArgs = null;
     mocks.localResult = queryResult();
   });
@@ -136,6 +147,37 @@ describe("useHomeTargetAgentLaunchOptions", () => {
     expect(mocks.cloudLaunchArgs).toMatchObject({ enabled: false });
     expect(result.current.data).toBeUndefined();
   });
+
+  it("hands the fan-out kinds their per-kind pending and error flags", () => {
+    // `data === null` reads the same for a kind still being asked and a kind
+    // whose read failed; only these flags separate them, and the Home gate
+    // reports them as different states.
+    mocks.listEntries = [
+      { harnessKind: "codex", data: null, isPending: true, isError: false },
+      { harnessKind: "cursor", data: null, isPending: false, isError: true },
+    ];
+    const { result } = renderHook(() => useHomeTargetOtherAgentsLaunchOptions({
+      harnessKinds: ["codex", "cursor"],
+      launchTarget: { kind: "local", sourceRoot: "/repo", existingWorkspaceId: null },
+    }));
+
+    expect(mocks.listArgs).toEqual({ harnessKinds: ["codex", "cursor"], enabled: true });
+    expect(result.current).toEqual(mocks.listEntries);
+  });
+
+  it("returns a stable empty list for a cloud target", () => {
+    mocks.listEntries = [
+      { harnessKind: "codex", data: null, isPending: true, isError: false },
+    ];
+    const { result, rerender } = renderHook(() => useHomeTargetOtherAgentsLaunchOptions({
+      harnessKinds: ["codex"],
+      launchTarget: { kind: "cloud", gitOwner: "owner", gitRepoName: "repo", baseBranch: "main" },
+    }));
+    const first = result.current;
+    expect(first).toEqual([]);
+    rerender();
+    expect(result.current).toBe(first);
+  });
 });
 
 function queryResult(overrides: Partial<{
@@ -149,6 +191,7 @@ function queryResult(overrides: Partial<{
     error: null,
     isError: false,
     isLoading: false,
+    refetch: vi.fn(),
     ...overrides,
   };
 }

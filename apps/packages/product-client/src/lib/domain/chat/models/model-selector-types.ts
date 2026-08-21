@@ -51,6 +51,21 @@ export interface ModelSelectorCurrentModel {
   pendingState: PendingSessionConfigChangeStatus | null;
 }
 
+/**
+ * Why the offered rows look the way they do.
+ *
+ * `groups.length === 0` cannot say it: no observation yet, an observation that
+ * found nothing, and a failed observation are three different facts, and the
+ * trigger label, the enabled state and the picker's empty body each differ
+ * between them. Chat has a live session and omits this (defaulting to
+ * `ready`); Home derives it from its model gate.
+ */
+export type ModelSelectorAvailability =
+  | "ready"
+  | "observation_pending"
+  | "observed_empty"
+  | "unavailable";
+
 export interface ModelSelectorProps {
   connectionState: string;
   currentModel: ModelSelectorCurrentModel | null;
@@ -58,6 +73,8 @@ export interface ModelSelectorProps {
   hasAgents: boolean;
   isLoading: boolean;
   onSelect: (selection: ModelSelectorSelection) => void;
+  /** Defaults to `ready`, which is exactly today's behavior. */
+  availability?: ModelSelectorAvailability;
   /**
    * Set when the model the composer is currently on is one the target refused.
    * Pinned under the control as an inline error — the condition belongs to this
