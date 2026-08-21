@@ -165,11 +165,30 @@ jobs:
             exit 1
           fi
 
+      # pnpm must be installed BEFORE `actions/setup-node` so that the
+      # `cache: pnpm` input below can shell out to `pnpm store path` to locate
+      # the content-addressable store. This is the same ordering every pnpm job
+      # in ci.yml uses.
+      - name: Setup pnpm
+        if: steps.filter.outputs.skip != 'true'
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      # `cache: pnpm` caches the pnpm content-addressable store (NOT any
+      # node_modules tree). setup-node derives the key itself as
+      # `node-cache-<platform>-<arch>-pnpm-<hash of **/pnpm-lock.yaml>`, so any
+      # lockfile edit — a version bump, an added package, a resolution change —
+      # produces a different key, and macOS arm64 never shares a key with any
+      # other runner OS/arch. `pnpm install` still resolves against the lockfile
+      # and re-links node_modules on a hit; only the tarball downloads are
+      # skipped, so a hit cannot change which package versions get installed.
       - name: Setup Node 22
         if: steps.filter.outputs.skip != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
+          cache: pnpm
 
       - name: Validate release title
         if: steps.filter.outputs.skip != 'true'
@@ -198,11 +217,43 @@ jobs:
           echo "PROLIFERATE_RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
           echo "Using release version $release_version"
 
-      - name: Setup pnpm
+      # Fail-fast preflight, lifted verbatim out of "Build frontend" below.
+      # The check itself is unchanged — same env resolution
+      # (SENTRY_DESKTOP_RENDERER_PROJECT || SENTRY_PROJECT), same request, same
+      # error text — only its position moved. It used to sit behind the Rust
+      # build, the agent seed and the SDK build, so a misconfigured Sentry
+      # project failed the release at roughly minute 13 instead of second 20.
+      - name: Preflight Sentry renderer project
         if: steps.filter.outputs.skip != 'true'
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10.11.0
+        shell: bash
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_DESKTOP_RENDERER_PROJECT || vars.SENTRY_PROJECT }}
+          SENTRY_URL: ${{ vars.SENTRY_URL }}
+        run: |
+          export VITE_PROLIFERATE_RELEASE="proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}"
+
+          if [[ -n "$VITE_PROLIFERATE_SENTRY_DSN" ]]; then
+            : "${SENTRY_AUTH_TOKEN:?Set SENTRY_AUTH_TOKEN secret for desktop renderer Sentry sourcemaps.}"
+            : "${SENTRY_ORG:?Set SENTRY_ORG GitHub variable for desktop renderer Sentry sourcemaps.}"
+            : "${SENTRY_PROJECT:?Set SENTRY_DESKTOP_RENDERER_PROJECT or SENTRY_PROJECT GitHub variable for desktop renderer Sentry sourcemaps.}"
+          fi
+
+          if [[ -n "$SENTRY_AUTH_TOKEN" && -n "$SENTRY_ORG" && -n "$SENTRY_PROJECT" && -n "$VITE_PROLIFERATE_RELEASE" ]]; then
+            sentry_url="${SENTRY_URL:-https://sentry.io/}"
+            sentry_status="$(
+              curl -sS -o /tmp/sentry-desktop-renderer-project.json -w "%{http_code}" \
+                -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+                "${sentry_url%/}/api/0/projects/${SENTRY_ORG}/${SENTRY_PROJECT}/" \
+                || true
+            )"
+
+            if [[ "$sentry_status" != "200" ]]; then
+              echo "::error::Sentry desktop renderer project '$SENTRY_PROJECT' is not accessible in org '$SENTRY_ORG' (HTTP $sentry_status). Update SENTRY_DESKTOP_RENDERER_PROJECT before releasing."
+              exit 1
+            fi
+          fi
 
       - name: Setup Rust stable
         if: steps.filter.outputs.skip != 'true'
@@ -216,6 +267,18 @@ jobs:
       # invocation below: one build graph, one cache, instead of four sequential
       # `cargo build -p <pkg>` steps that each re-resolved the same workspace
       # dependencies.
+      #
+      # Scope note: `workspaces` is left at its default (`. -> target`) on
+      # purpose. `apps/desktop/src-tauri` is a member of the root cargo
+      # workspace (see the root Cargo.toml `members` list) and has no
+      # CARGO_TARGET_DIR override, so `pnpm tauri build` compiles into this same
+      # root `target/` — the release log shows `Built application at:
+      # <repo>/target/aarch64-apple-darwin/release/proliferate`, and every
+      # verification step below reads `../../target/...` from apps/desktop.
+      # There is no second `apps/desktop/src-tauri/target` to add here. The same
+      # default also covers the host-triple `target/debug` tree that
+      # `Generate and build SDK` builds via `cargo run --bin anyharness --
+      # print-openapi`.
       - name: Rust cache
         if: steps.filter.outputs.skip != 'true'
         uses: Swatinem/rust-cache@v2
@@ -253,6 +316,19 @@ jobs:
         shell: bash
         run: brew install zstd
 
+      # Deliberately NOT cached. The seed archive is not a pure function of
+      # anything this repo pins: `anyharness install-agents` materializes each
+      # adapter's agent_process from the catalog's `git` source with a plain
+      # `npm install git+<repo>#<sha>` (installer/npm.rs
+      # `install_npm_package_into_prefix`) — no lockfile, no `npm ci`. Those
+      # adapters carry floating ranges (`codex-acp` depends on
+      # `@openai/codex: ^0.147.0`, `zod: ^4.0.0`; `claude-agent-acp` depends on
+      # `zod: ^3.25.0 || ^4.0.0`), so a key derived from catalog.json +
+      # agent-seed.inputs.json + build-agent-seed.mjs + the app version would
+      # hit while the resolved agent tree had legitimately moved on, and the
+      # release would silently ship a stale Codex CLI. Only the node/native
+      # halves are sha256-pinned. Re-open this if the git sources are moved to
+      # sha-pinned tarballs or a committed lockfile.
       - name: Build bundled agent seed
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
         shell: bash
@@ -314,11 +390,26 @@ jobs:
             chmod +x "apps/desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}"
           fi
 
+      # `pnpm run generate` shells out to `generate:openapi`, which by default
+      # runs `cargo run --bin anyharness -- print-openapi` — a SECOND, dev-profile
+      # compile of the whole anyharness crate graph (~1000 crates into
+      # target/debug) purely to print a static document. "Build Rust binaries for
+      # target" above already produced a release `anyharness` for this target,
+      # and `openapi_json()` has no profile-dependent cfg, so both binaries emit
+      # the same JSON. ANYHARNESS_OPENAPI_BIN points the script at the binary we
+      # already have; the guard below refuses to run rather than silently
+      # falling back to `cargo run`.
       - name: Generate and build SDK
         if: steps.filter.outputs.skip != 'true'
         shell: bash
+        env:
+          ANYHARNESS_OPENAPI_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/anyharness${{ matrix.runner_os == 'windows' && '.exe' || '' }}
         run: |
           pnpm install
+          if [[ ! -x "$ANYHARNESS_OPENAPI_BIN" ]]; then
+            echo "::error::Expected the release anyharness binary at $ANYHARNESS_OPENAPI_BIN (produced by 'Build Rust binaries for target'). Refusing to fall back to a dev-profile 'cargo run'."
+            exit 1
+          fi
           cd anyharness/sdk && pnpm run generate && pnpm run build
           cd ../sdk-react && pnpm run build
 
@@ -345,20 +436,12 @@ jobs:
             : "${SENTRY_PROJECT:?Set SENTRY_DESKTOP_RENDERER_PROJECT or SENTRY_PROJECT GitHub variable for desktop renderer Sentry sourcemaps.}"
           fi
 
-          if [[ -n "$SENTRY_AUTH_TOKEN" && -n "$SENTRY_ORG" && -n "$SENTRY_PROJECT" && -n "$VITE_PROLIFERATE_RELEASE" ]]; then
-            sentry_url="${SENTRY_URL:-https://sentry.io/}"
-            sentry_status="$(
-              curl -sS -o /tmp/sentry-desktop-renderer-project.json -w "%{http_code}" \
-                -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
-                "${sentry_url%/}/api/0/projects/${SENTRY_ORG}/${SENTRY_PROJECT}/" \
-                || true
-            )"
-
-            if [[ "$sentry_status" != "200" ]]; then
-              echo "::error::Sentry desktop renderer project '$SENTRY_PROJECT' is not accessible in org '$SENTRY_ORG' (HTTP $sentry_status). Update SENTRY_DESKTOP_RENDERER_PROJECT before releasing."
-              exit 1
-            fi
-          fi
+          # Launch gate: ship with cloud compute hidden (identity/billing stay
+          # enabled). Set here as well as in "Build Tauri app" because this step
+          # is now the sole producer of the dist/ that gets packaged — the tauri
+          # passes no longer re-run the frontend build. Remove both lines to
+          # re-enable cloud workspaces in builds.
+          export VITE_PROLIFERATE_DISABLE_CLOUD_COMPUTE=1
 
           pnpm run build
 
@@ -452,8 +535,25 @@ jobs:
             fi
             # Build the DMG in the known-good path first, then build the updater-
             # enabled app bundle separately so the mac updater tarball is emitted.
-            pnpm tauri build --target ${{ matrix.target }} --bundles dmg
-            pnpm tauri build --target ${{ matrix.target }} --bundles app
+            #
+            # `-c '{"build":{"beforeBuildCommand":""}}'` blanks tauri.conf.json's
+            # `beforeBuildCommand: "pnpm build"` for these two invocations only
+            # (tauri-cli merges the inline JSON over the file config, and treats
+            # an empty hook script as "no hook"). Without it each pass re-runs
+            # the entire renderer build that the "Build frontend" step above
+            # already ran: 3m43s + 2m58s of pure duplicate work in release run
+            # 30240922004. `frontendDist` is `../dist`, which is exactly what
+            # "Build frontend" writes, and nothing between the two steps
+            # touches it — only the keychain import and the API-key write run in
+            # between. This also makes the packaged bundle the same one whose
+            # sourcemaps were uploaded to Sentry: the rebuild used to happen
+            # without SENTRY_AUTH_TOKEN in scope and under a different
+            # VITE_PROLIFERATE_RELEASE, so the shipped renderer's release name
+            # never matched the uploaded artifacts.
+            tauri_config='{"build":{"beforeBuildCommand":""}}'
+            test -d dist || { echo "::error::apps/desktop/dist is missing; the Build frontend step must run before the tauri passes."; exit 1; }
+            pnpm tauri build --target ${{ matrix.target }} --bundles dmg -c "$tauri_config"
+            pnpm tauri build --target ${{ matrix.target }} --bundles app -c "$tauri_config"
           else
             pnpm tauri build --target ${{ matrix.target }} --bundles msi,nsis
           fi
