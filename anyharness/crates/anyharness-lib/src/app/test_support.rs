@@ -18,7 +18,7 @@ use crate::live::sessions::product_context::{
 use crate::persistence::Db;
 
 /// Store-backed [`ActorCapabilities`] for tests: the same wiring as
-/// `app/sessions.rs` (one `SessionStore` behind the four store traits plus a
+/// `app/sessions.rs` (one `SessionStore` behind the store traits plus a
 /// real `SessionAttachmentSource`), with no observers and no advisor.
 pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabilities {
     let attachment_storage = PromptAttachmentStorage::new(
@@ -29,6 +29,7 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
         queue: Arc::new(store.clone()),
         background: Arc::new(store.clone()),
         state: Arc::new(store.clone()),
+        idle_reap: Arc::new(store.clone()),
         fork_dispatch: Arc::new(store.clone()),
         attachments: Arc::new(SessionAttachmentSource::new(
             store.clone(),

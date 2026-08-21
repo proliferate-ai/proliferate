@@ -68,6 +68,7 @@ mod config_launch_intent;
 mod config_restore;
 mod config_variants;
 mod domain_ops;
+mod idle_reap;
 mod notifications;
 mod prompt;
 mod queue;

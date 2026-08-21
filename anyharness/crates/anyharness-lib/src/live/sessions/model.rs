@@ -329,6 +329,20 @@ pub trait SessionStateDurable: Send + Sync {
     ) -> anyhow::Result<()>;
 }
 
+/// Durable facts the idle reaper needs before it may retire an actor. Both
+/// answers are read-only, and both fail closed at the call site: an `Err`
+/// makes the session `Undetermined`, which is never reaped.
+pub trait IdleReapDurable: Send + Sync {
+    /// Would a cold start of this session resolve to a launch strategy right
+    /// now? Retirement is only non-terminal for a session that can be started
+    /// again, so a session the startup matrix refuses must never be reaped.
+    fn session_can_relaunch_from_cold(&self, session_id: &str) -> anyhow::Result<bool>;
+    /// Does this session parent a link holding a durable wake schedule whose
+    /// delivery reaches for a LIVE parent handle (everything except
+    /// `subagent`, whose delivery worker cold-starts the parent itself)?
+    fn has_live_delivery_wake_schedule(&self, session_id: &str) -> anyhow::Result<bool>;
+}
+
 /// Queues target re-observation after a live contradiction; app wiring owns
 /// the long-lived refresh mechanism behind this live/domain boundary.
 pub trait LaunchObservationInvalidator: Send + Sync {
@@ -343,6 +357,8 @@ pub struct ActorCapabilities {
     pub queue: Arc<dyn QueueDurable>,
     pub background: Arc<dyn BackgroundWorkDurable>,
     pub state: Arc<dyn SessionStateDurable>,
+    /// Read-only durable answers the idle reaper needs; see [`IdleReapDurable`].
+    pub idle_reap: Arc<dyn IdleReapDurable>,
     pub(crate) fork_dispatch: Arc<dyn crate::live::sessions::fork_dispatch::ForkDispatchDurable>,
     pub attachments: Arc<dyn AttachmentSource>,
     /// Resolved afresh immediately before every prompt render. Absence is not

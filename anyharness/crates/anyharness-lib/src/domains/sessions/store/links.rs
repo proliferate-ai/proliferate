@@ -183,6 +183,37 @@ impl SessionStore {
         })
     }
 
+    /// Does this session parent a link that holds a durable wake schedule
+    /// whose delivery needs a LIVE parent handle?
+    ///
+    /// `subagent` links are excluded because their completion enqueues a row
+    /// in `session_link_completion_deliveries`
+    /// (`store/completion_deliveries.rs::persist_terminal_turn_in_tx`, which
+    /// selects `WHERE relation = 'subagent'`), and `CompletionDeliveryWorker`
+    /// cold-starts the parent through `activate_durable_prompt_consumer` on
+    /// its own lease cadence. Every other relation is delivered by
+    /// `domains/cowork/runtime.rs::deliver_cowork_coding_completion`, which
+    /// reaches for `acp_manager.get_handle(...)` and silently drops the wake
+    /// when the parent is not live. Unknown future relations are held back by
+    /// the same `<>` test, which is the fail-safe direction.
+    pub fn has_live_delivery_wake_schedule(&self, session_id: &str) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM session_link_wake_schedules
+                    JOIN session_links
+                      ON session_links.id = session_link_wake_schedules.session_link_id
+                    WHERE session_links.parent_session_id = ?1
+                      AND session_links.relation <> ?2
+                      AND session_links.closed_at IS NULL
+                )",
+                params![session_id, SessionLinkRelation::Subagent.as_str()],
+                |row| row.get(0),
+            )
+            .map_err(Into::into)
+        })
+    }
+
     pub fn find_parent_by_inbound_link_relation(
         &self,
         session_id: &str,

@@ -1289,6 +1289,12 @@
   description: Absolute path override for the AnyHarness-managed worktree root used by inventory, orphan pruning, and automatic checkout retention
   tags: [local-dev, self-hosted]
 
+- name: ANYHARNESS_IDLE_SESSION_REAP_SECONDS
+  secret: false
+  default: "120"
+  description: "Seconds of continuous idleness after which the AnyHarness runtime retires a live session's agent processes; 0 disables the reaper"
+  tags: [local-dev, self-hosted, production]
+
 # ═══════════════════════════════════════════════════════════════════════
 # Desktop: Diagnostics (internal builds only)
 # ═══════════════════════════════════════════════════════════════════════

@@ -25,8 +25,8 @@ use crate::domains::sessions::store::persisted_payloads::sanitize_session_event_
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::fork_dispatch::ForkDispatchDurable;
 use crate::live::sessions::model::{
-    BackgroundWorkDurable, EventPersist, QueueDurable, SessionStateDurable, TerminalTurnOutcome,
-    TerminalTurnPersistenceInput,
+    BackgroundWorkDurable, EventPersist, IdleReapDurable, QueueDurable, SessionStateDurable,
+    TerminalTurnOutcome, TerminalTurnPersistenceInput,
 };
 use crate::live::sessions::model_attachments::AttachmentSource;
 use crate::live::sessions::queue_durable::{
@@ -273,6 +273,18 @@ impl BackgroundWorkDurable for SessionStore {
             state,
             completed_at,
         )
+    }
+}
+
+impl IdleReapDurable for SessionStore {
+    fn session_can_relaunch_from_cold(&self, session_id: &str) -> anyhow::Result<bool> {
+        crate::domains::sessions::runtime::startup_facts::session_can_relaunch_from_cold(
+            self, session_id,
+        )
+    }
+
+    fn has_live_delivery_wake_schedule(&self, session_id: &str) -> anyhow::Result<bool> {
+        SessionStore::has_live_delivery_wake_schedule(self, session_id)
     }
 }
 

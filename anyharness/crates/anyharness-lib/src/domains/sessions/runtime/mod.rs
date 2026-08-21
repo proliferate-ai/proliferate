@@ -78,7 +78,7 @@ mod prompt_queue;
 mod replay;
 mod startup;
 mod startup_errors;
-mod startup_facts;
+pub(crate) mod startup_facts;
 mod subagent_lifecycle;
 #[cfg(test)]
 mod tests;

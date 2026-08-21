@@ -26,6 +26,7 @@ pub use handle::{
     SidedoorForkCommandResult,
 };
 pub use manager::LiveSessionManager;
+pub(crate) use manager::reaper::IdleReapPolicy;
 pub(crate) use manager::RevealMcpElicitationUrlError;
 #[cfg(test)]
 pub(crate) use manager::{ScriptedSessionEvent, ScriptedSessionSpec};

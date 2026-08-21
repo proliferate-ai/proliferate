@@ -46,6 +46,28 @@ Its main jobs are:
 - build `SessionActorConfig`
 - create the live broadcast channel
 - spawn the actor and return its control handle
+- run the idle-session reaper
+
+#### Idle-session reaper (`live/sessions/manager/reaper.rs`)
+
+A live agent session costs a fixed amount of memory for as long as its processes exist, and it never returns any of it: a session that has run one turn keeps its retained conversation indefinitely, so waiting reclaims nothing. Retiring the actor is the runtime's only reclaim mechanism, and it reclaims the whole session rather than the post-turn increment.
+
+`spawn_idle_reaper` starts one sweep task per manager, wired in `app/sessions.rs`. Each sweep retires every live session that has been continuously quiescent for the threshold. Quiescent means all of: phase `Idle`, no pending interactions, the handle's busy flag clear, no pending `session_background_work` rows, an empty `session_pending_prompts` queue, no pending wake schedule whose delivery needs a live parent, and a durable shape the startup matrix would accept back. A durable read that fails is `Undetermined` and never reaps; the predicate fails closed.
+
+Two of those conditions exist because retirement is only safe for a session that can come back, and only for a session nothing is about to send to:
+
+- **Relaunchability.** The predicate runs the same decision the next prompt will run (`choose_session_startup_strategy`) and refuses to reap a session it returns an error for. The case that matters is a process-local (Claude) zero-turn fork child: it is inserted with `last_prompt_at: None`, finalizes to `Idle`, and `choose_fork_child_strategy` refuses to recover it on a cold actor, so reaping it would be permanent rather than non-terminal.
+- **Pending wakes.** A `cowork_coding_session` completion delivers its parent wake through `acp_manager.get_handle(...)` and silently drops it when the parent is not live, and nothing scans for stranded pending prompts. So a parent holding a wake schedule on any relation other than `subagent` is held back. `subagent` parents stay reapable because their completions go through `session_link_completion_deliveries` and `CompletionDeliveryWorker` cold-starts the parent itself.
+
+`AwaitingInteraction` is never reaped. A parked permission or input request belongs to a human, and the retirement path would cancel it along with the turn it is blocking. Sessions in that state are emitted per sweep under `result_class = "awaiting_interaction_held"`, and sessions held by a pending background-work row under `result_class = "background_work_held"`. Both are per-sweep GAUGES of a population that cannot be reaped, not counts of sessions that were otherwise ready: the checks run ahead of the threshold, so an ordinary in-flight permission prompt on a three-second-old session is counted too, and the same session is re-counted every sweep. They exist because both classes can leak permanently (`BackgroundWorkOptions::default()` sets `stale_after: None`, so an abandoned tracker's `pending` row never expires) and the alternative is that the leak is invisible.
+
+Retirement is the existing non-terminal `Unload` disposition, so the durable session row, transcript, configuration, and `native_session_id` all survive; the next prompt resumes through the ordinary startup strategy matrix. The reaper writes nothing durable itself. The actor's exit sequence signals the agent's whole process GROUP rather than dropping its direct child, because the direct child is the ACP adapter and the vendor CLI beneath it is where most of a session's memory lives.
+
+The reap is conditional, not advisory-then-forced. The sweep's verdict is stale the moment it is taken, so the reaper sends `SessionCommand::UnloadIfIdle` and the actor re-evaluates on its own loop: a running turn, a busy flag, a pending interaction, a durable queue head, or any command already sitting behind the unload in the mailbox all retain the session, and the reply names which. The residual window is between the actor accepting the unload and its handle leaving the live map: a prompt that fetched the handle inside it still reaches a closing mailbox, exactly as it does for any other unload.
+
+The idle clock lives in the sweep task, not on the handle. Each sweep records the first tick at which a session was seen quiescent along with the live snapshot's `updated_at` activity marker; a non-quiescent observation drops the record and a changed marker restarts it, so the measured quantity is continuous idleness. Cadence is `min(threshold / 4, 15s)`.
+
+Threshold is `ANYHARNESS_IDLE_SESSION_REAP_SECONDS`, in whole seconds, default 120. `0` disables the reaper; an unparseable value keeps the default.
 
 ### `LiveSessionHandle` (`anyharness/crates/anyharness-lib/src/live/sessions/handle.rs`)
 

@@ -2,6 +2,7 @@ mod background_work;
 mod capabilities;
 pub(in crate::live::sessions) mod command;
 mod config;
+mod exit_kill;
 mod fork;
 mod interactions;
 mod notifications;
