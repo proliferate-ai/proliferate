@@ -12,12 +12,15 @@
 //!   -> spawn that launcher the way `live::sessions::driver::process` does.
 //!
 //! Layers under test, all at once:
-//!   1. `installer::npm` shelling out with `Command::new("npm")` — on Windows
-//!      Node ships `npm.cmd`, not `npm.exe`.
+//!   1. `installer::npm` shelling out to npm — on Windows Node ships
+//!      `npm.cmd`, not `npm.exe` (fixed in #2152 @ f3122f08fc; asserted here
+//!      by actually spawning it, not by asserting the string).
 //!   2. The emitted launcher: extension-less `#!/bin/sh` on unix, `.cmd` on
 //!      Windows (PR #2152).
-//!   3. What the launcher invokes: `...\node_modules\.bin\grok` with no
-//!      extension, relying on cmd.exe's PATHEXT fallback.
+//!   3. What the launcher invokes: the `node_modules\.bin\grok` shim. #2152 @
+//!      f3122f08fc points it at the `.cmd` sibling npm's cmd-shim writes; what
+//!      npm ACTUALLY writes into `.bin` on Windows is observed here, on a real
+//!      filesystem, rather than asserted as a string.
 //!   4. `make_executable` being a no-op on Windows and `is_valid_executable`
 //!      being only `path.is_file()` there.
 //!   5. Whether the resulting artifact is spawnable by `CreateProcess`.
@@ -48,9 +51,8 @@ use std::time::{Duration, Instant};
 use anyharness_lib::domains::agents::catalog::service::AgentCatalogService;
 use anyharness_lib::domains::agents::catalog::sync::CatalogSyncService;
 use anyharness_lib::domains::agents::installer::{install_agent_with_pins, InstallOptions};
+use anyharness_lib::domains::agents::model::ArtifactRole;
 use anyharness_lib::domains::agents::registry;
-
-const AGENT_KIND: &str = "grok";
 
 fn scratch_runtime_home(label: &str) -> PathBuf {
     let unique = format!(
@@ -90,33 +92,56 @@ fn list_dir(label: &str, dir: &Path) {
 
 /// Layer 1, isolated so its failure cannot be confused with anything deeper.
 ///
-/// `installer/npm.rs` runs `Command::new("npm")`. On Windows, Node ships
-/// `npm.cmd` and `npm` (a sh script) but no `npm.exe`, so whether this works
-/// depends entirely on whether Rust's `std` process spawner applies `PATHEXT`
-/// when resolving a bare program name. Assert it directly.
+/// `installer/npm.rs` shells out to npm through `npm_program_name()`, which is
+/// crate-private, so this mirrors its choice rather than calling it. The point
+/// is not the string — a unit test already asserts that — it is whether the
+/// name Rust is handed can actually be RESOLVED AND SPAWNED. On Windows, Node
+/// ships `npm.cmd` and `npm` (a sh script) but no `npm.exe`, and
+/// `std::process::Command` has its own `.cmd`/`.bat` branch plus a CVE-era
+/// argument restriction. Only running it settles it.
+///
+/// The bare `npm` result is recorded alongside, as the control that shows what
+/// the pre-fix call shape does on this host.
 #[test]
-fn command_new_npm_resolves_on_this_platform() {
+fn the_npm_program_name_the_installer_uses_actually_spawns() {
     println!(
         "PATHEXT = {:?}",
         std::env::var("PATHEXT").unwrap_or_else(|_| "<unset>".into())
     );
-    let result = Command::new("npm").arg("--version").output();
-    match result {
+
+    // Control, non-fatal: the call shape `installer/npm.rs` used before the
+    // Windows fix. Recorded so the fix's necessity is visible in the log.
+    match Command::new("npm").arg("--version").output() {
+        Ok(output) => println!(
+            "control: bare `npm --version` -> status {:?} stdout {:?}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout).trim()
+        ),
+        Err(error) => println!(
+            "control: bare `npm --version` -> NOT SPAWNABLE: {error} (kind {:?}, raw os error {:?})",
+            error.kind(),
+            error.raw_os_error()
+        ),
+    }
+
+    // Mirrors `installer::npm::npm_program_name()`.
+    let program = if cfg!(windows) { "npm.cmd" } else { "npm" };
+    println!("installer program name = {program:?}");
+    match Command::new(program).arg("--version").output() {
         Ok(output) => {
             println!(
-                "npm --version -> status {:?} stdout {:?} stderr {:?}",
+                "{program} --version -> status {:?} stdout {:?} stderr {:?}",
                 output.status,
                 String::from_utf8_lossy(&output.stdout).trim(),
                 String::from_utf8_lossy(&output.stderr).trim()
             );
             assert!(
                 output.status.success(),
-                "`Command::new(\"npm\")` ran but failed: {:?}",
-                output
+                "`Command::new({program:?})` ran but failed: {output:?}"
             );
         }
         Err(error) => panic!(
-            "`Command::new(\"npm\")` could not be spawned: {error} (kind {:?}, raw os error {:?}). \
+            "`Command::new({program:?})` could not be spawned: {error} (kind {:?}, raw os error {:?}). \
              This is installer/npm.rs's exact call shape.",
             error.kind(),
             error.raw_os_error()
@@ -126,20 +151,41 @@ fn command_new_npm_resolves_on_this_platform() {
 
 /// The whole path: install the managed agent, then spawn what the install
 /// produced.
+///
+/// `grok` is the minimal case: one artifact, a plain public npm package, no
+/// native CLI. It isolates the npm + launcher + spawn layers.
 #[test]
-fn installs_the_managed_agent_and_spawns_the_launcher_it_produces() {
-    let runtime_home = scratch_runtime_home("install");
+fn installs_the_managed_grok_agent_and_spawns_the_launcher_it_produces() {
+    install_and_spawn("grok");
+}
+
+/// `claude` is the case that actually matters for a Windows beta: it is the
+/// default agent, and it is the only shape that exercises BOTH remaining
+/// install mechanisms in one run —
+///   * a pinned native binary download (`claude.exe`, sha256-verified, ~324MB,
+///     windows_x64 pin added by #2149), which is where `platform_binary_filename`
+///     and `make_executable`'s Windows no-op land, and
+///   * a GIT-sourced agent process (`npm install git+https://...#<sha>`), which
+///     is a different npm invocation from grok's registry install and needs
+///     `git` on PATH inside npm.
+#[test]
+fn installs_the_managed_claude_agent_and_spawns_the_launcher_it_produces() {
+    install_and_spawn("claude");
+}
+
+fn install_and_spawn(agent_kind: &str) {
+    let runtime_home = scratch_runtime_home(agent_kind);
     println!("runtime_home = {}", runtime_home.display());
 
     // Real bundled catalog + real bundled registry: the same two documents the
     // shipped runtime boots with.
     let catalog = AgentCatalogService::new(Arc::new(CatalogSyncService::from_bundled()));
     let pins = catalog
-        .pin_overrides(AGENT_KIND)
-        .unwrap_or_else(|| panic!("{AGENT_KIND} must have catalog pins"));
+        .pin_overrides(agent_kind)
+        .unwrap_or_else(|| panic!("{agent_kind} must have catalog pins"));
     println!("catalog pins = {pins:?}");
-    let descriptor = registry::descriptor(AGENT_KIND)
-        .unwrap_or_else(|| panic!("{AGENT_KIND} must have a registry descriptor"));
+    let descriptor = registry::descriptor(agent_kind)
+        .unwrap_or_else(|| panic!("{agent_kind} must have a registry descriptor"));
     println!(
         "descriptor.launch.executable_name = {}",
         descriptor.launch.executable_name
@@ -154,14 +200,19 @@ fn installs_the_managed_agent_and_spawns_the_launcher_it_produces() {
     {
         Ok(installed) => installed,
         Err(error) => {
+            let managed_dir = runtime_home
+                .join("agents")
+                .join(agent_kind)
+                .join("agent_process");
+            list_dir("agent_process dir after failed install", &managed_dir);
             list_dir(
-                "agent_process dir after failed install",
-                &runtime_home
-                    .join("agents")
-                    .join(AGENT_KIND)
-                    .join("agent_process"),
+                "node_modules/.bin after failed install",
+                &managed_dir.join("node_modules").join(".bin"),
             );
-            panic!("install_agent_with_pins failed: {error} (kind {:?})", error.kind());
+            panic!(
+                "install_agent_with_pins failed: {error} (kind {:?})",
+                error.kind()
+            );
         }
     };
 
@@ -175,14 +226,39 @@ fn installs_the_managed_agent_and_spawns_the_launcher_it_produces() {
             artifact.path.display()
         );
     }
+    // The launcher is the agent-process artifact. `claude` also reports a
+    // NativeCli artifact (the downloaded `claude.exe`); that one is a plain
+    // binary, not the thing a session spawns.
     let artifact = installed
-        .first()
-        .expect("install must report at least one artifact");
+        .iter()
+        .find(|artifact| matches!(artifact.role, ArtifactRole::AgentProcess))
+        .expect("install must report an agent-process artifact");
     let launcher = artifact.path.clone();
+    for artifact in &installed {
+        if matches!(artifact.role, ArtifactRole::NativeCli) {
+            // Windows has no exec bit, so the only thing that makes a
+            // downloaded native CLI runnable is its name.
+            println!(
+                "native CLI installed at {} (exists={}, extension={:?})",
+                artifact.path.display(),
+                artifact.path.is_file(),
+                artifact.path.extension()
+            );
+            assert!(
+                artifact.path.is_file(),
+                "the installer reported a native CLI at {} but no such file exists",
+                artifact.path.display()
+            );
+        }
+    }
+    list_dir(
+        "managed native dir",
+        &runtime_home.join("agents").join(agent_kind).join("native"),
+    );
 
     let managed_dir = runtime_home
         .join("agents")
-        .join(AGENT_KIND)
+        .join(agent_kind)
         .join("agent_process");
     list_dir("managed agent_process dir", &managed_dir);
     list_dir("node_modules/.bin", &managed_dir.join("node_modules").join(".bin"));
