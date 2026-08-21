@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useHomeScreen } from "#product/hooks/home/facade/use-home-screen";
 
@@ -98,5 +98,32 @@ describe("useHomeScreen", () => {
 
     expect(result.current).not.toHaveProperty("readyAgents");
     expect(result.current).not.toHaveProperty("installingAgents");
+  });
+});
+
+describe("useHomeScreen agent-settings routing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.readyAgents = [
+      { kind: "claude", displayName: "Claude" },
+      { kind: "codex", displayName: "Codex" },
+    ];
+    mocks.agentsLoading = false;
+  });
+  afterEach(() => cleanup());
+
+  it("opens the pane of the harness it was handed, not always Claude", () => {
+    // The terminal "no agents are supported" notice justifies itself by
+    // showing WHICH agents are unsupported. Sending every caller to the
+    // Claude pane makes that false whenever Claude is not the one: that pane
+    // only reports it has not been observed.
+    const { result } = renderHook(() => useHomeScreen());
+    act(() => result.current.handleHomeAction("agent-settings", { harnessKind: "cursor" }));
+    expect(mocks.navigate).toHaveBeenCalledWith("/settings?section=agent-cursor");
+
+    // No harness named, and an unmappable one, both keep the old default.
+    act(() => result.current.handleHomeAction("agent-settings"));
+    act(() => result.current.handleHomeAction("agent-settings", { harnessKind: "nope" }));
+    expect(mocks.navigate).toHaveBeenLastCalledWith("/settings?section=agent-claude");
   });
 });

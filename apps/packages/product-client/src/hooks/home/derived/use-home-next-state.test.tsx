@@ -164,10 +164,10 @@ describe("useHomeNextState", () => {
       stateMocks.model.modelGate = modelGate;
       const { result, unmount } = renderHomeNextState();
 
+      // `toBeNull()` is the whole assertion: it dominates any not.toBe on the
+      // same value, and the three literals that used to follow it appear
+      // nowhere in the repo, so no render could ever have failed them.
       expect(result.current.targetDisabledReason).toBeNull();
-      expect(result.current.targetDisabledReason).not.toBe("Loading models");
-      expect(result.current.targetDisabledReason).not.toBe("Couldn't load models");
-      expect(result.current.targetDisabledReason).not.toBe("No ready models");
 
       unmount();
     }

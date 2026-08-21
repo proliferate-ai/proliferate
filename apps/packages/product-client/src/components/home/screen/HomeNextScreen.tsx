@@ -129,10 +129,15 @@ export function HomeNextScreen() {
   // install toast. "Finish agent setup to start a chat." can only be reached
   // through blocked(agent_setup_required), which requires real
   // install_required/login_required readiness.
-  const modelAvailabilityNotice = resolveHomeModelGateNotice(homeNext.modelGate);
+  // A refused probe writes no durable state, so the gate cannot move and the
+  // same sentence would render again unchanged. The notice says so instead.
+  const modelAvailabilityNotice = resolveHomeModelGateNotice(homeNext.modelGate, {
+    refreshPending: homeNext.retryPending,
+    refreshRejected: homeNext.retryRejected,
+  });
   const runModelGateNoticeAction = () => {
     if (modelAvailabilityNotice?.action === "agent_settings") {
-      handleHomeAction("agent-settings");
+      handleHomeAction("agent-settings", { harnessKind: homeNext.unsupportedHarnessKind });
       return;
     }
     homeNext.retryModelObservation();
@@ -310,8 +315,13 @@ export function HomeNextScreen() {
               modelAvailabilityNoticeSlot={modelAvailabilityNotice ? (
                 <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-ui-sm text-muted-foreground">
                   <span>{modelAvailabilityNotice.text}</span>
-                  {/* Ruling 5: every notice carries an ENABLED action that
-                      cures the state it describes. */}
+                  {/* Ruling 5: a notice that names a cure carries an ENABLED
+                      action for it. The single terminal state names none —
+                      a button that cannot change anything is the dead end
+                      this gate removes, not a cure. */}
+                  {/* Never disabled: this is the only affordance on states
+                      with no guaranteed exit, and the hook already ignores a
+                      press while its own batch is in flight. */}
                   <Button
                     variant="ghost"
                     size="sm"

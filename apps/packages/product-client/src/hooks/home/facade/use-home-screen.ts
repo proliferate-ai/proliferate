@@ -13,6 +13,7 @@ import {
   buildHomeOnboardingCards,
   findHomeUnconfiguredGitHubRepository,
 } from "#product/lib/domain/home/home-screen";
+import { getSettingsSectionForHarnessKind } from "#product/lib/domain/settings/navigation-presentation";
 import { buildSettingsRepositoryEntries } from "#product/lib/domain/settings/repositories";
 import {
   buildCloudRepoSettingsHref,
@@ -87,7 +88,7 @@ export function useHomeScreen() {
     }),
     [repoConfigs?.repositories, repositories],
   );
-  function handleHomeAction(actionId: HomeActionId) {
+  function handleHomeAction(actionId: HomeActionId, options?: { harnessKind?: string | null }) {
     switch (actionId) {
       case "add-repository":
         openAddRepoFlow();
@@ -95,9 +96,16 @@ export function useHomeScreen() {
       case "agent-defaults":
         navigate(buildSettingsHref({ section: "agent-claude" }));
         return;
-      case "agent-settings":
-        navigate(buildSettingsHref({ section: "agent-claude" }));
+      case "agent-settings": {
+        // Land on an agent the caller actually means. The terminal
+        // "no agents are supported" notice is only honest if the pane it
+        // opens shows an unsupported agent, not whatever Claude reports.
+        const section = options?.harnessKind
+          ? getSettingsSectionForHarnessKind(options.harnessKind)
+          : null;
+        navigate(buildSettingsHref({ section: section ?? "agent-claude" }));
         return;
+      }
       case "repository-settings": {
         const firstRepository = repositoryToConfigure ?? repositories[0];
         if (firstRepository?.gitOwner && firstRepository.gitRepoName) {

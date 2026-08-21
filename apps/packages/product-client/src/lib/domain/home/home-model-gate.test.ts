@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   HOME_MODEL_GATE_AGENT_SETUP_NOTICE,
   HOME_MODEL_GATE_BLOCKED_REASONS,
+  HOME_MODEL_GATE_AGENTS_UNSUPPORTED_NOTICE,
+  HOME_MODEL_GATE_REFRESHING_NOTICE,
+  HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE,
   HOME_MODEL_GATE_REFUSAL_ANNOUNCEMENT,
+  homeModelGateNeedsNewProbe,
   resolveHomeModelGate,
   resolveHomeModelGateNotice,
   resolveHomeModelGateRefusalAnnouncement,
@@ -160,10 +164,44 @@ describe("resolveHomeModelGate precedence", () => {
   });
 
   it("resolves the residual to observation_idle rather than a query nobody is running", () => {
-    // Nothing loading, nothing failed, nothing observed, and an all-unsupported
-    // catalog that will never produce a model: the honest answer is "ask me".
-    expect(resolveHomeModelGate(input({ agentReadiness: ["unsupported"] })))
+    expect(resolveHomeModelGate(input({ agentReadiness: ["ready"] })))
       .toEqual({ kind: "blocked", reason: "observation_idle" });
+  });
+
+  it("states an all-unsupported catalog terminally and offers only navigation", () => {
+    // No probe can ever produce a model here, and `refetchAgents` re-reads an
+    // identical built-in registry — so a Refresh would be a button that does
+    // nothing, forever, without even the honesty of being refused. The action
+    // is navigation instead: it makes no claim to fix anything, and it is the
+    // only thing standing between this state and a dead end.
+    const gate = resolveHomeModelGate(input({ agentReadiness: ["unsupported", "unsupported"] }));
+    expect(gate).toEqual({ kind: "blocked", reason: "agents_unsupported" });
+    expect(resolveHomeModelGateNotice(gate)).toEqual({
+      text: HOME_MODEL_GATE_AGENTS_UNSUPPORTED_NOTICE,
+      actionLabel: "See agents",
+      action: "agent_settings",
+    });
+    // One unsupported agent beside a working one must never claim it.
+    expect(resolveHomeModelGate(input({ agentReadiness: ["unsupported", "ready"] })))
+      .not.toEqual({ kind: "blocked", reason: "agents_unsupported" });
+    // An empty catalog has not established anything about support.
+    expect(resolveHomeModelGate(input({ agentReadiness: [] })))
+      .toEqual({ kind: "blocked", reason: "observation_idle" });
+  });
+
+  it("prefers agents_unsupported over a stale observed_empty row", () => {
+    // Both arms are live at once when an agent was installed, reported no
+    // models, and an OS or arch upgrade then made it unsupported. The row
+    // still says observed_empty, but nothing on this machine can ever answer
+    // again — so the terminal sentence is the true one, and the ENABLED empty
+    // picker `observed_empty` would keep is the false one. Ordering, not
+    // reachability: swap the two arms and this is the assertion that moves.
+    const gate = resolveHomeModelGate(input({
+      agentReadiness: ["unsupported", "unsupported"],
+      observations: [observation({ state: "observed_empty" })],
+    }));
+    expect(gate).toEqual({ kind: "blocked", reason: "agents_unsupported" });
+    expect(resolveHomeModelSelectorAvailability(gate)).toBe("unavailable");
   });
 
   it("reports agent_setup_required for every readiness the Agents pane can cure", () => {
@@ -214,6 +252,7 @@ describe("resolveHomeModelGate precedence", () => {
       input({ observations: [observation({ state: "failed_without_observation" })] }),
       input({ observations: [observation({ isError: true })] }),
       input({ observations: [observation({ state: "detecting", probePhase: "idle" })] }),
+      input({ agentReadiness: ["unsupported"] }),
       input({ isCatalogLoading: true }),
     ];
     for (const testCase of cases) {
@@ -290,6 +329,65 @@ describe("home model gate presentation", () => {
       });
   });
 
+  it("names a new probe as the cure for exactly the gate that promises one", () => {
+    // The retry path reads THIS, so it cannot disagree with the arm that chose
+    // the reason — which is how a Refresh got promised to states the retry
+    // then answered with a re-read of the row that already said so.
+    const needing = ALL_GATES.filter(homeModelGateNeedsNewProbe);
+    expect(needing).toEqual([{ kind: "blocked", reason: "observation_idle" }]);
+  });
+
+  it("says a refused refresh instead of repeating a sentence that cannot change", () => {
+    const rejected = resolveHomeModelGateNotice(
+      { kind: "blocked", reason: "observation_idle" },
+      { refreshRejected: true },
+    );
+    expect(rejected).toEqual({
+      text: HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE,
+      actionLabel: "Refresh",
+      action: "retry_probe",
+    });
+    // "Couldn't check your models." already says a probe RAN and failed, which
+    // is strictly more than "it was refused" says. Trading it away loses a fact.
+    expect(resolveHomeModelGateNotice(
+      { kind: "blocked", reason: "observation_failed" },
+      { refreshRejected: true },
+    )?.text).toBe("Couldn't check your models.");
+
+    // A notice whose action never calls the mutation cannot be blamed for it.
+    for (const reason of ["agent_setup_required", "transport_error", "target_unobserved"] as const) {
+      const untouched = resolveHomeModelGateNotice({ kind: "blocked", reason });
+      expect(resolveHomeModelGateNotice({ kind: "blocked", reason }, { refreshRejected: true }))
+        .toEqual(untouched);
+    }
+    // And a silent gate stays silent.
+    expect(resolveHomeModelGateNotice({ kind: "selection_required" }, { refreshRejected: true }))
+      .toBeNull();
+  });
+
+  it("reports a refresh that is still running instead of a settled sentence", () => {
+    // A probe can take 45s per kind and they are serialized, and the query does
+    // not poll a settled row — so the terminal sentence would otherwise sit
+    // over live work for a minute at a time.
+    const running = resolveHomeModelGateNotice(
+      { kind: "blocked", reason: "observation_idle" },
+      { refreshPending: true, refreshRejected: true },
+    );
+    expect(running?.text).toBe(HOME_MODEL_GATE_REFRESHING_NOTICE);
+    expect(running?.action).toBe("retry_probe");
+    // In flight beats refused: a rejection from the previous attempt must not
+    // outrank the attempt happening now.
+    expect(resolveHomeModelGateNotice(
+      { kind: "blocked", reason: "observation_idle" },
+      { refreshRejected: true },
+    )?.text).toBe(HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE);
+    // And a notice that never fires a probe says nothing about one.
+    expect(resolveHomeModelGateNotice(
+      { kind: "blocked", reason: "agents_unsupported" },
+      { refreshPending: true },
+    )?.text).toBe(HOME_MODEL_GATE_AGENTS_UNSUPPORTED_NOTICE);
+  });
+
   it("keeps the picker enabled for observed_empty and disabled for the failures", () => {
     expect(resolveHomeModelSelectorAvailability({ kind: "selection_required" })).toBe("ready");
     expect(resolveHomeModelSelectorAvailability({ kind: "blocked", reason: "observed_empty" }))
@@ -302,6 +400,7 @@ describe("home model gate presentation", () => {
         "transport_error",
         "target_unobserved",
         "observation_idle",
+        "agents_unsupported",
       ] as const satisfies readonly HomeModelGateBlockedReason[]
     ) {
       expect(resolveHomeModelSelectorAvailability({ kind: "blocked", reason }))

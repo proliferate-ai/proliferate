@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type {
   AgentAuthProbePhase,
@@ -16,7 +16,7 @@ import {
   type DesktopLaunchModelRegistry as ModelRegistry,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
-  isSettledUnobservedHarness,
+  homeModelGateNeedsNewProbe,
   resolveHomeModelGate,
   type HomeModelGateObservation,
 } from "#product/lib/domain/home/home-model-gate";
@@ -27,6 +27,11 @@ import {
   type HomeLaunchTarget,
   type HomeNextModelSelection,
 } from "#product/lib/domain/home/home-next-launch";
+import {
+  IDLE_REFRESH_ATTEMPT,
+  isRefreshInFlight,
+  isRefreshRefused,
+} from "#product/lib/domain/home/home-model-refresh-attempt";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
@@ -205,37 +210,73 @@ export function useHomeNextModelSelection({
     targetLaunchOptions.isTargetUnobserved,
   ]);
 
+  /**
+   * The outcome of the probes THIS notice's action started.
+   *
+   * See `home-model-refresh-attempt` for why this is counted per attempt and
+   * attributed from `mutateAsync`'s promise rather than per-call callbacks.
+   */
+  const [refreshAttempt, setRefreshAttempt] = useState(IDLE_REFRESH_ATTEMPT);
+  // A refusal belongs to the target it was refused on, and the `!isCloudTarget`
+  // read mask below is what keeps it there. Resetting the counters on target
+  // kind as well was over-broad: the probe is keyed on `harnessKind` only and
+  // is machine-global, so a local->cloud->local flip discarded a tally that
+  // was still legitimately owed, leaving a refused refresh with NO receipt and
+  // the settled sentence rendering over probes that were still running.
   const refreshLaunchOptions = useRefreshHarnessLaunchOptionsMutation();
   const refetchTargetLaunchOptions = targetLaunchOptions.refetch;
   const refetchLaunchOptionsKind = useRefetchAgentLaunchOptionsKind();
-  const refreshMutate = refreshLaunchOptions.mutate;
+  const refreshMutateAsync = refreshLaunchOptions.mutateAsync;
   /**
    * The cure behind every blocked notice's action (ruling 5: a state must
    * never disable the control that would cure it).
    *
-   * Three different things can be broken, and each needs its own repair aimed
+   * Four different things can be broken, and each needs its own repair aimed
    * at the query that actually failed — a Retry that re-asks something which
    * was never the problem leaves the notice on screen forever:
    *
-   *  - A harness that failed without an observation, or one that settled
-   *    without ever being probed, needs a NEW probe. Refetching would just
-   *    re-read the recorded failure, or re-read the same "nobody looked".
+   *  - A gate that says nothing has looked yet needs a NEW probe, for EVERY
+   *    kind it knows about. Keyed on the gate rather than re-derived from the
+   *    observations: `observation_idle` is reached from a settled-unobserved
+   *    harness AND from the residual, and a retry that re-tested only the
+   *    first arm's predicate promised a Refresh to a backed-off harness, a
+   *    non-owner runtime and a zero-model `last_good_after_failure` and then
+   *    delivered a re-read of the row that already said so.
+   *  - A harness that failed without an observation needs a new probe too;
+   *    refetching would just re-read the recorded failure.
    *  - A read that failed at the transport layer needs THAT read again: the
    *    requested kind through its own query, a fanned-out kind through its
    *    shared cache key.
    *  - The agent catalog's own read is a third query entirely, and it is the
    *    one `hasCatalogError` reports. Nothing else here touches it.
+   *
+   * Cloud is deliberately none of the above: a cloud response carries no
+   * `probePhase`, so a cloud target always lands in the residual, where
+   * re-asking the sandbox and its launch options genuinely IS the cure.
    */
   const retryModelObservation = useCallback(() => {
+    // The door on overlapping batches. Disabling the control was tried and was
+    // worse: it removes the only affordance on a state with no guaranteed
+    // exit, so a refresh that never settles leaves nothing to press.
+    if (isRefreshInFlight(refreshAttempt)) {
+      return;
+    }
     let repaired = false;
+    const awaitsFirstProbe = !isCloudTarget && homeModelGateNeedsNewProbe(modelGate);
+    if (awaitsFirstProbe && observations.length === 0) {
+      // No kind to probe: the requested kind is null, which also means the
+      // single-kind query is DISABLED and refetching it is a no-op. The only
+      // thing that can produce a kind is the catalog.
+      void refetchAgents();
+      return;
+    }
+    const probeKinds: string[] = [];
     for (const observation of observations) {
       if (
         !isCloudTarget
-        && (observation.state === "failed_without_observation"
-          || isSettledUnobservedHarness(observation))
+        && (awaitsFirstProbe || observation.state === "failed_without_observation")
       ) {
-        refreshMutate(observation.harnessKind);
-        repaired = true;
+        probeKinds.push(observation.harnessKind);
         continue;
       }
       if (!observation.isError) {
@@ -246,6 +287,22 @@ export function useHomeNextModelSelection({
       } else {
         refetchLaunchOptionsKind(observation.harnessKind);
       }
+      repaired = true;
+    }
+    if (probeKinds.length > 0) {
+      setRefreshAttempt({ attempted: probeKinds.length, settled: 0, refused: 0 });
+      // `allSettled` never rejects, so a refused probe is a tally entry rather
+      // than an unhandled rejection. Probes are serialized runtime-side, so
+      // there is no partial-progress state worth rendering between them.
+      void Promise.allSettled(
+        probeKinds.map((harnessKind) => refreshMutateAsync(harnessKind)),
+      ).then((results) => {
+        setRefreshAttempt({
+          attempted: results.length,
+          settled: results.length,
+          refused: results.filter((result) => result.status === "rejected").length,
+        });
+      });
       repaired = true;
     }
     if (hasCatalogError) {
@@ -260,11 +317,13 @@ export function useHomeNextModelSelection({
   }, [
     hasCatalogError,
     isCloudTarget,
+    modelGate,
     observations,
     refetchAgents,
     refetchLaunchOptionsKind,
     refetchTargetLaunchOptions,
-    refreshMutate,
+    refreshAttempt,
+    refreshMutateAsync,
     requestedHarnessKind,
   ]);
 
@@ -292,6 +351,22 @@ export function useHomeNextModelSelection({
     error: (isCloudTarget ? null : agentsQueryError) ?? targetLaunchOptions.error,
     modelGate,
     retryModelObservation,
+    /** A probe this notice started is still running. Serialized, up to 45s per
+     * kind, and the launch-options query does not poll a settled row — so
+     * without this the settled sentence is rendered over live work. */
+    /** The harness the terminal `agents_unsupported` notice should open, and
+     * `null` for every other gate — including `agent_setup_required`, which
+     * shares the `agent_settings` action but means a DIFFERENT agent: the one
+     * needing login, never the unsupported one. Bound to the gate here so the
+     * wrong pairing cannot be expressed by a caller at all. */
+    unsupportedHarnessKind: modelGate.kind === "blocked" && modelGate.reason === "agents_unsupported"
+      ? agents.find((agent) => agent.readiness === "unsupported")?.kind ?? null
+      : null,
+    retryPending: !isCloudTarget && isRefreshInFlight(refreshAttempt),
+    /** EVERY kind attempted was refused. A rejection writes no durable state,
+     * so nothing else on screen would ever change. Scoped to local: cloud
+     * never calls the mutation, so nothing there could clear it. */
+    retryRejected: !isCloudTarget && isRefreshRefused(refreshAttempt),
   };
 }
 
