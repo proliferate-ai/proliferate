@@ -83,7 +83,10 @@ pub enum NativeInstallSpec {
     DirectBinary {
         /// URL that returns the latest version string (fetched if no version override is given).
         latest_version_url: Option<String>,
-        /// URL template with `{version}` and `{platform}` placeholders for the binary download.
+        /// URL template with `{version}`, `{platform}`, and `{binary}` placeholders
+        /// for the binary download. `{binary}` is the per-platform artifact
+        /// filename (`claude` on POSIX, `claude.exe` on Windows), resolved from
+        /// the registry's `binaryNameMap` by scripts/agent-catalog/resolve-pins.mjs.
         binary_url_template: String,
         /// Maps the current platform to a string used in the URL template.
         platform_map: Vec<(Platform, String)>,
