@@ -39,14 +39,6 @@ Each task gets an isolated git worktree for its branch, terminal, conversation, 
 
 </div>
 
-<br />
-
-Proliferate is a desktop app for running coding agents in parallel.
-
-- **Run any mix of agents in parallel**, each in its own isolated worktree, with native tools, auth, and config intact
-- **Let your agents manage each other**, like having Codex hand design work to Claude Code
-- **Set up MCPs and skills once**, shared across every agent
-
 ## Features
 
 - 🤖 **[Native harnesses](https://proliferate.com/docs/product/agents)** - Claude Code, Codex, OpenCode, Cursor, Grok, and more
@@ -98,11 +90,6 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 </table>
 
 ## Self-hosting
-
-Proliferate is AGPL-3.0. That covers the whole stack, including the desktop
-client and the cloud control plane. Download the app from [proliferate.com](https://proliferate.com)
-or follow the [quickstart](https://proliferate.com/docs/product/quickstart) to
-get going in a minute.
 
 The full Proliferate control plane is self-hostable. Start with the
 [deployment docs](https://proliferate.com/docs/deployment), which cover Docker,
