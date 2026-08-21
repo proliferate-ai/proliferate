@@ -12,7 +12,15 @@ import {
 } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const state = vi.hoisted(() => ({
-  cloudActive: true,
+  // Cloud COMPUTE is off for this entire suite, deliberately. That is the
+  // shipped production posture (CLOUD_COMPUTE_TEMPORARILY_DISABLED makes
+  // `cloudActive` false for every signed-in production user), and adoption is a
+  // control-plane concern that must run regardless. Every test below therefore
+  // doubles as the regression guard: re-couple the hook to `cloudActive` and
+  // the whole file fails.
+  cloudActive: false,
+  authStatus: "authenticated" as "authenticated" | "anonymous" | "loading",
+  controlPlaneReachable: true,
   isDesktop: true,
   connectionState: "healthy" as "connecting" | "healthy" | "failed",
   capabilities: {
@@ -55,7 +63,11 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 }));
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
-  useCloudAvailabilityState: () => ({ cloudActive: state.cloudActive }),
+  useCloudAvailabilityState: () => ({
+    cloudActive: state.cloudActive,
+    authStatus: state.authStatus,
+    controlPlaneReachable: state.controlPlaneReachable,
+  }),
 }));
 
 vi.mock("#product/host/ProductHostProvider", () => ({
@@ -121,7 +133,9 @@ beforeEach(() => {
   mocks.planner.mockReset();
   mocks.putMutate.mockReset();
 
-  state.cloudActive = true;
+  state.cloudActive = false;
+  state.authStatus = "authenticated";
+  state.controlPlaneReachable = true;
   state.isDesktop = true;
   state.connectionState = "healthy";
   state.capabilities.data = { gatewayEnabled: true };
@@ -186,8 +200,8 @@ describe("useFirstRunAuthAdoption", () => {
       .toBe(1_723_456_789);
   });
 
-  it("keeps inactive Cloud pending and can adopt after active Desktop transition", async () => {
-    state.cloudActive = false;
+  it("keeps a signed-out user pending and adopts after sign-in", async () => {
+    state.authStatus = "anonymous";
     const { rerender } = renderHook(() => useFirstRunAuthAdoption());
     await flushAdoption();
 
@@ -196,12 +210,43 @@ describe("useFirstRunAuthAdoption", () => {
     expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
     expect(mocks.refetchAgents).not.toHaveBeenCalled();
 
-    state.cloudActive = true;
+    state.authStatus = "authenticated";
     rerender();
     await waitFor(() => expect(mocks.putMutate).toHaveBeenCalledTimes(1));
 
     expect(mocks.capabilitiesEnabled).toHaveBeenLastCalledWith(true);
     expect(mocks.selectionsEnabled).toHaveBeenLastCalledWith(true);
+  });
+
+  it("keeps an unreachable control plane pending and adopts once it returns", async () => {
+    state.controlPlaneReachable = false;
+    const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await flushAdoption();
+
+    expect(mocks.capabilitiesEnabled).toHaveBeenLastCalledWith(false);
+    expect(mocks.selectionsEnabled).toHaveBeenLastCalledWith(false);
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
+
+    state.controlPlaneReachable = true;
+    rerender();
+    await waitFor(() => expect(mocks.putMutate).toHaveBeenCalledTimes(1));
+  });
+
+  it("adopts the gateway with cloud compute disabled (launch posture)", async () => {
+    // The explicit statement of what the suite-wide `cloudActive: false` proves:
+    // a signed-in user on a reachable control plane gets first-run gateway
+    // adoption even though cloud compute (E2B sandboxes) is switched off.
+    state.cloudActive = false;
+    state.authStatus = "authenticated";
+    state.controlPlaneReachable = true;
+
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitFor(() => expect(mocks.putMutate).toHaveBeenCalledTimes(1));
+
+    expect(mocks.capabilitiesEnabled).toHaveBeenLastCalledWith(true);
+    expect(mocks.selectionsEnabled).toHaveBeenLastCalledWith(true);
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds)
+      .toEqual(["claude"]);
   });
 
   it("waits while the Desktop runtime is connecting", async () => {
