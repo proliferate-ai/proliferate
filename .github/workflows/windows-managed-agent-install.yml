@@ -1,0 +1,74 @@
+name: Windows managed-agent install + spawn
+
+# The decisive Windows experiment.
+#
+# `windows-compile-check.yml` proves the Windows code TYPECHECKS. Nothing
+# proves the managed-agent install path RUNS. Every Windows fix so far was
+# derived by reading source, and each review round found one more broken layer
+# under the last: packaging, then the install path, then the launcher, then
+# what the launcher invokes. This job executes the path instead of reasoning
+# about it: install a managed agent from the real bundled catalog through the
+# real installer, then spawn what the install produced.
+#
+# It runs ONE integration test target rather than the crate's unit tests, for
+# the same reason `windows-process-kill-tests.yml` does: `anyharness-lib`'s
+# `lib test` target does not build for Windows today (ten pre-existing
+# test-only POSIX assumptions in unrelated modules), while an integration test
+# compiles as its own crate against the public surface and never pulls them in.
+#
+# Ubuntu runs the identical test as a control, so a red Windows result cannot
+# be blamed on the test itself.
+#
+# Deliberately NOT `continue-on-error`: the point is a verdict.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "anyharness/crates/anyharness-lib/tests/windows_managed_agent_install.rs"
+      - "anyharness/crates/anyharness-lib/src/domains/agents/installer/**"
+      - "anyharness/crates/anyharness-lib/src/domains/agents/readiness/**"
+      - "anyharness/crates/anyharness-lib/src/integrations/agent_cli/**"
+      - "catalogs/agents/**"
+      - ".github/workflows/windows-managed-agent-install.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  managed-agent:
+    name: install + spawn (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The control: this path is exercised every day on unix.
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          # The unknown.
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Node / npm as the runner ships them
+        # `installer/npm.rs` shells out to a bare `npm`. Record what is
+        # actually on PATH before the test runs so a spawn failure can be read
+        # against the real layout rather than an assumption about it.
+        shell: bash
+        run: |
+          node --version || true
+          npm --version || true
+          echo "which npm: $(which npm || true)"
+          echo "PATHEXT: ${PATHEXT:-<unset>}"
+      - name: cargo test
+        # Serial and uncaptured: both tests run a real `npm install` and spawn
+        # a real process, and their stdout IS the finding.
+        run: >
+          cargo test --target ${{ matrix.target }}
+          -p anyharness-lib --test windows_managed_agent_install
+          -- --nocapture --test-threads=1
