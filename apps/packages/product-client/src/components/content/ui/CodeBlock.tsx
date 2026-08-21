@@ -23,6 +23,12 @@ interface CodeBlockProps {
   lineNumberStart?: number;
   /** Additional children override the default content rendering entirely. */
   children?: ReactNode;
+  /**
+   * Viewport classes for the scroll region. Ordinary code keeps the
+   * monospace readable-code contract; diagram children pass a sans-serif
+   * override so SVG is not forced through `font-mono`.
+   */
+  viewportClassName?: string;
 }
 
 /**
@@ -41,6 +47,7 @@ export function CodeBlock({
   showLineNumbers = false,
   lineNumberStart = 1,
   children,
+  viewportClassName = `${CODE_BLOCK_MAX_HEIGHT_CLASS} p-3 font-mono text-chat font-normal`,
 }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
 
@@ -86,7 +93,7 @@ export function CodeBlock({
       */}
       <AutoHideScrollArea
         allowHorizontal
-        viewportClassName={`${CODE_BLOCK_MAX_HEIGHT_CLASS} p-3 font-mono text-chat font-normal`}
+        viewportClassName={viewportClassName}
         chainVerticalWheel
         viewportDataAttributes={{ "data-markdown-code-content": "true" }}
       >

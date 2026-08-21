@@ -1,4 +1,5 @@
 import {
+  createContext,
   memo,
   useContext,
   useMemo,
@@ -20,7 +21,10 @@ import {
 } from "./ChatContentSearchContext";
 import { stabilizeStreamingMarkdown } from "#product/lib/domain/chat/transcript/streaming-markdown";
 import { repairTranscriptFileLinks } from "#product/lib/domain/chat/transcript/file-link-markdown";
-import { MarkdownRevealContext } from "./MarkdownRevealText";
+import {
+  type HastNode,
+  MarkdownRevealContext,
+} from "./MarkdownRevealText";
 import {
   MarkdownCodeBlockContext,
   STATIC_MARKDOWN_COMPONENTS,
@@ -92,6 +96,44 @@ export interface MarkdownCodeBlockRenderInput {
 export type MarkdownCodeBlockRenderer = (
   input: MarkdownCodeBlockRenderInput,
 ) => ReactNode | null | undefined;
+
+/**
+ * Streaming render-copy available to fenced-code renderers. Completeness
+ * decisions (e.g. mermaid) belong in those renderers, not a second Markdown
+ * parser here.
+ */
+export interface MarkdownStreamingSource {
+  isStreaming: boolean;
+  source: string;
+}
+
+const MarkdownStreamingSourceContext = createContext<MarkdownStreamingSource>({
+  isStreaming: false,
+  source: "",
+});
+
+export function useMarkdownStreamingSource(): MarkdownStreamingSource {
+  return useContext(MarkdownStreamingSourceContext);
+}
+
+/**
+ * Start of the current fenced code node in the render-copy source. Completeness
+ * helpers (mermaid) use this to tell a closed fence from a later unclosed
+ * fence that happens to have the same body.
+ */
+export interface MarkdownFencedCodeStart {
+  startOffset: number | null;
+  startLine: number | null;
+}
+
+const MarkdownFencedCodeStartContext = createContext<MarkdownFencedCodeStart>({
+  startOffset: null,
+  startLine: null,
+});
+
+export function useMarkdownFencedCodeStart(): MarkdownFencedCodeStart {
+  return useContext(MarkdownFencedCodeStartContext);
+}
 
 type MdCodeProps = MdElementProps & {
   children?: ReactNode;
@@ -209,24 +251,34 @@ export const MarkdownBody = memo(function MarkdownBody({
     [revealText, revealedUpTo],
   );
 
+  const streamingSource = useMemo(
+    (): MarkdownStreamingSource => ({
+      isStreaming,
+      source: parsedContent,
+    }),
+    [isStreaming, parsedContent],
+  );
+
   const body = (
-    <MarkdownSurfaceProvider value={surface}>
-      <MarkdownRevealContext.Provider value={revealState}>
-        <div
-          className={markdownClassName}
-          data-markdown-body="true"
-          data-markdown-surface={surface}
-        >
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            urlTransform={markdownUrlTransform}
-            components={components}
+    <MarkdownStreamingSourceContext.Provider value={streamingSource}>
+      <MarkdownSurfaceProvider value={surface}>
+        <MarkdownRevealContext.Provider value={revealState}>
+          <div
+            className={markdownClassName}
+            data-markdown-body="true"
+            data-markdown-surface={surface}
           >
-            {parsedContent}
-          </ReactMarkdown>
-        </div>
-      </MarkdownRevealContext.Provider>
-    </MarkdownSurfaceProvider>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              urlTransform={markdownUrlTransform}
+              components={components}
+            >
+              {parsedContent}
+            </ReactMarkdown>
+          </div>
+        </MarkdownRevealContext.Provider>
+      </MarkdownSurfaceProvider>
+    </MarkdownStreamingSourceContext.Provider>
   );
 
   // Secondary chrome (tool detail bodies, plan cards) reuses MarkdownBody but
@@ -249,7 +301,7 @@ function MarkdownCode({
   dangerouslySetInnerHTML,
   renderInlineCode,
   renderCodeBlock,
-  node: _node,
+  node,
   ...rest
 }: MdCodeProps) {
   const isCodeBlock = useContext(MarkdownCodeBlockContext);
@@ -268,10 +320,14 @@ function MarkdownCode({
   if (isCodeBlock || match) {
     const language = match?.[1] ?? null;
     const renderedCodeBlock = renderCodeBlock?.({ code: codeString, language });
-    if (renderedCodeBlock !== null && renderedCodeBlock !== undefined) {
-      return <>{renderedCodeBlock}</>;
-    }
-    return <MarkdownCodeBlockShell code={codeString} label={language} />;
+    const block = renderedCodeBlock !== null && renderedCodeBlock !== undefined
+      ? renderedCodeBlock
+      : <MarkdownCodeBlockShell code={codeString} label={language} />;
+    return (
+      <MarkdownFencedCodeStartContext.Provider value={readFencedCodeStart(node)}>
+        {block}
+      </MarkdownFencedCodeStartContext.Provider>
+    );
   }
   const renderedInlineCode = renderInlineCode?.({ code: codeString, children });
   if (renderedInlineCode !== null && renderedInlineCode !== undefined) {
@@ -291,4 +347,12 @@ function markdownUrlTransform(value: string): string {
     return "";
   }
   return value;
+}
+
+function readFencedCodeStart(node: unknown): MarkdownFencedCodeStart {
+  const start = (node as HastNode | undefined)?.position?.start;
+  return {
+    startOffset: typeof start?.offset === "number" ? start.offset : null,
+    startLine: typeof start?.line === "number" ? start.line : null,
+  };
 }

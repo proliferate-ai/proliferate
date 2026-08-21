@@ -5,7 +5,9 @@ import {
   type MarkdownLinkRenderInput,
 } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { CodeBlock } from "#product/components/content/ui/CodeBlock";
+import { MermaidDiagram } from "#product/components/workspace/chat/transcript/MermaidDiagram";
 import { isExternalHttpLink } from "#product/components/workspace/chat/transcript/ProviderLinkMention";
+import { isMermaidLanguage } from "#product/lib/domain/chat/transcript/mermaid-fence";
 import { FilePathLink } from "#product/components/content/ui/FilePathLink";
 import { useHighlightedTokens } from "#product/hooks/ui/highlighting/use-highlighted-tokens";
 import {
@@ -53,6 +55,9 @@ export function renderTranscriptCodeBlock({
   code,
   language,
 }: MarkdownCodeBlockRenderInput): ReactNode {
+  if (isMermaidLanguage(language)) {
+    return <MermaidDiagram code={code} language={language} />;
+  }
   return <TranscriptHighlightedCodeBlock code={code} language={language} />;
 }
 
