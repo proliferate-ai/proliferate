@@ -55,6 +55,22 @@ const downloads = [
     matcher: (relPath, name) =>
       /(x64|x86_64).*\.dmg$/i.test(name),
   },
+  {
+    key: "windows-x86_64",
+    // The NSIS setup.exe is the canonical Windows download, not the MSI:
+    // release-desktop.yml's publish-updater job only copies "*-setup.exe"
+    // (not "*.msi") to the downloads bucket this manifest's --base-url
+    // points at, and it is the artifact the Tauri updater expects for a
+    // "windows-x86_64" platform entry. The "-setup.exe" suffix is what
+    // separates this download from darwin-x86_64 under the filename-only
+    // matching above; no directory segment is required, so a flat extraction
+    // resolves it just as well as a nested one.
+    // Optional: the Windows leg is an opt-in beta gated behind release.yml's
+    // enable_windows_beta input (defaulted false), so a missing or failed
+    // Windows build must never fail a mac-only release.
+    optional: true,
+    matcher: (relPath, name) => /(x64|x86_64).*-setup\.exe$/i.test(name),
+  },
 ];
 
 const manifest = {
