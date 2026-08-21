@@ -264,8 +264,7 @@ jobs:
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cargo check
-        run: cargo check --workspace
+      - uses: Swatinem/rust-cache@v2
 
       - name: Cargo test
         run: cargo test --workspace
