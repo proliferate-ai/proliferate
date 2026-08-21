@@ -128,9 +128,26 @@ endif
         release-e2e \
         all clean
 
-# --- Profile dev (setup, build, and run are separate) ---
+# --- Profile dev ---
 
-dev: setup run
+# The one command to launch a profile. Builds what is stale and nothing else,
+# which on an unchanged tree is a tenth of a second, so there is no longer a
+# reason for a shell wrapper to force a rebuild before launching.
+#
+# Recursive rather than a prerequisite list, because prerequisites of a single
+# target are only ordered under a serial make, and these three must run in this
+# order under any -j.
+#
+# SKIP_BUILD=1 launches without consulting the build at all, for the case where
+# you know the tree is untouched and want the process tree back immediately.
+dev:
+	@$(MAKE) --no-print-directory setup PROFILE=$(PROFILE)
+	@if [ -n "$(SKIP_BUILD)" ] && [ "$(SKIP_BUILD)" != "0" ]; then \
+		echo "SKIP_BUILD set - not checking build artifacts"; \
+	else \
+		$(MAKE) --no-print-directory dev-build; \
+	fi
+	@$(MAKE) --no-print-directory run PROFILE=$(PROFILE)
 
 dev-artifacts-ready:
 	@runtime_bin="$${ANYHARNESS_DEV_RUNTIME_BIN:-$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness}"; \
