@@ -1,0 +1,92 @@
+name: Windows managed-agent ACP handshake
+
+# The question `windows-managed-agent-install.yml` could not answer.
+#
+# That job proved the managed claude install produces a `.cmd` launcher that
+# `CreateProcess` can spawn and that exits 0 on stdin EOF. It never wrote a
+# byte to the launcher's stdin and never read a byte back, so "exit 0, empty
+# stdout, empty stderr" was the whole finding. A `.cmd` containing only
+# `@echo off` would have produced exactly that.
+#
+# This job writes a real ACP `initialize` request into the launcher and
+# requires a well-formed JSON-RPC response back, twice, before a clean
+# shutdown. No credential is involved: `initialize` is the handshake that
+# precedes authentication on both sides (see the test's module docs for the
+# source reading that establishes it).
+#
+# Ubuntu runs the identical test as the discriminating control, so a green
+# Windows leg cannot be explained by the test being vacuous.
+#
+# Deliberately NOT `continue-on-error`: the point is a verdict. Note that
+# `windows-compile-check.yml` IS `continue-on-error` on both of its jobs and
+# `ci-ok`'s `needs:` list covers only `ci.yml` jobs, so neither of those tells
+# you anything about this one. Read this workflow's own result.
+
+on:
+  workflow_dispatch:
+    inputs:
+      negative_control:
+        description: >-
+          Sabotage the handshake on purpose. Replaces the npm bin shim the
+          emitted launcher invokes with a process that starts, holds stdin and
+          never answers, leaving the launcher, the spawn and the assertions
+          untouched. The run MUST go red with ACP-HANDSHAKE-TIMEOUT. Used to
+          prove the test can fail.
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - "anyharness/crates/anyharness-lib/tests/windows_acp_handshake.rs"
+      - "anyharness/crates/anyharness-lib/src/domains/agents/installer/**"
+      - "anyharness/crates/anyharness-lib/src/integrations/agent_cli/**"
+      - "catalogs/agents/**"
+      - ".github/workflows/windows-acp-handshake.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  acp-handshake:
+    name: acp initialize (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # A handshake test that hangs is worse than no test: it would burn the
+    # runner's default 6h and report nothing. Every read inside the test is
+    # already deadline-bounded; this is the belt to that pair of braces.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The control: this path is exercised on unix every day.
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          # The unknown.
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Node / npm as the runner ships them
+        # The install shells out to npm, and the in-suite discriminators spawn
+        # `node -e`. Record what is on PATH so a spawn failure can be read
+        # against the real layout rather than an assumption about it.
+        shell: bash
+        run: |
+          node --version || true
+          npm --version || true
+          echo "which node: $(which node || true)"
+          echo "PATHEXT: ${PATHEXT:-<unset>}"
+      - name: cargo test
+        # Serial and uncaptured: the test runs a real `npm install`, spawns a
+        # real agent, and prints the actual JSON-RPC lines in both directions.
+        # That transcript IS the finding.
+        env:
+          RUST_BACKTRACE: "1"
+          ACP_HANDSHAKE_NEGATIVE_CONTROL: ${{ inputs.negative_control && '1' || '0' }}
+        run: >
+          cargo test --target ${{ matrix.target }}
+          -p anyharness-lib --test windows_acp_handshake
+          -- --nocapture --test-threads=1
