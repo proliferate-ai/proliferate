@@ -708,6 +708,24 @@ still works. `process_kill` itself lives at the crate root, not under
 `domains/workspaces::setup_runtime` need to name `PlaneKills` and either
 domain-side placement would force a second `live::` import in one of them.
 
+The escalation above describes unix, where the integer a caller holds names a
+process group (or, for a PTY, a session) because the spawn site called
+`process_group(0)`. Windows has neither concept and those spawn calls are
+`#[cfg(unix)]`, so on Windows the same integer is just the direct child's pid
+and `process_kill_windows.rs` reads it as the ROOT of a process tree, reaching
+the descendants through a `CreateToolhelp32Snapshot` walk over
+`th32ParentProcessID`. The return contract is the same - the same
+`(total, git)` census taken before anything is signaled, the same detached
+escalation, the same grace-as-deadline and confirmation budget - but the
+guarantee is weaker in three ways. `TerminateProcess` is unconditional, so the
+Windows ladder has no graceful rung before it. The kill is not atomic against
+a tree that grows mid-kill: `kill(-pgid)` still reaches a child created
+between the unix enumeration and the signal, whereas Windows acts on a pid
+list and picks such a child up only on the next confirmation pass. And a pid
+is not an identity, so a descendant whose creation time cannot be read is
+refused rather than killed, on the grounds that terminating a stranger is
+worse than leaking a descendant.
+
 Two timing rules make the stop fit an archive's quiesce budget:
 
 - The 5s grace is a DEADLINE, not a fixed cost. Each escalation polls for its
