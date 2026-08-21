@@ -45,6 +45,7 @@ const screenMocks = vi.hoisted(() => {
     isCatalogLoading: false,
     hasKnownAgents: true,
     retryModelObservation: () => {},
+    retryRejected: false,
     canLaunchTarget: true,
     effectiveModelSelection: { kind: "codex", modelId: "gpt-5.4" },
     launchTarget: { kind: "cowork" },
@@ -252,6 +253,7 @@ function resetHomeNext() {
   screenMocks.homeNext.isCatalogLoading = false;
   screenMocks.homeNext.hasKnownAgents = true;
   screenMocks.homeNext.retryModelObservation = screenMocks.retryModelObservation;
+  screenMocks.homeNext.retryRejected = false;
   screenMocks.homeNext.canLaunchTarget = true;
   screenMocks.homeNext.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
   screenMocks.homeNext.launchTarget = { kind: "cowork" };
@@ -303,7 +305,9 @@ describe("HomeNextScreen model gate", () => {
     expect(screen.getByText("Finish agent setup to start a chat.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-settings");
-    expect(screen.queryByText(/configured/i)).toBeNull();
+    // A string the notice slot CAN emit, so the exclusivity has teeth: an
+    // earlier `/configured/i` here matched nothing Home is able to render.
+    expect(screen.queryByText(/Models haven't been detected/i)).toBeNull();
     // Ruling 2, at the seam Home actually builds: the notice is on screen, so
     // the picker it is paired with cannot be an enabled "Select model".
     expect(screenMocks.leadingControlsProps.modelSelectorProps.availability)
@@ -431,16 +435,42 @@ describe("HomeNextScreen model gate", () => {
     expect(screenMocks.launch).not.toHaveBeenCalled();
   });
 
-  it("renders observation_idle with an honest sentence and a Refresh that probes", () => {
+  it("renders observation_idle with an honest sentence and an enabled Refresh", () => {
     screenMocks.homeNext.modelGate = { kind: "blocked", reason: "observation_idle" };
     render(<HomeNextScreen />);
     expect(screen.getByText("Models haven't been detected yet.")).toBeTruthy();
-    // Never "Probing…": nothing is probing, which is the whole problem.
-    expect(screen.queryByText(/Probing/i)).toBeNull();
+    // The state must not be dressed as in-flight. Asserted on the prop the
+    // trigger actually reads: no Home path emits the string "Probing", so a
+    // `queryByText(/Probing/i)` here could never have failed.
+    expect(screenMocks.leadingControlsProps.modelSelectorProps.availability)
+      .not.toBe("observation_pending");
     expect(screen.queryByText(/Finish agent setup/i)).toBeNull();
     const cure = screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement;
     expect(cure.disabled).toBe(false);
     fireEvent.click(cure);
+    // That this dispatches a real probe rather than a re-read is asserted in
+    // use-home-next-model-selection.test.tsx; here it is the wiring.
     expect(screenMocks.retryModelObservation).toHaveBeenCalled();
+  });
+
+  it("says the refresh was refused rather than re-rendering the same sentence", () => {
+    // A rejected probe writes no durable state, so the gate cannot move: the
+    // button would otherwise appear to do nothing, forever.
+    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "observation_idle" };
+    screenMocks.homeNext.retryRejected = true;
+    render(<HomeNextScreen />);
+    expect(screen.getByText("Couldn't refresh your models.")).toBeTruthy();
+    expect(screen.queryByText("Models haven't been detected yet.")).toBeNull();
+    // Still curable: the action survives the rejection.
+    expect((screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement).disabled)
+      .toBe(false);
+  });
+
+  it("does not blame a refused refresh for a notice that never fires a probe", () => {
+    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "agent_setup_required" };
+    screenMocks.homeNext.retryRejected = true;
+    render(<HomeNextScreen />);
+    expect(screen.getByText("Finish agent setup to start a chat.")).toBeTruthy();
+    expect(screen.queryByText("Couldn't refresh your models.")).toBeNull();
   });
 });

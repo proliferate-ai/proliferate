@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   HOME_MODEL_GATE_AGENT_SETUP_NOTICE,
   HOME_MODEL_GATE_BLOCKED_REASONS,
+  HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE,
   HOME_MODEL_GATE_REFUSAL_ANNOUNCEMENT,
+  homeModelGateNeedsNewProbe,
   resolveHomeModelGate,
   resolveHomeModelGateNotice,
   resolveHomeModelGateRefusalAnnouncement,
@@ -288,6 +290,40 @@ describe("home model gate presentation", () => {
         actionLabel: "Check again",
         action: "check_target_again",
       });
+  });
+
+  it("names a new probe as the cure for exactly the gate that promises one", () => {
+    // The retry path reads THIS, so it cannot disagree with the arm that chose
+    // the reason — which is how a Refresh got promised to states the retry
+    // then answered with a re-read of the row that already said so.
+    const needing = ALL_GATES.filter(homeModelGateNeedsNewProbe);
+    expect(needing).toEqual([{ kind: "blocked", reason: "observation_idle" }]);
+  });
+
+  it("says a refused refresh instead of repeating a sentence that cannot change", () => {
+    const rejected = resolveHomeModelGateNotice(
+      { kind: "blocked", reason: "observation_idle" },
+      { refreshRejected: true },
+    );
+    expect(rejected).toEqual({
+      text: HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE,
+      actionLabel: "Refresh",
+      action: "retry_probe",
+    });
+    expect(resolveHomeModelGateNotice(
+      { kind: "blocked", reason: "observation_failed" },
+      { refreshRejected: true },
+    )?.text).toBe(HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE);
+
+    // A notice whose action never calls the mutation cannot be blamed for it.
+    for (const reason of ["agent_setup_required", "transport_error", "target_unobserved"] as const) {
+      const untouched = resolveHomeModelGateNotice({ kind: "blocked", reason });
+      expect(resolveHomeModelGateNotice({ kind: "blocked", reason }, { refreshRejected: true }))
+        .toEqual(untouched);
+    }
+    // And a silent gate stays silent.
+    expect(resolveHomeModelGateNotice({ kind: "selection_required" }, { refreshRejected: true }))
+      .toBeNull();
   });
 
   it("keeps the picker enabled for observed_empty and disabled for the failures", () => {
