@@ -1178,7 +1178,7 @@ describe("HarnessPane all models (local composed observation)", () => {
     renderPane("claude");
 
     expect(screen.queryByText("1 model")).not.toBeNull();
-    expect(screen.queryByText(/Last refreshed/)).not.toBeNull();
+    expect(screen.queryByText(/refreshed/)).not.toBeNull(); // E-R1: "Last refreshed" copy is gone
     expandModelList();
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     expect(screen.queryByRole("switch")).toBeNull();
@@ -1188,7 +1188,7 @@ describe("HarnessPane all models (local composed observation)", () => {
     state.modelSnapshotStatus.data = undefined;
     renderPane("claude");
 
-    expect(screen.queryByText("0 models")).not.toBeNull();
+    expect(screen.queryByText(/\d+ models?/)).toBeNull(); // E-R1: no count before a settled observation
     expandModelList();
     expect(screen.queryByText("Sonnet 4.6")).toBeNull();
   });

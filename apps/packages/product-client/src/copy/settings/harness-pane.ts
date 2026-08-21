@@ -77,8 +77,13 @@ export const HARNESS_PANE_COPY = {
   // unattended (the Cursor regression fixture). Refresh stays enabled; this
   // replaces the old indefinite "Probing…" + disabled Refresh bug.
   allModelsIdleUnobservedTitle: "Models haven't been detected yet",
-  allModelsIdleUnobservedSuffix: (displayName: string) =>
-    `${displayName} reports models after its first launch. Refresh checks now.`,
+  // The trailing "Refresh checks now." names a control that only exists on
+  // the local surface (cloud has no manual-refresh route) — E-R5: never
+  // instruct the user to press a control the section doesn't render.
+  allModelsIdleUnobservedSuffix: (displayName: string, canManuallyRefresh: boolean) =>
+    canManuallyRefresh
+      ? `${displayName} reports models after its first launch. Refresh checks now.`
+      : `${displayName} reports models after its first launch.`,
   // State 5 — state=observed_empty: a settled, honest zero.
   allModelsObservedEmptySuffix: (displayName: string, ago: string) =>
     `${displayName} reported none · ${HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(ago)}`,
@@ -105,11 +110,11 @@ export const HARNESS_PANE_COPY = {
   // Diagnostics-only provenance (attestation + install identity) — never a gate.
   allModelsProvenance: (line: string) => `Observed by ${line}`,
   allModelsModes: (modes: readonly string[]) => `Modes: ${modes.join(", ")}`,
-  // `ago` is the raw duration from formatSnapshotAge ("5m", "2h", "3d", or the
-  // literal "just now" — which must NOT get its own "ago" appended, hence the
-  // special case rather than a blind template).
-  allModelsFreshRefreshedAgo: (ago: string) =>
-    ago === "just now" ? "refreshed just now" : `refreshed ${ago} ago`,
+  // `ago` is the repo's one relative-age string, `formatRelativeTime`
+  // ("2m ago", "3h ago", "3d ago", "now") — already carries its own "ago"
+  // (or none, for "now"), so this is a plain prefix, not a template that
+  // needs its own special-casing.
+  allModelsFreshRefreshedAgo: (ago: string) => `refreshed ${ago}`,
   getApiKey: "Get an API key",
   // PRO-206 — external links from the curated provider doc/console overlay.
   providerConsoleLink: "Get an API key",

@@ -34,6 +34,11 @@ const state = vi.hoisted(() => ({
   // query hook below transitions from `launchOptions` to this fixture after
   // one probe interval, with no user action in between.
   nextLaunchOptions: undefined as LaunchOptionsFixture,
+  // Cloud-surface fixtures (E-R5): both cloud hooks previously stayed
+  // `data: undefined` in every test, so the cloud path was entirely
+  // uncovered. Stateful like `launchOptions` above.
+  cloudSandbox: null as Record<string, unknown> | null,
+  cloudLaunchOptions: undefined as LaunchOptionsFixture,
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
@@ -61,8 +66,8 @@ vi.mock("@anyharness/sdk-react", () => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useCloudSandbox: () => ({ data: null, isLoading: false, isError: false, refetch: vi.fn() }),
-  useCloudHarnessLaunchOptions: () => ({ data: undefined, isLoading: false, isError: false, refetch: vi.fn() }),
+  useCloudSandbox: () => ({ data: state.cloudSandbox, isLoading: false, isError: false, refetch: vi.fn() }),
+  useCloudHarnessLaunchOptions: () => ({ data: state.cloudLaunchOptions, isLoading: false, isError: false, refetch: vi.fn() }),
 }));
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
@@ -85,6 +90,8 @@ beforeEach(() => {
   state.isLoading = false;
   state.isError = false;
   state.nextLaunchOptions = undefined;
+  state.cloudSandbox = null;
+  state.cloudLaunchOptions = undefined;
   state.launchOptions = {
     harnessKind: "claude",
     basisRevision: "basis-1",
@@ -148,7 +155,7 @@ describe("HarnessAllModelsSection — the eight models-section states", () => {
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Cursor" surface="local" />);
 
-    expect(screen.getByText("Checking available models…")).toBeTruthy();
+    expect(within(contentLine()).getByText("Checking available models…")).toBeTruthy();
     expect(screen.queryByText(/^0 models/)).toBeNull();
     const refreshButton = screen.getByRole("button", { name: "Refreshing…" }) as HTMLButtonElement;
     expect(refreshButton.disabled).toBe(true);
@@ -317,7 +324,7 @@ describe("HarnessAllModelsSection — self-curing refresh", () => {
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="OpenCode" surface="local" />);
 
-    expect(screen.getByText("Checking available models…")).toBeTruthy();
+    expect(within(contentLine()).getByText("Checking available models…")).toBeTruthy();
 
     act(() => {
       vi.advanceTimersByTime(1500);
@@ -400,5 +407,96 @@ describe("HarnessAllModelsSection — truthfulness rules", () => {
     expect(screen.getByText("0 models")).toBeTruthy();
     expect(screen.queryByText(/refreshed/)).toBeNull();
     expect(screen.queryByText("observed")).toBeNull();
+  });
+});
+
+describe("HarnessAllModelsSection — queued counts as live (E-R2)", () => {
+  it("detecting+queued renders Checking, Refresh disabled-as-busy", () => {
+    state.launchOptions = {
+      harnessKind: "claude",
+      basisRevision: "b1",
+      revision: 1,
+      state: "detecting",
+      options: null,
+      observedAt: null,
+      probeAttemptedAt: isoAgo(0),
+      probeFailureCode: null,
+      readiness: "ready",
+      probePhase: "queued",
+    };
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Cursor" surface="local" />);
+
+    expect(within(contentLine()).getByText("Checking available models…")).toBeTruthy();
+    expect(screen.queryByText("Models haven't been detected yet")).toBeNull();
+    const refreshButton = screen.getByRole("button", { name: "Refreshing…" }) as HTMLButtonElement;
+    expect(refreshButton.disabled).toBe(true);
+  });
+
+  it("refreshing+queued renders Checking, Refresh disabled-as-busy (not enabled/non-spinning)", () => {
+    state.launchOptions = {
+      harnessKind: "claude",
+      basisRevision: "b1",
+      revision: 2,
+      state: "refreshing",
+      options: {
+        models: [{ id: "m-1", observedName: "Model 1", observedDescription: null }],
+        controls: [],
+        defaults: { modelId: null, controlValues: {} },
+      },
+      observedAt: isoAgo(60_000),
+      probeAttemptedAt: isoAgo(0),
+      probeFailureCode: null,
+      readiness: "ready",
+      probePhase: "queued",
+    };
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Cursor" surface="local" />);
+
+    expect(within(contentLine()).getByText("Checking available models…")).toBeTruthy();
+    const refreshButton = screen.getByRole("button", { name: "Refreshing…" }) as HTMLButtonElement;
+    expect(refreshButton.disabled).toBe(true);
+    expect(refreshButton.className).toContain("disabled:opacity-100");
+  });
+});
+
+describe("HarnessAllModelsSection — cloud surface (E-R5)", () => {
+  it("idle-unobserved drops the Refresh-only sentence and renders no Refresh control", () => {
+    state.cloudSandbox = { id: "sandbox-1" };
+    state.cloudLaunchOptions = {
+      harnessKind: "claude",
+      basisRevision: "cloud-b1",
+      revision: 1,
+      state: "detecting",
+      options: null,
+      observedAt: null,
+      probeAttemptedAt: isoAgo(0),
+      probeFailureCode: null,
+      readiness: "ready",
+    };
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
+
+    expect(screen.getByText("Models haven't been detected yet")).toBeTruthy();
+    expect(screen.getByText("· Claude reports models after its first launch.")).toBeTruthy();
+    expect(screen.queryByText(/Refresh checks now/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /^refresh$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Refreshing…" })).toBeNull();
+  });
+
+  it("failed_without_observation offers no Retry (no probe route exists on cloud)", () => {
+    state.cloudSandbox = { id: "sandbox-1" };
+    state.cloudLaunchOptions = {
+      harnessKind: "claude",
+      basisRevision: "cloud-b1",
+      revision: 2,
+      state: "failed_without_observation",
+      options: null,
+      observedAt: null,
+      probeAttemptedAt: isoAgo(0),
+      probeFailureCode: "harness_probe_failed",
+      readiness: "ready",
+    };
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
+
+    expect(screen.getByText("Couldn't check models")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 });

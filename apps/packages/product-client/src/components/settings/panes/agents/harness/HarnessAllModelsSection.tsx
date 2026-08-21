@@ -19,7 +19,8 @@ import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import { formatSnapshotAge, normalizeRuntimeLaunchModels } from "#product/lib/domain/settings/harness-catalog";
+import { normalizeRuntimeLaunchModels } from "#product/lib/domain/settings/harness-catalog";
+import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 
 interface HarnessAllModelsSectionProps {
   harnessKind: string;
@@ -98,7 +99,7 @@ export function HarnessAllModelsSection({
   // probe over an already-answered harness.
   function handleRetryLoad() {
     if (isLocal) {
-      void runtimeLaunchOptionsQuery.refetch();
+      void runtimeLaunchOptionsQuery.refetch?.();
     } else {
       void cloudSandbox.refetch?.();
       void cloudLaunchOptionsQuery.refetch?.();
@@ -114,16 +115,20 @@ export function HarnessAllModelsSection({
 
   // Absent when the runtime that served this response cannot know the phase
   // (e.g. the cloud-copied snapshot), which is exactly the same as "not
-  // running" for every check below.
+  // live" for every check below. `queued` counts as live alongside `running`:
+  // it is the same bucket the polling policy in
+  // `resolveAgentLaunchOptionsRefetchInterval` treats as active (agents.ts
+  // :105-107) — a probe that is about to run is not a settled-unobserved
+  // harness, so it must not read as the calm, permanent idle-unobserved copy.
   const probePhase = isLocal ? runtimeLaunchOptionsQuery.data?.probePhase : undefined;
-  const isProbeRunning = probePhase === "running";
+  const isProbeLive = probePhase === "running" || probePhase === "queued";
 
   // The 32-minute bug: a stale `detecting` response used to disable the one
   // control that would cure it. Refresh is busy ONLY for its own mutation or
-  // a genuinely running probe — never for `detecting` alone, since a harness
+  // a genuinely live probe — never for `detecting` alone, since a harness
   // excluded from unattended probes (Cursor) sits `detecting` forever by
   // design and must keep an enabled Refresh.
-  const isRefreshing = isLocal && (refreshLaunchOptions.isPending || isProbeRunning);
+  const isRefreshing = isLocal && (refreshLaunchOptions.isPending || isProbeLive);
 
   // `state=refreshing` always means an active re-probe over last-good data
   // (the polling policy in `resolveAgentLaunchOptionsRefetchInterval` treats
@@ -131,11 +136,14 @@ export function HarnessAllModelsSection({
   // so it needs the phase check to tell an active first observation apart
   // from a settled-unobserved harness.
   const isChecking = launchOptions?.state === "refreshing"
-    || (launchOptions?.state === "detecting" && isProbeRunning);
-  const isIdleUnobserved = launchOptions?.state === "detecting" && !isProbeRunning;
+    || (launchOptions?.state === "detecting" && isProbeLive);
+  const isIdleUnobserved = launchOptions?.state === "detecting" && !isProbeLive;
 
   const modelCount = models.length;
-  const ago = launchOptions?.observedAt ? formatSnapshotAge(launchOptions.observedAt) : null;
+  // `formatRelativeTime` is the repo's one relative-age formatter (six other
+  // call sites); reused rather than re-invented so "refreshed 2m ago" stays
+  // byte-identical to every other surface's phrasing.
+  const ago = launchOptions?.observedAt ? formatRelativeTime(launchOptions.observedAt) : null;
   const freshnessLine = ago ? HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(ago) : null;
 
   // The one content line per state (Settings - Harness Models States
@@ -160,7 +168,7 @@ export function HarnessAllModelsSection({
     if (isIdleUnobserved) {
       return {
         foreground: HARNESS_PANE_COPY.allModelsIdleUnobservedTitle,
-        muted: HARNESS_PANE_COPY.allModelsIdleUnobservedSuffix(displayName),
+        muted: HARNESS_PANE_COPY.allModelsIdleUnobservedSuffix(displayName, canManuallyRefresh),
         retry: null,
       };
     }
@@ -219,17 +227,20 @@ export function HarnessAllModelsSection({
       action={(
         <>
           {canManuallyRefresh ? (
-            // Busy keeps full ink (an explicit `style` override defeats
-            // IconButton's own `disabled:opacity-50`, since its visuals are
-            // otherwise unchanged) — disabled must read as busy, never
-            // unavailable.
+            // Busy keeps full ink: `disabled:opacity-100` in `className`
+            // beats IconButton's own `disabled:opacity-50` (Tailwind orders
+            // opacity utilities by scale value, not by class-list position,
+            // so the higher value always wins the cascade once both are
+            // present) — the sanctioned busy-not-unavailable idiom used by
+            // SidebarUpdateFooterButton/WorkspaceCreationReceipt/
+            // GitReviewTargetSelector. IconButton itself stays unchanged.
             <IconButton
               aria-label={isRefreshing
                 ? HARNESS_PANE_COPY.allModelsRefreshing
                 : HARNESS_PANE_COPY.allModelsRefresh}
               title={HARNESS_PANE_COPY.allModelsRefresh}
               disabled={isRefreshing}
-              style={isRefreshing ? { opacity: 1 } : undefined}
+              className={isRefreshing ? "disabled:opacity-100" : undefined}
               onClick={handleRefresh}
             >
               <RefreshCw className={`icon-paired ${isRefreshing ? "animate-spin" : ""}`} />
@@ -303,6 +314,16 @@ export function HarnessAllModelsSection({
         {isLoading ? (
           <p className="text-ui-sm text-muted-foreground">
             {HARNESS_PANE_COPY.allModelsLoading}
+          </p>
+        ) : isChecking && models.length === 0 ? (
+          // E-R6: agree with the header only when there is no prior list to
+          // show yet (a first observation in progress). A re-probe over
+          // last-good data (`state === "refreshing"` with existing models)
+          // must keep the list visible undimmed — same "data stays readable
+          // while we wait" contract as state 6 — never blank it out for a
+          // "Checking…" placeholder.
+          <p className="text-ui-sm text-muted-foreground">
+            {HARNESS_PANE_COPY.allModelsChecking}
           </p>
         ) : models.length === 0 ? (
           <p className="text-ui-sm text-muted-foreground">
