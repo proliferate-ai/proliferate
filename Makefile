@@ -1571,13 +1571,30 @@ shared-build:
 # Both `dev-artifacts-ready` and the `run` target honor that env var, so such a
 # worktree never needs its own runtime build. (`tauri dev` still compiles the
 # desktop shell into the worktree's target/ on first run.)
+# One cargo build, then place the binary where the dev path reads it. Building a
+# second time under a different CARGO_TARGET_DIR shares no cache and so rebuilds
+# the crate and every dependency from scratch.
+#
+# The target directory is resolved from cargo rather than assumed, because
+# CARGO_BUILD_TARGET_DIR and [build] target-dir set it too. The copy is skipped
+# when the two paths are the same file, and when the contents already match, so
+# overriding DEV_ANYHARNESS_TARGET_DIR to the workspace target is not an error
+# and repeat runs do not churn the binary's mtime.
 build-rust:
 	@if [ -n "$(SKIP_RUST)" ] && [ "$(SKIP_RUST)" != "0" ]; then \
 		echo "SKIP_RUST set — skipping cargo builds (runtime: $${ANYHARNESS_DEV_RUNTIME_BIN:-<unset>})"; \
 	else \
 		$(CARGO) build --workspace && \
+		target_dir=$$($(CARGO) metadata --format-version 1 --no-deps --offline 2>/dev/null \
+			| node -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>{try{process.stdout.write(JSON.parse(b).target_directory)}catch{}})'); \
+		target_dir="$${target_dir:-target}"; \
 		mkdir -p "$(DEV_ANYHARNESS_TARGET_DIR)/debug" && \
-		cp -f "$${CARGO_TARGET_DIR:-target}/debug/anyharness" "$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness"; \
+		if [ "$$target_dir/debug/anyharness" -ef "$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness" ]; then \
+			:; \
+		else \
+			cmp -s "$$target_dir/debug/anyharness" "$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness" \
+				|| cp -f "$$target_dir/debug/anyharness" "$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness"; \
+		fi; \
 	fi
 
 runtime-build: build-rust
@@ -1597,11 +1614,15 @@ build: build-rust build-frontend
 # additionally produces production bundles for apps/desktop and apps/web, which
 # no dev server ever reads, because both compile on demand.
 #
-# The package half goes through scripts/dev-build.mjs rather than the phony
-# targets, so a package whose sources are unchanged is skipped instead of
-# rebuilt. Add --force to rebuild regardless.
-dev-build: build-rust
-	node scripts/dev-build.mjs $(DEV_BUILD_ARGS)
+# Everything goes through scripts/dev-build.mjs rather than the phony targets, so
+# a package whose sources are unchanged is skipped instead of rebuilt. The script
+# invokes build-rust itself rather than taking it as a prerequisite, because it
+# holds a single-instance lock and that lock has to cover the cargo build too:
+# five profiles launching at once must not start five cargo builds.
+#
+# DEV_BUILD_ARGS=--force rebuilds regardless.
+dev-build:
+	@node scripts/dev-build.mjs $(DEV_BUILD_ARGS)
 
 test-agent-runtime-cloud-e2b: sdk-generate
 	cd anyharness/tests && pnpm run test:cloud:e2b
