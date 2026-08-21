@@ -12,12 +12,9 @@ import {
 } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 const state = vi.hoisted(() => ({
-  // Cloud COMPUTE is off for this entire suite, deliberately. That is the
-  // shipped production posture (CLOUD_COMPUTE_TEMPORARILY_DISABLED makes
-  // `cloudActive` false for every signed-in production user), and adoption is a
-  // control-plane concern that must run regardless. Every test below therefore
-  // doubles as the regression guard: re-couple the hook to `cloudActive` and
-  // the whole file fails.
+  // Cloud COMPUTE is off for this whole suite on purpose: that is the shipped
+  // production posture, and adoption is a control-plane concern that must run
+  // regardless. Re-couple the hook to `cloudActive` and every test here fails.
   cloudActive: false,
   authStatus: "authenticated" as "authenticated" | "anonymous" | "loading",
   controlPlaneReachable: true,
@@ -233,13 +230,9 @@ describe("useFirstRunAuthAdoption", () => {
   });
 
   it("adopts the gateway with cloud compute disabled (launch posture)", async () => {
-    // The explicit statement of what the suite-wide `cloudActive: false` proves:
-    // a signed-in user on a reachable control plane gets first-run gateway
-    // adoption even though cloud compute (E2B sandboxes) is switched off.
-    state.cloudActive = false;
-    state.authStatus = "authenticated";
-    state.controlPlaneReachable = true;
-
+    // Explicit statement of what the suite-wide `cloudActive: false` proves: a
+    // signed-in user on a reachable control plane gets gateway adoption even
+    // though cloud compute (E2B sandboxes) is off.
     renderHook(() => useFirstRunAuthAdoption());
     await waitFor(() => expect(mocks.putMutate).toHaveBeenCalledTimes(1));
 
