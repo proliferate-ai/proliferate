@@ -60,20 +60,46 @@ export const HARNESS_PANE_COPY = {
   runLoginOpening: "Opening...",
   // Section title for the inline all-models panel.
   tabAllModels: "Models",
-  // The one content line of the collapsed Models section (design-handoff v2):
-  // count in foreground, provenance suffix muted.
+  // The one content line of the collapsed Models section (Settings - Harness
+  // Models States handoff, all eight states): count/title in foreground,
+  // provenance suffix muted.
   allModelsSeedSuffix: "shipped catalog, not probed yet",
   allModelsRefresh: "Refresh",
-  allModelsRefreshing: "Refreshing...",
+  allModelsRefreshing: "Refreshing…",
   allModelsEmpty: "No models detected yet.",
-  allModelsLoading: "Loading model catalog...",
-  // Shown while an empty list has a probe in flight.
-  allModelsProbing: "Probing…",
+  // State 1 — initial HTTP loading, no payload yet.
+  allModelsLoading: "Loading models…",
+  // State 2 — state=detecting|refreshing AND probePhase=running: an active
+  // first observation or re-probe. Never paired with a count.
+  allModelsChecking: "Checking available models…",
+  // State 3 — state=detecting AND probePhase=idle (or unknown): a harness
+  // that legitimately sits unobserved forever because it isn't probed
+  // unattended (the Cursor regression fixture). Refresh stays enabled; this
+  // replaces the old indefinite "Probing…" + disabled Refresh bug.
+  allModelsIdleUnobservedTitle: "Models haven't been detected yet",
+  allModelsIdleUnobservedSuffix: (displayName: string) =>
+    `${displayName} reports models after its first launch. Refresh checks now.`,
+  // State 5 — state=observed_empty: a settled, honest zero.
+  allModelsObservedEmptySuffix: (displayName: string, ago: string) =>
+    `${displayName} reported none · ${HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(ago)}`,
   // The composed observation (model-catalog.md "The picker is the
   // observation"): the only freshness display is the probedAt age plus the
   // lastAttempt outcome — age alone never blocks anything, and there is no
   // staleness state.
   allModelsRefreshFailedBadge: "last refresh failed",
+  // State 6 — state=last_good_after_failure: the prior observation stays
+  // rendered, undimmed, with exactly one refresh-failed line appended.
+  allModelsLastGoodAfterFailureSuffix: (ago: string) =>
+    `${HARNESS_PANE_COPY.allModelsRefreshFailedBadge} · ${HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(ago)}`,
+  // State 7 — state=failed_without_observation: no count line exists to
+  // fake; an explicit failure with its enabled cure (ruling 5).
+  allModelsFailedWithoutObservationTitle: "Couldn't check models",
+  allModelsProbeFailureReason: (displayName: string) => `${displayName} didn't answer the probe.`,
+  // State 8 — the launch-options request itself failed (no payload). Never
+  // rendered as a raw state string.
+  allModelsTransportErrorTitle: "Models couldn't be loaded",
+  allModelsTransportErrorReason: "The runtime didn't respond.",
+  allModelsRetry: "Retry",
   allModelsSeedDescription:
     "Showing shipped catalog models — not yet verified by a probe.",
   // Diagnostics-only provenance (attestation + install identity) — never a gate.

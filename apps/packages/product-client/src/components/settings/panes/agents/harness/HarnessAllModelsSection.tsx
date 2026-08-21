@@ -11,6 +11,7 @@ import {
 import { ChevronRight } from "#product/primitives/icons/core";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { AnimatedCollapsibleContent } from "#product/primitives/AnimatedCollapsibleContent";
+import { Button } from "#product/primitives/Button";
 import { IconButton } from "#product/primitives/IconButton";
 import { HarnessAllModelsFilterRow } from "#product/components/settings/panes/agents/harness/HarnessAllModelsFilterRow";
 import { ModelTable, type ModelTableRow } from "#product/components/settings/panes/agents/harness/ModelTable";
@@ -18,7 +19,7 @@ import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import { normalizeRuntimeLaunchModels } from "#product/lib/domain/settings/harness-catalog";
+import { formatSnapshotAge, normalizeRuntimeLaunchModels } from "#product/lib/domain/settings/harness-catalog";
 
 interface HarnessAllModelsSectionProps {
   harnessKind: string;
@@ -92,18 +93,104 @@ export function HarnessAllModelsSection({
     });
   }
 
+  // Retry-on-load-failure refetches the query itself (no payload exists to
+  // probe against yet); distinct from `handleRefresh`, which requests a new
+  // probe over an already-answered harness.
+  function handleRetryLoad() {
+    if (isLocal) {
+      void runtimeLaunchOptionsQuery.refetch();
+    } else {
+      void cloudSandbox.refetch?.();
+      void cloudLaunchOptionsQuery.refetch?.();
+    }
+  }
+
   const isLoading = isLocal
     ? runtimeLaunchOptionsQuery.isLoading
     : cloudSandbox.isLoading || cloudLaunchOptionsQuery.isLoading;
-  const isRefreshing = isLocal
-    && (refreshLaunchOptions.isPending || runtimeLaunchOptionsQuery.data?.state === "refreshing" || runtimeLaunchOptionsQuery.data?.state === "detecting");
-  // Empty list with a probe in flight shows the probing state instead of the
-  // static empty copy.
-  const isProbingEmpty = models.length === 0 && isRefreshing;
+  const isQueryError = isLocal
+    ? Boolean(runtimeLaunchOptionsQuery.isError)
+    : Boolean(cloudSandbox.isError) || Boolean(cloudLaunchOptionsQuery.isError);
 
-  const freshnessLine = launchOptions?.observedAt
-    ? `Last refreshed ${new Date(launchOptions.observedAt).toLocaleString()}`
-    : launchOptions?.state ?? "";
+  // Absent when the runtime that served this response cannot know the phase
+  // (e.g. the cloud-copied snapshot), which is exactly the same as "not
+  // running" for every check below.
+  const probePhase = isLocal ? runtimeLaunchOptionsQuery.data?.probePhase : undefined;
+  const isProbeRunning = probePhase === "running";
+
+  // The 32-minute bug: a stale `detecting` response used to disable the one
+  // control that would cure it. Refresh is busy ONLY for its own mutation or
+  // a genuinely running probe — never for `detecting` alone, since a harness
+  // excluded from unattended probes (Cursor) sits `detecting` forever by
+  // design and must keep an enabled Refresh.
+  const isRefreshing = isLocal && (refreshLaunchOptions.isPending || isProbeRunning);
+
+  // `state=refreshing` always means an active re-probe over last-good data
+  // (the polling policy in `resolveAgentLaunchOptionsRefetchInterval` treats
+  // it as unconditionally live); `state=detecting` is ambiguous on its own,
+  // so it needs the phase check to tell an active first observation apart
+  // from a settled-unobserved harness.
+  const isChecking = launchOptions?.state === "refreshing"
+    || (launchOptions?.state === "detecting" && isProbeRunning);
+  const isIdleUnobserved = launchOptions?.state === "detecting" && !isProbeRunning;
+
+  const modelCount = models.length;
+  const ago = launchOptions?.observedAt ? formatSnapshotAge(launchOptions.observedAt) : null;
+  const freshnessLine = ago ? HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(ago) : null;
+
+  // The one content line per state (Settings - Harness Models States
+  // handoff): a raw wire state string is never rendered as copy, and the
+  // model count never renders before a settled observation exists.
+  const content: { foreground: string | null; muted: string | null; retry: (() => void) | null } = (() => {
+    if (isLoading) {
+      return { foreground: null, muted: HARNESS_PANE_COPY.allModelsLoading, retry: null };
+    }
+    if (!launchOptions) {
+      return isQueryError
+        ? {
+          foreground: HARNESS_PANE_COPY.allModelsTransportErrorTitle,
+          muted: HARNESS_PANE_COPY.allModelsTransportErrorReason,
+          retry: handleRetryLoad,
+        }
+        : { foreground: null, muted: HARNESS_PANE_COPY.allModelsLoading, retry: null };
+    }
+    if (isChecking) {
+      return { foreground: null, muted: HARNESS_PANE_COPY.allModelsChecking, retry: null };
+    }
+    if (isIdleUnobserved) {
+      return {
+        foreground: HARNESS_PANE_COPY.allModelsIdleUnobservedTitle,
+        muted: HARNESS_PANE_COPY.allModelsIdleUnobservedSuffix(displayName),
+        retry: null,
+      };
+    }
+    switch (launchOptions.state) {
+      case "observed":
+        return { foreground: HARNESS_PANE_COPY.probeModelCount(modelCount), muted: freshnessLine, retry: null };
+      case "observed_empty":
+        return {
+          foreground: HARNESS_PANE_COPY.probeModelCount(modelCount),
+          muted: ago ? HARNESS_PANE_COPY.allModelsObservedEmptySuffix(displayName, ago) : null,
+          retry: null,
+        };
+      case "last_good_after_failure":
+        return {
+          foreground: HARNESS_PANE_COPY.probeModelCount(modelCount),
+          muted: ago
+            ? HARNESS_PANE_COPY.allModelsLastGoodAfterFailureSuffix(ago)
+            : HARNESS_PANE_COPY.allModelsRefreshFailedBadge,
+          retry: null,
+        };
+      case "failed_without_observation":
+        return {
+          foreground: HARNESS_PANE_COPY.allModelsFailedWithoutObservationTitle,
+          muted: HARNESS_PANE_COPY.allModelsProbeFailureReason(displayName),
+          retry: canManuallyRefresh ? handleRefresh : null,
+        };
+      default:
+        return { foreground: null, muted: freshnessLine, retry: null };
+    }
+  })();
 
   // Evidence is diagnostic only; executable membership remains the response.
   const diagnosticsLines: string[] = [];
@@ -124,18 +211,6 @@ export function HarnessAllModelsSection({
     );
   }, [rows, filterText]);
 
-  // The quiet v2 header (design-handoff "Models section"): title + refresh
-  // icon + rotating chevron on the right; ONE content line — the model count
-  // in foreground with the provenance/freshness suffix muted. No badge pile,
-  // no long fallback description.
-  const contentSuffix = isLoading
-    ? HARNESS_PANE_COPY.allModelsLoading
-    : isRefreshing
-      ? HARNESS_PANE_COPY.allModelsProbing
-      : launchOptions?.state === "last_good_after_failure"
-        ? HARNESS_PANE_COPY.allModelsRefreshFailedBadge
-        : freshnessLine;
-
   return (
     <SettingsSection
       title={HARNESS_PANE_COPY.tabAllModels}
@@ -144,12 +219,17 @@ export function HarnessAllModelsSection({
       action={(
         <>
           {canManuallyRefresh ? (
+            // Busy keeps full ink (an explicit `style` override defeats
+            // IconButton's own `disabled:opacity-50`, since its visuals are
+            // otherwise unchanged) — disabled must read as busy, never
+            // unavailable.
             <IconButton
               aria-label={isRefreshing
                 ? HARNESS_PANE_COPY.allModelsRefreshing
                 : HARNESS_PANE_COPY.allModelsRefresh}
               title={HARNESS_PANE_COPY.allModelsRefresh}
               disabled={isRefreshing}
+              style={isRefreshing ? { opacity: 1 } : undefined}
               onClick={handleRefresh}
             >
               <RefreshCw className={`icon-paired ${isRefreshing ? "animate-spin" : ""}`} />
@@ -168,17 +248,26 @@ export function HarnessAllModelsSection({
       )}
       data-harness-status="models"
     >
-      <p className="text-body">
-        <span className="text-foreground">
-          {HARNESS_PANE_COPY.probeModelCount(models.length)}
-        </span>
-        {contentSuffix ? (
-          <span className="text-ui text-muted-foreground/65">
-            {" · "}
-            {contentSuffix}
-          </span>
+      {/* The content line is the section's status text: re-announced only on
+          state transitions (aria-live="polite"). */}
+      <div className="flex items-center gap-3" aria-live="polite">
+        <p className="text-body">
+          {content.foreground ? (
+            <span className="text-foreground">{content.foreground}</span>
+          ) : null}
+          {content.muted ? (
+            <span className="text-ui text-muted-foreground/65">
+              {content.foreground ? " · " : null}
+              {content.muted}
+            </span>
+          ) : null}
+        </p>
+        {content.retry ? (
+          <Button variant="secondary" size="sm" onClick={content.retry}>
+            {HARNESS_PANE_COPY.allModelsRetry}
+          </Button>
         ) : null}
-      </p>
+      </div>
 
       {/*
         Disclosure is deferred here, recorded rather than re-derived: the model
@@ -214,11 +303,6 @@ export function HarnessAllModelsSection({
         {isLoading ? (
           <p className="text-ui-sm text-muted-foreground">
             {HARNESS_PANE_COPY.allModelsLoading}
-          </p>
-        ) : isProbingEmpty ? (
-          <p className="flex items-center gap-2 text-ui-sm text-muted-foreground">
-            <RefreshCw className="icon-paired animate-spin" />
-            {HARNESS_PANE_COPY.allModelsProbing}
           </p>
         ) : models.length === 0 ? (
           <p className="text-ui-sm text-muted-foreground">
