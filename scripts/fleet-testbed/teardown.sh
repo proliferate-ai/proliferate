@@ -2,7 +2,7 @@
 # Terminate fleet concurrency testbed resources.
 #
 # Safety: nothing is ever selected by the project tag alone. The VPC is resolved
-# by tag AND exact CIDR AND IsDefault=false (see lib.sh find_testbed_vpc),
+# by tag AND exact CIDR AND IsDefault=false (see lib.sh resolve_testbed_vpc),
 # the caller's account is asserted, and every delete below is additionally
 # filtered on the tag as well as VPC membership. This account also runs
 # production, and production lives in the default VPC, so one predicate is not
@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --network) DELETE_NETWORK="1"; shift ;;
     --all) DELETE_NETWORK="1"; DELETE_IDENTITY="1"; shift ;;
-    -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,16p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -56,14 +56,20 @@ with_retry() {
   "$@" >/dev/null
 }
 
-# Empty when the testbed VPC does not exist. That is not an error: with no
-# testbed VPC there is nothing this script is allowed to select, so instance and
+# Resolved into this shell, not through $(...), so a failing describe aborts
+# instead of reading as "no testbed VPC" -- which would make --network a silent
+# no-op over a live instance and let --all delete the key pair out from under
+# one. Empty genuinely means the VPC does not exist, which is not an error:
+# there is then nothing this script is allowed to select, so instance and
 # network teardown are skipped rather than falling back to a looser predicate.
-VPC_ID="$(find_testbed_vpc)"
+resolve_testbed_vpc
+VPC_ID="$TESTBED_VPC_ID"
 
 if [ -z "$VPC_ID" ]; then
   log "no testbed VPC (tag ${TAG_KEY}=${TAG_VALUE}, CIDR ${VPC_CIDR}, non-default); skipping instances and network"
-  if [ "$DELETE_IDENTITY" != "1" ]; then
+  # Only the VPC-scoped work is skipped. The SSM token and the IAM/key-pair
+  # resources outlive the VPC, so their blocks below must stay reachable.
+  if [ "$DELETE_NETWORK" != "1" ] && [ "$DELETE_IDENTITY" != "1" ]; then
     log "nothing to do"
     exit 0
   fi
@@ -184,15 +190,27 @@ if [ "$DELETE_IDENTITY" = "1" ]; then
     aws iam delete-role --role-name "$ROLE_NAME" || fail "delete role ${ROLE_NAME}"
   fi
 
-  if aws ec2 describe-key-pairs --key-names "$KEY_NAME" >/dev/null 2>&1; then
-    aws ec2 delete-key-pair --key-name "$KEY_NAME" >/dev/null \
-      || fail "delete key pair ${KEY_NAME}"
-  fi
-  # Deleted together with the AWS side, so the next provision does not trip the
-  # both-sides guard on a private key whose pair no longer exists.
-  if [ -e "$KEY_PATH" ]; then
-    log "removing local private key ${KEY_PATH}"
-    rm -f "$KEY_PATH" || fail "remove ${KEY_PATH}"
+  # Deleting the key pair while something is still running with it is
+  # unrecoverable: there is no second way onto the box. Checked account-wide on
+  # the key name rather than within the VPC, because by this point the VPC may
+  # already be gone.
+  KEY_USERS=$(aws ec2 describe-instances \
+    --filters "Name=key-name,Values=${KEY_NAME}" \
+              "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+    --query 'Reservations[].Instances[].InstanceId' --output text)
+  if [ -n "$KEY_USERS" ]; then
+    fail "refusing to delete key pair ${KEY_NAME}: still in use by ${KEY_USERS}"
+  else
+    if aws ec2 describe-key-pairs --key-names "$KEY_NAME" >/dev/null 2>&1; then
+      aws ec2 delete-key-pair --key-name "$KEY_NAME" >/dev/null \
+        || fail "delete key pair ${KEY_NAME}"
+    fi
+    # Deleted together with the AWS side, so the next provision does not trip
+    # the both-sides guard on a private key whose pair no longer exists.
+    if [ -e "$KEY_PATH" ]; then
+      log "removing local private key ${KEY_PATH}"
+      rm -f "$KEY_PATH" || fail "remove ${KEY_PATH}"
+    fi
   fi
 fi
 

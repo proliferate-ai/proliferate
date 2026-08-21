@@ -12,9 +12,14 @@
 
 set -euo pipefail
 
-# Logs first, mode-restricted before a single line is written to them. xtrace is
-# on for everything after this, and cloud-init's own log captures the same
-# stream, so both files are treated as sensitive by default.
+# Logs first. The setup log is created 0600 before it has a single byte in it.
+# cloud-init-output.log is not ours to create: cloud-init opens it early in boot
+# and has already written its own module output there by the time user-data
+# runs, so the honest claim is narrower -- it is tightened to 0600 before ANY
+# output of THIS script reaches it, which is what matters, since cloud-init's
+# own boot chatter holds nothing of ours. xtrace is on for everything after
+# this, and this script's stream lands in both files, so both are treated as
+# sensitive from here on.
 install -m 600 /dev/null /var/log/fleet-testbed-setup.log
 chmod 600 /var/log/cloud-init-output.log 2>/dev/null || true
 exec > >(tee -a /var/log/fleet-testbed-setup.log) 2>&1
@@ -140,15 +145,26 @@ apt_install_retry() {
 # from source on linux (they ship prebuilt platform packages), and every
 # platform-specific wheel in server/uv.lock has a manylinux build for both
 # x86_64 and aarch64, so uv never falls back to an sdist.
+#
+# `make` is NOT in that gated set. The Ubuntu 24.04 cloud image does not ship
+# it, build-essential was the only thing dragging it in, and `make build` and
+# `make setup` below are the whole point of the box -- so it is installed
+# unconditionally, next to the other tools this script invokes by name.
 BUILD_PKGS=()
 if [ "$WITH_RUST" = "1" ]; then
   BUILD_PKGS=(build-essential pkg-config libssl-dev)
 fi
 
 apt_install_retry \
-  git curl jq "${BUILD_PKGS[@]}" \
+  git curl jq make "${BUILD_PKGS[@]}" \
   postgresql-16 postgresql-client-16 redis-server \
   python3 python3-venv unzip ca-certificates
+
+# Assert the tools this script goes on to invoke by name, so a missing one fails
+# here in seconds rather than twenty minutes later inside a build step.
+for _tool in git curl jq make psql unzip; do
+  command -v "$_tool" >/dev/null || { echo "FATAL: ${_tool} is not installed" >&2; exit 1; }
+done
 
 systemctl enable --now postgresql redis-server
 
@@ -236,19 +252,48 @@ su - ubuntu -c "git clone https://github.com/proliferate-ai/proliferate.git ~/pr
 
 set -x
 
-# Fail loudly if a credential ever ends up persisted anyway.
-if grep -qE '://[^/@[:space:]]*:[^/@[:space:]]+@' /home/ubuntu/proliferate/.git/config; then
+# Fail loudly if a credential ever ends up persisted anyway. Any userinfo at all
+# in a remote URL is a finding here, not just the `user:secret@host` form: a
+# bare `token@host` is equally a persisted credential, and this script writes no
+# userinfo of any kind, so there is nothing legitimate for this to catch.
+if grep -qE '://[^/@[:space:]]+@' /home/ubuntu/proliferate/.git/config; then
   echo "FATAL: a credential was persisted into .git/config" >&2
+  exit 1
+fi
+if grep -qsE '(gh[pousr]_|github_pat_)' \
+    /home/ubuntu/proliferate/.git/config /home/ubuntu/.git-credentials; then
+  echo "FATAL: a GitHub token was persisted to disk" >&2
   exit 1
 fi
 
 # Pin to the release's own commit so the prebuilt runtime and the source tree
 # cannot disagree, then cherry-pick only the dev-loop fixes on top.
-su - ubuntu -c "cd ~/proliferate && \
-  git -c advice.detachedHead=false checkout ${REPO_REF} && \
-  git fetch origin ${FIX_BRANCH} main && \
-  git -c user.name=fleet -c user.email=fleet@local cherry-pick -x \
-    \$(git rev-list --reverse origin/${FIX_BRANCH} --not origin/main)"
+#
+# Written to a file rather than squeezed into `su -c "..."`, because the empty
+# case needs a conditional and nesting one inside that quoting is how mistakes
+# get made. The empty case is not hypothetical: once FIX_BRANCH merges,
+# rev-list returns nothing and `git cherry-pick -x` with no arguments exits 129
+# rather than doing nothing, which would turn the intended no-op into a boot
+# failure twenty minutes in.
+install -m 700 -o ubuntu -g ubuntu /dev/null /usr/local/bin/fleet-pin-repo
+cat > /usr/local/bin/fleet-pin-repo <<PIN_EOF
+#!/bin/bash
+set -euo pipefail
+cd ~/proliferate
+git -c advice.detachedHead=false checkout ${REPO_REF}
+git fetch origin ${FIX_BRANCH} main
+picks=\$(git rev-list --reverse origin/${FIX_BRANCH} --not origin/main)
+if [ -z "\$picks" ]; then
+  echo "nothing to cherry-pick: ${FIX_BRANCH} is already contained in main"
+  exit 0
+fi
+echo "cherry-picking \$(printf '%s\\n' \$picks | wc -l) commit(s) from ${FIX_BRANCH}"
+# Intentional word splitting: rev-list emits one sha per line.
+# shellcheck disable=SC2086
+git -c user.name=fleet -c user.email=fleet@local cherry-pick -x \$picks
+PIN_EOF
+
+su - ubuntu -c /usr/local/bin/fleet-pin-repo
 
 # Prebuilt runtime binaries: no cargo required for the product itself.
 su - ubuntu -c "mkdir -p ~/bin && cd ~/bin && \

@@ -59,17 +59,16 @@ require_positive_int "DEADMAN_HOURS" "$DEADMAN_HOURS"
 require_expected_account
 log "account ${ACCOUNT_ID}, region ${AWS_DEFAULT_REGION}"
 
-MY_IP="$(curl -fsS --max-time 10 https://checkip.amazonaws.com | tr -d '[:space:]')"
-case "$MY_IP" in
-  *[!0-9.]*|'') die "could not determine a public IPv4 for the SSH allowlist (got '${MY_IP}')" ;;
-esac
-[ "$(printf '%s' "$MY_IP" | tr -cd '.' | wc -c | tr -d '[:space:]')" = "3" ] \
-  || die "public IP is not dotted-quad IPv4: ${MY_IP}"
-[ "$MY_IP" != "0.0.0.0" ] || die "refusing to allowlist 0.0.0.0"
+MY_IP="$(curl -fsS --max-time 10 https://checkip.amazonaws.com | tr -d '[:space:]')" \
+  || die "could not reach checkip.amazonaws.com to determine the SSH allowlist address"
+require_ipv4 "the caller's public IP" "$MY_IP"
 
 # --- network -----------------------------------------------------------------
 
-VPC_ID="$(find_testbed_vpc)"
+# Sets TESTBED_VPC_ID in this shell rather than through $(...), so a failing
+# describe cannot masquerade as "no testbed VPC" and create a second one.
+resolve_testbed_vpc
+VPC_ID="$TESTBED_VPC_ID"
 
 if [ -z "$VPC_ID" ]; then
   log "creating dedicated VPC ${VPC_CIDR}"
@@ -111,16 +110,21 @@ if [ "$SG_ID" = "None" ] || [ -z "$SG_ID" ]; then
     --tag-specifications "$(tag_spec security-group)" --query 'GroupId' --output text)
 fi
 
-# Replace the SSH rule rather than adding one. Authorizing on every run without
-# revoking accumulates stale /32s until the 60-rule quota is hit, at which point
-# new authorizes fail and the caller silently cannot SSH in.
-EXISTING_SSH=$(aws ec2 describe-security-groups --group-ids "$SG_ID" \
-  --query 'SecurityGroups[0].IpPermissions[?FromPort==`22` && ToPort==`22`]' \
-  --output json)
-if [ "$(printf '%s' "$EXISTING_SSH" | tr -d '[:space:]')" != "[]" ]; then
-  log "revoking existing port-22 rules on ${SG_ID}"
+# Replace the whole ingress rule set rather than adding to it. Authorizing on
+# every run without revoking accumulates stale /32s until the 60-rule quota is
+# hit, at which point new authorizes fail and the caller silently cannot SSH in.
+#
+# Every rule goes, not only the ones with FromPort and ToPort both exactly 22: a
+# range rule, or an IpProtocol of -1, reaches port 22 without matching an
+# exact-22 predicate. This security group exists solely to carry this lane's SSH
+# rule, so its contents being a pure function of this script is the point. A
+# port opened here by hand does not survive the next provision, deliberately.
+EXISTING_INGRESS=$(aws ec2 describe-security-groups --group-ids "$SG_ID" \
+  --query 'SecurityGroups[0].IpPermissions' --output json)
+if [ "$(printf '%s' "$EXISTING_INGRESS" | tr -d '[:space:]')" != "[]" ]; then
+  log "revoking every existing ingress rule on ${SG_ID}"
   aws ec2 revoke-security-group-ingress --group-id "$SG_ID" \
-    --ip-permissions "$EXISTING_SSH" >/dev/null
+    --ip-permissions "$EXISTING_INGRESS" >/dev/null
 fi
 log "authorizing SSH from ${MY_IP}/32"
 aws ec2 authorize-security-group-ingress --group-id "$SG_ID" --protocol tcp \
@@ -221,10 +225,12 @@ log "refreshing GitHub token in SSM SecureString"
 TOKEN_FILE="$(mktemp)"
 chmod 600 "$TOKEN_FILE"
 trap 'rm -f "$TOKEN_FILE"' EXIT
-# Via a mode-600 temp file rather than an argv value, so the token never
-# appears in the process table.
-gh auth token > "$TOKEN_FILE" || die "gh auth token failed; run 'gh auth login' first"
-[ -s "$TOKEN_FILE" ] || die "gh auth token produced an empty token"
+# Via a mode-600 temp file rather than an argv value, so the token never appears
+# in the process table. Redirected rather than captured, so the value never
+# becomes a variable in this shell and a failure inside the reader is fatal
+# instead of yielding an empty token.
+read_github_token > "$TOKEN_FILE"
+[ -s "$TOKEN_FILE" ] || die "the configured GitHub token source produced nothing"
 aws ssm put-parameter --name "${SSM_PREFIX}/github-token" \
   --type SecureString --value "file://${TOKEN_FILE}" --overwrite >/dev/null
 rm -f "$TOKEN_FILE"
@@ -246,10 +252,10 @@ USER_DATA=$(sed \
   -e "s|__FIX_BRANCH__|${FIX_BRANCH}|g" \
   "${SCRIPT_DIR}/user-data.sh")
 
-case "$USER_DATA" in
-  *__REPO_REF__*|*__FIX_BRANCH__*|*__SSM_PREFIX__*|*__AWS_REGION__*)
-    die "user-data still contains unsubstituted placeholders" ;;
-esac
+# Every placeholder, not a hand-maintained subset of them: an unsubstituted one
+# reaches the instance as a literal and fails somewhere far from its cause.
+LEFTOVER=$(printf '%s\n' "$USER_DATA" | grep -oE '__[A-Z][A-Z0-9_]*__' | sort -u | tr '\n' ' ' || true)
+[ -z "$LEFTOVER" ] || die "user-data still contains unsubstituted placeholders: ${LEFTOVER}"
 
 log "launching ${INSTANCE_TYPE} (${ARCH}) from ${AMI_ID} (ref ${REPO_REF}, rust=${WITH_RUST}, deadman ${DEADMAN_HOURS}h)"
 INSTANCE_ID=$(aws ec2 run-instances \

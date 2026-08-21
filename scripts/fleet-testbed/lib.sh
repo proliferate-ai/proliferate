@@ -5,7 +5,7 @@
 # Every resource this lane creates therefore carries TAG_KEY=TAG_VALUE and lives
 # inside a dedicated non-default VPC whose CIDR nothing else uses. Selection for
 # any destructive operation asserts all three: the tag, the CIDR, and
-# IsDefault=false. See find_testbed_vpc.
+# IsDefault=false. See resolve_testbed_vpc.
 
 # Every value defined below is consumed by the scripts that source this file,
 # which a per-file unused-variable check cannot see.
@@ -108,18 +108,34 @@ require_positive_int() {
   [ "$value" -gt 0 ] || die "${label} must be greater than zero"
 }
 
-find_testbed_vpc() {
-  # Echoes the testbed VPC id, or nothing when it does not exist yet. Three
-  # independent predicates, not one applied twice: the project tag, an exact
-  # match on the dedicated CIDR (EC2's `cidr` filter is an exact primary-CIDR
-  # match), and IsDefault=false, because production lives in the default VPC.
-  # Anything other than exactly one match is an error rather than a pick.
+# Result of resolve_testbed_vpc. Empty means "does not exist", and it is only
+# ever meaningful immediately after a successful call.
+TESTBED_VPC_ID=""
+
+resolve_testbed_vpc() {
+  # Sets TESTBED_VPC_ID to the testbed VPC id, or to "" when it does not exist
+  # yet. Deliberately NOT a function whose value is captured with $(...): bash
+  # unsets errexit inside a command substitution unless inherit_errexit is on,
+  # and inherit_errexit does not exist at all in the bash 3.2 that macOS ships.
+  # Captured that way, a throttled or denied describe-vpcs would return an empty
+  # string with status 0 and every caller would read it as "no testbed VPC" --
+  # which silently turns `teardown --network` into a no-op that leaves the
+  # instance and the token alive, and turns provision into a second VPC at the
+  # same CIDR. Running in the caller's shell keeps errexit and `die` real.
+  #
+  # Three independent predicates, not one applied twice: the project tag, an
+  # exact match on the dedicated CIDR (EC2's `cidr` filter is an exact
+  # primary-CIDR match), and IsDefault=false, because production lives in the
+  # default VPC. Anything other than exactly one match is an error, not a pick.
+  TESTBED_VPC_ID=""
+
   local rows count vpc_id cidr is_default
   rows=$(aws ec2 describe-vpcs \
     --filters "Name=tag:${TAG_KEY},Values=${TAG_VALUE}" \
               "Name=cidr,Values=${VPC_CIDR}" \
               "Name=is-default,Values=false" \
-    --query 'Vpcs[].[VpcId,CidrBlock,IsDefault]' --output text)
+    --query 'Vpcs[].[VpcId,CidrBlock,IsDefault]' --output text) \
+    || die "describe-vpcs failed while resolving the testbed VPC; refusing to guess whether it exists"
 
   rows=$(printf '%s\n' "$rows" | grep -v '^[[:space:]]*$' || true)
   [ -n "$rows" ] || return 0
@@ -138,5 +154,65 @@ find_testbed_vpc() {
     *) die "VPC ${vpc_id} reports IsDefault=${is_default}; the default VPC holds production and is never a teardown target" ;;
   esac
 
-  echo "$vpc_id"
+  TESTBED_VPC_ID="$vpc_id"
+}
+
+require_ipv4() {
+  # $1 = label, $2 = value. Rejects anything that is not four plain decimal
+  # octets, including the shapes a dot-count check waves through: `1.2.3.`,
+  # `1.2.3.4.5`, `00.0.0.0`, and `999.0.0.1`. An SSH allowlist entry is not a
+  # place to accept a string AWS might interpret differently than this script.
+  local label="$1" value="$2"
+  local o1 o2 o3 o4 rest octet
+  IFS=. read -r o1 o2 o3 o4 rest <<<"$value"
+  [ -z "${rest:-}" ] || die "${label} is not a dotted-quad IPv4: ${value}"
+  for octet in "$o1" "$o2" "$o3" "$o4"; do
+    case "$octet" in
+      ''|*[!0-9]*) die "${label} is not a dotted-quad IPv4: ${value}" ;;
+      0) ;;
+      0*) die "${label} has a leading-zero octet, which is ambiguous: ${value}" ;;
+    esac
+    [ "${#octet}" -le 3 ] && [ "$octet" -le 255 ] \
+      || die "${label} has an out-of-range octet: ${value}"
+  done
+  [ "$value" != "0.0.0.0" ] || die "${label} is 0.0.0.0; refusing to use it in a rule"
+}
+
+read_github_token() {
+  # Prints the GitHub token on stdout, with no trailing newline, from whichever
+  # source the operator configured. Call it with a redirect, never as $(...):
+  # inside a command substitution `die` would only kill the subshell and the
+  # caller would proceed with an empty token. See resolve_testbed_vpc.
+  #
+  # Deliberately pluggable: the default is the
+  # personal `gh` credential, which is broader than this box needs, so a
+  # narrower fine-grained PAT can be supplied without editing the scripts.
+  #
+  #   FLEET_TESTBED_TOKEN_FILE=/path/to/pat     read a token from a file
+  #   FLEET_TESTBED_TOKEN_COMMAND='op read ...' run a command that prints one
+  #   (neither set)                             `gh auth token`
+  local token=""
+  if [ -n "${FLEET_TESTBED_TOKEN_FILE:-}" ]; then
+    [ -r "$FLEET_TESTBED_TOKEN_FILE" ] \
+      || die "FLEET_TESTBED_TOKEN_FILE is not readable: ${FLEET_TESTBED_TOKEN_FILE}"
+    token=$(cat "$FLEET_TESTBED_TOKEN_FILE") \
+      || die "could not read FLEET_TESTBED_TOKEN_FILE"
+  elif [ -n "${FLEET_TESTBED_TOKEN_COMMAND:-}" ]; then
+    token=$(eval "$FLEET_TESTBED_TOKEN_COMMAND") \
+      || die "FLEET_TESTBED_TOKEN_COMMAND failed"
+  else
+    token=$(gh auth token) \
+      || die "gh auth token failed; run 'gh auth login', or set FLEET_TESTBED_TOKEN_FILE to a scoped PAT"
+  fi
+
+  # Trim surrounding whitespace, so the SecureString holds exactly the token and
+  # not the trailing newline `file://` would otherwise carry into it.
+  token="${token#"${token%%[![:space:]]*}"}"
+  token="${token%"${token##*[![:space:]]}"}"
+
+  [ -n "$token" ] || die "the configured GitHub token source produced an empty token"
+  case "$token" in
+    *[[:space:]]*) die "the configured GitHub token source produced whitespace inside the token" ;;
+  esac
+  printf '%s' "$token"
 }
