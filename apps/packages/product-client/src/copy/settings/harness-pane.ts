@@ -104,6 +104,18 @@ export const HARNESS_PANE_COPY = {
   // rendered as a raw state string.
   allModelsTransportErrorTitle: "Models couldn't be loaded",
   allModelsTransportErrorReason: "The runtime didn't respond.",
+  // E-R17 — no payload because the local runtime is still coming up, so the
+  // read has no URL to call. Nothing was asked and nothing failed, and the
+  // connect retry cures it with no user action: say that, never state 8.
+  allModelsRuntimeConnectingTitle: "Connecting to the local runtime",
+  allModelsRuntimeConnectingSuffix: "Models load as soon as it's ready.",
+  // E-R18 — no payload because the account has no cloud workspace, so the
+  // target-scoped read has no target and never runs. Permanent until a
+  // workspace exists, and cloud renders no Refresh to cure it — so this is
+  // neither a spinner nor a failure.
+  allModelsCloudNoWorkspaceTitle: "No cloud workspace yet",
+  allModelsCloudNoWorkspaceSuffix: (displayName: string) =>
+    `${displayName} models are listed once a cloud workspace exists.`,
   allModelsRetry: "Retry",
   allModelsSeedDescription:
     "Showing shipped catalog models — not yet verified by a probe.",

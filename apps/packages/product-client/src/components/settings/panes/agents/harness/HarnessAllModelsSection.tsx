@@ -113,6 +113,36 @@ export function HarnessAllModelsSection({
     ? Boolean(runtimeLaunchOptionsQuery.isError)
     : Boolean(cloudSandbox.isError) || Boolean(cloudLaunchOptionsQuery.isError);
 
+  // A DISABLED query with no data is `status: "pending"` in TanStack v5, which
+  // `isPending` alone cannot tell apart from a request actually in flight —
+  // the same trap `useAgentLaunchOptionsListQuery` fixes for its per-kind
+  // entries. `fetchStatus` is the discriminator: only a real request is
+  // non-idle. Rendering a disabled query as either a spinner or a failure
+  // invents a claim about a request nobody has made yet.
+  const isFetchInFlight = isLocal
+    ? runtimeLaunchOptionsQuery.fetchStatus !== "idle"
+    : cloudSandbox.fetchStatus !== "idle" || cloudLaunchOptionsQuery.fetchStatus !== "idle";
+  const hasNoPayloadAndNothingHappening = !launchOptions && !isQueryError && !isFetchInFlight;
+
+  // E-R17: the local runtime is still connecting, so this query has no URL to
+  // call yet — `harness-connection-store` starts at `connecting`,
+  // `ProductProviderRoot` only forwards a `runtimeUrl` once the state is
+  // `healthy`, and `useAgentLaunchOptionsQuery` requires
+  // `runtimeUrl.length > 0`. Nothing failed and nothing is running; the
+  // 500ms `pollUntilHealthy` retry resolves it without the user doing a thing.
+  const isRuntimeConnecting = isLocal
+    && hasNoPayloadAndNothingHappening
+    && Boolean(runtimeLaunchOptionsQuery.isPending);
+
+  // E-R18: `getCloudSandbox` answers 200 with a null body for an account that
+  // has no cloud workspace, so `cloudSandbox.data?.id` is undefined and the
+  // dependent launch-options query (which requires a non-empty target) never
+  // runs. Unlike the local case this never self-corrects, and cloud renders no
+  // Refresh at all — so a spinner here would hang with no cure in the view.
+  const isCloudWithoutWorkspace = !isLocal
+    && hasNoPayloadAndNothingHappening
+    && Boolean(cloudLaunchOptionsQuery.isPending);
+
   // Absent when the runtime that served this response cannot know the phase
   // (e.g. the cloud-copied snapshot), which is exactly the same as "not
   // live" for every check below. `queued` counts as live alongside `running`:
@@ -144,6 +174,12 @@ export function HarnessAllModelsSection({
   // longer show a disabled-and-spinning header next to an enabled Retry.
   const isRefreshing = isLocal && (refreshLaunchOptions.isPending || isChecking);
 
+  // E-R17: `refresh_now` cannot reach a runtime that is not up, so an enabled
+  // button here would be the same lie pointed the other way. Disabled, and
+  // deliberately NOT spinning — nothing is in flight to spin about, and it
+  // keeps the dimmed unavailable look rather than the busy-with-full-ink one.
+  const isRefreshUnavailable = isRuntimeConnecting;
+
   const modelCount = models.length;
   // `formatRelativeTime` is the repo's one relative-age formatter (six other
   // call sites); reused rather than re-invented so "refreshed 2m ago" stays
@@ -159,19 +195,33 @@ export function HarnessAllModelsSection({
       return { foreground: null, muted: HARNESS_PANE_COPY.allModelsLoading, retry: null };
     }
     if (!launchOptions) {
-      // E-R13: `isLoading` is already false here (guarded above), so a local
-      // query with no data and no error is a DISABLED query — the runtime
-      // has no URL yet (`useAgentLaunchOptionsQuery` requires
-      // `runtimeUrl.length > 0`) — not one still in flight. Left alone this
-      // sits on "Loading models…" forever, a ninth state outside the
-      // spec's eight; state 8's copy is the closest honest match.
-      return isQueryError || isLocal
-        ? {
+      // Three different reasons produce "no payload", and collapsing any two
+      // of them fabricates state: only a request that was made and failed may
+      // claim failure, and only a request in flight may show a spinner.
+      if (isQueryError) {
+        return {
           foreground: HARNESS_PANE_COPY.allModelsTransportErrorTitle,
           muted: HARNESS_PANE_COPY.allModelsTransportErrorReason,
           retry: handleRetryLoad,
-        }
-        : { foreground: null, muted: HARNESS_PANE_COPY.allModelsLoading, retry: null };
+        };
+      }
+      if (isRuntimeConnecting) {
+        return {
+          foreground: HARNESS_PANE_COPY.allModelsRuntimeConnectingTitle,
+          muted: HARNESS_PANE_COPY.allModelsRuntimeConnectingSuffix,
+          retry: null,
+        };
+      }
+      if (isCloudWithoutWorkspace) {
+        return {
+          foreground: HARNESS_PANE_COPY.allModelsCloudNoWorkspaceTitle,
+          muted: HARNESS_PANE_COPY.allModelsCloudNoWorkspaceSuffix(displayName),
+          retry: null,
+        };
+      }
+      // What is left is a request genuinely in flight (`fetchStatus` non-idle
+      // without `isLoading`, e.g. a refetch that dropped its data).
+      return { foreground: null, muted: HARNESS_PANE_COPY.allModelsLoading, retry: null };
     }
     if (isChecking) {
       return { foreground: null, muted: HARNESS_PANE_COPY.allModelsChecking, retry: null };
@@ -255,7 +305,7 @@ export function HarnessAllModelsSection({
                 ? HARNESS_PANE_COPY.allModelsRefreshing
                 : HARNESS_PANE_COPY.allModelsRefresh}
               title={HARNESS_PANE_COPY.allModelsRefresh}
-              disabled={isRefreshing}
+              disabled={isRefreshing || isRefreshUnavailable}
               className={isRefreshing ? "disabled:opacity-100" : undefined}
               onClick={handleRefresh}
             >
@@ -342,12 +392,15 @@ export function HarnessAllModelsSection({
             {HARNESS_PANE_COPY.allModelsChecking}
           </p>
         ) : models.length === 0 ? (
-          // E-R14: the header already carries the reason for an empty list
-          // in these two states (transport error / no observation ever
-          // succeeded) — echoing "No models detected yet." underneath would
-          // contradict it, e.g. "...The runtime didn't respond." followed by
-          // "No models detected yet." for a request that never answered.
-          isQueryError || launchOptions?.state === "failed_without_observation" ? null : (
+          // E-R14/E-R19: the header already carries the reason for an empty
+          // list whenever there is no payload at all (transport error,
+          // runtime still connecting, no cloud workspace) or the probe never
+          // observed anything — echoing "No models detected yet." underneath
+          // would contradict it, e.g. "...The runtime didn't respond."
+          // followed by "No models detected yet.". Keyed on what drove the
+          // header, not on `isQueryError`, which only covers one of them.
+          isQueryError || !launchOptions
+            || launchOptions.state === "failed_without_observation" ? null : (
             <p className="text-ui-sm text-muted-foreground">
               {HARNESS_PANE_COPY.allModelsEmpty}
             </p>

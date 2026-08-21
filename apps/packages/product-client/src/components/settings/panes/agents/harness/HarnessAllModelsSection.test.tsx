@@ -34,9 +34,7 @@ const state = vi.hoisted(() => ({
   // query hook below transitions from `launchOptions` to this fixture after
   // one probe interval, with no user action in between.
   nextLaunchOptions: undefined as LaunchOptionsFixture,
-  // Cloud-surface fixtures (E-R5): both cloud hooks previously stayed
-  // `data: undefined` in every test, so the cloud path was entirely
-  // uncovered. Stateful like `launchOptions` above.
+  // Cloud-surface fixtures (E-R5), stateful like `launchOptions` above.
   cloudSandbox: null as Record<string, unknown> | null,
   cloudLaunchOptions: undefined as LaunchOptionsFixture,
 }));
@@ -57,7 +55,11 @@ vi.mock("@anyharness/sdk-react", () => ({
       }, 1500);
       return () => clearTimeout(timer);
     }, [data]);
-    return { data, isLoading: state.isLoading, isError: state.isError, refetch: state.refetch };
+    // v5 shape the component now depends on: a DISABLED query is pending with
+    // an IDLE fetchStatus; only a real request in flight is non-idle.
+    const isPending = data === undefined && !state.isError;
+    const fetchStatus = state.isLoading ? "fetching" : "idle";
+    return { data, isLoading: state.isLoading, isError: state.isError, isPending, fetchStatus, refetch: state.refetch };
   },
   useRefreshHarnessLaunchOptionsMutation: () => ({
     mutate: state.refresh,
@@ -66,8 +68,12 @@ vi.mock("@anyharness/sdk-react", () => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useCloudSandbox: () => ({ data: state.cloudSandbox, isLoading: false, isError: false, refetch: vi.fn() }),
-  useCloudHarnessLaunchOptions: () => ({ data: state.cloudLaunchOptions, isLoading: false, isError: false, refetch: vi.fn() }),
+  useCloudSandbox: () => ({ data: state.cloudSandbox, isLoading: false, isError: false, isPending: false, fetchStatus: "idle", refetch: vi.fn() }),
+  // Disabled without a sandbox id, exactly like the real dependent query.
+  useCloudHarnessLaunchOptions: ({ cloudSandboxId }: { cloudSandboxId?: string | null }) => {
+    const data = cloudSandboxId ? state.cloudLaunchOptions : undefined;
+    return { data, isLoading: false, isError: false, isPending: data === undefined, fetchStatus: "idle", refetch: vi.fn() };
+  },
 }));
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
@@ -406,12 +412,9 @@ describe("HarnessAllModelsSection — truthfulness rules", () => {
 
     expect(screen.getByText("0 models")).toBeTruthy();
     expect(screen.queryByText(/refreshed/)).toBeNull();
-    // E-R11: `queryByText("observed")` here can never match, even with the
-    // bug present, because the muted span concatenates a " · " separator
-    // with the raw state ("· observed" as one node's normalized text) —
-    // an exact-string query for the bare word is vacuous by construction.
-    // Assert on the container's full text instead, covering every raw wire
-    // state string the copy layer must never leak (not just "observed").
+    // E-R11: an exact-string `queryByText` for a bare wire state can never
+    // match (the muted span concatenates " · " into one text node), so assert
+    // on the container's full text, covering every raw state string.
     expect(contentLine().textContent).not.toMatch(
       /detecting|refreshing|observed|last_good_after_failure|failed_without_observation/,
     );
@@ -573,13 +576,14 @@ describe("HarnessAllModelsSection — round 2 review fixes", () => {
     expect(screen.queryByText("Checking available models…")).toBeNull();
   });
 
-  it("E-R13: a disabled local query (no runtime URL) does not load forever", () => {
+  it("E-R13/E-R17: a disabled local query neither loads forever nor claims failure", () => {
     state.launchOptions = undefined;
     state.isLoading = false;
     state.isError = false;
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
-    expect(screen.getByText("Models couldn't be loaded")).toBeTruthy();
+    expect(screen.getByText("Connecting to the local runtime")).toBeTruthy();
     expect(screen.queryByText("Loading models…")).toBeNull();
+    expect(screen.queryByText("Models couldn't be loaded")).toBeNull();
   });
 
   it("E-R14: the expanded body does not contradict a header that already explains an empty state", () => {
