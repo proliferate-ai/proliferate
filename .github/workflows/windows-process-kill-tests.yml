@@ -21,6 +21,8 @@ on:
   pull_request:
     paths:
       - "anyharness/crates/anyharness-lib/src/process_kill.rs"
+      - "anyharness/crates/anyharness-lib/src/process_kill_tree.rs"
+      - "anyharness/crates/anyharness-lib/src/process_kill_tree_tests.rs"
       - "anyharness/crates/anyharness-lib/src/process_kill_windows.rs"
       - "anyharness/crates/anyharness-lib/tests/windows_process_tree.rs"
       - ".github/workflows/windows-process-kill-tests.yml"

@@ -13,10 +13,10 @@
 //!
 //! The enumeration is genuinely one implementation per platform - macOS via
 //! libproc, Linux via `/proc`, Windows via a `CreateToolhelp32Snapshot`
-//! parent-link walk in [`process_kill_windows`](crate::process_kill_windows) -
-//! behind one `#[cfg]`, and on every platform the escalation runs on a
-//! detached task so a dropped or timed-out caller future can never strand a
-//! half-killed target between the first signal and the last.
+//! parent-link walk in `process_kill_windows.rs` - behind one `#[cfg]`, and
+//! on every platform the escalation runs on a detached task so a dropped or
+//! timed-out caller future can never strand a half-killed target between the
+//! first signal and the last.
 //!
 //! What a caller passes differs by platform and the two functions below name
 //! the unix concepts because that is where the distinction is real. Windows
@@ -26,7 +26,11 @@
 //! rooted at that pid. The CONTRACT is identical on both platforms: the
 //! returned `(total, git)` is the census taken before anything is signaled,
 //! `(0, 0)` means nothing was running, and the call resolves only once the
-//! target is confirmed dead or the confirmation budget is spent.
+//! target is confirmed dead or the confirmation budget is spent. Two places
+//! where Windows is genuinely weaker, both documented in
+//! `process_kill_windows.rs`: the kill is not atomic against a tree that
+//! grows mid-kill (unix's `kill(-pgid)` is), and an adoption whose identity
+//! cannot be proven is refused rather than guessed at.
 
 use std::time::Duration;
 
@@ -359,6 +363,15 @@ mod unix_impl {
 
 #[cfg(unix)]
 pub use unix_impl::{kill_group_and_await, kill_session_and_await};
+
+/// The tree bookkeeping the Windows kill path runs on. It contains no FFI, so
+/// it is compiled under `test` on every platform and its unit tests run on the
+/// ordinary Linux and macOS jobs - which is where the multi-pass escalation
+/// logic actually gets exercised, since a real-process Windows test never
+/// reaches the second pass.
+#[cfg(any(windows, test))]
+#[path = "process_kill_tree.rs"]
+mod tree;
 
 #[cfg(windows)]
 #[path = "process_kill_windows.rs"]

@@ -196,6 +196,12 @@ async fn the_census_counts_a_real_git_exe_grandchild() {
     // independent oracle: every git process in the tree is named `git.exe`,
     // never a bare `git`. The unix path's exact `"git"` comparison would
     // therefore have counted ZERO here while looking entirely correct.
+    //
+    // `Win32_Process.Name` is deliberately the field read here: it is the
+    // same base image name that `szExeFile` carries into the census, so this
+    // control compares the string the code actually matches on rather than a
+    // differently-derived one (`Get-Process`'s `ProcessName`, for instance,
+    // strips the extension and would hide the whole defect).
     let tree = descendants_of(root_pid);
     let git_names: Vec<String> = tree
         .iter()
@@ -212,15 +218,17 @@ async fn the_census_counts_a_real_git_exe_grandchild() {
     );
 
     let (total, git) = kill_group_and_await(root_pid as i32).await;
-    // NOT `== 1`. Git for Windows resolves `git` to a shim in `cmd\git.exe`
-    // that launches the real `git.exe` from `mingw64\bin`, so a single `git`
-    // invocation is two `git.exe` processes and this tree is three deep. The
-    // load-bearing claim is that the count is NONZERO, because that is exactly
-    // what R2's `repair_kill_debris` branches on (`killed_git > 0`); an exact
-    // `"git"` comparison would have made it zero forever.
-    assert!(
-        git >= 1,
-        "the census counted {git} git processes out of {total}; the real git.exe at pid {git_pid} must be recognised (oracle saw {git_names:?})"
+    // Not a hardcoded count: Git for Windows resolves `git` to a shim in
+    // `cmd\git.exe` that launches the real `git.exe` from `mingw64\bin`, so a
+    // single `git` invocation is two `git.exe` processes and this tree is
+    // three deep. Asserted against the oracle's own tally rather than a floor,
+    // so this catches OVER-matching (a census that counted `gitk.exe` or the
+    // shell) as well as under-matching.
+    assert_eq!(
+        git,
+        git_names.len(),
+        "the census counted {git} git processes out of {total}, but the CIM oracle saw {} ({git_names:?}); the real git.exe at pid {git_pid} must be recognised exactly once each",
+        git_names.len()
     );
     assert!(
         total >= 2,
