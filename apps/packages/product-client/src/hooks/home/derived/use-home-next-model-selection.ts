@@ -16,7 +16,7 @@ import {
   type DesktopLaunchModelRegistry as ModelRegistry,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
-  isSettledUnobservedHarness,
+  homeModelGateNeedsNewProbe,
   resolveHomeModelGate,
   type HomeModelGateObservation,
 } from "#product/lib/domain/home/home-model-gate";
@@ -213,26 +213,43 @@ export function useHomeNextModelSelection({
    * The cure behind every blocked notice's action (ruling 5: a state must
    * never disable the control that would cure it).
    *
-   * Three different things can be broken, and each needs its own repair aimed
+   * Four different things can be broken, and each needs its own repair aimed
    * at the query that actually failed — a Retry that re-asks something which
    * was never the problem leaves the notice on screen forever:
    *
-   *  - A harness that failed without an observation, or one that settled
-   *    without ever being probed, needs a NEW probe. Refetching would just
-   *    re-read the recorded failure, or re-read the same "nobody looked".
+   *  - A gate that says nothing has looked yet needs a NEW probe, for EVERY
+   *    kind it knows about. Keyed on the gate rather than re-derived from the
+   *    observations: `observation_idle` is reached from a settled-unobserved
+   *    harness AND from the residual, and a retry that re-tested only the
+   *    first arm's predicate promised a Refresh to a backed-off harness, a
+   *    non-owner runtime and a zero-model `last_good_after_failure` and then
+   *    delivered a re-read of the row that already said so.
+   *  - A harness that failed without an observation needs a new probe too;
+   *    refetching would just re-read the recorded failure.
    *  - A read that failed at the transport layer needs THAT read again: the
    *    requested kind through its own query, a fanned-out kind through its
    *    shared cache key.
    *  - The agent catalog's own read is a third query entirely, and it is the
    *    one `hasCatalogError` reports. Nothing else here touches it.
+   *
+   * Cloud is deliberately none of the above: a cloud response carries no
+   * `probePhase`, so a cloud target always lands in the residual, where
+   * re-asking the sandbox and its launch options genuinely IS the cure.
    */
   const retryModelObservation = useCallback(() => {
     let repaired = false;
+    const awaitsFirstProbe = !isCloudTarget && homeModelGateNeedsNewProbe(modelGate);
+    if (awaitsFirstProbe && observations.length === 0) {
+      // No kind to probe: the requested kind is null, which also means the
+      // single-kind query is DISABLED and refetching it is a no-op. The only
+      // thing that can produce a kind is the catalog.
+      void refetchAgents();
+      return;
+    }
     for (const observation of observations) {
       if (
         !isCloudTarget
-        && (observation.state === "failed_without_observation"
-          || isSettledUnobservedHarness(observation))
+        && (awaitsFirstProbe || observation.state === "failed_without_observation")
       ) {
         refreshMutate(observation.harnessKind);
         repaired = true;
@@ -260,6 +277,7 @@ export function useHomeNextModelSelection({
   }, [
     hasCatalogError,
     isCloudTarget,
+    modelGate,
     observations,
     refetchAgents,
     refetchLaunchOptionsKind,
@@ -292,6 +310,9 @@ export function useHomeNextModelSelection({
     error: (isCloudTarget ? null : agentsQueryError) ?? targetLaunchOptions.error,
     modelGate,
     retryModelObservation,
+    /** The last refresh was REFUSED by the runtime. A rejection writes no
+     * durable state, so nothing else on screen would ever change. */
+    retryRejected: refreshLaunchOptions.isError,
   };
 }
 

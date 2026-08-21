@@ -136,7 +136,11 @@ export function HomeNextScreen() {
   // install toast. "Finish agent setup to start a chat." can only be reached
   // through blocked(agent_setup_required), which requires real
   // install_required/login_required readiness.
-  const modelAvailabilityNotice = resolveHomeModelGateNotice(homeNext.modelGate);
+  // A refused probe writes no durable state, so the gate cannot move and the
+  // same sentence would render again unchanged. The notice says so instead.
+  const modelAvailabilityNotice = resolveHomeModelGateNotice(homeNext.modelGate, {
+    refreshRejected: homeNext.retryRejected,
+  });
   const runModelGateNoticeAction = () => {
     if (modelAvailabilityNotice?.action === "agent_settings") {
       handleHomeAction("agent-settings");

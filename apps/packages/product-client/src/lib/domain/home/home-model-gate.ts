@@ -41,6 +41,13 @@ export type HomeModelGateBlockedReason =
    * automatic probing (`AUTO_PROBE_EXCLUDED_HARNESSES`) live here permanently
    * until a user asks. Reporting it as in-flight is the "Probing…" that never
    * ends; reporting nothing at all is a dead end with no cure on screen.
+   *
+   * This is also where a `backoff` probe phase lands, deliberately. A retry IS
+   * armed for a future time, so it is tempting to call it in flight — but
+   * `observation_pending` is not polled, so classifying it that way would
+   * manufacture a new permanently-silent state, which is the exact bug this
+   * reason exists to remove. "Models haven't been detected yet." is literally
+   * true of a backed-off harness, and the Refresh does not wait for the timer.
    */
   | "observation_idle"
   /** The launch-option request itself failed; there is no state to read. */
@@ -213,6 +220,21 @@ function isProbeInFlight(observation: HomeModelGateObservation): boolean {
   return observation.probePhase === "queued" || observation.probePhase === "running";
 }
 
+/**
+ * Whether this gate's cure is a NEW probe rather than another read.
+ *
+ * The retry path reads THIS, keyed on the gate the resolver already produced,
+ * rather than re-deriving the condition from the observations. `observation_idle`
+ * is reached from two arms — a settled-unobserved harness and the residual —
+ * and a retry that re-checked only the first arm's predicate promised a
+ * Refresh to everything arriving through the second and then delivered a
+ * re-read of the same durable row. One fact, read once, cannot disagree with
+ * itself; two predicates over the same inputs can, and did.
+ */
+export function homeModelGateNeedsNewProbe(gate: HomeModelGate): boolean {
+  return gate.kind === "blocked" && gate.reason === "observation_idle";
+}
+
 function blocked(reason: HomeModelGateBlockedReason): HomeModelGate {
   return { kind: "blocked", reason };
 }
@@ -290,6 +312,17 @@ export interface HomeModelGateNotice {
 export const HOME_MODEL_GATE_AGENT_SETUP_NOTICE = "Finish agent setup to start a chat.";
 
 /**
+ * Shown in place of a probe-cured notice when the probe itself was REFUSED.
+ *
+ * A rejected refresh writes no durable state, so the underlying gate does not
+ * move and the same sentence would render again unchanged — a button that
+ * appears to do nothing, forever. (A probe that runs and FAILS is already
+ * visible: the runtime records `failed_without_observation` and the gate flips
+ * to "Couldn't check your models.")
+ */
+export const HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE = "Couldn't refresh your models.";
+
+/**
  * The visible line under the composer, or `null` for the states that must stay
  * silent.
  *
@@ -299,7 +332,20 @@ export const HOME_MODEL_GATE_AGENT_SETUP_NOTICE = "Finish agent setup to start a
  * rather than an instruction. `querying` / `observation_pending` are silent
  * because work is in flight and the toast already owns that story.
  */
-export function resolveHomeModelGateNotice(gate: HomeModelGate): HomeModelGateNotice | null {
+export function resolveHomeModelGateNotice(
+  gate: HomeModelGate,
+  options: { refreshRejected?: boolean } = {},
+): HomeModelGateNotice | null {
+  const notice = resolveGateNotice(gate);
+  // Only a notice whose action FIRES a probe can have that probe refused; the
+  // others never call the mutation, so its error says nothing about them.
+  if (notice && options.refreshRejected && notice.action === "retry_probe") {
+    return { ...notice, text: HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE };
+  }
+  return notice;
+}
+
+function resolveGateNotice(gate: HomeModelGate): HomeModelGateNotice | null {
   if (gate.kind !== "blocked") {
     return null;
   }

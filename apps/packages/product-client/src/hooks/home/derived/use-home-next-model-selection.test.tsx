@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   refetchKind: vi.fn(),
   refetchAgents: vi.fn(),
   refreshMutate: vi.fn(),
+  refreshIsError: false,
   otherEntries: [] as Array<{
     harnessKind: string;
     data: Record<string, unknown> | null;
@@ -49,7 +50,10 @@ vi.mock("#product/hooks/access/anyharness/agents/use-refetch-agent-launch-option
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
-  useRefreshHarnessLaunchOptionsMutation: () => ({ mutate: mocks.refreshMutate }),
+  useRefreshHarnessLaunchOptionsMutation: () => ({
+    mutate: mocks.refreshMutate,
+    isError: mocks.refreshIsError,
+  }),
 }));
 
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
@@ -83,6 +87,7 @@ describe("useHomeNextModelSelection", () => {
     mocks.refetchKind = vi.fn();
     mocks.refetchAgents = vi.fn();
     mocks.refreshMutate = vi.fn();
+    mocks.refreshIsError = false;
     mocks.otherEntries = [];
     mocks.agents = [];
     mocks.readyAgents = [];
@@ -391,6 +396,78 @@ describe("useHomeNextModelSelection", () => {
     });
     catalog.result.current.retryModelObservation();
     expect(mocks.refetchAgents).toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a backed-off probe", { state: "detecting", probePhase: "backoff" }],
+    ["a runtime that owns no probe engine", { state: "detecting", probePhase: null }],
+    ["an observation with zero models", { state: "observed", probePhase: "idle" }],
+    ["a zero-model last_good_after_failure", { state: "last_good_after_failure", probePhase: "idle" }],
+  ])("fires a real probe for observation_idle reached via %s", (_label, overrides) => {
+    // Every one of these lands on `observation_idle` through the RESIDUAL arm,
+    // not the settled-unobserved one. They were promised a Refresh and handed
+    // a re-read of the same durable row, which can never change what it says.
+    mocks.agents = [{ kind: "claude", readiness: "ready" }];
+    mocks.readyAgents = [{ kind: "claude" }];
+    mocks.data = { ...response(), ...overrides, options: null };
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: LOCAL_TARGET,
+    }));
+    expect(result.current.modelGate).toEqual({
+      kind: "blocked",
+      reason: "observation_idle",
+    });
+    result.current.retryModelObservation();
+    expect(mocks.refreshMutate).toHaveBeenCalledWith("claude");
+    expect(mocks.refetch).not.toHaveBeenCalled();
+  });
+
+  it("re-reads the catalog when observation_idle has no kind to probe", () => {
+    // With no requested kind the single-kind query is DISABLED, so refetching
+    // it is a literal no-op: a permanent sentence and a button that does
+    // nothing. Only the catalog can produce a kind to probe.
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "",
+      defaultChatModelIdByAgentKind: {},
+    });
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: LOCAL_TARGET,
+    }));
+    expect(result.current.modelGate).toEqual({
+      kind: "blocked",
+      reason: "observation_idle",
+    });
+    result.current.retryModelObservation();
+    expect(mocks.refetchAgents).toHaveBeenCalled();
+    expect(mocks.refetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the cloud check-again path on the generic target re-ask", () => {
+    // A cloud response carries no probePhase, so cloud always lands in the
+    // residual — and there the sandbox re-read genuinely IS the cure.
+    mocks.data = undefined;
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: CLOUD_TARGET,
+    }));
+    expect(result.current.modelGate).toEqual({
+      kind: "blocked",
+      reason: "observation_idle",
+    });
+    result.current.retryModelObservation();
+    expect(mocks.refetch).toHaveBeenCalled();
+    expect(mocks.refreshMutate).not.toHaveBeenCalled();
+  });
+
+  it("reports a refused refresh so the notice can stop repeating itself", () => {
+    mocks.refreshIsError = true;
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: LOCAL_TARGET,
+    }));
+    expect(result.current.retryRejected).toBe(true);
   });
 
   it("keeps a cloud sandbox that reported no models from claiming it has no agents", () => {
