@@ -36,14 +36,15 @@ export function useHarnessInstallAction(
 
     try {
       if (supportsScopedReconcile) {
+        // The scoped reconcile job is tracked by the same reconcile-status
+        // query HarnessUpdateToastPresenter polls; that presenter raises the
+        // in-progress toast for this job once its status flips to
+        // queued/running, so raising a second "started" toast here would
+        // double up. Let the presenter own the start signal.
         await reconcileAgents({
           reinstall: true,
           agentKinds: [agent.kind],
         });
-        showToast(HARNESS_PANE_COPY.updateStartedToast(
-          agent.displayName,
-          surface,
-        ));
       } else {
         // Older runtimes ignore unknown reconcile fields and would turn a
         // scoped update into a full forced reinstall. Keep their established,
