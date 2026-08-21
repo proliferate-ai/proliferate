@@ -53,7 +53,8 @@ Proliferate is a desktop app for running coding agents in parallel.
 - 🌳 **[Worktree workspaces](https://proliferate.com/docs/product/workspaces)** - an isolated branch and working directory for every task
 - 🔍 **[Git & diff review](https://proliferate.com/docs/product/workspaces/review-and-publish)** - inspect and edit agent changes without leaving the app
 - 🛡️ **[Plan & code review agents](https://proliferate.com/docs/product/workspaces/review-and-publish)** - reviewer agents check plans, diffs, risks, and branch readiness before you do
-- 🪆 **[Parallel agents & subagents](https://proliferate.com/docs/product/workspaces/parallel-agents)** - run agents side by side, or let them delegate scoped work to other agents
+- 🔀 **[Parallel agents](https://proliferate.com/docs/product/workspaces/parallel-agents)** - run agents side by side in the same workspace, each on its own task
+- 🪆 **[Subagents](https://proliferate.com/docs/product/workspaces/parallel-agents)** - agents delegate scoped work to child agents and pick the results back up when they finish
 - 🧩 **[Integrations](https://proliferate.com/docs/product/integrations)** - MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
 - ⏰ **[Workflows](https://proliferate.com/docs/product/workflows)** - recurring and event-driven agent runs: nightly review passes, triage on alerts, dependency bumps
 - 🖼️ **[Artifacts](https://proliferate.com/docs/product/learn/cowork-and-artifacts)** - docs, UI, demos, and components rendered inline as agents produce them
@@ -98,7 +99,7 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 
 ## Self-hosting
 
-Proliferate is AGPL-3.0 — the whole stack: desktop client, web app, and cloud
+Proliferate is AGPL-3.0 — the whole stack: desktop client and cloud
 control plane. Download the app from [proliferate.com](https://proliferate.com)
 or follow the [quickstart](https://proliferate.com/docs/product/quickstart) to
 get going in a minute.
@@ -154,27 +155,6 @@ See [dev profiles](./guides/local/dev-profiles.md) for profile state, ports,
 generated Tauri config, and app labels.
 
 </details>
-
-## Cloud Sandbox
-
-> Proliferate Cloud is not part of the initial launch — we're rebuilding the
-> sandbox infrastructure to remove the E2B dependency and will ship Cloud in a
-> follow-up release. Everything local above is available today.
-
-- ☁️ **Cloud sandboxes** - isolated cloud environments that keep working after you close your laptop
-- 🔁 **Workspace mobility** - move a running workspace between your machine and the cloud, mid-task, with changes and history intact
-- 👥 **Multiplayer cloud chats** - live sessions your team can inspect, claim, and continue
-- 💬 **Team Slackbot** - turn a Slack message into shared agent work for the whole team
-- 🤝 **Team automations** - shared recurring fixes and reviews the whole team can run
-- 🛰️ **Remote dispatch** - kick off and steer work on your own machine from the web
-- 🔑 **SSH access** - drop into any cloud sandbox from your terminal
-- 🔐 **Credential gateway** - your keys and subscriptions never touch the sandbox; sandboxes only get short-lived tokens
-- 🏢 **Organizations** - team seats, shared settings, cloud limits, and governance controls
-- 📱 **Mobile** - coming soon: dispatch work, approve actions, and follow runs from your phone
-- 🏗️ **Self-hosted Proliferate Cloud** - run the full cloud control plane yourself ([docs](#self-hosting))
-
-Like everything else, Proliferate Cloud will be open source (AGPL-3.0) and
-self-hostable.
 
 ## Community
 
