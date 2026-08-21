@@ -1,0 +1,13 @@
+# Force LF line endings for text files on checkout, regardless of the
+# checking-out platform's git config. Without this, GitHub's windows-latest
+# runner (core.autocrlf=true by default, no repo override before this file)
+# converts LF to CRLF on checkout for every text file, including
+# apps/packages/design/src/css/product.css. check-theme.mjs asserts that
+# product.css contains several multi-line CSS declarations as exact,
+# hardcoded LF-joined string literals (see the `productCss.includes(...)`
+# loop around line 592), so a CRLF checkout makes those substring matches
+# fail even though the CSS content is byte-for-byte the same modulo line
+# endings. This broke `pnpm run build` -> check-theme.mjs on the first-ever
+# Windows desktop build attempt (windows-latest), independent of and in
+# addition to the separate Sentry credential issue.
+* text=auto eol=lf
