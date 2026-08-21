@@ -71,8 +71,17 @@ export const ADMIN_TOKEN_PATH = path.join(
   os.homedir(),
   ".proliferate-local/ops/grafana-admin-rebuild.token",
 );
+export const OBSERVABILITY_KEYS_PATH = path.join(
+  os.homedir(),
+  ".proliferate-local/observability-keys.env",
+);
 
 const SLACK_WEBHOOK_ENV = "SLACK_ALERTS_WEBHOOK_URL";
+const SIGN_IN_RULE_UID = "ffvtx33lbo5c0e";
+const SLACK_RULE_UIDS = Object.freeze([...KNOWN_UIDS, SIGN_IN_RULE_UID]);
+const DEFAULT_GROUP_BY = Object.freeze(["grafana_folder", "alertname"]);
+const SLACK_TITLE = "{{ template \"slack.default.title\" . }}";
+const SLACK_TEXT = "{{ template \"slack.default.text\" . }}";
 
 function safeLog(...parts) {
   console.log(parts.map((p) => redact(String(p))).join(" "));
@@ -174,7 +183,10 @@ export function validateOverlayDocument(overlay) {
   if (!/^arn:aws:sns:/.test(overlay.contactPoint?.settings?.topic || "")) {
     throw new Error("Overlay contactPoint.settings.topic must be a real SNS topic ARN, not the AMG placeholder");
   }
-  if (overlay.slackContactPoint?.name !== "sns receiver" || overlay.slackContactPoint?.type !== "slack" ||
+  if (overlay.slackContactPoint?.uid !== "efvuhlsl31mo0e" ||
+      overlay.slackContactPoint?.name !== "grafana-default-sns" ||
+      overlay.slackContactPoint?.partialName !== "sns receiver" ||
+      overlay.slackContactPoint?.type !== "slack" ||
       overlay.slackContactPoint?.receiver !== overlay.contactPoint.name ||
       overlay.slackContactPoint?.legacyName !== "grafana-rebuild-slack" ||
       overlay.slackContactPoint?.legacyUid !== "dfvuf540l7ym8d" ||
@@ -223,6 +235,25 @@ export function adminTokenProvider({ tokenPath = ADMIN_TOKEN_PATH } = {}) {
   return token;
 }
 
+function assertMode0600(filePath, label) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`${label} not found at its named 0600 path (${filePath})`);
+  }
+  const mode = fs.statSync(filePath).mode & 0o777;
+  if (mode !== 0o600) {
+    throw new Error(`${label} must be mode 0600`);
+  }
+}
+
+export function assertSlackCredentialModes({
+  adminTokenPath = ADMIN_TOKEN_PATH,
+  observabilityKeysPath = OBSERVABILITY_KEYS_PATH,
+} = {}) {
+  assertMode0600(adminTokenPath, "Admin token file");
+  assertMode0600(observabilityKeysPath, "Observability keys file");
+  return true;
+}
+
 function fixedWorkspaceUrl(apiPath) {
   if (typeof apiPath !== "string" || !apiPath.startsWith("/api/") || apiPath.startsWith("//")) {
     throw new Error("Invalid fixed Grafana API path");
@@ -269,7 +300,6 @@ export function createClient({ fetchImpl = fetch, tokenProvider } = {}) {
     getAlertmanagerConfig: () => request("GET", "/api/alertmanager/grafana/config/api/v1/alerts"),
     postAlertmanagerConfig: (body) => request("POST", "/api/alertmanager/grafana/config/api/v1/alerts", body),
     listContactPoints: () => request("GET", "/api/v1/provisioning/contact-points"),
-    createContactPoint: (body) => request("POST", "/api/v1/provisioning/contact-points", body),
     updateContactPoint: (uid, body) => request("PUT", `/api/v1/provisioning/contact-points/${encodeURIComponent(uid)}`, body),
     deleteContactPoint: (uid) => request("DELETE", `/api/v1/provisioning/contact-points/${encodeURIComponent(uid)}`),
     testReceiver: (body) => request("POST", "/api/alertmanager/grafana/config/api/v1/receivers/test", body),
@@ -403,31 +433,26 @@ function slackWebhook(env = process.env) {
   return webhook;
 }
 
-function slackPayload(overlay, webhook, uid) {
+function slackPayload(overlay, webhook, name = overlay.slackContactPoint.name) {
   return {
-    ...(uid ? { uid } : {}),
-    name: overlay.slackContactPoint.name,
+    uid: overlay.slackContactPoint.uid,
+    name,
     type: "slack",
     disableResolveMessage: false,
     settings: {
       url: webhook,
-      title: "{{ template \"slack.default.title\" . }}",
-      text: "{{ template \"slack.default.text\" . }}",
+      title: SLACK_TITLE,
+      text: SLACK_TEXT,
     },
   };
 }
 
-function findSlackContacts(points, overlay) {
-  const slack = (points || []).filter((point) => point.type === "slack");
-  const target = slack.filter((point) => point.name === overlay.slackContactPoint.name);
-  const legacy = slack.filter((point) => point.name === overlay.slackContactPoint.legacyName);
-  const unexpected = slack.filter(
-    (point) => point.name !== overlay.slackContactPoint.name && point.name !== overlay.slackContactPoint.legacyName,
-  );
-  if (target.length > 1 || legacy.length > 1 || unexpected.length > 0) {
-    throw new Error("Slack contact-point state is duplicate, ambiguous, or contains an unexpected integration");
+function oneByName(receivers, name) {
+  const matches = (receivers || []).filter((receiver) => receiver.name === name);
+  if (matches.length > 1) {
+    throw new Error(`Receiver group ${name} is ambiguous`);
   }
-  return { target: target[0] || null, legacy: legacy[0] || null };
+  return matches[0] || null;
 }
 
 function flattenRoutes(route) {
@@ -435,213 +460,454 @@ function flattenRoutes(route) {
   return [route, ...(route.routes || []).flatMap(flattenRoutes)];
 }
 
-function isCanonicalLegacyRoute(route, overlay) {
+function isCanonicalGeneratedRoute(route, receiverName) {
   const matchers = route?.object_matchers || [];
-  return route?.receiver === overlay.slackContactPoint.legacyName &&
+  return route?.receiver === receiverName &&
+    isDeepStrictEqual(route.group_by, DEFAULT_GROUP_BY) &&
     matchers.length === 1 &&
-    isDeepStrictEqual(matchers[0], ["__grafana_receiver__", "=", overlay.slackContactPoint.legacyName]) &&
+    isDeepStrictEqual(matchers[0], ["__grafana_receiver__", "=", receiverName]) &&
     (route.routes == null || route.routes.length === 0) &&
-    route.continue !== true;
+    route.continue == null;
 }
 
-function assertLegacyState(am, legacyContact, overlay) {
-  const receivers = (am.receivers || []).filter(
-    (receiver) => receiver.name === overlay.slackContactPoint.legacyName,
-  );
-  const routes = flattenRoutes(am.route).filter(
-    (route) => route.receiver === overlay.slackContactPoint.legacyName,
-  );
-  if (!legacyContact) {
-    if (receivers.length !== 0 || routes.length !== 0) {
-      throw new Error("Standalone Slack receiver/route exists without its provisioning contact point");
-    }
-    return;
+function assertAuthoredRoot(route, overlay) {
+  if (!route || route.receiver !== overlay.notificationPolicy.receiver ||
+      !isDeepStrictEqual(route.group_by, DEFAULT_GROUP_BY)) {
+    throw new Error("Authored root notification policy is missing or drifted");
   }
-  if (legacyContact.uid !== overlay.slackContactPoint.legacyUid || receivers.length !== 1 || routes.length !== 1 ||
-      !isCanonicalLegacyRoute(routes[0], overlay)) {
-    throw new Error("Standalone Slack provisioning contact must match the pinned legacy UID exactly");
-  }
-  const configs = receivers[0].grafana_managed_receiver_configs || [];
-  if (configs.length !== 1 || configs[0].type !== "slack" ||
-      configs[0].uid !== overlay.slackContactPoint.legacyUid) {
-    throw new Error("Standalone Slack receiver config must match the pinned legacy UID exactly");
+  const authored = structuredClone(route);
+  delete authored.routes;
+  if (!isDeepStrictEqual(authored, {
+    receiver: overlay.notificationPolicy.receiver,
+    group_by: [...DEFAULT_GROUP_BY],
+  })) {
+    throw new Error("Authored root notification policy contains unexpected fields");
   }
 }
 
-function stripLegacyRoute(route, overlay) {
-  if (!route) return route;
+function routeWithoutGeneratedReceiver(route, receiverName) {
   const clone = structuredClone(route);
-  if (Array.isArray(clone.routes)) {
-    clone.routes = clone.routes
-      .filter((child) => child.receiver !== overlay.slackContactPoint.legacyName)
-      .map((child) => stripLegacyRoute(child, overlay));
+  let removed = 0;
+  function visit(node) {
+    if (!Array.isArray(node.routes)) return;
+    const next = [];
+    for (const child of node.routes) {
+      if (child.receiver === receiverName) {
+        if (!isCanonicalGeneratedRoute(child, receiverName)) {
+          throw new Error(`Generated route for ${receiverName} is drifted`);
+        }
+        removed += 1;
+      } else {
+        visit(child);
+        next.push(child);
+      }
+    }
+    node.routes = next;
+  }
+  visit(clone);
+  if (removed !== 1) {
+    throw new Error(`Expected exactly one generated route for ${receiverName}, found ${removed}`);
   }
   return clone;
 }
 
-function captureProviderCore(config, contacts, overlay) {
-  const am = config?.alertmanager_config;
-  if (am?.route?.receiver !== overlay.notificationPolicy.receiver) {
-    throw new Error("Root route receiver changed; refusing to alter the default SNS route");
+function assertGeneratedRoutePresence(route, receiverName, expected) {
+  const matches = flattenRoutes(route).filter((candidate) => candidate.receiver === receiverName);
+  if (matches.length !== expected || matches.some((candidate) => !isCanonicalGeneratedRoute(candidate, receiverName))) {
+    throw new Error(`Generated route state for ${receiverName} is missing, duplicate, or drifted`);
   }
-  assertLegacyState(am, contacts.legacy, overlay);
-  const route = stripLegacyRoute(am.route, overlay);
-  if (!isDeepStrictEqual(route, overlay.notificationPolicy)) {
-    throw new Error("Root/default policy or a pre-existing route is missing or drifted");
-  }
-  const defaults = (am.receivers || []).filter((entry) => entry.name === overlay.contactPoint.name);
-  if (defaults.length !== 1) {
-    throw new Error("Default SNS receiver is missing or ambiguous");
-  }
-  const configs = defaults[0].grafana_managed_receiver_configs || [];
-  const snsConfigs = configs.filter((entry) => entry.type === "sns");
-  const slackConfigs = configs.filter((entry) => entry.type === "slack");
-  if (snsConfigs.length !== 1 || snsConfigs[0].uid !== overlay.contactPoint.uid ||
-      snsConfigs[0].name !== overlay.contactPoint.integrationName ||
-      snsConfigs[0].disableResolveMessage !== overlay.contactPoint.disableResolveMessage ||
-      !isDeepStrictEqual(snsConfigs[0].settings, overlay.contactPoint.settings)) {
+}
+
+function assertSnsConfig(config, overlay) {
+  const expected = {
+    type: overlay.contactPoint.type,
+    uid: overlay.contactPoint.uid,
+    name: overlay.contactPoint.integrationName,
+    disableResolveMessage: overlay.contactPoint.disableResolveMessage,
+    secureFields: {},
+    settings: overlay.contactPoint.settings,
+  };
+  if (!isDeepStrictEqual(config, expected)) {
     throw new Error("Default SNS receiver configuration is missing or drifted");
   }
-  if (slackConfigs.length > 1 || configs.length !== snsConfigs.length + slackConfigs.length) {
-    throw new Error("Default SNS receiver has duplicate Slack or unexpected integration config");
+}
+
+function assertSlackConfig(config, uid, name) {
+  const expected = {
+    uid,
+    name,
+    type: "slack",
+    disableResolveMessage: false,
+    secureFields: { url: true },
+    settings: { title: SLACK_TITLE, text: SLACK_TEXT },
+  };
+  if (!isDeepStrictEqual(config, expected)) {
+    throw new Error(`Slack receiver config ${uid} is missing or drifted`);
   }
-  for (const receiver of am.receivers || []) {
-    if (receiver.name === overlay.contactPoint.name || receiver.name === overlay.slackContactPoint.legacyName) continue;
-    if ((receiver.grafana_managed_receiver_configs || []).some((entry) => entry.type === "slack")) {
-      throw new Error("Unexpected Slack integration exists outside the default SNS receiver");
+}
+
+function assertProvisioningContact(contact, uid, name) {
+  if (!contact || contact.uid !== uid || contact.name !== name || contact.type !== "slack" ||
+      contact.disableResolveMessage !== false) {
+    throw new Error(`Slack provisioning contact ${uid} is missing or drifted`);
+  }
+}
+
+function classifyContacts(points, overlay) {
+  const contacts = points || [];
+  const sns = contacts.filter((point) => point.uid === overlay.contactPoint.uid);
+  if (sns.length !== 1 || sns[0].type !== "sns" || sns[0].name !== overlay.contactPoint.integrationName) {
+    throw new Error("Default SNS provisioning contact is missing or ambiguous");
+  }
+  const slack = contacts.filter((point) => point.type === "slack");
+  const allowed = new Set([overlay.slackContactPoint.uid, overlay.slackContactPoint.legacyUid]);
+  if (slack.some((point) => !allowed.has(point.uid))) {
+    throw new Error("Unexpected Slack provisioning contact exists");
+  }
+  const target = slack.filter((point) => point.uid === overlay.slackContactPoint.uid);
+  const legacy = slack.filter((point) => point.uid === overlay.slackContactPoint.legacyUid);
+  if (target.length !== 1 || legacy.length > 1 || slack.length !== target.length + legacy.length) {
+    throw new Error("Slack provisioning contact state is missing, duplicate, or ambiguous");
+  }
+  return { sns: sns[0], target: target[0], legacy: legacy[0] || null };
+}
+
+function assertRulesUnrouted(ruleReadbacks) {
+  if (ruleReadbacks.length !== SLACK_RULE_UIDS.length) {
+    throw new Error("Expected six Grafana rule readbacks");
+  }
+  for (let index = 0; index < SLACK_RULE_UIDS.length; index += 1) {
+    const uid = SLACK_RULE_UIDS[index];
+    const readback = ruleReadbacks[index];
+    if (readback.status === 404 || !readback.body) {
+      throw new Error(`Grafana rule ${uid} is missing`);
+    }
+    if (Object.hasOwn(readback.body, "notification_settings")) {
+      throw new Error(`Grafana rule ${uid} has notification_settings; default routing is no longer authoritative`);
     }
   }
-  const coreReceivers = (am.receivers || [])
-    .filter((receiver) => receiver.name !== overlay.slackContactPoint.legacyName)
-    .map((receiver) => receiver.name === overlay.contactPoint.name
-      ? { ...structuredClone(receiver), grafana_managed_receiver_configs: structuredClone(snsConfigs) }
-      : structuredClone(receiver));
+}
+
+async function readSlackState(client) {
+  const [contacts, config, ...rules] = await Promise.all([
+    client.listContactPoints(),
+    client.getAlertmanagerConfig(),
+    ...SLACK_RULE_UIDS.map((uid) => client.getAlertRule(uid)),
+  ]);
+  if (!config.body?.alertmanager_config) {
+    throw new Error("Grafana alertmanager configuration is missing");
+  }
   return {
-    route,
-    receivers: coreReceivers,
-    defaultReceiver: defaults[0],
-    slackConfig: slackConfigs[0] || null,
+    contacts: contacts.body || [],
+    am: config.body.alertmanager_config,
+    rules,
   };
 }
 
-function assertProviderCorePreserved(config, contacts, baseline, overlay) {
-  const current = captureProviderCore(config, contacts, overlay);
-  if (!isDeepStrictEqual(current.route, baseline.route)) {
-    throw new Error("Root/default policy or a pre-existing route changed during Slack reconciliation");
-  }
-  if (!isDeepStrictEqual(current.receivers, baseline.receivers)) {
-    throw new Error("SNS integration or an unowned receiver changed during Slack reconciliation");
-  }
-  return current;
+function receiverShell(receiver) {
+  const clone = structuredClone(receiver);
+  delete clone.grafana_managed_receiver_configs;
+  return clone;
 }
 
-function assertCombinedContact(core, contact, overlay) {
-  const config = core.slackConfig;
-  if (!contact?.uid || contact.name !== overlay.slackContactPoint.name || contact.type !== "slack" ||
-      !config || config.uid !== contact.uid || config.name !== overlay.slackContactPoint.name ||
-      config.disableResolveMessage !== false || config.secureFields?.url !== true ||
-      config.settings?.title !== "{{ template \"slack.default.title\" . }}" ||
-      config.settings?.text !== "{{ template \"slack.default.text\" . }}") {
-    throw new Error("Combined default SNS + Slack contact point is missing or drifted");
+function assertPhase(state, overlay, phase) {
+  assertRulesUnrouted(state.rules);
+  assertAuthoredRoot(state.am.route, overlay);
+  const contacts = classifyContacts(state.contacts, overlay);
+  const expectedTargetName = phase === "original"
+    ? overlay.slackContactPoint.partialName
+    : overlay.slackContactPoint.name;
+  assertProvisioningContact(contacts.target, overlay.slackContactPoint.uid, expectedTargetName);
+  if (phase === "final") {
+    if (contacts.legacy) throw new Error("Legacy Slack provisioning contact still exists");
+  } else {
+    assertProvisioningContact(
+      contacts.legacy,
+      overlay.slackContactPoint.legacyUid,
+      overlay.slackContactPoint.legacyName,
+    );
+  }
+
+  const defaultReceiver = oneByName(state.am.receivers, overlay.contactPoint.name);
+  if (!defaultReceiver) throw new Error("Default SNS receiver is missing");
+  const defaultConfigs = defaultReceiver.grafana_managed_receiver_configs || [];
+  const snsConfigs = defaultConfigs.filter((entry) => entry.type === "sns");
+  const slackConfigs = defaultConfigs.filter((entry) => entry.type === "slack");
+  if (snsConfigs.length !== 1) throw new Error("Default SNS receiver must contain exactly one SNS config");
+  assertSnsConfig(snsConfigs[0], overlay);
+  if (phase === "original") {
+    if (defaultConfigs.length !== 1 || slackConfigs.length !== 0) {
+      throw new Error("Default SNS receiver must not contain Slack before reconciliation");
+    }
+  } else {
+    if (defaultConfigs.length !== 2 || slackConfigs.length !== 1) {
+      throw new Error("Default receiver must contain exactly the SNS and reconciled Slack configs");
+    }
+    assertSlackConfig(slackConfigs[0], overlay.slackContactPoint.uid, overlay.slackContactPoint.name);
+  }
+
+  const partialReceiver = oneByName(state.am.receivers, overlay.slackContactPoint.partialName);
+  const partialConfigs = partialReceiver?.grafana_managed_receiver_configs || [];
+  const legacyReceiver = oneByName(state.am.receivers, overlay.slackContactPoint.legacyName);
+  const legacyConfigs = legacyReceiver?.grafana_managed_receiver_configs || [];
+  if (phase === "original") {
+    if (partialConfigs.length !== 1) throw new Error("Partial standalone Slack receiver is missing or ambiguous");
+    assertSlackConfig(partialConfigs[0], overlay.slackContactPoint.uid, overlay.slackContactPoint.partialName);
+  } else if (partialConfigs.length !== 0) {
+    throw new Error("Partial standalone Slack receiver is not empty after reconciliation");
+  }
+  if (phase === "final") {
+    if (legacyConfigs.length !== 0) throw new Error("Legacy standalone Slack receiver still exists");
+  } else {
+    if (legacyConfigs.length !== 1) throw new Error("Legacy standalone Slack receiver is missing or ambiguous");
+    assertSlackConfig(legacyConfigs[0], overlay.slackContactPoint.legacyUid, overlay.slackContactPoint.legacyName);
+  }
+
+  const expectedSlackCount = phase === "original" ? 2 : phase === "combined" ? 2 : 1;
+  const allSlack = (state.am.receivers || []).flatMap(
+    (receiver) => (receiver.grafana_managed_receiver_configs || []).filter((entry) => entry.type === "slack"),
+  );
+  if (allSlack.length !== expectedSlackCount) {
+    throw new Error("Unexpected, duplicate, or missing Slack receiver config exists");
+  }
+  assertGeneratedRoutePresence(state.am.route, overlay.slackContactPoint.partialName, phase === "original" ? 1 : 0);
+  assertGeneratedRoutePresence(state.am.route, overlay.slackContactPoint.legacyName, phase === "final" ? 0 : 1);
+  return {
+    contacts,
+    defaultReceiver,
+    snsConfig: structuredClone(snsConfigs[0]),
+    route: structuredClone(state.am.route),
+  };
+}
+
+function receiverMapWithout(state, names) {
+  return new Map((state.am.receivers || [])
+    .filter((receiver) => !names.has(receiver.name))
+    .map((receiver) => [receiver.name, structuredClone(receiver)]));
+}
+
+function assertTransitionPreserved(before, after, overlay, removedName) {
+  const expectedRoute = routeWithoutGeneratedReceiver(before.am.route, removedName);
+  if (!isDeepStrictEqual(after.am.route, expectedRoute)) {
+    throw new Error("Generated route normalization changed more than the migrated standalone child");
+  }
+  const excluded = new Set([overlay.contactPoint.name, removedName]);
+  const beforeUnowned = receiverMapWithout(before, excluded);
+  const afterUnowned = receiverMapWithout(after, excluded);
+  if (!isDeepStrictEqual(afterUnowned, beforeUnowned)) {
+    throw new Error("An unowned receiver changed during Slack reconciliation");
+  }
+  const beforeDefault = oneByName(before.am.receivers, overlay.contactPoint.name);
+  const afterDefault = oneByName(after.am.receivers, overlay.contactPoint.name);
+  if (!isDeepStrictEqual(receiverShell(afterDefault), receiverShell(beforeDefault))) {
+    throw new Error("Default receiver metadata changed during Slack reconciliation");
+  }
+  const beforeSns = (beforeDefault.grafana_managed_receiver_configs || []).find((entry) => entry.type === "sns");
+  const afterSns = (afterDefault.grafana_managed_receiver_configs || []).find((entry) => entry.type === "sns");
+  if (!isDeepStrictEqual(afterSns, beforeSns)) {
+    throw new Error("Exact SNS integration changed during Slack reconciliation");
   }
 }
 
-// Grafana generates a reserved matcher subtree whenever a receiver is added.
-// Keep the policy tree byte-for-semantics unchanged by grouping Slack as a
-// second integration inside the existing default SNS receiver. A legacy
-// standalone receiver is deleted only after the combined contact is verified.
+function phaseForState(state, overlay) {
+  const contacts = classifyContacts(state.contacts, overlay);
+  if (contacts.target.name === overlay.slackContactPoint.partialName && contacts.legacy) return "original";
+  if (contacts.target.name === overlay.slackContactPoint.name && contacts.legacy) return "combined";
+  if (contacts.target.name === overlay.slackContactPoint.name && !contacts.legacy) return "final";
+  throw new Error("Slack reconciliation state is not an exact original, combined, or final state");
+}
+
+function testPayload(overlay, webhook) {
+  return {
+    receivers: [{
+      name: overlay.slackContactPoint.testReceiverName,
+      grafana_managed_receiver_configs: [slackPayload(overlay, webhook)],
+    }],
+  };
+}
+
+async function requireSlackTestOk(client, overlay, webhook) {
+  const result = await client.testReceiver(testPayload(overlay, webhook));
+  if (result.status !== 200) {
+    throw new Error(`Grafana Slack receiver test returned HTTP ${result.status}, expected 200`);
+  }
+  const receiver = result.body?.receivers?.[0];
+  const configs = receiver?.configs || receiver?.grafana_managed_receiver_configs || [];
+  if (configs.length !== 1 || configs[0].uid !== overlay.slackContactPoint.uid || configs[0].status !== "ok") {
+    throw new Error("Grafana Slack test delivery did not report status ok for the reconciled UID");
+  }
+  return true;
+}
+
+async function rollbackToOriginal(client, overlay, webhook, cause, baseline) {
+  try {
+    const response = await client.updateContactPoint(
+      overlay.slackContactPoint.uid,
+      slackPayload(overlay, webhook, overlay.slackContactPoint.partialName),
+    );
+    if (response.status !== 202) {
+      throw new Error(`Grafana rollback PUT returned HTTP ${response.status}, expected 202`);
+    }
+  } catch {
+    // A lost PUT response is resolved only by the exact readback below.
+  }
+  const restored = await readSlackState(client);
+  try {
+    assertPhase(restored, overlay, "original");
+    if (baseline?.phase === "original") {
+      if (!isDeepStrictEqual(restored.am.route, baseline.state.am.route)) {
+        throw new Error("Rollback did not restore the exact original generated route tree");
+      }
+      const excluded = new Set([
+        overlay.contactPoint.name,
+        overlay.slackContactPoint.partialName,
+      ]);
+      if (!isDeepStrictEqual(
+        receiverMapWithout(restored, excluded),
+        receiverMapWithout(baseline.state, excluded),
+      )) {
+        throw new Error("Rollback changed an unowned receiver");
+      }
+    }
+  } catch (rollbackError) {
+    throw new Error(
+      `Slack reconciliation failed and rollback did not restore the exact original state: ${rollbackError.message}`,
+      { cause },
+    );
+  }
+  throw new Error(`Slack reconciliation failed and was rolled back: ${cause.message}`, { cause });
+}
+
+// AMG's provisioning `name` selects the outer receiver group. Reconcile the
+// exact existing partial UID by PUT; never create a new contact point or write
+// the notification policy. Deletion is authorized only after exact structural
+// readback and an isolated Slack-only test succeeds.
 export async function ensureCombinedSlackContact(client, overlay, { env = process.env } = {}) {
   const webhook = slackWebhook(env);
-  const beforeContacts = findSlackContacts((await client.listContactPoints()).body, overlay);
-  const before = await client.getAlertmanagerConfig();
-  const baseline = captureProviderCore(before.body, beforeContacts, overlay);
-  if (!beforeContacts.target && !beforeContacts.legacy) {
-    throw new Error("Pinned standalone Slack migration target is missing; refusing combined-contact creation");
-  }
-  if (beforeContacts.target && !beforeContacts.legacy) {
-    assertCombinedContact(baseline, beforeContacts.target, overlay);
-    return { contactPoint: "present", legacyMigration: "not-needed", uid: beforeContacts.target.uid };
-  }
-  let contact = beforeContacts.target;
-  let contactPoint;
-  if (!contact) {
-    await client.createContactPoint(slackPayload(overlay, webhook));
-    contactPoint = "created";
-  } else {
-    if (!contact.uid) {
-      throw new Error("Slack contact point is missing its Grafana uid");
-    }
-    await client.updateContactPoint(contact.uid, slackPayload(overlay, webhook, contact.uid));
-    contactPoint = "updated";
-  }
-  const stagedContacts = findSlackContacts((await client.listContactPoints()).body, overlay);
-  contact = stagedContacts.target;
-  if (!contact?.uid) {
-    throw new Error("Post-write verification failed: Slack contact point is missing");
-  }
-  const staged = await client.getAlertmanagerConfig();
-  const stagedCore = assertProviderCorePreserved(staged.body, stagedContacts, baseline, overlay);
-  assertCombinedContact(stagedCore, contact, overlay);
+  const before = await readSlackState(client);
+  const phase = phaseForState(before, overlay);
+  assertPhase(before, overlay, phase);
+  const baseline = { phase, state: before };
 
-  let legacyMigration = "not-needed";
-  if (stagedContacts.legacy) {
-    await client.deleteContactPoint(stagedContacts.legacy.uid);
-    legacyMigration = "removed";
+  if (phase === "final") {
+    return {
+      contactPoint: "present",
+      testDelivery: "already-proven",
+      legacyMigration: "not-needed",
+      uid: overlay.slackContactPoint.uid,
+    };
   }
-  const finalContacts = findSlackContacts((await client.listContactPoints()).body, overlay);
-  if (finalContacts.legacy || finalContacts.target?.uid !== contact.uid) {
-    throw new Error("Standalone Slack migration did not converge to exactly one combined integration");
+
+  let combined = before;
+  let contactPoint = "present";
+  if (phase === "original") {
+    let putError = null;
+    try {
+      const response = await client.updateContactPoint(
+        overlay.slackContactPoint.uid,
+        slackPayload(overlay, webhook),
+      );
+      if (response.status !== 202) {
+        throw new Error(`Grafana contact-point PUT returned HTTP ${response.status}, expected 202`);
+      }
+    } catch (error) {
+      putError = error;
+    }
+    combined = await readSlackState(client);
+    try {
+      assertPhase(combined, overlay, "combined");
+      assertTransitionPreserved(before, combined, overlay, overlay.slackContactPoint.partialName);
+    } catch (verificationError) {
+      try {
+        assertPhase(combined, overlay, "original");
+        if (putError) throw putError;
+      } catch (originalError) {
+        if (originalError === putError) throw putError;
+      }
+      return rollbackToOriginal(client, overlay, webhook, verificationError, baseline);
+    }
+    contactPoint = putError ? "updated-after-response-loss" : "updated";
   }
-  const finalConfig = await client.getAlertmanagerConfig();
-  const finalCore = assertProviderCorePreserved(finalConfig.body, finalContacts, baseline, overlay);
-  assertCombinedContact(finalCore, finalContacts.target, overlay);
-  return { contactPoint, legacyMigration, uid: contact.uid };
+
+  try {
+    await requireSlackTestOk(client, overlay, webhook);
+  } catch (testError) {
+    return rollbackToOriginal(client, overlay, webhook, testError, baseline);
+  }
+
+  let deleteError = null;
+  try {
+    const response = await client.deleteContactPoint(overlay.slackContactPoint.legacyUid);
+    if (response.status !== 202) {
+      throw new Error(`Grafana legacy DELETE returned HTTP ${response.status}, expected 202`);
+    }
+  } catch (error) {
+    deleteError = error;
+  }
+  const final = await readSlackState(client);
+  try {
+    assertPhase(final, overlay, "final");
+    assertTransitionPreserved(combined, final, overlay, overlay.slackContactPoint.legacyName);
+  } catch (verificationError) {
+    try {
+      assertPhase(final, overlay, "combined");
+      if (deleteError) throw deleteError;
+    } catch (combinedError) {
+      if (combinedError === deleteError) throw deleteError;
+    }
+    throw new Error(`Final Slack reconciliation readback failed: ${verificationError.message}`, {
+      cause: verificationError,
+    });
+  }
+  return {
+    contactPoint,
+    testDelivery: "ok",
+    legacyMigration: deleteError ? "removed-after-response-loss" : "removed",
+    uid: overlay.slackContactPoint.uid,
+  };
 }
 
-export async function runSlackApply({ client, repoRoot = REPO_ROOT, env = process.env } = {}) {
+function prepareSlackCommand(repoRoot, env, credentialModeCheck) {
   const overlay = loadOverlay(repoRoot);
   validateOverlayDocument(overlay);
-  slackWebhook(env);
+  const webhook = slackWebhook(env);
+  credentialModeCheck();
+  return { overlay, webhook };
+}
+
+export async function runSlackApply({
+  client,
+  repoRoot = REPO_ROOT,
+  env = process.env,
+  credentialModeCheck = assertSlackCredentialModes,
+} = {}) {
+  const { overlay } = prepareSlackCommand(repoRoot, env, credentialModeCheck);
   return ensureCombinedSlackContact(client, overlay, { env });
 }
 
-export async function runSlackVerify({ client, repoRoot = REPO_ROOT, env = process.env } = {}) {
-  const overlay = loadOverlay(repoRoot);
-  validateOverlayDocument(overlay);
-  slackWebhook(env);
-  const contacts = findSlackContacts((await client.listContactPoints()).body, overlay);
-  if (!contacts.target?.uid || contacts.legacy) {
-    throw new Error("Combined Slack integration is missing or standalone migration is incomplete");
-  }
-  const config = await client.getAlertmanagerConfig();
-  const core = captureProviderCore(config.body, contacts, overlay);
-  assertCombinedContact(core, contacts.target, overlay);
-  return { status: "verified" };
+export async function runSlackVerify({
+  client,
+  repoRoot = REPO_ROOT,
+  env = process.env,
+  credentialModeCheck = assertSlackCredentialModes,
+} = {}) {
+  const { overlay } = prepareSlackCommand(repoRoot, env, credentialModeCheck);
+  const state = await readSlackState(client);
+  assertPhase(state, overlay, "final");
+  return { status: "verified", uid: overlay.slackContactPoint.uid };
 }
 
-export async function runSlackTest({ client, repoRoot = REPO_ROOT, env = process.env } = {}) {
-  const overlay = loadOverlay(repoRoot);
-  validateOverlayDocument(overlay);
-  const webhook = slackWebhook(env);
-  const contacts = findSlackContacts((await client.listContactPoints()).body, overlay);
-  if (!contacts.target?.uid || contacts.legacy) {
-    throw new Error("Combined Slack integration is missing; run slack-apply first");
-  }
-  const config = await client.getAlertmanagerConfig();
-  const core = captureProviderCore(config.body, contacts, overlay);
-  assertCombinedContact(core, contacts.target, overlay);
-  const result = await client.testReceiver({
-    receivers: [{
-      name: overlay.slackContactPoint.testReceiverName,
-      grafana_managed_receiver_configs: [slackPayload(overlay, webhook, contacts.target.uid)],
-    }],
-  });
-  const configs = result.body?.receivers?.[0]?.grafana_managed_receiver_configs ||
-    result.body?.receivers?.[0]?.configs || [];
-  if (!configs.some((entry) => entry.uid === contacts.target.uid && entry.status === "ok")) {
-    throw new Error("Grafana Slack test delivery did not report status ok");
-  }
-  return { delivery: "ok" };
+export async function runSlackTest({
+  client,
+  repoRoot = REPO_ROOT,
+  env = process.env,
+  credentialModeCheck = assertSlackCredentialModes,
+} = {}) {
+  const { overlay, webhook } = prepareSlackCommand(repoRoot, env, credentialModeCheck);
+  const state = await readSlackState(client);
+  assertPhase(state, overlay, "final");
+  await requireSlackTestOk(client, overlay, webhook);
+  return { delivery: "ok", uid: overlay.slackContactPoint.uid };
 }
 
 export async function ensureDashboard(client, overlay, dashboard) {
@@ -729,7 +995,7 @@ async function main() {
     case "slack-apply": {
       assertLiveAllowed();
       const result = await runSlackApply({ client: buildLiveClient() });
-      safeLog("Slack apply:", JSON.stringify({ contactPoint: result.contactPoint, route: result.route }));
+      safeLog("Slack apply:", JSON.stringify(result));
       return;
     }
     case "slack-verify": {
