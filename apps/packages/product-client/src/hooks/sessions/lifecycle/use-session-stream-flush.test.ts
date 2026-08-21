@@ -9,6 +9,7 @@ import {
 } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import { clearPendingConfigRollbackCheck } from "#product/hooks/sessions/lifecycle/session-runtime-pending-config";
 import {
@@ -24,6 +25,7 @@ const originalPatchTranscriptEntry = useSessionTranscriptStore.getState().patchE
 describe("session stream flush controller", () => {
   afterEach(() => {
     clearPendingConfigRollbackCheck("session-1");
+    useSessionIngestStore.getState().clear();
     useSessionTranscriptStore.setState({ patchEntry: originalPatchTranscriptEntry });
     vi.useRealTimers();
     vi.unstubAllGlobals();
@@ -36,6 +38,7 @@ describe("session stream flush controller", () => {
       activeSessionId: "session-1",
     });
     useSessionDirectoryStore.getState().clearEntries();
+    useSessionIngestStore.getState().clear();
     useSessionTranscriptStore.getState().clearEntries();
     putSessionRecord({
       ...createEmptySessionRecord("session-1", "codex", {
@@ -74,6 +77,25 @@ describe("session stream flush controller", () => {
     expect(reconcileWorkspacePinIntents).toHaveBeenCalledTimes(1);
     expect(reconcileWorkspacePinIntents.mock.calls[0]?.[0].map((event) => event.seq))
       .toEqual([2, 3, 4, 5]);
+  });
+
+  it("does not clear a recorded gap on a duplicate-only flush", () => {
+    useSessionIngestStore.getState().markStale("session-1", {
+      lastAppliedSeq: 1,
+      lastObservedSeq: 3,
+      gapAfterSeq: 1,
+    });
+    const scheduled = createManualScheduler();
+    const controller = createTestController({ scheduler: scheduled.scheduler });
+
+    controller.enqueue(turnStarted(1));
+    scheduled.flush();
+
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-1"])
+      .toMatchObject({
+        freshness: "stale",
+        gapAfterSeq: 1,
+      });
   });
 
   it("clears optimistic prompt when the stream echoes the user message", () => {

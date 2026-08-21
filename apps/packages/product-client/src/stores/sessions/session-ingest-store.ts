@@ -25,6 +25,7 @@ interface SessionIngestStoreState {
     >>,
   ) => void;
   markCold: (clientSessionId: string) => void;
+  applyHistoryHydration: (clientSessionId: string, lastAppliedSeq: number) => void;
   applyStreamProgress: (
     clientSessionId: string,
     progress: {
@@ -130,6 +131,8 @@ export const useSessionIngestStore = create<SessionIngestStoreState>((set) => ({
         [clientSessionId]: {
           ...existing,
           ...patch,
+          lastAppliedSeq: Math.max(existing.lastAppliedSeq, patch?.lastAppliedSeq ?? 0),
+          lastObservedSeq: Math.max(existing.lastObservedSeq, patch?.lastObservedSeq ?? 0),
           freshness: "stale",
           lastErrorAt: patch?.lastErrorAt ?? existing.lastErrorAt ?? new Date().toISOString(),
         },
@@ -145,6 +148,30 @@ export const useSessionIngestStore = create<SessionIngestStoreState>((set) => ({
         [clientSessionId]: {
           ...existing,
           freshness: "cold",
+        },
+      },
+    };
+  }),
+
+  // History replay is authoritative and contiguous, so a refill that advances
+  // the applied watermark past a recorded gap has repaired that hole; a refill
+  // that does not reach past the gap must leave it recorded.
+  applyHistoryHydration: (clientSessionId, lastAppliedSeq) => set((state) => {
+    const existing = state.freshnessByClientSessionId[clientSessionId] ?? COLD_FRESHNESS;
+    const gapAfterSeq = existing.gapAfterSeq !== null && lastAppliedSeq > existing.gapAfterSeq
+      ? null
+      : existing.gapAfterSeq;
+    const freshness: SessionIngestFreshness = gapAfterSeq === null ? "current" : "stale";
+    return {
+      freshnessByClientSessionId: {
+        ...state.freshnessByClientSessionId,
+        [clientSessionId]: {
+          ...existing,
+          freshness,
+          lastAppliedSeq: Math.max(existing.lastAppliedSeq, lastAppliedSeq),
+          lastObservedSeq: Math.max(existing.lastObservedSeq, lastAppliedSeq),
+          gapAfterSeq,
+          lastErrorAt: freshness === "current" ? null : existing.lastErrorAt,
         },
       },
     };

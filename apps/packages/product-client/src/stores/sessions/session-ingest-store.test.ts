@@ -87,6 +87,112 @@ describe("session ingest store invariants", () => {
     expect(isHotSessionTargetCurrent("session-a", "runtime-a")).toBe(false);
   });
 
+  it("applyHistoryHydration clears a repaired gap and marks the session current", () => {
+    const store = useSessionIngestStore.getState();
+    store.markStale("session-a", {
+      lastAppliedSeq: 1,
+      lastObservedSeq: 3,
+      gapAfterSeq: 1,
+      lastErrorAt: "2026-04-04T00:00:10.000Z",
+    });
+
+    store.applyHistoryHydration("session-a", 5);
+
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-a"])
+      .toMatchObject({
+        freshness: "current",
+        lastAppliedSeq: 5,
+        lastObservedSeq: 5,
+        gapAfterSeq: null,
+        lastErrorAt: null,
+      });
+  });
+
+  it("applyHistoryHydration preserves the gap when the refill does not reach past it", () => {
+    const store = useSessionIngestStore.getState();
+    store.markStale("session-a", {
+      lastAppliedSeq: 1,
+      lastObservedSeq: 3,
+      gapAfterSeq: 4,
+    });
+
+    store.applyHistoryHydration("session-a", 3);
+
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-a"])
+      .toMatchObject({
+        freshness: "stale",
+        lastAppliedSeq: 3,
+        lastObservedSeq: 3,
+        gapAfterSeq: 4,
+      });
+
+    store.applyHistoryHydration("session-a", 4);
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-a"])
+      .toMatchObject({
+        freshness: "stale",
+        gapAfterSeq: 4,
+      });
+
+    store.applyHistoryHydration("session-a", 5);
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-a"])
+      .toMatchObject({
+        freshness: "current",
+        gapAfterSeq: null,
+      });
+  });
+
+  it("applyHistoryHydration never regresses the applied or observed watermarks", () => {
+    const store = useSessionIngestStore.getState();
+    store.applyStreamProgress("session-a", {
+      lastAppliedSeq: 10,
+      lastObservedSeq: 12,
+      gapAfterSeq: null,
+    });
+
+    store.applyHistoryHydration("session-a", 5);
+
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-a"])
+      .toMatchObject({
+        freshness: "current",
+        lastAppliedSeq: 10,
+        lastObservedSeq: 12,
+      });
+  });
+
+  it("applyHistoryHydration marks an untracked session current with the given watermarks", () => {
+    useSessionIngestStore.getState().applyHistoryHydration("session-a", 5);
+
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-a"])
+      .toEqual({
+        freshness: "current",
+        lastAppliedSeq: 5,
+        lastObservedSeq: 5,
+        gapAfterSeq: null,
+        lastErrorAt: null,
+      });
+  });
+
+  it("markStale keeps the applied and observed watermarks monotonic", () => {
+    const store = useSessionIngestStore.getState();
+    store.applyStreamProgress("session-a", {
+      lastAppliedSeq: 10,
+      lastObservedSeq: 10,
+      gapAfterSeq: null,
+    });
+
+    store.markStale("session-a", {
+      lastAppliedSeq: 3,
+      lastObservedSeq: 3,
+    });
+
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-a"])
+      .toMatchObject({
+        freshness: "stale",
+        lastAppliedSeq: 10,
+        lastObservedSeq: 10,
+      });
+  });
+
   it("does not mark gapped progress current until the gap clears", () => {
     const store = useSessionIngestStore.getState();
     store.markStale("session-a", {
