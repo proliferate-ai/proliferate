@@ -176,13 +176,18 @@ change sits on:
 - **Structural, not length, bounds:** client payload scrubbing bounds depth,
   array positions, and object properties (`[circular]`, `[truncated]`) but
   does not truncate strings by length — what you put in a string field ships.
-- **Replay is off everywhere, in source:** Web/Mobile Sentry replay rates are
-  zero; Desktop renderer Sentry replay and Desktop/Web/Mobile PostHog session
-  recording are source-disabled and absent. No build value, environment value,
-  optional native package, or provider-side setting can start a recording, so
-  the recorded page-URL route-id gap is closed because nothing records.
-  Re-enablement anywhere requires the reviewed synthetic privacy proof in
-  [`frontend/telemetry.md`](frontend/telemetry.md); a new surface that can
+- **Replay is off for customers, and internal-only on Desktop:** Web/Mobile
+  Sentry replay rates are zero; Desktop renderer Sentry replay and Web/Mobile
+  PostHog session recording are source-disabled and absent. Desktop PostHog
+  recording never auto-starts and begins only for the closed internal audience
+  in `product-client/src/domain/telemetry/replay-audience.ts`, and only when
+  the PostHog project also enables replay server-side. The recorded page-URL
+  route-id gap is closed by
+  `product-client/src/domain/telemetry/route-id-redaction.ts`, which reduces
+  every URL and every rrweb `href`/`src` to a bounded route template from a
+  closed table and fails closed to `/unknown`. Widening to customers, or
+  re-enabling any other surface, requires the reviewed synthetic privacy proof
+  in [`frontend/telemetry.md`](frontend/telemetry.md); a new surface that can
   display prompts, files, paths, or credentials gets `[data-telemetry-block]` /
   `[data-telemetry-mask]` unless there is a reviewed reason not to.
 - **Child-agent stderr never reaches Sentry:** AnyHarness marks it with a

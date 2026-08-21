@@ -11,7 +11,8 @@ messaging.
 - [Anonymous telemetry](anonymous-telemetry.md) owns install-level version,
   activation, and usage records from Desktop and Server.
 - [PostHog](posthog.md) owns hosted-client event capture, identity, and the
-  source-disabled replay boundary.
+  replay boundary: source-disabled on Web and Mobile, internal-audience-only on
+  Desktop.
 - [Metabase](metabase.md) owns the checked-in analytics tables and views that a
   read-only BI client may query.
 - [Observability](../observability/README.md) owns logs, exceptions, Sentry,
@@ -52,8 +53,8 @@ deduplication boundary.
 | Identity and data | Anonymous install UUIDs; authenticated user UUIDs for daily activity; low-cardinality route/screen, version, platform, telemetry mode, activation, usage, and aggregate provider facts. |
 | Destinations | The configured Proliferate Server/Postgres database, PostHog for enabled hosted clients, and an operator-selected read-only BI client such as Metabase. |
 | Enable, disable, or no-op | Vendor adapters require their client key and telemetry gates. Anonymous telemetry has build/runtime and Server disable gates. Provider ingestion skips a provider whose required configuration is absent. |
-| Privacy and replay | First-party payloads exclude prompts, transcripts, repo names, file paths, terminal text, raw URLs, errors, and secrets. Desktop, Web, and Mobile recording are source-disabled; no client surface records, and the re-enablement contract is owned by the PostHog contract. |
-| Known gaps | Desktop, Web, and Mobile PostHog recording are source-disabled, so no client can expose route ids through recorded page URLs. Anonymous credential fields are accepted by the schema but currently have no Desktop emission directive. Live provider dashboards and data freshness are not enforced by repository code. |
+| Privacy and replay | First-party payloads exclude prompts, transcripts, repo names, file paths, terminal text, raw URLs, errors, and secrets. Web and Mobile recording are source-disabled. Desktop recording is start-gated to the internal audience, masks all text and inputs, and reduces every URL to a bounded route template; the re-enablement and widening contract is owned by the PostHog contract. |
+| Known gaps | The recorded-page-URL route-id leak is closed in source and proven by unit tests over a synthetic rrweb payload, but the live recorder-output and provider-arrival qualification has not run, so Desktop recording is internal-audience-only and customer recording is off. Anonymous credential fields are accepted by the schema but currently have no Desktop emission directive. Live provider dashboards and data freshness are not enforced by repository code. |
 
 ## Operating Routes
 

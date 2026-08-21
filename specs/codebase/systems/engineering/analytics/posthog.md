@@ -1,8 +1,9 @@
 # PostHog
 
 PostHog is the hosted-product vendor path for client analytics. Session replay
-is source-disabled on every client surface. It is separate from first-party
-anonymous telemetry and is not initialized by the Server API.
+is source-disabled on Web and Mobile. On Desktop it is start-gated to the
+internal replay audience and never auto-starts. It is separate from
+first-party anonymous telemetry and is not initialized by the Server API.
 
 ## Applicability And Data Contract
 
@@ -12,12 +13,13 @@ anonymous telemetry and is not initialized by the Server API.
 | Source components | Desktop `apps/desktop/src/lib/integrations/telemetry/{client,config,posthog}.ts`; Web `apps/web/src/browser/telemetry/install-web-telemetry.ts`; Mobile `apps/mobile/src/lib/integrations/telemetry/{config,posthog}.ts`. |
 | Identity and data | Distinct id is the authenticated user UUID, and identify calls send that UUID only with no email, display name, or other person properties. Captured data is the fixed event surface below plus scrubbed low-cardinality properties and registered app/surface/environment/release context. |
 | Destination | The configured PostHog host, defaulting to `https://us.i.posthog.com`. |
-| Enable, disable, or no-op | A missing API key makes each adapter inert. Web/Mobile also honor their public telemetry-disable setting; Desktop additionally requires hosted-product routing. Desktop, Web, and Mobile recording are source-disabled and have no gate to set. |
-| Privacy and replay | Autocapture and automatic page views are off. Payload scrubbers remove sensitive values. Desktop, Web, and Mobile recording are source-disabled and absent. |
-| Known gap | No client PostHog recording gap remains: Desktop, Web, and Mobile cannot record, so none can expose route ids through recorded page URLs. |
+| Enable, disable, or no-op | A missing API key makes each adapter inert. Web/Mobile also honor their public telemetry-disable setting; Desktop additionally requires hosted-product routing. Web and Mobile recording are source-disabled and have no gate to set. Desktop recording additionally requires an internal-audience sign-in and PostHog project-side replay enablement; there is no build or environment value that starts it. |
+| Privacy and replay | Autocapture and automatic page views are off. Payload scrubbers remove sensitive values, and route-identifier redaction reduces every URL and rrweb `href`/`src` to a bounded route template. Web and Mobile recording are source-disabled and absent. Desktop recording masks all text and inputs and starts only for the internal audience. |
+| Known gap | The route-id leak is closed at the payload level by `apps/packages/product-client/src/domain/telemetry/route-id-redaction.ts`, proven by unit tests over a synthetic rrweb payload. The live qualification (real recorder output from the running app, plus controlled provider arrival) has not been executed, which is why Desktop recording is limited to the internal audience and customer recording stays off. |
 
-Re-enabling recording on any surface is a separate founder-approved source
-change that must first satisfy the synthetic privacy qualification in
+Widening recording to customers on any surface, and re-enabling Web or Mobile
+recording at all, is a separate founder-approved source change that must first
+satisfy the synthetic privacy qualification in
 [`specs/frontend/telemetry.md`](../../../../frontend/telemetry.md).
 
 ## Desktop
@@ -30,12 +32,27 @@ capture_pageview=false
 capture_pageleave=false
 person_profiles=identified_only
 disable_session_recording=true
+session_recording=<masking and route-redaction options>
 ```
 
-Desktop session recording is source-disabled, not false-by-default. The Desktop
-source carries no recording flag, recording options object, `loaded` callback,
-or `startSessionRecording` call, so no build value, environment value, or
-PostHog provider-side replay setting can start it.
+Desktop recording never auto-starts. `disable_session_recording` is a literal
+`true` at init, there is no `loaded` callback, and the Desktop source carries
+no recording flag readable from a build or environment value. Recording begins
+only when `client.ts` calls `startDesktopPostHogSessionReplay()` after
+`isInternalReplayAudience(user.email)` returns true for the signed-in account,
+and even then only if the PostHog project has replay enabled server-side
+(posthog-js `_isRecordingEnabled` requires both). The audience is a closed
+source-owned list in
+`apps/packages/product-client/src/domain/telemetry/replay-audience.ts`; the
+address is read locally and never transmitted.
+
+The recorder is pinned to `maskAllInputs`, `maskTextSelector="*"` (all text
+masked), `blockSelector="[data-telemetry-block]"`, no font collection, no
+cross-origin iframes, no network headers or bodies, and a
+`maskCapturedNetworkRequestFn` that drops every captured request. URLs are
+handled separately from masking: `maskAttributeFn` reduces URL-valued DOM
+attributes at the recorder boundary, and the `before_send` scrubber reduces
+event properties and the rrweb Meta event `href`.
 
 Only these Desktop product events reach PostHog:
 
