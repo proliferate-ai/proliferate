@@ -76,6 +76,12 @@ export interface DesktopLaunchModelRegistryModel {
   isDefault: boolean;
   sessionDefaultControls?: DesktopSessionDefaultControl[];
   /**
+   * Exact target-observed launch controls for this model. `null` means the
+   * target did not report a model scope, so consumers use the compatible
+   * harness-level statement. An empty array is authoritative.
+   */
+  launchControls?: DesktopAgentLaunchControl[] | null;
+  /**
    * The `mode` control vocabulary this model actually supports (per-model
    * `controls.mode.values` in the catalog). Differs from the agent-level `mode`
    * control: e.g. gateway/bedrock Claude models exclude `auto`. `null` when the

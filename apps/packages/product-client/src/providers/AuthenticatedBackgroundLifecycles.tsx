@@ -1,5 +1,4 @@
 import { useLocalAutomationExecutor } from "#product/hooks/automations/lifecycle/use-local-automation-executor"
-import { useSessionIntentDispatcher } from "#product/hooks/sessions/lifecycle/use-session-intent-dispatcher"
 import { useWorkspacePinIntentReconciliationLifecycle } from "#product/hooks/sessions/lifecycle/use-workspace-pin-intent-reconciliation"
 import { recordBootDiagnosticOnce } from "#product/lib/infra/measurement/measurement-port"
 
@@ -15,12 +14,13 @@ import { recordBootDiagnosticOnce } from "#product/lib/infra/measurement/measure
  * mounted here even though it has the same shape: AuthenticatedLaunchLifecycles
  * already owns it, alongside the cloud-workspace poll loop that finalizes
  * those launches (PRO-230) — mounting it twice would double-invoke the hook.
+ *
+ * The session intent dispatcher is NOT mounted here either: draining a queued
+ * prompt is local runtime work that an anonymous client must also be able to
+ * do. It lives in SessionIntentDispatcherLifecycle, mounted on queued work.
  */
 export function AuthenticatedBackgroundLifecycles() {
   useWorkspacePinIntentReconciliationLifecycle()
-  recordBootDiagnosticOnce("app_runtime.render.before.use_session_intent_dispatcher")
-  useSessionIntentDispatcher()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_session_intent_dispatcher")
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")

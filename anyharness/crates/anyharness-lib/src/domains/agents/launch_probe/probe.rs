@@ -33,8 +33,8 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::live_ports::{probe_agent, ProbeOptions, ProbeSnapshot};
+use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::readiness::service::resolve_agent_unrouted_by_kind;
 use crate::domains::agents::route_auth::{
     self, GatewayModelPlan, ProbeAuthMaterial, RouteAuthError,
@@ -56,6 +56,8 @@ pub enum ProbeError {
     Spawn { detail: String },
     #[error("probe failed: {detail}")]
     Failed { detail: String },
+    #[error("model-scoped launch-control observation was incomplete")]
+    ModelControlsIncomplete,
     /// The probe thread ended without sending an outcome — it panicked, or the
     /// runtime could not be built. Distinct from `Failed` because it means the
     /// engine learned nothing about the harness.
@@ -71,6 +73,7 @@ impl ProbeError {
             Self::Cancelled => "cancelled",
             Self::Spawn { .. } => Self::CODE_SPAWN,
             Self::Failed { .. } => "probe_failed",
+            Self::ModelControlsIncomplete => "model_controls_incomplete",
             Self::RunnerVanished => "runner_vanished",
         }
     }
@@ -86,6 +89,7 @@ impl ProbeError {
             Self::Materialize(error) => error.to_string(),
             Self::Spawn { detail } => format!("{}: {detail}", Self::CODE_SPAWN),
             Self::Failed { detail } => detail.clone(),
+            Self::ModelControlsIncomplete => "model controls incomplete".to_string(),
         }
     }
 
@@ -123,10 +127,9 @@ pub struct ProbeRequest {
     pub per_probe_timeout: Duration,
 }
 
-/// The model-switch wait handed to `probe_agent`. Runtime probes never switch
-/// models (`switch_models: false`), so nothing ever waits on this; it is a fixed
-/// nonzero placeholder rather than a tunable. The dead `model_switch_timeout`
-/// engine-config field that used to feed it was deleted with ADR FR-2.
+/// The model-switch wait handed to `probe_agent`. Claude probes capture the
+/// exact control statement under every advertised model; other harnesses keep
+/// the no-switch baseline so very large menus do not multiply probe work.
 const PROBE_MODEL_SWITCH_TIMEOUT: Duration = Duration::from_secs(1);
 
 impl std::fmt::Debug for ProbeRequest {
@@ -240,7 +243,7 @@ impl ProbeRunner for AcpProbeRunner {
                         // The complete list: `max_models: Some(0)` would truncate
                         // to zero, which is not a way to skip switching.
                         max_models: None,
-                        switch_models: false,
+                        switch_models: request.harness_kind == "claude",
                         // A runtime probe must never burn a user's tokens.
                         send_test_prompt: false,
                     };

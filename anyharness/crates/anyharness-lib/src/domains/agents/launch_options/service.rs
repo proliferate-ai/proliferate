@@ -4,8 +4,8 @@ use super::basis::compute_harness_basis_revision;
 use super::store::HarnessLaunchOptionsStore;
 use super::types::{
     HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults, HarnessLaunchModel,
-    HarnessLaunchOptionStateRow, HarnessLaunchOptions, HarnessLaunchOptionsResponse,
-    HarnessLaunchOptionsState, LaunchSelection, ProbeState,
+    HarnessLaunchModelControls, HarnessLaunchOptionStateRow, HarnessLaunchOptions,
+    HarnessLaunchOptionsResponse, HarnessLaunchOptionsState, LaunchSelection, ProbeState,
 };
 use crate::persistence::Db;
 
@@ -98,11 +98,23 @@ impl HarnessLaunchOptionsService {
         )
     }
 
-    /// Lossless executable projection of the override-free ACP probe. Unknown
-    /// ids and missing prose are data, not validation failures.
+    /// Lossless executable projection of the baseline ACP observation and any
+    /// complete model-scoped observations. Unknown ids and missing prose are
+    /// data, not validation failures.
     pub(crate) fn options_from_probe(
         snapshot: &crate::domains::agents::live_ports::ProbeSnapshot,
-    ) -> HarnessLaunchOptions {
+    ) -> anyhow::Result<HarnessLaunchOptions> {
+        let requires_complete_model_controls =
+            snapshot.agent_kind == "claude" && snapshot.model_source == "modelConfigOption";
+        anyhow::ensure!(
+            !requires_complete_model_controls
+                || snapshot
+                    .models
+                    .iter()
+                    .all(|model| model.config_options.is_some()),
+            "model-scoped launch-control observation was incomplete"
+        );
+
         let models = snapshot
             .models
             .iter()
@@ -114,22 +126,30 @@ impl HarnessLaunchOptionsService {
             .collect::<Vec<_>>();
 
         let controls = controls_from_config_json(&snapshot.baseline_config_options);
-        let control_values = controls
+        let control_values = default_control_values(&snapshot.baseline_config_options, &controls);
+        let model_controls = snapshot
+            .models
             .iter()
-            .filter_map(|control| {
-                current_value(&snapshot.baseline_config_options, &control.id)
-                    .map(|value| (control.id.clone(), value))
+            .filter_map(|model| {
+                let config_options = model.config_options.as_ref()?;
+                let controls = controls_from_config_json(config_options);
+                Some(HarnessLaunchModelControls {
+                    model_id: model.model_id.clone(),
+                    default_control_values: default_control_values(config_options, &controls),
+                    controls,
+                })
             })
-            .collect::<std::collections::BTreeMap<_, _>>();
+            .collect();
 
-        HarnessLaunchOptions {
+        Ok(HarnessLaunchOptions {
             models,
             controls,
             defaults: HarnessLaunchDefaults {
                 model_id: snapshot.current_model_id.clone(),
                 control_values,
             },
-        }
+            model_controls,
+        })
     }
 
     pub fn record_failure(
@@ -163,6 +183,18 @@ impl HarnessLaunchOptionsService {
     pub fn runtime_home(&self) -> &Path {
         &self.runtime_home
     }
+}
+
+fn default_control_values(
+    config_options: &serde_json::Value,
+    controls: &[HarnessLaunchControl],
+) -> std::collections::BTreeMap<String, String> {
+    controls
+        .iter()
+        .filter_map(|control| {
+            current_value(config_options, &control.id).map(|value| (control.id.clone(), value))
+        })
+        .collect()
 }
 
 fn nonempty(value: &str) -> Option<String> {

@@ -36,12 +36,21 @@ export function selectLaunchModel(
 
 export function launchComposerControls(
   response: CloudHarnessLaunchOptionsResponse | null | undefined,
+  modelId?: string | null,
 ): ComposerLaunchControl[] {
   const options = response?.options;
   if (!options) {
     return [];
   }
-  return options.controls.map((control) => launchControlView(control, options.defaults.controlValues));
+  const effectiveModelId = modelId || options.defaults.modelId || null;
+  const modelScope = effectiveModelId
+    ? options.modelControls?.find((candidate) => candidate.modelId === effectiveModelId)
+    : undefined;
+  const controls = modelScope ? modelScope.controls : options.controls;
+  const defaults = modelScope
+    ? modelScope.defaultControlValues
+    : options.defaults.controlValues;
+  return controls.map((control) => launchControlView(control, defaults));
 }
 
 export function selectedLaunchControlValue(

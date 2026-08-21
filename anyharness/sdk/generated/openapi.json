@@ -12084,6 +12084,34 @@
           }
         }
       },
+      "HarnessLaunchModelControls": {
+        "type": "object",
+        "required": [
+          "modelId",
+          "controls",
+          "defaultControlValues"
+        ],
+        "properties": {
+          "controls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HarnessLaunchControl"
+            }
+          },
+          "defaultControlValues": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "modelId": {
+            "type": "string"
+          }
+        }
+      },
       "HarnessLaunchOptions": {
         "type": "object",
         "required": [
@@ -12100,6 +12128,12 @@
           },
           "defaults": {
             "$ref": "#/components/schemas/HarnessLaunchDefaults"
+          },
+          "modelControls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HarnessLaunchModelControls"
+            }
           },
           "models": {
             "type": "array",

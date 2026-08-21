@@ -61,6 +61,7 @@ export type {
   HarnessLaunchModel,
   HarnessLaunchControlValue,
   HarnessLaunchControl,
+  HarnessLaunchModelControls,
   HarnessLaunchDefaults,
   HarnessLaunchOptions,
   HarnessLaunchOptionsState,

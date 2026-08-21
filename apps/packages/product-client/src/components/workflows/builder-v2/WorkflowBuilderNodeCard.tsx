@@ -2,6 +2,7 @@ import type { WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import {
   workflowBuilderControlOptions,
+  workflowBuilderControlValues,
   workflowBuilderModelOptions,
   type WorkflowBuilderHarnessOption,
 } from "#product/lib/domain/workflows/workflow-builder-authoring";
@@ -201,7 +202,7 @@ function WorkflowBuilderNodeModelFields({
   const agentKind = node.model?.agentKind ?? "";
   const modelId = node.model?.modelId ?? "";
   const modelOptions = workflowBuilderModelOptions(harnesses, agentKind);
-  const controlOptions = workflowBuilderControlOptions(harnesses, agentKind);
+  const controlOptions = workflowBuilderControlOptions(harnesses, agentKind, modelId);
   const harnessUnavailable = agentKind.length > 0
     && !harnesses.some((harness) => harness.agentKind === agentKind);
   const modelUnavailable = modelId.length > 0
@@ -219,19 +220,14 @@ function WorkflowBuilderNodeModelFields({
           disabled={disabled}
           onChange={(event) => {
             const nextAgentKind = event.currentTarget.value;
-            const nextHarness = harnesses.find(
-              (harness) => harness.agentKind === nextAgentKind,
-            );
             // Clearing the harness clears the whole model: a modelId without
             // the harness that names it is not a resolvable selection.
             onChange({
               model: nextAgentKind.length > 0 ? {
                 agentKind: nextAgentKind,
                 modelId: null,
-                controlValues: Object.fromEntries(
-                  (nextHarness?.controls ?? [])
-                    .filter((control) => control.defaultValue !== null)
-                    .map((control) => [control.key, control.defaultValue as string]),
+                controlValues: workflowBuilderControlValues(
+                  workflowBuilderControlOptions(harnesses, nextAgentKind, null),
                 ),
               } : null,
             });
@@ -254,13 +250,24 @@ function WorkflowBuilderNodeModelFields({
           id={`${fieldPrefix}-model`}
           value={modelId}
           disabled={disabled || agentKind.length === 0}
-          onChange={(event) => onChange({
-            model: {
+          onChange={(event) => {
+            const nextModelId = event.currentTarget.value || null;
+            const nextControls = workflowBuilderControlOptions(
+              harnesses,
               agentKind,
-              modelId: event.currentTarget.value || null,
-              controlValues: node.model?.controlValues ?? {},
-            },
-          })}
+              nextModelId,
+            );
+            onChange({
+              model: {
+                agentKind,
+                modelId: nextModelId,
+                controlValues: workflowBuilderControlValues(
+                  nextControls,
+                  node.model?.controlValues,
+                ),
+              },
+            });
+          }}
         >
           <option value="">{WORKFLOW_BUILDER_COPY.modelDefaultOption}</option>
           {modelUnavailable ? (

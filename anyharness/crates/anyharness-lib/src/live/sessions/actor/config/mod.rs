@@ -1,3 +1,4 @@
+pub mod admission;
 pub mod apply;
 pub mod confirmation;
 pub mod diagnostics;

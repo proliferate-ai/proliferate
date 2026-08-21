@@ -1,7 +1,7 @@
 use anyharness_contract::v1::{
     AgentReadinessState, HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults,
-    HarnessLaunchModel, HarnessLaunchOptions, HarnessLaunchOptionsResponse,
-    HarnessLaunchOptionsState, ProblemDetails,
+    HarnessLaunchModel, HarnessLaunchModelControls, HarnessLaunchOptions,
+    HarnessLaunchOptionsResponse, HarnessLaunchOptionsState, ProblemDetails,
 };
 use axum::{
     extract::{Path, State},
@@ -66,10 +66,16 @@ pub async fn refresh_launch_options(
         .refresh_now(&kind)
         .await
         .map_err(refresh_error)?;
-    Ok((StatusCode::ACCEPTED, Json(response_for(&state, &kind).await?)))
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(response_for(&state, &kind).await?),
+    ))
 }
 
-async fn response_for(state: &AppState, kind: &str) -> Result<HarnessLaunchOptionsResponse, ApiError> {
+async fn response_for(
+    state: &AppState,
+    kind: &str,
+) -> Result<HarnessLaunchOptionsResponse, ApiError> {
     let readiness = state.agent_runtime.get_agent(kind).await?.agent.status;
     let readiness = readiness_to_contract(readiness);
     match state
@@ -105,9 +111,9 @@ fn validate_kind(kind: &str) -> Result<(), ApiError> {
 fn ensure_path_safe_identifier(value: &str, field: &str) -> Result<(), ApiError> {
     let well_formed = !value.is_empty()
         && value.len() <= 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-' || byte == b'_');
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-' || byte == b'_'
+        });
     if well_formed {
         Ok(())
     } else {
@@ -171,30 +177,74 @@ fn to_contract(
             domain::HarnessLaunchOptionsState::Detecting => HarnessLaunchOptionsState::Detecting,
             domain::HarnessLaunchOptionsState::Refreshing => HarnessLaunchOptionsState::Refreshing,
             domain::HarnessLaunchOptionsState::Observed => HarnessLaunchOptionsState::Observed,
-            domain::HarnessLaunchOptionsState::ObservedEmpty => HarnessLaunchOptionsState::ObservedEmpty,
-            domain::HarnessLaunchOptionsState::LastGoodAfterFailure => HarnessLaunchOptionsState::LastGoodAfterFailure,
-            domain::HarnessLaunchOptionsState::FailedWithoutObservation => HarnessLaunchOptionsState::FailedWithoutObservation,
+            domain::HarnessLaunchOptionsState::ObservedEmpty => {
+                HarnessLaunchOptionsState::ObservedEmpty
+            }
+            domain::HarnessLaunchOptionsState::LastGoodAfterFailure => {
+                HarnessLaunchOptionsState::LastGoodAfterFailure
+            }
+            domain::HarnessLaunchOptionsState::FailedWithoutObservation => {
+                HarnessLaunchOptionsState::FailedWithoutObservation
+            }
         },
         options: response.options.map(|options| HarnessLaunchOptions {
-            models: options.models.into_iter().map(|model| HarnessLaunchModel {
-                id: model.id,
-                observed_name: model.observed_name,
-                observed_description: model.observed_description,
-            }).collect(),
-            controls: options.controls.into_iter().map(|control| HarnessLaunchControl {
-                id: control.id,
-                observed_label: control.observed_label,
-                observed_description: control.observed_description,
-                values: control.values.into_iter().map(|value| HarnessLaunchControlValue {
-                    value: value.value,
-                    observed_label: value.observed_label,
-                    observed_description: value.observed_description,
-                }).collect(),
-            }).collect(),
+            models: options
+                .models
+                .into_iter()
+                .map(|model| HarnessLaunchModel {
+                    id: model.id,
+                    observed_name: model.observed_name,
+                    observed_description: model.observed_description,
+                })
+                .collect(),
+            controls: options
+                .controls
+                .into_iter()
+                .map(|control| HarnessLaunchControl {
+                    id: control.id,
+                    observed_label: control.observed_label,
+                    observed_description: control.observed_description,
+                    values: control
+                        .values
+                        .into_iter()
+                        .map(|value| HarnessLaunchControlValue {
+                            value: value.value,
+                            observed_label: value.observed_label,
+                            observed_description: value.observed_description,
+                        })
+                        .collect(),
+                })
+                .collect(),
             defaults: HarnessLaunchDefaults {
                 model_id: options.defaults.model_id,
                 control_values: options.defaults.control_values,
             },
+            model_controls: options
+                .model_controls
+                .into_iter()
+                .map(|scope| HarnessLaunchModelControls {
+                    model_id: scope.model_id,
+                    controls: scope
+                        .controls
+                        .into_iter()
+                        .map(|control| HarnessLaunchControl {
+                            id: control.id,
+                            observed_label: control.observed_label,
+                            observed_description: control.observed_description,
+                            values: control
+                                .values
+                                .into_iter()
+                                .map(|value| HarnessLaunchControlValue {
+                                    value: value.value,
+                                    observed_label: value.observed_label,
+                                    observed_description: value.observed_description,
+                                })
+                                .collect(),
+                        })
+                        .collect(),
+                    default_control_values: scope.default_control_values,
+                })
+                .collect(),
         }),
         observed_at: response.observed_at,
         probe_attempted_at: response.probe_attempted_at,

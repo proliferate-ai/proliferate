@@ -2,8 +2,7 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::ConfigApplyState;
 
 use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
-use crate::domains::sessions::live_config::controls::option_matches_key;
-use crate::domains::sessions::live_config::{NormalizedControlKind, LEGACY_MODE_COMPAT_CONFIG_ID};
+use crate::domains::sessions::live_config::LEGACY_MODE_COMPAT_CONFIG_ID;
 use crate::live::sessions::actor::config::apply::{
     apply_mode_via_direct_setter_legacy, apply_specific_config_option, try_apply_model_preference,
 };
@@ -11,13 +10,16 @@ use crate::live::sessions::actor::config::confirmation::config_value_matches_cur
 use crate::live::sessions::actor::config::persist::persist_requested_config_value_if_changed;
 use crate::live::sessions::actor::config::queue::queue_pending_config_change;
 use crate::live::sessions::actor::config::selection::{
-    find_select_option_by_purpose, find_select_option_for_request, into_raw_pending_option,
-    select_option_values,
+    find_select_option_by_purpose, find_select_option_for_request, select_option_values,
 };
 use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose,
 };
 use crate::live::sessions::actor::state::{SessionActor, SessionStartupState};
+
+pub(in crate::live::sessions::actor) use super::admission::{
+    initial_control_disposition, resolve_requested_model_id, InitialControlDisposition,
+};
 
 /// Applies the immutable create-time intent and accepts only a value that the
 /// live harness statement both advertises and positively confirms. Model is
@@ -36,11 +38,26 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
     intent: &ResolvedLaunchIntent,
     startup_state: &mut SessionStartupState,
 ) -> anyhow::Result<()> {
-    if let Some(model_id) = intent.model_id.as_deref() {
-        if !live_model_ids(startup_state).iter().any(|value| value == model_id) {
-            log_initial_config_apply(session_id, agent_kind, "model", "membership_rejected");
-            anyhow::bail!("requested model '{model_id}' is absent from the live {agent_kind} session");
+    let resolved_model_id = match intent.model_id.as_deref() {
+        Some(model_id) => {
+            match resolve_requested_model_id(&live_model_ids(startup_state), model_id) {
+                Some(resolved) => Some(resolved),
+                None => {
+                    log_initial_config_apply(
+                        session_id,
+                        agent_kind,
+                        "model",
+                        "membership_rejected",
+                    );
+                    anyhow::bail!(
+                        "requested model '{model_id}' is absent from the live {agent_kind} session"
+                    );
+                }
+            }
         }
+        None => None,
+    };
+    if let Some(model_id) = resolved_model_id.as_deref() {
         let outcome = match try_apply_model_preference(
             conn,
             native_session_id,
@@ -62,7 +79,10 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
             confirmed_result_code(outcome),
         );
         anyhow::ensure!(
-            matches!(outcome, ConfigApplyOutcome::NoChange | ConfigApplyOutcome::AppliedAuthoritative),
+            matches!(
+                outcome,
+                ConfigApplyOutcome::NoChange | ConfigApplyOutcome::AppliedAuthoritative
+            ),
             "requested model '{model_id}' was not confirmed by the live {agent_kind} session"
         );
     }
@@ -165,14 +185,16 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
     }
     // A control id the live statement never surfaced at all is a vocabulary
     // disagreement between the create-time observation and the live session,
-    // not per-model value narrowing. Dropping it would make every future user
-    // selection for that control a silent perpetual no-op, so it stays fatal.
+    // not per-model value narrowing. Model-scoped launch options keep expected
+    // narrowing out of the persisted intent; any id still absent here is a
+    // contradiction and stays fatal.
     anyhow::ensure!(
         pending.is_empty(),
         "requested controls are absent from the live {agent_kind} session: {:?}",
         pending.keys().collect::<Vec<_>>()
     );
-    let confirmed_intent = intent_without_dropped_controls(intent, &dropped_control_ids);
+    let mut confirmed_intent = intent_without_dropped_controls(intent, &dropped_control_ids);
+    confirmed_intent.model_id = resolved_model_id;
     if let Err(error) = ensure_resolved_launch_intent_confirmed(startup_state, &confirmed_intent) {
         log_initial_config_apply(session_id, agent_kind, "complete_intent", "final_mismatch");
         return Err(error);
@@ -186,62 +208,6 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
         "confirmed every applicable explicit launch intent value"
     );
     Ok(())
-}
-
-/// How the start path treats one explicit control value against the live
-/// statement. Create-time validation runs against the harness-level
-/// observation, but some harnesses narrow a QUALITY control's value set per
-/// model (codex reasoning_effort). A quality value the live session does not
-/// OFFER after the model applied is dropped to the session default rather than
-/// failing the whole start. The membership check runs before anything is sent;
-/// an OFFERED value whose setter read-back refuses it stays fatal — the same
-/// invariant the legacy mode branch keeps.
-///
-/// Posture controls are never dropped: launching a collaboration mode, mode /
-/// approval policy or sandbox mode at the harness default after the user
-/// explicitly selected against it is a silent behavior change, which is
-/// strictly worse than refusing the start.
-#[derive(Debug, PartialEq, Eq)]
-pub(in crate::live::sessions::actor) enum InitialControlDisposition {
-    AlreadyLive,
-    Apply,
-    Drop,
-    Refuse,
-}
-
-pub(in crate::live::sessions::actor) fn initial_control_disposition(
-    startup_state: &SessionStartupState,
-    config_id: &str,
-    value: &str,
-) -> InitialControlDisposition {
-    if config_value_matches_current_state(startup_state, config_id, value) {
-        return InitialControlDisposition::AlreadyLive;
-    }
-    let offered = find_select_option_for_request(&startup_state.config_options, config_id)
-        .is_some_and(|option| {
-            select_option_values(option).iter().any(|candidate| candidate == value)
-        });
-    if offered {
-        InitialControlDisposition::Apply
-    } else if is_posture_control(startup_state, config_id) {
-        InitialControlDisposition::Refuse
-    } else {
-        InitialControlDisposition::Drop
-    }
-}
-
-/// A posture control decides what the agent is allowed to DO — collaboration
-/// mode, the mode / approval-policy family, sandbox mode. Only quality and
-/// model-narrowing controls are eligible for the soft drop.
-fn is_posture_control(startup_state: &SessionStartupState, config_id: &str) -> bool {
-    if config_id == LEGACY_MODE_COMPAT_CONFIG_ID {
-        return true;
-    }
-    find_select_option_for_request(&startup_state.config_options, config_id).is_some_and(|option| {
-        let raw = into_raw_pending_option(option);
-        option_matches_key(&raw, NormalizedControlKind::Mode)
-            || option_matches_key(&raw, NormalizedControlKind::CollaborationMode)
-    })
 }
 
 pub(in crate::live::sessions::actor) fn intent_without_dropped_controls(
@@ -312,7 +278,10 @@ async fn try_apply_config_option_by_id(
     else {
         return Ok(ConfigApplyOutcome::NotApplied);
     };
-    if !select_option_values(option).iter().any(|candidate| candidate == value) {
+    if !select_option_values(option)
+        .iter()
+        .any(|candidate| candidate == value)
+    {
         return Ok(ConfigApplyOutcome::NotApplied);
     }
     crate::live::sessions::actor::config::apply::apply_select_config_option(

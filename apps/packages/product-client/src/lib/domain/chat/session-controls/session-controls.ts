@@ -175,6 +175,39 @@ export function mergeSessionConfigControlDescriptors(
   return merged;
 }
 
+/**
+ * Which control descriptors the composer shows, given both sources.
+ *
+ * Live config is authoritative the moment it exists. Until it does, the
+ * launched selection stands in for it so the row does not blank out during the
+ * new-chat -> live-session handoff: the launch descriptors used to be dropped
+ * as soon as a session id existed, while the live ones had not arrived yet, so
+ * mode and effort disappeared and then reappeared on every new chat.
+ *
+ * The stand-in is unsettable. The session is already created, so those chips
+ * report what was launched; they are not an edit surface, and accepting a click
+ * there would write a launch-time selection into a live session.
+ */
+export function resolveComposerSessionControls(input: {
+  suppressActiveSessionState: boolean;
+  hasActiveSession: boolean;
+  launchControls: LiveSessionControlDescriptor[];
+  liveControls: LiveSessionControlDescriptor[];
+}): LiveSessionControlDescriptor[] {
+  if (input.suppressActiveSessionState) {
+    return [];
+  }
+  if (input.liveControls.length > 0) {
+    return input.liveControls;
+  }
+  return mergeSessionConfigControlDescriptors(
+    input.hasActiveSession
+      ? input.launchControls.map((control) => ({ ...control, settable: false }))
+      : input.launchControls,
+    input.liveControls,
+  );
+}
+
 export function currentValueLabel(
   control: NormalizedSessionControl,
   currentValueOverride?: string | null,

@@ -5086,6 +5086,17 @@ export interface components {
             /** Observeddescription */
             observedDescription: string | null;
         };
+        /** LaunchModelControls */
+        LaunchModelControls: {
+            /** Modelid */
+            modelId: string;
+            /** Controls */
+            controls: components["schemas"]["LaunchControl"][];
+            /** Defaultcontrolvalues */
+            defaultControlValues: {
+                [key: string]: string;
+            };
+        };
         /** LaunchOptions */
         LaunchOptions: {
             /** Models */
@@ -5093,6 +5104,8 @@ export interface components {
             /** Controls */
             controls: components["schemas"]["LaunchControl"][];
             defaults: components["schemas"]["LaunchDefaults"];
+            /** Modelcontrols */
+            modelControls?: components["schemas"]["LaunchModelControls"][];
         };
         /** LaunchOptionsCopyRequest */
         LaunchOptionsCopyRequest: {

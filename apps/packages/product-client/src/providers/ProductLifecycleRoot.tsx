@@ -39,6 +39,7 @@ import { AppCommandActionsProvider } from "#product/providers/AppCommandActionsP
 import { DesktopProductLifecycleRoot } from "#product/providers/DesktopProductLifecycleRoot"
 import { AppErrorBoundary } from "#product/components/app/AppErrorBoundary"
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth"
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store"
 import {
   diagnosticField,
   recordRendererDiagnostic,
@@ -84,6 +85,12 @@ const AuthenticatedLaunchLifecycles = lazy(() =>
 const AuthenticatedBackgroundLifecycles = lazy(() =>
   import("#product/providers/AuthenticatedBackgroundLifecycles").then((m) => ({
     default: m.AuthenticatedBackgroundLifecycles,
+  })),
+)
+
+const SessionIntentDispatcherLifecycle = lazy(() =>
+  import("#product/providers/SessionIntentDispatcherLifecycle").then((m) => ({
+    default: m.SessionIntentDispatcherLifecycle,
   })),
 )
 
@@ -178,6 +185,16 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.after.use_auth_bootstrap")
   recordBootDiagnosticOnce("app_runtime.render.before.auth_status")
   const authStatus = useProductAuthStatus()
+  // Draining the session intent outbox is local runtime work, not a
+  // control-plane feature, so it cannot be gated on the product session: an
+  // anonymous or local-only client creates sessions against the local runtime
+  // fine, and gating the dispatcher on `authenticated` left its prompts queued
+  // forever behind a composer that just said "Thinking". Mount on the queued
+  // work itself, which also keeps the graph off the /login first-load path the
+  // lazy boundary exists to protect — a login first load has no intents.
+  const hasSessionIntents = useSessionIntentStore(
+    (state) => Object.keys(state.entriesById).length > 0,
+  )
   const authStatusRef = useRef(authStatus)
   authStatusRef.current = authStatus
   recordBootDiagnosticOnce("app_runtime.render.after.auth_status", { authStatus })
@@ -287,6 +304,11 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
       {authStatus === "authenticated" && (
         <Suspense fallback={null}>
           <AuthenticatedBackgroundLifecycles />
+        </Suspense>
+      )}
+      {(authStatus === "authenticated" || hasSessionIntents) && (
+        <Suspense fallback={null}>
+          <SessionIntentDispatcherLifecycle />
         </Suspense>
       )}
       {authStatus === "authenticated" && (

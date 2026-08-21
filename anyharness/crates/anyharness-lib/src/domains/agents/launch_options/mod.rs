@@ -9,8 +9,8 @@ pub use basis::compute_harness_basis_revision;
 pub use service::{HarnessLaunchOptionsService, LaunchSelectionUnsupported};
 pub use types::{
     HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults, HarnessLaunchModel,
-    HarnessLaunchOptionStateRow, HarnessLaunchOptions, HarnessLaunchOptionsResponse,
-    HarnessLaunchOptionsState, LaunchSelection, ProbeState,
+    HarnessLaunchModelControls, HarnessLaunchOptionStateRow, HarnessLaunchOptions,
+    HarnessLaunchOptionsResponse, HarnessLaunchOptionsState, LaunchSelection, ProbeState,
 };
 
 #[cfg(test)]

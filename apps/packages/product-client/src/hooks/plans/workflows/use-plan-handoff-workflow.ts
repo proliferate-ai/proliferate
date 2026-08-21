@@ -24,6 +24,7 @@ import type {
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import type { PendingSessionConfigChanges } from "#product/domain/sessions/pending-config";
 import { resolveModelDisplayName } from "#product/lib/domain/chat/models/model-display";
+import { resolveLaunchControlValuesForModel } from "#product/lib/domain/agents/cloud-launch-catalog";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -106,20 +107,25 @@ export function usePlanHandoffWorkflow({
     resolvedConnectionState,
   ]);
 
-  const launchControlDefaults = useMemo(() => Object.fromEntries(
-    (launchCatalog.launchAgents
-      .find((candidate) => candidate.kind === effectiveSelection?.kind)
-      ?.launchControls ?? [])
-      .flatMap((control) => control.defaultValue
-        ? [[control.key, control.defaultValue] as const]
-        : []),
-  ), [effectiveSelection?.kind, launchCatalog.launchAgents]);
-  const launchControlValues = useMemo(() => ({
-    ...launchControlDefaults,
-    ...(controlSelection && controlSelection.agentKind === effectiveSelection?.kind
+  const selectedLaunchAgent = useMemo(() => launchCatalog.launchAgents
+    .find((candidate) => candidate.kind === effectiveSelection?.kind) ?? null,
+  [effectiveSelection?.kind, launchCatalog.launchAgents]);
+  const launchControlDefaults = useMemo(() => resolveLaunchControlValuesForModel(
+    selectedLaunchAgent,
+    effectiveSelection?.modelId,
+  ), [effectiveSelection?.modelId, selectedLaunchAgent]);
+  const launchControlValues = useMemo(() => resolveLaunchControlValuesForModel(
+    selectedLaunchAgent,
+    effectiveSelection?.modelId,
+    controlSelection && controlSelection.agentKind === effectiveSelection?.kind
       ? controlSelection.values
-      : {}),
-  }), [controlSelection, effectiveSelection?.kind, launchControlDefaults]);
+      : {},
+  ), [
+    controlSelection,
+    effectiveSelection?.kind,
+    effectiveSelection?.modelId,
+    selectedLaunchAgent,
+  ]);
   const launchControlPending = useMemo<PendingSessionConfigChanges>(() =>
     Object.fromEntries(Object.entries(launchControlValues).map(([rawConfigId, value], index) => [
       rawConfigId,

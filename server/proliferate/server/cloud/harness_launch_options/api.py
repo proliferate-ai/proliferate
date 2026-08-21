@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.engine import get_async_session
@@ -45,9 +46,10 @@ async def get_launch_options(
     sandbox: LaunchOptionsSandboxAccess,
     harness_kind: str,
     db: AsyncSession = Depends(get_async_session),
-) -> CopiedLaunchOptionsResponse:
-    return await get_launch_options_service(
+) -> JSONResponse:
+    response = await get_launch_options_service(
         db,
         sandbox=sandbox,
         harness_kind=harness_kind,
     )
+    return JSONResponse(content=response)

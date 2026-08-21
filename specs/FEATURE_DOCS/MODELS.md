@@ -30,7 +30,9 @@ not keyed by workspace, user, auth surface, or route. Each row contains:
 - `basis_revision`: a hash of harness kind, installed harness identity, and the
   product-owned auth/route revision;
 - a monotonic runtime-local `revision`;
-- exact ordered models, controls, allowed values, and no-override defaults;
+- exact ordered models, a flat no-override control statement, and, when the
+  harness can be switched without prompting or inference, exact control
+  statements and defaults for each observed model;
 - successful-observation and latest-attempt timestamps; and
 - bounded probe evidence and failure code.
 
@@ -47,13 +49,23 @@ may request a probe. The probe:
 2. materializes product-owned auth/route state without any workspace or session
    environment;
 3. starts a headless, override-free harness session;
-4. records exact model and flat launch-control statements plus no-override
-   defaults; and
-5. atomically replaces the one harness row.
+4. records the exact model list and flat no-override launch-control statement;
+5. for bounded harnesses whose model config can be switched and read back
+   without prompting, records the exact control statement and defaults after
+   selecting every model; and
+6. atomically replaces the one harness row.
 
 Probe output is data, not a schema allow-list. Sparse and unknown identifiers
 are persisted. A successful empty statement is `observed_empty`, not a reason
 to consult static data.
+
+`modelControls` is an optional compatibility extension of the one target
+observation, not another authority. A row for the selected model is exact: a
+present empty `controls` list means that model offers no launch controls. When
+no row was observed, consumers use the flat no-override statement. A harness
+whose model-control enumeration is required must publish a complete matrix or
+fail the refresh and retain matching last-good state; it may not publish a
+partial matrix and silently fall back for the missing models.
 
 Workspace and per-session environment may not affect target observation.
 Session creation rejects an environment key that would override an auth input
@@ -88,14 +100,18 @@ Runtime API:
 
 Cloud API:
 
-- `GET /v1/cloud/sandboxes/{cloudSandboxId}/harness-launch-options/{harnessKind}`
-- Worker-authenticated target-state upload through the runtime-worker heartbeat
-  surface
+- `GET /v1/cloud/harness-launch-options/sandboxes/{cloudSandboxId}/{harnessKind}`
+- `POST /v1/cloud/harness-launch-options/{harnessKind}` from the authenticated
+  target Worker
 
 Home, new chat, Settings, Cowork and reviews, workflows, automations, Web,
 Desktop, and Mobile consume the same response for their selected target and
 harness. View mappers may label, order, group, search, or lay out exact keys.
 They may not union or intersect executable membership with catalog data.
+When the observation contains a `modelControls` row for the selected model,
+that row replaces the flat control statement for rendering and selection.
+Changing models therefore also replaces the rendered controls and drops stale
+control selections that the new model did not observe.
 
 Settings presents the observed list read-only. Model visibility overrides and
 server-side add/remove patches do not exist.
@@ -150,15 +166,17 @@ identifiers:
 }
 ```
 
-Every rendered control with a selected/default value is represented. Omission
-means no value was promised; it never means “look up a catalog default later.”
-Independent controls remain independent.
+Every rendered control with a selected/default value is represented. Defaults
+come from the selected model's exact row when present and otherwise from the
+flat statement. Omission means no value was promised; it never means “look up
+a catalog default later.” Independent controls remain independent.
 
 Session create reloads successful current-basis launch options even when the
-selection is empty. It validates exact model, control, and value membership.
-An unsupported value returns `SESSION_LAUNCH_VALUE_UNSUPPORTED` before a
-session is committed. Accepted create inserts the session and complete
-`ResolvedLaunchIntent` in one transaction.
+selection is empty. It validates exact model, control, and value membership
+against the selected model's row when present, otherwise against the flat
+statement. An unsupported value returns `SESSION_LAUNCH_VALUE_UNSUPPORTED`
+before a session is committed. Accepted create inserts the session and
+complete `ResolvedLaunchIntent` in one transaction.
 
 `modeId` is accepted only as a stateless N-1 HTTP decoder input and is converted
 to `controlValues.mode` before entering the session domain. First-party callers
@@ -185,13 +203,13 @@ then:
 The explicit model stays fail-closed: an absent or unconfirmed model fails
 startup and cleans up the incomplete native session.
 
-Controls carry exactly one carve-out, for per-model value narrowing on quality
-controls. Some harnesses shrink a control's allowed values under the applied
-model (codex `reasoning_effort` loses `max` under some models), which the
-harness-level observation cannot see at create time. A control that the live
-statement still surfaces, whose requested value that statement no longer
-offers, and that is not a posture control, is therefore dropped to the live
-session default with a `membership_dropped` result and a
+Controls carry exactly one carve-out, for value narrowing on quality controls
+when the target could not publish a model-specific row or the harness changed
+after observation. Some harnesses shrink a control's allowed values under the
+applied model (codex `reasoning_effort` loses `max` under some models). A
+control that the live statement still surfaces, whose requested value that
+statement no longer offers, and that is not a posture control, is therefore
+dropped to the live session default with a `membership_dropped` result and a
 `session.initial_config.dropped` event; the final aggregate check then runs
 against the intent minus the dropped controls.
 
@@ -246,7 +264,8 @@ Events include safe identifiers, basis/revision or source sequence, state,
 counts, duration, and result/error codes. See
 [Observability](../OBSERVABILITY.md) for the repository-wide scrubber contract.
 
-Release coverage includes sparse/unknown Claude identifiers, current Grok
+Release coverage includes sparse/unknown Claude identifiers, model-scoped
+Claude controls (including the absence of `fast` under Fable), current Grok
 identifiers, both Codex controls, empty/failure/basis-change states, exact
 create rejection, startup contradiction, active-session isolation, and cloud
 target isolation. The deterministic gates and real-profile verifier are in

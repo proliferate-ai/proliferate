@@ -22,7 +22,10 @@ use super::driver::session_lifecycle::{initialize_connection, start_new_session}
 use super::driver::SessionMcpServer;
 
 mod config_options;
-use config_options::{current_model_from_config_options, model_entries_from_config_options};
+use config_options::{
+    current_model_from_config_options, model_entries_from_config_options,
+    switch_model_and_capture_options,
+};
 mod model_setter;
 use model_setter::{model_entries_from_model_state, set_init_meta_model_and_confirm};
 
@@ -66,7 +69,8 @@ pub struct ProbeOptions {
     /// harnesses with very large dynamic model lists).
     pub max_models: Option<usize>,
     /// Capture the per-model `config_options` matrix by switching through every
-    /// model. `true` for the central CLI, `false` for runtime probes.
+    /// model. Runtime probes enable this only for bounded harnesses that expose
+    /// an authoritative model config option.
     ///
     /// **It does not skip the enumeration loop.** The loop does two jobs at once:
     /// the per-model switch round-trip AND building the `models` vector the whole
@@ -76,9 +80,8 @@ pub struct ProbeOptions {
     /// Ids, names, descriptions, modes, observed defaults and the attestation are
     /// all still recorded.
     ///
-    /// Runtime probes set `false` because the matrix costs one round-trip per
-    /// model. Vendor init-meta model alternatives are the exception: they have no
-    /// config option, so each alternative is setter-confirmed before inclusion.
+    /// Vendor init-meta model alternatives have no config option, so each
+    /// alternative is setter-confirmed before inclusion regardless of this flag.
     pub switch_models: bool,
     /// Send one minimal prompt on the session's current model and record the
     /// outcome. This is the ONLY honest availability test for seeded model
@@ -411,13 +414,7 @@ async fn run_enumeration(
             // no-op; every alternative must return an exact effective-model
             // readback before the probe advertises it.
             if current_model_id.as_deref() != Some(model_id.as_str()) {
-                match set_init_meta_model_and_confirm(
-                    conn,
-                    &native_session_id,
-                    &model_id,
-                )
-                .await
-                {
+                match set_init_meta_model_and_confirm(conn, &native_session_id, &model_id).await {
                     Ok(true) => {}
                     Ok(false) => {
                         warnings.push(format!(
@@ -426,9 +423,7 @@ async fn run_enumeration(
                         continue;
                     }
                     Err(error) => {
-                        warnings.push(format!(
-                            "session/set_model({model_id}) failed: {error}"
-                        ));
+                        warnings.push(format!("session/set_model({model_id}) failed: {error}"));
                         continue;
                     }
                 }
@@ -440,24 +435,17 @@ async fn run_enumeration(
             None
         } else if let Some(config_id) = &model_config_id {
             // Model exposed as a config option: switch through it; the
-            // response carries the updated option set directly.
-            match conn
-                .send_request(acp::schema::SetSessionConfigOptionRequest::new(
-                    native_session_id.clone(),
-                    config_id.clone(),
-                    model_id.as_str(),
-                ))
-                .block_task()
-                .await
-            {
-                Ok(response) => Some(elided(serde_json::to_value(&response.config_options)?)),
-                Err(error) => {
-                    warnings.push(format!(
-                        "set_session_config_option({config_id}={model_id}) failed: {error}"
-                    ));
-                    None
-                }
-            }
+            // response carries the updated option set directly, including the
+            // exact model read-back used to admit the capture.
+            switch_model_and_capture_options(
+                conn,
+                &native_session_id,
+                config_id,
+                &model_id,
+                options.model_switch_timeout,
+                warnings,
+            )
+            .await?
         } else {
             // ACP 0.14 removed set_session_model; harnesses that expose models
             // via the ACP models block can no longer be switched for per-model
@@ -528,27 +516,6 @@ async fn run_enumeration(
 
 fn drain_pending(notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>) {
     while notification_rx.try_recv().is_ok() {}
-}
-
-/// Per-model captures repeat the self-referential `model` select with the
-/// FULL model list as values — quadratic snapshot bloat with zero
-/// information (the baseline capture keeps the complete list). Elide those
-/// values in per-model captures, keeping the option + currentValue for
-/// switch verification.
-fn elided(mut config_options: serde_json::Value) -> serde_json::Value {
-    if let Some(options) = config_options.as_array_mut() {
-        for option in options {
-            let is_model = option.get("id").and_then(|v| v.as_str()) == Some("model")
-                || option.get("category").and_then(|v| v.as_str()) == Some("model");
-            if is_model {
-                if let Some(object) = option.as_object_mut() {
-                    object.insert("options".to_string(), serde_json::Value::Array(Vec::new()));
-                    object.insert("valuesElided".to_string(), serde_json::Value::Bool(true));
-                }
-            }
-        }
-    }
-    config_options
 }
 
 /// Best-effort identification of the native CLI the adapter will use. Claude

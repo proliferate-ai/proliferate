@@ -10,13 +10,17 @@ import {
 import type {
   DesktopAgentLaunchControl,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { launchControlsForModel } from "#product/lib/domain/agents/cloud-launch-catalog";
 
 export interface BuildLaunchControlDescriptorsInput {
   selection: { kind: string; modelId: string } | null;
   launchAgents: Array<{
     kind: string;
     launchControls?: DesktopAgentLaunchControl[];
-    models: Array<{ id: string }>;
+    models: Array<{
+      id: string;
+      launchControls?: DesktopAgentLaunchControl[] | null;
+    }>;
   }>;
   pendingConfigChanges: PendingSessionConfigChanges | null;
   onSelect: (
@@ -39,7 +43,7 @@ export function buildLaunchControlDescriptors(
     return [];
   }
 
-  return (agent.launchControls ?? [])
+  return launchControlsForModel(agent, input.selection.modelId)
     .flatMap((control) => launchControlToDescriptor({
       agentKind: agent.kind,
       control,
@@ -137,9 +141,33 @@ function launchControlToDescriptor(input: {
   }];
 }
 
+// Target-observed launch ids and live-session control keys are two spellings
+// of the same axis: codex observes `reasoning_effort` / `fast-mode` at launch
+// and reports `effort` / `fast_mode` once live. The composer groups controls by
+// this key, so an unmapped launch id silently demotes the effort stepper and
+// fast-mode toggle into generic overflow chips, and the composer presentation
+// flips the moment a session goes live. Only the display key is normalized:
+// `rawConfigId` keeps the observed id, which is what every apply path sends.
+const LAUNCH_CONTROL_KEY_ALIASES: Record<string, SupportedLiveControlKey> = {
+  collaboration_mode: "collaboration_mode",
+  effort: "effort",
+  fast_mode: "fast_mode",
+  mode: "mode",
+  reasoning: "reasoning",
+  reasoning_effort: "effort",
+};
+
 function normalizeLaunchControlKey(
   key: string,
 ): SupportedLiveControlKey | null {
+  const canonical = key.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (!canonical) {
+    return null;
+  }
+  const alias = LAUNCH_CONTROL_KEY_ALIASES[canonical];
+  if (alias) {
+    return alias;
+  }
   // The observed id is executable truth. The type predates arbitrary ACP
   // controls, but dropping an unknown id here would turn a rendering helper
   // into an availability filter. Preserve it until the view-model types are

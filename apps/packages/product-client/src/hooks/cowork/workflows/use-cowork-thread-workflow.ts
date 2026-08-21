@@ -28,6 +28,7 @@ import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog
 import {
   buildDesktopLaunchModelRegistries,
   projectHarnessLaunchOptions,
+  resolveLaunchControlValuesForModel,
   type DesktopAgentLaunchAgent,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
@@ -105,10 +106,13 @@ export function useCoworkThreadWorkflow() {
     const launchAgent = inputLaunchAgent
       ?? launchAgents.find((candidate) => candidate.kind === input.agentKind)
       ?? null;
-    const launchControlValues = {
-      ...defaultLaunchControlValues(launchAgent),
-      ...(input.launchControlValues ?? {}),
-    };
+    const launchControlValues = launchAgent
+      ? resolveLaunchControlValuesForModel(
+        launchAgent,
+        input.modelId,
+        input.launchControlValues,
+      )
+      : { ...(input.launchControlValues ?? {}) };
     return createCoworkThreadWorkflow({
       ...workflowInput,
       launchControlValues,
@@ -260,16 +264,4 @@ export function useCoworkThreadWorkflow() {
     openThread,
     isCreatingThread: createCoworkThreadMutation.isPending,
   };
-}
-
-function defaultLaunchControlValues(
-  agent: DesktopAgentLaunchAgent | null,
-): Record<string, string> {
-  const values: Record<string, string> = {};
-  for (const control of agent?.launchControls ?? []) {
-    if (control.defaultValue) {
-      values[control.key] = control.defaultValue;
-    }
-  }
-  return values;
 }

@@ -3233,9 +3233,17 @@ export interface components {
             observedDescription?: string | null;
             observedName?: string | null;
         };
+        HarnessLaunchModelControls: {
+            controls: components["schemas"]["HarnessLaunchControl"][];
+            defaultControlValues: {
+                [key: string]: string;
+            };
+            modelId: string;
+        };
         HarnessLaunchOptions: {
             controls: components["schemas"]["HarnessLaunchControl"][];
             defaults: components["schemas"]["HarnessLaunchDefaults"];
+            modelControls?: components["schemas"]["HarnessLaunchModelControls"][];
             models: components["schemas"]["HarnessLaunchModel"][];
         };
         HarnessLaunchOptionsResponse: {

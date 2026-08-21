@@ -49,6 +49,7 @@ fn effective_fixture() -> (
                 observed_name: None,
                 observed_description: None,
             }],
+            model_controls: Vec::new(),
         }),
         observed_at: Some("2026-08-19T00:00:00Z".to_string()),
         probe_attempted_at: "2026-08-19T00:00:00Z".to_string(),
