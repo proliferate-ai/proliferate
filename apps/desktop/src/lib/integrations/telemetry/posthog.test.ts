@@ -64,6 +64,8 @@ describe("desktop PostHog adapter", () => {
       capture_pageleave: false,
       person_profiles: "identified_only",
       disable_session_recording: true,
+      // Local literal, so the PostHog project cannot start console capture.
+      enable_recording_console_log: false,
     });
     const scrub = await import("./scrub");
     expect(beforeSend).toBe(scrub.scrubPostHogPayload);
@@ -75,6 +77,7 @@ describe("desktop PostHog adapter", () => {
       "capture_pageleave",
       "capture_pageview",
       "disable_session_recording",
+      "enable_recording_console_log",
       "person_profiles",
       "session_recording",
     ]);
@@ -95,6 +98,12 @@ describe("desktop PostHog adapter", () => {
     expect(options.recordHeaders).toBe(false);
     expect(options.recordBody).toBe(false);
     expect(options.maskCapturedNetworkRequestFn()).toBeNull();
+
+    // Canvas frames are pixels; `maskTextSelector: "*"` does not reach them,
+    // and `@xterm/addon-canvas` renders terminal output to a canvas. This must
+    // stay a local literal `false` or the PostHog project's
+    // `canvasRecording.enabled` decides on its own.
+    expect(options.captureCanvas).toEqual({ recordCanvas: false });
 
     // Dormant forward-compatibility, NOT coverage: the pinned
     // posthog-js@1.386.8 forwards only maskAllInputs/maskTextSelector/

@@ -41,6 +41,14 @@ export const DESKTOP_SESSION_RECORDING_OPTIONS = {
   recordHeaders: false,
   recordBody: false,
   maskCapturedNetworkRequestFn: () => null,
+  // Pins canvas recording off against the provider. Without this key the
+  // resolution in the `Rh` getter of posthog-js `dist/lazy-recorder.js` is
+  // `config.session_recording.captureCanvas?.recordCanvas ??
+  // remoteConfig.canvasRecording?.enabled`, so the PostHog project alone could
+  // turn it on. That matters here: `@xterm/addon-canvas` renders terminal
+  // output to a canvas, and canvas frames are captured as pixels, which
+  // `maskTextSelector: "*"` does not reach. A literal `false` wins the `??`.
+  captureCanvas: { recordCanvas: false },
 } as const;
 
 interface DesktopPostHogInitConfig {
@@ -73,6 +81,14 @@ export function initializeDesktopPostHog(config: DesktopPostHogInitConfig): void
     // requires `enabled_server_side && !disable_session_recording`).
     disable_session_recording: true,
     session_recording: DESKTOP_SESSION_RECORDING_OPTIONS,
+    // Pins console capture off against the provider. The `xh` getter in
+    // posthog-js `dist/lazy-recorder.js` resolves
+    // `config.enable_recording_console_log ??
+    // remoteConfig.consoleLogRecordingEnabled`, so leaving it unset would let
+    // the PostHog project alone start recording console output into the replay
+    // stream. Console arguments are arbitrary app strings that the route-id
+    // redactor deliberately does not rewrite, so this has to be a local literal.
+    enable_recording_console_log: false,
   });
 
   posthog.register({

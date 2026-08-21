@@ -49,7 +49,20 @@ address is read locally and never transmitted.
 The recorder is pinned to `maskAllInputs`, `maskTextSelector="*"` (all text
 masked), `blockSelector="[data-telemetry-block]"`, no font collection, no
 cross-origin iframes, no network headers or bodies, and a
-`maskCapturedNetworkRequestFn` that drops every captured request. URLs are
+`maskCapturedNetworkRequestFn` that drops every captured request.
+
+Three recorder capabilities resolve local-config-first and fall back to the
+PostHog project's remote flags response, so leaving them unset would hand the
+provider a decision the source is supposed to own. Each is therefore a local
+literal: `captureCanvas: { recordCanvas: false }` and
+`enable_recording_console_log: false`. Canvas matters specifically because
+`@xterm/addon-canvas` renders terminal output to a canvas and canvas frames are
+captured as pixels, which text masking does not reach; console capture matters
+because console arguments are arbitrary strings that route-id redaction
+deliberately does not rewrite. Network header and body capture resolves
+remote-OR-local rather than local-first and so cannot be pinned that way, but
+`maskCapturedNetworkRequestFn` returning `null` drops every captured request
+regardless of what the provider enables. URLs are
 handled separately from masking, and entirely at the `before_send` boundary:
 the scrubber reduces event properties, the rrweb Meta event `href`, and every
 URL-valued DOM attribute inside `$snapshot_data`. The same reducer is also

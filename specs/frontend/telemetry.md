@@ -139,6 +139,13 @@ session replay, and telemetry-related provider and hook ownership.
   scrubbed value for repeated references, and redacts enumerable accessors
   without evaluating them. These are structural bounds; strings retain their
   existing redaction behavior and are not truncated by length.
+- Recorder capabilities that resolve against the provider's remote flags are
+  pinned in source, not left unset. Canvas recording
+  (`captureCanvas: { recordCanvas: false }`) and console capture
+  (`enable_recording_console_log: false`) both resolve local-first, so an unset
+  value would let the PostHog project turn them on by itself. Canvas frames are
+  pixels and console arguments are arbitrary strings; neither is reached by
+  text masking or by route-id redaction.
 - Recorded content control is masking plus blocking, and the two have
   different coverage. Desktop recording masks all text (`maskTextSelector="*"`)
   and all inputs, so rendered prompts, transcripts, terminal text, and paths
