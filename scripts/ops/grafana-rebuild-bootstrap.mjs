@@ -177,6 +177,7 @@ export function validateOverlayDocument(overlay) {
   if (overlay.slackContactPoint?.name !== "sns receiver" || overlay.slackContactPoint?.type !== "slack" ||
       overlay.slackContactPoint?.receiver !== overlay.contactPoint.name ||
       overlay.slackContactPoint?.legacyName !== "grafana-rebuild-slack" ||
+      overlay.slackContactPoint?.legacyUid !== "dfvuf540l7ym8d" ||
       overlay.slackContactPoint?.testReceiverName !== "grafana-rebuild-slack-test") {
     throw new Error("Overlay must define the Slack integration inside the fixed default SNS receiver");
   }
@@ -456,13 +457,14 @@ function assertLegacyState(am, legacyContact, overlay) {
     }
     return;
   }
-  if (!legacyContact.uid || receivers.length !== 1 || routes.length !== 1 ||
+  if (legacyContact.uid !== overlay.slackContactPoint.legacyUid || receivers.length !== 1 || routes.length !== 1 ||
       !isCanonicalLegacyRoute(routes[0], overlay)) {
-    throw new Error("Standalone Slack migration state is missing, duplicate, or drifted");
+    throw new Error("Standalone Slack provisioning contact must match the pinned legacy UID exactly");
   }
   const configs = receivers[0].grafana_managed_receiver_configs || [];
-  if (configs.length !== 1 || configs[0].type !== "slack" || configs[0].uid !== legacyContact.uid) {
-    throw new Error("Standalone Slack receiver config is missing, duplicate, or drifted");
+  if (configs.length !== 1 || configs[0].type !== "slack" ||
+      configs[0].uid !== overlay.slackContactPoint.legacyUid) {
+    throw new Error("Standalone Slack receiver config must match the pinned legacy UID exactly");
   }
 }
 
@@ -553,6 +555,13 @@ export async function ensureCombinedSlackContact(client, overlay, { env = proces
   const beforeContacts = findSlackContacts((await client.listContactPoints()).body, overlay);
   const before = await client.getAlertmanagerConfig();
   const baseline = captureProviderCore(before.body, beforeContacts, overlay);
+  if (!beforeContacts.target && !beforeContacts.legacy) {
+    throw new Error("Pinned standalone Slack migration target is missing; refusing combined-contact creation");
+  }
+  if (beforeContacts.target && !beforeContacts.legacy) {
+    assertCombinedContact(baseline, beforeContacts.target, overlay);
+    return { contactPoint: "present", legacyMigration: "not-needed", uid: beforeContacts.target.uid };
+  }
   let contact = beforeContacts.target;
   let contactPoint;
   if (!contact) {

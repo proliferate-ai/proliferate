@@ -307,9 +307,11 @@ Discovered live 2026-08-21 (Lane A3), not previously documented:
    integration inside `grafana-default-sns`; Grafana sends a notification to
    every integration in that contact point. The root/default policy, its full
    route tree, and the exact SNS integration remain unchanged. A partial
-   standalone `grafana-rebuild-slack` receiver is removed only after the
-   combined contact is written and verified, making interrupted migration
-   safe to retry. Any loss, ambiguity, duplicate, or drift fails closed.
+   standalone `grafana-rebuild-slack` receiver (pinned UID
+   `dfvuf540l7ym8d`) is removed only after both its provisioning and receiver
+   readbacks match that identity and the combined contact is written and
+   verified, making interrupted migration safe to retry. Any loss, ambiguity,
+   duplicate, UID mismatch, or drift fails closed before mutation.
 
 ### Repository artifacts
 

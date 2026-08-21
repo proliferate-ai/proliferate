@@ -74,6 +74,7 @@
     "type": "slack",
     "receiver": "grafana-default-sns",
     "legacyName": "grafana-rebuild-slack",
+    "legacyUid": "dfvuf540l7ym8d",
     "testReceiverName": "grafana-rebuild-slack-test",
     "webhookEnvironmentVariable": "SLACK_ALERTS_WEBHOOK_URL"
   },
