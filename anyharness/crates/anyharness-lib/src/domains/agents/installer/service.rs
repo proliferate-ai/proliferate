@@ -129,6 +129,9 @@ impl From<LauncherError> for InstallError {
                 program: "launcher".into(),
                 message: error.to_string(),
             },
+            LauncherError::UnsupportedBatchValue(value) => Self::InvalidInstallSpec(format!(
+                "windows batch launcher cannot embed a literal '\"' in value: {value:?}"
+            )),
         }
     }
 }

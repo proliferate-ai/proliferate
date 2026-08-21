@@ -21,7 +21,9 @@ use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::model::{AgentKind, ArtifactRole, Platform};
 use crate::domains::agents::readiness::paths::artifact_root;
 use crate::integrations::agent_cli::executable::{is_valid_executable, make_executable};
-use crate::integrations::agent_cli::launcher::generate_launcher_script;
+use crate::integrations::agent_cli::launcher::{
+    generate_launcher_script, managed_launcher_file_name,
+};
 
 /// Materialize one artifact from its pinned, fenced `Binary`/`Archive` source:
 /// resolve this platform's target, download it, verify the sha256, place the
@@ -110,7 +112,7 @@ pub(super) fn install_agent_process_from_pin(
     reporter: Option<&InstallProgressReporter>,
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
     let managed_dir = artifact_root(runtime_home, kind, &ArtifactRole::AgentProcess);
-    let launcher_path = managed_dir.join(format!("{}-launcher", kind.as_str()));
+    let launcher_path = managed_dir.join(managed_launcher_file_name(kind.as_str()));
     let path_prefixes = launcher_path_prefixes(runtime_home, kind);
     let launcher_env = managed_launcher_env(kind);
 

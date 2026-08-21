@@ -8,7 +8,9 @@ use crate::domains::agents::model::*;
 use crate::domains::agents::readiness::paths::artifact_root;
 use crate::domains::agents::registry::built_in_registry;
 use crate::integrations::agent_cli::executable::is_valid_executable;
-use crate::integrations::agent_cli::launcher::generate_launcher_script_atomic;
+use crate::integrations::agent_cli::launcher::{
+    generate_launcher_script_atomic, managed_launcher_file_name,
+};
 
 pub(super) fn regenerate_seeded_agent_launchers(
     runtime_home: &Path,
@@ -36,7 +38,7 @@ fn regenerate_agent_process_launcher(
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
     let kind = &descriptor.kind;
     let managed_dir = artifact_root(runtime_home, kind, &ArtifactRole::AgentProcess);
-    let launcher_path = managed_dir.join(format!("{}-launcher", kind.as_str()));
+    let launcher_path = managed_dir.join(managed_launcher_file_name(kind.as_str()));
     let path_prefixes = launcher_path_prefixes(runtime_home, kind);
     let env = managed_launcher_env(kind);
 
