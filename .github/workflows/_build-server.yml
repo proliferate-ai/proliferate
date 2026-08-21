@@ -21,8 +21,12 @@ name: Build Server Artifacts
 # file, the thing you actually want is a stronger PR gate in server-ci.yml.
 #
 # Reusable-only, like the `_deploy-*.yml` lanes. The job-level `if:` gates below
-# are carried over verbatim from server-ci.yml, so a caller triggered by a
-# `server-v*` tag push keeps the exact publish semantics it had there.
+# are carried over verbatim from server-ci.yml. The `startsWith(github.ref,
+# 'refs/tags/server-v')` leg of those gates (and the `github.event_name ==
+# 'push'` check further down) is currently unreachable: no caller triggers this
+# workflow from a tag push today. It is kept, unchanged, only to stay
+# byte-comparable with the code it was moved from and to support a possible
+# future tag-triggered caller, should one be added.
 
 on:
   workflow_call:

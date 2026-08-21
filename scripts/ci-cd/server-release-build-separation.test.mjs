@@ -42,7 +42,10 @@ function jobs(source, name) {
 }
 
 // The literal publish gate both release jobs carry. Kept verbatim from
-// server-ci.yml so a `server-v` tag-triggered caller keeps identical semantics.
+// server-ci.yml. Its `server-v` tag-push leg is currently unreachable (no
+// caller triggers this workflow from a tag push today) and is retained
+// unchanged only to stay byte-comparable with server-ci.yml and to support a
+// possible future tag-triggered caller.
 const PUBLISH_GATE =
   "if: (startsWith(github.ref, 'refs/tags/server-v')) || " +
   "(inputs.publish == true && inputs.dry_run != true)";

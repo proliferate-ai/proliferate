@@ -1,13 +1,20 @@
 name: Server CI
 
 on:
-  # No `tags: ["server-v*"]` here any more. The two jobs that reacted to a
-  # server release tag (`docker`, `self-hosted-release-assets`) moved to
-  # `_build-server.yml`, so a tag push has nothing left to trigger in this file
-  # -- it would only re-run the suite the tagged commit already passed on `main`.
-  # (It never actually fired either: a `paths:` filter alongside a tag push
-  # matches nothing, and this workflow has zero tag-triggered runs in its
-  # history despite server-v0.4.4 through server-v0.4.9 all existing.)
+  # No `tags: ["server-v*"]` here any more. This is a deliberate retirement,
+  # not a no-op cleanup -- the tag trigger DID fire historically: three
+  # human-pushed tags (server-v0.1.1/0.1.2/0.1.3, 2026-05-29, runs
+  # 26621290094/26621446218/26622403422) ran this workflow, including the two
+  # jobs that reacted to a server release tag (`docker`,
+  # `self-hosted-release-assets`), which have since moved to
+  # `_build-server.yml`. (GitHub does not evaluate `paths:` filters for tag
+  # pushes at all, so the `paths:` list below never suppressed those runs.)
+  # server-v0.4.x tags produced no runs for an unrelated reason: those tags
+  # are minted by a workflow using the default `GITHUB_TOKEN`
+  # (`_build-server.yml`'s tag-creation step), and `GITHUB_TOKEN` pushes do
+  # not trigger new workflow runs. The trigger is being retired now because
+  # releases flow exclusively through `release.yml` -> `_build-server.yml`;
+  # a human-pushed `server-v*` tag no longer runs anything in this repo.
   push:
     branches: [main]
     paths:
