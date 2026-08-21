@@ -420,19 +420,24 @@ function findSlackContact(points, overlay) {
   return contact || null;
 }
 
-function isMatcherlessRoute(route) {
-  const arrays = [route.matchers, route.object_matchers];
-  const objects = [route.match, route.match_re];
-  return arrays.every((value) => value == null || (Array.isArray(value) && value.length === 0)) &&
-    objects.every(
-      (value) => value == null || (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0),
-    );
+const ROUTE_MATCH_KEYS = ["matchers", "object_matchers", "match", "match_re"];
+
+function routeMatchShape(route) {
+  const shape = {};
+  for (const key of ROUTE_MATCH_KEYS) {
+    const value = route?.[key];
+    if (value == null) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    if (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) continue;
+    shape[key] = structuredClone(value);
+  }
+  return shape;
 }
 
-function isExpectedSlackRoute(route, overlay) {
+function isExpectedSlackRoute(route, snsDeliveryRoute, overlay) {
   return route?.receiver === overlay.slackContactPoint.name &&
     route.continue === true &&
-    isMatcherlessRoute(route) &&
+    isDeepStrictEqual(routeMatchShape(route), routeMatchShape(snsDeliveryRoute)) &&
     (route.routes == null || (Array.isArray(route.routes) && route.routes.length === 0));
 }
 
@@ -452,14 +457,16 @@ function captureSnsBaseline(config, overlay) {
   const nonSlackRoutes = (am.route.routes || []).filter(
     (route) => route.receiver !== overlay.slackContactPoint.name,
   );
-  if (!nonSlackRoutes.some(
-    (route) => route.receiver === overlay.notificationPolicy.receiver && isMatcherlessRoute(route),
-  )) {
-    throw new Error("Default SNS matcherless child route is missing; additive Slack fan-out is not safe");
+  const deliveryRoutes = nonSlackRoutes.filter(
+    (route) => route.receiver === overlay.notificationPolicy.receiver,
+  );
+  if (deliveryRoutes.length !== 1) {
+    throw new Error("Default SNS delivery child route is missing or ambiguous; additive Slack fan-out is not safe");
   }
   return {
     receiver: structuredClone(receivers[0]),
     childRoutes: structuredClone(nonSlackRoutes),
+    deliveryRoute: structuredClone(deliveryRoutes[0]),
   };
 }
 
@@ -473,7 +480,7 @@ function assertSnsBaselinePreserved(config, baseline, overlay) {
   }
 }
 
-function assertSlackReceiverAndRoute(config, contact, overlay) {
+function assertSlackReceiverAndRoute(config, contact, snsDeliveryRoute, overlay) {
   const am = config?.alertmanager_config;
   const receivers = (am?.receivers || []).filter((entry) => entry.name === overlay.slackContactPoint.name);
   if (receivers.length !== 1) {
@@ -484,14 +491,14 @@ function assertSlackReceiverAndRoute(config, contact, overlay) {
     throw new Error("Slack alertmanager receiver configuration is missing or drifted");
   }
   const routes = (am?.route?.routes || []).filter((route) => route.receiver === overlay.slackContactPoint.name);
-  if (routes.length !== 1 || !isExpectedSlackRoute(routes[0], overlay)) {
+  if (routes.length !== 1 || !isExpectedSlackRoute(routes[0], snsDeliveryRoute, overlay)) {
     throw new Error("Slack child route is missing, ambiguous, or drifted");
   }
 }
 
-// Add one child route only after proving that a later matcherless SNS child
-// already exists. The root receiver and every pre-existing non-Slack child
-// route are snapshotted and compared after each write.
+// Mirror the unique SNS delivery child's match shape into a preceding Slack
+// sibling with continue=true. The root receiver and every pre-existing
+// non-Slack child route are snapshotted and compared after each write.
 export async function ensureSlackContactAndRoute(client, overlay, { env = process.env } = {}) {
   const webhook = slackWebhook(env);
   const before = await client.getAlertmanagerConfig();
@@ -519,7 +526,8 @@ export async function ensureSlackContactAndRoute(client, overlay, { env = proces
   const matchingRoutes = (am.route.routes || []).filter(
     (route) => route.receiver === overlay.slackContactPoint.name,
   );
-  if (matchingRoutes.length > 1 || (matchingRoutes.length === 1 && !isExpectedSlackRoute(matchingRoutes[0], overlay))) {
+  if (matchingRoutes.length > 1 ||
+      (matchingRoutes.length === 1 && !isExpectedSlackRoute(matchingRoutes[0], snsBaseline.deliveryRoute, overlay))) {
     throw new Error("Live Slack route is ambiguous or drifted; refusing to overwrite it");
   }
   const slackReceivers = (am.receivers || []).filter((entry) => entry.name === overlay.slackContactPoint.name);
@@ -528,17 +536,21 @@ export async function ensureSlackContactAndRoute(client, overlay, { env = proces
     throw new Error("Slack alertmanager receiver configuration is missing or drifted");
   }
   if (matchingRoutes.length === 1) {
-    assertSlackReceiverAndRoute(afterContact.body, contact, overlay);
+    assertSlackReceiverAndRoute(afterContact.body, contact, snsBaseline.deliveryRoute, overlay);
     return { contactPoint, route: "present", uid: contact.uid };
   }
 
-  const expected = { receiver: overlay.slackContactPoint.name, continue: true };
+  const expected = {
+    ...routeMatchShape(snsBaseline.deliveryRoute),
+    receiver: overlay.slackContactPoint.name,
+    continue: true,
+  };
   const next = structuredClone(afterContact.body);
   next.alertmanager_config.route.routes = [expected, ...(next.alertmanager_config.route.routes || [])];
   await client.postAlertmanagerConfig(next);
   const afterRoute = await client.getAlertmanagerConfig();
   assertSnsBaselinePreserved(afterRoute.body, snsBaseline, overlay);
-  assertSlackReceiverAndRoute(afterRoute.body, contact, overlay);
+  assertSlackReceiverAndRoute(afterRoute.body, contact, snsBaseline.deliveryRoute, overlay);
   return { contactPoint, route: "created", uid: contact.uid };
 }
 
@@ -558,8 +570,8 @@ export async function runSlackVerify({ client, repoRoot = REPO_ROOT, env = proce
     throw new Error("Slack contact point is missing its Grafana uid");
   }
   const config = await client.getAlertmanagerConfig();
-  captureSnsBaseline(config.body, overlay);
-  assertSlackReceiverAndRoute(config.body, contact, overlay);
+  const snsBaseline = captureSnsBaseline(config.body, overlay);
+  assertSlackReceiverAndRoute(config.body, contact, snsBaseline.deliveryRoute, overlay);
   return { status: "verified" };
 }
 
@@ -572,8 +584,8 @@ export async function runSlackTest({ client, repoRoot = REPO_ROOT, env = process
     throw new Error("Slack contact point is missing; run slack-apply first");
   }
   const config = await client.getAlertmanagerConfig();
-  captureSnsBaseline(config.body, overlay);
-  assertSlackReceiverAndRoute(config.body, contact, overlay);
+  const snsBaseline = captureSnsBaseline(config.body, overlay);
+  assertSlackReceiverAndRoute(config.body, contact, snsBaseline.deliveryRoute, overlay);
   const result = await client.testReceiver({
     receivers: [{
       name: overlay.slackContactPoint.name,
