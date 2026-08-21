@@ -36,7 +36,7 @@ export function resolveObservedLaunchControlScope<TControl>(
   options: ObservedLaunchControlOptions<TControl>,
   modelId: string | null | undefined,
 ): ResolvedObservedLaunchControlScope<TControl> {
-  const effectiveModelId = modelId ?? options.defaults.modelId ?? null;
+  const effectiveModelId = modelId || options.defaults.modelId || null;
   const modelScope = effectiveModelId
     ? options.modelControls?.find((candidate) => candidate.modelId === effectiveModelId)
     : undefined;

@@ -1,5 +1,5 @@
 import type { CloudHarnessLaunchOptionsResponse } from "@proliferate/cloud-sdk";
-import { resolveObservedLaunchControlScope } from "#product/domain/sessions/launch-control-scope";
+import { resolveObservedLaunchControlScope } from "#product/lib/domain/sessions/launch-control-scope";
 
 export interface WorkflowBuilderModelOption {
   id: string;

@@ -1,5 +1,5 @@
 import type { HarnessLaunchOptionsResponse } from "@anyharness/sdk";
-import { resolveObservedLaunchControlScope } from "#product/domain/sessions/launch-control-scope";
+import { resolveObservedLaunchControlScope } from "#product/lib/domain/sessions/launch-control-scope";
 
 /**
  * Filter a merged control-value map down to the target's current observation.
