@@ -306,6 +306,10 @@ fn set_app_config_api_base_url_at(
     ))
 }
 
+#[cfg(all(test, unix))]
+#[path = "app_config_home_env_tests.rs"]
+mod home_env_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
