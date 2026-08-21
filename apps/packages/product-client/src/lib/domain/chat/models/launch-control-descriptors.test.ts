@@ -404,3 +404,73 @@ describe("buildLaunchControlDescriptors", () => {
     });
   });
 });
+
+describe("observed launch control ids", () => {
+  // Codex observes `reasoning_effort` / `fast-mode` at launch and reports
+  // `effort` / `fast_mode` once live. The composer groups by the descriptor
+  // key, so the launch spelling must resolve to the live one or the effort
+  // stepper and fast-mode toggle demote to overflow chips on the new-chat
+  // composer and re-promote the instant the session goes live.
+  it("normalizes codex launch ids onto live control keys", () => {
+    const controls = buildLaunchControlDescriptors({
+      selection: { kind: "codex", modelId: "gpt-5.6-sol" },
+      launchAgents: [
+        {
+          kind: "codex",
+          models: [{ id: "gpt-5.6-sol" }],
+          launchControls: [
+            control("reasoning_effort", "Reasoning effort", "medium"),
+            control("fast-mode", "Fast mode", "off"),
+          ],
+        },
+      ],
+      pendingConfigChanges: null,
+      onSelect: vi.fn(),
+    });
+
+    expect(controls.map((candidate) => candidate.key)).toEqual([
+      "effort",
+      "fast_mode",
+    ]);
+  });
+
+  it("keeps the observed id as the executable raw config id", () => {
+    const controls = buildLaunchControlDescriptors({
+      selection: { kind: "codex", modelId: "gpt-5.6-sol" },
+      launchAgents: [
+        {
+          kind: "codex",
+          models: [{ id: "gpt-5.6-sol" }],
+          launchControls: [
+            control("reasoning_effort", "Reasoning effort", "medium"),
+            control("fast-mode", "Fast mode", "off"),
+          ],
+        },
+      ],
+      pendingConfigChanges: null,
+      onSelect: vi.fn(),
+    });
+
+    expect(controls.map((candidate) => candidate.rawConfigId)).toEqual([
+      "reasoning_effort",
+      "fast-mode",
+    ]);
+  });
+
+  it("preserves unknown observed ids instead of dropping the control", () => {
+    const controls = buildLaunchControlDescriptors({
+      selection: { kind: "codex", modelId: "gpt-5.6-sol" },
+      launchAgents: [
+        {
+          kind: "codex",
+          models: [{ id: "gpt-5.6-sol" }],
+          launchControls: [control("verbosity", "Verbosity", "medium")],
+        },
+      ],
+      pendingConfigChanges: null,
+      onSelect: vi.fn(),
+    });
+
+    expect(controls.map((candidate) => candidate.key)).toEqual(["verbosity"]);
+  });
+});

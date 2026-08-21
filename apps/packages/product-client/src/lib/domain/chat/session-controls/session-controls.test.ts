@@ -3,6 +3,7 @@ import type { NormalizedSessionControls } from "@anyharness/sdk";
 import {
   buildLiveSessionControlDescriptors,
   mergeSessionConfigControlDescriptors,
+  resolveComposerSessionControls,
   type LiveSessionControlDescriptor,
 } from "#product/lib/domain/chat/session-controls/session-controls";
 
@@ -186,6 +187,86 @@ describe("mergeSessionConfigControlDescriptors", () => {
         rawConfigId: "reasoning_effort",
       },
     ]);
+  });
+});
+
+// The new-chat -> live-session handoff. A session id appears before its first
+// live config snapshot does, and for that window neither source used to have
+// anything: launch descriptors were dropped on the session id, live ones had
+// not arrived. The composer row emptied and refilled on every new chat.
+describe("resolveComposerSessionControls", () => {
+  const launchMode = descriptor({
+    key: "mode",
+    label: "Mode",
+    detail: "Manual",
+    rawConfigId: "mode",
+  });
+  const launchEffort = descriptor({
+    key: "effort",
+    label: "Reasoning effort",
+    detail: "High",
+    rawConfigId: "effort",
+  });
+  const liveEffort = descriptor({
+    key: "effort",
+    label: "Reasoning effort",
+    detail: "Medium",
+    rawConfigId: "effort",
+  });
+
+  it("keeps the launched selection on screen while live config is in flight", () => {
+    const resolved = resolveComposerSessionControls({
+      suppressActiveSessionState: false,
+      hasActiveSession: true,
+      launchControls: [launchMode, launchEffort],
+      liveControls: [],
+    });
+
+    expect(resolved.map((control) => control.key)).toEqual(["mode", "effort"]);
+    expect(resolved.map((control) => control.detail)).toEqual(["Manual", "High"]);
+  });
+
+  it("makes the stand-in unsettable, because the session is already created", () => {
+    const resolved = resolveComposerSessionControls({
+      suppressActiveSessionState: false,
+      hasActiveSession: true,
+      launchControls: [launchMode, launchEffort],
+      liveControls: [],
+    });
+
+    expect(resolved.every((control) => control.settable)).toBe(false);
+    // The source descriptors are not mutated in place.
+    expect(launchMode.settable).toBe(true);
+  });
+
+  it("hands over to live config the moment it arrives", () => {
+    expect(resolveComposerSessionControls({
+      suppressActiveSessionState: false,
+      hasActiveSession: true,
+      launchControls: [launchMode, launchEffort],
+      liveControls: [liveEffort],
+    })).toEqual([liveEffort]);
+  });
+
+  it("leaves pre-session launch controls settable", () => {
+    const resolved = resolveComposerSessionControls({
+      suppressActiveSessionState: false,
+      hasActiveSession: false,
+      launchControls: [launchMode, launchEffort],
+      liveControls: [],
+    });
+
+    expect(resolved).toEqual([launchMode, launchEffort]);
+    expect(resolved.every((control) => control.settable)).toBe(true);
+  });
+
+  it("shows nothing while active session state is suppressed", () => {
+    expect(resolveComposerSessionControls({
+      suppressActiveSessionState: true,
+      hasActiveSession: true,
+      launchControls: [launchMode, launchEffort],
+      liveControls: [liveEffort],
+    })).toEqual([]);
   });
 });
 

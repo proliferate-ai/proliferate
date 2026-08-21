@@ -36,11 +36,38 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
     intent: &ResolvedLaunchIntent,
     startup_state: &mut SessionStartupState,
 ) -> anyhow::Result<()> {
-    if let Some(model_id) = intent.model_id.as_deref() {
-        if !live_model_ids(startup_state).iter().any(|value| value == model_id) {
-            log_initial_config_apply(session_id, agent_kind, "model", "membership_rejected");
-            anyhow::bail!("requested model '{model_id}' is absent from the live {agent_kind} session");
+    let resolved_model_id = match intent.model_id.as_deref() {
+        Some(model_id) => {
+            match resolve_requested_model_id(&live_model_ids(startup_state), model_id) {
+                Some(resolved) => {
+                    if resolved != model_id {
+                        // The live statement renamed the id between the create-time
+                        // observation and this session (a context-variant rotation such
+                        // as `claude-fable-5` -> `claude-fable-5[1m]`). The base id is
+                        // the same model selection, so launch with the id the live
+                        // session actually offers instead of failing the start.
+                        tracing::warn!(
+                            session_id,
+                            harness_kind = agent_kind,
+                            requested_model_id = %model_id,
+                            resolved_model_id = %resolved,
+                            event = "session.initial_config.model_id_rotated",
+                            "requested model id resolved to its live variant"
+                        );
+                    }
+                    Some(resolved)
+                }
+                None => {
+                    log_initial_config_apply(session_id, agent_kind, "model", "membership_rejected");
+                    anyhow::bail!(
+                        "requested model '{model_id}' is absent from the live {agent_kind} session"
+                    );
+                }
+            }
         }
+        None => None,
+    };
+    if let Some(model_id) = resolved_model_id.as_deref() {
         let outcome = match try_apply_model_preference(
             conn,
             native_session_id,
@@ -172,7 +199,8 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
         "requested controls are absent from the live {agent_kind} session: {:?}",
         pending.keys().collect::<Vec<_>>()
     );
-    let confirmed_intent = intent_without_dropped_controls(intent, &dropped_control_ids);
+    let mut confirmed_intent = intent_without_dropped_controls(intent, &dropped_control_ids);
+    confirmed_intent.model_id = resolved_model_id;
     if let Err(error) = ensure_resolved_launch_intent_confirmed(startup_state, &confirmed_intent) {
         log_initial_config_apply(session_id, agent_kind, "complete_intent", "final_mismatch");
         return Err(error);
@@ -325,6 +353,44 @@ async fn try_apply_config_option_by_id(
     .await
 }
 
+/// Resolves the create-time model id against the ids the live session offers.
+///
+/// Exact membership stays the primary rule. When the exact id is absent, a
+/// live id whose bracket-stripped base equals the requested id's base is the
+/// same model selection under a rotated context-variant id, and resolution
+/// succeeds only when exactly one such live id exists. Everything else stays
+/// fail-closed: no base match, or an ambiguous one, refuses the start exactly
+/// as before.
+pub(in crate::live::sessions::actor) fn resolve_requested_model_id(
+    live_ids: &[String],
+    requested: &str,
+) -> Option<String> {
+    if live_ids.iter().any(|value| value == requested) {
+        return Some(requested.to_string());
+    }
+    let requested_base = base_model_id(requested);
+    if requested_base.is_empty() {
+        return None;
+    }
+    let mut candidates = live_ids
+        .iter()
+        .filter(|value| base_model_id(value) == requested_base);
+    let first = candidates.next()?;
+    if candidates.next().is_some() {
+        return None;
+    }
+    Some(first.clone())
+}
+
+/// The id with any trailing bracket variant marker removed:
+/// `claude-fable-5[1m]` -> `claude-fable-5`.
+fn base_model_id(id: &str) -> &str {
+    match id.find('[') {
+        Some(index) => &id[..index],
+        None => id,
+    }
+}
+
 fn live_model_ids(startup_state: &SessionStartupState) -> Vec<String> {
     if let Some(option) =
         find_select_option_by_purpose(&startup_state.config_options, ConfigPurpose::Model)
@@ -420,5 +486,68 @@ impl SessionActor {
         }
 
         Ok(ConfigApplyState::Queued)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_requested_model_id;
+
+    fn live(ids: &[&str]) -> Vec<String> {
+        ids.iter().map(|value| value.to_string()).collect()
+    }
+
+    #[test]
+    fn exact_match_wins() {
+        let ids = live(&["default", "claude-fable-5", "sonnet"]);
+        assert_eq!(
+            resolve_requested_model_id(&ids, "claude-fable-5").as_deref(),
+            Some("claude-fable-5")
+        );
+    }
+
+    #[test]
+    fn rotated_variant_resolves_from_base_request() {
+        let ids = live(&["default", "opus[1m]", "claude-fable-5[1m]", "sonnet", "haiku"]);
+        assert_eq!(
+            resolve_requested_model_id(&ids, "claude-fable-5").as_deref(),
+            Some("claude-fable-5[1m]")
+        );
+    }
+
+    #[test]
+    fn variant_request_resolves_to_plain_base() {
+        let ids = live(&["default", "claude-fable-5", "sonnet"]);
+        assert_eq!(
+            resolve_requested_model_id(&ids, "claude-fable-5[1m]").as_deref(),
+            Some("claude-fable-5")
+        );
+    }
+
+    #[test]
+    fn exact_match_preferred_over_base_candidates() {
+        let ids = live(&["claude-fable-5", "claude-fable-5[1m]"]);
+        assert_eq!(
+            resolve_requested_model_id(&ids, "claude-fable-5[1m]").as_deref(),
+            Some("claude-fable-5[1m]")
+        );
+    }
+
+    #[test]
+    fn ambiguous_base_match_fails_closed() {
+        let ids = live(&["claude-fable-5[1m]", "claude-fable-5[200k]"]);
+        assert_eq!(resolve_requested_model_id(&ids, "claude-fable-5"), None);
+    }
+
+    #[test]
+    fn unknown_model_fails_closed() {
+        let ids = live(&["default", "sonnet", "haiku"]);
+        assert_eq!(resolve_requested_model_id(&ids, "claude-fable-5"), None);
+    }
+
+    #[test]
+    fn bracket_only_request_fails_closed() {
+        let ids = live(&["default", "sonnet"]);
+        assert_eq!(resolve_requested_model_id(&ids, "[1m]"), None);
     }
 }

@@ -163,8 +163,15 @@ export function useChatModelSelectorState(options?: {
   const activeLaunchAgentKind = scopedActiveSessionId ? currentSelection?.kind ?? null : null;
   const selectLaunchControl = useChatLaunchControlActions({ activeLaunchAgentKind });
 
+  // Built regardless of whether a session is active. These are the launch-time
+  // descriptors, and an active session does not make them meaningless: they are
+  // what the consumer falls back to while the session's own live config is
+  // still in flight. Zeroing them here used to blank the whole composer control
+  // row for the width of the new-chat -> live-session handoff, because the live
+  // side is also empty until the first config snapshot arrives. Precedence is
+  // the consumer's call (see ChatInput): live config wins the moment it exists.
   const launchControls = useMemo(
-    () => scopedActiveSessionId ? [] : buildLaunchControlDescriptors({
+    () => buildLaunchControlDescriptors({
       selection: currentSelection,
       launchAgents: launchCatalog.launchAgents,
       pendingConfigChanges: scopedPendingConfigChanges,
@@ -174,7 +181,6 @@ export function useChatModelSelectorState(options?: {
       currentSelection,
       launchCatalog.launchAgents,
       selectLaunchControl,
-      scopedActiveSessionId,
       scopedPendingConfigChanges,
     ],
   );

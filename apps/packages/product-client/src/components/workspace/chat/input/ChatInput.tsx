@@ -33,7 +33,7 @@ import { serializeChatDraftToPrompt } from "#product/lib/domain/chat/composer/fi
 import { promptAttachmentSnapshotsToContentParts } from "#product/domain/chats/composer/prompt-attachment-content-parts";
 import { buildPromptWithSelectedResponseContexts } from "#product/domain/chats/transcript/selected-response-context";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
-import { mergeSessionConfigControlDescriptors } from "#product/lib/domain/chat/session-controls/session-controls";
+import { resolveComposerSessionControls } from "#product/lib/domain/chat/session-controls/session-controls";
 import { buildComposerSessionControlGroups } from "#product/lib/domain/chat/session-controls/composer-control-groups";
 import {
   finishOrCancelMeasurementOperation,
@@ -113,11 +113,17 @@ export function ChatInput({
   });
   const { agentKind, controls: sessionConfigControls, modeControl } = useChatSessionControls();
   const launchConfigControls = suppressActiveSessionState ? [] : modelSelectorProps.launchControls;
-  const effectiveSessionConfigControls = useMemo(() => (
-    suppressActiveSessionState
-      ? []
-      : mergeSessionConfigControlDescriptors(launchConfigControls, sessionConfigControls)
-  ), [launchConfigControls, sessionConfigControls, suppressActiveSessionState]);
+  const effectiveSessionConfigControls = useMemo(() => resolveComposerSessionControls({
+    suppressActiveSessionState,
+    hasActiveSession: !!activeSessionIdForUi,
+    launchControls: launchConfigControls,
+    liveControls: sessionConfigControls,
+  }), [
+    activeSessionIdForUi,
+    launchConfigControls,
+    sessionConfigControls,
+    suppressActiveSessionState,
+  ]);
   const effectiveAgentKind = suppressActiveSessionState
     ? null
     : agentKind ?? modelSelectorProps.launchAgentKind;
