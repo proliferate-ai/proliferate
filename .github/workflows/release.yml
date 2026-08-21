@@ -87,10 +87,36 @@ jobs:
       server_tag: ${{ steps.artifacts.outputs.server_tag }}
       artifact_tags: ${{ steps.artifacts.outputs.artifact_tags }}
     steps:
+      # actions/checkout resolves a branch, a tag, or a full 40-character SHA.
+      # It cannot resolve an abbreviated SHA: it fetches the ref by name and
+      # dies with "A branch or tag with the name '<ref>' could not be found".
+      # An abbreviated SHA is exactly what an operator copies out of
+      # `git log --oneline` or a GitHub commit listing when driving the hotfix
+      # or promote path by hand, so run 32452508826 was dispatched with
+      # `ref: 6eac131a47` and failed here 9s in, before any release step ran.
+      # Re-dispatching the identical commit as its full SHA (run 32453354501)
+      # then worked, which is the whole difference. Resolve the input through
+      # the API first so every spelling of a commit that exists in this
+      # repository reaches checkout as the one spelling it accepts, and so an
+      # unresolvable ref fails with a message naming the ref.
+      - name: Resolve the release ref to a full commit SHA
+        id: ref
+        env:
+          INPUT_REF: ${{ github.event.inputs.ref || 'main' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${INPUT_REF}" --jq .sha)"; then
+            echo "::error::Release ref '${INPUT_REF}' does not resolve to a commit in ${GITHUB_REPOSITORY}. Pass a branch, a tag, or a commit SHA (abbreviated or full) that exists on this repository."
+            exit 1
+          fi
+          echo "Resolved release ref '${INPUT_REF}' to ${sha}."
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.ref || 'main' }}
+          ref: ${{ steps.ref.outputs.sha }}
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -270,7 +296,7 @@ jobs:
             echo "### Release plan"
             echo "- Product: \`${{ steps.artifacts.outputs.product_tag || 'no release' }}\`"
             echo "- Checkpoint: \`${{ steps.meta.outputs.release_id }}\`"
-            echo "- Ref: \`${{ github.event.inputs.ref || 'main' }}\`"
+            echo "- Ref: \`${{ github.event.inputs.ref || 'main' }}\` (resolved to \`${{ steps.ref.outputs.sha }}\`)"
             echo "- Base: \`${{ steps.meta.outputs.base_sha }}\`"
             echo "- Head: \`${{ steps.commit.outputs.head_sha }}\`"
             echo "- Skip build: \`${{ steps.meta.outputs.skip_build }}\`"
