@@ -542,13 +542,38 @@ jobs:
               echo "::error::APPLE_SIGNING_IDENTITY secret is not configured. Refusing to produce an ad-hoc-signed macOS release; ad-hoc builds break keychain persistence for every user who logs in on them. Dispatch with allow_unsigned=true to deliberately build unsigned."
               exit 1
             fi
-            # Build the DMG in the known-good path first, then build the updater-
-            # enabled app bundle separately so the mac updater tarball is emitted.
+            # One invocation emits the app bundle, the DMG and the updater
+            # tarball. This used to be two passes — `--bundles dmg` then
+            # `--bundles app` — because a dmg-only pass emits no updater
+            # tarball. That is real, but the fix is to ask for both bundle
+            # types at once, not to run the bundler twice. In tauri-bundler
+            # 2.9.4 (pinned via @tauri-apps/cli 2.11.4, see its Cargo.lock):
+            #
+            #   * bundle.rs sorts the requested package types by
+            #     `PackageType::priority()` (settings.rs): MacOsBundle=0,
+            #     Dmg=1, Updater=2. So `--bundles app,dmg` always runs
+            #     app -> dmg, whatever order the flag lists them in.
+            #   * The updater artifact is appended by bundle.rs only when
+            #     `MacOsBundle` is among the requested types — that is the
+            #     whole reason dmg-only produced no tarball. `app,dmg`
+            #     satisfies it.
+            #   * dmg/mod.rs rebuilds (and separately signs + notarizes) its
+            #     own throwaway `.app` *only* when MacOsBundle was not already
+            #     built in the same run; otherwise it reuses the one on disk.
+            #     Two passes therefore paid two full `notarytool submit`
+            #     round trips and two Rust link steps for one release.
+            #   * macos/app.rs holds the only `notarize()` call site in the
+            #     macOS path; dmg/mod.rs and updater_bundle.rs never notarize.
+            #     One pass = exactly one notarization, asserted below.
+            #   * updater_bundle.rs tars the same on-disk `.app` the app step
+            #     notarized and stapled, so the DMG payload and the updater
+            #     payload are now the same stapled bundle instead of two
+            #     independently notarized builds.
             #
             # `-c '{"build":{"beforeBuildCommand":""}}'` blanks tauri.conf.json's
-            # `beforeBuildCommand: "pnpm build"` for these two invocations only
+            # `beforeBuildCommand: "pnpm build"` for this invocation only
             # (tauri-cli merges the inline JSON over the file config, and treats
-            # an empty hook script as "no hook"). Without it each pass re-runs
+            # an empty hook script as "no hook"). Without it the pass re-runs
             # the entire renderer build that the "Build frontend" step above
             # already ran: 3m43s + 2m58s of pure duplicate work in release run
             # 30240922004. `frontendDist` is `../dist`, which is exactly what
@@ -560,9 +585,13 @@ jobs:
             # VITE_PROLIFERATE_RELEASE, so the shipped renderer's release name
             # never matched the uploaded artifacts.
             tauri_config='{"build":{"beforeBuildCommand":""}}'
-            test -d dist || { echo "::error::apps/desktop/dist is missing; the Build frontend step must run before the tauri passes."; exit 1; }
-            pnpm tauri build --target ${{ matrix.target }} --bundles dmg -c "$tauri_config"
-            pnpm tauri build --target ${{ matrix.target }} --bundles app -c "$tauri_config"
+            test -d dist || { echo "::error::apps/desktop/dist is missing; the Build frontend step must run before the tauri pass."; exit 1; }
+            # Tee the bundler output so the notarization-count assertion in
+            # "Verify macOS notarization and stapling" can read it. `shell:
+            # bash` runs with `-o pipefail`, so a bundler failure still fails
+            # the step.
+            pnpm tauri build --target ${{ matrix.target }} --bundles app,dmg -c "$tauri_config" \
+              2>&1 | tee "$RUNNER_TEMP/tauri-build.log"
           else
             pnpm tauri build --target ${{ matrix.target }} --bundles msi,nsis
           fi
@@ -599,6 +628,93 @@ jobs:
               exit 1
             fi
           done
+
+      # Added with the single-pass `--bundles app,dmg` cutover. The two-pass
+      # build notarized twice: once for the throwaway `.app` the dmg pass built
+      # and then deleted, and once for the `.app` the updater tarball was made
+      # from — so the DMG payload and the updater payload were two separately
+      # notarized builds of the same commit. One pass makes them the same
+      # stapled bundle. These assertions are the standing proof that the single
+      # notarization actually covered every shipped payload; if a future change
+      # reintroduces a second pass, or drops the app bundle type (which is what
+      # silently disables updater artifacts in tauri-bundler 2.9.4), the counts
+      # below stop matching and the release fails here instead of shipping.
+      - name: Verify macOS notarization and stapling
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        shell: bash
+        env:
+          _SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          _API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          if [[ -z "$_SIGNING_IDENTITY" || -z "$_API_KEY" ]]; then
+            echo "No Apple signing identity / notary key configured (ad-hoc build); skipping notarization assertions."
+            exit 0
+          fi
+
+          log="$RUNNER_TEMP/tauri-build.log"
+          test -s "$log" || { echo "::error::Missing tauri build log at $log"; exit 1; }
+
+          # tauri-macos-sign 2.3.4 prints exactly one `Notarizing <path>.app`
+          # immediately before each `xcrun notarytool submit`, and exactly one
+          # `Stapling app...` after each accepted submission.
+          submits=$(grep -cE 'Notarizing .*\.app$' "$log" || true)
+          staples=$(grep -cE 'Stapling app\.\.\.' "$log" || true)
+          echo "notarytool submissions=$submits staplings=$staples"
+          [[ "$submits" == "1" ]] || { echo "::error::Expected exactly 1 notarization round trip, saw $submits"; exit 1; }
+          [[ "$staples" == "1" ]] || { echo "::error::Expected exactly 1 stapling, saw $staples"; exit 1; }
+
+          base="target/${{ matrix.target }}/release/bundle"
+
+          # Explicit `|| return 1` on every command: bash suppresses errexit
+          # inside a function body when the call site is part of a `||` list
+          # (the DMG check below is), so a bare command's failure would
+          # otherwise be swallowed and only the last command's status would
+          # surface.
+          assert_notarized() {
+            echo "--- $2: $1"
+            xcrun stapler validate "$1" || return 1
+            spctl --assess --verbose=4 --type execute "$1" || return 1
+          }
+
+          # 1. The bundle left on disk. This is the one the updater tarball was
+          #    made from and the one copied into the DMG.
+          app=$(find "$base/macos" -maxdepth 1 -type d -name '*.app' | head -n 1)
+          [[ -n "$app" ]] || { echo "::error::No .app bundle on disk"; exit 1; }
+          assert_notarized "$app" "built .app"
+
+          # 2. The .app actually inside the DMG customers download.
+          dmg=$(compgen -G "$base/dmg/*.dmg" | head -n 1)
+          [[ -n "$dmg" ]] || { echo "::error::No DMG to inspect"; exit 1; }
+          mount_dir=$(mktemp -d)
+          hdiutil attach "$dmg" -readonly -nobrowse -noautoopen -mountpoint "$mount_dir"
+          status=0
+          dmg_app=$(find "$mount_dir" -maxdepth 1 -type d -name '*.app' | head -n 1)
+          if [[ -n "$dmg_app" ]]; then
+            assert_notarized "$dmg_app" "DMG-embedded .app" || status=1
+          else
+            echo "::error::DMG contains no .app bundle"
+            status=1
+          fi
+          # Retry the detach once: Spotlight can hold the fresh volume busy.
+          hdiutil detach "$mount_dir" -quiet || { sleep 2; hdiutil detach "$mount_dir" -force; }
+          [[ "$status" == "0" ]] || exit 1
+
+          # 3. The .app inside the updater tarball. Reported, not enforced:
+          #    whether a stapled ticket survives tar/untar is a property of the
+          #    upstream updater format that predates this change, and the
+          #    updater's own minisign signature is what gates an update.
+          tarball=$(compgen -G "$base/macos/*.app.tar.gz" | head -n 1)
+          [[ -n "$tarball" ]] || { echo "::error::No updater tarball to inspect"; exit 1; }
+          extract=$(mktemp -d)
+          tar -xzf "$tarball" -C "$extract"
+          updater_app=$(find "$extract" -maxdepth 1 -type d -name '*.app' | head -n 1)
+          [[ -n "$updater_app" ]] || { echo "::error::Updater tarball contains no .app"; exit 1; }
+          echo "--- updater tarball .app: $updater_app"
+          xcrun stapler validate "$updater_app" || echo "::warning::Updater tarball .app is not stapled after extraction"
+          spctl --assess --verbose=4 --type execute "$updater_app" || echo "::warning::Updater tarball .app failed offline Gatekeeper assessment"
+          # The extracted bundle is another ~700MB next to an already-large
+          # target/ tree; drop it before the artifact upload steps run.
+          rm -rf "$extract"
 
       - name: Upload native Sentry debug files
         if: steps.filter.outputs.skip != 'true'
