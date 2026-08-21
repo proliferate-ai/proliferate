@@ -4,7 +4,7 @@ export const WORKFLOW_RESUME_COPY = {
   dismissLabel: "Dismiss",
   fallbackRunTitle: "Workflow run",
   moreRunsHint: (count: number) =>
-    `And ${count} more — resuming or dismissing a run reveals the next.`,
+    `And ${count} more. Resuming or dismissing a run reveals the next.`,
 
   /**
    * The resume request itself failed — a runtime mid-restart is the case that
