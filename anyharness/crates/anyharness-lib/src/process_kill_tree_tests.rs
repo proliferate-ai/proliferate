@@ -169,6 +169,39 @@ fn absorb_drops_a_tracked_pid_that_was_recycled_between_passes() {
     assert_eq!(pids(&second), vec![100]);
 }
 
+/// An identity that cannot be READ is not an identity that has CHANGED. One
+/// transient failure against the root must not drop it and report a live root
+/// as dead - the same shape of bug as reading a failed enumeration as an empty
+/// process table. The pid keeps its place and only loses the ability to prove
+/// adoptions.
+///
+/// NEGATIVE CONTROL: change the `None` arm of the identity check back to
+/// `self.tracked.remove(&pid)` and the first assertion goes red, because the
+/// root vanishes from a pass in which it is plainly alive.
+#[test]
+fn absorb_keeps_a_tracked_pid_whose_identity_cannot_be_read() {
+    let mut tracker = TreeTracker::new(100, Some(10), 9999);
+    tracker.absorb(
+        &[entry(100, 1, "agent.exe")],
+        &mut clock(&[(100, 10), (200, 20)]),
+    );
+
+    // The creation-time read fails for the root this pass. It is still right
+    // there in the snapshot.
+    let snapshot = vec![entry(100, 1, "agent.exe"), entry(200, 100, "cmd.exe")];
+    let degraded = tracker.absorb(&snapshot, &mut clock(&[(200, 20)]));
+    assert_eq!(
+        pids(&degraded),
+        vec![100],
+        "a live root must not be dropped"
+    );
+
+    // ...and the downgrade is real: nothing may be adopted through an
+    // identity we can no longer confirm, even once reads start working again.
+    let later = tracker.absorb(&snapshot, &mut clock(&[(100, 10), (200, 20)]));
+    assert_eq!(pids(&later), vec![100]);
+}
+
 /// B3. A grandchild whose parent died inside the same interval must still be
 /// adopted, through the parent's last known membership.
 ///

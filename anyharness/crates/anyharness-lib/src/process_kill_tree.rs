@@ -73,19 +73,39 @@ pub(super) fn census(entries: &[ProcessEntry]) -> (usize, usize) {
 /// whose creator exited keeps pointing at that freed number, and when Windows
 /// hands the number to our agent child the stranger looks like a descendant
 /// and gets terminated. Adoption therefore requires the child's creation time
-/// to be at or after the parent's. That test is exactly right, not merely
-/// conservative: a genuine child is always created after its parent, and a
-/// stranger's dangling link can only name a pid whose previous owner was
-/// alive when the stranger started and had to exit before our root could
-/// acquire the number, so the stranger is always OLDER than our root. An
-/// adoption whose generations cannot be read is refused, because terminating
-/// a stranger is worse than leaking a descendant.
+/// to be at or after the parent's.
+///
+/// What that buys, precisely: for a link to be stale, the number's previous
+/// owner had to be alive when the stranger started and had to exit before our
+/// root could acquire the number, so in real time the stranger STARTED before
+/// our root did. A genuine child always starts after its parent. So the
+/// comparison separates the two cases whenever the clock separates them.
+///
+/// What it does not buy: the comparison is on REPORTED `GetProcessTimes`
+/// values, not on real time, and it admits equality. At an equal reported
+/// timestamp a stranger is adopted. Equality has to be admitted anyway, or a
+/// genuine child created inside the same tick as its parent leaks, so the
+/// code is deliberately this way and the residual is the same-tick window
+/// rather than a bug. How wide that window is depends on the sampling
+/// resolution `GetProcessTimes` actually reports on a given machine, which
+/// nothing here has measured; do not assume it is the 100ns the FILETIME
+/// encoding suggests. Job Objects (see the module header's follow-up note)
+/// remove the question rather than narrowing it.
+///
+/// An adoption whose generations cannot be read is refused outright, because
+/// terminating a stranger is worse than leaking a descendant.
 ///
 /// A pid can also be recycled while it is ALREADY tracked, if it dies and is
 /// reassigned between two passes so we never observe it missing. Adoption
 /// checks cannot help there, because an already-tracked pid is never a
 /// candidate for adoption. Every pass therefore re-verifies the identity of
-/// the pids it already holds and drops any whose creation time has changed.
+/// the pids it already holds and drops any whose creation time has CHANGED.
+/// A time it cannot read is a different thing from a time that differs: the
+/// pid keeps its place in the set, and only loses its ability to prove
+/// adoptions. Treating unreadable as changed would let one transient failure
+/// against the root drop it permanently and report a live root as dead, which
+/// is the same shape of bug as reading a failed enumeration as an empty
+/// process table.
 /// That subsumes the weaker "never re-adopt a pid we have seen die" rule this
 /// started with, which was redundant once identity is checked and which
 /// leaked a genuine child that happened to reuse a retired number.
@@ -133,8 +153,23 @@ impl TreeTracker {
             let Some(Some(stored)) = self.tracked.get(&pid).copied() else {
                 continue;
             };
-            if created_at(pid) != Some(stored) {
-                self.tracked.remove(&pid);
+            match created_at(pid) {
+                // Same process we have been tracking all along.
+                Some(current) if current == stored => {}
+                // A different process holds this number now. Drop it: it is
+                // not ours and must not be terminated or adopted through.
+                Some(_) => {
+                    self.tracked.remove(&pid);
+                }
+                // Unreadable, which is NOT evidence of a change. Keep it in
+                // the set so a transient failure cannot report a live process
+                // dead, but downgrade it so nothing can be adopted through an
+                // identity we can no longer confirm. The downgrade is
+                // permanent by design: a later successful read cannot tell us
+                // whether it is reading the same process.
+                None => {
+                    self.tracked.insert(pid, None);
+                }
             }
         }
 
