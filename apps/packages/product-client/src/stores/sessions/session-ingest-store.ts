@@ -3,6 +3,17 @@ import type { HotSessionTarget } from "#product/lib/domain/sessions/hot-session-
 
 export type SessionIngestFreshness = "current" | "warming" | "stale" | "cold";
 
+/**
+ * Freshness contract: `gapAfterSeq` records the applied watermark at the
+ * moment a stream gap was detected — events after it were missed. Only a
+ * repair that advances `lastAppliedSeq` past the recorded gap may clear it:
+ * an authoritative history refill (`applyHistoryHydration`) or a stream batch
+ * that reduced past it (`applyStreamProgress`). Writes that repaired nothing
+ * (duplicate-only flushes, reconnects, error marks) must preserve it, or the
+ * reopen flow skips the history refill that repairs the hole. A session is
+ * `current` only while no gap is recorded, and the `lastAppliedSeq` /
+ * `lastObservedSeq` watermarks never move backwards.
+ */
 export interface SessionIngestFreshnessState {
   freshness: SessionIngestFreshness;
   lastAppliedSeq: number;
