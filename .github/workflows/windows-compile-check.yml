@@ -14,6 +14,11 @@ on:
       - "apps/desktop/src-tauri/**"
       - "anyharness/crates/**"
       - ".github/workflows/windows-compile-check.yml"
+      - "Cargo.lock"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -24,9 +29,10 @@ jobs:
     # control, so a red desktop job cannot be blamed on the toolchain.
     name: runtime crates (control)
     runs-on: windows-latest
+    timeout-minutes: 45
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -37,9 +43,10 @@ jobs:
   desktop:
     name: desktop crates (the unknown)
     runs-on: windows-latest
+    timeout-minutes: 45
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -62,7 +69,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           grep -oE '\-\-> [^:]+' check.log | sed 's/--> //' | sort -u | head -60 >> $GITHUB_STEP_SUMMARY || true
           echo '```' >> $GITHUB_STEP_SUMMARY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: windows-desktop-check-log
