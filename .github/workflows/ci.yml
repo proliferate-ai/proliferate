@@ -346,6 +346,15 @@ jobs:
         working-directory: anyharness/sdk-react
         run: pnpm run build
 
+      # The sdk-react hooks own client-side launch-option cache behaviour
+      # (polling policy, per-kind combine, refresh-error reread). Building the
+      # package proves it typechecks and nothing more, so this suite is the only
+      # gate on that behaviour. It runs here rather than in a frontend job
+      # because it needs the @anyharness/sdk dist built two steps above.
+      - name: Test sdk-react
+        working-directory: anyharness/sdk-react
+        run: pnpm run test
+
   desktop-frontend:
     name: Desktop frontend build
     runs-on: ubuntu-latest

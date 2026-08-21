@@ -252,16 +252,34 @@ impl LaunchProbeService {
         self.auth_runtime_inputs_from_options(harness_kind, now, phase, next_attempt_at)
     }
 
-    /// The scheduler's live phase for this harness, for a surface that wants the
-    /// phase alone — the launch-options response, which cannot otherwise tell an
-    /// active probe apart from a provisional row nothing will ever refresh.
+    /// The probe phase for one harness, for a surface that wants the phase alone —
+    /// the launch-options response, which cannot otherwise tell an active probe
+    /// apart from a provisional row nothing will ever refresh.
     ///
-    /// `None` when this runtime does not own the probe engine for its runtime
-    /// home: a read-only runtime never admits an attempt, so every slot it could
-    /// read is a slot it never wrote, and reporting `idle` from one would be a
-    /// claim about another process's scheduler.
-    pub fn probe_phase(&self, harness_kind: &str, now: DateTime<Utc>) -> Option<ProbePhase> {
-        self.is_owner().then(|| self.live_phase(harness_kind, now).0)
+    /// `durable_in_flight` is the STORED row's own answer (`ProbeState::Probing`,
+    /// rendered as `detecting`/`refreshing`) and it outranks the live slot: the row
+    /// is a fact every reader of it shares, while the slot is one process's
+    /// in-memory bookkeeping that lags the durable write. Sourcing the phase from
+    /// the slot alone let `state` and the phase disagree — a `detecting` response
+    /// carrying `idle`, which a client reads as terminal and stops polling on.
+    ///
+    /// `None` only when nothing is in flight durably AND this runtime does not own
+    /// the engine: every slot a read-only runtime could read is one it never wrote,
+    /// so `idle` from there is a claim about another process's scheduler.
+    pub fn probe_phase(
+        &self,
+        harness_kind: &str,
+        now: DateTime<Utc>,
+        durable_in_flight: bool,
+    ) -> Option<ProbePhase> {
+        let live = self.is_owner().then(|| self.live_phase(harness_kind, now).0);
+        match (durable_in_flight, live) {
+            // The slot only ever refines an in-flight row: `running` is finer than
+            // `queued`, and an idle slot is simply behind the durable write.
+            (true, Some(ProbePhase::Running)) => Some(ProbePhase::Running),
+            (true, _) => Some(ProbePhase::Queued),
+            (false, live) => live,
+        }
     }
 
     /// The slot read both phase surfaces share. An unknown harness has no slot

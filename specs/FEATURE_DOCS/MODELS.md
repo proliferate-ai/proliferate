@@ -94,10 +94,19 @@ runs.
 `state` alone cannot say whether a `detecting` row is still converging. A
 harness excluded from unattended probes stays `detecting` until somebody presses
 Refresh, which reads identically to a probe that is about to answer. The
-response therefore also carries `probePhase`: the launch-probe scheduler's live
-phase for that harness (`idle`, `queued`, `running`, `backoff`), the same
-lifecycle the agent-auth summary reports. It is omitted when the serving runtime
-does not own the probe engine for its runtime home and so cannot know it.
+response therefore also carries `probePhase` for that harness (`idle`, `queued`,
+`running`, `backoff`), the same lifecycle the agent-auth summary reports.
+
+`probePhase` is derived from the same durable row as `state`, so the two cannot
+contradict each other: a row whose `probe_state` is `probing` — that is, every
+`detecting` and `refreshing` response — reports at least `queued`, and the
+scheduler's in-memory slot only refines that to `running`. The slot alone would
+not do, because a probe writes `probing` durably before it is admitted to the
+slot and then resolves a model plan, so a client polling in between would be told
+`detecting` with a settled `idle` and would stop. The field is omitted only when
+nothing is in flight in the row AND the serving runtime does not own the probe
+engine for its runtime home, which is the one case where the phase is genuinely
+unknowable there.
 
 Clients wait on a launch-option read only while `probePhase` is `queued` or
 `running`, or while the state is `refreshing`. Every terminal state, and a

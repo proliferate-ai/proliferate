@@ -54,7 +54,9 @@ describe("sdk-react workspace query request options", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(mocks.listWorkspaces).toHaveBeenCalledWith(expect.objectContaining({
+    // `list` takes (query, requestOptions); the hook passes `undefined` for the
+    // query, so the request options are the SECOND argument.
+    expect(mocks.listWorkspaces).toHaveBeenCalledWith(undefined, expect.objectContaining({
       signal: expect.any(AbortSignal),
     }));
     expect(JSON.stringify(queryClient.getQueryCache().getAll().map((query) => query.queryKey)))

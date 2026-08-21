@@ -4,8 +4,8 @@
 //! nothing will ever refresh — a manual-refresh-only harness sits `detecting`
 //! forever by design. These pin the three answers the field exists to give:
 //! `running` while an attempt is in flight, `idle` when settled-unobserved, and
-//! ABSENT when this runtime does not own the probe engine and therefore cannot
-//! know.
+//! ABSENT only when nothing is in flight durably and this runtime does not own
+//! the probe engine, so the phase is genuinely unknowable here.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -55,20 +55,20 @@ async fn probe_phase_is_running_while_an_attempt_is_in_flight() {
     );
     assert_eq!(engine.mode(), ProbeEngineMode::Owner);
     assert_eq!(
-        engine.probe_phase(HARNESS, chrono::Utc::now()),
+        engine.probe_phase(HARNESS, chrono::Utc::now(), false),
         Some(ProbePhase::Idle),
         "no attempt has been admitted yet"
     );
 
     engine.clone().poke_harness(HARNESS, PokeReason::Startup);
     wait_until("the attempt reaches the harness", || {
-        engine.probe_phase(HARNESS, chrono::Utc::now()) == Some(ProbePhase::Running)
+        engine.probe_phase(HARNESS, chrono::Utc::now(), false) == Some(ProbePhase::Running)
     })
     .await;
 
     release.send(true).expect("release the fake probe");
     wait_until("the attempt settles", || {
-        engine.probe_phase(HARNESS, chrono::Utc::now()) == Some(ProbePhase::Idle)
+        engine.probe_phase(HARNESS, chrono::Utc::now(), false) == Some(ProbePhase::Idle)
     })
     .await;
 }
@@ -110,6 +110,68 @@ async fn launch_options_omit_probe_phase_when_the_runtime_does_not_own_the_engin
     assert!(
         payload.get("probePhase").is_none(),
         "an unknown phase is omitted, never null and never a settled value: {payload}"
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// THE REGRESSION. An attempt writes `probing` durably before its live slot ever
+/// says so — and between the two the runtime resolves a gateway model plan, which
+/// for a gateway harness is a real HTTP round trip. A client that polls inside that
+/// window used to be told `detecting` + `idle`: an in-flight probe reported as a
+/// settled one, so polling stopped and never restarted. The durable row is what
+/// answers now, so the two fields cannot say opposite things.
+#[tokio::test]
+async fn durable_probing_reports_a_live_phase_before_the_slot_is_admitted() {
+    let home = temp_runtime_home("durable-probing");
+    let state = app_state(home.clone());
+    assert_eq!(
+        state.launch_probe_service.mode(),
+        ProbeEngineMode::Owner,
+        "this runtime owns the engine, so its live slot is readable and says idle"
+    );
+    state
+        .launch_options_service
+        .begin_probe(HARNESS, &chrono::Utc::now().to_rfc3339())
+        .expect("record a durable probe start");
+    assert_eq!(
+        state
+            .launch_probe_service
+            .probe_phase(HARNESS, chrono::Utc::now(), false),
+        Some(ProbePhase::Idle),
+        "no attempt is admitted to the live slot: this is exactly the window"
+    );
+
+    let payload = launch_options_payload(state).await;
+    assert_eq!(payload["state"], Value::from("detecting"));
+    assert_eq!(
+        payload["probePhase"],
+        Value::from("queued"),
+        "a row that says probing must never be served with a settled phase: {payload}"
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// A read-only runtime shares the document with the owner that is probing it. It
+/// cannot read the owner's slot, but it can read the row the owner wrote — so it
+/// converges instead of stalling on an absent field its client reads as terminal.
+#[tokio::test]
+async fn read_only_runtimes_report_the_durable_phase_the_owner_wrote() {
+    let home = temp_runtime_home("read-only-probing");
+    let _owner = ProbeEngineLock::try_acquire(&home).expect("take the engine lock first");
+
+    let state = app_state(home.clone());
+    assert_eq!(state.launch_probe_service.mode(), ProbeEngineMode::ReadOnly);
+    state
+        .launch_options_service
+        .begin_probe(HARNESS, &chrono::Utc::now().to_rfc3339())
+        .expect("record a durable probe start");
+
+    let payload = launch_options_payload(state).await;
+    assert_eq!(payload["state"], Value::from("detecting"));
+    assert_eq!(
+        payload["probePhase"],
+        Value::from("queued"),
+        "the row is a fact about the harness, not about who owns the engine: {payload}"
     );
     let _ = std::fs::remove_dir_all(&home);
 }

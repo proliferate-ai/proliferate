@@ -79,13 +79,18 @@ async fn response_for(
 ) -> Result<HarnessLaunchOptionsResponse, ApiError> {
     let readiness = state.agent_runtime.get_agent(kind).await?.agent.status;
     let readiness = readiness_to_contract(readiness);
-    let probe_phase = probe_phase_for(state, kind);
     match state
         .launch_options_service
         .read(kind)
         .map_err(|error| ApiError::internal(format!("launch-options read failed: {error}")))?
     {
-        Some(response) => Ok(to_contract(response, readiness, probe_phase)),
+        Some(response) => {
+            // Read AFTER the row, so the phase is never older than the state it
+            // qualifies, and derived FROM it, so the two cannot contradict.
+            let probe_phase = probe_phase_for(state, kind, durable_probe_in_flight(response.state));
+            Ok(to_contract(response, readiness, probe_phase))
+        }
+        // No row at all: nothing is durably in flight, whatever a slot might say.
         None => Ok(HarnessLaunchOptionsResponse {
             harness_kind: kind.to_string(),
             basis_revision: state.launch_options_service.basis_revision(kind),
@@ -96,9 +101,23 @@ async fn response_for(
             probe_attempted_at: chrono::Utc::now().to_rfc3339(),
             probe_failure_code: None,
             readiness,
-            probe_phase,
+            probe_phase: probe_phase_for(state, kind, false),
         }),
     }
+}
+
+/// Does the DURABLE row say a probe is in flight? The projected state is that
+/// row's own reading of `probe_state`: `detecting` and `refreshing` are exactly
+/// `ProbeState::Probing` over an absent or a present last-good observation
+/// (`launch_options::service::state_for`). Deriving the phase from the same
+/// projection the response carries is what keeps the two consistent by
+/// construction instead of by two racing sources of truth.
+fn durable_probe_in_flight(state: domain::HarnessLaunchOptionsState) -> bool {
+    matches!(
+        state,
+        domain::HarnessLaunchOptionsState::Detecting
+            | domain::HarnessLaunchOptionsState::Refreshing
+    )
 }
 
 fn validate_kind(kind: &str) -> Result<(), ApiError> {
@@ -157,13 +176,18 @@ fn refresh_error(error: crate::domains::agents::launch_probe::RefreshError) -> A
     }
 }
 
-/// The launch-probe scheduler's live phase for this harness. `None` when this
-/// runtime does not own the probe engine and so cannot know it; the field is
-/// then omitted from the wire rather than reported as a settled `idle`.
-fn probe_phase_for(state: &AppState, kind: &str) -> Option<AgentAuthProbePhase> {
+/// This harness's probe phase: the durable row's in-flight answer, refined by the
+/// scheduler's live slot. `None` when nothing is in flight durably AND this runtime
+/// does not own the probe engine, so the phase is genuinely unknowable here; the
+/// field is then omitted from the wire rather than reported as a settled `idle`.
+fn probe_phase_for(
+    state: &AppState,
+    kind: &str,
+    durable_in_flight: bool,
+) -> Option<AgentAuthProbePhase> {
     state
         .launch_probe_service
-        .probe_phase(kind, chrono::Utc::now())
+        .probe_phase(kind, chrono::Utc::now(), durable_in_flight)
         .map(probe_phase_to_contract)
 }
 
