@@ -1,6 +1,6 @@
 use anyharness_contract::v1::{
-    AgentReadinessState, HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults,
-    HarnessLaunchModel, HarnessLaunchModelControls, HarnessLaunchOptions,
+    AgentAuthProbePhase, AgentReadinessState, HarnessLaunchControl, HarnessLaunchControlValue,
+    HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchModelControls, HarnessLaunchOptions,
     HarnessLaunchOptionsResponse, HarnessLaunchOptionsState, ProblemDetails,
 };
 use axum::{
@@ -9,6 +9,7 @@ use axum::{
     Json,
 };
 
+use super::agents_contract::probe_phase_to_contract;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::agents::launch_options as domain;
@@ -78,12 +79,13 @@ async fn response_for(
 ) -> Result<HarnessLaunchOptionsResponse, ApiError> {
     let readiness = state.agent_runtime.get_agent(kind).await?.agent.status;
     let readiness = readiness_to_contract(readiness);
+    let probe_phase = probe_phase_for(state, kind);
     match state
         .launch_options_service
         .read(kind)
         .map_err(|error| ApiError::internal(format!("launch-options read failed: {error}")))?
     {
-        Some(response) => Ok(to_contract(response, readiness)),
+        Some(response) => Ok(to_contract(response, readiness, probe_phase)),
         None => Ok(HarnessLaunchOptionsResponse {
             harness_kind: kind.to_string(),
             basis_revision: state.launch_options_service.basis_revision(kind),
@@ -94,6 +96,7 @@ async fn response_for(
             probe_attempted_at: chrono::Utc::now().to_rfc3339(),
             probe_failure_code: None,
             readiness,
+            probe_phase,
         }),
     }
 }
@@ -154,6 +157,16 @@ fn refresh_error(error: crate::domains::agents::launch_probe::RefreshError) -> A
     }
 }
 
+/// The launch-probe scheduler's live phase for this harness. `None` when this
+/// runtime does not own the probe engine and so cannot know it; the field is
+/// then omitted from the wire rather than reported as a settled `idle`.
+fn probe_phase_for(state: &AppState, kind: &str) -> Option<AgentAuthProbePhase> {
+    state
+        .launch_probe_service
+        .probe_phase(kind, chrono::Utc::now())
+        .map(probe_phase_to_contract)
+}
+
 fn readiness_to_contract(status: ResolvedAgentStatus) -> AgentReadinessState {
     match status {
         ResolvedAgentStatus::Ready => AgentReadinessState::Ready,
@@ -168,6 +181,7 @@ fn readiness_to_contract(status: ResolvedAgentStatus) -> AgentReadinessState {
 fn to_contract(
     response: domain::HarnessLaunchOptionsResponse,
     readiness: AgentReadinessState,
+    probe_phase: Option<AgentAuthProbePhase>,
 ) -> HarnessLaunchOptionsResponse {
     HarnessLaunchOptionsResponse {
         harness_kind: response.harness_kind,
@@ -250,5 +264,6 @@ fn to_contract(
         probe_attempted_at: response.probe_attempted_at,
         probe_failure_code: response.probe_failure_code,
         readiness,
+        probe_phase,
     }
 }

@@ -91,6 +91,19 @@ the matching last-good statement. Read also recomputes the basis, preventing an
 auth/install event from exposing stale options before its invalidation task
 runs.
 
+`state` alone cannot say whether a `detecting` row is still converging. A
+harness excluded from unattended probes stays `detecting` until somebody presses
+Refresh, which reads identically to a probe that is about to answer. The
+response therefore also carries `probePhase`: the launch-probe scheduler's live
+phase for that harness (`idle`, `queued`, `running`, `backoff`), the same
+lifecycle the agent-auth summary reports. It is omitted when the serving runtime
+does not own the probe engine for its runtime home and so cannot know it.
+
+Clients wait on a launch-option read only while `probePhase` is `queued` or
+`running`, or while the state is `refreshing`. Every terminal state, and a
+`detecting` row whose phase is `idle`, `backoff`, or absent, is an answer rather
+than a wait.
+
 ## Pre-launch reads
 
 Runtime API:

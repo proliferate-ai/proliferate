@@ -333,6 +333,11 @@ pub struct HarnessLaunchOptionsResponse {
     pub probe_attempted_at: String,
     pub probe_failure_code: Option<String>,
     pub readiness: AgentReadinessState,
+    /// The launch-probe scheduler's live phase for this harness — the same
+    /// lifecycle as [`AgentAuthProbeLifecycle::phase`]. Absent when the runtime
+    /// serving this response cannot know it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub probe_phase: Option<AgentAuthProbePhase>,
 }
 
 // --- Install ---

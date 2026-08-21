@@ -3253,6 +3253,7 @@ export interface components {
             options?: null | components["schemas"]["HarnessLaunchOptions"];
             probeAttemptedAt: string;
             probeFailureCode?: string | null;
+            probePhase?: null | components["schemas"]["AgentAuthProbePhase"];
             readiness: components["schemas"]["AgentReadinessState"];
             /** Format: int64 */
             revision: number;

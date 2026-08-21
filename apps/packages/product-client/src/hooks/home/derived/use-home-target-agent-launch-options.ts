@@ -8,6 +8,7 @@ import {
   useCloudHarnessLaunchOptions,
   useCloudSandbox,
 } from "@proliferate/cloud-sdk-react";
+import { useMemo } from "react";
 import type { HomeLaunchTarget } from "#product/lib/domain/home/home-next-launch";
 
 type HomeTargetLaunchOptions =
@@ -102,10 +103,14 @@ export function useHomeTargetOtherAgentsLaunchOptions({
   launchTarget: HomeLaunchTarget | null;
 }): Array<HarnessLaunchOptionsResponse | null> {
   const isLocalRuntimeTarget = launchTarget !== null && launchTarget.kind !== "cloud";
-  const responses = useAgentLaunchOptionsListQuery({
+  const entries = useAgentLaunchOptionsListQuery({
     harnessKinds,
     enabled: isLocalRuntimeTarget,
   });
+  // The per-kind pending/error flags belong to a later slice; this hook still
+  // answers in responses. The entries are reference-stable, so this memo holds
+  // the downstream chain steady exactly as the raw array used to.
+  const responses = useMemo(() => entries.map((entry) => entry.data), [entries]);
   // Stable empty reference: a fresh [] here would recompute the whole
   // downstream memo chain on every cloud/no-target render.
   return isLocalRuntimeTarget ? responses : EMPTY_RESPONSES;

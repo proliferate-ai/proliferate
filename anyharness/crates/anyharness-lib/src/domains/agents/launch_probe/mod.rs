@@ -248,27 +248,38 @@ impl LaunchProbeService {
         harness_kind: &str,
         now: DateTime<Utc>,
     ) -> AuthRuntimeInputs {
-        let (phase, next_attempt_at) = {
-            let slots = self.slots.lock().expect("launch probe slots poisoned");
-            let Some(slot) = slots.get(harness_kind) else {
-                return self.auth_runtime_inputs_from_options(
-                    harness_kind,
-                    now,
-                    ProbePhase::Idle,
-                    None,
-                );
-            };
-            let state = slot.state.lock().expect("launch probe slot poisoned");
-            match state.live {
-                LiveState::Queued => (ProbePhase::Queued, None),
-                LiveState::Running => (ProbePhase::Running, None),
-                LiveState::Idle => match state.next_attempt_at {
-                    Some(next) if next > now => (ProbePhase::Backoff, Some(next.to_rfc3339())),
-                    _ => (ProbePhase::Idle, None),
-                },
-            }
-        };
+        let (phase, next_attempt_at) = self.live_phase(harness_kind, now);
         self.auth_runtime_inputs_from_options(harness_kind, now, phase, next_attempt_at)
+    }
+
+    /// The scheduler's live phase for this harness, for a surface that wants the
+    /// phase alone — the launch-options response, which cannot otherwise tell an
+    /// active probe apart from a provisional row nothing will ever refresh.
+    ///
+    /// `None` when this runtime does not own the probe engine for its runtime
+    /// home: a read-only runtime never admits an attempt, so every slot it could
+    /// read is a slot it never wrote, and reporting `idle` from one would be a
+    /// claim about another process's scheduler.
+    pub fn probe_phase(&self, harness_kind: &str, now: DateTime<Utc>) -> Option<ProbePhase> {
+        self.is_owner().then(|| self.live_phase(harness_kind, now).0)
+    }
+
+    /// The slot read both phase surfaces share. An unknown harness has no slot
+    /// and therefore no attempt: `Idle`.
+    fn live_phase(&self, harness_kind: &str, now: DateTime<Utc>) -> (ProbePhase, Option<String>) {
+        let slots = self.slots.lock().expect("launch probe slots poisoned");
+        let Some(slot) = slots.get(harness_kind) else {
+            return (ProbePhase::Idle, None);
+        };
+        let state = slot.state.lock().expect("launch probe slot poisoned");
+        match state.live {
+            LiveState::Queued => (ProbePhase::Queued, None),
+            LiveState::Running => (ProbePhase::Running, None),
+            LiveState::Idle => match state.next_attempt_at {
+                Some(next) if next > now => (ProbePhase::Backoff, Some(next.to_rfc3339())),
+                _ => (ProbePhase::Idle, None),
+            },
+        }
     }
 
     fn auth_runtime_inputs_from_options(

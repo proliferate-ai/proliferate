@@ -1,6 +1,8 @@
 pub mod access;
 pub mod agent_auth;
 pub mod agent_launch_options;
+#[cfg(test)]
+mod agent_launch_options_tests;
 pub mod agents;
 mod agents_contract;
 mod agents_errors;

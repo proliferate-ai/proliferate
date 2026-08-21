@@ -12185,6 +12185,17 @@
               "null"
             ]
           },
+          "probePhase": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthProbePhase",
+                "description": "The launch-probe scheduler's live phase for this harness — the same\nlifecycle as [`AgentAuthProbeLifecycle::phase`]. Absent when the runtime\nserving this response cannot know it."
+              }
+            ]
+          },
           "readiness": {
             "$ref": "#/components/schemas/AgentReadinessState"
           },

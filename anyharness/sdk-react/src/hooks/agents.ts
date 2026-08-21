@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type {
+  HarnessLaunchOptionsResponse,
   InstallAgentRequest,
   ReconcileAgentsResponse,
   ReconcileAgentsRequest,
@@ -71,6 +72,51 @@ export function useAgentsQuery(options?: RuntimeQueryOptions) {
   });
 }
 
+export const AGENT_LAUNCH_OPTIONS_PROBE_INTERVAL_MS = 1500;
+
+/**
+ * The ONE polling policy behind both launch-option queries.
+ *
+ * A launch-option response is a snapshot of a revision, and the runtime raises
+ * no event when a later one lands: a client that reads `detecting` once holds
+ * that provisional answer until something else happens to invalidate it. So the
+ * response says whether anything is still coming, and this decides whether to
+ * wait for it.
+ *
+ * `detecting` alone cannot: a harness excluded from unattended probes sits
+ * `detecting` forever by design, and polling it would be a permanent request
+ * loop against an answer that will never change. `probePhase` is what separates
+ * an active probe from a settled-unobserved one.
+ *
+ * The four terminal states never poll — their probe is over, and the next
+ * observation arrives through the events that already invalidate this cache.
+ * There is no client-side timeout: a probe that is genuinely running is worth
+ * waiting for however long it takes, and one that stops running says so.
+ */
+export function resolveAgentLaunchOptionsRefetchInterval(
+  state: { data?: HarnessLaunchOptionsResponse },
+): number | false {
+  const response = state.data;
+  if (!response) return false;
+  switch (response.state) {
+    case "refreshing":
+      // A re-probe over last-good data: the data stays readable while we wait.
+      return AGENT_LAUNCH_OPTIONS_PROBE_INTERVAL_MS;
+    case "detecting":
+      return response.probePhase === "queued" || response.probePhase === "running"
+        ? AGENT_LAUNCH_OPTIONS_PROBE_INTERVAL_MS
+        : false;
+    default:
+      return false;
+  }
+}
+
+function launchOptionsRefetchInterval(
+  query: { state: { data?: HarnessLaunchOptionsResponse } },
+): number | false {
+  return resolveAgentLaunchOptionsRefetchInterval(query.state);
+}
+
 export function useAgentLaunchOptionsQuery(options?: RuntimeQueryOptions & {
   harnessKind?: string | null;
 }) {
@@ -86,18 +132,36 @@ export function useAgentLaunchOptionsQuery(options?: RuntimeQueryOptions & {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.agents.getLaunchOptions(harnessKind, requestOptionsWithSignal(undefined, signal));
     },
+    refetchInterval: launchOptionsRefetchInterval,
   });
 }
 
 /**
+ * One entry per requested harness kind, in request order.
+ *
+ * `data` alone cannot say why it is absent, and the three reasons want
+ * different treatment: a kind still loading is not a kind whose runtime
+ * refused it, and neither is a kind that answered with nothing. The flags keep
+ * those apart at the seam that knows them.
+ */
+export interface AgentLaunchOptionsListEntry {
+  harnessKind: string;
+  data: HarnessLaunchOptionsResponse | null;
+  isPending: boolean;
+  isError: boolean;
+}
+
+/**
  * Launch options for several harnesses at once, sharing the per-kind cache
- * entries of [`useAgentLaunchOptionsQuery`]. Returns one response (or `null`
- * while unresolved/failed) per requested kind, in request order; `combine`
- * keeps the array reference stable across renders while the data is unchanged.
+ * entries of [`useAgentLaunchOptionsQuery`] — including its polling policy, so
+ * a fanned-out kind converges on the same terms as a singly-read one.
+ *
+ * `combine`'s result is structurally shared by the query cache, so an entry
+ * whose contents are unchanged keeps its reference across renders.
  */
 export function useAgentLaunchOptionsListQuery(options?: RuntimeQueryOptions & {
   harnessKinds?: readonly string[];
-}) {
+}): AgentLaunchOptionsListEntry[] {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
   const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
@@ -113,8 +177,14 @@ export function useAgentLaunchOptionsListQuery(options?: RuntimeQueryOptions & {
         const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
         return client.agents.getLaunchOptions(harnessKind, requestOptionsWithSignal(undefined, signal));
       },
+      refetchInterval: launchOptionsRefetchInterval,
     })),
-    combine: (results) => results.map((result) => result.data ?? null),
+    combine: (results): AgentLaunchOptionsListEntry[] => results.map((result, index) => ({
+      harnessKind: harnessKinds[index] ?? "",
+      data: result.data ?? null,
+      isPending: result.isPending,
+      isError: result.isError,
+    })),
   });
 }
 
@@ -133,6 +203,16 @@ export function useRefreshHarnessLaunchOptionsMutation() {
         anyHarnessAgentLaunchOptionsKey(runtimeUrl, response.harnessKind, cacheScopeKey),
         response,
       );
+    },
+    // A refresh that ends 5xx still changed the runtime: it durably records
+    // `failed_without_observation` before it answers. Leaving the cache on the
+    // pre-refresh revision would show a state the runtime no longer holds, so
+    // reread exactly this harness's entry.
+    onError: async (_error, harnessKind) => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, harnessKind, cacheScopeKey),
+        exact: true,
+      });
     },
   });
 }

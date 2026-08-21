@@ -47,6 +47,11 @@ export type HarnessLaunchOptionsState =
   | "observed_empty"
   | "last_good_after_failure"
   | "failed_without_observation";
+/**
+ * The launch-probe scheduler's live phase for a harness — the same lifecycle
+ * the agent-auth summary reports.
+ */
+export type AgentAuthProbePhase = components["schemas"]["AgentAuthProbePhase"];
 export interface HarnessLaunchOptionsResponse {
   harnessKind: string;
   basisRevision: string;
@@ -57,6 +62,12 @@ export interface HarnessLaunchOptionsResponse {
   probeAttemptedAt: string;
   probeFailureCode: string | null;
   readiness: AgentReadinessState;
+  /**
+   * Absent when the runtime that served this response cannot know the phase.
+   * `detecting` on its own cannot tell a probe that is running apart from one
+   * that will never run.
+   */
+  probePhase?: AgentAuthProbePhase;
 }
 export type InstallAgentRequest = components["schemas"]["InstallAgentRequest"];
 export type InstallAgentResponse = components["schemas"]["InstallAgentResponse"];
