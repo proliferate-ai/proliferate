@@ -9,6 +9,7 @@ use super::rendezvous::broker::{
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::ActorCapabilities;
 
+pub(crate) mod reaper;
 mod replay;
 mod runtime_events;
 mod startup;

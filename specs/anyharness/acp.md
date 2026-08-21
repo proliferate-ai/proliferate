@@ -46,6 +46,21 @@ Its main jobs are:
 - build `SessionActorConfig`
 - create the live broadcast channel
 - spawn the actor and return its control handle
+- run the idle-session reaper
+
+#### Idle-session reaper (`live/sessions/manager/reaper.rs`)
+
+A live agent session costs a fixed amount of memory for as long as its processes exist, and it never returns any of it: a session that has run one turn keeps its retained conversation indefinitely, so waiting reclaims nothing. Retiring the actor is the runtime's only reclaim mechanism, and it reclaims the whole session rather than the post-turn increment.
+
+`spawn_idle_reaper` starts one sweep task per manager, wired in `app/sessions.rs`. Each sweep retires every live session that has been continuously quiescent for the threshold. Quiescent means all of: phase `Idle`, no pending interactions, the handle's busy flag clear, no pending `session_background_work` rows, and an empty `session_pending_prompts` queue. A durable read that fails is `Undetermined` and never reaps; the predicate fails closed.
+
+`AwaitingInteraction` is never reaped. A parked permission or input request belongs to a human, and the retirement path would cancel it along with the turn it is blocking. Sessions held back for this reason are counted per sweep under `result_class = "awaiting_interaction_held"` so the abandoned-prompt case stays measurable.
+
+Retirement is the existing non-terminal `Unload` disposition, so the durable session row, transcript, configuration, and `native_session_id` all survive; the next prompt resumes through the ordinary startup strategy matrix. The reaper writes nothing durable itself.
+
+The idle clock lives in the sweep task, not on the handle. Each sweep records the first tick at which a session was seen quiescent along with the live snapshot's `updated_at` activity marker; a non-quiescent observation drops the record and a changed marker restarts it, so the measured quantity is continuous idleness. Cadence is `min(threshold / 4, 15s)`.
+
+Threshold is `ANYHARNESS_IDLE_SESSION_REAP_SECONDS`, in whole seconds, default 120. `0` disables the reaper; an unparseable value keeps the default.
 
 ### `LiveSessionHandle` (`anyharness/crates/anyharness-lib/src/live/sessions/handle.rs`)
 
