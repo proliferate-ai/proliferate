@@ -24,6 +24,7 @@ import {
   buildHomeModelSelectorProps,
   buildHomeSessionConfigControls,
 } from "#product/lib/domain/home/home-composer-controls";
+import { resolveHomeModelGateNotice } from "#product/lib/domain/home/home-model-gate";
 import { type HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
 import { resolveHomeModelProbeCardState } from "#product/lib/domain/home/home-screen";
 import { resolveHomeTargetLaunchKindForRepository } from "#product/lib/domain/home/home-target-picker";
@@ -93,7 +94,9 @@ export function HomeNextScreen() {
   const homeModelSelectorProps = buildHomeModelSelectorProps({
     groups: homeNext.modelGroups,
     selectedModel: homeNext.selectedModel,
-    availabilityState: homeNext.modelAvailabilityState,
+    gate: homeNext.modelGate,
+    isCatalogLoading: homeNext.isCatalogLoading,
+    hasKnownAgents: homeNext.hasKnownAgents,
     onSelect: (selection) => {
       setModelSelectionOverride(selection);
       setLaunchControlOverrides({});
@@ -127,23 +130,20 @@ export function HomeNextScreen() {
     || authSetupStep === "settingUp"
     || (authSetupEvidence !== undefined && authSetupEvidence !== null)
     || (modelProbeState !== undefined && modelProbeState.kind !== "hidden");
-  const modelAvailabilityNotice =
-    homeNext.modelAvailabilityState === "target_unobserved"
-      ? {
-        text: "This cloud target hasn't reported launch options yet.",
-        actionLabel: null,
-      }
-      : homeNext.modelAvailabilityState === "no_launchable_model"
-        ? {
-          text: "Finish agent setup to start a chat.",
-          actionLabel: "Agents",
-        }
-        : homeNext.modelAvailabilityState === "load_error"
-          ? {
-            text: "Models are unavailable right now. Try again in a moment.",
-            actionLabel: null,
-          }
-          : null;
+  // One mapping, keyed on the gate. Every silent arm is silent on purpose:
+  // selection_required and observed_empty are cured by the enabled picker
+  // itself (owner revisions r2/r3), and the in-flight arms belong to the
+  // install toast. "Finish agent setup to start a chat." can only be reached
+  // through blocked(agent_setup_required), which requires real
+  // install_required/login_required readiness.
+  const modelAvailabilityNotice = resolveHomeModelGateNotice(homeNext.modelGate);
+  const runModelGateNoticeAction = () => {
+    if (modelAvailabilityNotice?.action === "agent_settings") {
+      handleHomeAction("agent-settings");
+      return;
+    }
+    homeNext.retryModelObservation();
+  };
   return (
     <div
       className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground"
@@ -251,7 +251,7 @@ export function HomeNextScreen() {
           <div className="mx-auto w-full max-w-transcript-thread">
             <HomeComposerForm
               targetDisabledReason={homeNext.targetDisabledReason}
-              modelAvailabilityState={homeNext.modelAvailabilityState}
+              modelGate={homeNext.modelGate}
               canLaunchTarget={homeNext.canLaunchTarget}
               modelSelection={homeNext.effectiveModelSelection}
               launchControlValues={homeLaunchControls.launchControlValues}
@@ -318,16 +318,16 @@ export function HomeNextScreen() {
               modelAvailabilityNoticeSlot={modelAvailabilityNotice ? (
                 <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-ui-sm text-muted-foreground">
                   <span>{modelAvailabilityNotice.text}</span>
-                  {modelAvailabilityNotice.actionLabel ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleHomeAction("agent-settings")}
-                      className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
-                    >
-                      {modelAvailabilityNotice.actionLabel}
-                    </Button>
-                  ) : null}
+                  {/* Ruling 5: every notice carries an ENABLED action that
+                      cures the state it describes. */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={runModelGateNoticeAction}
+                    className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                  >
+                    {modelAvailabilityNotice.actionLabel}
+                  </Button>
                 </div>
               ) : null}
               submitDisabledReasonCtaSlot={

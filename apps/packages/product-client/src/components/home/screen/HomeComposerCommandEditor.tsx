@@ -29,6 +29,8 @@ interface HomeComposerCommandEditorProps {
   onKeyDown: (event: ChatComposerKeyboardEvent) => void;
   canSubmit: boolean;
   onSubmit: () => void;
+  /** Enter pressed while sending is refused (no model chosen yet). */
+  onSubmitRefused: () => void;
   placeholder: string;
   /** Raw per-harness catalog; the policy filter is applied by the menu hook. */
   availableCommands: readonly AvailableSessionCommand[];
@@ -49,6 +51,7 @@ export function HomeComposerCommandEditor({
   onKeyDown,
   canSubmit,
   onSubmit,
+  onSubmitRefused,
   placeholder,
   availableCommands,
   overlayHostElement,
@@ -174,6 +177,7 @@ export function HomeComposerCommandEditor({
         activeDescendantId={slashTrigger ? search.activeDescendantId : undefined}
         canSubmit={canSubmit}
         onSubmit={onSubmit}
+        onSubmitRefused={onSubmitRefused}
         editorRef={(editor) => { editorRef.current = editor; }}
         placeholder={placeholder}
         disabled={false}

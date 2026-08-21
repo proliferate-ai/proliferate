@@ -5,6 +5,7 @@ import { splitProviderDisplayName } from "#product/lib/domain/chat/models/model-
 import { orderModelGroupsActiveFirst } from "#product/lib/domain/chat/models/order-model-groups";
 import { MODEL_UNSUPPORTED_ROW_HINT } from "#product/lib/domain/chat/models/model-support-refusals";
 import type {
+  ModelSelectorAvailability,
   ModelSelectorGroup,
   ModelSelectorProps,
   ModelSelectorSelection,
@@ -17,6 +18,8 @@ import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 
 interface ComposerModelPickerPopoverProps {
   groups: ModelSelectorGroup[];
+  /** Why the group list is what it is; only changes the empty body. */
+  availability?: ModelSelectorAvailability;
   currentModel: ModelSelectorProps["currentModel"];
   onKeyboardClose: () => void;
   onSelect: (selection: ModelSelectorSelection) => void;
@@ -26,6 +29,7 @@ interface ComposerModelPickerPopoverProps {
 
 export function ComposerModelPickerPopover({
   groups,
+  availability = "ready",
   currentModel,
   onKeyboardClose,
   onSelect,
@@ -102,9 +106,15 @@ export function ComposerModelPickerPopover({
           />
         ))}
 
+        {/* Two ways to be empty, two sentences. `observed_empty` means the
+            catalog loaded, agents exist, and every group came back empty —
+            telling that user to add a harness would point at the wrong fix,
+            so the footer's Add provider / Settings carry the cures instead. */}
         {orderedGroups.length === 0 && (
           <p className="px-3 py-4 text-center text-ui text-muted-foreground">
-            {CHAT_MODEL_SELECTOR_LABELS.noProviders}
+            {availability === "observed_empty"
+              ? CHAT_MODEL_SELECTOR_LABELS.observedEmpty
+              : CHAT_MODEL_SELECTOR_LABELS.noProviders}
           </p>
         )}
 

@@ -42,7 +42,10 @@ const screenMocks = vi.hoisted(() => {
     effectiveMode: null,
     effectiveModeId: null,
     targetDisabledReason: null,
-    modelAvailabilityState: "launchable",
+    modelGate: { kind: "launchable" },
+    isCatalogLoading: false,
+    hasKnownAgents: true,
+    retryModelObservation: () => {},
     canLaunchTarget: true,
     effectiveModelSelection: { kind: "codex", modelId: "gpt-5.4" },
     launchTarget: { kind: "cowork" },
@@ -191,7 +194,9 @@ vi.mock("#product/components/workspace/chat/input/ChatComposerActions", () => ({
 function resetHomeNext() {
   screenMocks.productHost.desktop = {};
   screenMocks.homeNext.targetDisabledReason = null;
-  screenMocks.homeNext.modelAvailabilityState = "launchable";
+  screenMocks.homeNext.modelGate = { kind: "launchable" };
+  screenMocks.homeNext.isCatalogLoading = false;
+  screenMocks.homeNext.hasKnownAgents = true;
   screenMocks.homeNext.canLaunchTarget = true;
   screenMocks.homeNext.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
   screenMocks.homeNext.launchTarget = { kind: "cowork" };
@@ -226,41 +231,8 @@ describe("HomeNextScreen model availability notices", () => {
     cleanup();
   });
 
-  it("renders no agent/model notice for launchable and loading states", () => {
-    const { rerender } = render(<HomeNextScreen />);
-
-    expect(screen.queryByText(/Finish agent setup/i)).toBeNull();
-    expect(screen.queryByText(/Models are unavailable/i)).toBeNull();
-
-    screenMocks.homeNext.modelAvailabilityState = "loading";
-    rerender(<HomeNextScreen />);
-
-    expect(screen.queryByText(/Finish agent setup/i)).toBeNull();
-    expect(screen.queryByText(/Models are unavailable/i)).toBeNull();
-  });
-
-  it("renders setup guidance only for no launchable model", () => {
-    screenMocks.homeNext.modelAvailabilityState = "no_launchable_model";
-    render(<HomeNextScreen />);
-    expect(screen.getByText("Finish agent setup to start a chat.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-settings");
-    expect(screen.queryByText(/configured/i)).toBeNull();
-  });
-
-  it.each([
-    ["load_error", "Models are unavailable right now. Try again in a moment."],
-    ["target_unobserved", "This cloud target hasn't reported launch options yet."],
-  ] as const)("renders %s copy with no local setup CTA", (availabilityState, notice) => {
-    screenMocks.homeNext.modelAvailabilityState = availabilityState;
-    render(<HomeNextScreen />);
-    expect(screen.getByText(notice)).toBeTruthy();
-    expect(screen.queryByText(/Finish agent setup/i)).toBeNull();
-    expect(screen.queryByRole("button", { name: "Agents" })).toBeNull();
-  });
-
   it("does not render model-derived submit-disabled reasons after typing", () => {
-    screenMocks.homeNext.modelAvailabilityState = "no_launchable_model";
+    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "agent_setup_required" };
     render(<HomeNextScreen />);
 
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "hello" } });
@@ -427,8 +399,11 @@ describe("HomeNextScreen composer control-row parity", () => {
     });
     expect(screenMocks.leadingControlsProps.modelSelectorProps).toMatchObject({
       connectionState: "healthy",
-      hasAgents: false,
+      // From the agent CATALOG, not from the group list: an agent that has
+      // reported no models yet still exists.
+      hasAgents: true,
       isLoading: false,
+      availability: "ready",
     });
     expect(screenMocks.trailingControlsProps).toMatchObject({
       runtimeControlsDisabled: false,

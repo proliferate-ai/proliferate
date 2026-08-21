@@ -63,6 +63,13 @@ export interface ComposerRichTextEditorProps {
   activeDescendantId?: string;
   canSubmit: boolean;
   onSubmit: () => void;
+  /**
+   * Enter arrived while `canSubmit` was false. The keystroke is swallowed
+   * either way; this is the only signal a surface gets that the user asked to
+   * send and was refused, which is what Home needs to announce the reason and
+   * move focus to the cure.
+   */
+  onSubmitRefused?: () => void;
   editorRef?: (editor: LexicalEditor) => void;
   rootRef?: Ref<HTMLDivElement>; surface?: "workspace" | "home";
   placeholder: string;
@@ -80,6 +87,7 @@ export function ComposerRichTextEditor({
   activeDescendantId,
   canSubmit,
   onSubmit,
+  onSubmitRefused,
   editorRef, rootRef, surface = "workspace",
   placeholder,
   disabled,
@@ -181,6 +189,7 @@ export function ComposerRichTextEditor({
       <ComposerBehaviorPlugin
         canSubmit={canSubmit}
         onSubmit={onSubmit}
+        onSubmitRefused={onSubmitRefused}
         onKeyDown={onKeyDown}
         onCommandKey={onCommandKey}
       />
@@ -315,9 +324,13 @@ function ComposerEditorBridge({
 function ComposerBehaviorPlugin({
   canSubmit,
   onSubmit,
+  onSubmitRefused,
   onKeyDown,
   onCommandKey,
-}: Pick<ComposerRichTextEditorProps, "canSubmit" | "onSubmit" | "onKeyDown" | "onCommandKey">) {
+}: Pick<
+  ComposerRichTextEditorProps,
+  "canSubmit" | "onSubmit" | "onSubmitRefused" | "onKeyDown" | "onCommandKey"
+>) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
@@ -333,7 +346,10 @@ function ComposerBehaviorPlugin({
       }
       if (!plainEnter && !primaryEnter) return false;
       event.preventDefault();
-      if (!event.repeat && canSubmit) onSubmit();
+      if (!event.repeat) {
+        if (canSubmit) onSubmit();
+        else onSubmitRefused?.();
+      }
       return true;
     }, COMMAND_PRIORITY_HIGH);
     const unregisterTab = editor.registerCommand(KEY_TAB_COMMAND, (event) => {
@@ -351,7 +367,7 @@ function ComposerBehaviorPlugin({
       );
     }, COMMAND_PRIORITY_HIGH);
     return () => { unregisterEnter(); unregisterTab(); };
-  }, [canSubmit, editor, onCommandKey, onKeyDown, onSubmit]);
+  }, [canSubmit, editor, onCommandKey, onKeyDown, onSubmit, onSubmitRefused]);
 
   return null;
 }
