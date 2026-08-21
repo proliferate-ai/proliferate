@@ -469,7 +469,7 @@ pub struct AgentReconcileSummary {
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::{HarnessLaunchDefaults, HarnessLaunchModelControls, HarnessLaunchOptions};
+    use crate::v1::{HarnessLaunchDefaults, HarnessLaunchModelControls, HarnessLaunchOptions};
 
     #[test]
     fn empty_observation_is_not_absent_options() {
