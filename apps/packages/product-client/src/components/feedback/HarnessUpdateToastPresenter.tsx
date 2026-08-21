@@ -67,13 +67,29 @@ function joinNames(names: readonly string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
+/** One sentence, whatever the source text ended with. */
+function asSentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
 /**
  * The partial-failure terminal's description: names who failed and why, and
  * who is still usable. Reuses the typed-failure reason map; a mixed set of
  * failure kinds (or none reported) reads as "an unexpected error" rather than
  * naming one kind that does not cover every failure.
+ *
+ * A job can be `failed` with no failed result at all (D-R12). The runtime
+ * marks the whole job failed on the one path where the install task itself
+ * dies, and that path pushes no per-agent result for the agent that died, so
+ * there is no name to print. The old copy interpolated the empty name list
+ * anyway and rendered " failed (an unexpected error)." — a leading space and
+ * no subject. With no subject to name, the job's own message is the only
+ * thing that knows what happened, so it is surfaced instead of discarded.
  */
-function describePartialFailure(results: readonly ReconcileAgentResult[]): string {
+function describePartialFailure(
+  results: readonly ReconcileAgentResult[],
+  jobMessage: string | null | undefined,
+): string {
   const failed = results.filter((result) => result.outcome === "failed");
   const installed = results.filter((result) =>
     result.outcome === "installed" || result.outcome === "already_installed"
@@ -88,7 +104,12 @@ function describePartialFailure(results: readonly ReconcileAgentResult[]): strin
   const reason = kinds.size === 1
     ? FAILURE_KIND_REASON[[...kinds][0]] ?? "an unexpected error"
     : "an unexpected error";
-  const failedSentence = `${joinNames(failedNames)} failed (${reason}).`;
+  const detail = jobMessage?.trim();
+  const failedSentence = failedNames.length > 0
+    ? `${joinNames(failedNames)} failed (${reason}).`
+    : detail
+      ? `The install did not finish. ${asSentence(detail)}`
+      : "The install did not finish.";
   if (installedNames.length === 0) {
     return failedSentence;
   }
@@ -174,7 +195,7 @@ function useHarnessProgressToast({
               tone: "warning",
               badge: "AGENTS",
               title: "Some agent tools aren't ready",
-              description: describePartialFailure(results),
+              description: describePartialFailure(results, snapshot?.message),
               secondary: {
                 label: "Open agent settings",
                 onClick: () => {

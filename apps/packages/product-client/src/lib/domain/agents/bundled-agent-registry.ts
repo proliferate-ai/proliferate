@@ -12,6 +12,7 @@ interface RegistryAuthSlot {
 
 interface RegistryAgent {
   kind: string;
+  displayName?: string;
   authCardinality?: "single" | "multi";
   auth?: { slots?: RegistryAuthSlot[] } | null;
 }
@@ -42,6 +43,19 @@ const MULTI_SOURCE_KINDS: ReadonlySet<string> = new Set(
   AGENTS.filter((agent) => agent.authCardinality === "multi").map((agent) => agent.kind),
 );
 
+// Human-facing name per kind, straight from the same registry row that
+// declares the kind. Client-side name maps were the last re-literalling of
+// registry.json left in this package, and they silently degrade: an agent the
+// catalog ships but the map has never heard of (grok, then whatever is sixth)
+// printed its bare wire kind — "grok is ready." — in whatever surface named
+// it. Sourcing the name where the kind is declared means a new catalog agent
+// is named correctly with no client change at all.
+const DISPLAY_NAMES: ReadonlyMap<string, string> = new Map(
+  AGENTS
+    .filter((agent) => typeof agent.displayName === "string" && agent.displayName.length > 0)
+    .map((agent) => [agent.kind, agent.displayName as string] as const),
+);
+
 export function getRegistryHarnessKinds(): string[] {
   return [...HARNESS_KINDS];
 }
@@ -56,4 +70,13 @@ export function isGatewayCapableHarness(harnessKind: string): boolean {
 
 export function isMultiSourceHarness(harnessKind: string): boolean {
   return MULTI_SOURCE_KINDS.has(harnessKind);
+}
+
+/**
+ * The registry's declared display name for a harness kind, or null when the
+ * kind is not in the catalog at all. Callers own the fallback for that case;
+ * see getProviderDisplayName.
+ */
+export function getRegistryAgentDisplayName(harnessKind: string): string | null {
+  return DISPLAY_NAMES.get(harnessKind) ?? null;
 }

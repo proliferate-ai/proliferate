@@ -230,8 +230,15 @@ describe("HomeOnboardingCards evidence-bound card (rung 7)", () => {
     expect(line?.className).not.toContain("sr-only");
     expect(line?.textContent).toContain("Next attempt in");
     expect(line?.textContent).toContain("429 rate limited");
-    // A terminal backoff row shows no spinner.
-    expect(container.querySelector('[data-agent-onboarding-phase="backoff"] .animate-spin')).toBeNull();
+    // A terminal backoff row shows no spinner. Selected on the Spinner's own
+    // `data-loading-spinner` hook (D-R13): the old `.animate-spin` selector
+    // named a Tailwind class this app's Spinner never emits — it renders
+    // `proliferate-spinner` and rotates from a CSS rule — so the assertion
+    // matched nothing whether or not a spinner was there, and passed even
+    // with a real Spinner rendered in this subtree.
+    expect(
+      container.querySelector('[data-agent-onboarding-phase="backoff"] [data-loading-spinner]'),
+    ).toBeNull();
   });
 
   it("renders nothing when the evidence card has no badges", () => {

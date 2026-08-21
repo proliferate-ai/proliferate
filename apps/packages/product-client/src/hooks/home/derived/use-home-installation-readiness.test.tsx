@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useHomeInstallationReadiness } from "#product/hooks/home/derived/use-home-installation-readiness";
 
 /**
@@ -17,11 +17,20 @@ import { useHomeInstallationReadiness } from "#product/hooks/home/derived/use-ho
 
 const catalogMocks = vi.hoisted(() => ({
   reconcileSnapshot: null as Record<string, unknown> | null,
+  reconcileIsError: false,
 }));
 
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
-  useAgentCatalog: () => ({ reconcileSnapshot: catalogMocks.reconcileSnapshot }),
+  useAgentCatalog: () => ({
+    reconcileSnapshot: catalogMocks.reconcileSnapshot,
+    reconcileIsError: catalogMocks.reconcileIsError,
+  }),
 }));
+
+beforeEach(() => {
+  catalogMocks.reconcileSnapshot = null;
+  catalogMocks.reconcileIsError = false;
+});
 
 function multiAgentSnapshot() {
   return {
@@ -102,5 +111,57 @@ describe("useHomeInstallationReadiness (job-snapshot wiring)", () => {
     };
     const { result } = renderHook(() => useHomeInstallationReadiness("launchable"));
     expect(result.current).toBeNull();
+  });
+
+  /**
+   * D-R10: the card used to read phases alone, so a snapshot that stopped
+   * being updated left a permanent, false progress claim on the home screen.
+   * Both cases below are frozen snapshots whose components still read as a
+   * live install and would have rendered a card indefinitely.
+   */
+  describe("frozen snapshots", () => {
+    // The runtime's panic path marks the job failed and returns without
+    // finishing the agents it never reached, so those stay `queued`.
+    function panickedSnapshot() {
+      return {
+        jobId: "job-panic",
+        status: "failed",
+        message: "agent reconcile task failed: panic",
+        progress: {
+          downloadedBytes: 0,
+          downloadSizeBytes: null,
+          completedComponents: 1,
+          totalComponents: 3,
+          components: [
+            { agent: "claude", role: "native_cli", phase: "completed", downloadedBytes: 0, downloadSizeBytes: null },
+            { agent: "codex", role: "native_cli", phase: "queued", downloadedBytes: 0, downloadSizeBytes: null },
+            { agent: "opencode", role: "native_cli", phase: "queued", downloadedBytes: 0, downloadSizeBytes: null },
+          ],
+        },
+      };
+    }
+
+    it("shows nothing for a failed job whose unreached agents are stuck at queued", () => {
+      catalogMocks.reconcileSnapshot = panickedSnapshot();
+      const { result } = renderHook(() => useHomeInstallationReadiness("launchable"));
+      expect(result.current).toBeNull();
+    });
+
+    it("shows nothing once the poll has errored out under a retained running snapshot", () => {
+      // resolveAgentReconcileRefetchInterval returns false on a 404 even when
+      // the retained data says `running`, so polling stops for good while
+      // React Query keeps handing back the last mid-job snapshot.
+      catalogMocks.reconcileSnapshot = multiAgentSnapshot();
+      catalogMocks.reconcileIsError = true;
+      const { result } = renderHook(() => useHomeInstallationReadiness("launchable"));
+      expect(result.current).toBeNull();
+    });
+
+    it("still shows the card for the same snapshot while the poll is healthy", () => {
+      catalogMocks.reconcileSnapshot = multiAgentSnapshot();
+      catalogMocks.reconcileIsError = false;
+      const { result } = renderHook(() => useHomeInstallationReadiness("launchable"));
+      expect(result.current).not.toBeNull();
+    });
   });
 });

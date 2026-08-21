@@ -53,15 +53,32 @@ export interface HomeInstallProgressComponent {
   phase: string;
 }
 
-const READY_COMPONENT_PHASES = new Set(["completed", "skipped"]);
+/**
+ * The phases the runtime stamps once a component can no longer change
+ * (`finish_agent_components`). Everything else — queued, downloading,
+ * verifying, extracting, installing, finalizing — is still moving.
+ */
+const TERMINAL_COMPONENT_PHASES = new Set(["completed", "skipped", "failed"]);
 
 /**
- * Groups a job's components by agent to find who has fully settled (every
- * component completed or skipped) versus who still has a component in an
- * active phase. An agent with any `failed` component is excluded from both
- * sets — a failure is the terminal toast's decision to report, not this
- * card's; showing it as "still installing" would be false, and as "ready"
- * would be worse.
+ * Groups a job's components by agent into who is ready, who is still moving,
+ * and who is neither.
+ *
+ * An agent with any `failed` component is excluded from both sets — a failure
+ * is the terminal toast's decision to report, not this card's; showing it as
+ * "still installing" would be false, and as "ready" would be worse.
+ *
+ * `skipped` is excluded from ready for the same reason (D-R11). The runtime
+ * skips a component because nothing was installed for it: cursor cannot reach
+ * Ready in cloud, the agent is not managed-installed on an installed-only
+ * pass, the platform is unsupported, or the binary was already on PATH. Only
+ * the last of those is anything like "ready", and the phase alone cannot tell
+ * them apart — the same reason the toast beside it refuses to count a skipped
+ * result as a meaningful outcome. So a settled agent is ready only when every
+ * one of its components actually completed; a settled agent carrying a
+ * `skipped` is neither ready nor installing, and the card says nothing about
+ * it. An agent that still has a moving component is installing regardless,
+ * since a skip on one component does not stop the others.
  */
 function groupInstallProgressByAgent(
   components: readonly HomeInstallProgressComponent[],
@@ -83,10 +100,10 @@ function groupInstallProgressByAgent(
       continue;
     }
     const agent = { kind: agentKind, displayName: getAgentDisplayLabel(agentKind) };
-    if (phases.every((phase) => READY_COMPONENT_PHASES.has(phase))) {
-      readyAgents.push(agent);
-    } else {
+    if (phases.some((phase) => !TERMINAL_COMPONENT_PHASES.has(phase))) {
       installingAgents.push(agent);
+    } else if (phases.every((phase) => phase === "completed")) {
+      readyAgents.push(agent);
     }
   }
   return { readyAgents, installingAgents };
@@ -116,6 +133,35 @@ function describeStillInstalling(installingNames: readonly string[]): string {
 }
 
 /**
+ * Whether the snapshot the card is reading describes a job that is still
+ * running right now (D-R10). Phase alone cannot say: the durable snapshot
+ * keeps whatever phases it last held, so a job that stopped without stamping
+ * its remaining components leaves them reading `queued` forever, and the card
+ * would keep promising an install that is over.
+ *
+ * Two reachable ways to get there. The runtime's panic path sets the job to
+ * `failed` and returns without finishing the not-yet-reached agents, so their
+ * components stay `queued` in a terminal job — the status is what catches
+ * that. And the reconcile poll stops permanently on a 404 even while the last
+ * snapshot says `running` (a sidecar restarted into an older build, a runtime
+ * torn down), so the retained snapshot is frozen mid-job with nothing left to
+ * update it — the query's error state is what catches that.
+ *
+ * This is the same liveness test HarnessUpdateToastPresenter applies to the
+ * same snapshot before it shows progress; the card must not be laxer than the
+ * toast sitting beside it.
+ */
+function isLiveInstallJob(
+  jobStatus: string | null | undefined,
+  snapshotIsStale: boolean,
+): boolean {
+  if (snapshotIsStale) {
+    return false;
+  }
+  return jobStatus === "queued" || jobStatus === "running";
+}
+
+/**
  * The readiness card replacing the deleted model-probe card (UX spec §10
  * revision, ruling 4). Bound to per-agent readiness rather than a model
  * count: it exists only while the gate has resolved to something launchable
@@ -127,9 +173,14 @@ function describeStillInstalling(installingNames: readonly string[]): string {
  */
 export function resolveHomeReadinessCardModel(args: {
   gateKind: "launchable" | "selection_required" | "blocked";
+  jobStatus: string | null | undefined;
+  snapshotIsStale: boolean;
   progressComponents: readonly HomeInstallProgressComponent[];
 }): HomeReadinessCardModel | null {
   if (args.gateKind !== "selection_required" && args.gateKind !== "launchable") {
+    return null;
+  }
+  if (!isLiveInstallJob(args.jobStatus, args.snapshotIsStale)) {
     return null;
   }
   const { readyAgents, installingAgents } = groupInstallProgressByAgent(args.progressComponents);

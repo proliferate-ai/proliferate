@@ -383,6 +383,82 @@ describe("terminal triple", () => {
     toastInput.secondary.onClick();
     expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining("agent-codex"));
   });
+
+  /**
+   * D-R12. The runtime marks the whole job `failed` on exactly one path: the
+   * install task itself dying. That path pushes no per-agent result for the
+   * agent that died, so there is nobody to name — and the old copy
+   * interpolated the empty name list anyway, producing a description that
+   * began with a space and named no subject at all. The job's `message` is
+   * the only thing that knows what happened, and it was being discarded.
+   */
+  describe("a failed job with no failed result", () => {
+    it("does not print a subject-less sentence, and surfaces the job's reason", () => {
+      const { rerender } = render(<HarnessUpdateToastPresenter />);
+      vi.clearAllMocks();
+
+      state.localSnapshot = {
+        ...state.defaultLocalSnapshot,
+        status: "failed",
+        message: "agent reconcile task failed: panic",
+        results: [
+          { kind: "claude", outcome: "installed", installedArtifacts: [] },
+        ],
+      };
+      rerender(<HarnessUpdateToastPresenter />);
+
+      const toastInput = raisedWithId(HARNESS_UPDATE_TOAST_ID) as {
+        title: string;
+        description: string;
+      };
+      expect(toastInput.title).toBe("Some agent tools aren't ready");
+      expect(toastInput.description).toBe(
+        "The install did not finish. agent reconcile task failed: panic. "
+          + "Claude Code installed and remain usable.",
+      );
+      expect(toastInput.description.startsWith(" ")).toBe(false);
+      expect(toastInput.description).not.toContain(" failed (an unexpected error)");
+    });
+
+    it("still says something when the job carries no message either", () => {
+      const { rerender } = render(<HarnessUpdateToastPresenter />);
+      vi.clearAllMocks();
+
+      state.localSnapshot = {
+        ...state.defaultLocalSnapshot,
+        status: "failed",
+        results: [],
+      };
+      rerender(<HarnessUpdateToastPresenter />);
+
+      expect(raisedWithId(HARNESS_UPDATE_TOAST_ID)).toMatchObject({
+        title: "Some agent tools aren't ready",
+        description: "The install did not finish.",
+      });
+    });
+
+    it("keeps naming the agent whenever there is one to name", () => {
+      // The message must not displace a real named subject: a job that both
+      // failed at the job level and reported a failed agent still reads as
+      // that agent's failure.
+      const { rerender } = render(<HarnessUpdateToastPresenter />);
+      vi.clearAllMocks();
+
+      state.localSnapshot = {
+        ...state.defaultLocalSnapshot,
+        status: "failed",
+        message: "agent reconcile task failed: panic",
+        results: [
+          { kind: "codex", outcome: "failed", failureKind: "disk", installedArtifacts: [] },
+        ],
+      };
+      rerender(<HarnessUpdateToastPresenter />);
+
+      expect(raisedWithId(HARNESS_UPDATE_TOAST_ID)).toMatchObject({
+        description: "Codex failed (not enough disk space).",
+      });
+    });
+  });
 });
 
 describe("dismissal persistence", () => {
