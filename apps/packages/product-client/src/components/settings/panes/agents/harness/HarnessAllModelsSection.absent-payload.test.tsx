@@ -173,6 +173,7 @@ describe("HarnessAllModelsSection — no payload, nothing in flight (round 3)", 
       probeAttemptedAt: "2026-08-21T11:58:00Z",
       probeFailureCode: null,
       readiness: "ready",
+      canManuallyRefresh: true,
       probePhase: "idle",
     };
     rerender(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
@@ -385,6 +386,7 @@ describe("HarnessAllModelsSection — the refresh control tells the truth (round
       probeAttemptedAt: "2026-08-21T11:58:00Z",
       probeFailureCode: null,
       readiness: "ready",
+      canManuallyRefresh: true,
       probePhase: "idle",
     };
   }

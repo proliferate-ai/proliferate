@@ -40,7 +40,7 @@ function payload(state: string, probePhase: string | undefined, modelCount: numb
       controls: [], defaults: { modelId: null, controlValues: {} },
     },
     observedAt: "2026-08-21T11:58:00Z", probeAttemptedAt: "2026-08-21T11:58:00Z",
-    probeFailureCode: null, readiness: "ready", probePhase,
+    probeFailureCode: null, readiness: "ready", probePhase, canManuallyRefresh: true,
   } as unknown as AllModelsPresentationInput["launchOptions"];
 }
 
@@ -126,11 +126,6 @@ describe("the Models section over its whole input space", () => {
       const selfResolves = /as soon as|when the connection is back|after its first|Models load/i.test(r.detail ?? "");
       const namesAction = /restart|retry|once .+ exists|desktop app|refresh/i.test(r.detail ?? "");
       if (cure || selfResolves || namesAction) continue;
-      // The one standing exception, pinned so it cannot spread and cannot be
-      // forgotten: a `failed_without_observation` snapshot COPIED to cloud.
-      // Cloud has no probe route, so there is no control to offer and no
-      // honest self-resolution to promise. Recorded rather than papered over.
-      if (cell.surface === "cloud" && r.kind === "failed_without_observation") continue;
       bad.push(`${r.kind} :: ${r.title} :: ${r.detail}`);
     }
     expect(bad).toEqual([]);

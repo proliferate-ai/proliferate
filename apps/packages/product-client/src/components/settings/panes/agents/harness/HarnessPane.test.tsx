@@ -154,6 +154,9 @@ vi.mock("@anyharness/sdk-react", () => ({
         probeAttemptedAt: "2026-08-19T00:00:00Z",
         probeFailureCode: null,
         readiness: "ready",
+        // The LOCAL runtime owns its probe engine in this fixture; the cloud
+        // hook above carries no such field, because the wire has none.
+        canManuallyRefresh: true,
       } : undefined,
       isLoading: false,
     };
@@ -1162,19 +1165,14 @@ describe("HarnessPane all models", () => {
 });
 
 describe("HarnessPane all models (local composed observation)", () => {
+  const oneModelObservation = () => ({
+    agent: "claude", schemaVersion: 2, probeEngine: "owner", state: "idle",
+    probedAt: "2026-07-02T20:00:00Z", snapshotAgeSeconds: 90, modelCount: 1, modeCount: 0,
+    models: [{ id: "claude-sonnet-4-5", name: "Sonnet 4.6", provider: "anthropic" }],
+    modes: [],
+  });
   it("reads the runtime launch-option observation", () => {
-    state.modelSnapshotStatus.data = {
-      agent: "claude",
-      schemaVersion: 2,
-      probeEngine: "owner",
-      state: "idle",
-      probedAt: "2026-07-02T20:00:00Z",
-      snapshotAgeSeconds: 90,
-      modelCount: 1,
-      modeCount: 0,
-      models: [{ id: "claude-sonnet-4-5", name: "Sonnet 4.6", provider: "anthropic" }],
-      modes: [],
-    };
+    state.modelSnapshotStatus.data = oneModelObservation();
     renderPane("claude");
 
     expect(screen.queryByText("1 model")).not.toBeNull();
@@ -1194,6 +1192,8 @@ describe("HarnessPane all models (local composed observation)", () => {
   });
 
   it("hits the param-less runtime refresh endpoint for the local surface", () => {
+    // Round 5: Refresh needs a payload (ownership is a field on it).
+    state.modelSnapshotStatus.data = oneModelObservation();
     renderPane("claude");
 
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));

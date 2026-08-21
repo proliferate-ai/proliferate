@@ -100,6 +100,14 @@ export const HARNESS_PANE_COPY = {
   // fake; an explicit failure with its enabled cure (ruling 5).
   allModelsFailedWithoutObservationTitle: "Couldn't check models",
   allModelsProbeFailureReason: (displayName: string) => `${displayName} didn't answer the probe.`,
+  /**
+   * E-R37: the same failure, seen from a surface that cannot dispatch a probe.
+   * It names Retry because Retry is the control actually rendered, and it says
+   * "checks for" rather than "refreshes" because the button re-reads the stored
+   * result; the probe itself is re-run by whichever runtime owns the engine.
+   */
+  allModelsProbeFailureRecheckSuffix: (displayName: string) =>
+    `${displayName} didn't answer the probe. Retry checks for a newer result.`,
   // State 8 — the launch-options request itself failed (no payload). Never
   // rendered as a raw state string.
   allModelsTransportErrorTitle: "Models couldn't be loaded",

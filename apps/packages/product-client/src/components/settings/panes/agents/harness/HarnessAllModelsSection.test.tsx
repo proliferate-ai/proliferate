@@ -121,7 +121,7 @@ beforeEach(() => {
     observedAt: "2026-08-19T00:00:00Z",
     probeAttemptedAt: "2026-08-19T00:00:00Z",
     probeFailureCode: null,
-    readiness: "ready",
+    readiness: "ready", canManuallyRefresh: true,
   };
 });
 
@@ -143,14 +143,17 @@ describe("HarnessAllModelsSection", () => {
 });
 
 describe("HarnessAllModelsSection — the eight models-section states", () => {
-  it("1 · initial HTTP loading: no count, enabled Refresh", () => {
+  it("1 · initial HTTP loading: no count, Refresh disabled", () => {
     state.isLoading = true;
     state.launchOptions = undefined;
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
 
     expect(within(contentLine()).getByText("Loading models…")).toBeTruthy();
     expect(screen.queryByText(/^\d+ models?$/)).toBeNull();
-    expect((screen.getByRole("button", { name: /^refresh$/i }) as HTMLButtonElement).disabled).toBe(false);
+    // Round 5: no payload means no ownership fact to read, so the control fails
+    // closed. It was enabled here, which was never a cure anyway: a read that is
+    // already in flight does not land sooner because you pressed Refresh.
+    expect((screen.getByRole("button", { name: /^refresh$/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("2 · active first observation: Checking copy, never a count, Refresh disabled-as-busy", () => {
@@ -163,7 +166,7 @@ describe("HarnessAllModelsSection — the eight models-section states", () => {
       observedAt: null,
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "running",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Cursor" surface="local" />);
@@ -184,7 +187,7 @@ describe("HarnessAllModelsSection — the eight models-section states", () => {
       observedAt: null,
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "idle",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Cursor" surface="local" />);
@@ -211,7 +214,7 @@ describe("HarnessAllModelsSection — the eight models-section states", () => {
       observedAt: isoAgo(2 * 60_000),
       probeAttemptedAt: isoAgo(2 * 60_000),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "idle",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="OpenCode" surface="local" />);
@@ -232,7 +235,7 @@ describe("HarnessAllModelsSection — the eight models-section states", () => {
       observedAt: isoAgo(5 * 60_000),
       probeAttemptedAt: isoAgo(5 * 60_000),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "idle",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="OpenCode" surface="local" />);
@@ -257,7 +260,7 @@ describe("HarnessAllModelsSection — the eight models-section states", () => {
       observedAt: isoAgo(3 * 60 * 60_000),
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: "harness_probe_failed",
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "idle",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="OpenCode" surface="local" />);
@@ -277,7 +280,7 @@ describe("HarnessAllModelsSection — the eight models-section states", () => {
       observedAt: null,
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: "harness_probe_failed",
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "idle",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Cursor" surface="local" />);
@@ -316,7 +319,7 @@ describe("HarnessAllModelsSection — self-curing refresh", () => {
       observedAt: null,
       probeAttemptedAt: isoAgo(32 * 60_000, FIXED_NOW),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "running",
     };
     state.nextLaunchOptions = {
@@ -332,7 +335,7 @@ describe("HarnessAllModelsSection — self-curing refresh", () => {
       observedAt: isoAgo(0, FIXED_NOW),
       probeAttemptedAt: isoAgo(0, FIXED_NOW),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "idle",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="OpenCode" surface="local" />);
@@ -368,7 +371,7 @@ describe("HarnessAllModelsSection — self-curing refresh", () => {
       observedAt: null,
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: "harness_probe_failed",
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "idle",
     };
     rerender(<HarnessAllModelsSection harnessKind="claude" displayName="Cursor" surface="local" />);
@@ -395,7 +398,7 @@ describe("HarnessAllModelsSection — truthfulness rules", () => {
       observedAt: null,
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "running",
     };
     rerender(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
@@ -412,7 +415,7 @@ describe("HarnessAllModelsSection — truthfulness rules", () => {
       observedAt: null,
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "idle",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
@@ -439,7 +442,7 @@ describe("HarnessAllModelsSection — queued counts as live (E-R2)", () => {
       observedAt: null,
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "queued",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Cursor" surface="local" />);
@@ -464,7 +467,7 @@ describe("HarnessAllModelsSection — queued counts as live (E-R2)", () => {
       observedAt: isoAgo(60_000),
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "queued",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Cursor" surface="local" />);
@@ -499,7 +502,7 @@ describe("HarnessAllModelsSection — cloud surface (E-R5)", () => {
     expect(screen.queryByRole("button", { name: "Refreshing…" })).toBeNull();
   });
 
-  it("failed_without_observation offers no Retry (no probe route exists on cloud)", () => {
+  it("failed_without_observation offers a re-read, not a re-probe (E-R37)", () => {
     state.cloudSandbox = { id: "sandbox-1" };
     state.cloudLaunchOptions = {
       harnessKind: "claude",
@@ -515,7 +518,14 @@ describe("HarnessAllModelsSection — cloud surface (E-R5)", () => {
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
 
     expect(screen.getByText("Couldn't check models")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    // E-R37: cloud has no probe route, but this state is never polled either
+    // (`resolveAgentLaunchOptionsRefetchInterval` returns false for it), so
+    // with no Retry it was the pane's one permanent dead end. The cure offered
+    // is a re-READ of the snapshot the owning runtime keeps re-probing, which
+    // is why the copy says "checks for a newer result" and not "Refresh".
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByText(/Retry checks for a newer result\./)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^refresh$/i })).toBeNull();
   });
 });
 
@@ -530,7 +540,7 @@ describe("HarnessAllModelsSection — round 2 review fixes", () => {
       observedAt: isoAgo(60_000),
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: null,
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "queued",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
@@ -550,7 +560,7 @@ describe("HarnessAllModelsSection — round 2 review fixes", () => {
       observedAt: null,
       probeAttemptedAt: isoAgo(0),
       probeFailureCode: "harness_probe_failed",
-      readiness: "ready",
+      readiness: "ready", canManuallyRefresh: true,
       probePhase: "running",
     };
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);

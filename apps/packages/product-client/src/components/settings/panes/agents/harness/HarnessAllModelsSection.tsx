@@ -24,6 +24,7 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 import { normalizeRuntimeLaunchModels } from "#product/lib/domain/settings/harness-catalog";
 import {
   resolveAllModelsPresentation,
+  type AllModelsPayloadFacts,
   type AllModelsRetryAffordance,
   type HarnessModelsFetchStatus,
   type HarnessModelsQueryFacts,
@@ -132,6 +133,19 @@ export function HarnessAllModelsSection({
   const launchOptions = isLocal
     ? runtimeLaunchOptionsQuery.data
     : cloudLaunchOptionsQuery.data;
+  // Engine ownership is a fact about the runtime SERVING the response, and the
+  // cloud snapshot has no field for it: the copy in Proliferate Cloud was taken
+  // from whichever runtime observed the harness, and this browser is not that
+  // runtime. Said out loud here rather than left to an absent field defaulting
+  // to false, which keeps the SDK field non-optional so a local runtime that
+  // stops sending it is a build break instead of a silently dimmed Refresh.
+  // Cloud renders no Refresh control at all, so on cloud this only governs
+  // which failed-probe line is shown, where "cannot re-probe" is the truth.
+  const payloadFacts: AllModelsPayloadFacts | undefined = isLocal
+    ? runtimeLaunchOptionsQuery.data
+    : cloudLaunchOptionsQuery.data
+      ? { ...cloudLaunchOptionsQuery.data, canManuallyRefresh: false }
+      : undefined;
   const models = useMemo(
     () => normalizeRuntimeLaunchModels(harnessKind, launchOptions),
     [harnessKind, launchOptions],
@@ -201,7 +215,7 @@ export function HarnessAllModelsSection({
     sandboxQuery: queryFacts(cloudSandbox),
     hasCloudSandboxId: Boolean(cloudSandbox.data?.id),
     cloudLaunchOptionsQuery: queryFacts(cloudLaunchOptionsQuery),
-    launchOptions,
+    launchOptions: payloadFacts,
     isRefreshMutationPending: Boolean(refreshLaunchOptions.isPending),
     isRefreshMutationPaused: Boolean(refreshLaunchOptions.isPaused),
     modelCount: models.length,

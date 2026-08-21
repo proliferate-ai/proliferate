@@ -183,8 +183,14 @@ describe("resolveAllModelsPresentation — every no-payload cause is its own arm
       // the user can go and do (create a workspace, run the agent once, open
       // the desktop app).
       const namesAnAction = /restart|retry|once .+ exists|desktop app/i.test(arm.detail ?? "");
+      // `loading` is the one arm where a read is genuinely in flight, and it
+      // resolves when that read lands. Round 5 took its Refresh away, which is
+      // what makes this clause load-bearing rather than decorative: Refresh was
+      // never a cure for a read already running, so counting it as one was the
+      // predicate accepting a fake cure.
+      const isInFlight = arm.kind === "loading";
       expect(
-        { kind: arm.kind, ok: hasCure || saysItResolvesItself || namesAnAction },
+        { kind: arm.kind, ok: hasCure || saysItResolvesItself || namesAnAction || isInFlight },
       ).toEqual({ kind: arm.kind, ok: true });
       // And never a body line that contradicts the header it sits under.
       expect(arm.emptyBody).toBeNull();
@@ -275,6 +281,7 @@ describe("resolveAllModelsPresentation — a payload always outranks the no-payl
     probeAttemptedAt: "2026-08-21T11:58:00Z",
     probeFailureCode: null,
     readiness: "ready",
+    canManuallyRefresh: true,
     probePhase: "idle",
   } as unknown as AllModelsPresentationInput["launchOptions"];
 
@@ -309,6 +316,7 @@ describe("resolveAllModelsPresentation — the refresh control is not a proxy ei
     probeAttemptedAt: "2026-08-21T11:58:00Z",
     probeFailureCode: null,
     readiness: "ready",
+    canManuallyRefresh: true,
     probePhase: "idle",
   } as unknown as AllModelsPresentationInput["launchOptions"];
 
@@ -396,6 +404,73 @@ describe("resolveAllModelsPresentation — the refresh control is not a proxy ei
         refresh: "disabled",
       });
     }
+  });
+
+  // Round 5. These are the cases that make the payload seam falsifiable: a
+  // LOCAL runtime whose wire answer disagrees with `isLocal`. Every pre-existing
+  // fixture happens to be a local owner in `ready`, so `isLocal` and the wire
+  // value coincided everywhere and the seam could be reverted with no test
+  // noticing. Each case below discriminates the two.
+  describe("both preconditions on Refresh come from the wire, not from isLocal", () => {
+    function localPayload(over: Record<string, unknown>) {
+      return input({
+        runtimeQuery: facts({ isPending: false }),
+        modelCount: 1,
+        freshnessAgo: "2m ago",
+        launchOptions: { ...(observed as object), ...over } as typeof observed,
+      });
+    }
+
+    it("a local runtime that does not own the probe engine gets no Refresh", () => {
+      // It would answer 409 PROBE_ENGINE_NOT_OWNER, so an enabled control here
+      // has exactly one possible outcome: an error toast.
+      expect(resolveAllModelsPresentation(localPayload({ canManuallyRefresh: false })).refresh)
+        .toBe("disabled");
+      expect(resolveAllModelsPresentation(localPayload({ canManuallyRefresh: true })).refresh)
+        .toBe("enabled");
+    });
+
+    it("install state is the SECOND precondition and is not folded into the first", () => {
+      // Ownership says yes; the harness is not installed, so the probe route
+      // answers 404 and no amount of clicking installs anything.
+      const byReadiness = Object.fromEntries(
+        (["ready", "credentials_required", "login_required", "error", "install_required", "unsupported"] as const)
+          .map((readiness) => [
+            readiness,
+            resolveAllModelsPresentation(localPayload({ canManuallyRefresh: true, readiness })).refresh,
+          ]),
+      );
+      expect(byReadiness).toEqual({
+        ready: "enabled",
+        // Re-probing is exactly how the pane learns the user has since signed
+        // in, so taking Refresh away here would remove the cure as it starts
+        // working.
+        credentials_required: "enabled",
+        login_required: "enabled",
+        error: "enabled",
+        install_required: "disabled",
+        unsupported: "disabled",
+      });
+    });
+
+    it("a non-owner is told to check again, and is never left with a dead end", () => {
+      const owner = resolveAllModelsPresentation(localPayload({
+        state: "failed_without_observation", canManuallyRefresh: true,
+      }));
+      const reader = resolveAllModelsPresentation(localPayload({
+        state: "failed_without_observation", canManuallyRefresh: false,
+      }));
+      expect({ retry: owner.retry, detail: owner.detail }).toEqual({
+        retry: "reprobe_harness", detail: "Claude didn't answer the probe.",
+      });
+      // E-R37: it cannot dispatch a probe, but the owner re-probes on its own
+      // schedule and this state is never polled, so a re-read is the only cure
+      // there is. The copy does not name a Refresh that would not work.
+      expect({ retry: reader.retry, detail: reader.detail }).toEqual({
+        retry: "refetch_read",
+        detail: "Claude didn't answer the probe. Retry checks for a newer result.",
+      });
+    });
   });
 });
 

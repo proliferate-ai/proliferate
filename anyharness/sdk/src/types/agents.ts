@@ -63,6 +63,15 @@ export interface HarnessLaunchOptionsResponse {
   probeFailureCode: string | null;
   readiness: AgentReadinessState;
   /**
+   * Whether a manual refresh dispatched at this runtime can run at all: it owns
+   * the probe engine for its runtime home. A runtime that does not answers the
+   * refresh route with 409 `PROBE_ENGINE_NOT_OWNER`, and ownership appears
+   * nowhere else on any wire. Install state is the other precondition and is
+   * reported separately by `readiness`; a surface gating a Refresh control must
+   * respect both.
+   */
+  canManuallyRefresh: boolean;
+  /**
    * Absent when the runtime that served this response cannot know the phase.
    * `detecting` on its own cannot tell a probe that is running apart from one
    * that will never run.
