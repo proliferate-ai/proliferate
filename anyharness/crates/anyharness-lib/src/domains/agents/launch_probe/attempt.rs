@@ -25,12 +25,6 @@ impl LaunchProbeService {
         let service = self.launch_options.as_ref().ok_or_else(|| {
             RefreshError::Persistence("launch-options store is not configured".to_string())
         })?;
-        // Admitted BEFORE the durable "probing" write, not after the model plan
-        // resolves: everything between the two is observable to a client, and a row
-        // that says `probing` while the slot still says `idle` is the disagreement
-        // that stalls polling. `LiveStateGuard` is RAII, so every exit below —
-        // including the `?` on the next statement — still lands in `Drop`.
-        let live_state = self.admit_attempt(slot.clone());
         let started = service
             .begin_probe(harness_kind, &Utc::now().to_rfc3339())
             .map_err(|error| RefreshError::Persistence(error.to_string()))?;
