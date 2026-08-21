@@ -54,8 +54,12 @@ pub trait LoopFireExecutor: Send + Sync {
     async fn liveness(&self, session_id: &str) -> LoopSessionLiveness;
 
     /// Enqueue the loop's prompt as a loop-fired user turn and record the fire.
-    /// `None` = the loop record is gone/cleared and should be disarmed.
-    async fn fire(&self, session_id: &str, loop_id: &str) -> Option<LoopFireReport>;
+    ///
+    /// `Ok(None)` = the loop record is gone/cleared and should be disarmed;
+    /// `Err` = a transient failure — the arm must be kept so the fire retries
+    /// on a later pass.
+    async fn fire(&self, session_id: &str, loop_id: &str)
+        -> anyhow::Result<Option<LoopFireReport>>;
 }
 
 /// How long to wait before re-checking a due loop whose session was busy.
@@ -72,6 +76,7 @@ type ArmKey = (String, String);
 pub enum FireOutcome {
     Fired,
     SkippedBusy,
+    FailedTransient,
     DisarmedDead,
     DisarmedRetired,
     Gone,
@@ -94,10 +99,10 @@ impl LoopScheduler {
 
     /// Arm (or re-arm) one emulated loop at its next fire instant.
     pub async fn arm(&self, session_id: &str, loop_id: &str, next_fire_at_ms: i64) {
-        self.armed
-            .lock()
-            .await
-            .insert((session_id.to_string(), loop_id.to_string()), next_fire_at_ms);
+        self.armed.lock().await.insert(
+            (session_id.to_string(), loop_id.to_string()),
+            next_fire_at_ms,
+        );
         self.wake.notify_one();
     }
 
@@ -164,11 +169,15 @@ impl LoopScheduler {
                 // short backoff — the driver's sleep floor handles the cadence.
                 LoopSessionLiveness::Busy => FireOutcome::SkippedBusy,
                 LoopSessionLiveness::Idle => match self.executor.fire(session_id, loop_id).await {
-                    None => {
+                    Err(error) => {
+                        tracing::warn!(session_id, loop_id, error = %error, "emulated loop fire failed transiently; keeping the arm for retry");
+                        FireOutcome::FailedTransient
+                    }
+                    Ok(None) => {
                         self.armed.lock().await.remove(&key);
                         FireOutcome::Gone
                     }
-                    Some(report) => match (report.still_armed, report.next_fire_at_ms) {
+                    Ok(Some(report)) => match (report.still_armed, report.next_fire_at_ms) {
                         (true, Some(next)) => {
                             self.armed.lock().await.insert(key.clone(), next);
                             FireOutcome::Fired
@@ -186,9 +195,9 @@ impl LoopScheduler {
     }
 
     /// Sleep duration until the next actionable moment: the earliest future
-    /// fire, floored by [`BUSY_RETRY`] when a due loop was just skipped busy,
-    /// capped by [`MAX_SLEEP`].
-    async fn next_sleep(&self, now_ms: i64, skipped_busy: bool) -> Duration {
+    /// fire, floored by [`BUSY_RETRY`] when a due loop was skipped busy or
+    /// failed transiently, capped by [`MAX_SLEEP`].
+    async fn next_sleep(&self, now_ms: i64, retry_soon: bool) -> Duration {
         let earliest_future = {
             let armed = self.armed.lock().await;
             armed.values().copied().filter(|next| *next > now_ms).min()
@@ -196,7 +205,7 @@ impl LoopScheduler {
         let mut sleep = earliest_future
             .map(|next| Duration::from_millis((next - now_ms).max(0) as u64))
             .unwrap_or(MAX_SLEEP);
-        if skipped_busy {
+        if retry_soon {
             sleep = sleep.min(BUSY_RETRY);
         }
         sleep.min(MAX_SLEEP)
@@ -208,10 +217,13 @@ impl LoopScheduler {
             loop {
                 let now = now_ms();
                 let outcomes = self.run_due_pass(now).await;
-                let skipped_busy = outcomes
-                    .iter()
-                    .any(|(_, outcome)| *outcome == FireOutcome::SkippedBusy);
-                let sleep = self.next_sleep(now, skipped_busy).await;
+                let retry_soon = outcomes.iter().any(|(_, outcome)| {
+                    matches!(
+                        *outcome,
+                        FireOutcome::SkippedBusy | FireOutcome::FailedTransient
+                    )
+                });
+                let sleep = self.next_sleep(now, retry_soon).await;
                 tokio::select! {
                     _ = tokio::time::sleep(sleep) => {}
                     _ = self.wake.notified() => {}
@@ -252,9 +264,13 @@ mod tests {
         async fn liveness(&self, _session_id: &str) -> LoopSessionLiveness {
             self.liveness
         }
-        async fn fire(&self, _session_id: &str, _loop_id: &str) -> Option<LoopFireReport> {
+        async fn fire(
+            &self,
+            _session_id: &str,
+            _loop_id: &str,
+        ) -> anyhow::Result<Option<LoopFireReport>> {
             self.fires.fetch_add(1, Ordering::SeqCst);
-            Some(self.report.clone())
+            Ok(Some(self.report.clone()))
         }
     }
 
@@ -295,7 +311,12 @@ mod tests {
         assert_eq!(idle.fires.load(Ordering::SeqCst), 1);
         // Rescheduled to the reported next fire.
         assert_eq!(
-            *scheduler.armed.lock().await.get(&("s1".into(), "l1".into())).unwrap(),
+            *scheduler
+                .armed
+                .lock()
+                .await
+                .get(&("s1".into(), "l1".into()))
+                .unwrap(),
             5_000
         );
     }
@@ -349,6 +370,109 @@ mod tests {
         let outcomes = scheduler.run_due_pass(1_500).await;
         assert_eq!(outcomes[0].1, FireOutcome::DisarmedRetired);
         assert!(!scheduler.is_armed("s1", "l1").await);
+    }
+
+    #[tokio::test]
+    async fn transient_fire_failure_keeps_the_arm_and_retries() {
+        struct FlakyExecutor {
+            fires: AtomicUsize,
+        }
+        impl FlakyExecutor {
+            fn new() -> Arc<Self> {
+                Arc::new(Self {
+                    fires: AtomicUsize::new(0),
+                })
+            }
+        }
+        #[async_trait]
+        impl LoopFireExecutor for FlakyExecutor {
+            async fn liveness(&self, _session_id: &str) -> LoopSessionLiveness {
+                LoopSessionLiveness::Idle
+            }
+            async fn fire(
+                &self,
+                _session_id: &str,
+                _loop_id: &str,
+            ) -> anyhow::Result<Option<LoopFireReport>> {
+                if self.fires.fetch_add(1, Ordering::SeqCst) == 0 {
+                    Err(anyhow::anyhow!("sqlite blip"))
+                } else {
+                    Ok(Some(LoopFireReport {
+                        still_armed: true,
+                        next_fire_at_ms: Some(5_000),
+                    }))
+                }
+            }
+        }
+
+        let flaky = FlakyExecutor::new();
+        let scheduler = LoopScheduler::new(flaky.clone());
+        scheduler.arm("s1", "l1", 1_000).await;
+
+        // Transient failure -> FailedTransient, the arm stays at the original
+        // next_fire (1_000) so the next pass retries it.
+        let outcomes = scheduler.run_due_pass(1_500).await;
+        assert_eq!(outcomes[0].1, FireOutcome::FailedTransient);
+        assert_eq!(
+            *scheduler
+                .armed
+                .lock()
+                .await
+                .get(&("s1".into(), "l1".into()))
+                .unwrap(),
+            1_000
+        );
+        assert_eq!(flaky.fires.load(Ordering::SeqCst), 1);
+
+        // Retry succeeds -> Fired, rearmed to the reported next fire.
+        let outcomes = scheduler.run_due_pass(1_600).await;
+        assert_eq!(outcomes[0].1, FireOutcome::Fired);
+        assert_eq!(
+            *scheduler
+                .armed
+                .lock()
+                .await
+                .get(&("s1".into(), "l1".into()))
+                .unwrap(),
+            5_000
+        );
+        assert_eq!(flaky.fires.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn gone_loop_disarms() {
+        struct GoneExecutor {
+            fires: AtomicUsize,
+        }
+        impl GoneExecutor {
+            fn new() -> Arc<Self> {
+                Arc::new(Self {
+                    fires: AtomicUsize::new(0),
+                })
+            }
+        }
+        #[async_trait]
+        impl LoopFireExecutor for GoneExecutor {
+            async fn liveness(&self, _session_id: &str) -> LoopSessionLiveness {
+                LoopSessionLiveness::Idle
+            }
+            async fn fire(
+                &self,
+                _session_id: &str,
+                _loop_id: &str,
+            ) -> anyhow::Result<Option<LoopFireReport>> {
+                self.fires.fetch_add(1, Ordering::SeqCst);
+                Ok(None)
+            }
+        }
+
+        let gone = GoneExecutor::new();
+        let scheduler = LoopScheduler::new(gone.clone());
+        scheduler.arm("s1", "l1", 1_000).await;
+        let outcomes = scheduler.run_due_pass(1_500).await;
+        assert_eq!(outcomes[0].1, FireOutcome::Gone);
+        assert!(!scheduler.is_armed("s1", "l1").await);
+        assert_eq!(gone.fires.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
