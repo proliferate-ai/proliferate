@@ -301,11 +301,13 @@ Discovered live 2026-08-21 (Lane A3), not previously documented:
    Slack is an optional, separately gated additive path. Its webhook is read
    only from `SLACK_ALERTS_WEBHOOK_URL` in the protected local observability
    environment file; it is never checked in. The Slack operation creates a
-   new `grafana-rebuild-slack` receiver and prepends an all-alert child route
-   with `continue: true`. The root `grafana-default-sns` receiver and its
-   existing child route stay untouched, so SNS/email delivery continues beside
-   Slack. The operation refuses a changed root receiver or a drifted Slack
-   route instead of overwriting either.
+   new `grafana-rebuild-slack` receiver (or updates its persisted webhook from
+   the protected environment value) and prepends an all-alert child route with
+   `continue: true`. It first requires the live matcherless SNS child that
+   makes the two sibling routes a real fan-out. The root
+   `grafana-default-sns` receiver, its complete SNS configuration, and every
+   pre-existing non-Slack child route are snapshotted and must survive each
+   write exactly. Any loss, ambiguity, or drift fails the operation.
 
 ### Repository artifacts
 
@@ -345,8 +347,11 @@ GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-rebuild-bootstrap.mjs slack-tes
   confirms the dashboard exists. Use this, not a clean `apply` exit code, as
   the proof that alerting actually works.
 - `slack-apply`, `slack-verify`, and `slack-test` are separately live-gated
-  and require `SLACK_ALERTS_WEBHOOK_URL`. The test sends a real Grafana Slack
-  notification; record only its success status and timestamp, never the URL.
+  and require `SLACK_ALERTS_WEBHOOK_URL` before any provider request.
+  `slack-verify` throws on missing, duplicate, or drifted receiver/route state;
+  it does not report partial boolean success. The test sends a real Grafana
+  Slack notification; record only its success status and timestamp, never the
+  URL.
 - Admin credential: a dedicated ADMIN-role service-account token for this
   workspace only, minted via `aws grafana create-workspace-service-account`
   (role `ADMIN`) + `create-workspace-service-account-token`, stored at

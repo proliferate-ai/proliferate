@@ -335,57 +335,217 @@ test("this tool's fixed target is the new workspace, never the OLD workspace", (
   assert.equal(WORKSPACE_BASE_URL, "https://g-48655e6419.grafana-workspace.us-east-1.amazonaws.com");
 });
 
-test("Slack receiver is additive, preserves the SNS root route, and proves a test delivery", async () => {
+const TEST_SLACK_ENV = {
+  SLACK_ALERTS_WEBHOOK_URL: "https://hooks.slack.com/services/synthetic/test/value",
+};
+
+function slackWorkspace({ dropSnsReceiverOnRouteWrite = false, dropExistingRoutesOnRouteWrite = false } = {}) {
   const overlay = baseOverlay();
-  const originalRoutes = [{ receiver: overlay.notificationPolicy.receiver, routes: [{ receiver: overlay.notificationPolicy.receiver }] }];
+  const originalRoutes = [
+    {
+      receiver: overlay.notificationPolicy.receiver,
+      routes: [{ receiver: overlay.notificationPolicy.receiver, group_by: ["grafana_folder", "alertname"] }],
+    },
+    { receiver: "pre-existing-triage", matchers: [["severity", "=", "warning"]], continue: true },
+  ];
+  const snsReceiver = {
+    name: overlay.contactPoint.name,
+    grafana_managed_receiver_configs: [{
+      type: "sns",
+      uid: "sns-uid",
+      settings: structuredClone(overlay.contactPoint.settings),
+    }],
+  };
   const state = {
     contacts: [],
+    calls: [],
+    createPayload: null,
+    updatePayload: null,
+    testPayload: null,
     am: {
       alertmanager_config: {
         route: { receiver: overlay.notificationPolicy.receiver, routes: structuredClone(originalRoutes) },
-        receivers: [{ name: overlay.contactPoint.name, grafana_managed_receiver_configs: [{ type: "sns" }] }],
+        receivers: [structuredClone(snsReceiver)],
       },
     },
   };
   const client = {
-    listContactPoints: async () => ({ status: 200, body: structuredClone(state.contacts) }),
+    listContactPoints: async () => {
+      state.calls.push("listContactPoints");
+      return { status: 200, body: structuredClone(state.contacts) };
+    },
     createContactPoint: async (body) => {
+      state.calls.push("createContactPoint");
+      state.createPayload = structuredClone(body);
       state.contacts.push({ name: body.name, type: body.type, uid: "slack-uid" });
       state.am.alertmanager_config.receivers.push({
         name: body.name,
-        grafana_managed_receiver_configs: [{ type: body.type, uid: "slack-uid" }],
+        grafana_managed_receiver_configs: [{ ...structuredClone(body), uid: "slack-uid" }],
       });
       return { status: 201, body: {} };
     },
-    getAlertmanagerConfig: async () => ({ status: 200, body: structuredClone(state.am) }),
-    postAlertmanagerConfig: async (body) => {
-      state.am = structuredClone(body);
+    updateContactPoint: async (uid, body) => {
+      state.calls.push("updateContactPoint");
+      state.updatePayload = structuredClone(body);
+      const receiver = state.am.alertmanager_config.receivers.find((entry) => entry.name === body.name);
+      receiver.grafana_managed_receiver_configs = [{ ...structuredClone(body), uid }];
       return { status: 202, body: {} };
     },
-    testReceiver: async (body) => ({
-      status: 200,
-      body: { receivers: [{ configs: [{ uid: body.receivers[0].grafana_managed_receiver_configs[0].uid, status: "ok" }] }] },
-    }),
+    getAlertmanagerConfig: async () => {
+      state.calls.push("getAlertmanagerConfig");
+      return { status: 200, body: structuredClone(state.am) };
+    },
+    postAlertmanagerConfig: async (body) => {
+      state.calls.push("postAlertmanagerConfig");
+      state.am = structuredClone(body);
+      if (dropSnsReceiverOnRouteWrite) {
+        state.am.alertmanager_config.receivers = state.am.alertmanager_config.receivers.filter(
+          (entry) => entry.name !== overlay.contactPoint.name,
+        );
+      }
+      if (dropExistingRoutesOnRouteWrite) {
+        state.am.alertmanager_config.route.routes = state.am.alertmanager_config.route.routes.slice(0, 1);
+      }
+      return { status: 202, body: {} };
+    },
+    testReceiver: async (body) => {
+      state.calls.push("testReceiver");
+      state.testPayload = structuredClone(body);
+      return {
+        status: 200,
+        body: {
+          receivers: [{
+            configs: [{ uid: body.receivers[0].grafana_managed_receiver_configs[0].uid, status: "ok" }],
+          }],
+        },
+      };
+    },
   };
-  const env = { SLACK_ALERTS_WEBHOOK_URL: "https://hooks.slack.com/services/test/unit/webhook" };
+  return { overlay, originalRoutes, snsReceiver, state, client };
+}
 
-  const applied = await runSlackApply({ client, repoRoot: REPO_ROOT, env });
+test("Slack create/test payloads put the webhook only in settings.url", async () => {
+  const { overlay, state, client } = slackWorkspace();
+  await runSlackApply({ client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV });
+
+  const expectedContactPayload = {
+    name: overlay.slackContactPoint.name,
+    type: "slack",
+    disableResolveMessage: false,
+    settings: {
+      url: TEST_SLACK_ENV.SLACK_ALERTS_WEBHOOK_URL,
+      title: "{{ template \"slack.default.title\" . }}",
+      text: "{{ template \"slack.default.text\" . }}",
+    },
+  };
+  assert.deepEqual(state.createPayload, expectedContactPayload);
+
+  await runSlackTest({ client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV });
+  assert.deepEqual(state.testPayload, {
+    receivers: [{
+      name: overlay.slackContactPoint.name,
+      grafana_managed_receiver_configs: [{ uid: "slack-uid", ...expectedContactPayload }],
+    }],
+  });
+});
+
+test("Slack receiver is additive and preserves the exact SNS receiver and every existing route", async () => {
+  const { overlay, originalRoutes, snsReceiver, state, client } = slackWorkspace();
+
+  const applied = await runSlackApply({ client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV });
   assert.deepEqual(applied, { contactPoint: "created", route: "created", uid: "slack-uid" });
   assert.equal(state.am.alertmanager_config.route.receiver, overlay.notificationPolicy.receiver);
   assert.deepEqual(state.am.alertmanager_config.route.routes.slice(1), originalRoutes);
+  assert.deepEqual(state.am.alertmanager_config.receivers[0], snsReceiver);
   assert.deepEqual(state.am.alertmanager_config.route.routes[0], { receiver: overlay.slackContactPoint.name, continue: true });
 
-  assert.deepEqual(await runSlackVerify({ client, repoRoot: REPO_ROOT }), {
-    defaultSnsRoutePreserved: true,
-    slackContactPresent: true,
-    additiveSlackRoutePresent: true,
+  state.am.alertmanager_config.route.routes[0] = {
+    matchers: [],
+    continue: true,
+    routes: [],
+    receiver: overlay.slackContactPoint.name,
+  };
+  assert.deepEqual(await runSlackVerify({ client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV }), {
+    status: "verified",
   });
-  assert.deepEqual(await runSlackTest({ client, repoRoot: REPO_ROOT, env }), { delivery: "ok" });
+
+  const reapplied = await runSlackApply({ client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV });
+  assert.deepEqual(reapplied, { contactPoint: "updated", route: "present", uid: "slack-uid" });
+  assert.equal(state.updatePayload.settings.url, TEST_SLACK_ENV.SLACK_ALERTS_WEBHOOK_URL);
+  assert.equal(Object.hasOwn(state.updatePayload, "secureSettings"), false);
+  assert.deepEqual(state.am.alertmanager_config.route.routes.slice(1), originalRoutes);
+  assert.deepEqual(state.am.alertmanager_config.receivers[0], snsReceiver);
 });
 
-test("Slack apply refuses to operate without the protected webhook environment variable", async () => {
+test("Slack route write fails closed if Grafana loses SNS config or any existing child route", async () => {
+  for (const options of [
+    { dropSnsReceiverOnRouteWrite: true },
+    { dropExistingRoutesOnRouteWrite: true },
+  ]) {
+    const { client } = slackWorkspace(options);
+    await assert.rejects(
+      runSlackApply({ client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV }),
+      /SNS receiver|non-Slack child route|matcherless child route/,
+    );
+  }
+});
+
+test("Slack commands refuse a missing webhook before any provider call", async () => {
+  for (const run of [runSlackApply, runSlackVerify, runSlackTest]) {
+    const { state, client } = slackWorkspace();
+    await assert.rejects(run({ client, repoRoot: REPO_ROOT, env: {} }), /SLACK_ALERTS_WEBHOOK_URL must be present/);
+    assert.deepEqual(state.calls, []);
+  }
+});
+
+test("Slack verify throws on missing, duplicate, or drifted receiver and route state", async () => {
+  const missing = slackWorkspace();
   await assert.rejects(
-    runSlackApply({ client: {}, repoRoot: REPO_ROOT, env: {} }),
-    /SLACK_ALERTS_WEBHOOK_URL must be present/,
+    runSlackVerify({ client: missing.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV }),
+    /contact point is missing/,
+  );
+
+  const duplicateContact = slackWorkspace();
+  await runSlackApply({ client: duplicateContact.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV });
+  duplicateContact.state.contacts.push(structuredClone(duplicateContact.state.contacts[0]));
+  await assert.rejects(
+    runSlackVerify({ client: duplicateContact.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV }),
+    /multiple contact points/,
+  );
+
+  const driftedRoute = slackWorkspace();
+  await runSlackApply({ client: driftedRoute.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV });
+  driftedRoute.state.am.alertmanager_config.route.routes[0].continue = false;
+  await assert.rejects(
+    runSlackVerify({ client: driftedRoute.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV }),
+    /route is missing, ambiguous, or drifted/,
+  );
+
+  const duplicateReceiver = slackWorkspace();
+  await runSlackApply({ client: duplicateReceiver.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV });
+  duplicateReceiver.state.am.alertmanager_config.receivers.push(
+    structuredClone(duplicateReceiver.state.am.alertmanager_config.receivers.at(-1)),
+  );
+  await assert.rejects(
+    runSlackVerify({ client: duplicateReceiver.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV }),
+    /receiver is missing or ambiguous/,
+  );
+
+  const missingReceiver = slackWorkspace();
+  await runSlackApply({ client: missingReceiver.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV });
+  missingReceiver.state.am.alertmanager_config.receivers.pop();
+  await assert.rejects(
+    runSlackVerify({ client: missingReceiver.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV }),
+    /receiver is missing or ambiguous/,
+  );
+
+  const duplicateRoute = slackWorkspace();
+  await runSlackApply({ client: duplicateRoute.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV });
+  duplicateRoute.state.am.alertmanager_config.route.routes.unshift(
+    structuredClone(duplicateRoute.state.am.alertmanager_config.route.routes[0]),
+  );
+  await assert.rejects(
+    runSlackVerify({ client: duplicateRoute.client, repoRoot: REPO_ROOT, env: TEST_SLACK_ENV }),
+    /route is missing, ambiguous, or drifted/,
   );
 });
