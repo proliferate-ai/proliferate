@@ -112,11 +112,18 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Drain, unmount, drain again, and only then restore. cleanup() runs
+  // unmount-time effect cleanups, and one of those could itself arm a timer;
+  // restoring the native functions before cleanup() would let such a timer
+  // slip through untracked, reopening the exact bug class this file guards
+  // against from a different source (review finding on #2162).
+  pendingWindowTimeoutIds.forEach((id) => realWindowClearTimeout(id));
+  pendingWindowTimeoutIds.clear();
+  cleanup();
   pendingWindowTimeoutIds.forEach((id) => realWindowClearTimeout(id));
   pendingWindowTimeoutIds.clear();
   window.setTimeout = realWindowSetTimeout;
   window.clearTimeout = realWindowClearTimeout;
-  cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
