@@ -25,10 +25,6 @@ function findFiles(dir, matcher) {
   return files;
 }
 
-function pathIncludes(relPath, segment) {
-  return relPath.split("/").includes(segment);
-}
-
 const args = parseArgs();
 const version = args.version;
 const artifactsDir = args["artifacts-dir"];
@@ -74,15 +70,18 @@ if (!version || !artifactsDir || !baseUrl || !output) {
   process.exit(1);
 }
 
-// Platform mapping: Tauri platform key -> artifact patterns
+// Platform mapping: Tauri platform key -> artifact filename patterns.
+// Matchers test filenames only, never directory layout: download-artifact@v8
+// nests each artifact in a directory named after it when several artifacts
+// match the pattern, but extracts FLAT when exactly one matches (or when
+// merge-multiple is set). Requiring a path segment here is what broke the
+// 0.4.22 publish after the paused Intel lane left a single artifact.
 const platforms = [
   {
     key: "darwin-aarch64",
     artifactMatcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-aarch64-apple-darwin") &&
       /(aarch64|arm64).*\.app\.tar\.gz$/i.test(name),
     sigMatcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-aarch64-apple-darwin") &&
       /(aarch64|arm64).*\.app\.tar\.gz\.sig$/i.test(name),
   },
   {
@@ -93,10 +92,8 @@ const platforms = [
     // artifact is not a manifest-generation failure.
     optional: true,
     artifactMatcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.app\.tar\.gz$/i.test(name),
     sigMatcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.app\.tar\.gz\.sig$/i.test(name),
   },
 ];

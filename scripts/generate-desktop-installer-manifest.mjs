@@ -25,10 +25,6 @@ function findFiles(dir, matcher) {
   return files;
 }
 
-function pathIncludes(relPath, segment) {
-  return relPath.split("/").includes(segment);
-}
-
 const args = parseArgs();
 const version = args.version;
 const artifactsDir = args["artifacts-dir"];
@@ -40,11 +36,13 @@ if (!version || !artifactsDir || !baseUrl || !output) {
   process.exit(1);
 }
 
+// Matchers test filenames only, never directory layout: download-artifact@v8
+// extracts a single matching artifact flat (no per-artifact directory), so a
+// path-segment requirement fails exactly when only the ARM artifact exists.
 const downloads = [
   {
     key: "darwin-aarch64",
     matcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-aarch64-apple-darwin") &&
       /(aarch64|arm64).*\.dmg$/i.test(name),
   },
   {
@@ -55,7 +53,6 @@ const downloads = [
     // a manifest-generation failure.
     optional: true,
     matcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.dmg$/i.test(name),
   },
 ];
