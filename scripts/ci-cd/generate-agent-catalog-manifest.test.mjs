@@ -90,3 +90,32 @@ test("rejects a registry document missing registryVersion", (t) => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /missing a string registryVersion/);
 });
+
+test("runs main() when the script path needs URL percent-encoding (space in path)", (t) => {
+  // realpath: macOS tmpdir sits behind the /var → /private/var symlink, and
+  // node realpaths import.meta.url but not argv[1]; this test targets URL
+  // percent-encoding, not symlink resolution.
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "agent catalog manifest ")));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const copiedGenerator = path.join(root, "generate-agent-catalog-manifest.mjs");
+  fs.copyFileSync(generator, copiedGenerator);
+  const { catalogPath, registryPath } = writeFixtures(root);
+  const output = path.join(root, "manifest.json");
+  const result = spawnSync(
+    process.execPath,
+    [
+      copiedGenerator,
+      "--catalog",
+      catalogPath,
+      "--registry",
+      registryPath,
+      "--output",
+      output,
+    ],
+    { encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const manifest = JSON.parse(fs.readFileSync(output, "utf8"));
+  assert.equal(manifest.catalogVersion, "2026.08.15-1");
+});
