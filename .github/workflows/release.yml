@@ -17,7 +17,10 @@ on:
   workflow_dispatch:
     inputs:
       surfaces:
-        description: Comma-separated surfaces to release and deploy, or all.
+        description: >-
+          Exact comma-separated surfaces to release and deploy, or all. `all` makes every
+          surface eligible and lets change detection since the previous checkpoint pick the
+          ones that moved; an explicit list is an exact override that skips detection.
         default: all
         required: false
         type: string
@@ -112,13 +115,26 @@ jobs:
 
       - name: Detect release surfaces
         id: detect
-        run: >
-          node scripts/ci-cd/detect-deploy-surfaces.mjs
-          --base "${{ steps.meta.outputs.base_sha }}"
-          --head "${{ steps.meta.outputs.head_sha }}"
-          --only "$SURFACES"
         env:
           SURFACES: ${{ github.event.inputs.surfaces || 'all' }}
+          BASE_SHA: ${{ steps.meta.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.meta.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          # The nightly covers every surface: server, web, litellm, and a desktop
+          # release that publishes the updater manifest. `all` (the default) means
+          # every surface is eligible, and change detection since the previous
+          # checkpoint decides which ones actually moved, so a night with no
+          # changes to a surface does not re-release or redeploy it. An explicit
+          # list is the exact override the hotfix path uses.
+          only=""
+          if [[ "$SURFACES" != "all" ]]; then
+            only="$SURFACES"
+          fi
+          node scripts/ci-cd/detect-deploy-surfaces.mjs \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --only "$only"
 
       # Version bump, tags, and the product release belong to a build run. A
       # skip_build run promotes bytes that already exist for this exact ref, so

@@ -45,6 +45,8 @@ Merging to `main` deploys nothing. Continuous staging is retired: `deploy-stagin
 
 `release.yml` is the single transition from `main` to production, and production deploys from its prepare job rather than from a staging result. A manual dispatch takes three inputs: `surfaces` (default `all`), `skip_build`, and `ref` (default `main`). A hotfix is an exact `ref` plus an exact `surfaces` set. A promotion of an already-built ref is `skip_build`. Neither is a separate workflow file. An explicit `ref` must be an ancestor of `main`, so production only ever ships commits that reached `main`.
 
+Nothing in the pipeline asks for approval. Dispatching a run is the authorization, and the 09:00 UTC cron needs none.
+
 The live E2B webhook workflow is manual-only and is not part of ordinary CI, staging, or the release pipeline. The Worker reusable lane is a configured no-op while `WORKERS_DEPLOY_ENABLED` is false and deliberately fails if enabled before a canonical worker service and command exist.
 
 Hosted Playwright and Cargo Tauri dependency steps normalize the known Ubuntu
@@ -168,9 +170,11 @@ enabled on the cluster), and the task-outcome metric filters carry `task_name`
 
 `release.yml` is the only release coordinator. It runs unattended on a 09:00 UTC cron and on manual dispatch. Its prepare job resolves the release checkpoint and the public product and artifact versions, may commit version bumps to `main`, and creates the selected checkpoint, product, and artifact tags. The run then releases the selected Runtime/SDK, Server/self-host, and Desktop artifacts and deploys the selected hosted surfaces to production.
 
+The nightly run covers every surface: Server, Web, and LiteLLM deploys plus a Desktop release that publishes the updater manifest. `surfaces` defaults to `all`, which makes every surface eligible and leaves the choice to change detection against the previous checkpoint, so an unchanged surface is neither re-released nor redeployed and a night with no changes at all does nothing. An explicit `surfaces` list skips detection and is exact.
+
 A `skip_build` run is deploy-only. It creates no version bump, no tags, no artifact releases, and no product release page, so it deploys exactly the bytes that already exist for that ref.
 
-Production jobs are unattended workflow jobs. They can stay zero-touch only while the `Production` GitHub Environment carries no required-reviewer rule, which is a repository setting rather than anything expressed in these files.
+Production jobs are unattended workflow jobs, and the pipeline has no approval step of its own. The `Production` GitHub Environment's required-reviewer rule is a repository setting rather than anything these files express; while it is set, it stops the cron from completing unattended.
 
 Server and LiteLLM deploy in parallel, and Web waits for the Server deploy because a rolled web surface can call API endpoints that only the new server revision serves. Web still deploys when Server is not a selected surface, and does not deploy when a selected Server deploy failed.
 
