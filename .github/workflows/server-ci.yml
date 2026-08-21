@@ -12,15 +12,17 @@ on:
       - "pnpm-workspace.yaml"
       - "scripts/validate-agent-catalog.mjs"
       - "server/**"
+  # Deliberately no on.pull_request.paths filter. A path-skipped workflow never
+  # reports a conclusion at all, so a required check naming these jobs would sit
+  # Pending forever on every non-server PR and make it unmergeable -- and the
+  # only way to avoid that today is to leave the server lanes off the required
+  # list entirely, which is the absence hole ci-ok exists to close. So the
+  # workflow now runs on every PR and the cheap `changes` job below diffs the
+  # merge base against the same path list, gating the heavy lanes. A gated-off
+  # lane still reports (a `skipped` conclusion, which branch protection treats
+  # as satisfied), so `lint` and `test` are always safe to mark required. Same
+  # shape as self-host-smoke.yml's changes/smoke pair.
   pull_request:
-    paths:
-      - ".dockerignore"
-      - ".github/workflows/server-ci.yml"
-      - "catalogs/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "scripts/validate-agent-catalog.mjs"
-      - "server/**"
   workflow_dispatch:
     inputs:
       comparison_sha:
@@ -58,7 +60,59 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Cheap relevance probe that replaces the removed on.pull_request.paths
+  # filter. Checkout + one git diff, no toolchains. The path list below is the
+  # filter that used to live on the trigger, kept verbatim so the set of PRs
+  # that run the server lanes is unchanged; only the reporting behaviour on the
+  # other PRs changes (skipped conclusion instead of no conclusion).
+  #
+  # Every non-pull_request caller -- main/tag pushes, workflow_dispatch, and the
+  # release/hotfix workflow_call entrypoints -- is unconditionally relevant.
+  changes:
+    name: Detect server-relevant changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.detect.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
+          fetch-depth: 0
+
+      - name: Diff against merge base
+        id: detect
+        working-directory: .
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "Event $GITHUB_EVENT_NAME always runs the server lanes."
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base="$(git merge-base "origin/${BASE_REF}" HEAD)"
+          relevant=false
+          while IFS= read -r file; do
+            case "$file" in
+              .dockerignore|.github/workflows/server-ci.yml)
+                relevant=true
+                ;;
+              pnpm-lock.yaml|pnpm-workspace.yaml|scripts/validate-agent-catalog.mjs)
+                relevant=true
+                ;;
+              catalogs/*|server/*)
+                relevant=true
+                ;;
+            esac
+          done < <(git diff --name-only "$base" HEAD)
+          echo "Server-relevant changes since ${base}: ${relevant}"
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -110,6 +164,8 @@ jobs:
           --github-event-base
 
   test:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
