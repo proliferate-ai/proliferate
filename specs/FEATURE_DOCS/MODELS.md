@@ -126,6 +126,22 @@ queued behind that much work, and past it the slot (or, read-only, nothing) is t
 answer. The bound has to clear a real queue, not just one timeout, or a probe
 waiting its turn behind a full pass is called abandoned while it is about to run.
 
+The slot and the row cannot be read atomically, so the ORDER is part of the rule:
+the slot is read FIRST and the row second, always. Row-first admits the one pair
+that cannot be told apart from an orphan — an attempt that commits between the two
+reads leaves a `probing` row beside an already-`idle` slot — and would retire the
+observation the client is waiting for. Slot-first can only produce a slot livelier
+than the row, which costs one extra poll. The ordering is enforced, not merely
+documented: a phase reading carries when it was taken, a read carries when it was
+taken, and deriving from the wrong order is refused.
+
+One more source can look idle without being settled: an owner that has not yet
+dispatched its startup probe pass. It serves HTTP while seed hydration and the
+reconcile run ahead of that pass, so its slot map is empty because nothing has run
+YET. Until the pass dispatches — or a whole-machine-pass worth of wall clock goes
+by, so a stalled boot cannot wait forever either — a row claiming an attempt is
+reported as queued rather than settled.
+
 When a claim is withdrawn this way, the STATE withdraws it too, not only the
 phase. `refreshing` is waited on without consulting `probePhase` at all, so a row
 vetoed as an orphan is projected as though it were settled: its last observation
@@ -136,6 +152,13 @@ that reads the state would keep polling an attempt the phase already denied.
 The field is omitted only when nothing is in flight in the row AND the serving
 runtime does not own the probe engine for its runtime home, the one case where no
 source can answer.
+
+Ownership itself is on the response as `canManuallyRefresh`. The refresh route
+answers a non-owner with 409 `PROBE_ENGINE_NOT_OWNER`, and nothing else on any
+wire carries that fact, so a surface that inferred it from "is this runtime local?"
+rendered a Refresh control whose only outcome was an error toast. It reports
+ownership alone; install state is a separate precondition already carried by
+`readiness`, and a surface gating a Refresh control respects both.
 
 Clients wait on a launch-option read only while `probePhase` is `queued` or
 `running`, or while the state is `refreshing`. Every terminal state, and a

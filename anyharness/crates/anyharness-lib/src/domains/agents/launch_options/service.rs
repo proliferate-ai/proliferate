@@ -48,6 +48,11 @@ pub enum LaunchSelectionUnsupported {
 pub struct LaunchOptionsRead {
     pub response: HarnessLaunchOptionsResponse,
     pub probe_in_flight: bool,
+    /// When this read was taken. Carried so a caller that also reads the probe
+    /// scheduler can be CHECKED for reading the slot first — see
+    /// `LaunchProbeService::refine_row_claim`, where reading the row first is the
+    /// ordering that turns a committing attempt into an apparent orphan.
+    pub read_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl LaunchOptionsRead {
@@ -107,6 +112,7 @@ impl HarnessLaunchOptionsService {
         harness_kind: &str,
     ) -> anyhow::Result<Option<LaunchOptionsRead>> {
         let current_basis = self.basis_revision(harness_kind);
+        let read_at = chrono::Utc::now();
         self.store.read(harness_kind).map(|row| {
             row.map(|row| {
                 // The ROW's own answer, read before the basis is judged. A probe
@@ -119,6 +125,7 @@ impl HarnessLaunchOptionsService {
                 if row.basis_revision != current_basis {
                     return LaunchOptionsRead {
                         probe_in_flight,
+                        read_at,
                         response: HarnessLaunchOptionsResponse {
                             harness_kind: row.harness_kind,
                             basis_revision: current_basis,
@@ -133,6 +140,7 @@ impl HarnessLaunchOptionsService {
                 }
                 LaunchOptionsRead {
                     probe_in_flight,
+                    read_at,
                     response: project_response(row),
                 }
             })

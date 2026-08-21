@@ -3248,6 +3248,18 @@ export interface components {
         };
         HarnessLaunchOptionsResponse: {
             basisRevision: string;
+            /**
+             * @description Does the runtime serving this response own the probe engine for its runtime
+             *     home, and so can a manual refresh dispatched here run at all?
+             *
+             *     A runtime that does not answers the refresh route with 409
+             *     `PROBE_ENGINE_NOT_OWNER`, and ownership appears nowhere else on any wire —
+             *     so a surface inferring it from "is this runtime local?" renders a Refresh
+             *     control whose only possible outcome is an error toast. Install state is a
+             *     separate precondition and is already reported by `readiness`; a surface
+             *     gating a Refresh control must respect both.
+             */
+            canManuallyRefresh: boolean;
             harnessKind: string;
             observedAt?: string | null;
             options?: null | components["schemas"]["HarnessLaunchOptions"];

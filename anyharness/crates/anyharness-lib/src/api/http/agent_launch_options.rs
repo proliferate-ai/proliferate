@@ -13,6 +13,7 @@ use super::agents_contract::probe_phase_to_contract;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::agents::launch_options as domain;
+use crate::domains::agents::launch_probe::{LivePhaseReading, ProbeEngineMode};
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::registry::descriptor;
 
@@ -79,16 +80,27 @@ async fn response_for(
 ) -> Result<HarnessLaunchOptionsResponse, ApiError> {
     let readiness = state.agent_runtime.get_agent(kind).await?.agent.status;
     let readiness = readiness_to_contract(readiness);
+    let can_manually_refresh = can_manually_refresh(state);
+    // Read the SLOT FIRST and the row second, and never the other way round.
+    //
+    // These two reads cannot be made atomic, so one of them is always the older
+    // half of the answer. Row-first is the unsafe order: an attempt that commits
+    // between the reads leaves the row saying `probing` (read before the commit)
+    // beside a slot saying `idle` (read after it) — the exact pair that means
+    // ORPHAN, so the fresh observation would be settled away and served as
+    // terminal, and the client would stop polling before ever seeing it.
+    // Slot-first cannot produce that pair. Its worst case is a slot livelier than
+    // the row, which reports an in-flight phase for one extra tick — a client that
+    // polls 1.5s longer than it had to, and nothing else.
+    let now = chrono::Utc::now();
+    let live = state.launch_probe_service.live_probe_phase(kind, now);
     match state
         .launch_options_service
         .read_with_probe_state(kind)
         .map_err(|error| ApiError::internal(format!("launch-options read failed: {error}")))?
     {
         Some(mut read) => {
-            // The in-flight bit travels WITH the response, out of the same row, so
-            // the state and the phase cannot be derived apart and drift. Read after
-            // the row too, so the phase is never older than the state it qualifies.
-            let probe_phase = probe_phase_for(state, kind, attempt_started_at(&read));
+            let probe_phase = refine(state, live, read.read_at, attempt_started_at(&read), now);
             if read.probe_in_flight && !phase_is_in_flight(probe_phase.as_ref()) {
                 // The row claimed an attempt and nothing honoured the claim. The
                 // state has to withdraw it too: `refreshing` is waited on without
@@ -96,7 +108,12 @@ async fn response_for(
                 // leave the wire contradicting itself and the client polling.
                 read.settle_orphan();
             }
-            Ok(to_contract(read.response, readiness, probe_phase))
+            Ok(to_contract(
+                read.response,
+                readiness,
+                probe_phase,
+                can_manually_refresh,
+            ))
         }
         // No row at all: nothing is durably in flight, whatever a slot might say.
         None => Ok(HarnessLaunchOptionsResponse {
@@ -109,9 +126,22 @@ async fn response_for(
             probe_attempted_at: chrono::Utc::now().to_rfc3339(),
             probe_failure_code: None,
             readiness,
-            probe_phase: probe_phase_for(state, kind, None),
+            probe_phase: refine(state, live, now, None, now),
+            can_manually_refresh,
         }),
     }
+}
+
+/// Can a refresh dispatched at THIS runtime run at all?
+///
+/// Engine ownership only, deliberately. `refresh_now` also rejects a harness that
+/// is not installed, but install state is already on this very response as
+/// `readiness`, and folding the two into one boolean would make a surface unable
+/// to tell "install this harness" from "this runtime can never refresh anything" —
+/// two different remedies behind one false. Ownership is the fact that appears
+/// nowhere else on any wire.
+fn can_manually_refresh(state: &AppState) -> bool {
+    state.launch_probe_service.mode() == ProbeEngineMode::Owner
 }
 
 fn validate_kind(kind: &str) -> Result<(), ApiError> {
@@ -174,14 +204,16 @@ fn refresh_error(error: crate::domains::agents::launch_probe::RefreshError) -> A
 /// scheduler's live slot. `None` when nothing is in flight durably AND this runtime
 /// does not own the probe engine, so the phase is genuinely unknowable here; the
 /// field is then omitted from the wire rather than reported as a settled `idle`.
-fn probe_phase_for(
+fn refine(
     state: &AppState,
-    kind: &str,
+    live: LivePhaseReading,
+    row_read_at: chrono::DateTime<chrono::Utc>,
     in_flight_since: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> Option<AgentAuthProbePhase> {
     state
         .launch_probe_service
-        .probe_phase(kind, chrono::Utc::now(), in_flight_since)
+        .refine_row_claim(live, row_read_at, in_flight_since, now)
         .map(probe_phase_to_contract)
 }
 
@@ -220,6 +252,7 @@ fn to_contract(
     response: domain::HarnessLaunchOptionsResponse,
     readiness: AgentReadinessState,
     probe_phase: Option<AgentAuthProbePhase>,
+    can_manually_refresh: bool,
 ) -> HarnessLaunchOptionsResponse {
     HarnessLaunchOptionsResponse {
         harness_kind: response.harness_kind,
@@ -303,5 +336,6 @@ fn to_contract(
         probe_failure_code: response.probe_failure_code,
         readiness,
         probe_phase,
+        can_manually_refresh,
     }
 }

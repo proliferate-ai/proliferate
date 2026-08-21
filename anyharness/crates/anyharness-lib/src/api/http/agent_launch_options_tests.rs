@@ -163,24 +163,50 @@ async fn a_queued_probe_behind_a_whole_machine_pass_is_never_reported_idle() {
     let queued = ["claude", "codex", "cursor", "grok", HARNESS];
     assert!(queued.len() >= 4, "the trap only opens from K = 4 upward");
 
-    // Every row is admitted up front, as a pass does; the last one waits behind all
-    // the probes ahead of it. Three probe timeouts of waiting is ordinary here.
-    for harness in queued {
+    let reader = read_only_view(&home, &owner);
+    // 135s is three timeouts — the tempting-but-wrong bound. 230s is the REAL
+    // worst case: four probes of the pass ahead of this one, each allowed its full
+    // timeout, with the fifth running. A bound that only clears the first number
+    // leaves the whole band between them untested and unprotected.
+    for waited in [135, 230] {
+        for harness in queued {
+            owner
+                .launch_options_service
+                .begin_probe(harness, &seconds_ago(waited))
+                .expect("admit a queued attempt");
+        }
+        for harness in queued {
+            let payload = payload_for(reader.clone(), harness).await;
+            assert_eq!(
+                payload["probePhase"],
+                Value::from("queued"),
+                "{harness} waited {waited}s behind the pass, it is not abandoned: {payload}"
+            );
+            assert_eq!(payload["state"], Value::from("detecting"));
+        }
+    }
+}
+
+/// The bound itself, from both sides. Sizing it is a judgement call; where it
+/// lands is not, and a test that only probes one side of an inequality cannot
+/// tell a 270s bound from a 27000s one.
+#[tokio::test]
+async fn a_claim_is_believed_right_up_to_the_bound_and_not_one_second_past_it() {
+    let home = TempRuntimeHome::new("bound-edges");
+    let (owner, _engine, _release) = state_with_a_gated_engine(&home, HARNESS);
+    let reader = read_only_view(&home, &owner);
+
+    for (waited, expected) in [(269, Some("queued")), (271, None)] {
         owner
             .launch_options_service
-            .begin_probe(harness, &seconds_ago(135))
-            .expect("admit a queued attempt");
-    }
-
-    let reader = read_only_view(&home, &owner);
-    for harness in queued {
-        let payload = payload_for(reader.clone(), harness).await;
+            .begin_probe(HARNESS, &seconds_ago(waited))
+            .expect("strand a row at probing");
+        let payload = payload_for(reader.clone(), HARNESS).await;
         assert_eq!(
-            payload["probePhase"],
-            Value::from("queued"),
-            "{harness} is queued behind the pass, not abandoned: {payload}"
+            payload.get("probePhase").and_then(Value::as_str),
+            expected,
+            "a {waited}s-old claim on a read-only runtime: {payload}"
         );
-        assert_eq!(payload["state"], Value::from("detecting"));
     }
 }
 
@@ -391,10 +417,6 @@ async fn a_read_only_runtime_keeps_reporting_a_probe_across_a_basis_move() {
     let _ = attempt.await;
 }
 
-/// A real `AppState` served by an OWNER engine whose runner is gated, so a test can
-/// hold an attempt inside the probe and read the wire while it is there. The state
-/// and the engine share one launch-option store, which is what makes the row and
-/// the slot two views of the same attempt.
 /// THE `refreshing` ORPHAN. `begin_probe` does not clear `options_json`, so a
 /// harness with 180 observed models that a user pressed Refresh on keeps every one
 /// of them in the row — and the projection calls that `refreshing`. Drop the
@@ -438,4 +460,133 @@ async fn an_observed_harness_orphan_serves_its_last_observation() {
         "the models really were seen, and they are still the truth: {payload}"
     );
     let _ = release.send(true);
+}
+
+/// B-R24. The two reads a launch-options response is built from cannot be made
+/// atomic, so the ORDER decides which stale pair is reachable. Reading the row
+/// first admits the fatal one — a `probing` row beside an already-`idle` slot,
+/// which is indistinguishable from an orphan — and retires the observation the
+/// client is waiting for. This drives both orders over one real commit.
+#[tokio::test]
+async fn an_attempt_committing_between_the_two_reads_is_not_mistaken_for_an_orphan() {
+    let home = TempRuntimeHome::new("commit-between-reads");
+    let (state, engine, release) = state_with_a_gated_engine(&home, HARNESS);
+    observe_models(&state, HARNESS);
+    let attempt = spawn_refresh(&engine, HARNESS);
+    wait_until("the attempt reaches the harness", || {
+        engine.live_probe_phase(HARNESS, chrono::Utc::now()).phase() == Some(ProbePhase::Running)
+    })
+    .await;
+    let now = chrono::Utc::now();
+
+    // THE SAFE ORDER, which is the one the handler uses: slot first...
+    let live_first = engine.live_probe_phase(HARNESS, now);
+    // ...the attempt commits here, between the two reads...
+    release.send(true).expect("release the fake probe");
+    attempt.await.expect("the attempt finishes");
+    // ...and the row is read second, already carrying the new observation.
+    let after = state
+        .launch_options_service
+        .read_with_probe_state(HARNESS)
+        .expect("read the row")
+        .expect("a row exists");
+    assert!(
+        !after.probe_in_flight,
+        "the commit settled the row, so nothing is claimed"
+    );
+    assert_eq!(
+        engine.refine_row_claim(live_first, after.read_at, None, now),
+        Some(ProbePhase::Running),
+        "a slot livelier than the row costs one extra poll and nothing else"
+    );
+
+    // And for the record, the slot read AFTER that commit says `idle` — beside a
+    // row that (read first) would still have said `probing`, that is the orphan
+    // pair exactly, over an attempt that succeeded.
+    assert_eq!(
+        engine.live_probe_phase(HARNESS, chrono::Utc::now()).phase(),
+        Some(ProbePhase::Idle)
+    );
+
+    // And the wire, built the safe way, carries the observation the probe just made.
+    let payload = payload_for(state, HARNESS).await;
+    assert_eq!(payload["state"], Value::from("observed"));
+    assert_ne!(
+        payload["observedAt"],
+        Value::from(OBSERVED_AT),
+        "the fresh observation must not be replaced by the pre-attempt snapshot: {payload}"
+    );
+}
+
+/// B-R25. An unclean shutdown leaves a row `probing`; the runtime reboots and
+/// serves HTTP while seed hydration and the reconcile still run ahead of the
+/// startup probe pass. The slot map is empty because nothing has run YET, and
+/// believing it would hand the client a terminal answer seconds before the
+/// startup probe lands the real one.
+#[tokio::test]
+async fn a_boot_that_has_not_probed_yet_does_not_call_a_stranded_row_settled() {
+    let home = temp_runtime_home("boot-before-startup-pass");
+    let state = booting_app_state(home.clone());
+    observe_models(&state, HARNESS);
+    state
+        .launch_options_service
+        .begin_probe(HARNESS, &hours_ago(2))
+        .expect("strand a row at probing");
+
+    let payload = payload_for(state.clone(), HARNESS).await;
+    assert_eq!(
+        payload["probePhase"],
+        Value::from("queued"),
+        "a probe pass is owed to this harness, so the client keeps waiting: {payload}"
+    );
+    assert_eq!(
+        payload["state"],
+        Value::from("refreshing"),
+        "and the state must agree, since that is the field the client waits on"
+    );
+
+    // Once the pass has actually dispatched, the empty slot means what it says.
+    state.launch_probe_service.mark_startup_pass_dispatched();
+    let payload = payload_for(state, HARNESS).await;
+    assert_eq!(payload["probePhase"], Value::from("idle"));
+    assert_eq!(payload["state"], Value::from("observed"), "{payload}");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// B-R26. `ProbeEngineMode` was on no wire at all, so a surface had to guess from
+/// "is this runtime local?" — and guessed wrong for a sidecar, rendering a Refresh
+/// control whose only possible outcome is a 409.
+#[tokio::test]
+async fn a_runtime_that_cannot_refresh_says_so_on_the_wire() {
+    let home = TempRuntimeHome::new("refresh-ownership");
+    let (owner, _engine, _release) = state_with_a_gated_engine(&home, HARNESS);
+    observe_models(&owner, HARNESS);
+
+    let reader = read_only_view(&home, &owner);
+    let payload = payload_for(reader, HARNESS).await;
+    assert_eq!(
+        payload["canManuallyRefresh"],
+        Value::from(false),
+        "this runtime does not own the engine, so the refresh route can only 409: {payload}"
+    );
+
+    let payload = payload_for(owner, HARNESS).await;
+    assert_eq!(
+        payload["canManuallyRefresh"],
+        Value::from(true),
+        "the owner can dispatch a refresh: {payload}"
+    );
+}
+
+/// The ordering rule is a precondition, not a convention: deriving a phase from a
+/// slot read AFTER the row is refused outright, so the unsafe order cannot be
+/// reintroduced by a later refactor that merely looks tidier.
+#[tokio::test]
+#[should_panic(expected = "the probe slot must be read BEFORE the launch-options row")]
+async fn deriving_a_phase_from_a_slot_read_after_the_row_is_refused() {
+    let home = TempRuntimeHome::new("row-first-refused");
+    let (_state, engine, _release) = state_with_a_gated_engine(&home, HARNESS);
+    let row_read_at = chrono::Utc::now();
+    let live = engine.live_probe_phase(HARNESS, row_read_at + chrono::Duration::milliseconds(1));
+    let _ = engine.refine_row_claim(live, row_read_at, Some(row_read_at), row_read_at);
 }

@@ -56,6 +56,11 @@ pub(super) fn begin_a_probe(state: &AppState, harness: &str) {
         .expect("record a durable probe start");
 }
 
+/// A real `AppState` served by an OWNER engine whose runner is gated, so a test can
+/// hold an attempt inside the probe and read the wire while it is there. The state
+/// and the engine share one launch-option store, which is what makes the row and
+/// the slot two views of the same attempt. The startup pass is marked dispatched:
+/// these fixtures stand for a running system, not a booting one.
 pub(super) fn state_with_a_gated_engine(
     home: &TempRuntimeHome,
     harness: &str,
@@ -83,6 +88,7 @@ pub(super) fn state_with_a_gated_engine(
         .with_launch_options(store.clone()),
     );
     assert_eq!(engine.mode(), ProbeEngineMode::Owner);
+    engine.mark_startup_pass_dispatched();
 
     let mut state = app_state(home.path().to_path_buf());
     state.launch_options_service = store;
@@ -157,7 +163,19 @@ pub(super) fn temp_runtime_home(prefix: &str) -> PathBuf {
     path
 }
 
+/// A RUNNING runtime: its startup pass has already dispatched, so an empty slot
+/// map means the scheduler has nothing to say rather than nothing yet. Production
+/// spawns that pass from `AppState::new`; `cfg(test)` suppresses it, so a fixture
+/// that did not mark it would silently be testing a booting runtime.
 pub(super) fn app_state(runtime_home: PathBuf) -> AppState {
+    let state = booting_app_state(runtime_home);
+    state.launch_probe_service.mark_startup_pass_dispatched();
+    state
+}
+
+/// A runtime whose startup probe pass has NOT dispatched yet — the first seconds
+/// after boot, while seed hydration and the reconcile still run ahead of it.
+pub(super) fn booting_app_state(runtime_home: PathBuf) -> AppState {
     AppState::new(
         runtime_home,
         "http://127.0.0.1:8457".to_string(),
