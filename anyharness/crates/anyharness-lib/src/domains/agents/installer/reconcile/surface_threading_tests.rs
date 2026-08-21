@@ -218,6 +218,8 @@ fn seed_managed_launchers(runtime_home: &std::path::Path, kinds: &[AgentKind]) {
                 .join("agent_process")
                 .join(format!("{}-launcher", kind.as_str())),
         );
-        write_executable(&agent_dir.join("native").join(kind.as_str()));
+        write_executable(&agent_dir.join("native").join(
+            crate::integrations::agent_cli::executable::platform_binary_filename(kind.as_str()),
+        ));
     }
 }
