@@ -1,4 +1,5 @@
 import type { AgentSummary } from "@anyharness/sdk";
+import { isGatewayCapableHarness } from "#product/lib/domain/agents/bundled-agent-registry";
 import { agentNeedsInstall } from "#product/lib/domain/agents/status";
 
 /**
@@ -177,11 +178,17 @@ export function planFirstRunAuthAdoption(
   // Each harness adopts independently: detected native creds need no wiring
   // for THAT harness — native is the implicit empty state — but a harness
   // the scan already trusts must not suppress gateway preselection for any
-  // other harness on the machine.
+  // other harness on the machine. Existing gateway-support filtering still
+  // applies per-harness: a harness with no gateway recipe (cursor — single-
+  // source, its only slot is "cursor") can never be handed a gateway action,
+  // matching the settings write path's isGatewayCapableHarness guard and the
+  // server's selection_rules.py fail-closed ("no gateway recipe").
   return input.agents
     .filter(
       (agent) =>
-        agent.installState === "installed" && !hasDetectedNativeAuth(agent),
+        agent.installState === "installed"
+        && !hasDetectedNativeAuth(agent)
+        && isGatewayCapableHarness(agent.kind),
     )
     .map((agent) => ({
       harnessKind: agent.kind,
