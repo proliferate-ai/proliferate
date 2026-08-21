@@ -68,6 +68,19 @@ const ROWS: TranscriptVirtualRow[] = [
   { kind: "pending_prompt", key: "pending-prompt:session-1" },
 ];
 
+// @tanstack/virtual-core's isScrolling-reset debounce (`utils.ts`
+// `debounce`) arms a real `targetWindow.setTimeout` on "scroll" and never
+// cancels it on unmount, so a late scroll leaves it pending past
+// `cleanup()`. If it fires after vitest tears down jsdom's `window`,
+// react-dom's `resolveUpdatePriority` throws, failing the whole CI shard
+// even though every test passed (CI run 32450933492, job 96679196436).
+//
+// Track every timer armed on `window` per test and cancel whatever is still
+// outstanding before `cleanup()`, so it is cancelled outright, not raced.
+let pendingWindowTimeoutIds: Set<ReturnType<typeof setTimeout>>;
+let realWindowSetTimeout: typeof window.setTimeout;
+let realWindowClearTimeout: typeof window.clearTimeout;
+
 beforeEach(() => {
   observedVirtualizerOptions.length = 0;
   completedTurnAnchorRef.current = null;
@@ -78,9 +91,31 @@ beforeEach(() => {
     disconnect() {}
   }
   vi.stubGlobal("ResizeObserver", TestResizeObserver);
+
+  pendingWindowTimeoutIds = new Set();
+  realWindowSetTimeout = window.setTimeout.bind(window);
+  realWindowClearTimeout = window.clearTimeout.bind(window);
+  window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+    const id = realWindowSetTimeout(() => {
+      pendingWindowTimeoutIds.delete(id);
+      (handler as (...a: unknown[]) => void)(...args);
+    }, timeout);
+    pendingWindowTimeoutIds.add(id);
+    return id;
+  }) as typeof window.setTimeout;
+  window.clearTimeout = ((id?: Parameters<typeof window.clearTimeout>[0]) => {
+    if (id !== undefined) {
+      pendingWindowTimeoutIds.delete(id as ReturnType<typeof setTimeout>);
+    }
+    return realWindowClearTimeout(id);
+  }) as typeof window.clearTimeout;
 });
 
 afterEach(() => {
+  pendingWindowTimeoutIds.forEach((id) => realWindowClearTimeout(id));
+  pendingWindowTimeoutIds.clear();
+  window.setTimeout = realWindowSetTimeout;
+  window.clearTimeout = realWindowClearTimeout;
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
