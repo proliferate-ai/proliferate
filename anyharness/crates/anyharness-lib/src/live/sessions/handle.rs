@@ -17,7 +17,7 @@ use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
-use crate::live::sessions::actor::command::SessionCommand;
+use crate::live::sessions::actor::command::{ConditionalUnloadOutcome, SessionCommand};
 mod fork;
 mod sidedoor;
 #[derive(Debug)]
@@ -493,6 +493,27 @@ impl LiveSessionHandle {
             .map_err(anyhow_command_error)
     }
 
+    /// Ask the actor to retire itself only if it is STILL idle when the
+    /// command reaches the front of its mailbox. The reaper's sweep verdict is
+    /// an outside observation that is already stale by the time it is acted
+    /// on, so the actor re-decides serially on its own loop. `None` means the
+    /// actor is unavailable (command not delivered, or the reply lost), which
+    /// for the reaper reads the same as gone.
+    pub(in crate::live::sessions) async fn unload_nonterminal_if_idle(
+        &self,
+    ) -> Option<ConditionalUnloadOutcome> {
+        let (respond_to, rx) = tokio::sync::oneshot::channel();
+        if self
+            .command_tx
+            .send(SessionCommand::UnloadIfIdle { respond_to })
+            .await
+            .is_err()
+        {
+            return None;
+        }
+        rx.await.ok()
+    }
+
     pub(in crate::live::sessions) async fn unload_nonterminal(&self) -> anyhow::Result<()> {
         self.send_request(|respond_to| SessionCommand::Unload { respond_to })
             .await
@@ -543,44 +564,4 @@ impl LiveSessionHandle {
 }
 
 #[cfg(test)]
-mod ext_method_error_tests {
-    use super::AgentExtMethodError;
-
-    #[test]
-    fn timeout_and_internal_errors_are_agent_unavailable() {
-        assert!(AgentExtMethodError::Timeout {
-            method: "_anyharness/goal/set".to_string(),
-            timeout_secs: 45,
-        }
-        .is_agent_unavailable());
-        assert!(AgentExtMethodError::Rpc {
-            method: "_anyharness/goal/get".to_string(),
-            code: -32603,
-            message: "sqlite state db unavailable".to_string(),
-        }
-        .is_agent_unavailable());
-    }
-
-    #[test]
-    fn invalid_params_stays_a_client_rejection() {
-        assert!(!AgentExtMethodError::Rpc {
-            method: "_anyharness/goal/set".to_string(),
-            code: -32602,
-            message: "invalid params".to_string(),
-        }
-        .is_agent_unavailable());
-    }
-
-    #[test]
-    fn classification_survives_anyhow_downcast() {
-        let error: anyhow::Error = AgentExtMethodError::Timeout {
-            method: "_anyharness/goal/clear".to_string(),
-            timeout_secs: 45,
-        }
-        .into();
-        let downcast = error
-            .downcast_ref::<AgentExtMethodError>()
-            .expect("ext-method error survives anyhow round-trip");
-        assert!(downcast.is_agent_unavailable());
-    }
-}
+mod ext_method_error_tests;

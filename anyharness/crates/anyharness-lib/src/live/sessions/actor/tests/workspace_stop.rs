@@ -44,11 +44,11 @@ use crate::live::sessions::sink::SessionEventSink;
 use crate::persistence::Db;
 use crate::process_kill::pid_is_alive;
 
-const SESSION_ID: &str = "session-1";
-const WORKSPACE_ID: &str = "workspace-1";
-const NATIVE_SESSION_ID: &str = "native-1";
+pub(super) const SESSION_ID: &str = "session-1";
+pub(super) const WORKSPACE_ID: &str = "workspace-1";
+pub(super) const NATIVE_SESSION_ID: &str = "native-1";
 
-fn temp_dir(name: &str) -> PathBuf {
+pub(super) fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "anyharness-actor-workspace-stop-test-{name}-{}",
         uuid::Uuid::new_v4()
@@ -65,7 +65,7 @@ fn temp_dir(name: &str) -> PathBuf {
 /// `/bin/sleep`) the instant it is exec'd from a path other than its
 /// originally-signed location (repro-verified: exit 137). A binary this
 /// test compiles itself has neither problem.
-fn compile_sleep_binary_named(dir: &std::path::Path, name: &str) -> PathBuf {
+pub(super) fn compile_sleep_binary_named(dir: &std::path::Path, name: &str) -> PathBuf {
     let source = dir.join(format!("{name}.c"));
     std::fs::write(
         &source,
@@ -89,7 +89,7 @@ fn compile_sleep_binary_named(dir: &std::path::Path, name: &str) -> PathBuf {
     path
 }
 
-async fn wait_for_pidfile(path: &std::path::Path) -> i32 {
+pub(super) async fn wait_for_pidfile(path: &std::path::Path) -> i32 {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
         if let Ok(contents) = std::fs::read_to_string(path) {
@@ -225,18 +225,18 @@ fn spawn_fake_agent_peer(
 
 /// Everything a stop test needs to drive the real actor against a real child
 /// process and a fake ACP peer.
-struct RealChildActorHarness {
-    actor: SessionActor,
-    command_tx: mpsc::Sender<SessionCommand>,
-    command_rx: mpsc::Receiver<SessionCommand>,
-    handle: Arc<LiveSessionHandle>,
-    /// Deferred `session/prompt` responders the fake agent received; holding
-    /// one keeps the turn's prompt future pending forever.
-    prompt_responder_rx: mpsc::UnboundedReceiver<acp::Responder<acp::schema::PromptResponse>>,
+pub(super) struct RealChildActorHarness {
+    pub(super) actor: SessionActor,
+    pub(super) command_tx: mpsc::Sender<SessionCommand>,
+    pub(super) command_rx: mpsc::Receiver<SessionCommand>,
+    pub(super) handle: Arc<LiveSessionHandle>,
+    /// Deferred `session/prompt` responders; one held keeps a turn pending.
+    pub(super) prompt_responder_rx:
+        mpsc::UnboundedReceiver<acp::Responder<acp::schema::PromptResponse>>,
     /// Every `session/cancel` the fake agent received (and ignored).
-    cancel_rx: mpsc::UnboundedReceiver<acp::schema::CancelNotification>,
+    pub(super) cancel_rx: mpsc::UnboundedReceiver<acp::schema::CancelNotification>,
     /// Kept alive so the in-memory database outlives the actor.
-    _store: SessionStore,
+    pub(super) _store: SessionStore,
 }
 
 /// Builds a real `SessionActor` whose owned child is a REAL `/bin/sh`
@@ -244,7 +244,7 @@ struct RealChildActorHarness {
 /// `spawn_agent_process` uses in production (R3-1). `agent_script` is the
 /// dummy "agent"'s body (e.g. a TERM-ignoring script that backgrounds a
 /// `git`-named grandchild).
-async fn spawn_actor_with_real_child(agent_script: &str) -> RealChildActorHarness {
+pub(super) async fn spawn_actor_with_real_child(agent_script: &str) -> RealChildActorHarness {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace_with_repo_root(&db, WORKSPACE_ID, "local", "/tmp/workspace");
     let store = SessionStore::new(db.clone());

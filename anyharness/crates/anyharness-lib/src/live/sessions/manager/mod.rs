@@ -13,6 +13,7 @@ pub(crate) mod reaper;
 mod replay;
 mod runtime_events;
 mod startup;
+mod unload;
 
 #[cfg(test)]
 mod fork_test_support;
@@ -153,54 +154,6 @@ impl LiveSessionManager {
         let mut sessions = self.live_sessions.write().await;
         sessions.remove(session_id);
         self.pending_startups.write().await.remove(session_id);
-    }
-
-    /// Retire one actor without changing the durable session lifecycle. The
-    /// actor itself bounds ACP cancellation and finalizes any partial turn;
-    /// this method waits for the exact registered handle to leave the live
-    /// map so a subsequent resume cannot race actor retirement.
-    pub(crate) async fn unload_session_nonterminal(&self, session_id: &str) -> anyhow::Result<()> {
-        #[cfg(not(test))]
-        const UNLOAD_EXIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
-        #[cfg(test)]
-        const UNLOAD_EXIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
-
-        let Some(handle) = self.get_handle(session_id).await else {
-            return Ok(());
-        };
-
-        tokio::time::timeout(UNLOAD_EXIT_TIMEOUT, async {
-            if let Err(error) = handle.unload_nonterminal().await {
-                // A dead command channel means this exact actor is already
-                // unavailable. Remove only its stale map entry; never evict a
-                // newer actor that might have been installed concurrently.
-                let mut sessions = self.live_sessions.write().await;
-                if matches!(sessions.get(session_id), Some(current) if Arc::ptr_eq(current, &handle))
-                {
-                    sessions.remove(session_id);
-                }
-                tracing::debug!(session_id, error = %error, "non-terminal unload found unavailable actor");
-                return;
-            }
-
-            loop {
-                let retired = {
-                    let sessions = self.live_sessions.read().await;
-                    !matches!(sessions.get(session_id), Some(current) if Arc::ptr_eq(current, &handle))
-                };
-                if retired {
-                    return;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            }
-        })
-        .await
-        .map_err(|_| {
-            anyhow::anyhow!(
-                "non-terminal actor unload timed out after {}s",
-                UNLOAD_EXIT_TIMEOUT.as_secs()
-            )
-        })
     }
 
     /// Synchronous variant for mobility install/export code that runs inside a

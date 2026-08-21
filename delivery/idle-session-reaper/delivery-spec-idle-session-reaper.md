@@ -58,10 +58,18 @@ Quiescence predicate, all of which must hold:
 - the handle's busy flag is clear
 - zero pending durable background-work rows for the session
 - the durable pending-prompt queue for the session is empty
+- no pending wake schedule on a link this session parents whose delivery needs a live parent handle
+- a cold start of this session would resolve to a launch strategy
 
 Never reaped: `Starting`, `Running`, `Errored`, `Closed`, and `AwaitingInteraction`. A durable read that fails yields `Undetermined`, which is treated as not reapable. The reaper fails closed on missing evidence.
 
-Retirement is the existing graceful non-terminal `Unload` path (`SessionCommand::Unload` to `ActorExitDisposition::Unload`), not SIGSTOP and not a terminal close. The durable session row, its transcript, its configuration, and its `native_session_id` all survive. Resume happens through the ordinary startup strategy matrix on the next prompt.
+Retirement is the existing graceful non-terminal `Unload` disposition, not SIGSTOP and not a terminal close. The durable session row, its transcript, its configuration, and its `native_session_id` all survive. Resume happens through the ordinary startup strategy matrix on the next prompt.
+
+The command the reaper sends is `SessionCommand::UnloadIfIdle`, not `Unload`. A sweep verdict is an outside observation that is already stale when the command is delivered, and `Unload` is not advisory: mid-turn it sends `CancelNotification` and resolves pending interactions `Cancelled`, and the idle loop's biased select puts commands ahead of the durable queue drain. So the actor re-evaluates the condition serially on its own loop, where the durable queue head, the busy flag, the pending interactions and the rest of the mailbox are all authoritative, and refuses the reap if anything arrived in between. The refusal reason is a bounded class (`active_turn`, `busy`, `pending_interaction`, `queued_prompt`, `mailbox_not_empty`, `replay_session`) and it resets the idle clock.
+
+Residual window, stated exactly: between the actor answering `Unloading` and its handle leaving the live map, a caller that already fetched the handle can still send into a closing mailbox and get `ResponseDropped`. That window is not introduced by the reaper - it is the same window every `unload_live_session_nonterminal` caller has always had - and closing it needs the handle lookup and the send to be atomic with respect to actor retirement, which is a manager-wide change and out of scope here.
+
+The actor's exit sequence signals the agent's process GROUP on every exit, not only on `Stop`. `kill_on_drop` is the crash backstop for the direct child only, and the direct child is the ACP adapter: the measurement below puts 64% of a session's memory in the vendor CLI it spawns, which is a grandchild. A reap that dropped only the child would leave the expensive half of the session resident, which is a leak plus a cold start rather than a reclaim. `kill_group_and_await` returns immediately on an empty group and exits its grace as soon as the group honors the TERM, so an ordinary exit pays milliseconds for this. A child that is not its own group leader gets the direct SIGKILL `kill_on_drop` would have delivered instead of a group signal, because a group kill aimed at a non-leader pid signals nothing and the reap would then wait out its whole budget for a process nobody told to die.
 
 The idle clock is the reaper's own observation ledger, held in the sweep task rather than on the handle. Each sweep records the first tick at which a session was seen quiescent, keyed by the live snapshot's `updated_at` activity marker. Any non-quiescent observation drops the record, and a changed activity marker restarts it, so what is measured is continuous idleness rather than cumulative idleness. Sweep cadence is `min(threshold / 4, 15s)`, which bounds how much later than the threshold a reap can land.
 
@@ -85,11 +93,22 @@ The 2026-08-15 draft said resume uses `SessionStartupStrategy::ResumeSeqFreshNat
 
 ## Resolved implementer verification items
 
-The frozen draft flagged three items to confirm in code rather than assume. All three are resolved.
+The frozen draft flagged three items to confirm in code rather than assume. All three are resolved, and review added a fourth.
 
-**Mobility and cowork wake schedules survive reaping.** A wake schedule is a durable row in `session_link_wake_schedules`, keyed by session link. Actor retirement does not touch it. When the child finishes, `LinkCompletionStore::insert_completion_and_consume_schedule` consumes the schedule and inserts the parent's wake prompt into `session_pending_prompts` inside one store transaction, with no live parent involved. The completion-delivery worker then calls `SessionRuntime::activate_durable_prompt_consumer`, which cold starts the parent through `ensure_live_session_handle` and hands it the queued prompt. The worker polls on a one-second cadence with a lease and retries until the wake is durably visible, so a delivery that lands in the narrow window between the reaper's queue check and its unload self-heals on the next pass. The reaper's own durable-queue check is the primary guard: from the instant the wake prompt row exists, the parent is not reapable. The acceptance test the draft called mandatory is `a_pending_wake_schedule_survives_reaping_and_still_wakes_the_parent`.
+**Wake schedules survive reaping, but only ONE relation's delivery survives a reaped parent.** Corrected 2026-08-21 after review; the original text below the correction was wrong about which subsystem delivers a cowork wake.
+
+A wake schedule is a durable row in `session_link_wake_schedules`, keyed by session link, and actor retirement does not touch it. When the child finishes, `LinkCompletionStore::insert_completion_and_consume_schedule` consumes the schedule and inserts the parent's wake prompt into `session_pending_prompts` inside one store transaction with no live parent involved. What happens next depends entirely on the relation:
+
+- **`subagent`.** `persist_terminal_turn_in_tx` writes a `session_link_completion_deliveries` row (`WHERE relation = 'subagent'`), and `CompletionDeliveryWorker` claims it on a one-second lease cadence and calls `SessionRuntime::activate_durable_prompt_consumer`, which cold starts the parent through `ensure_live_session_handle`. A reaped parent is woken. This is the path the original text described.
+- **`cowork_coding_session`.** No outbox row is ever written for this relation. Its one production caller is `deliver_cowork_coding_completion`, which sends the wake with `acp_manager.get_handle(&link.parent_session_id)` and skips the send silently when that returns `None`. Nothing scans for stranded pending prompts. A reaped parent's wake therefore sits in `session_pending_prompts` until a human next opens or prompts the session, which may be never.
+
+The fix is in the predicate rather than in a new drainer: a session that parents a link with a pending wake schedule on any relation other than `subagent` is not reapable. Unknown future relations are held back by the same test, which is the fail-safe direction. Once the wake prompt row exists the durable-queue check takes over.
+
+The mandatory acceptance test is split to match the truth: `a_cowork_parent_expecting_a_wake_is_not_reaped` (held back, verdict `PendingWake`, reapable again once the wake is delivered and drained) and `a_subagent_parent_is_reapable_and_its_wake_still_becomes_a_durable_prompt` (reaped, schedule intact, completion still produces the parent's durable wake prompt with no live parent). Neither test demonstrates the delivery worker's cold start, which belongs to the worker's own suite; the assertions stop at the durable facts this PR owns.
 
 **Durable prompt-queue emptiness.** The check is `QueueDurable::list_pending_prompts(session_id)`, read through the manager's existing `ActorCapabilities`. This is the same rowset the actor's own queue drain reads, so a queued prompt cannot be dropped by retirement: retirement is refused while any row exists.
+
+**Relaunchability after a reap.** Added 2026-08-21 after review. Retirement is only non-terminal for a session the startup matrix will take back, and one shape it refuses is fully quiescent from birth: a process-local (Claude) zero-turn fork child is inserted with `last_prompt_at: None` (`runtime/fork/mod.rs`), finalizes to `Idle`, and `choose_fork_child_strategy` bails with "process-local zero-turn fork recovery requires an exact-prefix recovery proof". Before this PR that state was only reachable after a process restart; a two-minute timer would have made it routine and permanent. The predicate therefore asks the launch policy itself - `choose_session_startup_strategy` against the same durable rows the next prompt will read - and refuses to reap anything it errors for. Keying on the policy rather than on "is it a Claude fork child" means the carve-out cannot drift from the policy: a zero-turn NON-fork session still resolves to `ResumeSeqFreshNative` and stays reapable, pinned by `a_zero_turn_session_that_is_not_a_fork_child_is_still_reaped`.
 
 **Subagent orphaning.** Delegated subagent sessions are ordinary sessions in the same `live_sessions` map, and the parent/child relationship is durable in `session_links` rather than held by the parent's actor. Reaping a parent therefore cannot orphan a live child: the child keeps running, records its completion durably, and wakes the parent by the path above. A child that is itself idle is reaped on its own merits. No special casing is required and this PR does not add any.
 
@@ -123,12 +142,18 @@ Per `specs/OBSERVABILITY.md`. All fields are ids, durations, and bounded classes
 | reap succeeded, `result_class = "reaped"` | session id, idle seconds, threshold seconds |
 | reap failed, `result_class = "reap_failed"` | session id, idle seconds, `failure_code = "nonterminal_unload_failed"`, error |
 | clock reset, debug | session id, blocking verdict as a bounded string |
-| `result_class = "awaiting_interaction_held"`, debug | count held on this sweep |
+| reap refused by the actor, `result_class = "reap_retained"` | session id, idle seconds, refusal reason as a bounded string |
+| `result_class = "awaiting_interaction_held"`, debug | count held on THIS sweep |
+| `result_class = "background_work_held"`, debug | count held on THIS sweep |
 | threshold override ignored | `failure_code = "idle_reap_threshold_unparseable"` |
+
+Both `_held` counters are per-sweep gauges, not cumulative totals: a session that nobody ever answers is counted again on every sweep for as long as it is held. That is the intended shape for the follow-up argument, since the quantity of interest is "how many sessions are stuck right now", but it means the numbers must be read as a gauge and not summed over time.
+
+Only one `_held` counter fires per held session per sweep, because the predicate short-circuits in a fixed order and `AwaitingInteraction` is tested first. A session that is both awaiting a human and holding a background-work tracker is counted as `awaiting_interaction_held` only. The order is deliberate and is not going to change: the founder ruling makes `AwaitingInteraction` the never-reap case, so it must be the first thing the predicate proves.
 
 ## Testing
 
-Per `specs/TESTING.md`. Tier 2, in `live/sessions/manager/reaper/tests.rs`, against a real in-memory `SessionStore` and the real `unload_session_nonterminal` path.
+Per `specs/TESTING.md`. Tier 2, in `live/sessions/manager/reaper/tests.rs`, against a real in-memory `SessionStore` and the real `unload_session_if_still_idle` path, whose actors are scripted mailbox consumers rather than real ones.
 
 - A continuously idle session is reaped once the threshold passes, and not one second before.
 - An `AwaitingInteraction` session is never reaped, at any elapsed time, and is counted as held.
@@ -138,9 +163,21 @@ Per `specs/TESTING.md`. Tier 2, in `live/sessions/manager/reaper/tests.rs`, agai
 - A `Running` session is not reaped.
 - Activity between sweeps restarts the continuous-idleness clock, and the restarted clock still runs out.
 - A reaped session's durable row is untouched: `native_session_id`, `last_prompt_at`, `status = "idle"`, no `closed_at`, no `dismissed_at`. That is exactly the shape `choose_session_startup_strategy` turns into `LoadNative(native_session_id)`, pinned by the existing `choose_startup_strategy_loads_claude_when_last_prompt_was_recorded`.
-- A pending wake schedule survives reaping and still wakes the parent.
+- A `subagent` parent is reapable, its wake schedule survives, and the child's completion still turns into the parent's durable wake prompt with no live parent.
+- A `cowork_coding_session` parent with a pending wake schedule is NOT reaped, and becomes reapable once that wake has been delivered and drained.
+- A process-local zero-turn fork child is never reaped, and the same session becomes reapable the moment it has a `last_prompt_at`.
+- A zero-turn session that is not a fork child is still reaped.
+- A durable read that fails makes the session `Undetermined`, which is never reaped.
+- An actor that refuses the conditional unload keeps its session, and the refusal resets the idle clock.
+- The env contract: absent keeps the default, unparseable keeps the default, `0` disables.
 - The spawned sweep loop reaps on its own cadence.
 - A zero threshold disables the reaper entirely.
+
+Tier 2 store-backed tests cannot prove what happens to the agent's processes or to the durable status, because their actors are scripted consumers rather than real ones. Three tests in `live/sessions/actor/tests/idle_reap.rs` therefore drive a REAL `SessionActor` over a real ACP duplex against a real spawned process tree:
+
+- A conditional unload kills the agent's whole process group, including a grandchild that outlives its parent's stdin, and the durable status transitions from `running` to `idle` with `native_session_id` intact.
+- A prompt queued behind the reap wins: the prompt is answered by the still-live actor and the session is kept.
+- A mid-turn reap is refused without cancelling the turn, and no ACP `session/cancel` is sent.
 
 Every one of these carries a negative control: the mechanism is mutated behaviourally with all signatures intact, the test is observed failing, the mutation is reverted, and the test is observed passing. Compile failures do not count.
 

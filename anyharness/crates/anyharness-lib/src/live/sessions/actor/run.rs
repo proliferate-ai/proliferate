@@ -1,7 +1,10 @@
 use agent_client_protocol as acp;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::live::sessions::actor::command::{ConditionalCancelOutcome, Resolution, SessionCommand};
+use crate::live::sessions::actor::command::{
+    ConditionalCancelOutcome, ConditionalUnloadOutcome, Resolution, SessionCommand,
+    UnloadRetainedReason,
+};
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::active::ActivePromptRequest;
@@ -98,11 +101,22 @@ impl SessionActor {
         // final events.
         self.handle.relinquish_event_sequence();
         self.handle.finish_prompt();
+        // Every exit signals the agent's process GROUP, not just the child
+        // this actor owns. `kill_on_drop` is the crash backstop for the direct
+        // child only (see `driver/process.rs`), and the direct child is the
+        // ACP adapter: the vendor CLI it spawns is a grandchild, and the
+        // measurement behind the idle reaper puts 64% of a session's memory
+        // in that grandchild. Dropping the child alone would leave the
+        // expensive half of the session running, which turns a reclaim into a
+        // leak plus a cold start. `kill_group_and_await` returns immediately
+        // when the group is already empty and exits the grace as soon as the
+        // group honors the TERM, so an ordinary exit pays milliseconds.
+        //
+        // The stop responder is the only difference between the two arms:
+        // `Stop` owes its caller the kill census, everything else does not.
+        let kills = self.kill_process_group_and_reap().await;
         if let Some(respond_to) = self.pending_stop_response.take() {
-            let kills = self.kill_process_group_and_reap().await;
             let _ = respond_to.send(Ok(kills));
-        } else {
-            drop(self.child);
         }
         Ok(())
     }
@@ -121,6 +135,18 @@ impl SessionActor {
         // `spawn_agent_process` gives the child its own process group via
         // `process_group(0)`, which makes the child's own pid the pgid.
         let pgid = pid as i32;
+        if !child_leads_its_own_group(pgid) {
+            // The child is in somebody else's group, so a group kill aimed at
+            // its pid signals nothing, and the wait below would then burn the
+            // whole reap budget waiting for a process nobody told to die.
+            // Production never spawns that shape (`spawn_agent_process` always
+            // sets `process_group(0)`), but the exit sequence has to stay
+            // bounded for any spawn site that does not, so fall back to the
+            // direct SIGKILL `kill_on_drop` would have delivered anyway. The
+            // census is the group's, and this group has no members.
+            let _ = tokio::time::timeout(REAP_BUDGET, self.child.kill()).await;
+            return (0, 0);
+        }
         let (kills, wait_result) = tokio::join!(
             crate::process_kill::kill_group_and_await(pgid),
             tokio::time::timeout(REAP_BUDGET, self.child.wait())
@@ -410,6 +436,20 @@ impl SessionActor {
                 let _ = respond_to.send(Ok(()));
                 Some(ActorExitDisposition::Unload)
             }
+            SessionCommand::UnloadIfIdle { respond_to } => {
+                if let Some(reason) = self.unload_refusal_reason(command_rx).await {
+                    tracing::debug!(
+                        session_id = %self.session_id,
+                        reason = reason.as_str(),
+                        result_class = "conditional_unload_retained",
+                        "conditional unload refused; the session is no longer idle"
+                    );
+                    let _ = respond_to.send(ConditionalUnloadOutcome::Retained(reason));
+                    return None;
+                }
+                let _ = respond_to.send(ConditionalUnloadOutcome::Unloading);
+                Some(ActorExitDisposition::Unload)
+            }
             SessionCommand::Stop { respond_to } => {
                 self.resolve_pending_interactions(Resolution::Dismissed)
                     .await;
@@ -437,6 +477,41 @@ impl SessionActor {
                 None
             }
         }
+    }
+
+    /// The actor-side half of the conditional unload: everything that must
+    /// still be true at the moment the actor is about to leave its loop.
+    ///
+    /// Reaching this point already proves there is no active turn (the
+    /// active-turn dispatch answers `Retained(ActiveTurn)` on its own arm), so
+    /// what is left is state a turn does not own. The mailbox check is the one
+    /// that closes the reaper's race: the channel is FIFO, so anything sitting
+    /// behind the unload was sent AFTER it, which means after the sweep's
+    /// observation. Refusing here lets that command run instead of being
+    /// answered with a dropped responder by the exit sequence.
+    async fn unload_refusal_reason(
+        &self,
+        command_rx: &mpsc::Receiver<SessionCommand>,
+    ) -> Option<UnloadRetainedReason> {
+        if self.handle.is_busy() {
+            return Some(UnloadRetainedReason::Busy);
+        }
+        if !self
+            .handle
+            .execution_snapshot()
+            .await
+            .pending_interactions
+            .is_empty()
+        {
+            return Some(UnloadRetainedReason::PendingInteraction);
+        }
+        if self.next_pending_prompt_for_drain().is_some() {
+            return Some(UnloadRetainedReason::QueuedPrompt);
+        }
+        if !command_rx.is_empty() {
+            return Some(UnloadRetainedReason::MailboxNotEmpty);
+        }
+        None
     }
 
     /// Dispatches an ACP extension-method request WITHOUT blocking the actor
@@ -512,4 +587,19 @@ impl SessionActor {
         };
         Ok(serde_json::to_value(&response)?)
     }
+}
+
+/// Whether the agent process is its own group leader, which is what makes a
+/// group kill aimed at its pid reach it and everything it spawned.
+#[cfg(unix)]
+fn child_leads_its_own_group(pid: i32) -> bool {
+    // Safety: `getpgid` only reads the kernel's process table. A `-1` (the
+    // process is already gone) is not a leader either, which is the right
+    // answer here.
+    unsafe { libc::getpgid(pid) == pid }
+}
+
+#[cfg(not(unix))]
+fn child_leads_its_own_group(_pid: i32) -> bool {
+    false
 }
