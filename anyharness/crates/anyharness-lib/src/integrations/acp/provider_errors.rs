@@ -76,8 +76,8 @@ pub fn classify_network_connection_error(message: &str) -> Option<ErrorEventDeta
     })
 }
 
-/// Reduces the two bounded provider-model failures exposed by OpenCode's ACP
-/// adapter to stable product error codes. The adapter currently preserves the
+/// Reduces the two bounded provider-model failures exposed by the ACP adapter
+/// to stable product error codes. The adapter currently preserves the
 /// provider message and an `APIError`/`session` discriminator, but not the
 /// provider HTTP status or retryability. Require that full surviving envelope
 /// so similar prose from another harness cannot acquire this classification.
