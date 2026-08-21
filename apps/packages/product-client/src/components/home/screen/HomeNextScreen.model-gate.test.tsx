@@ -500,15 +500,19 @@ describe("HomeNextScreen model gate", () => {
     expect(screen.queryByText("Couldn't refresh your models.")).toBeNull();
   });
 
-  it("offers nothing to press when no agent can ever run here", () => {
-    // The only terminal gate: a Refresh would re-read an identical built-in
-    // registry forever, so a button would be the dead end, not the cure.
+  it("navigates rather than probing when no agent can ever run here", () => {
+    // The only gate with no cure. A Refresh would re-read an identical
+    // built-in registry forever, so the action is navigation to the pane that
+    // shows WHICH agents are unsupported — never repair vocabulary, and never
+    // a probe.
     screenMocks.homeNext.modelGate = { kind: "blocked", reason: "agents_unsupported" };
     render(<HomeNextScreen />);
     expect(screen.getByText("No agents are supported on this machine.")).toBeTruthy();
-    for (const name of ["Refresh", "Retry", "Check again", "Agents"]) {
+    for (const name of ["Refresh", "Retry", "Check again"]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
+    fireEvent.click(screen.getByRole("button", { name: "See agents" }));
+    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-settings");
     expect(screenMocks.retryModelObservation).not.toHaveBeenCalled();
   });
 });

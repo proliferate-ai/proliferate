@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type {
   AgentAuthProbePhase,
@@ -27,29 +27,14 @@ import {
   type HomeLaunchTarget,
   type HomeNextModelSelection,
 } from "#product/lib/domain/home/home-next-launch";
+import {
+  IDLE_REFRESH_ATTEMPT,
+  isRefreshInFlight,
+  isRefreshRefused,
+} from "#product/lib/domain/home/home-model-refresh-attempt";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
-
-interface RefreshAttempt {
-  attempted: number;
-  settled: number;
-  refused: number;
-}
-
-const IDLE_REFRESH_ATTEMPT: RefreshAttempt = { attempted: 0, settled: 0, refused: 0 };
-
-function isRefreshInFlight(attempt: RefreshAttempt): boolean {
-  return attempt.attempted > 0 && attempt.settled < attempt.attempted;
-}
-
-/** Refused only when NOTHING got through: one kind succeeding means the
- * refresh did something, whatever another kind answered. */
-function isRefreshRefused(attempt: RefreshAttempt): boolean {
-  return attempt.attempted > 0
-    && attempt.settled === attempt.attempted
-    && attempt.refused === attempt.attempted;
-}
 
 interface UseHomeNextModelSelectionArgs {
   modelSelectionOverride: HomeNextModelSelection | null;
@@ -228,23 +213,25 @@ export function useHomeNextModelSelection({
   /**
    * The outcome of the probes THIS notice's action started.
    *
-   * Counted here rather than read off the mutation, because one `useMutation`
-   * observer tracks only its most recent call: fire two kinds, have one
-   * refused and one succeed, and `isError` reports whichever finished last.
-   * The user would be told the refresh was refused because of start order.
+   * See `home-model-refresh-attempt` for why this is counted per attempt and
+   * attributed from `mutateAsync`'s promise rather than per-call callbacks.
    */
   const [refreshAttempt, setRefreshAttempt] = useState(IDLE_REFRESH_ATTEMPT);
   // A refusal belongs to the target it was refused on. Switching targets must
   // not carry "Couldn't refresh your models." to a target nothing was ever
   // asked of — and on cloud nothing can clear it, since cloud never probes.
   const launchTargetKind = launchTarget?.kind ?? null;
+  // Bumped by both the reset and each new batch, so a batch that settles after
+  // either one cannot write its stale tally over the current state.
+  const refreshRunId = useRef(0);
   useEffect(() => {
+    refreshRunId.current += 1;
     setRefreshAttempt(IDLE_REFRESH_ATTEMPT);
   }, [launchTargetKind]);
   const refreshLaunchOptions = useRefreshHarnessLaunchOptionsMutation();
   const refetchTargetLaunchOptions = targetLaunchOptions.refetch;
   const refetchLaunchOptionsKind = useRefetchAgentLaunchOptionsKind();
-  const refreshMutate = refreshLaunchOptions.mutate;
+  const refreshMutateAsync = refreshLaunchOptions.mutateAsync;
   /**
    * The cure behind every blocked notice's action (ruling 5: a state must
    * never disable the control that would cure it).
@@ -302,20 +289,24 @@ export function useHomeNextModelSelection({
       repaired = true;
     }
     if (probeKinds.length > 0) {
+      refreshRunId.current += 1;
+      const runId = refreshRunId.current;
       setRefreshAttempt({ attempted: probeKinds.length, settled: 0, refused: 0 });
-      for (const harnessKind of probeKinds) {
-        refreshMutate(harnessKind, {
-          onError: () => setRefreshAttempt((attempt) => ({
-            ...attempt,
-            settled: attempt.settled + 1,
-            refused: attempt.refused + 1,
-          })),
-          onSuccess: () => setRefreshAttempt((attempt) => ({
-            ...attempt,
-            settled: attempt.settled + 1,
-          })),
+      // `allSettled` never rejects, so a refused probe is a tally entry rather
+      // than an unhandled rejection. Probes are serialized runtime-side, so
+      // there is no partial-progress state worth rendering between them.
+      void Promise.allSettled(
+        probeKinds.map((harnessKind) => refreshMutateAsync(harnessKind)),
+      ).then((results) => {
+        if (refreshRunId.current !== runId) {
+          return;
+        }
+        setRefreshAttempt({
+          attempted: results.length,
+          settled: results.length,
+          refused: results.filter((result) => result.status === "rejected").length,
         });
-      }
+      });
       repaired = true;
     }
     if (hasCatalogError) {
@@ -335,7 +326,7 @@ export function useHomeNextModelSelection({
     refetchAgents,
     refetchLaunchOptionsKind,
     refetchTargetLaunchOptions,
-    refreshMutate,
+    refreshMutateAsync,
     requestedHarnessKind,
   ]);
 

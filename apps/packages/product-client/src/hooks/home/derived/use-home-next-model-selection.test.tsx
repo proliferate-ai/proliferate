@@ -2,6 +2,14 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  CLOUD_TARGET,
+  LOCAL_TARGET,
+  codexResponse,
+  entry,
+  response,
+  wrapper,
+} from "#product/hooks/home/derived/home-model-selection.fixtures";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useHomeNextModelSelection } from "#product/hooks/home/derived/use-home-next-model-selection";
 
@@ -13,11 +21,9 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   refetchKind: vi.fn(),
   refetchAgents: vi.fn(),
-  refreshMutate: vi.fn(),
-  refreshCalls: [] as Array<{
-    kind: string;
-    options?: { onSuccess?: () => void; onError?: () => void };
-  }>,
+  refreshFn: vi.fn(),
+  // Settled by hand, one entry per real `mutateAsync` call.
+  refreshProbes: [] as Array<{ kind: string; succeed: () => void; refuse: () => void }>,
   otherEntries: [] as Array<{
     harnessKind: string;
     data: Record<string, unknown> | null;
@@ -52,9 +58,19 @@ vi.mock("#product/hooks/access/anyharness/agents/use-refetch-agent-launch-option
   useRefetchAgentLaunchOptionsKind: () => mocks.refetchKind,
 }));
 
-vi.mock("@anyharness/sdk-react", () => ({
-  useRefreshHarnessLaunchOptionsMutation: () => ({ mutate: mocks.refreshMutate }),
-}));
+// A REAL `useMutation`, not a hand-written stand-in. The previous mock let the
+// tests invoke all N per-call callbacks themselves, encoding a contract
+// react-query does not honour — one `#mutateOptions` slot means only the LAST
+// call's callbacks run — which hid a refresh that never stopped claiming to be
+// in flight.
+vi.mock("@anyharness/sdk-react", async () => {
+  const { useMutation } = await import("@tanstack/react-query");
+  return {
+    useRefreshHarnessLaunchOptionsMutation: () => useMutation({
+      mutationFn: (harnessKind: string) => mocks.refreshFn(harnessKind) as Promise<unknown>,
+    }),
+  };
+});
 
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => ({
@@ -69,18 +85,26 @@ vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   }),
 }));
 
-const LOCAL_TARGET = { kind: "local", sourceRoot: "/repo", existingWorkspaceId: null } as const;
-const CLOUD_TARGET = {
-  kind: "cloud",
-  gitOwner: "owner",
-  gitRepoName: "repo",
-  baseBranch: "main",
-} as const;
-
 type LaunchTarget = typeof LOCAL_TARGET | typeof CLOUD_TARGET | null;
 
 function renderSelection(launchTarget: LaunchTarget) {
-  return renderHook(() => useHomeNextModelSelection({ modelSelectionOverride: null, launchTarget }));
+  return renderHook(
+    () => useHomeNextModelSelection({ modelSelectionOverride: null, launchTarget }),
+    { wrapper },
+  );
+}
+
+/** `mutationFn` runs in a microtask: a probe has not started synchronously
+ *  with the call that requested it. */
+async function startProbes(start: () => void) {
+  await act(async () => { start(); });
+}
+
+/** Settle every probe started so far and flush the batch's promise chain. */
+async function settleProbes(outcomes: Array<"succeed" | "refuse">) {
+  await act(async () => {
+    outcomes.forEach((outcome, i) => mocks.refreshProbes[i][outcome]());
+  });
 }
 
 describe("useHomeNextModelSelection", () => {
@@ -92,10 +116,14 @@ describe("useHomeNextModelSelection", () => {
     mocks.refetch = vi.fn();
     mocks.refetchKind = vi.fn();
     mocks.refetchAgents = vi.fn();
-    mocks.refreshCalls = [];
-    mocks.refreshMutate = vi.fn((kind: string, options?: Record<string, () => void>) => {
-      mocks.refreshCalls.push({ kind, options });
-    });
+    mocks.refreshProbes = [];
+    mocks.refreshFn = vi.fn((kind: string) => new Promise((resolve, reject) => {
+      mocks.refreshProbes.push({
+        kind,
+        succeed: () => resolve({ harnessKind: kind }),
+        refuse: () => reject(new Error("refresh refused")),
+      });
+    }));
     mocks.otherEntries = [];
     mocks.agents = [];
     mocks.readyAgents = [];
@@ -267,7 +295,7 @@ describe("useHomeNextModelSelection", () => {
     }
   });
 
-  it("requests a new probe for a failed observation and refetches otherwise", () => {
+  it("requests a new probe for a failed observation and refetches otherwise", async () => {
     mocks.agents = [{ kind: "claude", readiness: "ready" }];
     mocks.readyAgents = [{ kind: "claude" }];
     mocks.data = { ...response(), state: "failed_without_observation", options: null };
@@ -276,8 +304,8 @@ describe("useHomeNextModelSelection", () => {
       kind: "blocked",
       reason: "observation_failed",
     });
-    failed.result.current.retryModelObservation();
-    expect(mocks.refreshMutate).toHaveBeenCalledWith("claude", expect.anything());
+    await startProbes(() => failed.result.current.retryModelObservation());
+    expect(mocks.refreshFn).toHaveBeenCalledWith("claude");
     expect(mocks.refetch).not.toHaveBeenCalled();
     failed.unmount();
 
@@ -288,11 +316,11 @@ describe("useHomeNextModelSelection", () => {
       kind: "blocked",
       reason: "transport_error",
     });
-    broken.result.current.retryModelObservation();
+    await startProbes(() => broken.result.current.retryModelObservation());
     expect(mocks.refetch).toHaveBeenCalled();
   });
 
-  it("reports a settled unprobed harness as observation_idle and refreshes it", () => {
+  it("reports a settled unprobed harness as observation_idle and refreshes it", async () => {
     // A harness excluded from automatic probing answers `detecting` + `idle`
     // and stays there. Nothing is in flight, so the cure is a NEW probe.
     mocks.agents = [{ kind: "cursor", readiness: "ready" }];
@@ -313,12 +341,12 @@ describe("useHomeNextModelSelection", () => {
       kind: "blocked",
       reason: "observation_idle",
     });
-    result.current.retryModelObservation();
-    expect(mocks.refreshMutate).toHaveBeenCalledWith("cursor", expect.anything());
+    await startProbes(() => result.current.retryModelObservation());
+    expect(mocks.refreshFn).toHaveBeenCalledWith("cursor");
     expect(mocks.refetch).not.toHaveBeenCalled();
   });
 
-  it("repairs the query that actually failed, not the one it can reach", () => {
+  it("repairs the query that actually failed, not the one it can reach", async () => {
     // A FAN-OUT kind's read failed. Re-asking the requested kind would re-read
     // an endpoint that was never the problem and leave the notice up.
     mocks.agents = [
@@ -333,7 +361,7 @@ describe("useHomeNextModelSelection", () => {
     };
     mocks.otherEntries = [entry("codex", null, { isError: true })];
     const fanout = renderSelection(LOCAL_TARGET);
-    fanout.result.current.retryModelObservation();
+    await startProbes(() => fanout.result.current.retryModelObservation());
     expect(mocks.refetchKind).toHaveBeenCalledWith("codex");
     expect(mocks.refetch).not.toHaveBeenCalled();
     fanout.unmount();
@@ -348,7 +376,7 @@ describe("useHomeNextModelSelection", () => {
       kind: "blocked",
       reason: "transport_error",
     });
-    catalog.result.current.retryModelObservation();
+    await startProbes(() => catalog.result.current.retryModelObservation());
     expect(mocks.refetchAgents).toHaveBeenCalled();
   });
 
@@ -359,7 +387,7 @@ describe("useHomeNextModelSelection", () => {
     ["a runtime that owns no probe engine", { state: "detecting", probePhase: null }],
     ["an observation with zero models", { state: "observed", probePhase: "idle" }],
     ["a zero-model last_good_after_failure", { state: "last_good_after_failure", probePhase: "idle" }],
-  ])("fires a real probe for observation_idle reached via %s", (_label, overrides) => {
+  ])("fires a real probe for observation_idle reached via %s", async (_label, overrides) => {
     // Every one of these lands on `observation_idle` through the RESIDUAL arm,
     // not the settled-unobserved one. They were promised a Refresh and handed
     // a re-read of the same durable row, which can never change what it says.
@@ -371,12 +399,12 @@ describe("useHomeNextModelSelection", () => {
       kind: "blocked",
       reason: "observation_idle",
     });
-    result.current.retryModelObservation();
-    expect(mocks.refreshMutate).toHaveBeenCalledWith("claude", expect.anything());
+    await startProbes(() => result.current.retryModelObservation());
+    expect(mocks.refreshFn).toHaveBeenCalledWith("claude");
     expect(mocks.refetch).not.toHaveBeenCalled();
   });
 
-  it("re-reads the catalog when observation_idle has no kind to probe", () => {
+  it("re-reads the catalog when observation_idle has no kind to probe", async () => {
     // With no requested kind the single-kind query is DISABLED, so refetching
     // it is a literal no-op: a permanent sentence and a button that does
     // nothing. Only the catalog can produce a kind to probe.
@@ -389,12 +417,12 @@ describe("useHomeNextModelSelection", () => {
       kind: "blocked",
       reason: "observation_idle",
     });
-    result.current.retryModelObservation();
+    await startProbes(() => result.current.retryModelObservation());
     expect(mocks.refetchAgents).toHaveBeenCalled();
     expect(mocks.refetch).not.toHaveBeenCalled();
   });
 
-  it("keeps the cloud check-again path on the generic target re-ask", () => {
+  it("keeps the cloud check-again path on the generic target re-ask", async () => {
     // A cloud response carries no probePhase, so cloud always lands in the
     // residual — and there the sandbox re-read genuinely IS the cure.
     mocks.data = undefined;
@@ -403,12 +431,12 @@ describe("useHomeNextModelSelection", () => {
       kind: "blocked",
       reason: "observation_idle",
     });
-    result.current.retryModelObservation();
+    await startProbes(() => result.current.retryModelObservation());
     expect(mocks.refetch).toHaveBeenCalled();
-    expect(mocks.refreshMutate).not.toHaveBeenCalled();
+    expect(mocks.refreshFn).not.toHaveBeenCalled();
   });
 
-  it("claims refusal only when nothing got through, and reports the wait", () => {
+  it("claims refusal only when nothing got through, and reports the wait", async () => {
     // One `useMutation` observer tracks only its last call, so reading `isError`
     // off it made the claim depend on which kind finished last, not on truth.
     mocks.agents = [
@@ -421,46 +449,70 @@ describe("useHomeNextModelSelection", () => {
     const { result } = renderSelection(LOCAL_TARGET);
     expect(result.current.retryPending).toBe(false);
 
-    act(() => result.current.retryModelObservation());
-    expect(mocks.refreshCalls.map((call) => call.kind)).toEqual(["claude", "codex"]);
+    await startProbes(() => result.current.retryModelObservation());
+    expect(mocks.refreshProbes.map((probe) => probe.kind)).toEqual(["claude", "codex"]);
     // Still running: the settled sentence must not be rendered over live work.
     expect(result.current.retryPending).toBe(true);
     expect(result.current.retryRejected).toBe(false);
 
-    act(() => mocks.refreshCalls[0].options?.onError?.());
-    expect(result.current.retryPending).toBe(true);
-    act(() => mocks.refreshCalls[1].options?.onSuccess?.());
-    // One kind refused, one succeeded: the refresh DID something.
+    await settleProbes(["refuse", "succeed"]);
+    // Two kinds through ONE observer. Counting per-call callbacks stalled here
+    // at settled=1 of 2 and pinned "Refreshing your models…" permanently.
     expect(result.current.retryPending).toBe(false);
+    // One kind refused, one succeeded: the refresh DID something.
     expect(result.current.retryRejected).toBe(false);
 
-    act(() => result.current.retryModelObservation());
-    act(() => {
-      mocks.refreshCalls[2].options?.onError?.();
-      mocks.refreshCalls[3].options?.onError?.();
-    });
+    await startProbes(() => result.current.retryModelObservation());
+    expect(result.current.retryPending).toBe(true);
+    await settleProbes(["refuse", "refuse", "refuse", "refuse"]);
+    // All refused, and reachable at N=2 rather than only at N=1.
+    expect(result.current.retryPending).toBe(false);
     expect(result.current.retryRejected).toBe(true);
   });
 
-  it("never carries a local refusal onto a cloud target", () => {
-    // Cloud never calls the mutation, so nothing on that path could clear a
-    // stale refusal: it would be a permanent, uncurable false failure claim.
-    // Two mechanisms stop it (the `!isCloudTarget` scope and the reset on
-    // target kind) and this proves the OUTCOME, not either one alone: removing
-    // just one still passes, removing both fails.
+  it("never carries a local refusal onto a cloud target", async () => {
+    // Cloud never calls the mutation, so nothing there could clear a stale
+    // refusal. Two mechanisms stop it (the `!isCloudTarget` read mask and the
+    // reset of the counters on target kind); this proves the OUTCOME, not
+    // either alone — removing just one still passes, removing both fails.
     mocks.agents = [{ kind: "claude", readiness: "ready" }];
     mocks.readyAgents = [{ kind: "claude" }];
     mocks.data = { ...response(), state: "observed", probePhase: "idle", options: null };
     const view = renderHook(
       ({ target }: { target: typeof LOCAL_TARGET | typeof CLOUD_TARGET }) =>
         useHomeNextModelSelection({ modelSelectionOverride: null, launchTarget: target }),
-      { initialProps: { target: LOCAL_TARGET as typeof LOCAL_TARGET | typeof CLOUD_TARGET } },
+      {
+        initialProps: { target: LOCAL_TARGET as typeof LOCAL_TARGET | typeof CLOUD_TARGET },
+        wrapper,
+      },
     );
-    act(() => view.result.current.retryModelObservation());
-    act(() => mocks.refreshCalls[0].options?.onError?.());
+    await startProbes(() => view.result.current.retryModelObservation());
+    await settleProbes(["refuse"]);
     expect(view.result.current.retryRejected).toBe(true);
 
     view.rerender({ target: CLOUD_TARGET });
+    expect(view.result.current.retryRejected).toBe(false);
+  });
+
+  it("drops a batch that settles after the target changed", async () => {
+    // Without the run-id guard, a late `allSettled` overwrites the reset and
+    // resurrects a refusal on a target nothing was ever asked of.
+    mocks.agents = [{ kind: "claude", readiness: "ready" }];
+    mocks.readyAgents = [{ kind: "claude" }];
+    mocks.data = { ...response(), state: "observed", probePhase: "idle", options: null };
+    const view = renderHook(
+      ({ target }: { target: typeof LOCAL_TARGET | typeof CLOUD_TARGET }) =>
+        useHomeNextModelSelection({ modelSelectionOverride: null, launchTarget: target }),
+      {
+        initialProps: { target: LOCAL_TARGET as typeof LOCAL_TARGET | typeof CLOUD_TARGET },
+        wrapper,
+      },
+    );
+    await startProbes(() => view.result.current.retryModelObservation());
+    view.rerender({ target: CLOUD_TARGET });
+    view.rerender({ target: LOCAL_TARGET });
+    await settleProbes(["refuse"]);
+    expect(view.result.current.retryPending).toBe(false);
     expect(view.result.current.retryRejected).toBe(false);
   });
 
@@ -505,49 +557,3 @@ describe("useHomeNextModelSelection", () => {
   });
 });
 
-function entry(
-  harnessKind: string,
-  data: Record<string, unknown> | null,
-  flags?: { isPending?: boolean; isError?: boolean },
-) {
-  return {
-    harnessKind,
-    data,
-    isPending: flags?.isPending ?? false,
-    isError: flags?.isError ?? false,
-  };
-}
-
-function codexResponse() {
-  return {
-    ...response(),
-    harnessKind: "codex",
-    options: {
-      models: [{ id: "gpt-5.6-sol", observedName: "GPT-5.6 Sol", observedDescription: null }],
-      controls: [],
-      defaults: { modelId: "gpt-5.6-sol", controlValues: {} },
-    },
-  };
-}
-
-function response() {
-  return {
-    harnessKind: "claude",
-    basisRevision: "basis-1",
-    revision: 2,
-    state: "observed",
-    probePhase: "idle",
-    options: {
-      models: [
-        { id: "fable", observedName: "Fable", observedDescription: null },
-        { id: "unknown-upstream", observedName: null, observedDescription: null },
-      ],
-      controls: [],
-      defaults: { modelId: "fable", controlValues: {} },
-    },
-    observedAt: "2026-08-19T00:00:00Z",
-    probeAttemptedAt: "2026-08-19T00:00:00Z",
-    probeFailureCode: null,
-    readiness: "ready",
-  };
-}

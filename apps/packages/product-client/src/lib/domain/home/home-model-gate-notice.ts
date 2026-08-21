@@ -16,10 +16,11 @@ export type HomeModelGateNoticeAction =
 
 export interface HomeModelGateNotice {
   text: string;
-  /** `null` for a terminal state with nothing to press. Offering a button that
-   * cannot change anything is the dead end this gate exists to remove. */
-  actionLabel: string | null;
-  action: HomeModelGateNoticeAction | null;
+  /** Non-optional on purpose. Every notice a user can reach must give them
+   * something to do — a cure where one exists, and navigation where none
+   * does. A notice with no action is a dead end, so it must not typecheck. */
+  actionLabel: string;
+  action: HomeModelGateNoticeAction;
 }
 
 export const HOME_MODEL_GATE_AGENT_SETUP_NOTICE = "Finish agent setup to start a chat.";
@@ -123,11 +124,16 @@ function resolveGateNotice(gate: HomeModelGate): HomeModelGateNotice | null {
         actionLabel: "Check again",
         action: "check_target_again",
       };
+    // The one gate with no cure: no probe can change it, and the picker is
+    // unavailable, so without this the state has nothing at all to act on.
+    // The action is NAVIGATION, deliberately not Refresh/Retry vocabulary —
+    // it does not claim to fix anything, it takes the user to the pane that
+    // shows WHICH agents are unsupported and why.
     case "agents_unsupported":
       return {
         text: HOME_MODEL_GATE_AGENTS_UNSUPPORTED_NOTICE,
-        actionLabel: null,
-        action: null,
+        actionLabel: "See agents",
+        action: "agent_settings",
       };
     case "target_missing":
     case "querying":
