@@ -31,7 +31,10 @@ function triggerBlock(source, name) {
 const MAIN_BRANCH_FILTER = /branches:\s*(?:\[[^\]]*\bmain\b[^\]]*\]|(?:\r?\n\s*-\s*["']?main["']?))/;
 // `Production` and `production` are the same GitHub Environment reference as
 // far as a reviewer scanning for prod reach is concerned, and the two deleted
-// coordinators both used the lowercase spelling.
+// coordinators both used the lowercase spelling. The spellings are NOT
+// interchangeable at deploy time, though: the string is passed through to
+// `DEPLOY_ENVIRONMENT` and interpolated into SSM parameter paths. See the
+// deploy-environment casing test below.
 const PRODUCTION_ENVIRONMENT = /environment:\s*["']?[Pp]roduction["']?/;
 
 test("staging runs only when an operator dispatches it", () => {
@@ -152,4 +155,38 @@ test("a dry run walks the graph without any externally visible effect", () => {
   // Both summaries say so out loud.
   assert.match(section("- name: Summarize plan", "  # \u2500\u2500 Release builds"), /Dry run/);
   assert.match(section("- name: Summarize results"), /DRY RUN\./);
+});
+
+test("deploy environment inputs use the exact casing the AWS resource paths use", () => {
+  // GitHub matches environment names case-insensitively, so `Production` binds
+  // to the same environment as `production` and nothing fails at bind time.
+  // But the same string becomes `DEPLOY_ENVIRONMENT`, which is interpolated
+  // raw into SSM parameter paths (`/proliferate/${DEPLOY_ENVIRONMENT}/litellm/...`
+  // in _deploy-litellm.yml, `/proliferate/${DEPLOY_ENVIRONMENT}/support/...` in
+  // _deploy-server.yml) and into the CloudWatch log group name. Those resources
+  // exist only under the lowercase spelling, and the deploy role's IAM policy is
+  // scoped to it, so a capitalized input fails with AccessDeniedException at
+  // deploy time. Release run 32450223908 lost its LiteLLM deploy to exactly this.
+  //
+  // The canonical spelling is the environment key in the hosted contract, which
+  // is the same token the AWS resources are named after.
+  const contract = JSON.parse(
+    readFileSync(path.join(repoRoot, "server/deploy/hosted-redis-contract.json"), "utf8"),
+  );
+  const canonical = new Set(Object.keys(contract.environments));
+  assert.ok(canonical.size > 0, "the hosted contract must declare environments");
+
+  for (const name of ["release.yml", "deploy-staging.yml"]) {
+    const source = read(name);
+    const passed = [...source.matchAll(/^      environment: (\S+)$/gm)].map((match) => match[1]);
+    assert.ok(passed.length > 0, `${name}: expected at least one environment input`);
+    for (const value of passed) {
+      assert.ok(
+        canonical.has(value),
+        `${name}: environment input '${value}' is not a hosted contract environment key ` +
+          `(${[...canonical].join(", ")}). The input is interpolated into SSM paths, so the ` +
+          `casing must match the AWS resources exactly.`,
+      );
+    }
+  }
 });

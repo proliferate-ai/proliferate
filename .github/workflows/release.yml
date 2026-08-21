@@ -351,7 +351,7 @@ jobs:
     if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-server.yml
     with:
-      environment: Production
+      environment: production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
       enabled: ${{ needs.prepare.outputs.server == 'true' && needs.prepare.outputs.dry_run != 'true' }}
     secrets: inherit
@@ -361,7 +361,7 @@ jobs:
     if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-litellm.yml
     with:
-      environment: Production
+      environment: production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
       enabled: ${{ needs.prepare.outputs.litellm == 'true' && needs.prepare.outputs.dry_run != 'true' }}
     secrets: inherit
@@ -384,7 +384,7 @@ jobs:
       }}
     uses: ./.github/workflows/_deploy-web.yml
     with:
-      environment: Production
+      environment: production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
       enabled: ${{ needs.prepare.outputs.web == 'true' && needs.prepare.outputs.dry_run != 'true' }}
     secrets: inherit
