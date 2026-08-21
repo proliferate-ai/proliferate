@@ -264,6 +264,13 @@ Events include safe identifiers, basis/revision or source sequence, state,
 counts, duration, and result/error codes. See
 [Observability](../OBSERVABILITY.md) for the repository-wide scrubber contract.
 
+Prompt-time provider rejection is not executable-membership authority. Known
+model-unavailable and model-configuration failures receive bounded error codes
+for actionable client presentation, while the original diagnostic stays behind
+the error's technical-details disclosure. Clients may offer the model picker;
+they do not remove an observed model, rewrite the saved selection, or retry the
+same non-retryable request automatically.
+
 Release coverage includes sparse/unknown Claude identifiers, model-scoped
 Claude controls (including the absence of `fast` under Fable), current Grok
 identifiers, both Codex controls, empty/failure/basis-change states, exact
