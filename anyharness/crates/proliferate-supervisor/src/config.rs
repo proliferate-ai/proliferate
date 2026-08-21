@@ -112,8 +112,12 @@ fn default_config_path() -> PathBuf {
     supervisor_state_dir().join("config.toml")
 }
 
+/// `HOME` first on every platform, so unix resolution is unchanged; windows
+/// has no `HOME` by default, so `USERPROFILE` is consulted before giving up
+/// and using the process working directory.
 fn dirs_fallback_home() -> PathBuf {
     std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
 }

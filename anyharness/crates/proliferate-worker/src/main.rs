@@ -8,6 +8,7 @@ mod launch_options_sync;
 mod lifecycle;
 mod logging;
 mod observability;
+mod posix_shell;
 mod process_lock;
 mod runtime;
 mod self_update;

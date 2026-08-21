@@ -714,16 +714,16 @@ async fn wait_for_anyharness(local_url: &str) -> Result<(), String> {
 }
 
 fn expand_home_path(path: &str) -> Result<PathBuf, String> {
+    // `app_config::home_dir` reads `HOME` first and only then `USERPROFILE`,
+    // so unix resolution is unchanged (including this error string) while
+    // windows, which has no `HOME`, stops failing outright.
+    let home = || crate::app_config::home_dir().map_err(|_| "HOME is not set.".to_string());
+
     if path == "~" {
-        return std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| "HOME is not set.".to_string());
+        return home();
     }
     if let Some(rest) = path.strip_prefix("~/") {
-        let home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| "HOME is not set.".to_string())?;
-        return Ok(home.join(rest));
+        return Ok(home()?.join(rest));
     }
     Ok(PathBuf::from(path))
 }
