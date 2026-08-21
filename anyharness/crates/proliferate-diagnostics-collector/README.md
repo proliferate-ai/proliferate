@@ -16,8 +16,21 @@ proliferate-diagnostics-collector \
   --capability-fd <inherited-fd> \
   [--control-fd <inherited-fd>] \
   [--release <non-secret-release>] \
-  [--environment <non-secret-environment>]
+  [--environment <non-secret-environment>] \
+  [--install-id <non-secret-install-identity>]
 ```
+
+`--install-id` is the stable identity of the installation. The collector never
+derives, generates, or persists one; the host that owns the identity passes it
+in, which is why no producer can set, spoof, or omit it. It is stamped on every
+exported record as the `proliferate.install_id` resource attribute, so it is
+the field that turns per-record counts into per-install counts. A present value
+must be 1 to 128 printable ASCII bytes and startup refuses anything else rather
+than sanitizing it. Omitting it means the attribute is absent, not empty.
+
+`--print-export-policy` prints this binary's compiled export policy and exits
+zero. The desktop release job runs the packaged collector with it and requires
+`lifecycle_only`.
 
 The capability descriptor contains one newline-terminated, visible-ASCII
 bearer capability and is closed after startup. The raw capability is not an
@@ -151,12 +164,13 @@ resource attribute.
 Accepted records are offered to a bounded queue as they are accepted and
 converted to OTLP/HTTP JSON logs: one resource per producer boot
 (`service.name`, `service.version`, `service.instance.id`,
-`deployment.environment.name`, and `dev.user` when a developer tag is
-configured), one scope per admitted schema version, a detailed message or the
-stable record name as the body, and every remaining contract field as a
-`proliferate.*` attribute. Typed arguments become `proliferate.argument.<name>`.
-A record classified `secret` is refused rather than encoded, which is a second
-fence behind ingest admission rather than a new privacy path.
+`deployment.environment.name`, `proliferate.install_id` when the host supplied
+one, and `dev.user` when a developer tag is configured), one scope per admitted
+schema version, a detailed message or the stable record name as the body, and
+every remaining contract field as a `proliferate.*` attribute. Typed arguments
+become `proliferate.argument.<name>`. A record the compiled export policy does
+not admit is refused rather than encoded, which is a second fence behind ingest
+admission rather than a new privacy path.
 
 The export bounds are internal-only and independent of the runtime caps above:
 a 512-record queue, a 128-record or 512 KiB batch, a 250 ms batch linger, a

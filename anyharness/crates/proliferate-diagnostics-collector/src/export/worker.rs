@@ -98,6 +98,7 @@ pub(super) struct Worker {
     receiver: mpsc::Receiver<Arc<[u8]>>,
     target: ExportTarget,
     metrics: Arc<ExporterMetrics>,
+    install_id: Option<String>,
     consecutive_failures: u32,
     cooldown_until: Option<Instant>,
 }
@@ -107,11 +108,13 @@ impl Worker {
         receiver: mpsc::Receiver<Arc<[u8]>>,
         target: ExportTarget,
         metrics: Arc<ExporterMetrics>,
+        install_id: Option<String>,
     ) -> Self {
         Self {
             receiver,
             target,
             metrics,
+            install_id,
             consecutive_failures: 0,
             cooldown_until: None,
         }
@@ -202,7 +205,7 @@ impl Worker {
         if records.is_empty() {
             return;
         }
-        let (payload, refused) = otlp::encode_batch(&records);
+        let (payload, refused) = otlp::encode_batch(self.install_id.as_deref(), &records);
         if refused > 0 {
             self.metrics.note_dropped(refused);
         }

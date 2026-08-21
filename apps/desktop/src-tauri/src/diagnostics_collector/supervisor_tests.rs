@@ -489,6 +489,7 @@ async fn renderer_ingest_pre_dispatch_states_write_once_and_return_the_original_
         fallback.clone(),
         "test".to_string(),
         "test".to_string(),
+        None,
     );
     fallback.set_active(false);
     let cases = [

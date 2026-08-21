@@ -40,6 +40,24 @@ impl ReceiverState {
             .collect()
     }
 
+    /// Every resource-attribute set the receiver has accepted, one per
+    /// resource stream per request, in arrival order.
+    pub fn resource_attribute_sets(&self) -> Vec<Value> {
+        self.requests
+            .lock()
+            .expect("receiver requests")
+            .iter()
+            .flat_map(|request| {
+                request.payload["resourceLogs"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|resource| resource["resource"]["attributes"].clone())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     pub fn request_count(&self) -> usize {
         self.requests.lock().expect("receiver requests").len()
     }

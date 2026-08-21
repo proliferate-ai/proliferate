@@ -42,7 +42,7 @@ fn attribute_of<'a>(log: &'a Value, key: &str) -> Option<&'a Value> {
 /// policy they are asserting about. Only the tests whose subject is "what does
 /// THIS build do" call [`encode_batch`] and pick up the compiled policy.
 fn encode_all(records: &[CollectorAcceptedRecordV1]) -> (Value, u64) {
-    encode_batch_with_policy(ExportPolicy::All, records)
+    encode_batch_with_policy(ExportPolicy::All, None, records)
 }
 
 fn all_log_records(payload: &Value) -> Vec<&Value> {
@@ -198,7 +198,7 @@ fn lifecycle_record_carries_phase_outcome_and_finalizer() {
         })
         .expect("terminal fixture record")
         .clone();
-    let (payload, _) = encode_batch(std::slice::from_ref(&terminal));
+    let (payload, _) = encode_batch(None, std::slice::from_ref(&terminal));
     let log = all_log_records(&payload)[0];
     assert_eq!(
         attribute_of(log, "proliferate.lifecycle.phase"),
@@ -232,7 +232,7 @@ fn model_metadata_survives_as_bounded_scalar_attributes() {
         })
         .expect("model fixture record")
         .clone();
-    let (payload, _) = encode_batch(std::slice::from_ref(&model));
+    let (payload, _) = encode_batch(None, std::slice::from_ref(&model));
     let log = all_log_records(&payload)[0];
     assert!(attribute_of(log, "proliferate.lifecycle.model.model_id").is_some());
     for key in [
@@ -278,7 +278,7 @@ fn only_a_hex_trace_id_is_promoted_to_the_otlp_trace_field() {
 fn a_secret_classified_record_is_refused_instead_of_encoded() {
     let mut record = fixture_records()[0].clone();
     record.record.privacy = PrivacyClassificationV1::Secret;
-    let (payload, refused) = encode_batch(std::slice::from_ref(&record));
+    let (payload, refused) = encode_batch(None, std::slice::from_ref(&record));
     assert_eq!(refused, 1);
     assert!(all_log_records(&payload).is_empty());
 }
@@ -312,7 +312,7 @@ fn assert_base_resource_attributes(attributes: &[Value], key: &ResourceKey) {
 #[test]
 fn a_configured_dev_tag_is_added_to_resource_attributes_without_disturbing_the_rest() {
     let key = sample_resource_key();
-    let attributes = resource_attributes(&key, Some("alice"));
+    let attributes = resource_attributes(&key, Some("alice"), None);
     assert_eq!(attributes.len(), 6, "the five base attributes plus dev.user");
     assert_eq!(
         attributes
@@ -327,7 +327,7 @@ fn a_configured_dev_tag_is_added_to_resource_attributes_without_disturbing_the_r
 #[test]
 fn an_absent_dev_tag_omits_dev_user_and_leaves_the_rest_unchanged() {
     let key = sample_resource_key();
-    let attributes = resource_attributes(&key, None);
+    let attributes = resource_attributes(&key, None, None);
     assert_eq!(attributes.len(), 5, "no dev.user attribute is added");
     assert!(attributes
         .iter()
@@ -350,7 +350,7 @@ fn a_secret_classified_argument_is_dropped_from_an_otherwise_exportable_record()
             value: ArgumentValueV1::String("never-exported".to_owned()),
         },
     ];
-    let (payload, refused) = encode_batch(std::slice::from_ref(&record));
+    let (payload, refused) = encode_batch(None, std::slice::from_ref(&record));
     assert_eq!(refused, 0);
     let log = all_log_records(&payload)[0];
     assert!(attribute_of(log, "proliferate.argument.kept").is_some());
@@ -377,7 +377,7 @@ fn the_customer_policy_refuses_every_detailed_record_in_the_fixture() {
         .count();
     assert!(detailed > 0, "the fixture must exercise the refusal path");
 
-    let (payload, refused) = encode_batch_with_policy(ExportPolicy::LifecycleOnly, &records);
+    let (payload, refused) = encode_batch_with_policy(ExportPolicy::LifecycleOnly, None, &records);
     assert_eq!(refused as usize, detailed);
     assert_eq!(all_log_records(&payload).len(), records.len() - detailed);
     for log in all_log_records(&payload) {
@@ -424,7 +424,7 @@ fn the_customer_policy_drops_a_non_operational_argument_a_dogfood_build_keeps() 
     ];
 
     let (customer, refused) =
-        encode_batch_with_policy(ExportPolicy::LifecycleOnly, std::slice::from_ref(&record));
+        encode_batch_with_policy(ExportPolicy::LifecycleOnly, None, std::slice::from_ref(&record));
     assert_eq!(refused, 0, "the record itself is still exportable");
     let log = all_log_records(&customer)[0];
     assert!(attribute_of(log, "proliferate.argument.kept").is_some());
@@ -444,8 +444,8 @@ fn the_customer_policy_drops_a_non_operational_argument_a_dogfood_build_keeps() 
 #[test]
 fn encode_batch_applies_the_compiled_policy() {
     let records = fixture_records();
-    let (compiled, compiled_refused) = encode_batch(&records);
-    let (expected, expected_refused) = encode_batch_with_policy(EXPORT_POLICY, &records);
+    let (compiled, compiled_refused) = encode_batch(None, &records);
+    let (expected, expected_refused) = encode_batch_with_policy(EXPORT_POLICY, None, &records);
     assert_eq!(compiled_refused, expected_refused);
     assert_eq!(compiled, expected);
 
@@ -459,4 +459,55 @@ fn encode_batch_applies_the_compiled_policy() {
         compiled_refused, 0,
         "a dogfood build exports every non-secret fixture record"
     );
+}
+
+#[test]
+fn the_install_id_is_stamped_as_a_resource_attribute_when_the_host_supplies_one() {
+    let key = sample_resource_key();
+    let attributes = resource_attributes(&key, None, Some("install-9f2c"));
+    assert_eq!(attributes.len(), 6, "the five base attributes plus install id");
+    assert_eq!(
+        attributes
+            .iter()
+            .find(|attribute| attribute["key"] == "proliferate.install_id")
+            .expect("proliferate.install_id attribute")["value"],
+        serde_json::json!({ "stringValue": "install-9f2c" })
+    );
+    assert_base_resource_attributes(&attributes, &key);
+}
+
+/// Absent rather than empty or invented. A host with no identity to give
+/// produces records with no install attribute at all, so a consumer can tell
+/// "unknown install" from "install whose id is the empty string".
+#[test]
+fn an_absent_install_id_omits_the_attribute_entirely() {
+    let key = sample_resource_key();
+    let attributes = resource_attributes(&key, None, None);
+    assert!(attributes
+        .iter()
+        .all(|attribute| attribute["key"] != "proliferate.install_id"));
+    assert_base_resource_attributes(&attributes, &key);
+}
+
+/// One install id covers every resource stream in a batch, whatever producer
+/// boot or component each record came from. That is the whole point: it is the
+/// only field in the payload that is stable across producer restarts.
+#[test]
+fn every_resource_stream_in_a_batch_carries_the_same_install_id() {
+    let (payload, _) = encode_batch_with_policy(
+        ExportPolicy::All,
+        Some("install-9f2c"),
+        &fixture_records(),
+    );
+    let resources = payload["resourceLogs"].as_array().expect("resource logs");
+    assert!(resources.len() > 1, "the fixture must span several resource streams");
+    for resource in resources {
+        let value = resource["resource"]["attributes"]
+            .as_array()
+            .expect("resource attributes")
+            .iter()
+            .find(|attribute| attribute["key"] == "proliferate.install_id")
+            .expect("proliferate.install_id attribute");
+        assert_eq!(value["value"], serde_json::json!({ "stringValue": "install-9f2c" }));
+    }
 }

@@ -36,6 +36,7 @@ pub(super) fn test_coordinator(
         fallback,
         "test".to_string(),
         "test".to_string(),
+        None,
     );
     SupportSnapshotCoordinator::with_test_parts(
         supervisor,

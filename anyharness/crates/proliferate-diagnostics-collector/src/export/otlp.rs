@@ -39,8 +39,11 @@ struct ResourceKey {
 /// reaches this check; it exists so a future call site that finds another way
 /// into the encoder still cannot smuggle one past. The count of what it
 /// refused is returned so exporter health can report it.
-pub(super) fn encode_batch(records: &[CollectorAcceptedRecordV1]) -> (Value, u64) {
-    encode_batch_with_policy(EXPORT_POLICY, records)
+pub(super) fn encode_batch(
+    install_id: Option<&str>,
+    records: &[CollectorAcceptedRecordV1],
+) -> (Value, u64) {
+    encode_batch_with_policy(EXPORT_POLICY, install_id, records)
 }
 
 /// The policy-parameterised encoder. Production always passes the compiled
@@ -49,6 +52,7 @@ pub(super) fn encode_batch(records: &[CollectorAcceptedRecordV1]) -> (Value, u64
 /// customer build refuses it.
 pub(super) fn encode_batch_with_policy(
     policy: ExportPolicy,
+    install_id: Option<&str>,
     records: &[CollectorAcceptedRecordV1],
 ) -> (Value, u64) {
     let dev_tag = super::dev_tag();
@@ -77,7 +81,7 @@ pub(super) fn encode_batch_with_policy(
         .into_iter()
         .map(|(key, scopes)| {
             json!({
-                "resource": { "attributes": resource_attributes(&key, dev_tag) },
+                "resource": { "attributes": resource_attributes(&key, dev_tag, install_id) },
                 "scopeLogs": scopes
                     .into_iter()
                     .map(|(version, log_records)| json!({
@@ -94,7 +98,11 @@ pub(super) fn encode_batch_with_policy(
     (json!({ "resourceLogs": resource_logs }), refused)
 }
 
-fn resource_attributes(key: &ResourceKey, dev_tag: Option<&str>) -> Vec<Value> {
+fn resource_attributes(
+    key: &ResourceKey,
+    dev_tag: Option<&str>,
+    install_id: Option<&str>,
+) -> Vec<Value> {
     let mut attributes = vec![
         attribute("service.name", string_value(component_name(key.component))),
         attribute("service.version", string_value(&key.release)),
@@ -105,6 +113,18 @@ fn resource_attributes(key: &ResourceKey, dev_tag: Option<&str>) -> Vec<Value> {
         ),
         attribute("telemetry.sdk.name", string_value(SCOPE_NAME)),
     ];
+    if let Some(install) = install_id {
+        // The stable identity of the installation, stamped by the collector
+        // from a value its host passed in. It is not a wire-protocol field, so
+        // no producer can set, spoof, or omit it, and every record from one
+        // install carries the same value whatever the producer boot. It is
+        // what turns per-record counts into "how many installs saw this".
+        //
+        // Pseudonymous by construction: a locally generated UUID with no
+        // account, machine, or user identity in it, and absent entirely when
+        // the host has none to give.
+        attributes.push(attribute("proliferate.install_id", string_value(install)));
+    }
     if let Some(tag) = dev_tag {
         // Identifies whose desktop produced the record when teammates share
         // one dogfood environment. Absent unless configured.

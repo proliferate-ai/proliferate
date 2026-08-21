@@ -130,6 +130,11 @@ pub(crate) struct CollectorProcessLauncher {
     binary: PathBuf,
     release: String,
     environment: String,
+    /// Identity of this installation, handed to the collector so it can stamp
+    /// exported records with it. `None` when the identity could not be read or
+    /// created, which is an observability degradation and never a launch
+    /// failure: the collector then exports records with no install attribute.
+    install_id: Option<String>,
     fallback: FallbackDiagnosticsWriter,
 }
 
@@ -140,6 +145,7 @@ impl fmt::Debug for CollectorProcessLauncher {
             .field("binary", &self.binary.file_name())
             .field("release", &self.release)
             .field("environment", &self.environment)
+            .field("install_id", &self.install_id)
             .finish_non_exhaustive()
     }
 }
@@ -148,6 +154,7 @@ impl CollectorProcessLauncher {
     pub(crate) fn discover(
         release: String,
         environment: String,
+        install_id: Option<String>,
         fallback: FallbackDiagnosticsWriter,
     ) -> Result<Self, CollectorLaunchError> {
         if !supported_target(current_target_triple()) {
@@ -165,10 +172,16 @@ impl CollectorProcessLauncher {
         validate_binary(&binary)?;
         validate_label(&release)?;
         validate_label(&environment)?;
+        // An unusable identity is dropped rather than failing the launch. The
+        // collector refuses an out-of-range `--install-id` outright, so
+        // passing one through would trade a missing attribute for no
+        // diagnostics at all.
+        let install_id = install_id.filter(|value| validate_label(value).is_ok());
         Ok(Self {
             binary,
             release,
             environment,
+            install_id,
             fallback,
         })
     }
@@ -188,6 +201,7 @@ impl CollectorProcessLauncher {
             binary,
             release,
             environment,
+            install_id: None,
             fallback,
         }
     }
@@ -218,6 +232,13 @@ impl CollectorProcessLauncher {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        // Optional, and passed as an argument rather than an environment
+        // value so it travels the same audited seam as `--release` and
+        // `--environment` and cannot be inherited by anything else the child
+        // spawns.
+        if let Some(install_id) = self.install_id.as_deref() {
+            command.args(["--install-id", install_id]);
+        }
 
         // SAFETY: after fork and before exec this closure performs only two raw,
         // checked fcntl calls. It allocates, formats, logs, and locks nothing.
