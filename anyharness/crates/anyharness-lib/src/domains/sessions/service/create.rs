@@ -73,12 +73,10 @@ impl SessionService {
         )
     }
 
-    /// Runs the common create validation and record assembly, then delegates
-    /// the first durable insert to one caller-owned transaction. Subagent
-    /// creation uses this seam to make the child row and relationship visible
-    /// atomically; ordinary and idempotent creation keep the default store
-    /// path above.
-    pub(crate) fn create_session_with_persist<F>(
+    /// The create use case itself. The observable entry point that wraps it
+    /// is `create_session_with_persist` in `create_lifecycle.rs`.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn create_session_with_persist_inner<F>(
         &self,
         workspace_id: &str,
         agent_kind: &str,
@@ -281,13 +279,7 @@ impl SessionService {
         let (outcome, validated_state) = if reuse_existing {
             let (insert_outcome, validated_state) = self
                 .session_store
-                .insert_or_find_by_id(
-                    &record,
-                    &intent,
-                    agent_kind,
-                    &basis_revision,
-                    &selection,
-                )
+                .insert_or_find_by_id(&record, &intent, agent_kind, &basis_revision, &selection)
                 .map_err(|unsupported| {
                     map_selection_unsupported(
                         workspace_id,

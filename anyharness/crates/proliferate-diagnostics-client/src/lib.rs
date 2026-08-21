@@ -6,11 +6,13 @@
 use std::{borrow::Cow, time::Duration};
 
 use proliferate_diagnostics_protocol::v1::types::{
-    ArgumentValueV1, DetailedKindV1, SeverityV1, StandardStreamV1,
+    ArgumentValueV1, DetailedKindV1, LifecycleFinalizerV1, LifecyclePhaseV1, SeverityV1,
+    StandardStreamV1, TerminalOutcomeV1,
 };
 
 pub mod bridge;
 mod fallback;
+pub mod lifecycle;
 mod producer;
 mod tracing_layer;
 
@@ -100,6 +102,49 @@ pub struct DiagnosticCorrelation {
     pub workflow_id: Option<String>,
 }
 
+/// A lifecycle argument. There is no privacy field: a lifecycle record is
+/// operational by construction, and the record factory refuses any argument
+/// whose name is outside the operation's closed safe-field list
+/// ([`lifecycle::safe_fields`]).
+pub struct LifecycleArgument {
+    pub name: &'static str,
+    pub value: ArgumentValueV1,
+}
+
+/// Model metadata, legal only on the two catalog operations that own a
+/// provider request (`anyharness.model.request`, `server.model_gateway.request`
+/// per `validation.rs`). Carries no prompt, response, or provider message.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LifecycleModelMetadata {
+    pub model_id: String,
+    pub provider_kind: Option<Cow<'static, str>>,
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub duration_ms: Option<u64>,
+}
+
+/// A canonical lifecycle record.
+///
+/// Deliberately not a superset of [`DetailedDiagnosticInput`]: there is no
+/// `message`, no `stream`, and no `milestone`, because free text is the entire
+/// reason the `detailed` class exists and the entire reason it never leaves a
+/// customer machine. Everything here is a closed enum, a bounded integer, an
+/// identifier the wire protocol already carries, or a name drawn from a closed
+/// list.
+pub struct LifecycleDiagnosticInput {
+    /// Must be a P0 catalog operation; ingest rejects anything else
+    /// (`validation.rs` `is_p0_operation`).
+    pub name: Cow<'static, str>,
+    pub severity: SeverityV1,
+    pub phase: LifecyclePhaseV1,
+    pub outcome: Option<TerminalOutcomeV1>,
+    pub finalizer: LifecycleFinalizerV1,
+    pub arguments: Vec<LifecycleArgument>,
+    pub correlation: DiagnosticCorrelation,
+    pub error_classification: Option<&'static str>,
+    pub model: Option<LifecycleModelMetadata>,
+}
+
 pub struct DetailedDiagnosticInput {
     pub name: Cow<'static, str>,
     pub severity: SeverityV1,
@@ -141,12 +186,25 @@ pub fn install_desktop_producer(
     release: &str,
     environment: &str,
 ) -> Result<DiagnosticsInstallation, InstallError> {
-    producer::install(component, activation, release, environment)
+    let installation = producer::install(component, activation, release, environment)?;
+    // Publishes the handle for library code that has no path to the binary's
+    // telemetry wiring. One producer per process, so first caller wins.
+    lifecycle::install_global_producer(installation.handle.clone());
+    Ok(installation)
 }
 
 impl DiagnosticsProducerHandle {
     pub fn try_emit_detailed(&self, input: DetailedDiagnosticInput) -> EmitDisposition {
-        self.try_emit(input)
+        self.try_emit(producer::DiagnosticInput::Detailed(input))
+    }
+
+    /// Emits one canonical lifecycle record.
+    ///
+    /// The record is built as `privacy == operational` and every argument is
+    /// filtered against the operation's closed safe-field list, so a caller
+    /// cannot widen the exported surface by passing a new field name.
+    pub fn try_emit_lifecycle(&self, input: LifecycleDiagnosticInput) -> EmitDisposition {
+        self.try_emit(producer::DiagnosticInput::Lifecycle(input))
     }
 
     pub fn new_operation_context(&self, mut seed: DiagnosticCorrelation) -> DiagnosticCorrelation {
