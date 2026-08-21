@@ -67,8 +67,8 @@ the Desktop package, Tauri configuration, and Cargo package. A manual dry run
 can build from the selected ref without publishing. A manual non-dry run must
 be dispatched from an existing `desktop-v*` tag ref; a branch ref fails release
 validation. Tag pushes and publishing release-coordinator calls can build the
-current macOS matrix and create a draft GitHub Release. Updater/download
-publication is separate:
+current macOS and Windows matrix and create a draft GitHub Release.
+Updater/download publication is separate:
 
 - a `desktop-v*` tag push publishes it automatically;
 - a reusable production or train call can request it explicitly;
@@ -85,6 +85,21 @@ collector package first and stages that exact executable into the app. Verify
 the app's `Contents/MacOS` inventory contains executable, signed AnyHarness,
 Worker, `proliferate-debug`, and `proliferate-diagnostics-collector` binaries;
 the collector must not contain the debug placeholder marker.
+
+### Windows Beta
+
+Windows (`x86_64-pc-windows-msvc`) returned to the matrix on 2026-08-20, having been removed on 2026-04-13 while the SDK generation step was POSIX-shell only. It is a beta leg, it is deliberately not release-blocking, and it is opt-in only:
+
+- the Windows matrix entry is skipped unless the caller explicitly sets `enable_windows_beta: true`. Every automatic caller (`deploy-staging.yml`, `promote-production.yml`, `hotfix-production.yml` through `_deploy-desktop.yml`, and `nightly-release-train.yml` directly) leaves it at its `false` default, and a plain `desktop-v*` tag push carries no inputs at all, so it also defaults to `false`. Only an explicit `workflow_dispatch` run with `enable_windows_beta: true` builds Windows;
+- the Windows matrix entry also runs `continue-on-error`, so on the runs where it is enabled, a failed Windows build leaves the macOS release and the updater publish intact;
+- `windows-x86_64` is an `optional` platform in both `scripts/generate-updater-manifest.mjs` and `scripts/generate-desktop-installer-manifest.mjs`, so a release with no Windows artifact publishes without a Windows entry rather than failing;
+- the Windows installer is not Authenticode signed, so first launch shows a SmartScreen warning that the user clicks through. The Tauri updater's minisign signature is a separate mechanism and is applied, so in-app updates still verify;
+- `proliferate-diagnostics-collector` does not compile for Windows, so the Windows build ships a placeholder sidecar and has no in-app diagnostics capture or support snapshot;
+- there is no bundled agent seed on Windows. `agent-seed.inputs.json` pins Node only for the two Apple targets and `scripts/build-agent-seed.mjs` is native-macOS-only, so a Windows build sets `ANYHARNESS_AGENT_SEED_EXPECTED` with no seed present. There is also no managed agent launcher that can run on Windows yet (the launcher is a `#!/bin/sh` script), so there is no fallback to "whatever Node the machine already has": no agent session can start on a Windows build today regardless of seed state.
+
+The build logs a warning annotation for each of those gaps.
+
+To make Windows release-blocking, delete the `continue-on-error` line from `build-desktop` and drop `optional` from the `windows-x86_64` entries. To make it build automatically on one of the existing pipelines, pass `enable_windows_beta: true` from that caller.
 
 ## Runtime And SDK
 

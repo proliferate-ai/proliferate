@@ -20,7 +20,12 @@ on:
         options:
           - all
           - macos
+          - windows
         default: all
+      enable_windows_beta:
+        description: "Opt into building the Windows beta leg (never on by default; see B2 in PR #2150)"
+        type: boolean
+        default: false
       allow_unsigned:
         description: "Allow ad-hoc (unsigned) macOS builds when APPLE_SIGNING_IDENTITY is not configured"
         type: boolean
@@ -52,6 +57,10 @@ on:
         description: "Target OS"
         type: string
         default: all
+      enable_windows_beta:
+        description: "Opt into building the Windows beta leg (never on by default; see B2 in PR #2150)"
+        type: boolean
+        default: false
       allow_unsigned:
         description: "Allow ad-hoc (unsigned) macOS builds when APPLE_SIGNING_IDENTITY is not configured"
         type: boolean
@@ -106,8 +115,24 @@ jobs:
           # - os: macos-15-intel
           #   target: x86_64-apple-darwin
           #   runner_os: macos
+          # Windows was removed 2026-04-13 by 3d3c0504b8 because the SDK
+          # generate step was POSIX-shell only. That step is node now, so the
+          # leg is back for the beta. The matrix entry itself is unconditional;
+          # "Decide whether to build this matrix entry" below is what actually
+          # keeps it from running unless `enable_windows_beta` is explicitly
+          # true, so it never rides along on push, workflow_call or
+          # unattended workflow_dispatch runs.
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            runner_os: windows
 
     runs-on: ${{ matrix.os }}
+
+    # Beta posture: Windows is best effort. A failed Windows leg must not take
+    # the macOS release down with it, and `needs: build-desktop` on
+    # create-release would do exactly that if this job reported failure. Delete
+    # this line to make Windows release-blocking.
+    continue-on-error: ${{ matrix.runner_os == 'windows' }}
 
     env:
       # The desktop renderer (vite) build OOMs the default Node heap on the
@@ -120,12 +145,21 @@ jobs:
         shell: bash
         env:
           TARGET_OS: ${{ inputs.target_os || 'all' }}
+          # `inputs.enable_windows_beta` is only populated on workflow_dispatch
+          # and workflow_call. A `push` (desktop-v* tag) event carries no
+          # inputs at all, so this is empty/false there too, and the Windows
+          # leg cannot ride along on a tag push. Every workflow_call caller
+          # must opt in explicitly; none does today (see guides/deploying/releases.md).
+          ENABLE_WINDOWS_BETA: ${{ inputs.enable_windows_beta && 'true' || 'false' }}
         run: |
+          skip=false
           if [[ "${{ github.event_name }}" != "push" ]] && [[ "$TARGET_OS" != "all" ]] && [[ "$TARGET_OS" != "${{ matrix.runner_os }}" ]]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            skip=true
           fi
+          if [[ "${{ matrix.runner_os }}" == "windows" ]] && [[ "$ENABLE_WINDOWS_BETA" != "true" ]]; then
+            skip=true
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
 
       - name: Validate release ref
         if: steps.filter.outputs.skip != 'true' && github.event_name == 'workflow_dispatch' && !inputs.dry_run && !inputs.git_sha
@@ -198,6 +232,7 @@ jobs:
 
       - name: Validate release title
         if: steps.filter.outputs.skip != 'true'
+        shell: bash
         env:
           RELEASE_TITLE: ${{ inputs.release_title || '' }}
         run: |
@@ -304,11 +339,24 @@ jobs:
         if: steps.filter.outputs.skip != 'true'
         shell: bash
         run: |
-          cargo build --release --target "${{ matrix.target }}" \
-            -p anyharness \
-            -p proliferate-diagnostics-collector \
-            -p proliferate-debug \
-            -p proliferate-worker
+          # proliferate-diagnostics-collector is POSIX-only: process.rs reads an
+          # inherited descriptor through an unconditional `use std::os::fd`, so
+          # the crate does not compile for x86_64-pc-windows-msvc at all. The
+          # desktop build script already recognizes Windows as an unsupported
+          # collector target and stages an explicit placeholder sidecar, so
+          # asking cargo for the real one here would only fail the leg.
+          if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
+            cargo build --release --target "${{ matrix.target }}" \
+              -p anyharness \
+              -p proliferate-debug \
+              -p proliferate-worker
+          else
+            cargo build --release --target "${{ matrix.target }}" \
+              -p anyharness \
+              -p proliferate-diagnostics-collector \
+              -p proliferate-debug \
+              -p proliferate-worker
+          fi
           mkdir -p apps/desktop/src-tauri/binaries
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
             cp "target/${{ matrix.target }}/release/anyharness.exe" "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
@@ -361,7 +409,7 @@ jobs:
           spctl --assess --verbose=4 --type open --context context:primary-signature "$EXTRACTED_NODE_BIN"
 
       - name: Stage diagnostics collector for target
-        if: steps.filter.outputs.skip != 'true'
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os != 'windows'
         shell: bash
         run: |
           mkdir -p apps/desktop/src-tauri/binaries
@@ -371,6 +419,18 @@ jobs:
           cp "$collector" "$staged"
           chmod +x "$staged"
           cmp "$collector" "$staged"
+
+      # Say the losses out loud rather than letting a placeholder sidecar and an
+      # empty resource directory pass for working ones. The desktop build script
+      # writes the collector placeholder; this step exists so the release log
+      # records what a Windows user does not get.
+      - name: Report Windows beta gaps
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'windows'
+        shell: bash
+        run: |
+          echo "::warning::Windows beta ships a placeholder diagnostics collector. proliferate-diagnostics-collector does not compile for x86_64-pc-windows-msvc, so in-app diagnostics capture, the support-report snapshot and the collector-backed export path are all unavailable in this build."
+          echo "::warning::Windows beta ships no bundled agent seed. agent-seed.inputs.json pins Node only for the two Apple targets and build-agent-seed.mjs is native-macOS-only, so this build sets ANYHARNESS_AGENT_SEED_EXPECTED with no seed present. No managed agent launcher can run on Windows yet (see PR body), so there is no fallback to \"whatever Node the machine already has\" either."
+          echo "::warning::Windows installers are not Authenticode signed. First launch shows a click-through SmartScreen warning. The Tauri updater minisign signature is separate and is applied."
 
       - name: Stage Proliferate debug helper for target
         if: steps.filter.outputs.skip != 'true'
@@ -760,6 +820,21 @@ jobs:
           name: proliferate-dmg-${{ matrix.target }}
           path: |
             target/${{ matrix.target }}/release/release-artifacts/*.dmg
+          if-no-files-found: error
+          compression-level: 0
+
+      # Restored from 3d3c0504b8. There is no name-normalization step on this
+      # path: the updater and installer manifests match Tauri's own NSIS output
+      # name, which already carries the x64 arch token.
+      - name: Upload build artifacts (Windows)
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'windows'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/**/*.msi
+            target/${{ matrix.target }}/release/bundle/**/*-setup.exe
+            target/${{ matrix.target }}/release/bundle/**/*-setup.exe.sig
           if-no-files-found: error
           compression-level: 0
 

@@ -28,6 +28,10 @@ pub(crate) fn current_target_triple() -> &'static str {
     {
         "x86_64-pc-windows-msvc"
     }
+    #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+    {
+        "aarch64-pc-windows-msvc"
+    }
 }
 
 pub(crate) fn launch_env<R: Runtime>(app: &AppHandle<R>) -> HashMap<String, String> {
