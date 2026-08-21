@@ -11,11 +11,13 @@ export const AGENT_API_KEYS_COPY = {
   emptyDescription: "Add a key to wire it into a harness later.",
   signInRequiredTitle: "Sign in required",
   signInRequired: "Sign in to Proliferate Cloud to manage your API key vault.",
-  cloudNotConfiguredTitle: "Cloud is not configured",
-  // Signed in, but the operator has not configured cloud compute — never a
-  // sign-in prompt to someone already signed in (PR2-GATING-01 class).
-  cloudNotConfigured:
-    "Cloud is not configured on this deployment. An operator must finish configuring it before the API key vault is available.",
+  // Signed in, but the control plane is unreachable. Never a sign-in prompt to
+  // someone already signed in (PR2-GATING-01 class), and never a "cloud is not
+  // configured" claim: the vault is a control-plane feature, so cloud compute
+  // being off is not a reason it is unavailable (ADR FM6/Q9).
+  serverUnreachableTitle: "Can't reach the server",
+  serverUnreachable:
+    "Your API key vault lives on the server. Reconnect to manage your keys.",
   addAction: "Add key",
   addModalHeading: "Add API key",
   addModalDescription:

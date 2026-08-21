@@ -45,7 +45,12 @@ const AUTH_SETUP_POLL_MS = 3000;
  * edit going pending never resurrects the onboarding card.
  */
 export function useAuthSetupOnboardingStep(): AuthSetupStepState {
-  const { cloudActive } = useCloudAvailabilityState();
+  const { authStatus, controlPlaneReachable } = useCloudAvailabilityState();
+  // Control-plane gate, NOT a cloud-compute gate: this step watches auth
+  // selections and gateway enrollment, both control-plane state independent of
+  // cloud COMPUTE. Matches `useFirstRunAuthAdoption` — if adoption ran, the
+  // step that watches its acks must be able to run too.
+  const authReady = authStatus === "authenticated" && controlPlaneReachable;
   const adoptedHarnessKinds = useAuthSetupOnboardingStore(
     (store) => store.adoptedHarnessKinds,
   );
@@ -83,13 +88,13 @@ export function useAuthSetupOnboardingStep(): AuthSetupStepState {
     return () => clearTimeout(timer);
   }, [watching, adoptionStartedAt]);
 
-  const selectionsQuery = useAuthSelections("local", cloudActive && watching, {
+  const selectionsQuery = useAuthSelections("local", authReady && watching, {
     refetchInterval: watching ? AUTH_SETUP_POLL_MS : false,
   });
   // Enrollment sync (keys minted) is part of the same pending truth: a state
   // acked before sync lacks the key, and sync bumps the revision back to
   // pending — so resolution requires synced AND applied.
-  const enrollmentQuery = useAgentGatewayEnrollment(cloudActive && watching, {
+  const enrollmentQuery = useAgentGatewayEnrollment(authReady && watching, {
     refetchInterval: watching ? AUTH_SETUP_POLL_MS : false,
   });
   // An errored enrollment read (e.g. the 404 before the row exists, or

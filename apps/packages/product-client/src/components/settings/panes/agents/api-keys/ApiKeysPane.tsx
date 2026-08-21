@@ -38,10 +38,19 @@ function formatCreatedAt(value: string): string {
 }
 
 export function ApiKeysPane() {
-  const { cloudActive, authStatus, cloudComputeEnabled } = useCloudAvailabilityState();
+  const { authStatus, controlPlaneReachable } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
 
-  const keysQuery = useAgentApiKeys(cloudActive);
+  // The API key vault is a control-plane feature, not a cloud-compute one: it
+  // must stay usable whenever the control plane is reachable and the user is
+  // signed in, independent of `cloudComputeEnabled` (ADR FM6/Q9). The settings
+  // router already routes this pane through exactly that gate
+  // (render-settings-section.tsx `authGate`); gating the pane body on
+  // `cloudActive` re-coupled it to cloud compute and slammed the door the
+  // router had just opened.
+  const authReady = authStatus === "authenticated" && controlPlaneReachable;
+
+  const keysQuery = useAgentApiKeys(authReady);
   const createKey = useCreateAgentApiKey();
   const revokeKey = useRevokeAgentApiKey();
 
@@ -123,11 +132,11 @@ export function ApiKeysPane() {
     })();
   }
 
-  if (!cloudActive) {
-    // Truthful cause: a signed-in user on a compute-unconfigured deployment
-    // gets the operator explanation, not a "sign in" prompt they can't act on
+  if (!authReady) {
+    // Truthful cause: a signed-in user whose control plane is unreachable gets
+    // a connectivity explanation, not a "sign in" prompt they can't act on
     // (PR2-GATING-01 class). Anonymous users still get the sign-in prompt.
-    const operatorGated = authStatus === "authenticated" && !cloudComputeEnabled;
+    const unreachable = authStatus === "authenticated" && !controlPlaneReachable;
     return (
       <SettingsPageBody data-api-keys-pane="" data-api-keys-state="gated">
         <PageHeader
@@ -137,11 +146,11 @@ export function ApiKeysPane() {
         />
         <SettingsEmptyState
           size="compact"
-          title={operatorGated
-            ? AGENT_API_KEYS_COPY.cloudNotConfiguredTitle
+          title={unreachable
+            ? AGENT_API_KEYS_COPY.serverUnreachableTitle
             : AGENT_API_KEYS_COPY.signInRequiredTitle}
-          description={operatorGated
-            ? AGENT_API_KEYS_COPY.cloudNotConfigured
+          description={unreachable
+            ? AGENT_API_KEYS_COPY.serverUnreachable
             : AGENT_API_KEYS_COPY.signInRequired}
         />
       </SettingsPageBody>

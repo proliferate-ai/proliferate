@@ -12,7 +12,13 @@ import { AUTH_SETUP_GRACE_MS } from "#product/lib/domain/agents/auth-onboarding"
 import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
 
 const state = vi.hoisted(() => ({
-  cloudActive: true,
+  // Cloud COMPUTE is off for this entire suite, deliberately: that is the
+  // shipped production posture, and this step watches control-plane state
+  // (auth selections + gateway enrollment) that must resolve regardless.
+  // Re-couple the hook to `cloudActive` and the whole file fails.
+  cloudActive: false,
+  authStatus: "authenticated" as "authenticated" | "anonymous" | "loading",
+  controlPlaneReachable: true,
   selections: {
     data: undefined as Array<Record<string, unknown>> | undefined,
   },
@@ -36,7 +42,11 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 }));
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
-  useCloudAvailabilityState: () => ({ cloudActive: state.cloudActive }),
+  useCloudAvailabilityState: () => ({
+    cloudActive: state.cloudActive,
+    authStatus: state.authStatus,
+    controlPlaneReachable: state.controlPlaneReachable,
+  }),
 }));
 
 function recordAdoption(harnessKinds: string[]) {
@@ -56,7 +66,9 @@ afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
   useAuthSetupOnboardingStore.getState().resetForTests();
-  state.cloudActive = true;
+  state.cloudActive = false;
+  state.authStatus = "authenticated";
+  state.controlPlaneReachable = true;
   state.selections.data = undefined;
   state.enrollment.data = undefined;
   state.enrollment.isError = false;
@@ -203,6 +215,26 @@ describe("useAuthSetupOnboardingStep", () => {
       vi.advanceTimersByTime(AUTH_SETUP_GRACE_MS + 1);
     });
     expect(result.current).toBe("advanced");
+  });
+
+  it("watches with cloud compute disabled, and stops watching when signed out", () => {
+    // Launch posture: cloud compute off, signed in, control plane reachable.
+    // The step must still enable both watch queries.
+    recordAdoption(["claude"]);
+    const { rerender } = renderHook(() => useAuthSetupOnboardingStep());
+    expect(state.selectionsArgs.at(-1)?.enabled).toBe(true);
+    expect(state.enrollmentArgs.at(-1)?.enabled).toBe(true);
+
+    state.authStatus = "anonymous";
+    rerender();
+    expect(state.selectionsArgs.at(-1)?.enabled).toBe(false);
+    expect(state.enrollmentArgs.at(-1)?.enabled).toBe(false);
+
+    state.authStatus = "authenticated";
+    state.controlPlaneReachable = false;
+    rerender();
+    expect(state.selectionsArgs.at(-1)?.enabled).toBe(false);
+    expect(state.enrollmentArgs.at(-1)?.enabled).toBe(false);
   });
 
   it("advances immediately when the app observes an already-expired grace window", () => {
