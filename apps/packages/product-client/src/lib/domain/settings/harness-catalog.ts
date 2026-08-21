@@ -20,4 +20,3 @@ export function normalizeRuntimeLaunchModels(
     description: model.observedDescription?.trim() || null,
   }));
 }
-

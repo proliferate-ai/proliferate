@@ -123,21 +123,26 @@ export function HarnessAllModelsSection({
   const probePhase = isLocal ? runtimeLaunchOptionsQuery.data?.probePhase : undefined;
   const isProbeLive = probePhase === "running" || probePhase === "queued";
 
-  // The 32-minute bug: a stale `detecting` response used to disable the one
-  // control that would cure it. Refresh is busy ONLY for its own mutation or
-  // a genuinely live probe — never for `detecting` alone, since a harness
-  // excluded from unattended probes (Cursor) sits `detecting` forever by
-  // design and must keep an enabled Refresh.
-  const isRefreshing = isLocal && (refreshLaunchOptions.isPending || isProbeLive);
-
-  // `state=refreshing` always means an active re-probe over last-good data
-  // (the polling policy in `resolveAgentLaunchOptionsRefetchInterval` treats
-  // it as unconditionally live); `state=detecting` is ambiguous on its own,
-  // so it needs the phase check to tell an active first observation apart
-  // from a settled-unobserved harness.
-  const isChecking = launchOptions?.state === "refreshing"
+  // `state=refreshing` is live only on the surface that can ever resolve it:
+  // cloud has no refetch interval and no Refresh control, so a copied
+  // `refreshing` snapshot there is not "checking" — it is last-good data
+  // that only a remount can refresh (E-R12). `state=detecting` is ambiguous
+  // on its own, so it needs the phase check to tell an active first
+  // observation apart from a settled-unobserved harness.
+  const isChecking = (isLocal && launchOptions?.state === "refreshing")
     || (launchOptions?.state === "detecting" && isProbeLive);
   const isIdleUnobserved = launchOptions?.state === "detecting" && !isProbeLive;
+
+  // The 32-minute bug's exact shape through a different door (E-R9): deriving
+  // "busy" from the raw `probePhase` disables Refresh in EVERY state,
+  // including terminal ones (e.g. `observed` + a stray live `probePhase`)
+  // that `resolveAgentLaunchOptionsRefetchInterval` never polls — frozen
+  // data behind a disabled button, with nothing ever scheduled to update it.
+  // Tying busy to `isChecking` instead means Refresh is disabled ONLY in a
+  // state that is actually polling (or mid-mutation), so it always has a
+  // way out. Also resolves E-R10: `failed_without_observation` can no
+  // longer show a disabled-and-spinning header next to an enabled Retry.
+  const isRefreshing = isLocal && (refreshLaunchOptions.isPending || isChecking);
 
   const modelCount = models.length;
   // `formatRelativeTime` is the repo's one relative-age formatter (six other
@@ -154,7 +159,13 @@ export function HarnessAllModelsSection({
       return { foreground: null, muted: HARNESS_PANE_COPY.allModelsLoading, retry: null };
     }
     if (!launchOptions) {
-      return isQueryError
+      // E-R13: `isLoading` is already false here (guarded above), so a local
+      // query with no data and no error is a DISABLED query — the runtime
+      // has no URL yet (`useAgentLaunchOptionsQuery` requires
+      // `runtimeUrl.length > 0`) — not one still in flight. Left alone this
+      // sits on "Loading models…" forever, a ninth state outside the
+      // spec's eight; state 8's copy is the closest honest match.
+      return isQueryError || isLocal
         ? {
           foreground: HARNESS_PANE_COPY.allModelsTransportErrorTitle,
           muted: HARNESS_PANE_COPY.allModelsTransportErrorReason,
@@ -174,6 +185,11 @@ export function HarnessAllModelsSection({
     }
     switch (launchOptions.state) {
       case "observed":
+      // E-R12: only reachable here on cloud (isChecking already consumed
+      // `refreshing` unconditionally for local) — cloud has no refetch
+      // interval and no Refresh control, so a copied `refreshing` snapshot
+      // is rendered as its last-good count + freshness, not as "checking".
+      case "refreshing":
         return { foreground: HARNESS_PANE_COPY.probeModelCount(modelCount), muted: freshnessLine, retry: null };
       case "observed_empty":
         return {
@@ -326,9 +342,16 @@ export function HarnessAllModelsSection({
             {HARNESS_PANE_COPY.allModelsChecking}
           </p>
         ) : models.length === 0 ? (
-          <p className="text-ui-sm text-muted-foreground">
-            {HARNESS_PANE_COPY.allModelsEmpty}
-          </p>
+          // E-R14: the header already carries the reason for an empty list
+          // in these two states (transport error / no observation ever
+          // succeeded) — echoing "No models detected yet." underneath would
+          // contradict it, e.g. "...The runtime didn't respond." followed by
+          // "No models detected yet." for a request that never answered.
+          isQueryError || launchOptions?.state === "failed_without_observation" ? null : (
+            <p className="text-ui-sm text-muted-foreground">
+              {HARNESS_PANE_COPY.allModelsEmpty}
+            </p>
+          )
         ) : (
           <ModelTable models={filteredRows} />
         )}

@@ -406,7 +406,15 @@ describe("HarnessAllModelsSection — truthfulness rules", () => {
 
     expect(screen.getByText("0 models")).toBeTruthy();
     expect(screen.queryByText(/refreshed/)).toBeNull();
-    expect(screen.queryByText("observed")).toBeNull();
+    // E-R11: `queryByText("observed")` here can never match, even with the
+    // bug present, because the muted span concatenates a " · " separator
+    // with the raw state ("· observed" as one node's normalized text) —
+    // an exact-string query for the bare word is vacuous by construction.
+    // Assert on the container's full text instead, covering every raw wire
+    // state string the copy layer must never leak (not just "observed").
+    expect(contentLine().textContent).not.toMatch(
+      /detecting|refreshing|observed|last_good_after_failure|failed_without_observation/,
+    );
   });
 });
 
@@ -498,5 +506,90 @@ describe("HarnessAllModelsSection — cloud surface (E-R5)", () => {
 
     expect(screen.getByText("Couldn't check models")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+});
+
+describe("HarnessAllModelsSection — round 2 review fixes", () => {
+  it("E-R9: a terminal state carrying a stray live probePhase keeps Refresh enabled", () => {
+    state.launchOptions = {
+      harnessKind: "claude",
+      basisRevision: "b1",
+      revision: 5,
+      state: "observed",
+      options: { models: [{ id: "m-1", observedName: "Model 1", observedDescription: null }], controls: [], defaults: { modelId: null, controlValues: {} } },
+      observedAt: isoAgo(60_000),
+      probeAttemptedAt: isoAgo(0),
+      probeFailureCode: null,
+      readiness: "ready",
+      probePhase: "queued",
+    };
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
+    expect(screen.getByText("1 model")).toBeTruthy();
+    const refreshButton = screen.getByRole("button", { name: /^refresh$/i }) as HTMLButtonElement;
+    expect(refreshButton.disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Refreshing…" })).toBeNull();
+  });
+
+  it("E-R10: failed_without_observation with a live probePhase shows one consistent affordance", () => {
+    state.launchOptions = {
+      harnessKind: "claude",
+      basisRevision: "b1",
+      revision: 9,
+      state: "failed_without_observation",
+      options: null,
+      observedAt: null,
+      probeAttemptedAt: isoAgo(0),
+      probeFailureCode: "harness_probe_failed",
+      readiness: "ready",
+      probePhase: "running",
+    };
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
+    expect(screen.getByText("Couldn't check models")).toBeTruthy();
+    const retryButton = screen.getByRole("button", { name: "Retry" }) as HTMLButtonElement;
+    expect(retryButton.disabled).toBe(false);
+    const refreshButton = screen.getByRole("button", { name: /^refresh$/i }) as HTMLButtonElement;
+    expect(refreshButton.disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Refreshing…" })).toBeNull();
+  });
+
+  it("E-R12: a copied cloud snapshot in refreshing shows last-good count + freshness, not checking", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+    state.cloudSandbox = { id: "sandbox-1" };
+    state.cloudLaunchOptions = {
+      harnessKind: "claude",
+      basisRevision: "cloud-b1",
+      revision: 3,
+      state: "refreshing",
+      options: { models: [{ id: "m-1", observedName: "Model 1", observedDescription: null }], controls: [], defaults: { modelId: null, controlValues: {} } },
+      observedAt: isoAgo(120_000),
+      probeAttemptedAt: isoAgo(0),
+      probeFailureCode: null,
+      readiness: "ready",
+    };
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
+    expect(screen.getByText("1 model")).toBeTruthy();
+    expect(screen.getByText("· refreshed 2m ago")).toBeTruthy();
+    expect(screen.queryByText("Checking available models…")).toBeNull();
+  });
+
+  it("E-R13: a disabled local query (no runtime URL) does not load forever", () => {
+    state.launchOptions = undefined;
+    state.isLoading = false;
+    state.isError = false;
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
+    expect(screen.getByText("Models couldn't be loaded")).toBeTruthy();
+    expect(screen.queryByText("Loading models…")).toBeNull();
+  });
+
+  it("E-R14: the expanded body does not contradict a header that already explains an empty state", () => {
+    state.launchOptions = undefined;
+    state.isLoading = false;
+    state.isError = true;
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
+    fireEvent.click(screen.getByRole("button", { name: "Models" }));
+
+    expect(screen.getByText("Models couldn't be loaded")).toBeTruthy();
+    expect(screen.queryByText("No models detected yet.")).toBeNull();
   });
 });
