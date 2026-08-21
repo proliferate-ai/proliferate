@@ -85,7 +85,8 @@ jobs:
         # That transcript IS the finding.
         env:
           RUST_BACKTRACE: "1"
-          ACP_HANDSHAKE_NEGATIVE_CONTROL: ${{ inputs.negative_control && '1' || '0' }}
+          # TEMPORARY, THIS BRANCH ONLY: forced on so the run goes red on purpose.
+          ACP_HANDSHAKE_NEGATIVE_CONTROL: "1"
         run: >
           cargo test --target ${{ matrix.target }}
           -p anyharness-lib --test windows_acp_handshake
