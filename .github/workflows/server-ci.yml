@@ -16,12 +16,16 @@ on:
   # reports a conclusion at all, so a required check naming these jobs would sit
   # Pending forever on every non-server PR and make it unmergeable -- and the
   # only way to avoid that today is to leave the server lanes off the required
-  # list entirely, which is the absence hole ci-ok exists to close. So the
-  # workflow now runs on every PR and the cheap `changes` job below diffs the
-  # merge base against the same path list, gating the heavy lanes. A gated-off
-  # lane still reports (a `skipped` conclusion, which branch protection treats
-  # as satisfied), so `lint` and `test` are always safe to mark required. Same
-  # shape as self-host-smoke.yml's changes/smoke pair.
+  # list entirely, which is exactly the absence hole ci-ok exists to close.
+  #
+  # So the workflow runs on EVERY pull request, and the cheap `changes` job
+  # below diffs the merge base against the same path list that used to sit on
+  # this trigger. On a non-server diff the heavy lanes short-circuit and report
+  # SUCCESS in well under a minute rather than being job-level `if:`-skipped.
+  # That distinction is the whole point: `skipped` is a conclusion branch
+  # protection silently accepts, so an absence-is-fatal required check must
+  # never be satisfied by one. `lint` and `test` now always report a real
+  # green/red, on every PR, with no path-filter trust anywhere in the chain.
   pull_request:
   workflow_dispatch:
     inputs:
@@ -68,6 +72,15 @@ jobs:
   #
   # Every non-pull_request caller -- main/tag pushes, workflow_dispatch, and the
   # release/hotfix workflow_call entrypoints -- is unconditionally relevant.
+  #
+  # This job is lane-agnostic on purpose: it publishes ONE `relevant` flag, and
+  # any number of downstream lanes consume it. When the server lane split lands
+  # (#2137 splits `test` into `test-unit` + a 3-way-sharded `test-integration`),
+  # each new lane needs the same two things and nothing more: `needs: changes`,
+  # and `if: needs.changes.outputs.relevant == 'true'` on every one of its
+  # steps, plus the green no-op step. Do not reintroduce a paths filter, and do
+  # not gate a lane at the job level -- that produces `skipped`, which is the
+  # conclusion this whole arrangement exists to avoid.
   changes:
     name: Detect server-relevant changes
     runs-on: ubuntu-latest
@@ -112,47 +125,69 @@ jobs:
 
   lint:
     needs: changes
-    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     steps:
+      # Reports SUCCESS, not `skipped`, when the diff cannot change this lane's
+      # result. `skipped` is what branch protection silently accepts, so it is
+      # exactly the conclusion an absence-is-fatal required check must never
+      # rely on; every step below is individually gated instead, and the job
+      # ends green in well under a minute.
+      - name: No server-relevant changes
+        if: needs.changes.outputs.relevant != 'true'
+        working-directory: .
+        run: |
+          echo "No server-relevant paths in this diff; nothing for this lane to verify."
+          echo "Reporting success (not skipped) so this check always reports a conclusion."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.relevant == 'true'
         with:
           ref: ${{ inputs.git_sha || github.ref }}
           fetch-depth: 2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.changes.outputs.relevant == 'true'
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
+        if: needs.changes.outputs.relevant == 'true'
         with:
           version: 10
       - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.relevant == 'true'
       - uses: actions/setup-python@v7
+        if: needs.changes.outputs.relevant == 'true'
         with:
           python-version: "3.12"
 
       - name: Validate catalogs
+        if: needs.changes.outputs.relevant == 'true'
         run: |
           node scripts/validate-agent-catalog.mjs
         working-directory: .
 
       - name: Install workspace dependencies
+        if: needs.changes.outputs.relevant == 'true'
         run: pnpm install --frozen-lockfile
         working-directory: .
 
       - name: Build artifact runtime
+        if: needs.changes.outputs.relevant == 'true'
         run: pnpm -C server/artifact-runtime build
         working-directory: .
 
       - name: Install dependencies
+        if: needs.changes.outputs.relevant == 'true'
         run: uv sync --python 3.12 --frozen --extra dev
 
       - name: Ruff check
+        if: needs.changes.outputs.relevant == 'true'
         run: uv run --python 3.12 --frozen --extra dev ruff check proliferate/ tests/
 
       - name: Ruff format check
+        if: needs.changes.outputs.relevant == 'true'
         run: uv run --python 3.12 --frozen --extra dev ruff format --check proliferate/ tests/
 
       - name: Mypy diagnostic ratchet
+        if: needs.changes.outputs.relevant == 'true'
         env:
           MYPY_COMPARISON_SHA: ${{ inputs.comparison_sha || '' }}
           MYPY_EVENT_NAME: ${{ github.event_name }}
@@ -163,9 +198,12 @@ jobs:
           uv run --python 3.12 --frozen --extra dev python scripts/check_mypy_baseline.py
           --github-event-base
 
+  # The `services:` block below has no conditional form in Actions, so Postgres
+  # and Redis boot even on a no-op run. Both are alpine images in the runner's
+  # warm cache; the resulting green no-op still lands in well under a minute,
+  # which is the price of a check that always reports a real conclusion.
   test:
     needs: changes
-    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
@@ -196,29 +234,49 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
+      # Reports SUCCESS, not `skipped`, when the diff cannot change this lane's
+      # result. `skipped` is what branch protection silently accepts, so it is
+      # exactly the conclusion an absence-is-fatal required check must never
+      # rely on; every step below is individually gated instead, and the job
+      # ends green in well under a minute.
+      - name: No server-relevant changes
+        if: needs.changes.outputs.relevant != 'true'
+        working-directory: .
+        run: |
+          echo "No server-relevant paths in this diff; nothing for this lane to verify."
+          echo "Reporting success (not skipped) so this check always reports a conclusion."
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.relevant == 'true'
         with:
           ref: ${{ inputs.git_sha || github.ref }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.changes.outputs.relevant == 'true'
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
+        if: needs.changes.outputs.relevant == 'true'
         with:
           version: 10
       - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.relevant == 'true'
       - uses: actions/setup-python@v7
+        if: needs.changes.outputs.relevant == 'true'
         with:
           python-version: "3.12"
 
       - name: Install workspace dependencies
+        if: needs.changes.outputs.relevant == 'true'
         run: pnpm install --frozen-lockfile
         working-directory: .
 
       - name: Build artifact runtime
+        if: needs.changes.outputs.relevant == 'true'
         run: pnpm -C server/artifact-runtime build
         working-directory: .
 
       - name: Install dependencies
+        if: needs.changes.outputs.relevant == 'true'
         run: uv pip install --system -e ".[dev]"
 
       # Four workers means four concurrent 78-table TRUNCATEs and four
@@ -229,6 +287,7 @@ jobs:
       # postmaster-level, and service containers take no command line, so it has
       # to be written to postgresql.auto.conf and the container bounced.
       - name: Raise the Postgres lock table for parallel workers
+        if: needs.changes.outputs.relevant == 'true'
         run: |
           set -euo pipefail
           container="$(docker ps --filter 'ancestor=postgres:16-alpine' --format '{{.ID}}' | head -1)"
@@ -246,6 +305,7 @@ jobs:
             -c 'SHOW max_locks_per_transaction;'
 
       - name: Run tests
+        if: needs.changes.outputs.relevant == 'true'
         run: pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py -n 4 -q --durations=20
 
   docker:
