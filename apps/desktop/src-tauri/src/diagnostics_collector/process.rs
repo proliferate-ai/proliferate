@@ -169,6 +169,16 @@ impl CollectorProcessLauncher {
                 "collector binary is missing",
             )
         })?;
+        Self::discover_with_binary(binary, release, environment, install_id, fallback)
+    }
+
+    fn discover_with_binary(
+        binary: PathBuf,
+        release: String,
+        environment: String,
+        install_id: Option<String>,
+        fallback: FallbackDiagnosticsWriter,
+    ) -> Result<Self, CollectorLaunchError> {
         validate_binary(&binary)?;
         validate_label(&release)?;
         validate_label(&environment)?;
@@ -176,7 +186,7 @@ impl CollectorProcessLauncher {
         // collector refuses an out-of-range `--install-id` outright, so
         // passing one through would trade a missing attribute for no
         // diagnostics at all.
-        let install_id = install_id.filter(|value| validate_label(value).is_ok());
+        let install_id = retain_valid_install_id(install_id);
         Ok(Self {
             binary,
             release,
@@ -528,7 +538,7 @@ mod owned;
 
 use helpers::{
     clear_cloexec_raw, drain_stderr, generate_capability, protected_pair, read_descriptor,
-    resolve_binary, supported_target, validate_binary, validate_label,
+    resolve_binary, retain_valid_install_id, supported_target, validate_binary, validate_label,
 };
 #[cfg(test)]
 use owned::typed_shutdown_command;

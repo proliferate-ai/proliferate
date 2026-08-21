@@ -283,26 +283,50 @@ async fn an_install_id_crosses_the_process_seam_to_the_real_collector() {
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 
-/// Negative control for the filter in `discover`. The collector refuses an
-/// out-of-range `--install-id` at startup rather than sanitizing it, so
-/// passing one through would cost the whole collector, not just the
-/// attribute. `discover` therefore drops an unusable identity instead.
-#[tokio::test]
-async fn an_unusable_install_id_would_cost_the_collector_so_discover_drops_it() {
+#[test]
+fn install_id_filter_accepts_exactly_the_collectors_domain() {
+    assert!(retain_valid_install_id(None).is_none());
+
+    for (install_id, accepted) in install_id_domain_cases() {
+        let retained = retain_valid_install_id(Some(install_id.clone()));
+        assert_eq!(
+            retained.as_deref(),
+            accepted.then_some(install_id.as_str()),
+            "unexpected filter result for install id {install_id:?}"
+        );
+    }
+}
+
+/// On the supported target, the real-binary discovery path delegates persisted
+/// install IDs to the platform-neutral filter before constructing the launcher.
+#[cfg(target_os = "macos")]
+#[test]
+fn discover_drops_an_unusable_persisted_install_id() {
     let root = std::env::temp_dir().join(format!("collector-bad-install-{}", uuid::Uuid::new_v4()));
     let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
         .expect("fallback");
-    let unusable = "x".repeat(129);
-
-    let launcher = install_id_launcher(Some(&unusable), &fallback);
-    assert!(
-        launcher.launch().await.is_err(),
-        "the collector must refuse an out-of-range install id"
-    );
-
-    assert!(validate_label(&unusable).is_err());
-    assert!(validate_label("install-desktop-test-4b71").is_ok());
+    let launcher = CollectorProcessLauncher::discover_with_binary(
+        built_collector_binary(),
+        "desktop-test".to_owned(),
+        "test".to_owned(),
+        Some("has space".to_owned()),
+        fallback.clone(),
+    )
+    .expect("discover real collector");
+    assert!(launcher.install_id.is_none());
 
     fallback.close().expect("close fallback");
     std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+fn install_id_domain_cases() -> [(String, bool); 7] {
+    [
+        ("install-desktop-test-4b71".to_owned(), true),
+        ("x".repeat(128), true),
+        (String::new(), false),
+        ("x".repeat(129), false),
+        ("has space".to_owned(), false),
+        ("has\nnewline".to_owned(), false),
+        ("non-ascii-é".to_owned(), false),
+    ]
 }
