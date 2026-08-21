@@ -24,8 +24,12 @@ the AnyHarness runtime.
 Never put a Honeycomb API key (read, ingest, or management) in CLI arguments,
 shell history, command output, screenshots, issues, PRs, documentation, or
 chat. `HONEYCOMB_READ_KEY` lives in `~/.proliferate-local/observability-keys.env`
-(mode 0600); as of 2026-08-21 it returns HTTP 401 `unknown API key` against
-`GET /1/auth` and needs re-minting before any of this is queryable via API
+(mode 0600); as of 2026-08-21 (re-checked live, ~08:2xZ) it still returns HTTP
+401 `unknown API key` against `GET /1/auth`. A second key, `HONEYCOMB_CONFIG_KEY`
+(minted by Lane B, see `~/.proliferate-local/dev/otlp-honeycomb.env`), can read
+schema and create a query definition but gets HTTP 401 `this API key isn't
+allowed to execute queries` when asked to run one. Neither is execute-capable
+tonight; both need re-minting/rescoping before any of this is queryable via API
 (same shape as the Sentry/PostHog write-scope blockers documented in
 [[Accounts and Wiring State 2026-08-20]] -- provider UI, Pablo, 2FA/session
 required).
@@ -35,27 +39,35 @@ required).
 Full source-record citations and the checked-in draft Honeycomb query
 specification live in
 [`server/infra/observability/honeycomb/product-sli-queries.json`](../../../server/infra/observability/honeycomb/product-sli-queries.json).
-That file is [unverified against the live API] end to end tonight: it has
-never been applied, because (1) the read key above is broken, and (2) as of
-this writing Lane B has not yet posted a Stage-1 dogfood proof note (dataset
-name and record shapes actually observed) to the Accounts and Wiring doc, so
-even a working key would query an empty dataset for these operations. Poll
-that doc; the moment both are true this file should move from "specified" to
-"applied and showing a number."
+**Update 2026-08-21 ~08:2xZ:** Lane B posted the Stage-1 dogfood proof to the
+Accounts and Wiring doc ("Lane B2, Stage-1 dogfood proof") -- the `anyharness`
+dataset genuinely holds real Stage-0 records now (6 emitted, zero drops, 12
+columns created at 2026-08-21T08:15:01Z), confirming the dataset name, field
+names, and the exact Rejected-vs-Failed split rule used below. That clears the
+second of the two original blockers. The file is still [unverified against
+the live API] end to end: no query in it has been executed, because both
+Honeycomb keys above remain non-execute-capable. So SLI #1 below is now "real
+data confirmed to exist, query specified, not yet run" rather than "specified
+against an assumed-empty dataset."
 
 ### 1. Session-create success, split Rejected vs Failed
 
-**Buildable now** -- the only blockers are the two above, not missing
-instrumentation. Source: `anyharness.session.create` lifecycle record
+**Buildable now, and the source record is now confirmed live** -- the only
+remaining blocker is the credentials note above, not missing instrumentation
+or missing data. Source: `anyharness.session.create` lifecycle record
 (`anyharness/crates/anyharness-lib/src/domains/sessions/service/create_lifecycle.rs`,
 landed in PR #2180, Lane B Stage 0, unmerged). Terminal outcome is one of
 `succeeded | rejected | failed | abandoned`
 (`proliferate.lifecycle.outcome` attribute). Formula: failed-rate and
 rejected-rate are each `COUNT(outcome=X) / COUNT(all terminal records)` over
 a window, broken out because Rejected is user-fixable (belongs in a digest)
-and Failed means we broke it (can page). Starting threshold, not yet
-calibrated against real data: Failed rate > 2% over 15m with a 20-record
-minimum.
+and Failed means we broke it (can page). Lane B's Stage-1 note confirms this
+split needs no extra logic: only the `internal_error` error classification
+ever produces `outcome=failed`, every other closed classification produces
+`outcome=rejected`. Starting threshold, not yet calibrated against real data:
+Failed rate > 2% over 15m with a 20-record minimum. Do not key any query on
+`proliferate.trace_id` -- Lane B confirmed it does not exist in this dataset,
+the Stage-0 emitters never set it.
 
 **When it fires:** break down failed terminal records by
 `proliferate.error_classification`. `internal_error` dominating is an
@@ -83,9 +95,9 @@ specified with a real threshold.
 
 ### 3. Time to first output (turn latency)
 
-**Blocked on a missing duration field**, not on data or credentials.
-`anyharness.turn.execute` IS instrumented by PR #2180 (Started on
-`begin_turn`/`ensure_open_turn`, Terminal on `turn_ended` /
+**Blocked, confirmed two ways as of Lane B's Stage-1 note.** First, this
+lane's original finding: `anyharness.turn.execute` IS instrumented by PR
+#2180 (Started on `begin_turn`/`ensure_open_turn`, Terminal on `turn_ended` /
 `commit_staged_prompt_terminal`), but "Started to Terminal duration" needs a
 delta between two separate OTLP log records sharing `proliferate.operation_id`.
 Verified 2026-08-21 by reading the emitted record shape directly: there is no
@@ -94,7 +106,14 @@ record for this operation -- `turn.execute`'s only safe fields are
 `stop_reason` and `engine_initiated`, neither numeric. Honeycomb computes
 per-event calculations; it does not join two log rows by a shared attribute
 inside one query (that is a trace-span feature and this export is OTLP logs,
-not spans). This needs a Rust follow-up: attach the elapsed time the RAII
-guard already holds in-process as a new safe-listed `duration_ms` argument on
-the Terminal record. Once present, the SLI is a straight P50/P95/P99
-calculation filtered to `outcome=succeeded`.
+not spans). Second, and more fundamental: Lane B's Stage-1 note independently
+flags that `anyharness.model.request` -- the operation Lane B identifies as
+the actual source for provider/time-to-first-output latency -- "is declared
+in the producer's table but has NO runtime emitter yet." So even a
+`duration_ms` fix on `turn.execute` would only measure whole-turn duration,
+not the narrower "time to first output" the spec calls for; the operation
+that would measure that has no emitter at all yet. This needs a Rust
+follow-up either way: attach the elapsed time the RAII guard already holds
+in-process as a new safe-listed `duration_ms` argument on the Terminal
+record, and/or wire up a real `model.request` emitter. Once either lands, the
+SLI is a straight P50/P95/P99 calculation filtered to `outcome=succeeded`.
