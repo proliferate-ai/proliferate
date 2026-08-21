@@ -283,25 +283,52 @@ async fn an_install_id_crosses_the_process_seam_to_the_real_collector() {
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 
-/// Negative control for the filter in `discover`. The collector refuses an
-/// out-of-range `--install-id` at startup rather than sanitizing it, so
-/// passing one through would cost the whole collector, not just the
-/// attribute. `discover` therefore drops an unusable identity instead.
-#[tokio::test]
-async fn an_unusable_install_id_would_cost_the_collector_so_discover_drops_it() {
+/// Discovery applies the collector's exact bounded-graphic-ASCII domain. A bad
+/// persisted identity costs only the attribute, never the collector launch.
+#[cfg(target_os = "macos")]
+#[test]
+fn discover_accepts_exactly_the_collectors_install_id_domain() {
     let root = std::env::temp_dir().join(format!("collector-bad-install-{}", uuid::Uuid::new_v4()));
     let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
         .expect("fallback");
-    let unusable = "x".repeat(129);
+    let binary = built_collector_binary();
+    let previous_binary = std::env::var_os("PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN");
+    std::env::set_var("PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN", &binary);
 
-    let launcher = install_id_launcher(Some(&unusable), &fallback);
-    assert!(
-        launcher.launch().await.is_err(),
-        "the collector must refuse an out-of-range install id"
-    );
+    let discovered = [
+        ("install-desktop-test-4b71".to_owned(), true),
+        ("x".repeat(128), true),
+        (String::new(), false),
+        ("x".repeat(129), false),
+        ("has space".to_owned(), false),
+        ("has\nnewline".to_owned(), false),
+        ("non-ascii-é".to_owned(), false),
+    ]
+    .into_iter()
+    .map(|(install_id, accepted)| {
+        let result = CollectorProcessLauncher::discover(
+            "desktop-test".to_owned(),
+            "test".to_owned(),
+            Some(install_id.clone()),
+            fallback.clone(),
+        );
+        (install_id, accepted, result)
+    })
+    .collect::<Vec<_>>();
 
-    assert!(validate_label(&unusable).is_err());
-    assert!(validate_label("install-desktop-test-4b71").is_ok());
+    match previous_binary {
+        Some(value) => std::env::set_var("PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN", value),
+        None => std::env::remove_var("PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN"),
+    }
+
+    for (install_id, accepted, result) in discovered {
+        let launcher = result.expect("discover real collector");
+        assert_eq!(
+            launcher.install_id.as_deref(),
+            accepted.then_some(install_id.as_str()),
+            "unexpected discovery result for install id {install_id:?}"
+        );
+    }
 
     fallback.close().expect("close fallback");
     std::fs::remove_dir_all(root).expect("cleanup");

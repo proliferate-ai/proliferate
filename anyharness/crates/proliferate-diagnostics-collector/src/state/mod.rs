@@ -290,6 +290,7 @@ mod install_id_tests {
     #[test]
     fn a_bounded_printable_install_id_is_accepted() {
         assert!(CollectorCore::new(&config(Some("2f6b1c8e-install"))).is_ok());
+        assert!(CollectorCore::new(&config(Some(&"x".repeat(128)))).is_ok());
     }
 
     /// The install id is stamped on every exported record, so an empty,
@@ -298,7 +299,13 @@ mod install_id_tests {
     /// it, because a silently rewritten identity is worse than no identity.
     #[test]
     fn an_empty_oversized_or_unprintable_install_id_is_refused() {
-        for rejected in ["", &"x".repeat(129), "has space", "has\nnewline"] {
+        for rejected in [
+            "",
+            &"x".repeat(129),
+            "has space",
+            "has\nnewline",
+            "non-ascii-é",
+        ] {
             assert!(
                 CollectorCore::new(&config(Some(rejected))).is_err(),
                 "install id {rejected:?} must be refused"

@@ -176,7 +176,7 @@ impl CollectorProcessLauncher {
         // collector refuses an out-of-range `--install-id` outright, so
         // passing one through would trade a missing attribute for no
         // diagnostics at all.
-        let install_id = install_id.filter(|value| validate_label(value).is_ok());
+        let install_id = install_id.filter(|value| is_valid_install_id(value));
         Ok(Self {
             binary,
             release,
@@ -527,8 +527,8 @@ mod helpers;
 mod owned;
 
 use helpers::{
-    clear_cloexec_raw, drain_stderr, generate_capability, protected_pair, read_descriptor,
-    resolve_binary, supported_target, validate_binary, validate_label,
+    clear_cloexec_raw, drain_stderr, generate_capability, is_valid_install_id, protected_pair,
+    read_descriptor, resolve_binary, supported_target, validate_binary, validate_label,
 };
 #[cfg(test)]
 use owned::typed_shutdown_command;
