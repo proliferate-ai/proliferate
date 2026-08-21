@@ -335,30 +335,51 @@ jobs:
       # release would silently ship a stale Codex CLI. Only the node/native
       # halves are sha256-pinned. Re-open this if the git sources are moved to
       # sha-pinned tarballs or a committed lockfile.
-      - name: Build bundled agent seed
+      #
+      # Started here, collected in "Finish bundled agent seed" after the
+      # renderer build. The seed and the SDK/renderer builds are the only two
+      # chunks of this job that can overlap: both need nothing but the release
+      # `anyharness` the step above produced, neither reads the other's
+      # outputs (the seed writes `src-tauri/agent-seeds/` plus an npm prefix
+      # under a mktemp runtime home; the JS side writes `node_modules`,
+      # `anyharness/sdk*/dist` and `apps/desktop/dist`), and they load
+      # different resources — the seed is npm/network followed by one
+      # `tar | zstd` pipe, the JS side is node/esbuild. Run serially they were
+      # 97s + 36s + 69s in release-desktop run 32454795006.
+      #
+      # Doing this as a GitHub job fan-out instead was measured and rejected:
+      # the seed cannot start until the Rust build has produced `anyharness`,
+      # so the only overlap on offer is those same ~97s, while two extra macOS
+      # job setups plus a second Rust-capable setup on the joining job cost
+      # ~76s of it before a single artifact byte moves. See the PR for the
+      # per-step arithmetic.
+      - name: Start bundled agent seed
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
         shell: bash
         run: |
-          TMP_SEED_RUNTIME="$(mktemp -d)"
-          node scripts/build-agent-seed.mjs \
-            --target "${{ matrix.target }}" \
-            --anyharness-bin "$PWD/target/${{ matrix.target }}/release/anyharness" \
-            --runtime-home "$TMP_SEED_RUNTIME" \
-            --output-dir "$PWD/apps/desktop/src-tauri/agent-seeds"
+          seed_runtime="$(mktemp -d)"
+          {
+            echo "SEED_RUNTIME_HOME=$seed_runtime"
+            echo "SEED_LOG=$RUNNER_TEMP/agent-seed.log"
+            echo "SEED_STATUS=$RUNNER_TEMP/agent-seed.status"
+          } >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/agent-seed.status"
 
-          test -s "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst"
-          test -s "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.sha256"
-          seed_count=$(find apps/desktop/src-tauri/agent-seeds -maxdepth 1 -type f -name 'agent-seed-*.tar.zst' | wc -l | tr -d ' ')
-          [[ "$seed_count" == "1" ]] || { echo "::error::Expected one target seed archive, found $seed_count"; exit 1; }
-          NODE_BIN="$TMP_SEED_RUNTIME/node/${{ matrix.target }}/bin/node"
-          codesign --verify --verbose "$NODE_BIN"
-          spctl --assess --verbose=4 --type open --context context:primary-signature "$NODE_BIN"
-
-          TMP_SEED_EXTRACT="$(mktemp -d)"
-          zstd -dc "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst" | tar -xf - -C "$TMP_SEED_EXTRACT"
-          EXTRACTED_NODE_BIN="$TMP_SEED_EXTRACT/node/${{ matrix.target }}/bin/node"
-          codesign --verify --verbose "$EXTRACTED_NODE_BIN"
-          spctl --assess --verbose=4 --type open --context context:primary-signature "$EXTRACTED_NODE_BIN"
+          # stdin from /dev/null and both output streams into a file. The
+          # runner reads a step's stdout to EOF, so a background child holding
+          # the inherited pipe open would block the step until the child
+          # exited — which is exactly the overlap this is buying.
+          (
+            seed_exit=0
+            node scripts/build-agent-seed.mjs \
+              --target "${{ matrix.target }}" \
+              --anyharness-bin "$PWD/target/${{ matrix.target }}/release/anyharness" \
+              --runtime-home "$seed_runtime" \
+              --output-dir "$PWD/apps/desktop/src-tauri/agent-seeds" || seed_exit=$?
+            echo "$seed_exit" > "$RUNNER_TEMP/agent-seed.status"
+          ) </dev/null > "$RUNNER_TEMP/agent-seed.log" 2>&1 &
+          disown 2>/dev/null || true
+          echo "Agent seed build started in the background (pid $!)."
 
       - name: Stage diagnostics collector for target
         if: steps.filter.outputs.skip != 'true'
@@ -453,6 +474,50 @@ jobs:
           export VITE_PROLIFERATE_DISABLE_CLOUD_COMPUTE=1
 
           pnpm run build
+
+      # Collects the background seed build started before the SDK/renderer
+      # steps. Everything below the wait is the verification the single
+      # "Build bundled agent seed" step used to run inline, unchanged.
+      - name: Finish bundled agent seed
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        shell: bash
+        run: |
+          # The background subshell writes the status file on success *and* on
+          # failure, so a file that never appears means the child died without
+          # reaching its own tail (or the runner reaped it). That has to fail
+          # loudly: a release with no agent seed must never reach the bundler.
+          deadline=$(( SECONDS + 1500 ))
+          while [[ ! -f "$SEED_STATUS" ]]; do
+            if (( SECONDS > deadline )); then
+              echo "::group::agent seed log (incomplete)"
+              cat "$SEED_LOG" || true
+              echo "::endgroup::"
+              echo "::error::Agent seed build did not finish within 25 minutes."
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "::group::agent seed log"
+          cat "$SEED_LOG"
+          echo "::endgroup::"
+          seed_exit="$(cat "$SEED_STATUS")"
+          [[ "$seed_exit" == "0" ]] || { echo "::error::Agent seed build failed with exit status $seed_exit"; exit 1; }
+
+          TMP_SEED_RUNTIME="$SEED_RUNTIME_HOME"
+          test -s "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst"
+          test -s "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.sha256"
+          seed_count=$(find apps/desktop/src-tauri/agent-seeds -maxdepth 1 -type f -name 'agent-seed-*.tar.zst' | wc -l | tr -d ' ')
+          [[ "$seed_count" == "1" ]] || { echo "::error::Expected one target seed archive, found $seed_count"; exit 1; }
+          NODE_BIN="$TMP_SEED_RUNTIME/node/${{ matrix.target }}/bin/node"
+          codesign --verify --verbose "$NODE_BIN"
+          spctl --assess --verbose=4 --type open --context context:primary-signature "$NODE_BIN"
+
+          TMP_SEED_EXTRACT="$(mktemp -d)"
+          zstd -dc "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst" | tar -xf - -C "$TMP_SEED_EXTRACT"
+          EXTRACTED_NODE_BIN="$TMP_SEED_EXTRACT/node/${{ matrix.target }}/bin/node"
+          codesign --verify --verbose "$EXTRACTED_NODE_BIN"
+          spctl --assess --verbose=4 --type open --context context:primary-signature "$EXTRACTED_NODE_BIN"
+          rm -rf "$TMP_SEED_EXTRACT"
 
       - name: Import Apple Developer Certificate
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
