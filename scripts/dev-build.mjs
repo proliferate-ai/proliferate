@@ -21,7 +21,9 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // Dependency order. `upstream` lists packages whose output this package
-// compiles against, so a change there has to invalidate this one too.
+// compiles against, and `extra` lists repo-relative paths it reads from outside
+// its own directory. Both have to invalidate it, or a stale dist survives a
+// change it should have been rebuilt for.
 const PACKAGES = [
   { dir: "cloud/sdk", filter: "@proliferate/cloud-sdk", upstream: [] },
   { dir: "cloud/sdk-react", filter: "@proliferate/cloud-sdk-react", upstream: ["cloud/sdk"] },
@@ -32,6 +34,9 @@ const PACKAGES = [
     dir: "apps/packages/product-client",
     filter: "@proliferate/product-client",
     upstream: ["cloud/sdk", "cloud/sdk-react", "anyharness/sdk", "anyharness/sdk-react", "apps/packages/design"],
+    // copy-product-client-assets.mjs generates src/generated/agent-registry.json
+    // from this file, which lives outside the package.
+    extra: ["catalogs/agents/registry.json"],
   },
 ];
 
@@ -99,6 +104,11 @@ function main() {
     const hash = createHash("sha256");
     hash.update(hashSources(absDir));
     for (const up of pkg.upstream) hash.update(resolved.get(up) ?? "");
+    for (const extra of pkg.extra ?? []) {
+      const full = path.join(repoRoot, extra);
+      hash.update(extra);
+      hash.update(fs.existsSync(full) ? fs.readFileSync(full) : "");
+    }
     const key = hash.digest("hex");
     resolved.set(pkg.dir, key);
 
