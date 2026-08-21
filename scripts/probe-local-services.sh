@@ -16,6 +16,19 @@
 
 set -u
 
+# The Postgres half additionally requires a client. `make`'s existing-Postgres
+# path does not just open a socket: scripts/dev.mjs `ensureDatabase` shells out
+# to `psql -h <host> -p <port>` when USE_EXISTING_POSTGRES is 1, and without
+# psql on PATH spawnSync fails ENOENT and surfaces as a bare
+# "psql ... failed" with no stdout or stderr to explain it. The repo's own
+# docker-compose publishes its db on the same 5432 by default, so a plain socket
+# probe would flip a working Docker setup onto a psql path that is not there.
+# Report 0 instead: Docker keeps talking to Docker.
+probe_postgres() {
+  command -v psql >/dev/null 2>&1 || { printf '0'; return; }
+  probe "$1" "$2"
+}
+
 probe() {
   local host="$1" port="$2"
   case "$host" in
@@ -32,4 +45,4 @@ probe() {
   fi
 }
 
-printf '%s %s\n' "$(probe "${1:-}" "${2:-}")" "$(probe "${3:-}" "${4:-}")"
+printf '%s %s\n' "$(probe_postgres "${1:-}" "${2:-}")" "$(probe "${3:-}" "${4:-}")"

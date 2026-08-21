@@ -28,8 +28,16 @@ LOCAL_REDIS_PORT ?= 6379
 # Both services are probed in one invocation: this file is parsed once per
 # recursive make, and two separate python3 probes cost about 70ms each parse
 # against 10ms for one bash run.
+# Never probe under CI. A CI job's service topology is a property of its
+# workflow file, so it must not depend on what happens to be listening: several
+# jobs publish postgres on 5432 and redis on 6379 while running `make` steps
+# that leave both variables unset, and those steps must keep resolving the way
+# they did before this block existed. GitHub Actions always sets CI, and any
+# job that genuinely wants the native services already says so explicitly.
+ifndef CI
 ifneq ($(filter undefined,$(origin USE_EXISTING_POSTGRES) $(origin USE_EXISTING_REDIS)),)
 LOCAL_SERVICE_PROBE := $(shell scripts/probe-local-services.sh '$(LOCAL_PGHOST)' '$(LOCAL_PGPORT)' '$(LOCAL_REDIS_HOST)' '$(LOCAL_REDIS_PORT)' 2>/dev/null)
+endif
 endif
 
 ifeq ($(origin USE_EXISTING_POSTGRES), undefined)
@@ -1648,4 +1656,3 @@ catalog-update:
 	cd scripts/agent-catalog && node build-catalog.mjs --require-complete-probe \
 		&& cp catalog.draft.json ../../catalogs/agents/catalog.json
 	node scripts/validate-agent-catalog.mjs
-
