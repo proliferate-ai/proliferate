@@ -151,3 +151,5 @@ Contributing? See the [Contribution Guide](./CONTRIBUTING.md).
 ## License
 
 [AGPL-3.0](./LICENSE)
+
+<!-- Gate timing probe 2026-08-21, safe to close -->
