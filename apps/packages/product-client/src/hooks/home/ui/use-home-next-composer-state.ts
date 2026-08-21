@@ -3,17 +3,22 @@ import { flushSync } from "react-dom";
 import type { PromptAttachmentController } from "#product/hooks/chat/ui/use-chat-prompt-attachments";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
 import { useHomeDraftHandoffStore } from "#product/stores/home/home-draft-handoff-store";
+import {
+  HOME_MODEL_GATE_SEND_BLOCKED_REASON,
+  HOME_MODEL_TRIGGER_SELECTOR,
+  resolveHomeModelGateRefusalAnnouncement,
+  type HomeModelGate,
+} from "#product/lib/domain/home/home-model-gate";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
-  ModelAvailabilityState,
 } from "#product/lib/domain/home/home-next-launch";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import type { ChatComposerKeyboardEvent } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
 
 interface UseHomeNextComposerStateArgs {
   targetDisabledReason: string | null;
-  modelAvailabilityState: ModelAvailabilityState;
+  modelGate: HomeModelGate;
   canLaunchTarget: boolean;
   modelSelection: HomeNextModelSelection | null;
   launchControlValues: Record<string, string>;
@@ -23,7 +28,7 @@ interface UseHomeNextComposerStateArgs {
 
 export function useHomeNextComposerState({
   targetDisabledReason,
-  modelAvailabilityState,
+  modelGate,
   canLaunchTarget,
   modelSelection,
   launchControlValues,
@@ -38,6 +43,18 @@ export function useHomeNextComposerState({
   const restoredDraftText = useHomeDraftHandoffStore((state) => state.draftText);
   const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const { isLaunching, launch } = useHomeNextLaunch();
+  // Counts refusals only so the live region's text can differ between two of
+  // them; the count itself never reaches the region (ruling 6).
+  const [refusalCount, setRefusalCount] = useState(0);
+
+  // A refusal sentence is only true while the gate is still asking for a
+  // selection. Left alone it would sit in the accessibility tree for the rest
+  // of the session, including after a model was chosen and Send worked.
+  useEffect(() => {
+    if (modelGate.kind !== "selection_required") {
+      setRefusalCount(0);
+    }
+  }, [modelGate.kind]);
 
   useEffect(() => {
     if (restoredDraftText !== null) {
@@ -56,10 +73,28 @@ export function useHomeNextComposerState({
   const submitDisabledReason = isEmpty ? null : targetDisabledReason;
   const canSubmit =
     !isEmpty
-    && modelAvailabilityState === "launchable"
+    && modelGate.kind === "launchable"
     && canLaunchTarget
     && !!modelSelection
     && !!launchTarget;
+  /**
+   * The disabled Send's tooltip AND accessible name while a model is unchosen.
+   *
+   * Empty-guarded exactly as `submitDisabledReason` above is: this string
+   * becomes the button's accessible NAME, so on an empty composer — where the
+   * button is disabled because there is nothing to send — it would name the
+   * wrong reason. The component renders whatever reason it is handed; deciding
+   * that the reason applies is this hook's job.
+   *
+   * selection_required carries no visible notice (owner revision r2), so this
+   * reason and the enabled picker pill are the whole of the state's visual
+   * story — a Send that still reads "Send (Cmd+Enter)" would be the only thing
+   * on screen saying nothing is wrong.
+   */
+  const sendBlockedReason = !isEmpty && modelGate.kind === "selection_required"
+    ? HOME_MODEL_GATE_SEND_BLOCKED_REASON
+    : null;
+  const refusalAnnouncement = resolveHomeModelGateRefusalAnnouncement(refusalCount);
 
   const setDraft = useCallback((
     value: string,
@@ -120,6 +155,41 @@ export function useHomeNextComposerState({
     modelSelection,
   ]);
 
+  /**
+   * Enter with a draft and no model (ruling 3).
+   *
+   * The draft is untouched — not cleared, not restored, simply left alone —
+   * focus moves to the picker trigger, and the reason is re-committed to the
+   * status region. The picker is NOT opened: auto-opening a menu under a
+   * keystroke the user did not aim at it steals the caret, and the focused
+   * trigger is already one keypress from the same menu.
+   *
+   * Scoped to `selection_required`, and to that gate ONLY, for two reasons
+   * that both have to hold:
+   *
+   *  - "Choose a model before sending" is only true when there is a model to
+   *    choose. Under `agent_setup_required` there is not, and the screen is
+   *    already showing the sentence that IS true.
+   *  - It is the only gate whose trigger is enabled. Every other blocked
+   *    reason renders the trigger as a native `<button disabled>`, which is
+   *    not focusable, so `focus()` would be a silent no-op aimed at a control
+   *    the user cannot use.
+   *
+   * An empty composer is not a refusal at all: Enter on an empty Home composer
+   * did nothing before this slice and must keep doing nothing, rather than
+   * throwing the caret out of the editor the page just autofocused.
+   */
+  const refuseSubmit = useCallback(() => {
+    if (isEmpty || canSubmit || modelGate.kind !== "selection_required") {
+      return;
+    }
+    setRefusalCount((count) => count + 1);
+    const trigger = typeof document === "undefined"
+      ? null
+      : document.querySelector<HTMLElement>(HOME_MODEL_TRIGGER_SELECTOR);
+    trigger?.focus();
+  }, [canSubmit, isEmpty, modelGate.kind]);
+
   const cancel = useCallback(() => {
     if (!isLaunching) {
       setDraftState({ value: "" });
@@ -144,6 +214,9 @@ export function useHomeNextComposerState({
     editorSnapshot: draftState.snapshot,
     setDraft,
     submitDisabledReason,
+    sendBlockedReason,
+    refusalAnnouncement,
+    refuseSubmit,
     canSubmit,
     isEmpty,
     isLaunching,

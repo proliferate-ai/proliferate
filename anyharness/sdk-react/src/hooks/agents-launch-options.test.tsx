@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { HarnessLaunchOptionsResponse } from "@anyharness/sdk";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -140,6 +140,27 @@ describe("launch-option convergence", () => {
       resolveAgentLaunchOptionsRefetchInterval({ data: response({ state: "refreshing" }) }),
     ).toBe(AGENT_LAUNCH_OPTIONS_PROBE_INTERVAL_MS);
     expect(resolveAgentLaunchOptionsRefetchInterval({})).toBe(false);
+  });
+
+  it("probes the local runtime even when the browser reports offline", async () => {
+    // The probe targets localhost. Under react-query's default "online" mode
+    // an offline browser parks the mutation WITHOUT invoking `mutationFn`, so
+    // `mutateAsync` never settles and every caller awaiting it hangs — on a
+    // machine where the refresh would have worked.
+    mocks.getLaunchOptions.mockResolvedValue(response({ revision: 1, state: "observed" }));
+    mocks.refreshLaunchOptions.mockResolvedValue(response({ revision: 2, state: "observed" }));
+    onlineManager.setOnline(false);
+    try {
+      const { result } = renderHook(() => useRefreshHarnessLaunchOptionsMutation(), {
+        wrapper: wrapper(),
+      });
+      await act(async () => {
+        await result.current.mutateAsync("claude");
+      });
+      expect(mocks.refreshLaunchOptions).toHaveBeenCalledWith("claude");
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 
   it("rereads the harness after a failed refresh", async () => {

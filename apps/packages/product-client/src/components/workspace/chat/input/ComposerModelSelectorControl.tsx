@@ -5,7 +5,10 @@ import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 import { getSettingsSectionForHarnessKind } from "#product/lib/domain/settings/navigation-presentation";
 import { splitProviderDisplayName } from "#product/lib/domain/chat/models/model-display-name-parts";
-import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
+import {
+  resolveModelSelectorEnabled,
+  type ModelSelectorProps,
+} from "#product/lib/domain/chat/models/model-selector-types";
 import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { PopoverButton } from "#product/primitives/PopoverButton";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
@@ -39,9 +42,17 @@ export function ComposerModelSelectorControl({
     hasAgents,
     isLoading,
     onSelect,
+    availability = "ready",
     unsupportedSelectionMessage = null,
   } = modelSelectorProps;
-  const selectorEnabled = !disabled && connectionState === "healthy" && !isLoading && hasAgents;
+  // Shared with the coexistence tests, so neither can drift from the other.
+  const selectorEnabled = resolveModelSelectorEnabled({
+    disabled,
+    connectionState,
+    isLoading,
+    hasAgents,
+    availability,
+  });
   // The picker opens itself after a refusal so the marked rows are in front of
   // the user rather than one click away. Nonce-driven: two refusals in a row
   // each reopen it, and nothing has to reset a flag.
@@ -147,6 +158,16 @@ export function ComposerModelSelectorControl({
             aria-describedby={unsupportedSelectionMessage
               ? MODEL_UNSUPPORTED_MESSAGE_ID
               : undefined}
+            onKeyDown={(event) => {
+              // Escape from the closed trigger hands the caret back to the
+              // editor: a refused Enter parks focus here, and Escape is how
+              // the user says "not now" without losing their place.
+              if (event.key !== "Escape" || pickerOpen || !keyboardFocusRestoreEnabled) {
+                return;
+              }
+              event.preventDefault();
+              focusChatInput();
+            }}
             className="max-w-[min(15rem,100%)]"
           />
         )}
@@ -160,6 +181,7 @@ export function ComposerModelSelectorControl({
         {(close) => (
           <ComposerModelPickerPopover
             groups={groups}
+            availability={availability}
             currentModel={currentModel}
             onKeyboardClose={handleKeyboardClose}
             onSelect={(selection) => {
@@ -193,6 +215,7 @@ const MODEL_UNSUPPORTED_MESSAGE_ID = "composer-model-unsupported";
 
 function resolveTriggerLabel(modelSelectorProps: ModelSelectorProps): string {
   const {
+    availability = "ready",
     connectionState,
     currentModel,
     hasAgents,
@@ -202,6 +225,8 @@ function resolveTriggerLabel(modelSelectorProps: ModelSelectorProps): string {
   if (connectionState === "connecting") {
     return "Connecting...";
   }
+  // "Loading agents..." belongs to a genuine catalog HTTP read and nothing
+  // else. An install in flight is not the catalog loading.
   if (isLoading && !currentModel) {
     return "Loading agents...";
   }
@@ -209,7 +234,19 @@ function resolveTriggerLabel(modelSelectorProps: ModelSelectorProps): string {
     // Show only the leaf name on the pill — the provider icon already carries harness identity.
     return splitProviderDisplayName(currentModel.displayName).leaf;
   }
-  if (!hasAgents) {
+  // Before the first observation the disabled trigger reads "Select model":
+  // "No agents" would be false (they are installing) and "Loading agents..."
+  // would misname an install as a catalog fetch.
+  if (availability === "observation_pending") {
+    return CHAT_MODEL_SELECTOR_LABELS.empty;
+  }
+  // "No agents" is a claim about the CATALOG, and it is only this control's to
+  // make when the catalog is the reason there is nothing to show. Under any
+  // non-ready availability the gate already knows the real reason — a cloud
+  // sandbox that reported zero models, or one that has not reported at all —
+  // and the pill saying "No agents" beside a notice saying otherwise is two
+  // contradictory stories about the same sandbox.
+  if (!hasAgents && availability === "ready") {
     return "No agents";
   }
   return CHAT_MODEL_SELECTOR_LABELS.empty;

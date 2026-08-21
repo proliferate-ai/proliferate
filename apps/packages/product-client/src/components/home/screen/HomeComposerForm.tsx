@@ -19,10 +19,10 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 import { recordTypingKeystrokeLatency } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import type { HomeModelGate } from "#product/lib/domain/home/home-model-gate";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
-  ModelAvailabilityState,
 } from "#product/lib/domain/home/home-next-launch";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
@@ -57,7 +57,7 @@ const HOME_TYPING_SURFACES = [
 interface HomeComposerFormProps {
   // --- launch readiness (inputs to the composer state hook) ---
   targetDisabledReason: string | null;
-  modelAvailabilityState: ModelAvailabilityState;
+  modelGate: HomeModelGate;
   canLaunchTarget: boolean;
   modelSelection: HomeNextModelSelection | null;
   launchControlValues: Record<string, string>;
@@ -81,7 +81,7 @@ interface HomeComposerFormProps {
 
 export function HomeComposerForm({
   targetDisabledReason,
-  modelAvailabilityState,
+  modelGate,
   canLaunchTarget,
   modelSelection,
   launchControlValues,
@@ -95,7 +95,7 @@ export function HomeComposerForm({
 }: HomeComposerFormProps) {
   const composer = useHomeNextComposerState({
     targetDisabledReason,
-    modelAvailabilityState,
+    modelGate,
     canLaunchTarget,
     modelSelection,
     launchControlValues,
@@ -212,6 +212,7 @@ export function HomeComposerForm({
                   onKeyDown={composer.handleKeyDown}
                   canSubmit={composer.canSubmit}
                   onSubmit={() => { void composer.submit(); }}
+                  onSubmitRefused={composer.refuseSubmit}
                   placeholder={CHAT_COMPOSER_LABELS.placeholder}
                   availableCommands={availableCommands}
                   overlayHostElement={composerOverlayHost}
@@ -230,6 +231,7 @@ export function HomeComposerForm({
                     isRunning={false}
                     isEmpty={composer.isEmpty}
                     isDisabled={!composer.canSubmit}
+                    disabledReason={composer.sendBlockedReason}
                     onSubmit={() => { void composer.submit(); }}
                     onCancel={composer.cancel}
                   />
@@ -239,6 +241,19 @@ export function HomeComposerForm({
           </ChatComposerSurface>
         </div>
       </DebugProfiler>
+
+      {/* selection_required has no visible notice (owner revision r2), so this
+          region is the ONLY thing that reports a refused Enter. It is mounted
+          unconditionally: a live region created at the same moment its text
+          appears is not reliably announced. */}
+      <div
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        data-home-model-gate-announcement
+      >
+        {composer.refusalAnnouncement}
+      </div>
 
       {modelAvailabilityNoticeSlot}
 
