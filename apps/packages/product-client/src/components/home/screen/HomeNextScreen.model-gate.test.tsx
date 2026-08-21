@@ -47,6 +47,7 @@ const screenMocks = vi.hoisted(() => {
     retryModelObservation: () => {},
     retryRejected: false,
     retryPending: false,
+    unsupportedHarnessKind: null,
     canLaunchTarget: true,
     effectiveModelSelection: { kind: "codex", modelId: "gpt-5.4" },
     launchTarget: { kind: "cowork" },
@@ -256,6 +257,7 @@ function resetHomeNext() {
   screenMocks.homeNext.retryModelObservation = screenMocks.retryModelObservation;
   screenMocks.homeNext.retryRejected = false;
   screenMocks.homeNext.retryPending = false;
+  screenMocks.homeNext.unsupportedHarnessKind = null;
   screenMocks.homeNext.canLaunchTarget = true;
   screenMocks.homeNext.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
   screenMocks.homeNext.launchTarget = { kind: "cowork" };
@@ -309,7 +311,8 @@ describe("HomeNextScreen model gate", () => {
     render(<HomeNextScreen />);
     expect(screen.getByText("Finish agent setup to start a chat.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-settings");
+    expect(screenMocks.handleHomeAction)
+      .toHaveBeenCalledWith("agent-settings", { harnessKind: null });
     // A string the notice slot CAN emit, so the exclusivity has teeth: an
     // earlier `/configured/i` here matched nothing Home is able to render.
     expect(screen.queryByText(/Models haven't been detected/i)).toBeNull();
@@ -506,13 +509,30 @@ describe("HomeNextScreen model gate", () => {
     // shows WHICH agents are unsupported — never repair vocabulary, and never
     // a probe.
     screenMocks.homeNext.modelGate = { kind: "blocked", reason: "agents_unsupported" };
+    screenMocks.homeNext.unsupportedHarnessKind = "cursor";
     render(<HomeNextScreen />);
     expect(screen.getByText("No agents are supported on this machine.")).toBeTruthy();
     for (const name of ["Refresh", "Retry", "Check again"]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
     fireEvent.click(screen.getByRole("button", { name: "See agents" }));
-    expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-settings");
+    // Routed to the harness that IS unsupported. Sending every caller to the
+    // Claude pane made the ruling false whenever Claude was not the
+    // unsupported one: that pane just says it has not reported.
+    expect(screenMocks.handleHomeAction)
+      .toHaveBeenCalledWith("agent-settings", { harnessKind: "cursor" });
+    expect(screenMocks.retryModelObservation).not.toHaveBeenCalled();
+  });
+
+  it("keeps the notice action inert while its own probe is still running", () => {
+    // Pressing again mid-flight starts an overlapping batch, and two batches
+    // settling out of order report the wrong outcome for the wrong press.
+    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "observation_idle" };
+    screenMocks.homeNext.retryPending = true;
+    render(<HomeNextScreen />);
+    const action = screen.getByRole("button", { name: "Refresh" });
+    expect(action.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(action);
     expect(screenMocks.retryModelObservation).not.toHaveBeenCalled();
   });
 });

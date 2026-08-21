@@ -151,6 +151,33 @@ async function resolveDeferredRead(
   });
 }
 
+describe("useHomeScreen agent-settings routing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.readyAgents = [{ kind: "claude" }, { kind: "codex" }];
+    mocks.agentsLoading = false;
+    mocks.isReconciling = false;
+    mocks.storageContext = null;
+  });
+  afterEach(() => cleanup());
+
+  it("opens the pane of the harness it was handed, not always Claude", () => {
+    // The terminal "no agents are supported" notice justifies itself by
+    // showing WHICH agents are unsupported. Sending every caller to the
+    // Claude pane makes that false whenever Claude is not the one: that pane
+    // only reports it has not been observed.
+    installStorage({ getItem: async () => null });
+    const { result } = renderHook(() => useHomeScreen());
+    act(() => result.current.handleHomeAction("agent-settings", { harnessKind: "cursor" }));
+    expect(mocks.navigate).toHaveBeenCalledWith("/settings?section=agent-cursor");
+
+    // No harness named, and an unmappable one, both keep the old default.
+    act(() => result.current.handleHomeAction("agent-settings"));
+    act(() => result.current.handleHomeAction("agent-settings", { harnessKind: "nope" }));
+    expect(mocks.navigate).toHaveBeenLastCalledWith("/settings?section=agent-claude");
+  });
+});
+
 describe("useHomeScreen model-probe dismissal hydration", () => {
   beforeEach(() => {
     vi.clearAllMocks();

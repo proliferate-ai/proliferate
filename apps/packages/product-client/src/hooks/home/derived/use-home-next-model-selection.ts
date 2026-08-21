@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type {
   AgentAuthProbePhase,
@@ -217,17 +217,12 @@ export function useHomeNextModelSelection({
    * attributed from `mutateAsync`'s promise rather than per-call callbacks.
    */
   const [refreshAttempt, setRefreshAttempt] = useState(IDLE_REFRESH_ATTEMPT);
-  // A refusal belongs to the target it was refused on. Switching targets must
-  // not carry "Couldn't refresh your models." to a target nothing was ever
-  // asked of — and on cloud nothing can clear it, since cloud never probes.
-  const launchTargetKind = launchTarget?.kind ?? null;
-  // Bumped by both the reset and each new batch, so a batch that settles after
-  // either one cannot write its stale tally over the current state.
-  const refreshRunId = useRef(0);
-  useEffect(() => {
-    refreshRunId.current += 1;
-    setRefreshAttempt(IDLE_REFRESH_ATTEMPT);
-  }, [launchTargetKind]);
+  // A refusal belongs to the target it was refused on, and the `!isCloudTarget`
+  // read mask below is what keeps it there. Resetting the counters on target
+  // kind as well was over-broad: the probe is keyed on `harnessKind` only and
+  // is machine-global, so a local->cloud->local flip discarded a tally that
+  // was still legitimately owed, leaving a refused refresh with NO receipt and
+  // the settled sentence rendering over probes that were still running.
   const refreshLaunchOptions = useRefreshHarnessLaunchOptionsMutation();
   const refetchTargetLaunchOptions = targetLaunchOptions.refetch;
   const refetchLaunchOptionsKind = useRefetchAgentLaunchOptionsKind();
@@ -289,8 +284,6 @@ export function useHomeNextModelSelection({
       repaired = true;
     }
     if (probeKinds.length > 0) {
-      refreshRunId.current += 1;
-      const runId = refreshRunId.current;
       setRefreshAttempt({ attempted: probeKinds.length, settled: 0, refused: 0 });
       // `allSettled` never rejects, so a refused probe is a tally entry rather
       // than an unhandled rejection. Probes are serialized runtime-side, so
@@ -298,9 +291,6 @@ export function useHomeNextModelSelection({
       void Promise.allSettled(
         probeKinds.map((harnessKind) => refreshMutateAsync(harnessKind)),
       ).then((results) => {
-        if (refreshRunId.current !== runId) {
-          return;
-        }
         setRefreshAttempt({
           attempted: results.length,
           settled: results.length,
@@ -357,6 +347,10 @@ export function useHomeNextModelSelection({
     /** A probe this notice started is still running. Serialized, up to 45s per
      * kind, and the launch-options query does not poll a settled row — so
      * without this the settled sentence is rendered over live work. */
+    /** The harness the terminal `agents_unsupported` notice should open. The
+     * gate knows the readiness list, so navigation lands on an agent that IS
+     * unsupported instead of a hardcoded pane that may report nothing. */
+    unsupportedHarnessKind: agents.find((agent) => agent.readiness === "unsupported")?.kind ?? null,
     retryPending: !isCloudTarget && isRefreshInFlight(refreshAttempt),
     /** EVERY kind attempted was refused. A rejection writes no durable state,
      * so nothing else on screen would ever change. Scoped to local: cloud

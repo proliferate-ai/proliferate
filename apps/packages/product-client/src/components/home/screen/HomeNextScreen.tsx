@@ -144,7 +144,7 @@ export function HomeNextScreen() {
   });
   const runModelGateNoticeAction = () => {
     if (modelAvailabilityNotice?.action === "agent_settings") {
-      handleHomeAction("agent-settings");
+      handleHomeAction("agent-settings", { harnessKind: homeNext.unsupportedHarnessKind });
       return;
     }
     homeNext.retryModelObservation();
@@ -327,9 +327,13 @@ export function HomeNextScreen() {
                       action for it. The single terminal state names none —
                       a button that cannot change anything is the dead end
                       this gate removes, not a cure. */}
+                  {/* Disabled while a probe is running: a second press would
+                      start an overlapping batch whose out-of-order settle
+                      could report the wrong outcome for the wrong press. */}
                   <Button
                     variant="ghost"
                     size="sm"
+                    disabled={homeNext.retryPending}
                     onClick={runModelGateNoticeAction}
                     className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
                   >

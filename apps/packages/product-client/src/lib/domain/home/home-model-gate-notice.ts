@@ -40,11 +40,14 @@ export const HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE = "Couldn't refresh your mo
 export const HOME_MODEL_GATE_REFRESHING_NOTICE = "Refreshing your models…";
 
 /**
- * The one notice with no action, because there is genuinely nothing to press.
+ * The one notice whose action is navigation rather than a cure.
  *
  * Every agent the runtime knows about is unsupported here, so no probe can
  * ever produce a model and a Refresh would re-read an identical list forever.
- * A terminal fact stated plainly beats a button that quietly does nothing.
+ * Stating the fact and leaving nothing to press was the first shape and was
+ * wrong for a different reason: with the picker unavailable it left the
+ * screen with no affordance at all. So the action goes where the user can see
+ * WHICH agents are unsupported and why — it claims to fix nothing.
  */
 export const HOME_MODEL_GATE_AGENTS_UNSUPPORTED_NOTICE =
   "No agents are supported on this machine.";
