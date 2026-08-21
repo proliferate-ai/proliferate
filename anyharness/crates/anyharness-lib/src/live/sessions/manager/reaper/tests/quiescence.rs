@@ -223,10 +223,23 @@ async fn an_actor_that_refuses_the_conditional_unload_keeps_its_session() {
     register_busy_refusing_session(&manager, "session-1").await;
 
     let mut reaper = IdleSessionReaper::new(manager.clone(), THRESHOLD);
+    let start = Instant::now();
+    reaper.sweep(start).await;
+    let outcome = reaper.sweep(start + THRESHOLD).await;
+
     assert_eq!(
-        sweep_twice(&mut reaper).await,
+        outcome.reaped,
         Vec::<String>::new(),
         "the actor's serial verdict overrides the sweep's stale observation"
+    );
+    // Discriminating: a manager that ignored the refusal would fall through to
+    // the retirement wait, time out, and record this as a FAILED reap instead.
+    // Both outcomes leave the session live, so only the retained list tells
+    // them apart.
+    assert_eq!(
+        outcome.retained,
+        vec!["session-1".to_string()],
+        "a refusal is an answer, not a failure"
     );
     assert!(is_live(&manager, "session-1").await);
 }

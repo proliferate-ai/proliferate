@@ -161,6 +161,11 @@ struct IdleObservation {
 pub(crate) struct IdleSweepOutcome {
     /// Sessions whose actors were retired on this sweep.
     pub(crate) reaped: Vec<String>,
+    /// Sessions whose actor REFUSED the conditional unload on this sweep,
+    /// because something arrived between the sweep's observation and the
+    /// command reaching the actor's loop. Distinct from a failed reap: the
+    /// actor answered, and its answer was no.
+    pub(crate) retained: Vec<String>,
     /// Live sessions carrying an unanswered permission or input request on
     /// this sweep. It is a per-sweep GAUGE of the population that can never be
     /// reaped, not a count of sessions that were otherwise ready: the
@@ -264,6 +269,7 @@ impl IdleSessionReaper {
                         result_class = "reap_retained",
                         "idle session reap refused by the actor; the session is no longer idle"
                     );
+                    outcome.retained.push(session_id);
                 }
                 Ok(None) => {
                     self.observations.remove(&session_id);
