@@ -65,3 +65,55 @@ pub(crate) fn run_script(
          which this platform does not provide",
     ))
 }
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::{run_script, ScriptShell};
+
+    /// Negative control for the "unix behaviour is unchanged" claim: these are
+    /// the exact programs and flags the three call sites hardcoded before this
+    /// module existed (`sh -c` twice, `bash -lc` once).
+    #[test]
+    fn programs_and_flags_are_the_original_literals() {
+        assert_eq!(ScriptShell::Sh.program(), "sh");
+        assert_eq!(ScriptShell::Sh.flag(), "-c");
+        assert_eq!(ScriptShell::BashLogin.program(), "bash");
+        assert_eq!(ScriptShell::BashLogin.flag(), "-lc");
+    }
+
+    #[test]
+    fn the_scripts_exit_status_is_returned_verbatim() {
+        let status = run_script(ScriptShell::Sh, "exit 3", None).expect("spawn sh");
+
+        assert_eq!(status.code(), Some(3));
+    }
+
+    #[test]
+    fn a_requested_working_directory_is_applied() {
+        let dir = std::env::temp_dir().join(format!(
+            "worker-posix-shell-cwd-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        std::fs::write(dir.join("marker"), b"").expect("write marker");
+
+        let status = run_script(ScriptShell::Sh, "test -f marker", Some(&dir)).expect("spawn sh");
+
+        assert!(status.success(), "the script ran outside the requested cwd");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn without_a_working_directory_the_script_inherits_the_process_cwd() {
+        let expected = std::env::current_dir().expect("process cwd");
+        let script = format!(
+            "test \"$(pwd -P)\" = \"$(cd '{}' && pwd -P)\"",
+            expected.display()
+        );
+
+        let status = run_script(ScriptShell::Sh, &script, None).expect("spawn sh");
+
+        assert!(status.success());
+    }
+}

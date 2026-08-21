@@ -1,107 +1,104 @@
-//! The one place that answers "which shell does this host use, and how is it
-//! handed a command string?".
+//! The one place that decides how a user-authored command string reaches a
+//! shell.
 //!
-//! Everything that used to hardcode `/bin/sh` asks here instead. The unix
-//! answers are exactly the literals the call sites used before, so unix
-//! behaviour is unchanged; the windows answers are the equivalents that
-//! actually exist there. Written as `cfg(unix)` / `cfg(not(unix))` function
-//! pairs to match how the rest of this crate handles platform differences
-//! (see `process_kill`, `integrations::agent_cli::executable::make_executable`).
+//! Scope is deliberately narrow: this covers the *piped* command runner in
+//! `live::terminals::command_runs::setup_process`, which hands a command
+//! string to a shell, captures stdout/stderr and waits for exit under a
+//! deadline. It does NOT cover the PTY command-run path, and must not be
+//! wired into it. That path writes a POSIX sentinel wrapper into the terminal
+//! (`. <script>; anyharness_code=$?; printf ...` in
+//! `command_runs::pty::build_pty_command_wrapper`) and waits for the sentinel
+//! to come back, so an interpreter that cannot speak POSIX would leave a run
+//! that never completes. That path already refuses such shells up front:
+//! `command_runs::pty::run_terminal_command` bails with
+//! `unsupported_terminal_shell` whenever `ShellKind::is_posix()` is false, and
+//! `detect_shell_kind` classifies anything that is not bash/zsh/sh as
+//! `ShellKind::Other`. Terminal shell detection is therefore left resolving
+//! POSIX paths only, so the failure stays at PTY spawn rather than becoming a
+//! terminal that opens and then rejects every command.
+//!
+//! Written as a `cfg(unix)` / `cfg(not(unix))` function pair to match how the
+//! rest of this crate handles platform differences (see `process_kill`,
+//! `integrations::agent_cli::executable::make_executable`,
+//! `integrations::mcp::capability_token::write_secret_file`).
 
-use std::ffi::OsString;
-
-/// Program plus the single flag that makes it read the *next* argument as a
-/// whole command string to interpret.
+/// A `tokio` command that will run `command` through the host's shell.
 ///
-/// Used for command strings that are genuinely user-supplied and genuinely
-/// want shell semantics (pipes, globs, `&&`, environment expansion). A fixed
-/// program with fixed arguments should be spawned directly instead of going
-/// through here.
-#[derive(Debug, Clone)]
-pub struct CommandStringShell {
-    pub program: OsString,
-    pub command_flag: &'static str,
-}
-
-/// Unix: `/bin/sh -lc <command>`, byte-for-byte what the setup-command runner
-/// spawned before this module existed.
+/// The caller still owns cwd, stdio, environment and process-group setup; this
+/// only fixes the interpreter, the flag, and how the command string is quoted.
+///
+/// Unix: `/bin/sh -lc <command>`, byte-for-byte the invocation the setup
+/// runner built before this module existed.
 #[cfg(unix)]
-pub fn command_string_shell() -> CommandStringShell {
-    CommandStringShell {
-        program: OsString::from("/bin/sh"),
-        command_flag: "-lc",
-    }
+pub fn command_string_shell(command: &str) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new("/bin/sh");
+    cmd.arg("-lc").arg(command);
+    cmd
 }
 
 /// Windows: the interpreter named by `ComSpec` (`cmd.exe` when unset) with
-/// `/C`, which is the closest equivalent of `sh -c` that is guaranteed to be
-/// present. There is no login-shell notion, so `-lc` collapses to `/C`.
-#[cfg(not(unix))]
-pub fn command_string_shell() -> CommandStringShell {
-    CommandStringShell {
-        program: std::env::var_os("ComSpec").unwrap_or_else(|| OsString::from("cmd.exe")),
-        command_flag: "/C",
-    }
-}
-
-/// Absolute interpreter paths probed, in order, when a managed run needs a
-/// shell and the caller did not name one. Unix keeps the original list and
-/// order; windows has no such fixed paths, so the probe is empty and the
-/// caller falls through to [`last_resort_shell`].
-#[cfg(unix)]
-pub fn well_known_shell_paths() -> &'static [&'static str] {
-    &[
-        "/bin/bash",
-        "/usr/bin/bash",
-        "/bin/zsh",
-        "/usr/bin/zsh",
-        "/bin/sh",
-        "/usr/bin/sh",
-    ]
-}
-
-#[cfg(not(unix))]
-pub fn well_known_shell_paths() -> &'static [&'static str] {
-    &[]
-}
-
-/// Interpreter paths tried after `$SHELL` when detecting the host's default
-/// interactive shell. Unix keeps the original list and order.
-#[cfg(unix)]
-pub fn default_shell_fallbacks() -> &'static [&'static str] {
-    &["/bin/bash", "/usr/bin/bash", "/bin/sh", "/usr/bin/sh"]
-}
-
-#[cfg(not(unix))]
-pub fn default_shell_fallbacks() -> &'static [&'static str] {
-    &[]
-}
-
-/// What to spawn when nothing else resolved. Unix returns `/bin/sh`, the same
-/// literal the terminal driver returned before. Windows returns `ComSpec`,
-/// which is the only shell guaranteed to exist there.
-#[cfg(unix)]
-pub fn last_resort_shell() -> String {
-    "/bin/sh".to_string()
-}
-
-#[cfg(not(unix))]
-pub fn last_resort_shell() -> String {
-    std::env::var_os("ComSpec")
-        .map(|value| value.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "cmd.exe".to_string())
-}
-
-/// Home directory of the current user, honouring `USERPROFILE` on windows
-/// where `HOME` is usually absent.
+/// `/C`, the closest guaranteed-present equivalent of `sh -c`. There is no
+/// login-shell notion, so `-lc` collapses to `/C`.
 ///
-/// `HOME` is consulted first and returned verbatim, so every unix host that
-/// sets it resolves exactly as before, empty value included. `USERPROFILE` is
-/// only reached when `HOME` is absent entirely, which is the case this exists
-/// to fix.
-pub fn home_dir_from_env() -> Option<std::path::PathBuf> {
-    if let Some(home) = std::env::var_os("HOME") {
-        return Some(std::path::PathBuf::from(home));
+/// The command string goes through `raw_arg`, not `arg`. `arg` applies the
+/// MSVCRT quoting rules on windows, which wrap anything containing a space in
+/// quotes; `cmd.exe` does not parse its argument that way, so a perfectly
+/// ordinary `npm run build --if-present` would arrive mangled. `raw_arg`
+/// passes the string through untouched, which is what `/C` expects.
+#[cfg(not(unix))]
+pub fn command_string_shell(command: &str) -> tokio::process::Command {
+    let program =
+        std::env::var_os("ComSpec").unwrap_or_else(|| std::ffi::OsString::from("cmd.exe"));
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.arg("/C");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.as_std_mut().raw_arg(command);
     }
-    std::env::var_os("USERPROFILE").map(std::path::PathBuf::from)
+    #[cfg(not(windows))]
+    cmd.arg(command);
+    cmd
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::ffi::OsStr;
+
+    /// Negative control for the "unix behaviour is unchanged" claim: these are
+    /// the exact program and flag the setup runner hardcoded before this
+    /// module existed. Changing either should fail here.
+    #[test]
+    fn unix_invocation_is_exactly_bin_sh_dash_lc() {
+        let command = super::command_string_shell("printf ok");
+        let std_command = command.as_std();
+
+        assert_eq!(std_command.get_program(), OsStr::new("/bin/sh"));
+        assert_eq!(
+            std_command.get_args().collect::<Vec<_>>(),
+            vec![OsStr::new("-lc"), OsStr::new("printf ok")]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_command_string_is_interpreted_by_a_shell_and_its_status_is_returned() {
+        let status = super::command_string_shell("exit 7")
+            .status()
+            .await
+            .expect("spawn the host shell");
+
+        assert_eq!(status.code(), Some(7));
+    }
+
+    #[tokio::test]
+    async fn shell_syntax_in_the_command_string_is_honoured() {
+        // Proves a shell really is interpreting the string rather than the
+        // string being spawned as a program name with arguments.
+        let status = super::command_string_shell("false || true")
+            .status()
+            .await
+            .expect("spawn the host shell");
+
+        assert!(status.success());
+    }
 }

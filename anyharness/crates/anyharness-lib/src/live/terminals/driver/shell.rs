@@ -56,12 +56,15 @@ pub(super) fn detect_shell_kind(shell: &str) -> ShellKind {
     }
 }
 
-/// The shell a managed run (setup / run terminals) is spawned under. Named
-/// for the POSIX shells it prefers; on hosts without them the probe list is
-/// empty and this falls through to `detect_default_shell`, which resolves the
-/// host's own interpreter.
 pub(in crate::live::terminals) fn detect_posix_shell() -> String {
-    for &candidate in crate::host_shell::well_known_shell_paths() {
+    for candidate in [
+        "/bin/bash",
+        "/usr/bin/bash",
+        "/bin/zsh",
+        "/usr/bin/zsh",
+        "/bin/sh",
+        "/usr/bin/sh",
+    ] {
         if is_executable_command(candidate, std::env::var_os("PATH").as_deref()) {
             return candidate.to_string();
         }
@@ -70,8 +73,8 @@ pub(in crate::live::terminals) fn detect_posix_shell() -> String {
 }
 
 fn ensure_bash_prompt_rcfile() -> Option<String> {
-    let home = crate::host_shell::home_dir_from_env()?;
-    let rcfile = home
+    let home = std::env::var_os("HOME")?;
+    let rcfile = Path::new(&home)
         .join(".proliferate")
         .join("anyharness")
         .join("terminal")
@@ -114,7 +117,7 @@ fn detect_default_shell_with_env(shell_env: Option<&str>, path_env: Option<&OsSt
         candidates.push(shell);
     }
 
-    for &fallback in crate::host_shell::default_shell_fallbacks() {
+    for fallback in ["/bin/bash", "/usr/bin/bash", "/bin/sh", "/usr/bin/sh"] {
         if !candidates.contains(&fallback) {
             candidates.push(fallback);
         }
@@ -126,7 +129,7 @@ fn detect_default_shell_with_env(shell_env: Option<&str>, path_env: Option<&OsSt
         }
     }
 
-    crate::host_shell::last_resort_shell()
+    "/bin/sh".to_string()
 }
 
 fn is_executable_command(command: &str, path_env: Option<&OsStr>) -> bool {

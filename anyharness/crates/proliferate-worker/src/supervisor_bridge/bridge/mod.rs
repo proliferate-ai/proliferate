@@ -397,6 +397,15 @@ fn detached_supervisor_launch_script(
 /// Escape a path for a `pgrep -f` pattern so the pgrep shell never matches its
 /// own command line — identical to the server bootstrap's
 /// `_pgrep_pattern_for_path` and `anyharness_update`'s escaper.
+///
+/// Still load-bearing for the two callers that build shell scripts
+/// (`detached_supervisor_launch_script` here and `stop_runtime_script` in
+/// `anyharness_update`): there the pattern is interpolated into a script whose
+/// own command line contains it, so an unescaped pattern would match the shell
+/// running the search. It is vestigial but harmless for `supervisor_live`,
+/// which now spawns `pgrep` directly with no shell in between and therefore
+/// has no such process to exclude. Kept uniform on purpose so all three
+/// callers pass byte-identical patterns.
 fn pgrep_pattern_for_path(path: &str) -> String {
     if let Some(rest) = path.strip_prefix('/') {
         format!("[/]{rest}")
