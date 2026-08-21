@@ -116,6 +116,28 @@ export const HARNESS_PANE_COPY = {
   allModelsCloudNoWorkspaceTitle: "No cloud workspace yet",
   allModelsCloudNoWorkspaceSuffix: (displayName: string) =>
     `${displayName} models are listed once a cloud workspace exists.`,
+  // E-R22 — `pollUntilHealthy` gave up. This never cures itself, so the line
+  // carries the one action that does. Restarting the app is not a control
+  // this section renders, so E-R5 (never name a button that isn't here) is
+  // satisfied while the arm still ends in something the user can do.
+  allModelsRuntimeFailedTitle: "The local runtime didn't start",
+  allModelsRuntimeFailedSuffix: "Restart Proliferate to try again.",
+  // E-R23 — query-core parked the request because the browser is offline.
+  // Nothing is in flight and nothing failed; the network returning resumes it.
+  allModelsOfflineTitle: "You're offline",
+  allModelsOfflineSuffix: "Models load when the connection is back.",
+  // E-R24 — a structured 404 from the cloud read: the target exists and the
+  // server answered, it just has nothing ingested yet. The ordinary first-run
+  // screen for a workspace that has never run an agent, not a failure.
+  allModelsCloudNotObservedSuffix: (displayName: string) =>
+    `${displayName} reports models after its first run in this workspace.`,
+  // A genuine cloud transport failure, kept apart from the local runtime's:
+  // "the runtime didn't respond" names the wrong hop for a cloud API call.
+  allModelsCloudUnreachableReason: "Proliferate Cloud didn't respond.",
+  // The enabled-but-never-started read. Unreachable in query-core today, but
+  // enumerated with a cure that works rather than folded into another arm.
+  allModelsNotReadYetTitle: "Models haven't been read yet",
+  allModelsNotReadYetSuffix: "Retry to check now.",
   allModelsRetry: "Retry",
   allModelsSeedDescription:
     "Showing shipped catalog models — not yet verified by a probe.",

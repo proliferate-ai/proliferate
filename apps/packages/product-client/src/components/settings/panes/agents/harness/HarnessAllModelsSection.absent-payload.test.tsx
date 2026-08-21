@@ -2,7 +2,9 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 /**
  * The three ways a launch-options payload can be absent, kept apart.
@@ -31,6 +33,7 @@ const cloudState = vi.hoisted(() => ({
   // 200-with-a-null-body: the account simply has no cloud workspace.
   sandbox: null as Record<string, unknown> | null,
   launchOptions: undefined as Record<string, unknown> | undefined,
+  launchOptionsError: null as Error | null,
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
@@ -50,12 +53,14 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   // The real hook is disabled without a non-empty target, so a null sandbox
   // leaves it pending-and-idle forever.
   useCloudHarnessLaunchOptions: ({ cloudSandboxId }: { cloudSandboxId?: string | null }) => {
-    const data = cloudSandboxId ? cloudState.launchOptions : undefined;
+    const error = cloudSandboxId ? cloudState.launchOptionsError : null;
+    const data = cloudSandboxId && !error ? cloudState.launchOptions : undefined;
     return {
       data,
+      error,
       isLoading: false,
-      isError: false,
-      isPending: data === undefined,
+      isError: error !== null,
+      isPending: data === undefined && error === null,
       fetchStatus: "idle",
       refetch: vi.fn(),
     };
@@ -74,6 +79,9 @@ vi.mock("#product/stores/toast/toast-store", () => ({
 afterEach(cleanup);
 
 beforeEach(() => {
+  // Local default: the runtime is still coming up, which is the fact that
+  // disables the query — not something inferred from the query itself.
+  useHarnessConnectionStore.setState({ connectionState: "connecting" });
   runtimeQuery.data = undefined;
   runtimeQuery.isLoading = false;
   runtimeQuery.isError = false;
@@ -82,6 +90,7 @@ beforeEach(() => {
   runtimeQuery.refetch.mockReset();
   cloudState.sandbox = null;
   cloudState.launchOptions = undefined;
+  cloudState.launchOptionsError = null;
 });
 
 describe("HarnessAllModelsSection — no payload, nothing in flight (round 3)", () => {
@@ -92,7 +101,7 @@ describe("HarnessAllModelsSection — no payload, nothing in flight (round 3)", 
     expect(screen.getByText("· Models load as soon as it's ready.")).toBeTruthy();
     // Nothing failed, so no failure claim and no cure to offer.
     expect(screen.queryByText("Models couldn't be loaded")).toBeNull();
-    expect(screen.queryByText("The runtime didn't respond.")).toBeNull();
+    expect(screen.queryByText("· The runtime didn't respond.")).toBeNull();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
     // Nothing is running, so no spinner either.
     expect(screen.queryByText("Loading models…")).toBeNull();
@@ -111,6 +120,7 @@ describe("HarnessAllModelsSection — no payload, nothing in flight (round 3)", 
     );
     expect(screen.getByText("Connecting to the local runtime")).toBeTruthy();
 
+    useHarnessConnectionStore.setState({ connectionState: "healthy" });
     runtimeQuery.isPending = false;
     runtimeQuery.data = {
       harnessKind: "claude",
@@ -148,6 +158,64 @@ describe("HarnessAllModelsSection — no payload, nothing in flight (round 3)", 
     expect(screen.queryByText("Models couldn't be loaded")).toBeNull();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^refresh$/i })).toBeNull();
+  });
+
+  it("E-R22: a runtime that gave up is not reported as still connecting", () => {
+    useHarnessConnectionStore.setState({ connectionState: "failed" });
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
+
+    expect(screen.getByText("The local runtime didn't start")).toBeTruthy();
+    expect(screen.getByText("· Restart Proliferate to try again.")).toBeTruthy();
+    // The promise the old arm could not keep.
+    expect(screen.queryByText("Connecting to the local runtime")).toBeNull();
+    expect(screen.queryByText("· Models load as soon as it's ready.")).toBeNull();
+    // No control that cannot work, but the line still names a real cure.
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    const refresh = screen.getByRole("button", { name: /^refresh$/i }) as HTMLButtonElement;
+    expect(refresh.disabled).toBe(true);
+    expect(refresh.querySelector(".animate-spin")).toBeNull();
+  });
+
+  it("E-R23: an offline-paused read does not spin forever", () => {
+    useHarnessConnectionStore.setState({ connectionState: "healthy" });
+    runtimeQuery.fetchStatus = "paused";
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
+
+    expect(screen.getByText("You're offline")).toBeTruthy();
+    expect(screen.getByText("· Models load when the connection is back.")).toBeTruthy();
+    expect(screen.queryByText("Loading models…")).toBeNull();
+    // The refresh mutation is parked by the same offline gate.
+    expect((screen.getByRole("button", { name: /^refresh$/i }) as HTMLButtonElement).disabled)
+      .toBe(true);
+  });
+
+  it("E-R24: a not-observed 404 is the cloud first-run screen, not a failure", () => {
+    cloudState.sandbox = { id: "sandbox-1" };
+    cloudState.launchOptionsError = new ProliferateClientError(
+      "Harness launch options have not been observed on this target.",
+      404,
+      "harness_launch_options_not_observed",
+    );
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
+
+    expect(screen.getByText("Models haven't been detected yet")).toBeTruthy();
+    expect(screen.getByText("· Claude reports models after its first run in this workspace."))
+      .toBeTruthy();
+    // The server DID respond, with a structured code.
+    expect(screen.queryByText("Models couldn't be loaded")).toBeNull();
+    expect(screen.queryByText("· The runtime didn't respond.")).toBeNull();
+    // Retrying re-issues the same GET and 404s forever.
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("E-R24: an unstructured cloud failure still gets the error arm and a Retry", () => {
+    cloudState.sandbox = { id: "sandbox-1" };
+    cloudState.launchOptionsError = new ProliferateClientError("Bad Gateway", 502, null);
+    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
+
+    expect(screen.getByText("Models couldn't be loaded")).toBeTruthy();
+    expect(screen.getByText("· Proliferate Cloud didn't respond.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
   });
 
   it("E-R19: neither new arm prints a body that contradicts its own header", () => {

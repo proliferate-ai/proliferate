@@ -291,8 +291,8 @@ vi.mock("#product/hooks/agents/workflows/use-harness-install-action", () => ({
 }));
 vi.mock("#product/providers/CloudAnyHarnessRuntimeProvider", () => ({ CloudAnyHarnessRuntimeProvider: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock("#product/stores/sessions/harness-connection-store", () => ({
-  useHarnessConnectionStore: (selector: (s: { runtimeUrl: string }) => unknown) =>
-    selector({ runtimeUrl: "http://127.0.0.1:8457" }),
+  useHarnessConnectionStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ runtimeUrl: "http://127.0.0.1:8457", connectionState: "healthy" }),
 }));
 
 vi.mock("#product/hooks/access/anyharness/agents/use-agent-resources-cache", () => ({

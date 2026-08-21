@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 const FIXED_NOW = new Date("2026-08-21T12:00:00Z").getTime();
 
@@ -13,11 +14,7 @@ function isoAgo(ms: number, from: number = FIXED_NOW): string {
 
 type LaunchOptionsFixture = Record<string, unknown> | undefined;
 
-/**
- * The section's status text (aria-live="polite"), scoped away from the
- * disclosure body — some fallback body copy (e.g. the loading line) is
- * deliberately identical text, rendered collapsed but still in the DOM.
- */
+/** The status text (aria-live), scoped away from identical collapsed body copy. */
 function contentLine(): HTMLElement {
   const node = document.querySelector('[aria-live="polite"]');
   if (!node) throw new Error("content line container not found");
@@ -91,6 +88,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  useHarnessConnectionStore.setState({ connectionState: "healthy" });
   state.refresh.mockReset();
   state.refetch.mockReset();
   state.isLoading = false;
@@ -577,6 +575,7 @@ describe("HarnessAllModelsSection — round 2 review fixes", () => {
   });
 
   it("E-R13/E-R17: a disabled local query neither loads forever nor claims failure", () => {
+    useHarnessConnectionStore.setState({ connectionState: "connecting" });
     state.launchOptions = undefined;
     state.isLoading = false;
     state.isError = false;
