@@ -44,8 +44,7 @@ fn dropped_per_model_control_is_excluded_from_the_final_aggregate_check() {
     ensure_resolved_launch_intent_confirmed(&startup_state, &intent)
         .expect_err("the undropped value must keep failing the aggregate");
 
-    let confirmed =
-        intent_without_dropped_controls(&intent, &["reasoning_effort".to_string()]);
+    let confirmed = intent_without_dropped_controls(&intent, &["reasoning_effort".to_string()]);
     assert!(confirmed.control_values.is_empty());
     assert_eq!(confirmed.model_id.as_deref(), Some("gpt-5.5"));
     ensure_resolved_launch_intent_confirmed(&startup_state, &confirmed)
@@ -64,8 +63,7 @@ fn intent_without_dropped_controls_keeps_undropped_values() {
         .collect(),
         created_at: "2026-08-19T00:00:00Z".to_string(),
     };
-    let confirmed =
-        intent_without_dropped_controls(&intent, &["reasoning_effort".to_string()]);
+    let confirmed = intent_without_dropped_controls(&intent, &["reasoning_effort".to_string()]);
     assert_eq!(
         confirmed.control_values.get("mode").map(String::as_str),
         Some("agent")
@@ -205,10 +203,9 @@ fn seam_intent(config_id: &str, value: &str) -> ResolvedLaunchIntent {
 async fn launch_intent_seam_drops_only_quality_controls() {
     tokio::task::LocalSet::new()
         .run_until(async {
-            let fake = super::config_direct_setter::fake_connection(
-                serde_json::json!({ "ok": true }),
-            )
-            .await;
+            let fake =
+                super::config_direct_setter::fake_connection(serde_json::json!({ "ok": true }))
+                    .await;
 
             // Harnesses narrow the control SET per model, not just a control's
             // value set: claude surfaces `fast` only under opus and drops
@@ -297,10 +294,9 @@ async fn launch_intent_seam_drops_only_quality_controls() {
 async fn claude_model_narrowed_control_set_launches_without_the_absent_control() {
     tokio::task::LocalSet::new()
         .run_until(async {
-            let fake = super::config_direct_setter::fake_connection(
-                serde_json::json!({ "ok": true }),
-            )
-            .await;
+            let fake =
+                super::config_direct_setter::fake_connection(serde_json::json!({ "ok": true }))
+                    .await;
 
             // The live statement a `sonnet` claude session publishes: no `fast`.
             let mut startup_state = SessionStartupState {
