@@ -322,3 +322,58 @@ manifest publisher exists.
   helpers have no active call site.
 - Raw product release publication and the Issue Lifecycle manifest/finalizer
   remain separate, and landing publication is not automated.
+
+## Merge Gate
+
+Branch protection on `main` cannot distinguish "no red X" from "actually
+verified". A required status check is satisfied when it reports `success`, and
+also when it reports `skipped`, and also when the name stops resolving because
+the job behind it was renamed, deleted, or gated off. A required-checks list
+made of per-lane names therefore degrades silently to green at exactly the
+moment the lanes stop running.
+
+Two rollup jobs invert that. `ci-ok` in `.github/workflows/ci.yml` and
+`server-ci-ok` in `.github/workflows/server-ci.yml` each depend on every lane in
+their own workflow, run under `if: always()`, and fail unless every dependency
+concluded `success` -- `failure`, `skipped`, and `cancelled` are all fatal, and
+the failing lanes are named in the output. Each carries a drift guard that
+parses its own workflow file and fails if a job exists there but not in the
+rollup's `needs:` list, so a lane cannot leave the gate unnoticed. `needs:`
+cannot cross workflows, which is why there is one rollup per workflow rather
+than one overall.
+
+The required status checks for `main` are:
+
+| Check | Workflow |
+| --- | --- |
+| `ci-ok` | CI |
+| `server-ci-ok` | Server CI |
+| `Analyze (javascript-typescript)` | CodeQL |
+| `Analyze (python)` | CodeQL |
+| `Analyze (rust)` | CodeQL |
+| `Validate PR title and labels` | PR Metadata |
+| `Detect smoke-relevant changes` | Self-Host Smoke |
+| `Production compose smoke` | Self-Host Smoke |
+
+Names are check-run display names, as `gh pr checks` prints them. No individual
+lane name from `ci.yml` or `server-ci.yml` belongs on the list: the rollups are
+strictly stronger, and a per-lane name is a name that can rot. Because a
+`needs:` entry on a matrix job covers all of its shards, sharding or renaming a
+lane never requires a branch-protection edit.
+
+Excluded on purpose: `intent-tests (provisional)` and `intent-billing
+(provisional)` are `continue-on-error` while the harness earns trust;
+`docker` and `self-hosted-release-assets` are release-only jobs that skip on
+every pull request, and `server-ci-ok` exempts them by detecting their
+`server-v` tag gate rather than by name; the Vercel checks are third-party.
+
+Server CI carries no `on.pull_request.paths` filter, because a path-skipped
+workflow never reports a conclusion at all and a required check pointing into it
+would strand every unrelated pull request on a pending check. It runs on every
+pull request instead, and a `changes` job publishes one relevance flag that each
+lane's steps consume. A lane with nothing to verify reports a real `success`
+rather than `skipped`, and an unset flag -- what a failed `changes` job produces
+-- runs the real suite.
+
+Any change to the set of required checks belongs here and in the comment block
+above `ci-ok` in `.github/workflows/ci.yml`, in the same commit.
