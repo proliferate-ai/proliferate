@@ -53,7 +53,7 @@ Each task gets an isolated git worktree for its branch, terminal, conversation, 
 
 ## Supported agents
 
-Each agent runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact. New harness features show up in Proliferate the day they ship.
+Proliferate runs each agent through its native harness.
 
 <table>
   <tr>
