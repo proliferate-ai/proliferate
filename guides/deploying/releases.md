@@ -25,6 +25,8 @@ selects an exact set. Its prepare job resolves the train, public product, and
 artifact versions; may commit version bumps to `main`; and creates the selected
 train/product/artifact tags.
 
+The version-bump push to `main` authenticates with the `RELEASE_PUSH_TOKEN` repository secret, an admin fine-grained PAT (Contents: Read and write on this repository) that bypasses the required status checks on `main`. The prepare job fails loudly before committing if the secret is missing, and every release including the daily cron fails until it is restored, so renew the PAT before it expires.
+
 The train then:
 
 1. releases selected Runtime/SDK, Server/self-host, and Desktop artifacts;

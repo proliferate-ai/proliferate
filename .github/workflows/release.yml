@@ -206,6 +206,7 @@ jobs:
           RELEASE_ID: ${{ steps.meta.outputs.release_id }}
           SKIP_BUILD: ${{ steps.meta.outputs.skip_build }}
           DRY_RUN: ${{ steps.meta.outputs.dry_run }}
+          RELEASE_PUSH_TOKEN: ${{ secrets.RELEASE_PUSH_TOKEN }}
         run: |
           set -euo pipefail
           # A dry run computes the bump so the plan is real, then throws it away:
@@ -218,11 +219,26 @@ jobs:
             echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # main is branch protected and the workflow's GITHUB_TOKEN cannot
+          # satisfy required status checks on a direct push (GH006, run
+          # 32446272831). This is the only branch push in the release
+          # pipeline, so it alone authenticates with RELEASE_PUSH_TOKEN, an
+          # admin fine-grained PAT that bypasses the checks while
+          # enforce_admins stays off. Fail loudly before committing if the
+          # secret is missing instead of dying opaquely at the push.
+          if [[ -z "$RELEASE_PUSH_TOKEN" ]]; then
+            echo "::error::RELEASE_PUSH_TOKEN secret is not set; the version-bump push to protected main needs a bypass-capable token."
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add VERSION apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml anyharness/sdk/package.json
           git commit -m "release: prepare $RELEASE_ID"
-          git push origin HEAD:main
+          # actions/checkout persists GITHUB_TOKEN as an http.extraheader in
+          # .git/config; blank it for this one command so the PAT in the URL
+          # is the credential that reaches GitHub.
+          git -c "http.https://github.com/.extraheader=" \
+            push "https://x-access-token:${RELEASE_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Create release tags
