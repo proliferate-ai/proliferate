@@ -11,15 +11,10 @@ separate from other local runs.
 From the worktree root:
 
 ```bash
-make setup PROFILE=<name>
-make build # first clean worktree, or after generated/Rust/frontend artifacts change
-make run PROFILE=<name>
+make dev PROFILE=<name>
 ```
 
-`setup` allocates the profile and prepares its database. `build` produces the
-runtime and shared frontend artifacts that `run` expects. `run` deliberately
-does not rebuild; when an artifact is missing it reports the narrow build target
-to run.
+`make dev PROFILE=<name>` is the whole launch: it allocates the profile, builds only what changed since the last run (a fraction of a second on an unchanged tree), and starts it. Use this for every normal launch.
 
 List profiles, their worktrees, assigned ports, and probed status with:
 
@@ -27,8 +22,16 @@ List profiles, their worktrees, assigned ports, and probed status with:
 make dev-list
 ```
 
-`make dev-init` and `make dev` remain compatibility aliases. Use the explicit
-`setup`, `build`, and `run` sequence in new instructions and automation.
+The individual steps are still available when you want one of them on its own:
+
+```bash
+make setup PROFILE=<name>
+make dev-build            # only what a running profile consumes
+make build                # that, plus production bundles for both apps
+make run PROFILE=<name>
+```
+
+`setup` allocates the profile and prepares its database. `run` never rebuilds; when an artifact is missing it reports the narrow build target to run. See `guides/local/dev-profiles.md` for the full command reference and the environment variables that control a launch.
 
 ## Git Hooks
 

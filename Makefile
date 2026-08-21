@@ -74,6 +74,10 @@ DESKTOP_RELEASE_WORKFLOW ?= Release Desktop
 DESKTOP_RELEASE_REF ?= $(shell git branch --show-current 2>/dev/null)
 LANE ?= local
 DESKTOP ?= web
+# HEADLESS=1 runs a profile without the Tauri Desktop app: runtime, API, and
+# hosted Web only. Required on machines with no display, and the shape used
+# when running several profiles at once.
+HEADLESS ?= 0
 AGENTS ?= all
 SCENARIOS ?= all
 BEHAVIOR ?= diagnostic
@@ -141,7 +145,7 @@ endif
         server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
-        sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
+        sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build dev-build rebuild \
         desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b \
@@ -157,9 +161,26 @@ endif
         release-e2e \
         all clean
 
-# --- Profile dev (setup, build, and run are separate) ---
+# --- Profile dev ---
 
-dev: setup run
+# The one command to launch a profile. Builds what is stale and nothing else,
+# which on an unchanged tree is a tenth of a second, so there is no longer a
+# reason for a shell wrapper to force a rebuild before launching.
+#
+# Recursive rather than a prerequisite list, because prerequisites of a single
+# target are only ordered under a serial make, and these three must run in this
+# order under any -j.
+#
+# SKIP_BUILD=1 launches without consulting the build at all, for the case where
+# you know the tree is untouched and want the process tree back immediately.
+dev:
+	@$(MAKE) --no-print-directory setup PROFILE=$(PROFILE)
+	@if [ -n "$(SKIP_BUILD)" ] && [ "$(SKIP_BUILD)" != "0" ]; then \
+		echo "SKIP_BUILD set - not checking build artifacts"; \
+	else \
+		$(MAKE) --no-print-directory dev-build; \
+	fi
+	@$(MAKE) --no-print-directory run PROFILE=$(PROFILE)
 
 dev-artifacts-ready:
 	@runtime_bin="$${ANYHARNESS_DEV_RUNTIME_BIN:-$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness}"; \
@@ -344,9 +365,14 @@ run: dev-artifacts-ready
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 "$$runtime_bin" serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
 	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
 	echo "Starting hosted web app..."; \
-	(cd apps/web && VITE_PROLIFERATE_API_BASE_URL="$$API_BASE_URL" VITE_PROLIFERATE_DEV_TOKEN_LOGIN="$${VITE_PROLIFERATE_DEV_TOKEN_LOGIN:-true}" pnpm dev --host 127.0.0.1 --port "$$PROLIFERATE_HOSTED_WEB_PORT" --strictPort) & \
-	sleep 2; \
-	(cd apps/desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
+	(cd apps/web && VITE_PROLIFERATE_API_BASE_URL="$$API_BASE_URL" VITE_PROLIFERATE_DEV_TOKEN_LOGIN="$${VITE_PROLIFERATE_DEV_TOKEN_LOGIN:-true}" exec ./node_modules/.bin/vite --host 127.0.0.1 --port "$$PROLIFERATE_HOSTED_WEB_PORT" --strictPort) & \
+	if [ "$(HEADLESS)" = "1" ]; then \
+		echo "HEADLESS=1: Desktop app not started. Runtime, API, and hosted Web are running; Ctrl-C stops them."; \
+		wait; \
+	else \
+		sleep 2; \
+		(cd apps/desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json"); \
+	fi
 
 setup: git-hooks
 	@if [ -z "$(PROFILE)" ]; then \
@@ -1540,9 +1566,19 @@ cloud-client-generate: cloud-openapi
 
 # --- TypeScript SDK ---
 
+# SKIP_RUST=1 means "no cargo in this worktree". Honor it here too: the
+# prebuilt runtime emits the same schema, so a frontend-only worktree does not
+# need a toolchain just to regenerate the SDK. Without this the flag leaks and
+# `SKIP_RUST=1 make build` still invokes cargo.
 sdk-generate:
 	mkdir -p anyharness/sdk/generated
-	$(CARGO) run --bin anyharness -- print-openapi > anyharness/sdk/generated/openapi.json
+	@runtime_bin="$${ANYHARNESS_DEV_RUNTIME_BIN:-}"; \
+	if [ -n "$(SKIP_RUST)" ] && [ "$(SKIP_RUST)" != "0" ] && [ -n "$$runtime_bin" ] && [ -x "$$runtime_bin" ]; then \
+		echo "sdk-generate: SKIP_RUST set, using prebuilt runtime $$runtime_bin"; \
+		"$$runtime_bin" print-openapi > anyharness/sdk/generated/openapi.json; \
+	else \
+		$(CARGO) run --bin anyharness -- print-openapi > anyharness/sdk/generated/openapi.json; \
+	fi
 	cd anyharness/sdk && npx openapi-typescript generated/openapi.json -o src/generated/openapi.ts
 
 sdk-build: sdk-generate
@@ -1568,12 +1604,30 @@ shared-build:
 # Both `dev-artifacts-ready` and the `run` target honor that env var, so such a
 # worktree never needs its own runtime build. (`tauri dev` still compiles the
 # desktop shell into the worktree's target/ on first run.)
+# One cargo build, then place the binary where the dev path reads it. Building a
+# second time under a different CARGO_TARGET_DIR shares no cache and so rebuilds
+# the crate and every dependency from scratch.
+#
+# The target directory is resolved from cargo rather than assumed, because
+# CARGO_BUILD_TARGET_DIR and [build] target-dir set it too. The copy is skipped
+# when the two paths are the same file, and when the contents already match, so
+# overriding DEV_ANYHARNESS_TARGET_DIR to the workspace target is not an error
+# and repeat runs do not churn the binary's mtime.
 build-rust:
 	@if [ -n "$(SKIP_RUST)" ] && [ "$(SKIP_RUST)" != "0" ]; then \
 		echo "SKIP_RUST set — skipping cargo builds (runtime: $${ANYHARNESS_DEV_RUNTIME_BIN:-<unset>})"; \
 	else \
-		$(CARGO) build --workspace && \
-		CARGO_TARGET_DIR="$(DEV_ANYHARNESS_TARGET_DIR)" $(CARGO) build -p anyharness; \
+		$(CARGO) build --workspace || exit 1; \
+		target_dir=$$($(CARGO) metadata --format-version 1 --no-deps --offline 2>/dev/null \
+			| node -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>{try{process.stdout.write(JSON.parse(b).target_directory)}catch{}})'); \
+		target_dir="$${target_dir:-target}"; \
+		mkdir -p "$(DEV_ANYHARNESS_TARGET_DIR)/debug" || exit 1; \
+		if [ "$$target_dir/debug/anyharness" -ef "$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness" ]; then \
+			:; \
+		else \
+			cmp -s "$$target_dir/debug/anyharness" "$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness" \
+				|| cp -f "$$target_dir/debug/anyharness" "$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness"; \
+		fi; \
 	fi
 
 runtime-build: build-rust
@@ -1587,6 +1641,21 @@ web-build: cloud-sdk-build cloud-sdk-react-build sdk-build shared-build
 build-frontend: desktop-build web-build
 
 build: build-rust build-frontend
+
+# What `make run` actually consumes, and nothing else. DEV_FRONTEND_ARTIFACTS
+# already enumerates it: the runtime binary plus six package dists. `make build`
+# additionally produces production bundles for apps/desktop and apps/web, which
+# no dev server ever reads, because both compile on demand.
+#
+# Everything goes through scripts/dev-build.mjs rather than the phony targets, so
+# a package whose sources are unchanged is skipped instead of rebuilt. The script
+# invokes build-rust itself rather than taking it as a prerequisite, because it
+# holds a single-instance lock and that lock has to cover the cargo build too:
+# five profiles launching at once must not start five cargo builds.
+#
+# DEV_BUILD_ARGS=--force rebuilds regardless.
+dev-build:
+	@node scripts/dev-build.mjs $(DEV_BUILD_ARGS)
 
 test-agent-runtime-cloud-e2b: sdk-generate
 	cd anyharness/tests && pnpm run test:cloud:e2b
