@@ -284,19 +284,27 @@ jobs:
       # process across a work-stealing pool instead of one thread pool per test
       # binary, which is where the wall-clock win comes from. It does not run
       # doctests; this workspace has none (every Doc-tests binary reports zero
-      # tests), so nothing is dropped.
+      # tests), so nothing is dropped. Pinned rather than floating so the runner
+      # version is deterministic: rust-cache's paths include ~/.cargo/bin, which
+      # is where install-action puts the binary, so an unpinned tool can ride
+      # along in a restored target-dir cache.
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest@0.9.143
 
+      # --no-fail-fast restores libtest's diagnostic behaviour: nextest stops
+      # scheduling new tests after the first failure, while cargo test reports
+      # every failure in the binary it is running. Pass/fail is identical either
+      # way; without this a red run surfaces one failing test instead of the
+      # whole failing set.
       - name: Cargo test
-        run: cargo nextest run --workspace
+        run: cargo nextest run --workspace --no-fail-fast
 
       # The workspace run above builds this package with default features, so
       # the internal-only export path and its dogfood proof would never be
       # evaluated without this step.
       - name: Cargo test internal diagnostics export
-        run: cargo nextest run -p proliferate-diagnostics-collector --features internal-dogfood-export
+        run: cargo nextest run -p proliferate-diagnostics-collector --features internal-dogfood-export --no-fail-fast
 
   sdk-build:
     name: Build SDK
