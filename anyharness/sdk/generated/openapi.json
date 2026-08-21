@@ -12151,11 +12151,16 @@
           "revision",
           "state",
           "probeAttemptedAt",
-          "readiness"
+          "readiness",
+          "canManuallyRefresh"
         ],
         "properties": {
           "basisRevision": {
             "type": "string"
+          },
+          "canManuallyRefresh": {
+            "type": "boolean",
+            "description": "Does the runtime serving this response own the probe engine for its runtime\nhome, and so can a manual refresh dispatched here run at all?\n\nA runtime that does not answers the refresh route with 409\n`PROBE_ENGINE_NOT_OWNER`, and ownership appears nowhere else on any wire —\nso a surface inferring it from \"is this runtime local?\" renders a Refresh\ncontrol whose only possible outcome is an error toast. Install state is a\nseparate precondition and is already reported by `readiness`; a surface\ngating a Refresh control must respect both."
           },
           "harnessKind": {
             "type": "string"
@@ -12183,6 +12188,17 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "probePhase": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthProbePhase",
+                "description": "The launch-probe scheduler's live phase for this harness — the same\nlifecycle as [`AgentAuthProbeLifecycle::phase`]. Absent when the runtime\nserving this response cannot know it."
+              }
             ]
           },
           "readiness": {

@@ -93,7 +93,10 @@ export {
 export {
   useRuntimeHealthQuery,
 } from "./hooks/runtime.js";
+export type { AgentLaunchOptionsListEntry } from "./hooks/agents.js";
 export {
+  AGENT_LAUNCH_OPTIONS_PROBE_INTERVAL_MS,
+  resolveAgentLaunchOptionsRefetchInterval,
   useAgentsQuery,
   useWorkspaceAgentsQuery,
   useAgentLaunchOptionsQuery,

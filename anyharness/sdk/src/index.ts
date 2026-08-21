@@ -58,6 +58,7 @@ export type {
   AgentCredentialState,
   AgentCliAuthState,
   AgentReadinessState,
+  AgentAuthProbePhase,
   HarnessLaunchModel,
   HarnessLaunchControlValue,
   HarnessLaunchControl,

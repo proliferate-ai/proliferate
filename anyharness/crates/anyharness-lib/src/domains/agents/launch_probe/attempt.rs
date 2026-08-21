@@ -6,6 +6,7 @@ use std::time::Instant;
 use chrono::{DateTime, Utc};
 
 use super::backoff::jittered_backoff_seconds;
+use super::live_state::LiveStateGuard;
 use super::probe::{ProbeError, ProbeRequest};
 use super::{HarnessRuntimeState, HarnessSlot, LaunchProbeService, PokeReason, RefreshError};
 
@@ -15,6 +16,10 @@ impl LaunchProbeService {
         harness_kind: &str,
         slot: &Arc<HarnessSlot>,
         reason: PokeReason,
+        // Admitted by the CALLER, before it queued on the single-flight gate, so the
+        // slot never reports `idle` across that wait. Owned here so every exit out
+        // of this function still releases it.
+        mut live_state: LiveStateGuard,
     ) -> Result<(), RefreshError> {
         let attempt_started_at = Instant::now();
         let service = self.launch_options.as_ref().ok_or_else(|| {
@@ -51,7 +56,6 @@ impl LaunchProbeService {
         .await
         .unwrap_or_default();
 
-        let live_state = self.admit_attempt(slot.clone());
         let _permit = self
             .probe_semaphore
             .acquire()

@@ -378,14 +378,20 @@ fn auth_selection_to_contract(selection: &SelectionFact) -> AgentAuthSelectionFa
     }
 }
 
+/// The probe lifecycle's phase on the wire. Shared with the launch-options
+/// response, which carries the same phase for the same harness.
+pub(super) fn probe_phase_to_contract(phase: ProbePhase) -> AgentAuthProbePhase {
+    match phase {
+        ProbePhase::Idle => AgentAuthProbePhase::Idle,
+        ProbePhase::Queued => AgentAuthProbePhase::Queued,
+        ProbePhase::Running => AgentAuthProbePhase::Running,
+        ProbePhase::Backoff => AgentAuthProbePhase::Backoff,
+    }
+}
+
 fn auth_probe_to_contract(probe: &ProbeLifecycle) -> AgentAuthProbeLifecycle {
     AgentAuthProbeLifecycle {
-        phase: match probe.phase {
-            ProbePhase::Idle => AgentAuthProbePhase::Idle,
-            ProbePhase::Queued => AgentAuthProbePhase::Queued,
-            ProbePhase::Running => AgentAuthProbePhase::Running,
-            ProbePhase::Backoff => AgentAuthProbePhase::Backoff,
-        },
+        phase: probe_phase_to_contract(probe.phase),
         last_success_age_seconds: probe.last_success_age_seconds,
         last_failure_detail: probe.last_failure_detail.clone(),
         next_attempt_at: probe.next_attempt_at.clone(),

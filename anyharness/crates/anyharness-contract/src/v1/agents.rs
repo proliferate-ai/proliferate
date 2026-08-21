@@ -257,84 +257,6 @@ pub struct AgentAuthStateSummary {
     pub facts: AgentAuthFactsSummary,
 }
 
-// --- Target-observed harness launch options ---
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct HarnessLaunchModel {
-    pub id: String,
-    pub observed_name: Option<String>,
-    pub observed_description: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct HarnessLaunchControlValue {
-    pub value: String,
-    pub observed_label: Option<String>,
-    pub observed_description: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct HarnessLaunchControl {
-    pub id: String,
-    pub observed_label: Option<String>,
-    pub observed_description: Option<String>,
-    pub values: Vec<HarnessLaunchControlValue>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct HarnessLaunchModelControls {
-    pub model_id: String,
-    pub controls: Vec<HarnessLaunchControl>,
-    pub default_control_values: std::collections::BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct HarnessLaunchDefaults {
-    pub model_id: Option<String>,
-    #[serde(default)]
-    pub control_values: std::collections::BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct HarnessLaunchOptions {
-    pub models: Vec<HarnessLaunchModel>,
-    pub controls: Vec<HarnessLaunchControl>,
-    pub defaults: HarnessLaunchDefaults,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub model_controls: Vec<HarnessLaunchModelControls>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum HarnessLaunchOptionsState {
-    Detecting,
-    Refreshing,
-    Observed,
-    ObservedEmpty,
-    LastGoodAfterFailure,
-    FailedWithoutObservation,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct HarnessLaunchOptionsResponse {
-    pub harness_kind: String,
-    pub basis_revision: String,
-    pub revision: i64,
-    pub state: HarnessLaunchOptionsState,
-    pub options: Option<HarnessLaunchOptions>,
-    pub observed_at: Option<String>,
-    pub probe_attempted_at: String,
-    pub probe_failure_code: Option<String>,
-    pub readiness: AgentReadinessState,
-}
-
 // --- Install ---
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -547,7 +469,7 @@ pub struct AgentReconcileSummary {
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::{HarnessLaunchDefaults, HarnessLaunchModelControls, HarnessLaunchOptions};
+    use crate::v1::{HarnessLaunchDefaults, HarnessLaunchModelControls, HarnessLaunchOptions};
 
     #[test]
     fn empty_observation_is_not_absent_options() {
