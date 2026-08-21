@@ -25,6 +25,11 @@ export interface HarnessLaunchControl {
   observedDescription: string | null;
   values: HarnessLaunchControlValue[];
 }
+export interface HarnessLaunchModelControls {
+  modelId: string;
+  controls: HarnessLaunchControl[];
+  defaultControlValues: Record<string, string>;
+}
 export interface HarnessLaunchDefaults {
   modelId: string | null;
   controlValues: Record<string, string>;
@@ -33,6 +38,7 @@ export interface HarnessLaunchOptions {
   models: HarnessLaunchModel[];
   controls: HarnessLaunchControl[];
   defaults: HarnessLaunchDefaults;
+  modelControls?: HarnessLaunchModelControls[];
 }
 export type HarnessLaunchOptionsState =
   | "detecting"

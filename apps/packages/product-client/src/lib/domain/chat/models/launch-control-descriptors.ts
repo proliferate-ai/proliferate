@@ -10,13 +10,17 @@ import {
 import type {
   DesktopAgentLaunchControl,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { launchControlsForModel } from "#product/lib/domain/agents/cloud-launch-catalog";
 
 export interface BuildLaunchControlDescriptorsInput {
   selection: { kind: string; modelId: string } | null;
   launchAgents: Array<{
     kind: string;
     launchControls?: DesktopAgentLaunchControl[];
-    models: Array<{ id: string }>;
+    models: Array<{
+      id: string;
+      launchControls?: DesktopAgentLaunchControl[] | null;
+    }>;
   }>;
   pendingConfigChanges: PendingSessionConfigChanges | null;
   onSelect: (
@@ -39,7 +43,7 @@ export function buildLaunchControlDescriptors(
     return [];
   }
 
-  return (agent.launchControls ?? [])
+  return launchControlsForModel(agent, input.selection.modelId)
     .flatMap((control) => launchControlToDescriptor({
       agentKind: agent.kind,
       control,

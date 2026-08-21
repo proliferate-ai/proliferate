@@ -27,6 +27,14 @@ pub struct HarnessLaunchControl {
     pub values: Vec<HarnessLaunchControlValue>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessLaunchModelControls {
+    pub model_id: String,
+    pub controls: Vec<HarnessLaunchControl>,
+    pub default_control_values: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HarnessLaunchDefaults {
@@ -41,6 +49,8 @@ pub struct HarnessLaunchOptions {
     pub models: Vec<HarnessLaunchModel>,
     pub controls: Vec<HarnessLaunchControl>,
     pub defaults: HarnessLaunchDefaults,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub model_controls: Vec<HarnessLaunchModelControls>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

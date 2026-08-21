@@ -46,7 +46,43 @@ fn options() -> HarnessLaunchOptions {
             }],
         }],
         defaults: HarnessLaunchDefaults::default(),
+        model_controls: Vec::new(),
     }
+}
+
+fn observed_control(id: &str, current_value: &str, values: &[&str]) -> serde_json::Value {
+    serde_json::json!({
+        "id": id,
+        "name": id,
+        "currentValue": current_value,
+        "options": values
+            .iter()
+            .map(|value| serde_json::json!({ "value": value, "name": value }))
+            .collect::<Vec<_>>(),
+    })
+}
+
+fn claude_model_scoped_snapshot() -> crate::domains::agents::live_ports::ProbeSnapshot {
+    let mut snapshot = crate::domains::agents::launch_probe::test_support::snapshot(
+        "claude",
+        &["opus".to_string(), "fable".to_string()],
+    );
+    snapshot.current_model_id = Some("opus".to_string());
+    snapshot.baseline_config_options = serde_json::json!([
+        observed_control("mode", "default", &["default", "plan"]),
+        observed_control("effort", "high", &["low", "high"]),
+        observed_control("fast", "off", &["off", "on"]),
+    ]);
+    snapshot.models[0].config_options = Some(serde_json::json!([
+        observed_control("mode", "default", &["default", "plan"]),
+        observed_control("effort", "high", &["low", "high"]),
+        observed_control("fast", "off", &["off", "on"]),
+    ]));
+    snapshot.models[1].config_options = Some(serde_json::json!([
+        observed_control("mode", "default", &["default", "plan"]),
+        observed_control("effort", "high", &["low", "high"]),
+    ]));
+    snapshot
 }
 
 #[test]
@@ -117,10 +153,145 @@ fn probe_legacy_modes_are_not_advertised_without_a_confirmable_config_control() 
         &["gpt-5.6-sol".to_string()],
     );
 
-    let options = HarnessLaunchOptionsService::options_from_probe(&snapshot);
+    let options = HarnessLaunchOptionsService::options_from_probe(&snapshot)
+        .expect("codex projection does not require model-scoped controls");
 
     assert!(options.controls.is_empty());
     assert!(options.defaults.control_values.is_empty());
+}
+
+#[test]
+fn claude_probe_projects_exact_model_scoped_controls_and_defaults() {
+    let options = HarnessLaunchOptionsService::options_from_probe(&claude_model_scoped_snapshot())
+        .expect("complete Claude model-control matrix projects");
+
+    assert_eq!(options.model_controls.len(), 2);
+    let opus = options
+        .model_controls
+        .iter()
+        .find(|scope| scope.model_id == "opus")
+        .expect("opus scope");
+    assert_eq!(
+        opus.controls
+            .iter()
+            .map(|control| control.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["mode", "effort", "fast"]
+    );
+    assert_eq!(opus.default_control_values["fast"], "off");
+
+    let fable = options
+        .model_controls
+        .iter()
+        .find(|scope| scope.model_id == "fable")
+        .expect("fable scope");
+    assert_eq!(
+        fable
+            .controls
+            .iter()
+            .map(|control| control.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["mode", "effort"]
+    );
+    assert_eq!(
+        fable.default_control_values,
+        BTreeMap::from([
+            ("effort".to_string(), "high".to_string()),
+            ("mode".to_string(), "default".to_string()),
+        ])
+    );
+}
+
+#[test]
+fn claude_probe_rejects_an_incomplete_model_control_matrix() {
+    let mut snapshot = claude_model_scoped_snapshot();
+    snapshot.models[1].config_options = None;
+
+    let error = HarnessLaunchOptionsService::options_from_probe(&snapshot)
+        .expect_err("partial Claude model-control matrix must fail closed");
+
+    assert_eq!(
+        error.to_string(),
+        "model-scoped launch-control observation was incomplete"
+    );
+}
+
+#[test]
+fn validation_uses_selected_model_scope_and_falls_back_only_when_absent() {
+    let home = TestRuntimeHome::new("model-scoped-validation");
+    let service =
+        HarnessLaunchOptionsService::new(Db::open_in_memory().unwrap(), home.path().to_path_buf());
+    let started = service
+        .begin_probe("claude", "2026-08-19T00:00:00Z")
+        .unwrap();
+    let mut projected =
+        HarnessLaunchOptionsService::options_from_probe(&claude_model_scoped_snapshot())
+            .expect("complete Claude model-control matrix projects");
+    projected.defaults.model_id = Some("fable".to_string());
+    service
+        .record_success(&started, &projected, "2026-08-19T00:00:01Z")
+        .unwrap();
+
+    service
+        .validate_selection(
+            "claude",
+            &LaunchSelection {
+                model_id: Some("opus".to_string()),
+                control_values: BTreeMap::from([("fast".to_string(), "on".to_string())]),
+            },
+        )
+        .expect("opus offers fast");
+    assert!(matches!(
+        service.validate_selection(
+            "claude",
+            &LaunchSelection {
+                model_id: None,
+                control_values: BTreeMap::from([("fast".to_string(), "on".to_string())]),
+            },
+        ),
+        Err(LaunchSelectionUnsupported::Control { control_id, .. }) if control_id == "fast"
+    ));
+    assert!(matches!(
+        service.validate_selection(
+            "claude",
+            &LaunchSelection {
+                model_id: Some("fable".to_string()),
+                control_values: BTreeMap::from([("fast".to_string(), "off".to_string())]),
+            },
+        ),
+        Err(LaunchSelectionUnsupported::Control { control_id, .. }) if control_id == "fast"
+    ));
+    service
+        .validate_selection(
+            "claude",
+            &LaunchSelection {
+                model_id: Some("fable".to_string()),
+                control_values: BTreeMap::from([
+                    ("effort".to_string(), "high".to_string()),
+                    ("mode".to_string(), "plan".to_string()),
+                ]),
+            },
+        )
+        .expect("fable offers mode and effort");
+
+    let legacy_started = service
+        .begin_probe("codex", "2026-08-19T00:00:02Z")
+        .unwrap();
+    service
+        .record_success(&legacy_started, &options(), "2026-08-19T00:00:03Z")
+        .unwrap();
+    service
+        .validate_selection(
+            "codex",
+            &LaunchSelection {
+                model_id: Some("unknown/fable".to_string()),
+                control_values: BTreeMap::from([(
+                    "mode".to_string(),
+                    "agent-full-access".to_string(),
+                )]),
+            },
+        )
+        .expect("legacy row without a model scope uses baseline controls");
 }
 
 #[test]

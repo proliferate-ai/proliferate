@@ -52,6 +52,7 @@ describe("filterControlValuesToObservation", () => {
         "fast-mode": "off",
       },
       observation(),
+      "gpt-5.6-sol",
     );
 
     expect(filtered).toEqual({ reasoning_effort: "xhigh", "fast-mode": "off" });
@@ -66,6 +67,7 @@ describe("filterControlValuesToObservation", () => {
       filterControlValuesToObservation(
         { reasoning_effort: "ultra" },
         observation(),
+        "gpt-5.6-sol",
       ),
     ).toEqual({});
   });
@@ -80,13 +82,17 @@ describe("filterControlValuesToObservation", () => {
       },
     });
     expect(
-      filterControlValuesToObservation({ effort: "high", mode: "agent" }, grokShaped),
+      filterControlValuesToObservation(
+        { effort: "high", mode: "agent" },
+        grokShaped,
+        "grok-4",
+      ),
     ).toEqual({});
   });
 
   it("sends nothing when the observation fetch failed", () => {
     expect(
-      filterControlValuesToObservation({ reasoning_effort: "xhigh" }, null),
+      filterControlValuesToObservation({ reasoning_effort: "xhigh" }, null, null),
     ).toEqual({});
   });
 
@@ -95,12 +101,14 @@ describe("filterControlValuesToObservation", () => {
       filterControlValuesToObservation(
         { reasoning_effort: "xhigh" },
         observation({ state: "detecting", options: null }),
+        "gpt-5.6-sol",
       ),
     ).toEqual({});
     expect(
       filterControlValuesToObservation(
         { reasoning_effort: "xhigh" },
         observation({ state: "failed_without_observation", options: null }),
+        "gpt-5.6-sol",
       ),
     ).toEqual({});
   });
@@ -113,8 +121,83 @@ describe("filterControlValuesToObservation", () => {
         filterControlValuesToObservation(
           { reasoning_effort: "xhigh", effort: "xhigh" },
           observation({ state }),
+          "gpt-5.6-sol",
         ),
       ).toEqual({ reasoning_effort: "xhigh" });
     }
   });
+
+  it("uses exact model controls and defaults for Fable and Opus", () => {
+    const scoped = modelScopedObservation();
+
+    expect(filterControlValuesToObservation(
+      { mode: "default", effort: "high", fast: "on" },
+      scoped,
+      "claude-fable-5[1m]",
+    )).toEqual({ mode: "default", effort: "high" });
+    expect(filterControlValuesToObservation(
+      { mode: "default", effort: "ultra", fast: "on" },
+      scoped,
+      "opus[1m]",
+    )).toEqual({ mode: "default", effort: "ultra", fast: "on" });
+  });
+
+  it("falls back to harness controls when the selected model scope is unavailable", () => {
+    const scoped = modelScopedObservation();
+    const options = scoped.options;
+    if (options) {
+      (options as typeof options & { modelControls?: unknown }).modelControls = undefined;
+    }
+
+    expect(filterControlValuesToObservation(
+      { fast: "on" },
+      scoped,
+      "claude-fable-5[1m]",
+    )).toEqual({ mode: "default", effort: "high", fast: "on" });
+  });
 });
+
+function modelScopedObservation(): HarnessLaunchOptionsResponse {
+  const mode = control("mode", ["default", "plan"]);
+  const effort = control("effort", ["high", "ultra"]);
+  const fast = control("fast", ["off", "on"]);
+  return observation({
+    harnessKind: "claude",
+    options: {
+      models: [
+        { id: "opus[1m]", observedName: "Opus", observedDescription: null },
+        { id: "claude-fable-5[1m]", observedName: "Fable", observedDescription: null },
+      ],
+      controls: [mode, effort, fast],
+      defaults: {
+        modelId: "opus[1m]",
+        controlValues: { mode: "default", effort: "high", fast: "off" },
+      },
+      modelControls: [
+        {
+          modelId: "opus[1m]",
+          controls: [mode, effort, fast],
+          defaultControlValues: { mode: "default", effort: "high", fast: "off" },
+        },
+        {
+          modelId: "claude-fable-5[1m]",
+          controls: [mode, effort],
+          defaultControlValues: { mode: "default", effort: "high" },
+        },
+      ],
+    },
+  } as Partial<HarnessLaunchOptionsResponse>);
+}
+
+function control(id: string, values: string[]) {
+  return {
+    id,
+    observedLabel: null,
+    observedDescription: null,
+    values: values.map((value) => ({
+      value,
+      observedLabel: null,
+      observedDescription: null,
+    })),
+  };
+}

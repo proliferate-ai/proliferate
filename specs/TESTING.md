@@ -12,9 +12,11 @@ Changes to harness observation, session create/configuration, cloud target
 copy, or first-party launch pickers must prove the complete authority chain:
 
 - target observation covers non-empty, empty, same-basis failure,
-  basis-change invalidation, and unknown identifiers;
-- create reloads current-basis state, rejects exact non-members, and stores the
-  complete resolved intent atomically;
+  basis-change invalidation, unknown identifiers, and exact model-scoped
+  control statements when the harness exposes them;
+- create reloads current-basis state, validates against the selected model row
+  when present, rejects exact non-members, and stores the complete resolved
+  intent atomically;
 - actor startup cannot publish ready until every explicit value is confirmed;
 - live mutation advances the full session snapshot, and active UI ignores
   target/catalog state;

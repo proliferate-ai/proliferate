@@ -69,6 +69,54 @@ function modeControl(): DesktopAgentLaunchControl {
 }
 
 describe("buildLaunchControlDescriptors observed vocabulary", () => {
+  it("renders only the exact selected model's observed controls", () => {
+    const descriptors = buildLaunchControlDescriptors({
+      selection: { kind: "claude", modelId: "claude-fable-5[1m]" },
+      launchAgents: [{
+        kind: "claude",
+        launchControls: [
+          control("effort", "Effort", "medium"),
+          control("fast", "Fast", "off"),
+        ],
+        models: [
+          {
+            id: "claude-fable-5[1m]",
+            launchControls: [control("effort", "Effort", "medium")],
+          },
+          {
+            id: "opus[1m]",
+            launchControls: [
+              control("effort", "Effort", "medium"),
+              control("fast", "Fast", "off"),
+            ],
+          },
+        ],
+      }],
+      pendingConfigChanges: null,
+      onSelect: vi.fn(),
+    });
+
+    expect(descriptors.map((descriptor) => descriptor.key)).toEqual(["effort"]);
+  });
+
+  it("falls back to harness controls when a model scope was not observed", () => {
+    const descriptors = buildLaunchControlDescriptors({
+      selection: { kind: "claude", modelId: "legacy" },
+      launchAgents: [{
+        kind: "claude",
+        launchControls: [
+          control("effort", "Effort", "medium"),
+          control("fast", "Fast", "off"),
+        ],
+        models: [{ id: "legacy", launchControls: null }],
+      }],
+      pendingConfigChanges: null,
+      onSelect: vi.fn(),
+    });
+
+    expect(descriptors.map((descriptor) => descriptor.key)).toEqual(["effort", "fast"]);
+  });
+
   it("preserves the complete observed control vocabulary without static per-model filtering", () => {
     const [mode] = buildLaunchControlDescriptors({
       selection: { kind: "claude", modelId: "claude-haiku-4-5" },

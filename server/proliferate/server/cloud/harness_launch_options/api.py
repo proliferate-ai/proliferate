@@ -40,6 +40,7 @@ async def ingest_launch_options(
 @router.get(
     "/sandboxes/{cloud_sandbox_id}/{harness_kind}",
     response_model=CopiedLaunchOptionsResponse,
+    response_model_exclude_unset=True,
 )
 async def get_launch_options(
     sandbox: LaunchOptionsSandboxAccess,

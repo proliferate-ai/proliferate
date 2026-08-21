@@ -13,6 +13,7 @@ import {
   type WorkspaceShellTab,
 } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
+import { resolveLaunchControlValuesForModel } from "#product/lib/domain/agents/cloud-launch-catalog";
 import { resolveStoredWorkspaceShellTab } from "#product/lib/domain/workspaces/tabs/active-shell-tab";
 import type {
   HeaderWorkspaceShellStripRow,
@@ -152,12 +153,11 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
     void createEmptySessionWithResolvedConfig({
       agentKind: selection.kind,
       modelId: selection.modelId,
-      launchControlValues: Object.fromEntries(
-        (configuredLaunch.launchCatalog.launchAgents.find(
+      launchControlValues: resolveLaunchControlValuesForModel(
+        configuredLaunch.launchCatalog.launchAgents.find(
           (candidate) => candidate.kind === selection.kind,
-        )?.launchControls ?? [])
-          .filter((control) => control.defaultValue !== null)
-          .map((control) => [control.key, control.defaultValue as string]),
+        ),
+        selection.modelId,
       ),
       latencyFlowId,
       reuseInFlightEmptySession: false,

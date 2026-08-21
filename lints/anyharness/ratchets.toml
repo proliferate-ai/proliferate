@@ -75,8 +75,8 @@ reason = "R3 real-process stop suite; every case owns a real agent process and a
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/probe.rs"
-max_lines = 642
-reason = "catalog probe with per-harness model-source fallbacks (+the three runtime-probe options: env removal, scratch workspace root, config-option-only switch suppression); shrank from 683 after the readiness resolve moved to the call boundary (grid plan PR 5c/7 — live never fetches)"
+max_lines = 609
+reason = "catalog probe with per-harness model-source fallbacks (+the three runtime-probe options: env removal, scratch workspace root, config-option-only switch suppression); shrank from 683 after readiness resolution and config-option model switching moved to owned seams"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/terminals/manager_tests.rs"

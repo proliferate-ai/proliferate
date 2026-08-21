@@ -18,26 +18,18 @@ use crate::live::sessions::actor::config::types::{
 use crate::live::sessions::actor::state::{SessionActor, SessionStartupState};
 
 pub(in crate::live::sessions::actor) use super::admission::{
-    absent_control_is_posture, initial_control_disposition, resolve_requested_model_id,
-    InitialControlDisposition,
+    initial_control_disposition, resolve_requested_model_id, InitialControlDisposition,
 };
 
 /// Applies the immutable create-time intent and accepts only a value that the
 /// live harness statement both advertises and positively confirms. Model is
 /// first; controls follow the harness-advertised order.
 ///
-/// The one carve-out is per-model narrowing on a NON-posture control. A
-/// harness narrows both a control's VALUE set and the control SET itself per
-/// model: codex drops `max` from reasoning_effort under some models, and
-/// claude surfaces `fast` only under opus while haiku loses `effort` as well.
-/// The create-time observation is harness-level, so it carries the union. A
-/// quality knob whose requested value — or whose whole row — the applied model
-/// does not offer therefore launches without it instead of failing the start.
-///
-/// Posture controls stay fail-closed in both cases: launching a collaboration
-/// mode, mode / approval policy or sandbox mode at the harness default after
-/// the user explicitly selected against it is a silent behavior change, which
-/// is strictly worse than refusing the start.
+/// The one carve-out is per-model value narrowing on a NON-posture control: a
+/// quality knob the live statement still surfaces but whose requested value it
+/// no longer offers under the applied model launches at the session default
+/// instead of failing the start. Posture controls and control ids the live
+/// statement never surfaced at all stay fail-closed.
 pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
@@ -49,24 +41,7 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
     let resolved_model_id = match intent.model_id.as_deref() {
         Some(model_id) => {
             match resolve_requested_model_id(&live_model_ids(startup_state), model_id) {
-                Some(resolved) => {
-                    if resolved != model_id {
-                        // The live statement renamed the id between the create-time
-                        // observation and this session (a context-variant rotation such
-                        // as `claude-fable-5` -> `claude-fable-5[1m]`). The base id is
-                        // the same model selection, so launch with the id the live
-                        // session actually offers instead of failing the start.
-                        tracing::warn!(
-                            session_id,
-                            harness_kind = agent_kind,
-                            requested_model_id = %model_id,
-                            resolved_model_id = %resolved,
-                            event = "session.initial_config.model_id_rotated",
-                            "requested model id resolved to its live variant"
-                        );
-                    }
-                    Some(resolved)
-                }
+                Some(resolved) => Some(resolved),
                 None => {
                     log_initial_config_apply(
                         session_id,
@@ -208,39 +183,16 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
             "requested control 'mode' value '{value}' was not confirmed by the live {agent_kind} session"
         );
     }
-    // Harnesses narrow the control SET per model, not just a control's value
-    // set: claude surfaces `fast` only under opus, and drops `effort` as well
-    // under haiku. The create-time observation is harness-level, so it carries
-    // the union — including the harness default `fast: off` that a user who
-    // never touched the control still launches with. Refusing every id the
-    // applied model does not surface therefore failed the start of every
-    // non-opus claude session.
-    //
-    // An absent QUALITY control is the same per-model narrowing the offered-
-    // but-unavailable value branch already drops to the session default. An
-    // absent POSTURE control stays fatal: launching at the harness default
-    // after the user explicitly selected a mode or collaboration mode is a
-    // silent behavior change, which is worse than refusing the start.
-    let absent_posture_ids = pending
-        .keys()
-        .filter(|config_id| absent_control_is_posture(config_id))
-        .cloned()
-        .collect::<Vec<_>>();
+    // A control id the live statement never surfaced at all is a vocabulary
+    // disagreement between the create-time observation and the live session,
+    // not per-model value narrowing. Model-scoped launch options keep expected
+    // narrowing out of the persisted intent; any id still absent here is a
+    // contradiction and stays fatal.
     anyhow::ensure!(
-        absent_posture_ids.is_empty(),
-        "requested controls are absent from the live {agent_kind} session: {absent_posture_ids:?}"
+        pending.is_empty(),
+        "requested controls are absent from the live {agent_kind} session: {:?}",
+        pending.keys().collect::<Vec<_>>()
     );
-    for (config_id, _) in std::mem::take(&mut pending) {
-        log_initial_config_apply(session_id, agent_kind, &config_id, "membership_dropped");
-        tracing::warn!(
-            session_id,
-            harness_kind = agent_kind,
-            control_id = %config_id,
-            event = "session.initial_config.dropped",
-            "requested control is absent from the live session under the applied model; launching without it"
-        );
-        dropped_control_ids.push(config_id);
-    }
     let mut confirmed_intent = intent_without_dropped_controls(intent, &dropped_control_ids);
     confirmed_intent.model_id = resolved_model_id;
     if let Err(error) = ensure_resolved_launch_intent_confirmed(startup_state, &confirmed_intent) {

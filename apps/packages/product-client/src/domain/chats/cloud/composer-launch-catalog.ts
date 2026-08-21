@@ -3,6 +3,7 @@ import type {
   CloudHarnessLaunchModel,
   CloudHarnessLaunchOptionsResponse,
 } from "@proliferate/cloud-sdk";
+import { resolveObservedLaunchControlScope } from "#product/domain/sessions/launch-control-scope";
 import type { CloudLaunchComposerSelection } from "./composer-control-model";
 
 /** A presentation-only view over one target-observed launch control. */
@@ -36,12 +37,16 @@ export function selectLaunchModel(
 
 export function launchComposerControls(
   response: CloudHarnessLaunchOptionsResponse | null | undefined,
+  modelId?: string | null,
 ): ComposerLaunchControl[] {
   const options = response?.options;
   if (!options) {
     return [];
   }
-  return options.controls.map((control) => launchControlView(control, options.defaults.controlValues));
+  const scoped = resolveObservedLaunchControlScope(options, modelId);
+  return scoped.controls.map((control) =>
+    launchControlView(control, scoped.defaultControlValues)
+  );
 }
 
 export function selectedLaunchControlValue(

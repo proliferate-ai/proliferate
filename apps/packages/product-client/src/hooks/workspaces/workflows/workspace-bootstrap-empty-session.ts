@@ -7,6 +7,7 @@ import type { ChatLaunchPreferences } from "#product/lib/domain/chat/models/mode
 import { hasHiddenDismissedWorkspaceSessions } from "#product/lib/domain/workspaces/selection/selection";
 import {
   projectHarnessLaunchOptions,
+  resolveLaunchControlValuesForModel,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
 import { getAgentLaunchOptions } from "#product/lib/access/anyharness/agents";
 import {
@@ -176,10 +177,11 @@ export async function handleEmptyWorkspaceBootstrap(
       agentKind: launchSelection.kind,
       modelId: launchSelection.modelId,
       clientSessionId: reusableProjectedSession?.sessionId ?? null,
-      launchControlValues: Object.fromEntries(
-        (projectedLaunchAgent?.launchControls ?? [])
-          .filter((control) => control.defaultValue !== null)
-          .map((control) => [control.key, control.defaultValue as string]),
+      launchControlValues: resolveLaunchControlValuesForModel(
+        projectedLaunchAgent?.kind === launchSelection.kind
+          ? projectedLaunchAgent
+          : null,
+        launchSelection.modelId,
       ),
       latencyFlowId: input.latencyFlowId,
       preserveProjectedSessionOnCreateFailure: true,

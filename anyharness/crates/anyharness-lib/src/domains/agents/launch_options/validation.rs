@@ -40,9 +40,21 @@ pub(super) fn validate_selection_row(
             });
         }
     }
+    let selected_model_id = selection
+        .model_id
+        .as_deref()
+        .or(options.defaults.model_id.as_deref());
+    let scoped_controls = selected_model_id
+        .and_then(|model_id| {
+            options
+                .model_controls
+                .iter()
+                .find(|scope| scope.model_id == model_id)
+        })
+        .map(|scope| scope.controls.as_slice())
+        .unwrap_or(options.controls.as_slice());
     for (control_id, value) in &selection.control_values {
-        let Some(control) = options
-            .controls
+        let Some(control) = scoped_controls
             .iter()
             .find(|control| &control.id == control_id)
         else {

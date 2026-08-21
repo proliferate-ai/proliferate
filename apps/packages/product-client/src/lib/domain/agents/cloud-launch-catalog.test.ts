@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { projectHarnessLaunchOptions } from "#product/lib/domain/agents/cloud-launch-catalog";
+import {
+  launchControlsForModel,
+  projectHarnessLaunchOptions,
+  resolveLaunchControlValuesForModel,
+} from "#product/lib/domain/agents/cloud-launch-catalog";
 
 function response(models: Array<{ id: string; observedName?: string | null }>) {
   return {
@@ -54,3 +58,86 @@ describe("projectHarnessLaunchOptions display names", () => {
     expect(projected?.defaultModelId).toBe("claude-fable-5");
   });
 });
+
+describe("projectHarnessLaunchOptions model control scopes", () => {
+  it("projects Fable and Opus from their exact observed scopes", () => {
+    const projected = projectHarnessLaunchOptions(modelScopedResponse());
+
+    expect(launchControlsForModel(projected, "claude-fable-5[1m]")
+      .map((control) => control.key)).toEqual(["mode", "effort"]);
+    expect(launchControlsForModel(projected, "opus[1m]")
+      .map((control) => control.key)).toEqual(["mode", "effort", "fast"]);
+    expect(resolveLaunchControlValuesForModel(
+      projected,
+      "claude-fable-5[1m]",
+      { effort: "high", fast: "on" },
+    )).toEqual({ mode: "default", effort: "high" });
+    expect(resolveLaunchControlValuesForModel(
+      projected,
+      "opus[1m]",
+      { effort: "ultra", fast: "on" },
+    )).toEqual({ mode: "default", effort: "ultra", fast: "on" });
+  });
+
+  it("falls back to harness controls when a selected model scope is unavailable", () => {
+    const projected = projectHarnessLaunchOptions(modelScopedResponse());
+
+    expect(launchControlsForModel(projected, "legacy")
+      .map((control) => control.key)).toEqual(["mode", "effort", "fast"]);
+    expect(resolveLaunchControlValuesForModel(projected, "legacy"))
+      .toEqual({ mode: "default", effort: "high", fast: "off" });
+  });
+
+  it("uses the observed default model scope when no explicit model is selected", () => {
+    const projected = projectHarnessLaunchOptions(modelScopedResponse());
+
+    expect(launchControlsForModel(projected, null)
+      .map((control) => control.key)).toEqual(["mode", "effort"]);
+  });
+});
+
+function modelScopedResponse(): Parameters<typeof projectHarnessLaunchOptions>[0] {
+  const mode = launchControl("mode", ["default", "plan"]);
+  const effort = launchControl("effort", ["high", "ultra"]);
+  const fast = launchControl("fast", ["off", "on"]);
+  return {
+    harnessKind: "claude",
+    options: {
+      models: [
+        { id: "opus[1m]", observedName: "Opus", observedDescription: null },
+        { id: "claude-fable-5[1m]", observedName: "Fable", observedDescription: null },
+        { id: "legacy", observedName: "Legacy", observedDescription: null },
+      ],
+      controls: [mode, effort, fast],
+      defaults: {
+        modelId: "claude-fable-5[1m]",
+        controlValues: { mode: "default", effort: "high", fast: "off" },
+      },
+      modelControls: [
+        {
+          modelId: "opus[1m]",
+          controls: [mode, effort, fast],
+          defaultControlValues: { mode: "default", effort: "high", fast: "off" },
+        },
+        {
+          modelId: "claude-fable-5[1m]",
+          controls: [mode, effort],
+          defaultControlValues: { mode: "default", effort: "high" },
+        },
+      ],
+    },
+  } as unknown as Parameters<typeof projectHarnessLaunchOptions>[0];
+}
+
+function launchControl(id: string, values: string[]) {
+  return {
+    id,
+    observedLabel: id,
+    observedDescription: null,
+    values: values.map((value) => ({
+      value,
+      observedLabel: value,
+      observedDescription: null,
+    })),
+  };
+}

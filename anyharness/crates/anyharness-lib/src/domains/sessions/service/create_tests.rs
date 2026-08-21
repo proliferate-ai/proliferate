@@ -9,7 +9,8 @@ use super::{CreateSessionError, CreateSessionOutcome};
 use crate::app::{test_support, AppState};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::launch_options::{
-    HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions, LaunchSelection,
+    HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults, HarnessLaunchModel,
+    HarnessLaunchModelControls, HarnessLaunchOptions, LaunchSelection, LaunchSelectionUnsupported,
 };
 use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
@@ -127,6 +128,7 @@ async fn idempotent_create_requires_exact_intent_and_current_observation() {
                 ],
                 controls: vec![],
                 defaults: HarnessLaunchDefaults::default(),
+                model_controls: Vec::new(),
             },
             "2026-08-19T00:00:00Z",
         )
@@ -261,6 +263,108 @@ async fn idempotent_create_requires_exact_intent_and_current_observation() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn model_scoped_control_refusal_is_atomic_and_valid_fable_intent_persists() {
+    let runtime_home = TestDir::new("anyharness-model-scoped-session-create");
+    let workspace_path = runtime_home.path().join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
+    let state = AppState::new(
+        runtime_home.path().to_path_buf(),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("open in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("create app state");
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-scoped",
+        "local",
+        &workspace_path.to_string_lossy(),
+    );
+    let started = state
+        .launch_options_service
+        .begin_probe("claude", "2026-08-20T00:00:00Z")
+        .expect("begin observed launch options");
+    state
+        .launch_options_service
+        .record_success(
+            &started,
+            &claude_model_scoped_options(),
+            "2026-08-20T00:00:01Z",
+        )
+        .expect("record model-scoped launch options");
+    let basis = state.launch_options_service.basis_revision("claude");
+    let basis_revision = || basis.clone();
+
+    let invalid_selection = LaunchSelection {
+        model_id: Some("fable".to_string()),
+        control_values: BTreeMap::from([("fast".to_string(), "off".to_string())]),
+    };
+    let invalid_intent = ResolvedLaunchIntent {
+        model_id: invalid_selection.model_id.clone(),
+        control_values: invalid_selection.control_values.clone(),
+        created_at: "2026-08-20T00:00:02Z".to_string(),
+    };
+    let mut invalid_record = session_record("01234567-89ab-4def-8123-456789abc001");
+    invalid_record.workspace_id = "workspace-scoped".to_string();
+    let error = state
+        .session_service
+        .store()
+        .insert_with_launch_intent(
+            &invalid_record,
+            &invalid_intent,
+            "claude",
+            &basis_revision,
+            &invalid_selection,
+        )
+        .expect_err("Fable must reject the absent fast control before commit");
+    assert!(matches!(
+        error,
+        LaunchSelectionUnsupported::Control { control_id, .. } if control_id == "fast"
+    ));
+    assert!(state
+        .session_service
+        .store()
+        .find_by_id(&invalid_record.id)
+        .expect("read rejected session")
+        .is_none());
+
+    let valid_selection = LaunchSelection {
+        model_id: Some("fable".to_string()),
+        control_values: BTreeMap::from([
+            ("effort".to_string(), "high".to_string()),
+            ("mode".to_string(), "default".to_string()),
+        ]),
+    };
+    let valid_intent = ResolvedLaunchIntent {
+        model_id: valid_selection.model_id.clone(),
+        control_values: valid_selection.control_values.clone(),
+        created_at: "2026-08-20T00:00:03Z".to_string(),
+    };
+    let mut valid_record = session_record("01234567-89ab-4def-8123-456789abc002");
+    valid_record.workspace_id = "workspace-scoped".to_string();
+    state
+        .session_service
+        .store()
+        .insert_with_launch_intent(
+            &valid_record,
+            &valid_intent,
+            "claude",
+            &basis_revision,
+            &valid_selection,
+        )
+        .expect("valid Fable intent commits");
+    assert_eq!(
+        state
+            .session_service
+            .store()
+            .find_launch_intent(&valid_record.id)
+            .expect("read Fable launch intent"),
+        Some(valid_intent)
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn unsupported_model_refusal_leaves_no_session_row_or_live_process() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
@@ -389,5 +493,66 @@ fn session_record(id: &str) -> SessionRecord {
         subagents_enabled: true,
         action_capabilities_json: None,
         origin: Some(OriginContext::api_local_runtime()),
+    }
+}
+
+fn claude_model_scoped_options() -> HarnessLaunchOptions {
+    let control = |id: &str, values: &[&str]| HarnessLaunchControl {
+        id: id.to_string(),
+        observed_label: None,
+        observed_description: None,
+        values: values
+            .iter()
+            .map(|value| HarnessLaunchControlValue {
+                value: (*value).to_string(),
+                observed_label: None,
+                observed_description: None,
+            })
+            .collect(),
+    };
+    let mode = control("mode", &["default", "plan"]);
+    let effort = control("effort", &["low", "high"]);
+    let fast = control("fast", &["off", "on"]);
+    HarnessLaunchOptions {
+        models: vec![
+            HarnessLaunchModel {
+                id: "opus".to_string(),
+                observed_name: None,
+                observed_description: None,
+            },
+            HarnessLaunchModel {
+                id: "fable".to_string(),
+                observed_name: None,
+                observed_description: None,
+            },
+        ],
+        controls: vec![mode.clone(), effort.clone(), fast.clone()],
+        defaults: HarnessLaunchDefaults {
+            model_id: Some("opus".to_string()),
+            control_values: BTreeMap::from([
+                ("effort".to_string(), "high".to_string()),
+                ("fast".to_string(), "off".to_string()),
+                ("mode".to_string(), "default".to_string()),
+            ]),
+        },
+        model_controls: vec![
+            HarnessLaunchModelControls {
+                model_id: "opus".to_string(),
+                controls: vec![mode.clone(), effort.clone(), fast],
+                default_control_values: BTreeMap::from([
+                    ("effort".to_string(), "high".to_string()),
+                    ("fast".to_string(), "off".to_string()),
+                    ("mode".to_string(), "default".to_string()),
+                ]),
+            },
+            HarnessLaunchModelControls {
+                model_id: "fable".to_string(),
+                controls: vec![mode, effort],
+                default_control_values: BTreeMap::from([
+                    ("effort".to_string(), "high".to_string()),
+                    ("mode".to_string(), "default".to_string()),
+                ]),
+            },
+        ],
     }
 }

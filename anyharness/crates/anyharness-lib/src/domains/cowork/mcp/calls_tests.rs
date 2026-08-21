@@ -4,11 +4,15 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 
 use super::calls::{call_artifact_tool, ensure_tool_available};
+use super::calls_helpers::default_launch_selection;
 use super::context::CoworkMcpContext;
+use crate::domains::agents::launch_options::{
+    HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults, HarnessLaunchModel,
+    HarnessLaunchModelControls, HarnessLaunchOptions,
+};
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::workspaces::model::{
-    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
-    WorkspaceSurface,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
 };
 use crate::origin::OriginContext;
 
@@ -94,4 +98,52 @@ async fn create_artifact_tool_delegates_to_artifact_runtime() {
     assert_eq!(result["path"], "notes/brief.md");
     assert_eq!(result["title"], "Brief");
     assert!(temp.path.join("notes/brief.md").exists());
+}
+
+#[test]
+fn cowork_defaults_use_the_exact_default_model_scope() {
+    let control = |id: &str, value: &str| HarnessLaunchControl {
+        id: id.to_string(),
+        observed_label: None,
+        observed_description: None,
+        values: vec![HarnessLaunchControlValue {
+            value: value.to_string(),
+            observed_label: None,
+            observed_description: None,
+        }],
+    };
+    let options = HarnessLaunchOptions {
+        models: vec![HarnessLaunchModel {
+            id: "fable".to_string(),
+            observed_name: None,
+            observed_description: None,
+        }],
+        controls: vec![control("mode", "default"), control("fast", "off")],
+        defaults: HarnessLaunchDefaults {
+            model_id: Some("fable".to_string()),
+            control_values: [
+                ("mode".to_string(), "default".to_string()),
+                ("fast".to_string(), "off".to_string()),
+            ]
+            .into_iter()
+            .collect(),
+        },
+        model_controls: vec![HarnessLaunchModelControls {
+            model_id: "fable".to_string(),
+            controls: vec![control("mode", "default")],
+            default_control_values: [("mode".to_string(), "default".to_string())]
+                .into_iter()
+                .collect(),
+        }],
+    };
+
+    let (model_id, control_values) = default_launch_selection(&options);
+
+    assert_eq!(model_id.as_deref(), Some("fable"));
+    assert_eq!(
+        control_values,
+        [("mode".to_string(), "default".to_string())]
+            .into_iter()
+            .collect()
+    );
 }

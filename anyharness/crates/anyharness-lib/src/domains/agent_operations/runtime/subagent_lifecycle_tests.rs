@@ -342,6 +342,7 @@ fn fixture(closed: bool) -> (Arc<AgentOperations>, Arc<State>, Arc<Queue>, Strin
                 model_id: Some(model.id.clone()),
                 control_values: Default::default(),
             },
+            model_controls: Vec::new(),
         }),
         observed_at: Some("2026-08-19T00:00:00Z".into()),
         probe_attempted_at: "2026-08-19T00:00:00Z".into(),

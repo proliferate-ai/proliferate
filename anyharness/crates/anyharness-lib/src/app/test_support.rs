@@ -82,6 +82,7 @@ pub(crate) fn seed_observed_launch_options(
                     model_id: Some("haiku".to_string()),
                     control_values: Default::default(),
                 },
+                model_controls: Vec::new(),
             },
             "2026-08-10T23:58:01Z",
         )

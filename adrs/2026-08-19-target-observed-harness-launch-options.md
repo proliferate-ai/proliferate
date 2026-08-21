@@ -39,6 +39,11 @@ it cannot define executable membership, defaults, filtering, or fallback.
 The only compatibility path is a stateless N-1 HTTP decoder that converts
 `modeId` to `controlValues.mode` before domain validation.
 
+The later
+[model-scoped controls decision](2026-08-20-model-scoped-harness-launch-controls.md)
+extends this one target observation with exact per-model control statements;
+it does not change the authority boundary established here.
+
 ## Consequences
 
 - Empty and unobserved targets show no explicit executable choices.
