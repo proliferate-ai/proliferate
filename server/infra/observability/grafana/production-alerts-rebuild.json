@@ -34,6 +34,11 @@
       "messageFormat": "json"
     }
   },
+  "slackContactPoint": {
+    "name": "grafana-rebuild-slack",
+    "type": "slack",
+    "webhookEnvironmentVariable": "SLACK_ALERTS_WEBHOOK_URL"
+  },
   "dashboard": {
     "uid": "prod-overview",
     "folderUid": "ops-folder",
