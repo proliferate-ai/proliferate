@@ -342,12 +342,12 @@ describe("HomeNextScreen model availability notices", () => {
     expect(document.querySelector("[data-home-onboarding-region]")).toBeTruthy();
     expect(document.querySelector("[data-home-composer-dock]")).toBeTruthy();
 
-    expect(screen.getByText("Add a GitHub repo")).toBeTruthy();
-    expect(screen.getByText("Configure default harnesses")).toBeTruthy();
-    expect(screen.queryByText("Manage agents")).toBeNull();
-    expect(screen.queryByText("Add another repository")).toBeNull();
-    expect(screen.queryByText(/Choose a local GitHub clone/i)).toBeNull();
-
+    // Was three negations of literals nothing emits; the live form is the list.
+    const cards = document.querySelectorAll("[data-home-onboarding-region] button");
+    expect(Array.from(cards).map((card) => card.getAttribute("aria-label"))).toEqual([
+      "Add a GitHub repo",
+      "Configure default harnesses",
+    ]);
     fireEvent.click(screen.getByRole("button", { name: "Add a GitHub repo" }));
     expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("add-repository");
 

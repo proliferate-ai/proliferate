@@ -327,16 +327,14 @@ export function HomeNextScreen() {
                       action for it. The single terminal state names none —
                       a button that cannot change anything is the dead end
                       this gate removes, not a cure. */}
-                  {modelAvailabilityNotice.action ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={runModelGateNoticeAction}
-                      className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
-                    >
-                      {modelAvailabilityNotice.actionLabel}
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={runModelGateNoticeAction}
+                    className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                  >
+                    {modelAvailabilityNotice.actionLabel}
+                  </Button>
                 </div>
               ) : null}
               submitDisabledReasonCtaSlot={

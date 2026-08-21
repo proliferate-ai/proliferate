@@ -168,16 +168,18 @@ describe("resolveHomeModelGate precedence", () => {
       .toEqual({ kind: "blocked", reason: "observation_idle" });
   });
 
-  it("states an all-unsupported catalog terminally and offers nothing to press", () => {
+  it("states an all-unsupported catalog terminally and offers only navigation", () => {
     // No probe can ever produce a model here, and `refetchAgents` re-reads an
     // identical built-in registry — so a Refresh would be a button that does
-    // nothing, forever, without even the honesty of being refused.
+    // nothing, forever, without even the honesty of being refused. The action
+    // is navigation instead: it makes no claim to fix anything, and it is the
+    // only thing standing between this state and a dead end.
     const gate = resolveHomeModelGate(input({ agentReadiness: ["unsupported", "unsupported"] }));
     expect(gate).toEqual({ kind: "blocked", reason: "agents_unsupported" });
     expect(resolveHomeModelGateNotice(gate)).toEqual({
       text: HOME_MODEL_GATE_AGENTS_UNSUPPORTED_NOTICE,
-      actionLabel: null,
-      action: null,
+      actionLabel: "See agents",
+      action: "agent_settings",
     });
     // One unsupported agent beside a working one must never claim it.
     expect(resolveHomeModelGate(input({ agentReadiness: ["unsupported", "ready"] })))
@@ -185,6 +187,21 @@ describe("resolveHomeModelGate precedence", () => {
     // An empty catalog has not established anything about support.
     expect(resolveHomeModelGate(input({ agentReadiness: [] })))
       .toEqual({ kind: "blocked", reason: "observation_idle" });
+  });
+
+  it("prefers agents_unsupported over a stale observed_empty row", () => {
+    // Both arms are live at once when an agent was installed, reported no
+    // models, and an OS or arch upgrade then made it unsupported. The row
+    // still says observed_empty, but nothing on this machine can ever answer
+    // again — so the terminal sentence is the true one, and the ENABLED empty
+    // picker `observed_empty` would keep is the false one. Ordering, not
+    // reachability: swap the two arms and this is the assertion that moves.
+    const gate = resolveHomeModelGate(input({
+      agentReadiness: ["unsupported", "unsupported"],
+      observations: [observation({ state: "observed_empty" })],
+    }));
+    expect(gate).toEqual({ kind: "blocked", reason: "agents_unsupported" });
+    expect(resolveHomeModelSelectorAvailability(gate)).toBe("unavailable");
   });
 
   it("reports agent_setup_required for every readiness the Agents pane can cure", () => {
