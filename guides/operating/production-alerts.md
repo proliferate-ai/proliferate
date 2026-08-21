@@ -303,15 +303,20 @@ Discovered live 2026-08-21 (Lane A3), not previously documented:
    environment file; it is never checked in. Grafana regenerates a reserved
    matcher subtree whenever a standalone receiver is added, so a second
    receiver cannot provide an authored sibling fan-out safely. Instead, the
-   Slack operation adds exactly one Slack integration beside the existing SNS
-   integration inside `grafana-default-sns`; Grafana sends a notification to
-   every integration in that contact point. The root/default policy, its full
-   route tree, and the exact SNS integration remain unchanged. A partial
-   standalone `grafana-rebuild-slack` receiver (pinned UID
-   `dfvuf540l7ym8d`) is removed only after both its provisioning and receiver
-   readbacks match that identity and the combined contact is written and
-   verified, making interrupted migration safe to retry. Any loss, ambiguity,
-   duplicate, UID mismatch, or drift fails closed before mutation.
+   Slack operation moves the existing partial integration (pinned UID
+   `efvuhlsl31mo0e`) from its standalone `sns receiver` group into
+   `grafana-default-sns` with a provisioning `PUT`; the `name` field selects
+   the outer receiver group. There is no contact-point `POST` and no policy
+   write. Before that `PUT`, the tool requires the exact authored root policy,
+   SNS UID/config, both partial Slack UIDs, generated routes, six unrouted
+   rules, and `0600` credential files. After it, the tool requires the full
+   provider readback to equal the prior state minus only the generated
+   `sns receiver` child. It then runs one isolated Slack-only receiver test.
+   Only after that structural and delivery proof does it delete the other
+   partial standalone `grafana-rebuild-slack` integration (pinned UID
+   `dfvuf540l7ym8d`). A lost response resumes only from an exact readback; a
+   verification or test failure moves `efvuhlsl31mo0e` back to `sns receiver`
+   and verifies the original state without deleting `dfvuf540l7ym8d`.
 
 ### Repository artifacts
 
@@ -352,10 +357,15 @@ GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-rebuild-bootstrap.mjs slack-tes
   the proof that alerting actually works.
 - `slack-apply`, `slack-verify`, and `slack-test` are separately live-gated
   and require `SLACK_ALERTS_WEBHOOK_URL` before any provider request.
-  `slack-verify` throws on missing, duplicate, drifted, or incomplete migration
-  state; it does not report partial boolean success. The test payload contains
-  only the Slack integration, so it sends no duplicate SNS/email notification.
-  Record only its success status and timestamp, never the webhook URL.
+  They also require both the dedicated admin-token file and the protected
+  observability environment file to be mode `0600`. `slack-apply` performs the
+  exact preflight, move, readback, isolated Slack test, and legacy deletion in
+  that order. `slack-verify` throws on missing, duplicate, drifted, or
+  incomplete migration state; it does not report partial boolean success.
+  `slack-test` retests the verified final state. Both test payloads contain
+  only UID `efvuhlsl31mo0e` as a Slack integration, so they send no duplicate
+  SNS/email notification. Record only success status and timestamp, never the
+  webhook URL.
 - Admin credential: a dedicated ADMIN-role service-account token for this
   workspace only, minted via `aws grafana create-workspace-service-account`
   (role `ADMIN`) + `create-workspace-service-account-token`, stored at

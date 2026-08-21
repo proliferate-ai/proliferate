@@ -70,7 +70,9 @@
     }
   },
   "slackContactPoint": {
-    "name": "sns receiver",
+    "uid": "efvuhlsl31mo0e",
+    "name": "grafana-default-sns",
+    "partialName": "sns receiver",
     "type": "slack",
     "receiver": "grafana-default-sns",
     "legacyName": "grafana-rebuild-slack",
