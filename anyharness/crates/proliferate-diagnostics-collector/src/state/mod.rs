@@ -116,7 +116,9 @@ pub struct CollectorCore {
     pub(crate) tail_tx: broadcast::Sender<Arc<[u8]>>,
     pub(crate) tail_slots: Arc<Semaphore>,
     pub(crate) export_slots: Arc<Semaphore>,
-    /// Internal/dogfood OTLP fan-out. Absent from customer builds.
+    /// OTLP fan-out. Present in every build; what it may export is the
+    /// compile-time `EXPORT_POLICY` (`export/policy.rs`), which limits a
+    /// customer build to the lifecycle record class.
     pub(crate) exporter: ExporterHandle,
 }
 
@@ -183,14 +185,14 @@ impl CollectorCore {
         &self.boot_id
     }
 
-    /// Starts the internal export task inside the collector runtime. It is a
-    /// no-op in a customer build and in an internal build with no destination.
+    /// Starts the export task inside the collector runtime. It is a no-op in
+    /// any build with no destination configured.
     pub fn spawn_exporter(&self) {
         self.exporter.spawn();
     }
 
-    /// Gives the internal exporter one bounded final flush. Never a shutdown
-    /// gate, and a no-op in a customer build.
+    /// Gives the exporter one bounded final flush. Never a shutdown gate, and
+    /// a no-op in any build with no destination configured.
     pub async fn shutdown_exporter(&self) {
         self.exporter.shutdown().await;
     }
