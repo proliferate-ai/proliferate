@@ -31,7 +31,10 @@ function triggerBlock(source, name) {
 const MAIN_BRANCH_FILTER = /branches:\s*(?:\[[^\]]*\bmain\b[^\]]*\]|(?:\r?\n\s*-\s*["']?main["']?))/;
 // `Production` and `production` are the same GitHub Environment reference as
 // far as a reviewer scanning for prod reach is concerned, and the two deleted
-// coordinators both used the lowercase spelling.
+// coordinators both used the lowercase spelling. The spellings are NOT
+// interchangeable at deploy time, though: the string is passed through to
+// `DEPLOY_ENVIRONMENT` and interpolated into SSM parameter paths. See the
+// deploy-environment casing test below.
 const PRODUCTION_ENVIRONMENT = /environment:\s*["']?[Pp]roduction["']?/;
 
 test("staging runs only when an operator dispatches it", () => {
@@ -152,4 +155,69 @@ test("a dry run walks the graph without any externally visible effect", () => {
   // Both summaries say so out loud.
   assert.match(section("- name: Summarize plan", "  # \u2500\u2500 Release builds"), /Dry run/);
   assert.match(section("- name: Summarize results"), /DRY RUN\./);
+});
+
+test("deploy environment inputs use the exact casing the AWS resource paths use", () => {
+  // GitHub matches environment names case-insensitively, so `Production` binds
+  // to the same environment as `production` and nothing fails at bind time.
+  // But the same string becomes `DEPLOY_ENVIRONMENT`, which is interpolated
+  // raw into SSM parameter paths (`/proliferate/${DEPLOY_ENVIRONMENT}/litellm/...`
+  // in _deploy-litellm.yml, `/proliferate/${DEPLOY_ENVIRONMENT}/support/...` in
+  // _deploy-server.yml) and into Sentry environment values on the server task
+  // definition. Every live SSM parameter uses the lowercase spelling and the
+  // deploy role's IAM policy is scoped to it case-sensitively, so a capitalized
+  // input fails with AccessDeniedException at deploy time. Release run
+  // 32450223908 lost its LiteLLM deploy to exactly this, and shipped a server
+  // task definition carrying SENTRY_ENVIRONMENT=Production.
+  //
+  // Not covered by this test: _deploy-server.yml's CloudWatch derivations
+  // (`Proliferate/Background/${DEPLOY_ENVIRONMENT}`, `/ecs/proliferate-server-${DEPLOY_ENVIRONMENT}`)
+  // match no real resource under EITHER spelling; the live log group is
+  // `/ecs/proliferate-prod`. That is a separate defect.
+  //
+  // The canonical spelling is the environment key in the hosted contract, which
+  // is the same token the AWS resources are named after.
+  const contract = JSON.parse(
+    readFileSync(path.join(repoRoot, "server/deploy/hosted-redis-contract.json"), "utf8"),
+  );
+  const canonical = new Set(Object.keys(contract.environments));
+  assert.ok(canonical.size > 0, "the hosted contract must declare environments");
+
+  // Every `environment:` line is inspected at any indentation, with an inline
+  // comment stripped, surrounding quotes removed, and trailing whitespace
+  // trimmed, so none of those spellings can smuggle a capitalized value past
+  // the check. Expression-valued inputs (`${{ ... }}`) are resolved at run time
+  // by the caller, which is itself one of the files checked here.
+  for (const [name, expected] of [
+    ["release.yml", 3],
+    ["deploy-staging.yml", 4],
+  ]) {
+    const source = read(name);
+    const lines = source.split("\n").filter((line) => /^\s*environment:\s*\S/.test(line));
+    // Pin the count so a refactor that renames or drops the key trips this test
+    // instead of vacuously passing on an empty match set.
+    assert.equal(
+      lines.length,
+      expected,
+      `${name}: expected ${expected} environment inputs, found ${lines.length}. ` +
+        `Update this test deliberately when the deploy lanes change.`,
+    );
+
+    for (const line of lines) {
+      const raw = line
+        .replace(/^\s*environment:\s*/, "")
+        .replace(/\s+#.*$/, "")
+        .trim()
+        .replace(/^["'](.*)["']$/, "$1");
+      if (raw.includes("${{")) {
+        continue;
+      }
+      assert.ok(
+        canonical.has(raw),
+        `${name}: environment input '${raw}' is not a hosted contract environment key ` +
+          `(${[...canonical].join(", ")}). The input is interpolated into SSM paths and ` +
+          `Sentry environment values, so the casing must match the AWS resources exactly.`,
+      );
+    }
+  }
 });
