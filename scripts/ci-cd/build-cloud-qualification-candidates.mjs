@@ -122,7 +122,7 @@ export function allocateCloudWorldSubdomain({ runId, shardId, zoneDomain = DEFAU
 /**
  * Builds the three musl runtime binaries via `cargo zigbuild`, stamped with
  * the repository VERSION and source SHA, reusing the exact target/package set
- * `Makefile cloud-runtime-build` and `.github/workflows/_deploy-e2b.yml` use
+ * `Makefile cloud-runtime-build` and `.github/workflows/release-cloud-template.yml` use
  * (prework fact 4: "reuse this path verbatim"). Materializes each binary at
  * `outputDir/<name>`.
  */

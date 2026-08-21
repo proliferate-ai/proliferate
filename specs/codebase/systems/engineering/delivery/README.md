@@ -47,7 +47,7 @@ Merging to `main` deploys nothing. Continuous staging is retired: `deploy-stagin
 
 Nothing in the pipeline asks for approval. Dispatching a run is the authorization, and the 09:00 UTC cron needs none.
 
-The live E2B webhook workflow is manual-only and is not part of ordinary CI, staging, or the release pipeline. The Worker reusable lane is a configured no-op while `WORKERS_DEPLOY_ENABLED` is false and deliberately fails if enabled before a canonical worker service and command exist.
+The live E2B webhook workflow is manual-only and is not part of ordinary CI, staging, or the release pipeline. The E2B, mobile, and standalone Worker reusable lanes were deleted with the coordinators that were their only callers; the Celery worker and Beat services still deploy inside `_deploy-server.yml`, which is a different thing from the retired `_deploy-workers.yml` no-op.
 
 Hosted Playwright and Cargo Tauri dependency steps normalize the known Ubuntu
 runner mirror indirection to the canonical archive immediately before
@@ -172,9 +172,11 @@ enabled on the cluster), and the task-outcome metric filters carry `task_name`
 
 The nightly run covers every surface: Server, Web, and LiteLLM deploys plus a Desktop release that publishes the updater manifest. `surfaces` defaults to `all`, which makes every surface eligible and leaves the choice to change detection against the previous checkpoint, so an unchanged surface is neither re-released nor redeployed and a night with no changes at all does nothing. An explicit `surfaces` list skips detection and is exact.
 
-A `skip_build` run is deploy-only. It creates no version bump, no tags, no artifact releases, and no product release page, so it deploys exactly the bytes that already exist for that ref.
+A `skip_build` run is deploy-only. It creates no version bump, no tags, no artifact releases, and no product release page, so it deploys the exact ref without minting new artifact identities. It does not reuse the artifacts a previous run produced: each hosted lane still rebuilds its image from that same source SHA, so a promotion is a deterministic rebuild of the promoted commit rather than a retag of existing bytes. Artifact handoff would make it a true retag and is not built.
 
-Production jobs are unattended workflow jobs, and the pipeline has no approval step of its own. The `Production` GitHub Environment's required-reviewer rule is a repository setting rather than anything these files express; while it is set, it stops the cron from completing unattended.
+Production jobs are unattended workflow jobs, and the pipeline has no approval step of its own. The `Production` GitHub Environment's required-reviewer rule is a repository setting rather than anything these files express, and while it is set it does more than delay a run.
+
+A cron run under that rule pushes its version-bump commit to `main` and creates the release tags in prepare, which is not bound to any environment, and then parks `deploy-server-prod` in Waiting. The parked run holds the `nightly-release-train` concurrency group with `cancel-in-progress: false`, and no separate hotfix workflow exists to route around it, so every later dispatch queues behind the parked run instead of preempting it and a third dispatch cancels the queued one rather than the stuck one. Every manual production deploy is blocked for as long as the run sits there. The operator escape hatch is `gh run cancel <run-id>` on the parked run, which releases the group. The rule must be removed for this pipeline to operate as described.
 
 Server and LiteLLM deploy in parallel, and Web waits for the Server deploy because a rolled web surface can call API endpoints that only the new server revision serves. Web still deploys when Server is not a selected surface, and does not deploy when a selected Server deploy failed.
 
@@ -187,10 +189,11 @@ See the [Release procedure](../../../../../guides/deploying/releases.md).
 ### Artifact lanes
 
 Desktop, Runtime/SDK, Server/self-host, and E2B template outputs have distinct
-coordinates. The reusable E2B deploy lane and the two standalone cloud-template
-workflows all operate on the same immutable `sha-<12>` plus rolling
-`staging`/`production` family; they are separate entrypoints, not separate
-artifact identities.
+coordinates. The two standalone cloud-template workflows operate on the same
+immutable `sha-<12>` plus rolling `staging`/`production` family;
+`release-cloud-template.yml` builds an immutable tag and moves `staging`, and
+`promote-cloud-template.yml` smokes an immutable tag and moves `production`.
+They are separate entrypoints, not separate artifact identities.
 
 Server releases publish server and LiteLLM GHCR images with version and rolling
 `stable` tags, never commit-SHA image tags. A `server-v<version>` GitHub Release
@@ -213,12 +216,9 @@ gate.
 | Workflow | Trigger and posture | Role |
 | --- | --- | --- |
 | `_deploy-desktop.yml` | Reusable only | Validate/build Desktop for staging or call the Desktop publisher for production. |
-| `_deploy-e2b.yml` | Reusable only | Build and/or promote one immutable E2B template into a rolling environment tag; the smoke proves the three runtime binaries report the canonical version and carry the stamped source SHA before the rolling tag moves. |
 | `_deploy-litellm.yml` | Reusable only | Build and roll the LiteLLM ECS service when its environment switch is enabled. |
-| `_deploy-mobile.yml` | Reusable only | Run the selected EAS build and optional submit lane when enabled. |
 | `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, conditionally roll the Celery worker and Beat before the API, roll the API, and verify health. API, worker, and Beat are all pinned to the one candidate image by its **immutable `repo@sha256:` digest** (resolved from the build/push output), never a mutable tag, so all three planes run the byte-identical image and a later tag move cannot change what a rolled service runs. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, preserves the support-feed secret, and explicitly authors the API's checked-in environment-bound Redis and E2B-key field references after account, region, secret-identity, DNS-safe Redis, and nonempty-key preflights. The conditional background re-image authors the same exact key projection plus the reviewed template, and asserts the full contract before and after registration. |
 | `_deploy-web.yml` | Reusable only | Deploy and verify the selected Vercel web surface. |
-| `_deploy-workers.yml` | Reusable only | Report the disabled Worker lane, or fail if enabled before a canonical deploy exists. |
 
 ### CI, security, compatibility, probes, and qualification
 
@@ -292,7 +292,9 @@ manifest publisher exists.
 - Self-host release E2E exposes a reusable trigger but is not called by the
   release coordinator, even though Testing's target requires an every-release
   gate.
-- Hosted Worker deployment has no enabled canonical service or command.
+- E2B has no automated production path. `release.yml` has no E2B job, and the rolling `production` template tag moves only through the manual `Promote Cloud Template` workflow, even though change detection still classifies an `e2b` surface.
+- Mobile has no deploy path in any workflow. Its EAS lane was deleted with the coordinators that called it.
+- Hosted Worker deployment has no enabled canonical service or command, and no standalone Worker workflow exists any more. The Celery worker and Beat rollout inside `_deploy-server.yml` is unaffected.
 - The AWS Graviton self-host template downloads the aarch64 runtime bundle,
   while provider-sandbox runtime discovery currently expects x86 Linux
   binaries. The default AWS cloud-workspace path is therefore not proven.

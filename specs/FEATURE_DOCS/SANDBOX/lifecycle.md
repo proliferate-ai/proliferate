@@ -91,9 +91,8 @@ commit SHA.
 ### Publish
 
 CI publishes each build under an immutable `sha-<12-hex>` tag
-([release-cloud-template.yml](../../../.github/workflows/release-cloud-template.yml),
-[_deploy-e2b.yml](../../../.github/workflows/_deploy-e2b.yml)) on one
-template family. Immutable tags are like commits; the rolling tags
+([release-cloud-template.yml](../../../.github/workflows/release-cloud-template.yml))
+on one template family. Immutable tags are like commits; the rolling tags
 `:staging` and `:production` are movable pointers, like branch names.
 Promotion and rollback are the same operation, re-pointing a rolling tag
 at a different immutable build
@@ -522,8 +521,8 @@ scripts/
 ├── promote-cloud-template.mjs               move a rolling tag onto a verified immutable tag
 └── smoke-cloud-template.mjs                 throwaway-sandbox smoke against an exact ref
 .github/workflows/
-├── release-cloud-template.yml               immutable sha-tag build lane
-└── _deploy-e2b.yml                          reusable build/promote lane
+├── release-cloud-template.yml               immutable sha-tag build lane, moves :staging
+└── promote-cloud-template.yml               smoke an immutable tag, move :production
 server/proliferate/
 ├── constants/sandbox/e2b.py                 timeout (2700 s), runtime port (8457), binary path
 ├── integrations/sandbox/e2b.py              provider adapter: create/connect/pause/kill, host resolution

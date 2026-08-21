@@ -44,11 +44,10 @@ The normal path is CI, not a laptop:
 2. The lane smoke-tests the exact immutable ref with
    [`scripts/smoke-cloud-template.mjs`](../../scripts/smoke-cloud-template.mjs)
    before any rolling tag moves.
-3. Promotion to a rolling tag happens through the same lane
-   ([_deploy-e2b.yml](../../.github/workflows/_deploy-e2b.yml)) or the
-   manual `Promote Cloud Template` workflow
+3. Promotion to a rolling tag happens through the manual
+   `Promote Cloud Template` workflow
    ([promote-cloud-template.yml](../../.github/workflows/promote-cloud-template.yml)),
-   both of which call
+   which calls
    [`scripts/promote-cloud-template.mjs`](../../scripts/promote-cloud-template.mjs).
 
 Local builds (`node scripts/build-template.mjs`) exist for template
@@ -81,10 +80,10 @@ Secrets policy:
 1. Identify the affected environment and rolling tag:
    - staging uses `:staging`
    - production uses `:production`
-2. Find the current bad immutable tag from the failed `Deploy Staging`,
-   `Promote Production`, `Release Cloud Template`, or
-   `Promote Cloud Template` run summary. The E2B job summary prints the
-   immutable tag and template family.
+2. Find the current bad immutable tag from the failed
+   `Release Cloud Template` or `Promote Cloud Template` run summary. The E2B
+   job summary prints the immutable tag and template family. No other workflow
+   builds or moves an E2B tag.
 3. Find the previous known-good immutable `sha-*` tag from the last successful
    run for the same rolling tag. Do not use a rolling tag as the rollback
    source.
@@ -95,8 +94,6 @@ Secrets policy:
 Useful commands:
 
 ```bash
-gh run list --workflow "Deploy Staging" --limit 20
-gh run list --workflow "Promote Production" --limit 20
 gh run list --workflow "Release Cloud Template" --limit 20
 gh run list --workflow "Promote Cloud Template" --limit 20
 ```

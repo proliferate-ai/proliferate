@@ -15,7 +15,7 @@ import { DESKTOP_RENDERER_ARTIFACT_ID, SERVER_ARTIFACT_PREFIX } from "./local-ca
  *
  * The `server/*` id carries a dynamic docker-platform segment (matched by its
  * stable prefix, like the local world); the four runtime binaries are pinned to
- * the exact musl Linux target, matching `.github/workflows/_deploy-e2b.yml` and
+ * the exact musl Linux target, matching `.github/workflows/release-cloud-template.yml` and
  * `Makefile cloud-runtime-build`. `desktop-renderer/browser` is the existing PR 1
  * id, reused per World-construction step 5 ("reuse the PR 1 renderer candidate
  * pattern targeted at the public candidate API origin") — the spec's

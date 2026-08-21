@@ -133,7 +133,7 @@ async function main() {
 
     // Prove all three binaries report the expected canonical version before any
     // rolling reference is moved. A stale-stamp bundle (e.g. Cargo `0.1.0`)
-    // fails here, so `_deploy-e2b.yml` never promotes an unidentified build.
+    // fails here, so `promote-cloud-template.yml` never promotes an unidentified build.
     if (parsed.expectedVersion) {
       const versionCheck = await sandbox.commands.run(
         [
