@@ -89,3 +89,64 @@ test("a deploy-only run refuses to resolve an empty surface set", () => {
   assert.match(guard, /::error::/);
   assert.match(guard, /exit 1/);
 });
+
+test("a dry run walks the graph without any externally visible effect", () => {
+  // dry_run is the standing wiring proof: every job must still be reachable, and
+  // every step that writes to main, to a tag, to a cloud provider, or to a
+  // GitHub Release must be suppressed.
+  const release = read("release.yml");
+
+  const section = (from, to) => {
+    const start = release.indexOf(from);
+    assert.notEqual(start, -1, `release.yml is missing ${from}`);
+    const end = to ? release.indexOf(to, start + from.length) : -1;
+    return release.slice(start, end === -1 ? undefined : end);
+  };
+
+  // Nothing is pushed to main and no tag is minted.
+  const commit = section("- name: Commit version bumps", "- name: Create release tags");
+  assert.match(commit, /if \[\[ "\$SKIP_BUILD" == "true" \|\| "\$DRY_RUN" == "true" \]\]; then/);
+  assert.ok(
+    commit.indexOf('exit 0') < commit.indexOf("git push origin HEAD:main"),
+    "the dry-run early return must precede the push to main",
+  );
+  for (const step of ["- name: Verify version tags are free", "- name: Create release tags"]) {
+    assert.match(
+      section(step, "\n      - name:"),
+      /steps\.meta\.outputs\.dry_run != 'true'/,
+      `${step} must be suppressed on a dry run`,
+    );
+  }
+
+  // No artifact release build runs.
+  for (const job of ["  release-runtime:", "  release-server:", "  release-desktop:"]) {
+    assert.match(
+      section(job, "    uses:"),
+      /needs\.prepare\.outputs\.dry_run != 'true'/,
+      `${job.trim()} must be skipped on a dry run`,
+    );
+  }
+
+  // Every deploy lane is still called, but with the enabled no-op switch off, so
+  // the call wiring is exercised and nothing reaches AWS or Vercel.
+  const deployJobs = [...release.matchAll(/^  (deploy-[a-z-]+):$/gm)].map((m) => m[1]);
+  assert.deepEqual(deployJobs, ["deploy-server-prod", "deploy-litellm-prod", "deploy-web-prod"]);
+  for (const job of deployJobs) {
+    const body = section(`  ${job}:`, "    secrets: inherit");
+    assert.match(body, /uses: \.\/\.github\/workflows\/_deploy-/, `${job} must still call its lane`);
+    assert.match(
+      body,
+      /enabled: \$\{\{ needs\.prepare\.outputs\.[a-z]+ == 'true' && needs\.prepare\.outputs\.dry_run != 'true' \}\}/,
+      `${job} must pass enabled: false on a dry run`,
+    );
+  }
+
+  // The product release page renders but is never created or updated.
+  const publish = section("  publish-product-release:", "  summary:");
+  assert.match(publish, /--dry-run "\$\{\{ needs\.prepare\.outputs\.dry_run \}\}"/);
+  assert.match(publish, /needs\.prepare\.outputs\.dry_run == 'true' \|\|/);
+
+  // Both summaries say so out loud.
+  assert.match(section("- name: Summarize plan", "  # \u2500\u2500 Release builds"), /Dry run/);
+  assert.match(section("- name: Summarize results"), /DRY RUN\./);
+});

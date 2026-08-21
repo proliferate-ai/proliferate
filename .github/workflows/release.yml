@@ -34,6 +34,17 @@ on:
         default: main
         required: false
         type: string
+      dry_run:
+        description: >-
+          Exercise the whole graph while suppressing every externally visible effect: no
+          version-bump commit, no tags, no artifact releases, no deploy, no product release
+          page. This is the standing way to prove a wiring change before it can ship
+          anything. Composes with the other inputs: with `surfaces` it plans exactly that
+          set, and with `skip_build` it walks the deploy-only shape (which still requires an
+          explicit `surfaces` list, because that guard is part of the wiring being proven).
+        default: false
+        required: false
+        type: boolean
 
 permissions:
   actions: read
@@ -59,6 +70,7 @@ jobs:
       base_sha: ${{ steps.meta.outputs.base_sha }}
       head_sha: ${{ steps.commit.outputs.head_sha }}
       skip_build: ${{ steps.meta.outputs.skip_build }}
+      dry_run: ${{ steps.meta.outputs.dry_run }}
       product_version: ${{ steps.artifacts.outputs.product_version }}
       product_tag: ${{ steps.artifacts.outputs.product_tag }}
       selected_surfaces: ${{ steps.detect.outputs.selected_surfaces }}
@@ -89,6 +101,7 @@ jobs:
         env:
           INPUT_REF: ${{ github.event.inputs.ref || '' }}
           SKIP_BUILD: ${{ github.event.inputs.skip_build || 'false' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           set -euo pipefail
           git fetch origin main --tags --prune
@@ -110,6 +123,7 @@ jobs:
             echo "base_sha=$base_sha"
             echo "head_sha=$head_sha"
             echo "skip_build=$SKIP_BUILD"
+            echo "dry_run=$DRY_RUN"
           } >> "$GITHUB_OUTPUT"
 
       - name: Detect release surfaces
@@ -163,7 +177,7 @@ jobs:
           --surfaces "${{ steps.detect.outputs.selected_surfaces }}"
           --release-id "${{ steps.meta.outputs.release_id }}"
           --version-bump patch
-          --dry-run false
+          --dry-run "${{ steps.meta.outputs.dry_run }}"
 
       - name: Verify version tags are free
         # Runs before the version-bump commit is pushed. desktop-v*/server-v*/
@@ -171,7 +185,7 @@ jobs:
         # already picks the next version past every existing tag, so any of these
         # existing at all here means a real collision (e.g. a race with another
         # run), and we want that to abort before main gets a throwaway commit.
-        if: steps.meta.outputs.skip_build != 'true' && steps.artifacts.outputs.product_tag != ''
+        if: steps.meta.outputs.skip_build != 'true' && steps.meta.outputs.dry_run != 'true' && steps.artifacts.outputs.product_tag != ''
         env:
           ARTIFACT_TAGS: ${{ steps.artifacts.outputs.artifact_tags }}
           PRODUCT_TAG: ${{ steps.artifacts.outputs.product_tag }}
@@ -191,9 +205,12 @@ jobs:
         env:
           RELEASE_ID: ${{ steps.meta.outputs.release_id }}
           SKIP_BUILD: ${{ steps.meta.outputs.skip_build }}
+          DRY_RUN: ${{ steps.meta.outputs.dry_run }}
         run: |
           set -euo pipefail
-          if [[ "$SKIP_BUILD" == "true" ]]; then
+          # A dry run computes the bump so the plan is real, then throws it away:
+          # nothing is committed and nothing is pushed to main.
+          if [[ "$SKIP_BUILD" == "true" || "$DRY_RUN" == "true" ]]; then
             echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -209,7 +226,7 @@ jobs:
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Create release tags
-        if: steps.meta.outputs.skip_build != 'true' && steps.artifacts.outputs.product_tag != ''
+        if: steps.meta.outputs.skip_build != 'true' && steps.meta.outputs.dry_run != 'true' && steps.artifacts.outputs.product_tag != ''
         env:
           ARTIFACT_TAGS: ${{ steps.artifacts.outputs.artifact_tags }}
           PRODUCT_TAG: ${{ steps.artifacts.outputs.product_tag }}
@@ -241,6 +258,10 @@ jobs:
             echo "- Base: \`${{ steps.meta.outputs.base_sha }}\`"
             echo "- Head: \`${{ steps.commit.outputs.head_sha }}\`"
             echo "- Skip build: \`${{ steps.meta.outputs.skip_build }}\`"
+            echo "- Dry run: \`${{ steps.meta.outputs.dry_run }}\`"
+            if [[ "${{ steps.meta.outputs.dry_run }}" == "true" ]]; then
+              echo "- **Dry run: nothing was committed, tagged, released, or deployed.** The versions and tags below are the plan this run would have executed."
+            fi
             echo "- Selected surfaces: \`${{ steps.detect.outputs.selected_surfaces }}\`"
             echo "- Desktop: \`${{ steps.artifacts.outputs.desktop_tag }}\`"
             echo "- Runtime: \`${{ steps.artifacts.outputs.runtime_tag }}\`"
@@ -249,11 +270,15 @@ jobs:
 
   # ── Release builds ────────────────────────────────────────────────────────────
   # Artifact identities for this head. Skipped entirely on a promote run, whose
-  # artifacts already exist.
+  # artifacts already exist, and on a dry run. The reusable build lanes have no
+  # cheap no-op switch: their own `dry_run` input still compiles everything, and a
+  # macOS desktop matrix is not a proportionate price for a wiring proof. This is
+  # how the retired train's plan-only dry run behaved too. The deploy lanes below
+  # do have such a switch, so a dry run still walks their call wiring.
 
   release-runtime:
     needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.skip_build != 'true' && needs.prepare.outputs.runtime == 'true' }}
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.skip_build != 'true' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.runtime == 'true' }}
     uses: ./.github/workflows/release-runtime.yml
     with:
       git_sha: ${{ needs.prepare.outputs.head_sha }}
@@ -264,7 +289,7 @@ jobs:
 
   release-server:
     needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.skip_build != 'true' && needs.prepare.outputs.server == 'true' }}
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.skip_build != 'true' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.server == 'true' }}
     permissions:
       contents: write
       packages: write
@@ -279,7 +304,7 @@ jobs:
 
   release-desktop:
     needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.skip_build != 'true' && needs.prepare.outputs.desktop == 'true' }}
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.skip_build != 'true' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.desktop == 'true' }}
     permissions:
       contents: write
       id-token: write
@@ -299,6 +324,11 @@ jobs:
   # Hosted surfaces deploy from prepare, not from the release builds: each
   # reusable lane builds its own exact-SHA image. Artifact handoff between the
   # build jobs and these deploys is a separate follow-up.
+  #
+  # A dry run still calls every lane so the `uses:` resolution, the input wiring,
+  # and the needs-graph edges are all exercised; it just passes `enabled: false`,
+  # which is the same no-op switch an unselected surface uses, so the inner job
+  # that touches AWS or Vercel never starts.
 
   deploy-server-prod:
     needs: [prepare]
@@ -307,7 +337,7 @@ jobs:
     with:
       environment: Production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.server == 'true' }}
+      enabled: ${{ needs.prepare.outputs.server == 'true' && needs.prepare.outputs.dry_run != 'true' }}
     secrets: inherit
 
   deploy-litellm-prod:
@@ -317,7 +347,7 @@ jobs:
     with:
       environment: Production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.litellm == 'true' }}
+      enabled: ${{ needs.prepare.outputs.litellm == 'true' && needs.prepare.outputs.dry_run != 'true' }}
     secrets: inherit
 
   deploy-web-prod:
@@ -331,6 +361,7 @@ jobs:
         needs.prepare.result == 'success' &&
         needs.prepare.outputs.selected_surfaces != '' &&
         (
+          needs.prepare.outputs.dry_run == 'true' ||
           needs.prepare.outputs.server != 'true' ||
           needs.deploy-server-prod.result == 'success'
         )
@@ -339,13 +370,15 @@ jobs:
     with:
       environment: Production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.web == 'true' }}
+      enabled: ${{ needs.prepare.outputs.web == 'true' && needs.prepare.outputs.dry_run != 'true' }}
     secrets: inherit
 
   publish-product-release:
     # Gates on the release builds only. Hosted deploys are not artifact
     # identities, so a product release page can publish while production is
-    # still rolling or after production later fails.
+    # still rolling or after production later fails. On a dry run the builds are
+    # skipped, so the gate falls through to the script's own --dry-run, which
+    # renders the release body without creating or updating anything.
     needs:
       - prepare
       - release-runtime
@@ -358,9 +391,14 @@ jobs:
         needs.prepare.outputs.skip_build != 'true' &&
         needs.prepare.outputs.product_tag != '' &&
         needs.prepare.outputs.selected_surfaces != '' &&
-        (needs.prepare.outputs.runtime != 'true' || needs.release-runtime.result == 'success') &&
-        (needs.prepare.outputs.server != 'true' || needs.release-server.result == 'success') &&
-        (needs.prepare.outputs.desktop != 'true' || needs.release-desktop.result == 'success')
+        (
+          needs.prepare.outputs.dry_run == 'true' ||
+          (
+            (needs.prepare.outputs.runtime != 'true' || needs.release-runtime.result == 'success') &&
+            (needs.prepare.outputs.server != 'true' || needs.release-server.result == 'success') &&
+            (needs.prepare.outputs.desktop != 'true' || needs.release-desktop.result == 'success')
+          )
+        )
       }}
     runs-on: ubuntu-latest
     permissions:
@@ -392,7 +430,7 @@ jobs:
           --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           --repository "${{ github.repository }}"
           --body-out product-release.md
-          --dry-run false
+          --dry-run "${{ needs.prepare.outputs.dry_run }}"
 
       - name: Summarize product release page
         run: |
@@ -422,11 +460,15 @@ jobs:
         run: |
           {
             echo "### Release result"
+            if [[ "${{ needs.prepare.outputs.dry_run }}" == "true" ]]; then
+              echo "- **DRY RUN. No commit, tag, artifact release, deploy, or product release page was produced.**"
+            fi
             echo "- Product: \`${{ needs.prepare.outputs.product_tag || 'no release' }}\`"
             echo "- Checkpoint: \`${{ needs.prepare.outputs.release_id }}\`"
             echo "- Head: \`${{ needs.prepare.outputs.head_sha }}\`"
             echo "- Surfaces: \`${{ needs.prepare.outputs.selected_surfaces }}\`"
             echo "- Skip build: \`${{ needs.prepare.outputs.skip_build }}\`"
+            echo "- Dry run: \`${{ needs.prepare.outputs.dry_run }}\`"
             echo "- Runtime release: \`${{ needs.release-runtime.result }}\`"
             echo "- Server release: \`${{ needs.release-server.result }}\`"
             echo "- Desktop release: \`${{ needs.release-desktop.result }}\`"

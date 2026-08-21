@@ -29,9 +29,9 @@ test("same-version desktop release runs share one non-cancelling concurrency loc
 });
 
 test("the desktop title entrypoint survives the coordinator collapse", async () => {
-  // The three release coordinators collapsed into one release.yml whose only
-  // dispatch inputs are surfaces, skip_build, and ref, so a titled desktop
-  // release is dispatched on release-desktop.yml itself. The reusable
+  // The three release coordinators collapsed into one release.yml whose
+  // dispatch inputs are surfaces, skip_build, ref, and dry_run, so a titled
+  // desktop release is dispatched on release-desktop.yml itself. The reusable
   // pass-through must therefore stay intact.
   const [deployDesktop, release] = await Promise.all([
     workflow("_deploy-desktop.yml"),
@@ -40,9 +40,16 @@ test("the desktop title entrypoint survives the coordinator collapse", async () 
 
   assert.match(deployDesktop, /workflow_call:[\s\S]*?release_title:/);
   assert.match(deployDesktop, /release_title: \$\{\{ inputs\.release_title \}\}/);
-  assert.match(
-    release,
-    /workflow_dispatch:[\s\S]*?surfaces:[\s\S]*?skip_build:[\s\S]*?ref:/,
+  // Scope this to the dispatch inputs: `dry_run:` also appears in the reusable
+  // `with:` blocks further down, so an unscoped match would pass on a file that
+  // has no dry_run input at all.
+  const dispatchInputs = release.slice(
+    release.indexOf("  workflow_dispatch:"),
+    release.indexOf("\npermissions:"),
+  );
+  assert.deepEqual(
+    [...dispatchInputs.matchAll(/^      ([a-z_]+):$/gm)].map((match) => match[1]).sort(),
+    ["dry_run", "ref", "skip_build", "surfaces"],
   );
 
   const retired = ["nightly-release-train.yml", "hotfix-production.yml", "promote-production.yml"];

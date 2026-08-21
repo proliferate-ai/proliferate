@@ -43,7 +43,7 @@ Delivery has three states. Main is a commit that passed CI. Staging is a deploye
 
 Merging to `main` deploys nothing. Continuous staging is retired: `deploy-staging.yml` keeps only its manual dispatch, so a staging deploy is an operator's deliberate act. Its internals are unchanged. It resolves the exact SHA, detects or explicitly selects surfaces, waits for matching Server CI when such a run exists, invokes the reusable staging lanes, and writes a summary artifact. The Desktop staging lane validates and builds only; it does not publish the updater.
 
-`release.yml` is the single transition from `main` to production, and production deploys from its prepare job rather than from a staging result. A manual dispatch takes three inputs: `surfaces` (default `all`), `skip_build`, and `ref` (default `main`). A hotfix is an exact `ref` plus an exact `surfaces` set. A promotion of an already-built ref is `skip_build`. Neither is a separate workflow file. An explicit `ref` must be an ancestor of `main`, so production only ever ships commits that reached `main`.
+`release.yml` is the single transition from `main` to production, and production deploys from its prepare job rather than from a staging result. A manual dispatch takes four inputs: `surfaces` (default `all`), `skip_build`, `ref` (default `main`), and `dry_run`. A hotfix is an exact `ref` plus an exact `surfaces` set. A promotion of an already-built ref is `skip_build`. Neither is a separate workflow file. An explicit `ref` must be an ancestor of `main`, so production only ever ships commits that reached `main`. A scheduled run supplies no inputs, so every default applies and `dry_run` is false.
 
 Nothing in the pipeline asks for approval. Dispatching a run is the authorization, and the 09:00 UTC cron needs none.
 
@@ -172,6 +172,10 @@ enabled on the cluster), and the task-outcome metric filters carry `task_name`
 
 The nightly run covers every surface: Server, Web, and LiteLLM deploys plus a Desktop release that publishes the updater manifest. `surfaces` defaults to `all`, which makes every surface eligible and leaves the choice to change detection against the previous checkpoint, so an unchanged surface is neither re-released nor redeployed and a night with no changes at all does nothing. An explicit `surfaces` list skips detection and is exact.
 
+`dry_run` is the standing way to prove a change to this pipeline before it can ship anything. A dry run walks the whole graph and suppresses every externally visible effect: prepare computes the version plan but commits nothing to `main` and creates no tags, the artifact release builds are skipped, each deploy lane is still called but with `enabled: false` so the inner job that reaches AWS or Vercel never starts, and the product release body is rendered without creating or updating a GitHub Release. Both step summaries say the run was a dry run. It composes with the other inputs: `surfaces` narrows what the plan covers, and `skip_build` walks the deploy-only shape, which still requires an explicit `surfaces` list because that guard is part of what a wiring proof needs to exercise.
+
+The build lanes are skipped rather than called with their own `dry_run`, because their dry-run input still compiles everything; the deploy lanes have a real no-op switch, so calling them costs seconds and proves the call wiring. That asymmetry is deliberate.
+
 A `skip_build` run is deploy-only. It creates no version bump, no tags, no artifact releases, and no product release page, so it deploys the exact ref without minting new artifact identities. It does not reuse the artifacts a previous run produced: each hosted lane still rebuilds its image from that same source SHA, so a promotion is a deterministic rebuild of the promoted commit rather than a retag of existing bytes. Artifact handoff would make it a true retag and is not built.
 
 Production jobs are unattended workflow jobs, and the pipeline has no approval step of its own. The `Production` GitHub Environment's required-reviewer rule is a repository setting rather than anything these files express, and while it is set it does more than delay a run.
@@ -248,7 +252,7 @@ parent because that source commit already passed the `main` push gate.
 | Workflow | Trigger and posture | Role |
 | --- | --- | --- |
 | `deploy-staging.yml` | Manual | Plan, deploy selected staging surfaces, and retain the exact-SHA summary. Nothing triggers it automatically. |
-| `release.yml` | Scheduled daily at 09:00 UTC, or manual | Release selected artifacts and deploy selected hosted surfaces straight to production. `skip_build` makes the run a deploy-only promotion; `ref` plus `surfaces` expresses a hotfix. |
+| `release.yml` | Scheduled daily at 09:00 UTC, or manual | Release selected artifacts and deploy selected hosted surfaces straight to production. `skip_build` makes the run a deploy-only promotion; `ref` plus `surfaces` expresses a hotfix; `dry_run` walks the graph with every externally visible effect suppressed. |
 
 ### Artifact and template releases
 
