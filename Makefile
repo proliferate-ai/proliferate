@@ -1615,6 +1615,7 @@ build-rust:
 		echo "SKIP_RUST set — skipping cargo builds (runtime: $${ANYHARNESS_DEV_RUNTIME_BIN:-<unset>})"; \
 	else \
 		$(CARGO) build --workspace || exit 1; \
+		$(CARGO) build -p anyharness || exit 1; \
 		target_dir=$$($(CARGO) metadata --format-version 1 --no-deps --offline 2>/dev/null \
 			| node -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>{try{process.stdout.write(JSON.parse(b).target_directory)}catch{}})'); \
 		target_dir="$${target_dir:-target}"; \
