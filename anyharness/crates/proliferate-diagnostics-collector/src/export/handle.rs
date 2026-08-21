@@ -37,7 +37,10 @@ pub(crate) struct ExporterHandle {
 }
 
 impl ExporterHandle {
-    pub(crate) fn from_environment() -> Self {
+    /// `install_id` is the host-supplied identity of this installation. It is
+    /// carried to the encoder rather than read from the environment, because
+    /// only the host that owns the identity may assert it.
+    pub(crate) fn from_environment(install_id: Option<String>) -> Self {
         let metrics = Arc::new(ExporterMetrics::default());
         match target::from_environment() {
             TargetConfiguration::Absent => Self::inert(Sink::Off, metrics),
@@ -49,7 +52,7 @@ impl ExporterHandle {
             }
             TargetConfiguration::Configured(target) => {
                 let (sender, receiver) = mpsc::channel(QUEUE_RECORDS);
-                let worker = Worker::new(receiver, target, Arc::clone(&metrics));
+                let worker = Worker::new(receiver, target, Arc::clone(&metrics), install_id);
                 Self {
                     sink: Sink::Queue(sender),
                     metrics,

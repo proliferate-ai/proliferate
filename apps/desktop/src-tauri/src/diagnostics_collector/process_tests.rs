@@ -103,6 +103,7 @@ async fn accepted_collector_binary_round_trips_protected_launch_health_and_shutd
         binary: built_collector_binary(),
         release: "desktop-test".to_string(),
         environment: "test".to_string(),
+        install_id: None,
         fallback: fallback.clone(),
     };
     assert!(launcher.binary.is_file(), "collector binary must be built");
@@ -241,6 +242,66 @@ async fn rv_2_05_oversized_control_causes_child_exit_not_graceful_shutdown() {
         .expect("observe oversized control exit");
     assert!(!status.success());
     assert!(!process.orderly_shutdown_requested);
+
+    fallback.close().expect("close fallback");
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+fn install_id_launcher(
+    install_id: Option<&str>,
+    fallback: &FallbackDiagnosticsWriter,
+) -> CollectorProcessLauncher {
+    CollectorProcessLauncher {
+        binary: built_collector_binary(),
+        release: "desktop-test".to_string(),
+        environment: "test".to_string(),
+        install_id: install_id.map(str::to_owned),
+        fallback: fallback.clone(),
+    }
+}
+
+/// The install id crosses the process seam as an argument, the same way
+/// `--release` and `--environment` do, and the real collector binary accepts
+/// it. This is the desktop half of the `proliferate.install_id` resource
+/// attribute; the collector half is proven in `otlp_dogfood.rs`.
+#[tokio::test]
+async fn an_install_id_crosses_the_process_seam_to_the_real_collector() {
+    let root = std::env::temp_dir().join(format!("collector-install-id-{}", uuid::Uuid::new_v4()));
+    let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
+        .expect("fallback");
+    let launcher = install_id_launcher(Some("install-desktop-test-4b71"), &fallback);
+
+    let mut process = launcher.launch().await.expect("launch with an install id");
+    let health = process.client().health().await.expect("authenticated health");
+    assert_eq!(health.status, HealthStatusV1::Ready);
+    assert_eq!(
+        process.orderly_shutdown().await.expect("shutdown"),
+        CollectorShutdownOutcome::Graceful
+    );
+
+    fallback.close().expect("close fallback");
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+/// Negative control for the filter in `discover`. The collector refuses an
+/// out-of-range `--install-id` at startup rather than sanitizing it, so
+/// passing one through would cost the whole collector, not just the
+/// attribute. `discover` therefore drops an unusable identity instead.
+#[tokio::test]
+async fn an_unusable_install_id_would_cost_the_collector_so_discover_drops_it() {
+    let root = std::env::temp_dir().join(format!("collector-bad-install-{}", uuid::Uuid::new_v4()));
+    let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
+        .expect("fallback");
+    let unusable = "x".repeat(129);
+
+    let launcher = install_id_launcher(Some(&unusable), &fallback);
+    assert!(
+        launcher.launch().await.is_err(),
+        "the collector must refuse an out-of-range install id"
+    );
+
+    assert!(validate_label(&unusable).is_err());
+    assert!(validate_label("install-desktop-test-4b71").is_ok());
 
     fallback.close().expect("close fallback");
     std::fs::remove_dir_all(root).expect("cleanup");

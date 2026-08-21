@@ -81,6 +81,15 @@ pub struct CollectorConfig {
     pub capability: Vec<u8>,
     pub release: String,
     pub environment: String,
+    /// Stable identity of this installation, stamped onto exported records as
+    /// the `proliferate.install_id` resource attribute.
+    ///
+    /// It is not a wire-protocol field and no producer can set it. The host
+    /// that owns the identity passes it in, so a record cannot claim to come
+    /// from an install other than the one whose collector accepted it.
+    /// `None` means the host had no identity to give, and the attribute is
+    /// then absent rather than empty or invented.
+    pub install_id: Option<String>,
     pub runtime_limits: RuntimeLimits,
     pub auto_ready: bool,
 }
@@ -92,6 +101,7 @@ impl std::fmt::Debug for CollectorConfig {
             .field("capability", &"[REDACTED]")
             .field("release", &self.release)
             .field("environment", &self.environment)
+            .field("install_id", &self.install_id)
             .field("runtime_limits", &self.runtime_limits)
             .field("auto_ready", &self.auto_ready)
             .finish()
@@ -110,6 +120,7 @@ impl CollectorConfig {
             capability: capability.into(),
             release: "standalone".to_owned(),
             environment: "local".to_owned(),
+            install_id: None,
             runtime_limits: RuntimeLimits::default(),
             auto_ready: true,
         }

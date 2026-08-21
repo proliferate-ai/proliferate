@@ -20,8 +20,10 @@ impl DiagnosticsCollectorSupervisor {
         fallback: FallbackDiagnosticsWriter,
         release: String,
         environment: String,
+        install_id: Option<String>,
     ) -> Arc<Self> {
-        let launcher = CollectorProcessLauncher::discover(release, environment, fallback.clone());
+        let launcher =
+            CollectorProcessLauncher::discover(release, environment, install_id, fallback.clone());
         Self::with_launcher(producer, fallback, launcher)
     }
 

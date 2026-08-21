@@ -27,6 +27,13 @@ struct Args {
     release: String,
     #[arg(long, default_value = "local")]
     environment: String,
+    /// Stable identity of this installation, stamped on exported records as
+    /// the `proliferate.install_id` resource attribute.
+    ///
+    /// The host that owns the identity passes it in; the collector never
+    /// derives, generates, or persists one. Omitted means no attribute.
+    #[arg(long)]
+    install_id: Option<String>,
 }
 
 #[tokio::main]
@@ -52,6 +59,7 @@ async fn main() -> anyhow::Result<()> {
     let mut config = CollectorConfig::standalone(capability.clone());
     config.release = args.release;
     config.environment = args.environment;
+    config.install_id = args.install_id;
     let server = CollectorServer::start(config).await?;
     let descriptor = server.connection_descriptor(capability_fd as u32)?;
     let core = server.core();
