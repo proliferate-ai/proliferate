@@ -714,10 +714,8 @@ async fn wait_for_anyharness(local_url: &str) -> Result<(), String> {
 }
 
 fn expand_home_path(path: &str) -> Result<PathBuf, String> {
-    // `app_config::home_dir_os` reads `HOME` first, verbatim and as an
-    // `OsString`, and only then `USERPROFILE`. Unix resolution is unchanged
-    // for every `HOME` value including non-UTF-8 ones, error string included,
-    // while windows, which has no `HOME`, stops failing outright.
+    // `home_dir_os` keeps `var_os` semantics (see its doc comment) and adds the
+    // windows `USERPROFILE` fallback; unix resolution is unchanged.
     let home = || crate::app_config::home_dir_os().ok_or_else(|| "HOME is not set.".to_string());
 
     if path == "~" {
