@@ -188,7 +188,13 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
-          cache: pnpm
+          # setup-node's built-in cache has no save-if control, and a cache
+          # written under a tag ref can never be restored by any later run, so
+          # tag-triggered releases would only pollute the repo's 10GB LRU cache
+          # budget with dead entries. Enable the cache only off tag refs (the
+          # nightly train runs on main and both saves and restores); an empty
+          # cache input disables caching entirely.
+          cache: ${{ github.ref_type != 'tag' && 'pnpm' || '' }}
 
       - name: Validate release title
         if: steps.filter.outputs.skip != 'true'
