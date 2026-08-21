@@ -10,10 +10,43 @@ LOCAL_PGPORT ?= 5432
 LOCAL_PGUSER ?= proliferate
 LOCAL_PGPASSWORD ?= localdev
 LOCAL_PGDATABASE ?= proliferate
-USE_EXISTING_POSTGRES ?= 0
 LOCAL_REDIS_HOST ?= 127.0.0.1
 LOCAL_REDIS_PORT ?= 6379
-USE_EXISTING_REDIS ?= 0
+# A local service already bound to the port is the one to use. Shell wrappers
+# around `make` exist largely to prefix every invocation with
+# USE_EXISTING_POSTGRES=1 / USE_EXISTING_REDIS=1, so make does not bring up a
+# Docker Postgres or Redis on top of a native one. Probing here instead is what
+# lets `make dev PROFILE=x` be the whole launch, with nothing left for a wrapper
+# to add.
+#
+# The probe runs ONLY for a variable the caller left unset. An explicit 0 still
+# forces the Docker path and an explicit 1 still skips the probe, so every CI
+# workflow, all of which set both to "1", is unaffected by construction. A
+# missing or failing probe yields an empty word and falls back to 0, the
+# behaviour that existed before this block.
+#
+# Both services are probed in one invocation: this file is parsed once per
+# recursive make, and two separate python3 probes cost about 70ms each parse
+# against 10ms for one bash run.
+# Never probe under CI. A CI job's service topology is a property of its
+# workflow file, so it must not depend on what happens to be listening: several
+# jobs publish postgres on 5432 and redis on 6379 while running `make` steps
+# that leave both variables unset, and those steps must keep resolving the way
+# they did before this block existed. GitHub Actions always sets CI, and any
+# job that genuinely wants the native services already says so explicitly.
+ifndef CI
+ifneq ($(filter undefined,$(origin USE_EXISTING_POSTGRES) $(origin USE_EXISTING_REDIS)),)
+LOCAL_SERVICE_PROBE := $(shell scripts/probe-local-services.sh '$(LOCAL_PGHOST)' '$(LOCAL_PGPORT)' '$(LOCAL_REDIS_HOST)' '$(LOCAL_REDIS_PORT)' 2>/dev/null)
+endif
+endif
+
+ifeq ($(origin USE_EXISTING_POSTGRES), undefined)
+USE_EXISTING_POSTGRES := $(or $(word 1,$(LOCAL_SERVICE_PROBE)),0)
+endif
+
+ifeq ($(origin USE_EXISTING_REDIS), undefined)
+USE_EXISTING_REDIS := $(or $(word 2,$(LOCAL_SERVICE_PROBE)),0)
+endif
 STRIPE_FORWARD_TO ?= http://127.0.0.1:8000/v1/billing/webhooks/stripe
 STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed
 AGENT_GATEWAY ?= 0
