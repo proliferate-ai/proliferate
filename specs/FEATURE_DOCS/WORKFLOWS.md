@@ -30,7 +30,7 @@ This document covers the Workflow system spanning server ↔ runtime ↔ workspa
 
 The authenticated Workflows surface keeps the production shell and routes. Its
 index lists saved schema-v2 definitions, legacy delete-only definitions, and
-runtime executions; creation starts from a blank workflow or one of the four
+runtime executions; creation starts from a blank workflow or one of the five
 starter templates. Definition Run continues through the existing Cloud
 invocation/runtime courier and opens the exact workspace. The workspace
 right-panel run pane is unchanged.
