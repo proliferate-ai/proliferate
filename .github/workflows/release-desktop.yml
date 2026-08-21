@@ -221,6 +221,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+          # Actions caches are ref-scoped. This workflow also triggers on
+          # `push: tags: desktop-v*`, and a save made under `refs/tags/...` can
+          # only ever be restored by that same tag, so it is a pure write into
+          # an already-tight repo cache pool. Only branch / dispatch runs save.
+          save-if: ${{ github.ref_type != 'tag' }}
+          # Notarization and publish are the late, occasionally-failing part of
+          # this job. A failure there should still bank the compile cache the
+          # preceding ~12 minutes produced.
+          cache-on-failure: true
 
       - name: Build Rust binaries for target
         if: steps.filter.outputs.skip != 'true'
