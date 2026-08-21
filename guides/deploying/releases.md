@@ -67,8 +67,8 @@ the Desktop package, Tauri configuration, and Cargo package. A manual dry run
 can build from the selected ref without publishing. A manual non-dry run must
 be dispatched from an existing `desktop-v*` tag ref; a branch ref fails release
 validation. Tag pushes and publishing release-coordinator calls can build the
-current macOS matrix and create a draft GitHub Release. Updater/download
-publication is separate:
+current macOS and Windows matrix and create a draft GitHub Release.
+Updater/download publication is separate:
 
 - a `desktop-v*` tag push publishes it automatically;
 - a reusable production or train call can request it explicitly;
@@ -85,6 +85,35 @@ collector package first and stages that exact executable into the app. Verify
 the app's `Contents/MacOS` inventory contains executable, signed AnyHarness,
 Worker, `proliferate-debug`, and `proliferate-diagnostics-collector` binaries;
 the collector must not contain the debug placeholder marker.
+
+### Windows Beta
+
+Windows (`x86_64-pc-windows-msvc`) returned to the matrix on 2026-08-20, having
+been removed on 2026-04-13 while the SDK generation step was POSIX-shell only.
+It is a beta leg and is deliberately not release-blocking:
+
+- the Windows matrix entry runs `continue-on-error`, so a failed Windows build
+  leaves the macOS release and the updater publish intact;
+- `windows-x86_64` is an `optional` platform in both
+  `scripts/generate-updater-manifest.mjs` and
+  `scripts/generate-desktop-installer-manifest.mjs`, so a release with no
+  Windows artifact publishes without a Windows entry rather than failing;
+- the Windows installer is not Authenticode signed, so first launch shows a
+  SmartScreen warning that the user clicks through. The Tauri updater's
+  minisign signature is a separate mechanism and is applied, so in-app updates
+  still verify;
+- `proliferate-diagnostics-collector` does not compile for Windows, so the
+  Windows build ships a placeholder sidecar and has no in-app diagnostics
+  capture or support snapshot;
+- there is no bundled agent seed on Windows. `agent-seed.inputs.json` pins Node
+  only for the two Apple targets and `scripts/build-agent-seed.mjs` is
+  native-macOS-only, so a Windows build sets `PROLIFERATE_AGENT_SEED_EXPECTED`
+  with no seed present and agents use whatever Node the machine already has.
+
+The build logs a warning annotation for each of those gaps.
+
+To make Windows release-blocking, delete the `continue-on-error` line from
+`build-desktop` and drop `optional` from the `windows-x86_64` entries.
 
 ## Runtime And SDK
 
