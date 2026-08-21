@@ -448,8 +448,13 @@ jobs:
       - name: Enforce /login runtime budget
         run: node scripts/measure-login-runtime-budget.mjs
 
-  shared-frontend-packages:
-    name: Shared frontend packages
+  # Housekeeping that "Test product client"
+  # does not need (typecheck, the python-only checks, and the two other
+  # focused vitest invocations) lives in its own job here so every matrix
+  # shard below is pure install+build+test. Runs in parallel with the shards;
+  # merge-gating exactly like shared-frontend-packages was before the split.
+  shared-frontend-checks:
+    name: Shared frontend checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -490,9 +495,6 @@ jobs:
       - name: Test ProductClient domain
         run: pnpm --filter @proliferate/product-client exec vitest run src/domain
 
-      - name: Test product client
-        run: pnpm --filter @proliferate/product-client test
-
       # Focused Tier-1 gate for the workflow authoring surface: builder save
       # gating (title + unresolved-reference blocks), schema-version refusal,
       # and main-page row lifecycle including confirmed delete
@@ -501,6 +503,44 @@ jobs:
       # so regressions remain immediately named.
       - name: Test workflow authoring surface
         run: pnpm --filter @proliferate/product-client exec vitest run src/components/workflows/builder-v2/WorkflowBuilderSurface.test.tsx src/components/workflows/main/WorkflowsMainSurface.test.tsx
+
+  # "Test product client" was the pole of the combined job (~338s of
+  # ~8m38s-9m13s wall clock). Sharded 4-way via vitest's native --shard
+  # (3-way still exceeded the 3-minute target; measured numbers in PR #2120).
+  # Every
+  # other step this job used to run (typecheck, python checks, the two other
+  # focused vitest invocations) moved to shared-frontend-checks above, so
+  # every shard here is pure install+build+test. "Install dependencies" and
+  # "Build shared packages" stay ungated: product-client imports
+  # @proliferate/design/@proliferate/cloud-sdk(-react) through package.json
+  # `exports` that resolve only to `dist`, so the build is a real
+  # prerequisite of every shard, not just of the steps that moved out.
+  shared-frontend-packages:
+    name: Shared frontend packages
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build shared packages
+        run: pnpm shared:build
+
+      - name: Test product client
+        run: pnpm --filter @proliferate/product-client exec vitest run --shard=${{ matrix.shard }}/4
 
   # Scroll-physics tier (specs/TESTING.md): the real transcript renderer driven
   # by a scripted streaming fixture in real Chromium AND real WebKit. Merge-
