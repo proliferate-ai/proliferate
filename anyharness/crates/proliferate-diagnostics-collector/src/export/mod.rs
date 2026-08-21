@@ -1,35 +1,37 @@
-//! Internal/dogfood OTLP export.
+//! OTLP export.
 //!
-//! The whole adapter lives behind the non-default `internal-dogfood-export`
-//! Cargo feature. A customer collector binary is compiled from
-//! [`absent`], which owns no configuration read, queue, task, HTTP client, or
-//! credential handling; the release packaging job proves the absence by
-//! grepping the shipped binary for the endpoint variable name. An internal
-//! binary compiles [`present`] and still exports nothing until a destination is
-//! configured out of band.
+//! The adapter is compiled into every build, customer releases included. What
+//! a build may export is decided at compile time by [`policy::EXPORT_POLICY`]:
+//! a customer build carries `LifecycleOnly`, so `record_class == detailed`
+//! never enters the export queue and never reaches the encoder, and the
+//! free-text surface a detailed record owns therefore cannot leave the
+//! machine. The `internal-dogfood-export` feature widens that to
+//! `ExportPolicy::All` and adds the per-developer `dev.user` tag.
+//!
+//! A build exports nothing at all until a destination is configured. With no
+//! endpoint the handle is `Sink::Off`, which allocates no queue, spawns no
+//! task, builds no HTTP client, and loses nothing.
 //!
 //! Nothing here is provider-specific. The wire contract is OTLP/HTTP JSON logs
 //! and the destination URL plus its request headers are configuration values,
 //! so provider identity and credentials stay outside this contract exactly as
 //! the observability ADR requires.
 
-#[cfg_attr(feature = "internal-dogfood-export", path = "present.rs")]
-#[cfg_attr(not(feature = "internal-dogfood-export"), path = "absent.rs")]
-mod handle;
-
-#[cfg(feature = "internal-dogfood-export")]
 mod classification;
-#[cfg(feature = "internal-dogfood-export")]
+mod handle;
 mod otlp;
-#[cfg(feature = "internal-dogfood-export")]
+pub(crate) mod policy;
 mod target;
-#[cfg(feature = "internal-dogfood-export")]
 mod worker;
 
 pub(crate) use handle::ExporterHandle;
 
 /// The environment variable that names whose desktop produced an exported
 /// record, taking priority over `$USER`.
+///
+/// Dogfood only, and deliberately so: this literal exists in a binary if and
+/// only if `internal-dogfood-export` was enabled, which is what the desktop
+/// release job greps packaged binaries for.
 #[cfg(feature = "internal-dogfood-export")]
 const DEV_TAG_ENV: &str = "PROLIFERATE_DIAGNOSTICS_DEV_TAG";
 
@@ -50,4 +52,11 @@ fn dev_tag() -> Option<&'static str> {
                 .filter(|value| !value.trim().is_empty())
         })
         .as_deref()
+}
+
+/// A customer build has no per-developer tag at all: neither the environment
+/// variable name nor `$USER` is read, so no local identity can ride out.
+#[cfg(not(feature = "internal-dogfood-export"))]
+fn dev_tag() -> Option<&'static str> {
+    None
 }

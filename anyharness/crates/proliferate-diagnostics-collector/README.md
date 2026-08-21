@@ -96,17 +96,39 @@ oldest first.
 No record, token, descriptor, queue, or replay state is written to disk. A new
 process begins with a new boot ID and only its own boot lifecycle evidence.
 Standalone fallback health remains neutral, and so does exporter health in
-every build of this package that is not compiled for internal dogfooding.
+any build with no destination configured.
 
 ## Internal OTLP export
 
-The `internal-dogfood-export` Cargo feature is off by default and is the whole
-gate. A customer release builds this package with default features, so the
-binary contains no destination read, queue, task, HTTP client, or credential
-handling; the release job proves that by refusing to ship a bundle whose
-binaries contain the endpoint variable name. Compiling the feature is necessary
-but not sufficient: an internal binary still exports nothing until a
-destination arrives out of band.
+The adapter is compiled into every build, customer releases included. What a
+build may export is decided at compile time by one constant, `EXPORT_POLICY` in
+`src/export/policy.rs`, and there is no configuration value that can relax it.
+
+A customer build carries `ExportPolicy::LifecycleOnly`: only
+`record_class == lifecycle` may be exported, and only when every field on it is
+`operational`. The detailed class is the only payload in the protocol that can
+carry free text, because `DetailedDiagnosticV1` owns `message`, `stream`, and
+`milestone`, so refusing the class refuses the entire free-text surface. Two
+fences consult the policy, not one: the ingest path refuses an inadmissible
+class before the record can enter the export queue (`src/export/handle.rs`),
+and the encoder refuses it again before it can become a wire payload
+(`src/export/otlp.rs`). A refused class is not a loss and is not counted as
+one, because the record was still accepted, retained, and stays queryable
+locally.
+
+The `internal-dogfood-export` feature widens the policy to `ExportPolicy::All`
+and adds the per-developer `dev.user` tag. Its literals therefore exist in a
+binary if and only if the feature was enabled, which is what the desktop
+release job checks. That job runs the packaged collector with
+`--print-export-policy`, requires the answer `lifecycle_only`, requires the
+`PROLIFERATE_EXPORT_POLICY=lifecycle_only` marker in the binary, and refuses a
+bundle carrying either `PROLIFERATE_EXPORT_POLICY=all` or
+`PROLIFERATE_DIAGNOSTICS_DEV_TAG`.
+
+The policy is necessary but not sufficient: any build exports nothing at all
+until a destination arrives out of band. With no endpoint configured the export
+handle is `Sink::Off`, which allocates no queue, spawns no task, builds no HTTP
+client, and loses nothing.
 
 The destination is two environment values, both read once at startup:
 

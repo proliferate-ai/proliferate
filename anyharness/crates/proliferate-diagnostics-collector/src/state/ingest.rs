@@ -303,10 +303,11 @@ impl CollectorCore {
         };
         let encoded = serde_json::to_vec(&accepted).map_err(|_| RejectionReasonV1::InvalidShape)?;
         let encoded: Arc<[u8]> = encoded.into();
+        let record_class = accepted.record.record_class;
         let stored = StoredRecord {
             cursor: order,
             version: accepted.record.schema_version,
-            record_class: accepted.record.record_class,
+            record_class,
             component: accepted.record.component,
             encoded: Arc::clone(&encoded),
         };
@@ -315,7 +316,11 @@ impl CollectorCore {
         // Both fan-outs are non-blocking and lossy by construction, so neither
         // a slow tail reader nor a failing internal exporter can change what
         // this record's acceptance already decided.
-        self.exporter.offer(&encoded);
+        //
+        // The class travels with the offer because it is the export privacy
+        // control: a customer build refuses everything but `lifecycle` before
+        // the queue (`export/policy.rs`).
+        self.exporter.offer(record_class, &encoded);
         let _ = self.tail_tx.send(encoded);
         Ok(AcceptDisposition::Accepted(order))
     }
