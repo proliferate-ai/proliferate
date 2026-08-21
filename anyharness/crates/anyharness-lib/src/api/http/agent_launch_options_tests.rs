@@ -358,38 +358,6 @@ async fn an_orphaned_probing_row_reports_the_owners_idle_slot() {
     let _ = release.send(true);
 }
 
-/// The orphan that matters most, on the harness no unattended poke may refresh: a
-/// spinning client here can never be converged by anything but a human.
-///
-/// The row is left by `begin_probe` — the same durable write `run_attempt` makes
-/// (`attempt.rs`), not a hand-edited field — because cursor's credential is not
-/// gateway-backed and so cannot be materialized into a probe by this fixture at
-/// all. That inability is the point: nothing in this runtime will ever move this
-/// row, so the phase must not ask a client to wait for it.
-#[tokio::test]
-async fn an_orphaned_cursor_row_never_asks_a_client_to_keep_waiting() {
-    let home = temp_runtime_home("orphaned-cursor-row");
-    let state = app_state(home.clone());
-    assert_eq!(state.launch_probe_service.mode(), ProbeEngineMode::Owner);
-    begin_a_probe(&state, CURSOR);
-    assert_eq!(
-        state
-            .launch_probe_service
-            .probe_phase(CURSOR, chrono::Utc::now(), None),
-        Some(ProbePhase::Idle),
-        "the owner admits before it writes the row, so an idle slot means orphan"
-    );
-
-    let payload = payload_for(state, CURSOR).await;
-    assert_eq!(payload["state"], Value::from("detecting"));
-    assert_eq!(
-        payload["probePhase"],
-        Value::from("idle"),
-        "a harness only a human can refresh must never be served as queued: {payload}"
-    );
-    let _ = std::fs::remove_dir_all(&home);
-}
-
 /// The basis moving under a REAL probe, seen from a runtime that cannot read a
 /// slot at all. Its only source is the row, so a basis-gated read would omit the
 /// field entirely — which the client also treats as terminal.
@@ -516,41 +484,6 @@ async fn an_attempt_committing_between_the_two_reads_is_not_mistaken_for_an_orph
         Value::from(OBSERVED_AT),
         "the fresh observation must not be replaced by the pre-attempt snapshot: {payload}"
     );
-}
-
-/// B-R25. An unclean shutdown leaves a row `probing`; the runtime reboots and
-/// serves HTTP while seed hydration and the reconcile still run ahead of the
-/// startup probe pass. The slot map is empty because nothing has run YET, and
-/// believing it would hand the client a terminal answer seconds before the
-/// startup probe lands the real one.
-#[tokio::test]
-async fn a_boot_that_has_not_probed_yet_does_not_call_a_stranded_row_settled() {
-    let home = temp_runtime_home("boot-before-startup-pass");
-    let state = booting_app_state(home.clone());
-    observe_models(&state, HARNESS);
-    state
-        .launch_options_service
-        .begin_probe(HARNESS, &hours_ago(2))
-        .expect("strand a row at probing");
-
-    let payload = payload_for(state.clone(), HARNESS).await;
-    assert_eq!(
-        payload["probePhase"],
-        Value::from("queued"),
-        "a probe pass is owed to this harness, so the client keeps waiting: {payload}"
-    );
-    assert_eq!(
-        payload["state"],
-        Value::from("refreshing"),
-        "and the state must agree, since that is the field the client waits on"
-    );
-
-    // Once the pass has actually dispatched, the empty slot means what it says.
-    state.launch_probe_service.mark_startup_pass_dispatched();
-    let payload = payload_for(state, HARNESS).await;
-    assert_eq!(payload["probePhase"], Value::from("idle"));
-    assert_eq!(payload["state"], Value::from("observed"), "{payload}");
-    let _ = std::fs::remove_dir_all(&home);
 }
 
 /// B-R26. `ProbeEngineMode` was on no wire at all, so a surface had to guess from

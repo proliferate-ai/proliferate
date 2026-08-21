@@ -14,16 +14,24 @@ use super::LaunchProbeService;
 use crate::domains::agents::auth_state::ProbePhase;
 
 /// A reading of the scheduler's slot, stamped with WHEN it was taken so the
-/// slot-before-row ordering can be checked rather than merely documented.
-#[derive(Debug, Clone, Copy)]
+/// slot-before-row ordering can be checked rather than merely documented, and
+/// with WHICH harness it is a reading of.
+///
+/// The harness travels with the reading rather than being passed again alongside
+/// it because the refinement rules are not harness-agnostic: whether a startup
+/// pass is owed at all depends on the probe-eligibility policy for this specific
+/// harness, and a caller that named one harness for the slot and another for the
+/// refinement would silently apply cursor's law to opencode, or the reverse.
+#[derive(Debug, Clone)]
 pub struct LivePhaseReading {
+    harness_kind: String,
     phase: Option<ProbePhase>,
     taken_at: DateTime<Utc>,
 }
 
 impl LivePhaseReading {
     /// The phase itself, for a caller that only wants to look.
-    pub fn phase(self) -> Option<ProbePhase> {
+    pub fn phase(&self) -> Option<ProbePhase> {
         self.phase
     }
 }
@@ -71,6 +79,7 @@ impl LaunchProbeService {
     /// keeps a client polling one extra tick.
     pub fn live_probe_phase(&self, harness_kind: &str, now: DateTime<Utc>) -> LivePhaseReading {
         LivePhaseReading {
+            harness_kind: harness_kind.to_string(),
             phase: self
                 .is_owner()
                 .then(|| self.live_phase(harness_kind, now).0),
@@ -96,17 +105,19 @@ impl LaunchProbeService {
             live.taken_at <= row_read_at,
             "the probe slot must be read BEFORE the launch-options row"
         );
+        // An owner that has not yet dispatched its startup pass has an empty slot
+        // map because nothing has run yet. Believing it would serve a terminal
+        // phase seconds before the startup probe lands, and the client that stopped
+        // polling would never see the result. Computed BEFORE the phase is unpacked
+        // because it is the harness, not the phase, that decides whether a pass is
+        // owed.
+        let startup_pending = self.startup_probe_pending(&live.harness_kind, now);
         let live = live.phase;
         // The row claims nothing, so only the slot can answer, and for a read-only
         // runtime that is nothing at all.
         let Some(started_at) = in_flight_since else {
             return live;
         };
-        // An owner that has not yet dispatched its startup pass has an empty slot
-        // map because nothing has run yet. Believing it would serve a terminal
-        // phase seconds before the startup probe lands, and the client that stopped
-        // polling would never see the result.
-        let startup_pending = self.is_owner() && self.startup_probe_pending(now);
         if self.attempt_is_abandoned(started_at, now) && !startup_pending {
             return live;
         }
@@ -125,15 +136,35 @@ impl LaunchProbeService {
         }
     }
 
-    /// Does this owner still owe the startup probe pass its slots are waiting for?
+    /// Does this owner still owe THIS HARNESS the startup probe pass its slot is
+    /// waiting for?
+    ///
+    /// Per-harness, not merely per-runtime. `poke_all(Startup)` funnels through
+    /// `poke_harness`, which refuses any harness in `AUTO_PROBE_EXCLUDED_HARNESSES`
+    /// — cursor today — so for those the startup pass is dispatched and dispatches
+    /// NOTHING. A runtime-wide grace therefore reported `queued` on a stranded
+    /// cursor row for the whole grace window, against an attempt that was never
+    /// coming: `detecting` + `queued` is exactly the pair the client polls on, so
+    /// it polled every 1.5s for the bound's full length and then gave up on an
+    /// answer no automatic probe could ever have produced. An excused empty slot is
+    /// only honest where a poke is genuinely owed.
     ///
     /// Bounded by wall clock as well as by the pass itself: the pass runs behind
     /// seed hydration and a reconcile, either of which can stall, and an unbounded
     /// "a probe is coming" is the same forever-poll this module already bounds
     /// everywhere else.
-    fn startup_probe_pending(&self, now: DateTime<Utc>) -> bool {
-        !self.startup_pass_dispatched.load(Ordering::Relaxed)
+    fn startup_probe_pending(&self, harness_kind: &str, now: DateTime<Utc>) -> bool {
+        self.is_owner()
+            && self.targets.allows_automatic_probe(harness_kind)
+            && !self.startup_pass_dispatched.load(Ordering::Relaxed)
             && now.signed_duration_since(self.started_at) <= self.abandoned_attempt_after
+    }
+
+    /// Is this harness one an UNATTENDED poke may touch at all? Exposed because
+    /// the startup grace turns on it, and a test of the grace that asserted the
+    /// grace's own conclusion would be circular.
+    pub(crate) fn targets_allow_automatic_probe(&self, harness_kind: &str) -> bool {
+        self.targets.allows_automatic_probe(harness_kind)
     }
 
     /// Called once the startup pass has actually dispatched its pokes, so reads
