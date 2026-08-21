@@ -45,6 +45,8 @@ fs2.workspace = true
 libc.workspace = true
 reqwest = { workspace = true, features = ["blocking", "json"] }
 minisign-verify.workspace = true
+proliferate-diagnostics-client.workspace = true
+proliferate-diagnostics-protocol.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

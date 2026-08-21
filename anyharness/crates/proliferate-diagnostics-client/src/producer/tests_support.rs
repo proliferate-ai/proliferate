@@ -111,7 +111,14 @@ pub(super) fn producer(
 }
 
 pub(super) fn emit(inner: &ProducerInner, input: DetailedDiagnosticInput) -> EmitDisposition {
-    inner.try_emit_inner(input, false)
+    inner.try_emit_inner(super::record::DiagnosticInput::Detailed(input), false)
+}
+
+pub(super) fn emit_lifecycle(
+    inner: &ProducerInner,
+    input: crate::LifecycleDiagnosticInput,
+) -> EmitDisposition {
+    inner.try_emit_inner(super::record::DiagnosticInput::Lifecycle(input), false)
 }
 
 /// Ordinary lane input: `info` is neither protected nor immediately flushed.

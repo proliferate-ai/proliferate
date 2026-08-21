@@ -36,6 +36,8 @@ mod tests_filter;
 #[cfg(all(test, unix))]
 mod tests_generation;
 #[cfg(test)]
+mod tests_lifecycle;
+#[cfg(test)]
 mod tests_loss;
 #[cfg(test)]
 mod tests_queue;
@@ -55,6 +57,7 @@ mod tests_terminal;
 mod tests_transport;
 
 use admission::{LossSnapshot, PendingLossRange};
+pub(crate) use record::DiagnosticInput;
 use record::RecordFactory;
 use status::{
     BoundedLossCounters, ProducerCollectorState, ProducerFailureClassification,
@@ -295,7 +298,7 @@ impl DiagnosticsProducerHandle {
         self.inner.component
     }
 
-    pub(crate) fn try_emit(&self, input: crate::DetailedDiagnosticInput) -> EmitDisposition {
+    pub(crate) fn try_emit(&self, input: record::DiagnosticInput) -> EmitDisposition {
         self.inner.try_emit_inner(input, false)
     }
 

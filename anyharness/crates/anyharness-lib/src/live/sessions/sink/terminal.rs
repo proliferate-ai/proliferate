@@ -237,6 +237,11 @@ impl SessionEventSink {
             .map(|event| event.seq)
             .ok_or_else(|| anyhow::anyhow!("terminal event batch is empty"))?;
         let turn_id = committed.input.turn_id.clone();
+        // The turn's lifecycle terminal is emitted only after the durable
+        // transaction succeeded. A failed commit leaves the guard open for the
+        // bounded actor retry rather than reporting an outcome the store never
+        // accepted.
+        self.commit_turn_lifecycle(committed.input.outcome);
         self.apply_terminal_state(
             committed
                 .final_state
