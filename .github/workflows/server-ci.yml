@@ -1,9 +1,15 @@
 name: Server CI
 
 on:
+  # No `tags: ["server-v*"]` here any more. The two jobs that reacted to a
+  # server release tag (`docker`, `self-hosted-release-assets`) moved to
+  # `_build-server.yml`, so a tag push has nothing left to trigger in this file
+  # -- it would only re-run the suite the tagged commit already passed on `main`.
+  # (It never actually fired either: a `paths:` filter alongside a tag push
+  # matches nothing, and this workflow has zero tag-triggered runs in its
+  # history despite server-v0.4.4 through server-v0.4.9 all existing.)
   push:
     branches: [main]
-    tags: ["server-v*"]
     paths:
       - ".dockerignore"
       - ".github/workflows/server-ci.yml"
@@ -33,28 +39,19 @@ on:
         description: "Trusted base SHA for the shrink-only mypy baseline comparison."
         required: true
         type: string
+  # Validation only. Release packaging inputs (`version`, `dry_run`, `publish`)
+  # live on `_build-server.yml`, which is what release.yml calls; this workflow
+  # no longer publishes anything and takes no publishing inputs.
   workflow_call:
     inputs:
       git_sha:
-        description: "Commit SHA to validate and package. Defaults to the caller ref."
+        description: "Commit SHA to validate. Defaults to the caller ref."
         required: false
         type: string
       comparison_sha:
         description: "Trusted base SHA for the shrink-only mypy baseline comparison."
         required: true
         type: string
-      version:
-        description: "Server/self-hosted version to release. Required for reusable release calls."
-        required: false
-        type: string
-      dry_run:
-        description: "Run validation and packaging without publishing release artifacts."
-        type: boolean
-        default: false
-      publish:
-        description: "Publish GHCR image and GitHub Release assets."
-        type: boolean
-        default: true
 
 defaults:
   run:
@@ -70,8 +67,8 @@ jobs:
   # whose server lanes actually execute is unchanged; only the reporting
   # behaviour on the other PRs changes (a real green instead of no conclusion).
   #
-  # Every non-pull_request caller -- main/tag pushes, workflow_dispatch, and the
-  # release/hotfix workflow_call entrypoints -- is unconditionally relevant.
+  # Every non-pull_request caller -- main pushes, workflow_dispatch, and any
+  # workflow_call entrypoint -- is unconditionally relevant.
   #
   # This job is lane-agnostic on purpose: it publishes ONE `relevant` flag and
   # any number of downstream lanes consume it. A new lane needs exactly three
@@ -102,11 +99,11 @@ jobs:
           set -euo pipefail
 
           # A reusable-workflow call inherits the CALLER's event name and never
-          # reports "workflow_call" (see the docker job's comment below), so the
-          # event name alone cannot identify a release invocation. Both callers
-          # today are non-PR (hotfix-production.yml is workflow_dispatch,
-          # nightly-release-train.yml is schedule/workflow_dispatch), but a
-          # future PR-triggered caller would otherwise compute relevance from
+          # reports "workflow_call" (the same quirk `_build-server.yml` documents
+          # on its job gates), so the event name alone cannot identify a
+          # reusable invocation. There is no checked-in caller today -- release.yml
+          # calls `_build-server.yml`, not this file -- but a future PR-triggered
+          # caller would otherwise compute relevance from
           # the PR's diff and could ship with the server lanes no-opped. A
           # non-empty inputs.git_sha only ever comes from a workflow_call, so
           # treat it as unconditionally relevant regardless of event name.
@@ -539,249 +536,6 @@ jobs:
         if: needs.changes.outputs.relevant != 'false'
         run: xargs -r -a shard_files.txt pytest -n 4 -q --durations=20
 
-  docker:
-    runs-on: ubuntu-latest
-    needs: [lint, test-unit, test-integration]
-    # Reusable-workflow calls inherit the caller's event name (never
-    # "workflow_call"), so this leg is driven by inputs.publish/dry_run instead.
-    # inputs.* are empty on plain push/PR events, so the comparisons stay false
-    # there and true only on a server-v tag push or an explicit publish call.
-    if: (startsWith(github.ref, 'refs/tags/server-v')) || (inputs.publish == true && inputs.dry_run != true)
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.git_sha || github.ref }}
-
-      - name: Login to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Compute image tags
-        id: tags
-        env:
-          INPUT_VERSION: ${{ inputs.version || '' }}
-        run: |
-          set -euo pipefail
-          GHCR_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/proliferate-server"
-          LITELLM_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/proliferate-litellm"
-          TAGS=()
-          LITELLM_TAGS=()
-
-          if [[ "${GITHUB_REF:-}" == refs/tags/server-v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/server-v}"
-          else
-            VERSION="${INPUT_VERSION:?A server version input is required for reusable releases.}"
-          fi
-          # Push both the immutable version tag and the rolling :stable tag that the
-          # self-host compose bundle (server/deploy/) defaults to.
-          TAGS+=("${GHCR_IMAGE}:${VERSION}" "${GHCR_IMAGE}:stable")
-          LITELLM_TAGS+=("${LITELLM_IMAGE}:${VERSION}" "${LITELLM_IMAGE}:stable")
-
-          {
-            echo "tags<<EOF"
-            printf '%s\n' "${TAGS[@]}"
-            echo "EOF"
-            echo "litellm_tags<<EOF"
-            printf '%s\n' "${LITELLM_TAGS[@]}"
-            echo "EOF"
-            echo "version=${VERSION}"
-          } >> "$GITHUB_OUTPUT"
-
-      # Version pins stamped into the image and reported by /health and /meta.
-      # serverVersion is the release version (server-v tag / input). The desktop,
-      # runtime, and worker pins are read from their tracked package manifests
-      # at this commit; minDesktopVersion defaults to the pinned desktop version.
-      - name: Resolve version pins
-        id: pins
-        run: |
-          set -euo pipefail
-          desktop_version="$(jq -r '.version' apps/desktop/package.json)"
-          runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
-          worker_version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' anyharness/crates/proliferate-worker/Cargo.toml | head -n 1)"
-          : "${worker_version:?Failed to read the proliferate-worker crate version.}"
-          {
-            echo "desktop_version=${desktop_version}"
-            echo "runtime_version=${runtime_version}"
-            echo "worker_version=${worker_version}"
-            echo "min_desktop_version=${desktop_version}"
-          } >> "$GITHUB_OUTPUT"
-        working-directory: .
-
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: server/Dockerfile
-          push: true
-          tags: ${{ steps.tags.outputs.tags }}
-          build-args: |
-            SERVER_VERSION=${{ steps.tags.outputs.version }}
-            DESKTOP_VERSION=${{ steps.pins.outputs.desktop_version }}
-            RUNTIME_VERSION=${{ steps.pins.outputs.runtime_version }}
-            WORKER_VERSION=${{ steps.pins.outputs.worker_version }}
-            MIN_DESKTOP_VERSION=${{ steps.pins.outputs.min_desktop_version }}
-
-      # The self-host compose bundle also defaults the LiteLLM gateway to
-      # ghcr.io/OWNER/proliferate-litellm:stable, which no workflow built before.
-      # Build it here symmetrically with the server image (same GHCR login, same
-      # version/:stable tags) so self-host operators can pull it.
-      - name: Build and push LiteLLM gateway
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: server/litellm/Dockerfile
-          push: true
-          tags: ${{ steps.tags.outputs.litellm_tags }}
-
-  self-hosted-release-assets:
-    runs-on: ubuntu-latest
-    needs: [lint, test-unit, test-integration, docker]
-    # Same input-driven gate as the docker job (see note above): a server-v tag
-    # push, or an explicit publish call from a release train / hotfix workflow.
-    if: (startsWith(github.ref, 'refs/tags/server-v')) || (inputs.publish == true && inputs.dry_run != true)
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.git_sha || github.ref }}
-
-      - name: Setup Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: |
-            x86_64-unknown-linux-musl
-            aarch64-unknown-linux-musl
-
-      # This job compiles the same 3 crates (anyharness, proliferate-worker,
-      # proliferate-supervisor) for 2 targets with no cache today, so every run
-      # pays a full from-scratch registry download plus workspace-dependency
-      # compile twice. `cross` (used for the aarch64 build below) bind-mounts
-      # the repo root, including target/, into its build container by default,
-      # so a host-side target/ cache benefits both the native x86_64 build and
-      # the cross-compiled aarch64 build. Same pattern already used for
-      # `cross` builds elsewhere in this repo (see release-e2e.yml).
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "."
-
-      - name: Install musl-tools
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
-        working-directory: .
-
-      - name: Install cross for aarch64
-        run: cargo install cross --git https://github.com/cross-rs/cross --locked
-        working-directory: .
-
-      - name: Build self-hosted Linux runtime (x86_64)
-        run: cargo build --release --target x86_64-unknown-linux-musl -p anyharness -p proliferate-worker -p proliferate-supervisor
-        working-directory: .
-
-      - name: Build self-hosted Linux runtime (aarch64)
-        run: cross build --release --target aarch64-unknown-linux-musl -p anyharness -p proliferate-worker -p proliferate-supervisor
-        working-directory: .
-
-      - name: Prepare release assets
-        env:
-          INPUT_VERSION: ${{ inputs.version || '' }}
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts
-          if [[ "${GITHUB_REF:-}" == refs/tags/server-v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/server-v}"
-          else
-            VERSION="${INPUT_VERSION:?A server version input is required for reusable releases.}"
-          fi
-          # Archive as root:root so a root extraction on the operator host does
-          # not hand ownership of executables to the runner's unprivileged uid.
-          tar czf artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz \
-            --owner=0 --group=0 --numeric-owner \
-            -C target/x86_64-unknown-linux-musl/release \
-            anyharness \
-            proliferate-worker \
-            proliferate-supervisor
-          tar czf artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz \
-            --owner=0 --group=0 --numeric-owner \
-            -C target/aarch64-unknown-linux-musl/release \
-            anyharness \
-            proliferate-worker \
-            proliferate-supervisor
-          cp server/infra/self-hosted-aws/template.yaml \
-            artifacts/proliferate-self-hosted-aws-template.yaml
-          # Standalone entrypoints operators fetch before they have the bundle:
-          # the guided installer and the AWS launch action. Published (and
-          # checksummed) so they can be pinned to a release and verified.
-          cp server/deploy/install.sh artifacts/proliferate-selfhost-install.sh
-          cp server/infra/self-hosted-aws/launch-stack.sh \
-            artifacts/proliferate-selfhost-aws-launch.sh
-          bundle_root="$(mktemp -d)"
-          mkdir -p "$bundle_root/proliferate-deploy"
-          cp -R server/deploy/. "$bundle_root/proliferate-deploy/"
-          # smoke/ and tests/ are CI-only; the operator bundle ships just the
-          # scripts, compose, and config the running stack needs.
-          rm -rf "$bundle_root/proliferate-deploy/smoke"
-          rm -rf "$bundle_root/proliferate-deploy/tests"
-          rm -f "$bundle_root/proliferate-deploy/.bootstrap-progress.log"
-          printf '%s\n' "$VERSION" > "$bundle_root/proliferate-deploy/VERSION"
-          tar czf artifacts/proliferate-deploy.tar.gz \
-            --owner=0 --group=0 --numeric-owner \
-            -C "$bundle_root" proliferate-deploy
-          rm -rf "$bundle_root"
-          (
-            cd artifacts
-            sha256sum \
-              anyharness-x86_64-unknown-linux-musl.tar.gz \
-              anyharness-aarch64-unknown-linux-musl.tar.gz \
-              proliferate-self-hosted-aws-template.yaml \
-              proliferate-selfhost-install.sh \
-              proliferate-selfhost-aws-launch.sh \
-              proliferate-deploy.tar.gz \
-              > self-hosted-assets.SHA256SUMS
-          )
-        working-directory: .
-
-      - name: Ensure server release tag exists
-        # Only publish calls need to create the tag; on a real server-v tag push
-        # the tag already exists. Input-driven, not event-name-driven.
-        if: inputs.publish == true && inputs.dry_run != true
-        env:
-          RELEASE_TAG: ${{ format('server-v{0}', inputs.version) }}
-          RELEASE_TARGET: ${{ inputs.git_sha }}
-        run: |
-          set -euo pipefail
-          : "${RELEASE_TAG:?Missing server release tag.}"
-          : "${RELEASE_TARGET:?Missing server release target.}"
-          existing_target="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" | awk '{ print $1 }' | head -n 1)"
-          if [[ -n "$existing_target" && "$existing_target" != "$RELEASE_TARGET" ]]; then
-            echo "::error::Server tag $RELEASE_TAG already exists at $existing_target, not $RELEASE_TARGET."
-            exit 1
-          fi
-          if [[ -z "$existing_target" ]]; then
-            git tag "$RELEASE_TAG" "$RELEASE_TARGET"
-            git push origin "refs/tags/$RELEASE_TAG"
-          fi
-        working-directory: .
-
-      - name: Publish self-hosted release assets
-        uses: softprops/action-gh-release@v3
-        with:
-          target_commitish: ${{ inputs.git_sha || github.sha }}
-          tag_name: ${{ github.event_name == 'push' && github.ref_name || format('server-v{0}', inputs.version) }}
-          files: |
-            artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz
-            artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz
-            artifacts/proliferate-self-hosted-aws-template.yaml
-            artifacts/proliferate-selfhost-install.sh
-            artifacts/proliferate-selfhost-aws-launch.sh
-            artifacts/proliferate-deploy.tar.gz
-            artifacts/self-hosted-assets.SHA256SUMS
-
   # ---------------------------------------------------------------------------
   # Absence gate for this workflow, mirroring `ci-ok` in ci.yml. `needs:` cannot
   # cross workflows, so each workflow that carries required checks needs its own
@@ -822,16 +576,21 @@ jobs:
       # but not to `needs:` above would sit outside the rollup, which is the
       # same absence hole one level up.
       #
-      # Two job classes are legitimately outside the rollup, and the exemption
-      # is DERIVED rather than hardcoded so it cannot rot: `docker` and
-      # `self-hosted-release-assets` publish release artifacts and carry a
-      # job-level `if:` gated on the `server-v` tag, so they are `skipped` on
-      # every pull request by design. Rolling them up would make this check
-      # permanently red on PRs. Identifying them by that gate -- rather than by
-      # name -- means that if anyone ever removes the release gate from one of
-      # them, it stops being exempt and the drift guard demands it join
-      # `needs:`. The exempt set is printed on every run so the exemption is
-      # visible rather than implied.
+      # The exemption for release-only jobs is DERIVED rather than hardcoded so
+      # it cannot rot: any job carrying a job-level `if:` gated on the
+      # `server-v` tag publishes release artifacts, is `skipped` on every pull
+      # request by design, and would make this check permanently red if rolled
+      # up. Identifying such a job by that gate -- rather than by name -- means
+      # that if anyone ever removes the release gate from one, it stops being
+      # exempt and the drift guard demands it join `needs:`. The exempt set is
+      # printed on every run so the exemption is visible rather than implied.
+      #
+      # That set is EMPTY today, and the guard's arithmetic is what proves it:
+      # `docker` and `self-hosted-release-assets` moved to `_build-server.yml`,
+      # which release.yml calls directly, so every job left in this file is a
+      # validation lane and every one of them is in `needs:` below. The
+      # derivation stays because a future release-gated job must not silently
+      # join the rollup, not because anything is exempt right now.
       #
       # `working-directory: .` on both run steps: this file sets
       # `defaults.run.working-directory: server`, and the sparse checkout above
