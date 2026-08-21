@@ -103,7 +103,13 @@ per-developer `dev.user` tag. The release job refuses a bundle whose packaged
 collector does not report `lifecycle_only`, or whose binaries carry the
 dogfood-only marker or dev-tag literals. Independently of the policy, any build
 exports nothing until a destination is configured out of band, so customer
-export stays dark until that configuration is a deliberate decision. The adapter is bounded best effort —
+export stays dark until that configuration is a deliberate decision. Exported
+records carry `proliferate.install_id`, a resource attribute the collector
+stamps from a value its host passes on the process seam as `--install-id`; the
+desktop passes the `desktop_install_id` it already owns. It is not a
+wire-protocol field, so no producer can set or spoof it, and it is what
+distinguishes one install failing forty times from forty installs failing once.
+It is absent rather than invented when the host has no identity to give. The adapter is bounded best effort —
 a fixed queue that drops rather than grows, a fixed batch, one attempt plus two
 retries, a cooldown, and no disk outbox or replay — so a failing destination
 changes only `exporter.state`, `exporter.dropped_records`, and a fixed-table
