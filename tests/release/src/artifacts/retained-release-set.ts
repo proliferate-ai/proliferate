@@ -161,9 +161,21 @@ const RELEASE_ID_PATTERN = /^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 const VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 const SOURCE_TAG_PATTERN = /^sha-[0-9a-f]{12}$/;
 const OCI_DIGEST_REF_PATTERN = /^[a-z0-9.-]+\/[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}$/;
-const DESKTOP_PLATFORMS: readonly RetainedDesktopPlatform[] = [
+/** Every desktop platform production has ever published; rejects unknown values. */
+const SUPPORTED_DESKTOP_PLATFORMS: readonly RetainedDesktopPlatform[] = [
   "darwin-aarch64",
   "darwin-x86_64",
+];
+/**
+ * Desktop platforms every retained release receipt must carry. Intel
+ * (darwin-x86_64) is paused 2026-08-20 (release-desktop.yml build-desktop
+ * matrix), so it is dropped from the required set here: an arm-only receipt
+ * still qualifies, and a receipt that does carry an Intel package is still
+ * accepted (SUPPORTED_DESKTOP_PLATFORMS above), just no longer demanded.
+ * Restoring Intel is a matching one-line change here and in that matrix.
+ */
+const REQUIRED_DESKTOP_PLATFORMS: readonly RetainedDesktopPlatform[] = [
+  "darwin-aarch64",
 ];
 // Query parameters that mark a presigned/expiring URL. An expiring locator can
 // never satisfy the retention promise, even while it still resolves.
@@ -383,7 +395,7 @@ export function validateRetainedReleaseReceiptShape(parsed: unknown): RetainedRe
       `desktop.packages[${index}]`,
     );
     const platform = pkg.platform;
-    if (typeof platform !== "string" || !DESKTOP_PLATFORMS.includes(platform as RetainedDesktopPlatform)) {
+    if (typeof platform !== "string" || !SUPPORTED_DESKTOP_PLATFORMS.includes(platform as RetainedDesktopPlatform)) {
       throw new RetainedReleaseError(`desktop.packages[${index}].platform is unsupported.`);
     }
     if (seenPlatforms.has(platform)) {
@@ -411,9 +423,9 @@ export function validateRetainedReleaseReceiptShape(parsed: unknown): RetainedRe
       sha256_signature: signatureSha,
     };
   });
-  for (const required of DESKTOP_PLATFORMS) {
+  for (const required of REQUIRED_DESKTOP_PLATFORMS) {
     if (!seenPlatforms.has(required)) {
-      throw new RetainedReleaseError(`desktop.packages is missing supported platform "${required}".`);
+      throw new RetainedReleaseError(`desktop.packages is missing required platform "${required}".`);
     }
   }
 

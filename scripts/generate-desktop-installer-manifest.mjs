@@ -49,6 +49,11 @@ const downloads = [
   },
   {
     key: "darwin-x86_64",
+    // Intel desktop builds are paused 2026-08-20 (release-desktop.yml
+    // build-desktop matrix), so this download is expected to be absent from
+    // every run until they resume. Optional: a missing Intel installer is not
+    // a manifest-generation failure.
+    optional: true,
     matcher: (relPath, name) =>
       pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.dmg$/i.test(name),
@@ -67,6 +72,10 @@ for (const download of downloads) {
   const files = findFiles(artifactsDir, download.matcher);
 
   if (files.length === 0) {
+    if (download.optional) {
+      console.warn(`Skipping ${download.key}: no installer found (optional platform).`);
+      continue;
+    }
     errors.push(`Missing installer file for ${download.key}`);
     continue;
   }

@@ -59,9 +59,8 @@ jobs:
       selected_surfaces: ${{ steps.detect.outputs.selected_surfaces }}
       server: ${{ steps.detect.outputs.server }}
       workers: ${{ steps.detect.outputs.workers }}
-      e2b: ${{ steps.detect.outputs.e2b }}
+      litellm: ${{ steps.detect.outputs.litellm }}
       web: ${{ steps.detect.outputs.web }}
-      mobile: ${{ steps.detect.outputs.mobile }}
       desktop: ${{ steps.detect.outputs.desktop }}
       runtime: ${{ steps.detect.outputs.runtime }}
       desktop_version: ${{ steps.artifacts.outputs.desktop_version }}
@@ -252,21 +251,9 @@ jobs:
       target_os: all
     secrets: inherit
 
-  deploy-e2b:
+  deploy-server:
     needs: [prepare]
     if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
-    uses: ./.github/workflows/_deploy-e2b.yml
-    with:
-      environment: staging
-      git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.e2b == 'true' }}
-      rolling_tag: staging
-      mode: build_and_promote
-    secrets: inherit
-
-  deploy-server:
-    needs: [prepare, deploy-e2b]
-    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-server.yml
     with:
       environment: staging
@@ -274,14 +261,14 @@ jobs:
       enabled: ${{ needs.prepare.outputs.server == 'true' }}
     secrets: inherit
 
-  deploy-workers:
-    needs: [prepare, deploy-server]
-    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
-    uses: ./.github/workflows/_deploy-workers.yml
+  deploy-litellm:
+    needs: [prepare]
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
+    uses: ./.github/workflows/_deploy-litellm.yml
     with:
       environment: staging
       git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.workers == 'true' }}
+      enabled: ${{ needs.prepare.outputs.litellm == 'true' }}
     secrets: inherit
 
   deploy-web:
@@ -294,37 +281,15 @@ jobs:
       enabled: ${{ needs.prepare.outputs.web == 'true' }}
     secrets: inherit
 
-  deploy-mobile:
-    needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
-    uses: ./.github/workflows/_deploy-mobile.yml
-    with:
-      environment: staging
-      git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.mobile == 'true' }}
-    secrets: inherit
-
   # ── Production promotion (zero-touch auto-prod) ───────────────────────────────
   # Each prod job promotes only after its staging counterpart deploys cleanly, so
   # the train still validates on staging first — but with no human approval step.
   # Targets the existing `Production` GitHub Environment (prod cluster, deploy
-  # role, prod E2B template, secrets). The Environment's required-reviewer rule
-  # must be removed for these to run unattended.
-
-  deploy-e2b-prod:
-    needs: [prepare, deploy-e2b]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-e2b.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
-    uses: ./.github/workflows/_deploy-e2b.yml
-    with:
-      environment: Production
-      git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.e2b == 'true' }}
-      rolling_tag: production
-      mode: build_and_promote
-    secrets: inherit
+  # role, secrets). The Environment's required-reviewer rule must be removed
+  # for these to run unattended.
 
   deploy-server-prod:
-    needs: [prepare, deploy-server, deploy-e2b-prod]
+    needs: [prepare, deploy-server]
     if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-server.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-server.yml
     with:
@@ -333,14 +298,14 @@ jobs:
       enabled: ${{ needs.prepare.outputs.server == 'true' }}
     secrets: inherit
 
-  deploy-workers-prod:
-    needs: [prepare, deploy-workers, deploy-server-prod]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-workers.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
-    uses: ./.github/workflows/_deploy-workers.yml
+  deploy-litellm-prod:
+    needs: [prepare, deploy-litellm]
+    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-litellm.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    uses: ./.github/workflows/_deploy-litellm.yml
     with:
       environment: Production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.workers == 'true' }}
+      enabled: ${{ needs.prepare.outputs.litellm == 'true' }}
     secrets: inherit
 
   deploy-web-prod:
@@ -353,27 +318,15 @@ jobs:
       enabled: ${{ needs.prepare.outputs.web == 'true' }}
     secrets: inherit
 
-  deploy-mobile-prod:
-    needs: [prepare, deploy-mobile]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-mobile.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
-    uses: ./.github/workflows/_deploy-mobile.yml
-    with:
-      environment: Production
-      git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.mobile == 'true' }}
-    secrets: inherit
-
   publish-product-release:
     needs:
       - prepare
       - release-runtime
       - release-server
       - release-desktop
-      - deploy-e2b
       - deploy-server
-      - deploy-workers
+      - deploy-litellm
       - deploy-web
-      - deploy-mobile
     if: >-
       ${{
         always() &&
@@ -386,10 +339,8 @@ jobs:
             (needs.prepare.outputs.runtime != 'true' || needs.release-runtime.result == 'success') &&
             (needs.prepare.outputs.server != 'true' || (needs.release-server.result == 'success' && needs.deploy-server.result == 'success')) &&
             (needs.prepare.outputs.desktop != 'true' || needs.release-desktop.result == 'success') &&
-            (needs.prepare.outputs.e2b != 'true' || needs.deploy-e2b.result == 'success') &&
-            (needs.prepare.outputs.workers != 'true' || needs.deploy-workers.result == 'success') &&
-            (needs.prepare.outputs.web != 'true' || needs.deploy-web.result == 'success') &&
-            (needs.prepare.outputs.mobile != 'true' || needs.deploy-mobile.result == 'success')
+            (needs.prepare.outputs.litellm != 'true' || needs.deploy-litellm.result == 'success') &&
+            (needs.prepare.outputs.web != 'true' || needs.deploy-web.result == 'success')
           )
         )
       }}
@@ -442,16 +393,12 @@ jobs:
       - release-runtime
       - release-server
       - release-desktop
-      - deploy-e2b
       - deploy-server
-      - deploy-workers
+      - deploy-litellm
       - deploy-web
-      - deploy-mobile
-      - deploy-e2b-prod
       - deploy-server-prod
-      - deploy-workers-prod
+      - deploy-litellm-prod
       - deploy-web-prod
-      - deploy-mobile-prod
     if: ${{ always() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -466,14 +413,10 @@ jobs:
             echo "- Runtime release: \`${{ needs.release-runtime.result }}\`"
             echo "- Server release: \`${{ needs.release-server.result }}\`"
             echo "- Desktop release: \`${{ needs.release-desktop.result }}\`"
-            echo "- E2B staging: \`${{ needs.deploy-e2b.result }}\`"
             echo "- Server staging: \`${{ needs.deploy-server.result }}\`"
-            echo "- Workers staging: \`${{ needs.deploy-workers.result }}\`"
+            echo "- LiteLLM staging: \`${{ needs.deploy-litellm.result }}\`"
             echo "- Web staging: \`${{ needs.deploy-web.result }}\`"
-            echo "- Mobile staging: \`${{ needs.deploy-mobile.result }}\`"
-            echo "- E2B prod: \`${{ needs.deploy-e2b-prod.result }}\`"
             echo "- Server prod: \`${{ needs.deploy-server-prod.result }}\`"
-            echo "- Workers prod: \`${{ needs.deploy-workers-prod.result }}\`"
+            echo "- LiteLLM prod: \`${{ needs.deploy-litellm-prod.result }}\`"
             echo "- Web prod: \`${{ needs.deploy-web-prod.result }}\`"
-            echo "- Mobile prod: \`${{ needs.deploy-mobile-prod.result }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

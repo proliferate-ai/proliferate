@@ -195,9 +195,12 @@ The manual hotfix coordinator starts from an exact ref on `main`, prepares the
 selected versions and tags, runs selected artifact and production jobs, and
 publishes its raw product release only after every selected artifact-release
 and production job succeeds. A Runtime-only hotfix therefore waits for the
-Runtime release even though it has no production deploy job. Neither
-coordinator includes a LiteLLM job. Exact LiteLLM deployment uses the manual
-production-promotion path.
+Runtime release even though it has no production deploy job. The nightly
+coordinator includes a LiteLLM job following the same staging-then-production
+shape as the other hosted surfaces: a staging leg parallel to the Server job,
+with a production leg chained off the staging leg's result. The hotfix
+coordinator does not include a LiteLLM job; exact LiteLLM deployment for a
+hotfix uses the manual production-promotion path.
 
 See the [Release procedure](../../../../../guides/deploying/releases.md).
 
@@ -304,8 +307,8 @@ manifest publisher exists.
 
 ## Current Gaps
 
-- Nightly and hotfix coordinators do not include LiteLLM; use manual production
-  promotion for that surface.
+- The hotfix coordinator does not include LiteLLM; use manual production
+  promotion for that surface. The nightly coordinator includes a LiteLLM job.
 - Self-host release E2E exposes a reusable trigger but is not called by a
   release coordinator, even though Testing's target requires an every-release
   gate.
