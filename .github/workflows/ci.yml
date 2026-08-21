@@ -187,6 +187,14 @@ jobs:
       - name: Test CI/CD scripts
         run: node --test scripts/ci-cd/*.test.mjs
 
+      # Offline-only: exercises canonicalization, allowlist/checksum drift
+      # detection, and the fake-client apply/verify contract for the Grafana
+      # alerting tooling (both the OLD-workspace overlay tool and the NEW
+      # (proliferate-ops-rebuild) workspace bootstrap). Never touches the
+      # network; live operations stay gated behind GRAFANA_ALERTING_LIVE=1.
+      - name: Test Grafana ops scripts
+        run: node --test scripts/ops/*.test.mjs
+
       # Launcher-level proof (BG4-LOCAL-01): `make run BACKGROUND=1` must start
       # the Celery worker/Beat against the SELECTED profile database on
       # profile-scoped broker/store ports. Renders `docker compose config` (no
