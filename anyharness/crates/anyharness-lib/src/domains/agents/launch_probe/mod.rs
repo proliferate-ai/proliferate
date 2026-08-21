@@ -167,26 +167,40 @@ impl LaunchProbeService {
     /// apart from a provisional row nothing will ever refresh.
     ///
     /// `durable_in_flight` is the STORED row's own answer (`ProbeState::Probing`,
-    /// whatever basis the row carries) and it outranks the live slot: the row
-    /// is a fact every reader of it shares, while the slot is one process's
-    /// in-memory bookkeeping that lags the durable write. Sourcing the phase from
-    /// the slot alone let `state` and the phase disagree — a `detecting` response
-    /// carrying `idle`, which a client reads as terminal and stops polling on.
+    /// whatever basis the row carries). It is the only source a READ-ONLY runtime
+    /// has — that runtime never admits an attempt, so every slot it could read is
+    /// one it never wrote — and it is what keeps `state` and the phase from
+    /// disagreeing there: a `detecting` response carrying `idle` or no phase at all
+    /// is one a client reads as terminal and stops polling on.
+    ///
+    /// The OWNER's slot outranks the row in one direction, and only because
+    /// admission now precedes `begin_probe`: for an owner, a row that is `probing`
+    /// while its slot is `idle` is an ORPHAN — a durable start whose attempt is
+    /// gone, which is reachable without any crash, since dropping the `refresh_now`
+    /// future (an ordinary client disconnect) releases the guard and leaves no
+    /// compensating write. Reporting the row there would poll a client forever
+    /// against an attempt that no longer exists.
     ///
     /// `None` only when nothing is in flight durably AND this runtime does not own
-    /// the engine: every slot a read-only runtime could read is one it never wrote,
-    /// so `idle` from there is a claim about another process's scheduler.
+    /// the engine, so no source can answer at all.
     pub fn probe_phase(
         &self,
         harness_kind: &str,
         now: DateTime<Utc>,
         durable_in_flight: bool,
     ) -> Option<ProbePhase> {
-        let live = self.is_owner().then(|| self.live_phase(harness_kind, now).0);
+        let live = self
+            .is_owner()
+            .then(|| self.live_phase(harness_kind, now).0);
         match (durable_in_flight, live) {
-            // The slot only ever refines an in-flight row: `running` is finer than
-            // `queued`, and an idle slot is simply behind the durable write.
             (true, Some(ProbePhase::Running)) => Some(ProbePhase::Running),
+            // The owner admits BEFORE `begin_probe`, so a probing row over a slot
+            // that is idle (or serving out a backoff) is an orphan no attempt
+            // backs: report the slot, not the row.
+            (true, Some(phase @ (ProbePhase::Idle | ProbePhase::Backoff))) => Some(phase),
+            // Either the owner's slot is `queued`, or there is no slot to read
+            // because this runtime does not own the engine. Both mean the row's
+            // in-flight attempt is the best answer available.
             (true, _) => Some(ProbePhase::Queued),
             (false, live) => live,
         }
@@ -412,7 +426,10 @@ impl LaunchProbeService {
         if !self.backoff_admits(&slot, Utc::now()) {
             return;
         }
-        if let Err(error) = self.run_attempt(harness_kind, &slot, reason, live_state).await {
+        if let Err(error) = self
+            .run_attempt(harness_kind, &slot, reason, live_state)
+            .await
+        {
             // Automatic pokes swallow errors (the document's `lastAttempt` carries
             // them); only a user-initiated refresh surfaces them.
             tracing::debug!(

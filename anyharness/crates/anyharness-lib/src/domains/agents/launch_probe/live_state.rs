@@ -128,3 +128,92 @@ impl Drop for LiveStateGuard {
         };
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::sync::Mutex;
+
+    use super::*;
+
+    /// Everything below is about MORE THAN ONE guard on one slot, which is only
+    /// reachable because admission precedes the single-flight gate. The coalescing
+    /// test cannot cover it: it counts spawns and never reads the live phase.
+    fn slot() -> Arc<HarnessSlot> {
+        Arc::new(HarnessSlot {
+            attempt_gate: tokio::sync::Mutex::new(()),
+            state: Mutex::new(HarnessRuntimeState::default()),
+        })
+    }
+
+    fn observe(slot: &HarnessSlot) -> (LiveState, u32) {
+        let state = slot.state.lock().expect("slot poisoned");
+        (state.live, state.admitted)
+    }
+
+    /// A poke admitted while another attempt is already inside the probe must not
+    /// drag the slot back to `queued`: the harness IS running.
+    #[test]
+    fn an_admission_does_not_demote_a_running_attempt() {
+        let slot = slot();
+        let mut winner = LiveStateGuard::admit(slot.clone());
+        winner.running();
+
+        let _loser = LiveStateGuard::admit(slot.clone());
+
+        assert_eq!(observe(&slot), (LiveState::Running, 2));
+    }
+
+    /// The stall this counter exists to prevent. The loser coalesces and returns
+    /// while the winner is still probing; an unconditional `Idle` on drop would
+    /// report a running probe as settled, and the client would stop polling.
+    #[test]
+    fn a_coalesce_loser_letting_go_does_not_report_the_winner_idle() {
+        let slot = slot();
+        let mut winner = LiveStateGuard::admit(slot.clone());
+        winner.running();
+        let loser = LiveStateGuard::admit(slot.clone());
+
+        drop(loser);
+
+        assert_eq!(observe(&slot), (LiveState::Running, 1));
+        drop(winner);
+        assert_eq!(observe(&slot), (LiveState::Idle, 0));
+    }
+
+    /// The other direction: the winner finishes first, and the pokes still queued
+    /// on the gate are exactly what `queued` means.
+    #[test]
+    fn the_running_guard_steps_back_to_queued_while_others_wait() {
+        let slot = slot();
+        let mut winner = LiveStateGuard::admit(slot.clone());
+        winner.running();
+        let waiting = LiveStateGuard::admit(slot.clone());
+
+        drop(winner);
+
+        assert_eq!(observe(&slot), (LiveState::Queued, 1));
+        drop(waiting);
+        assert_eq!(observe(&slot), (LiveState::Idle, 0));
+    }
+
+    /// A panic unwinding through an attempt frame releases exactly one admission —
+    /// the guard's whole reason for existing (F-036), now that the count must also
+    /// come back down.
+    #[test]
+    fn a_panic_releases_exactly_one_admission() {
+        let slot = slot();
+        let survivor = LiveStateGuard::admit(slot.clone());
+
+        let unwound = catch_unwind(AssertUnwindSafe(|| {
+            let mut doomed = LiveStateGuard::admit(slot.clone());
+            doomed.running();
+            panic!("an attempt frame dies mid-probe");
+        }));
+
+        assert!(unwound.is_err(), "the panic must have unwound");
+        assert_eq!(observe(&slot), (LiveState::Queued, 1));
+        drop(survivor);
+        assert_eq!(observe(&slot), (LiveState::Idle, 0));
+    }
+}

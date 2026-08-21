@@ -97,22 +97,30 @@ Refresh, which reads identically to a probe that is about to answer. The
 response therefore also carries `probePhase` for that harness (`idle`, `queued`,
 `running`, `backoff`), the same lifecycle the agent-auth summary reports.
 
-`probePhase` is derived from the same durable row as `state`, and the read returns
-the two together so no caller can derive them apart: a row whose `probe_state` is
-`probing` reports at least `queued`, and the scheduler's in-memory slot only
-refines that to `running`. The row decides in both directions, which matters
-wherever the basis has moved and the response is `detecting` for that reason
-alone. A settled row there reports `idle`, so a harness no unattended poke may
-refresh is not polled forever; a row still `probing` there keeps reporting
-`queued`, because an auth change moves every harness's basis and can land under a
-probe that is genuinely running — the very probe whose result the client is
-waiting for. The slot alone would
-not do, because a probe writes `probing` durably before it is admitted to the
-slot and then resolves a model plan, so a client polling in between would be told
-`detecting` with a settled `idle` and would stop. The field is omitted only when
-nothing is in flight in the row AND the serving runtime does not own the probe
-engine for its runtime home, which is the one case where the phase is genuinely
-unknowable there.
+`probePhase` and `state` come out of one read of one durable row, returned
+together so no caller can derive them apart and let them disagree. A row whose
+`probe_state` is `probing` reports at least `queued`, whatever basis that row
+carries: an auth change moves every harness's basis and can land under a probe
+that is genuinely running, and that probe is the one whose result the client is
+waiting for. A settled row at a moved basis reports `idle` instead, even though it
+too is served as `detecting`, so a harness no unattended poke may refresh is not
+polled forever.
+
+The scheduler's in-memory slot refines the row rather than replacing it, in two
+directions. An owner admits an attempt to its slot BEFORE writing `probing`
+durably and before every await after it, so for an owner the slot leads the row:
+it sharpens `queued` to `running`, and — the case that matters — a `probing` row
+whose owner slot is `idle` is an ORPHAN, a durable start whose attempt is gone.
+That happens without any crash, since dropping the refresh future releases the
+guard and nothing releases the row, so the owner's slot is what stops a client
+polling forever against an attempt that no longer exists. A read-only runtime has
+no slot to refine anything with, because it never admits an attempt; the row is
+its only source, and reporting it is what keeps a runtime that shares the document
+converging with the owner probing it.
+
+The field is omitted only when nothing is in flight in the row AND the serving
+runtime does not own the probe engine for its runtime home, the one case where no
+source can answer.
 
 Clients wait on a launch-option read only while `probePhase` is `queued` or
 `running`, or while the state is `refreshing`. Every terminal state, and a
