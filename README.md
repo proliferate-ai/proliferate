@@ -21,7 +21,7 @@
 <br />
 
 Run Claude Code, Codex, OpenCode, and any other coding agent in parallel, in one workspace.<br />
-Each task gets an isolated git worktree — branch, terminal, conversation, and review state kept together.
+Each task gets an isolated git worktree for its branch, terminal, conversation, and review state.
 
 <br />
 
