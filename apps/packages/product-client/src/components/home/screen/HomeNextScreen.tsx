@@ -327,13 +327,12 @@ export function HomeNextScreen() {
                       action for it. The single terminal state names none —
                       a button that cannot change anything is the dead end
                       this gate removes, not a cure. */}
-                  {/* Disabled while a probe is running: a second press would
-                      start an overlapping batch whose out-of-order settle
-                      could report the wrong outcome for the wrong press. */}
+                  {/* Never disabled: this is the only affordance on states
+                      with no guaranteed exit, and the hook already ignores a
+                      press while its own batch is in flight. */}
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled={homeNext.retryPending}
                     onClick={runModelGateNoticeAction}
                     className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
                   >

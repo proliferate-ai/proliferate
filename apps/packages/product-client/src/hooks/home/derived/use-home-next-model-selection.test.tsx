@@ -533,6 +533,21 @@ describe("useHomeNextModelSelection", () => {
     expect(result.current.unsupportedHarnessKind).toBe("claude");
   });
 
+  it("withholds the unsupported harness from every gate but its own", () => {
+    // `agent_setup_required` shares the `agent_settings` action and means a
+    // DIFFERENT agent. Handing it the unsupported kind opened a pane that can
+    // never be set up while the agent actually needing login went unopened —
+    // the ordinary first-run state of any machine with one unsupported agent.
+    mocks.agents = [
+      { kind: "cursor", readiness: "unsupported" },
+      { kind: "claude", readiness: "login_required" },
+    ];
+    const { result } = renderSelection(LOCAL_TARGET);
+    expect(result.current.modelGate)
+      .toEqual({ kind: "blocked", reason: "agent_setup_required" });
+    expect(result.current.unsupportedHarnessKind).toBeNull();
+  });
+
   it("keeps a cloud sandbox that reported no models from claiming it has no agents", () => {
     // `observed_empty` is the one blocked state ruling 3 keeps the picker
     // ENABLED for, and an enabled picker labelled "No agents" is false: the
