@@ -1,10 +1,9 @@
+# Manual-only staging. Merging to main deploys nothing: the one automated
+# transition is `release.yml` (main to production). Staging is an optional
+# proving ground an operator dispatches on purpose.
 name: Deploy Staging
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
@@ -31,18 +30,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: >-
-    deploy-staging-${{
-      github.event_name == 'workflow_dispatch'
-      && format('push-success-{0}-main', github.repository)
-      || format(
-        '{0}-{1}-{2}-{3}',
-        github.event.workflow_run.event,
-        github.event.workflow_run.conclusion,
-        github.event.workflow_run.head_repository.full_name,
-        github.event.workflow_run.head_branch
-      )
-    }}
+  # One staging deploy at a time, and never cancel one mid-roll.
+  group: deploy-staging-${{ github.repository }}
   cancel-in-progress: false
 
 env:
@@ -50,16 +39,6 @@ env:
 
 jobs:
   plan:
-    if: >-
-      ${{
-        github.event_name == 'workflow_dispatch'
-        || (
-          github.event.workflow_run.conclusion == 'success'
-          && github.event.workflow_run.event == 'push'
-          && github.event.workflow_run.head_branch == 'main'
-          && github.event.workflow_run.head_repository.full_name == github.repository
-        )
-      }}
     runs-on: ubuntu-latest
     outputs:
       base_sha: ${{ steps.detect.outputs.base_sha }}
@@ -81,7 +60,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha || github.event.inputs.ref || github.sha }}
+          ref: ${{ github.event.inputs.ref || github.sha }}
 
       - name: Resolve deploy metadata
         id: meta

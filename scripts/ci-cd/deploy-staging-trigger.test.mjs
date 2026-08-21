@@ -1,62 +1,62 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const workflow = readFileSync(
-  path.join(repoRoot, ".github/workflows/deploy-staging.yml"),
-  "utf8",
-);
-const repository = "proliferate-ai/proliferate";
+const workflowDir = path.join(repoRoot, ".github/workflows");
+const workflow = readFileSync(path.join(workflowDir, "deploy-staging.yml"), "utf8");
 
-function automaticGroup({ event, conclusion, headRepository, headBranch }) {
-  return `deploy-staging-${event}-${conclusion}-${headRepository}-${headBranch}`;
+function read(name) {
+  return readFileSync(path.join(workflowDir, name), "utf8");
 }
 
-function isTrustedAutomaticRun({ event, conclusion, headRepository, headBranch }) {
-  return (
-    event === "push" &&
-    conclusion === "success" &&
-    headRepository === repository &&
-    headBranch === "main"
-  );
+function workflowNames() {
+  return readdirSync(workflowDir).filter((name) => name.endsWith(".yml"));
 }
 
-test("staging queues workflow-run events from main only", () => {
-  assert.match(
-    workflow,
-    /^on:\n  workflow_run:\n    workflows: \["CI"\]\n    types: \[completed\]\n    branches: \[main\]$/m,
-  );
-  assert.match(
-    workflow,
-    /format\('push-success-\{0\}-main', github\.repository\)/,
-  );
-  assert.match(workflow, /github\.event\.workflow_run\.event == 'push'/);
-  assert.match(
-    workflow,
-    /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/,
-  );
-  assert.match(workflow, /github\.event\.workflow_run\.conclusion == 'success'/);
+function triggerBlock(source) {
+  const start = source.indexOf("\non:");
+  const end = source.indexOf("\npermissions:", start);
+  return source.slice(start, end === -1 ? undefined : end);
+}
+
+test("staging runs only when an operator dispatches it", () => {
+  const triggers = triggerBlock(workflow);
+
+  assert.match(triggers, /^on:\n  workflow_dispatch:$/m);
+  assert.doesNotMatch(triggers, /workflow_run:/);
+  assert.doesNotMatch(triggers, /\bpush:/);
+  assert.doesNotMatch(triggers, /\bschedule:/);
   assert.match(workflow, /^  cancel-in-progress: false$/m);
 });
 
-test("a fork pull request named main cannot enter or displace the trusted queue", () => {
-  const trusted = {
-    event: "push",
-    conclusion: "success",
-    headRepository: repository,
-    headBranch: "main",
-  };
-  const forkPullRequest = {
-    event: "pull_request",
-    conclusion: "success",
-    headRepository: "contributor/proliferate",
-    headBranch: "main",
-  };
+test("merging to main deploys nothing", () => {
+  const automatic = [];
+  for (const name of workflowNames()) {
+    const source = read(name);
+    const triggers = triggerBlock(source);
+    const startsOnMain =
+      /workflow_run:/.test(triggers) || /branches:\s*\[\s*main\s*\]/.test(triggers);
+    const deploys = /uses: \.\/\.github\/workflows\/_deploy-/.test(source);
+    if (startsOnMain && deploys) {
+      automatic.push(name);
+    }
+  }
 
-  assert.equal(isTrustedAutomaticRun(trusted), true);
-  assert.equal(isTrustedAutomaticRun(forkPullRequest), false);
-  assert.notEqual(automaticGroup(forkPullRequest), automaticGroup(trusted));
+  assert.deepEqual(automatic, []);
+});
+
+test("release.yml is the only entrypoint into a production deploy lane", () => {
+  const coordinators = workflowNames().filter((name) =>
+    /environment: Production/.test(read(name)),
+  );
+
+  assert.deepEqual(coordinators, ["release.yml"]);
+});
+
+test("staging never targets the production environment", () => {
+  assert.doesNotMatch(workflow, /environment: Production/);
+  assert.match(workflow, /environment: staging/);
 });
