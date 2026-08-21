@@ -41,6 +41,15 @@ pub enum LaunchSelectionUnsupported {
     },
 }
 
+/// One read of the launch-option document: the projected response, and whether
+/// the row behind it has a probe in flight for the current basis. The two travel
+/// together so that a caller reporting both cannot derive them from two sources
+/// and let them disagree.
+pub struct LaunchOptionsRead {
+    pub response: HarnessLaunchOptionsResponse,
+    pub probe_in_flight: bool,
+}
+
 impl HarnessLaunchOptionsService {
     pub fn new(db: Db, runtime_home: PathBuf) -> Self {
         Self {
@@ -54,22 +63,49 @@ impl HarnessLaunchOptionsService {
     }
 
     pub fn read(&self, harness_kind: &str) -> anyhow::Result<Option<HarnessLaunchOptionsResponse>> {
+        Ok(self
+            .read_with_probe_state(harness_kind)?
+            .map(|read| read.response))
+    }
+
+    /// [`Self::read`], plus the one fact about the STORED row that the projection
+    /// cannot carry: whether a probe is in flight for the basis this response is
+    /// about.
+    ///
+    /// A surface that reports the state and the probe phase together must take
+    /// both from here rather than re-deriving the phase from the projected state.
+    /// The projection is NOT a function of `probe_state`: the basis-mismatch arm
+    /// below synthesizes `detecting` for a settled row, and re-deriving from that
+    /// reports a harness nothing will ever probe as perpetually queued.
+    pub fn read_with_probe_state(
+        &self,
+        harness_kind: &str,
+    ) -> anyhow::Result<Option<LaunchOptionsRead>> {
         let current_basis = self.basis_revision(harness_kind);
         self.store.read(harness_kind).map(|row| {
             row.map(|row| {
                 if row.basis_revision != current_basis {
-                    return HarnessLaunchOptionsResponse {
-                        harness_kind: row.harness_kind,
-                        basis_revision: current_basis,
-                        revision: row.revision.saturating_add(1),
-                        state: HarnessLaunchOptionsState::Detecting,
-                        options: None,
-                        observed_at: None,
-                        probe_attempted_at: row.probe_attempted_at,
-                        probe_failure_code: None,
+                    return LaunchOptionsRead {
+                        // Nothing has been observed for THIS basis and no attempt
+                        // covers it either: `begin_probe` stamps the current basis,
+                        // so an in-flight probe never lands in this arm.
+                        probe_in_flight: false,
+                        response: HarnessLaunchOptionsResponse {
+                            harness_kind: row.harness_kind,
+                            basis_revision: current_basis,
+                            revision: row.revision.saturating_add(1),
+                            state: HarnessLaunchOptionsState::Detecting,
+                            options: None,
+                            observed_at: None,
+                            probe_attempted_at: row.probe_attempted_at,
+                            probe_failure_code: None,
+                        },
                     };
                 }
-                project_response(row)
+                LaunchOptionsRead {
+                    probe_in_flight: row.probe_state == ProbeState::Probing,
+                    response: project_response(row),
+                }
             })
         })
     }

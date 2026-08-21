@@ -97,10 +97,13 @@ Refresh, which reads identically to a probe that is about to answer. The
 response therefore also carries `probePhase` for that harness (`idle`, `queued`,
 `running`, `backoff`), the same lifecycle the agent-auth summary reports.
 
-`probePhase` is derived from the same durable row as `state`, so the two cannot
-contradict each other: a row whose `probe_state` is `probing` — that is, every
-`detecting` and `refreshing` response — reports at least `queued`, and the
-scheduler's in-memory slot only refines that to `running`. The slot alone would
+`probePhase` is derived from the same durable row as `state`, and the read returns
+the two together so no caller can derive them apart: a row whose `probe_state` is
+`probing` for the current basis reports at least `queued`, and the scheduler's
+in-memory slot only refines that to `running`. The basis qualifier is load-bearing
+rather than pedantic — a settled row whose basis has moved is served as
+`detecting` with no probe in flight at all, and it must read as `idle` so a
+harness excluded from unattended probes is not polled forever. The slot alone would
 not do, because a probe writes `probing` durably before it is admitted to the
 slot and then resolves a model plan, so a client polling in between would be told
 `detecting` with a settled `idle` and would stop. The field is omitted only when

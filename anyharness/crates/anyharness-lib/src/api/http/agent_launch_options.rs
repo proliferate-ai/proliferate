@@ -81,14 +81,15 @@ async fn response_for(
     let readiness = readiness_to_contract(readiness);
     match state
         .launch_options_service
-        .read(kind)
+        .read_with_probe_state(kind)
         .map_err(|error| ApiError::internal(format!("launch-options read failed: {error}")))?
     {
-        Some(response) => {
-            // Read AFTER the row, so the phase is never older than the state it
-            // qualifies, and derived FROM it, so the two cannot contradict.
-            let probe_phase = probe_phase_for(state, kind, durable_probe_in_flight(response.state));
-            Ok(to_contract(response, readiness, probe_phase))
+        Some(read) => {
+            // The in-flight bit travels WITH the response, out of the same row, so
+            // the state and the phase cannot be derived apart and drift. Read after
+            // the row too, so the phase is never older than the state it qualifies.
+            let probe_phase = probe_phase_for(state, kind, read.probe_in_flight);
+            Ok(to_contract(read.response, readiness, probe_phase))
         }
         // No row at all: nothing is durably in flight, whatever a slot might say.
         None => Ok(HarnessLaunchOptionsResponse {
@@ -106,19 +107,6 @@ async fn response_for(
     }
 }
 
-/// Does the DURABLE row say a probe is in flight? The projected state is that
-/// row's own reading of `probe_state`: `detecting` and `refreshing` are exactly
-/// `ProbeState::Probing` over an absent or a present last-good observation
-/// (`launch_options::service::state_for`). Deriving the phase from the same
-/// projection the response carries is what keeps the two consistent by
-/// construction instead of by two racing sources of truth.
-fn durable_probe_in_flight(state: domain::HarnessLaunchOptionsState) -> bool {
-    matches!(
-        state,
-        domain::HarnessLaunchOptionsState::Detecting
-            | domain::HarnessLaunchOptionsState::Refreshing
-    )
-}
 
 fn validate_kind(kind: &str) -> Result<(), ApiError> {
     ensure_path_safe_identifier(kind, "kind")?;

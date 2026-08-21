@@ -256,8 +256,8 @@ impl LaunchProbeService {
     /// the launch-options response, which cannot otherwise tell an active probe
     /// apart from a provisional row nothing will ever refresh.
     ///
-    /// `durable_in_flight` is the STORED row's own answer (`ProbeState::Probing`,
-    /// rendered as `detecting`/`refreshing`) and it outranks the live slot: the row
+    /// `durable_in_flight` is the STORED row's own answer (`ProbeState::Probing`
+    /// for the CURRENT basis) and it outranks the live slot: the row
     /// is a fact every reader of it shares, while the slot is one process's
     /// in-memory bookkeeping that lags the durable write. Sourcing the phase from
     /// the slot alone let `state` and the phase disagree — a `detecting` response
