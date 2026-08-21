@@ -147,6 +147,7 @@ export function useAgentLaunchOptionsQuery(options?: RuntimeQueryOptions & {
 export interface AgentLaunchOptionsListEntry {
   harnessKind: string;
   data: HarnessLaunchOptionsResponse | null;
+  /** In flight right now. A disabled entry is not pending: nothing will resolve it. */
   isPending: boolean;
   isError: boolean;
 }
@@ -182,7 +183,11 @@ export function useAgentLaunchOptionsListQuery(options?: RuntimeQueryOptions & {
     combine: (results): AgentLaunchOptionsListEntry[] => results.map((result, index) => ({
       harnessKind: harnessKinds[index] ?? "",
       data: result.data ?? null,
-      isPending: result.isPending,
+      // A DISABLED query with no data is `status: "pending"` in v5, so the raw flag
+      // reports "still loading" for a fan-out that is not running and never will
+      // until the runtime URL arrives. A consumer renders that as a control waiting
+      // on something, forever. `fetchStatus` is what separates the two.
+      isPending: result.isPending && result.fetchStatus !== "idle",
       isError: result.isError,
     })),
   });

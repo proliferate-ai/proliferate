@@ -107,7 +107,6 @@ async fn response_for(
     }
 }
 
-
 fn validate_kind(kind: &str) -> Result<(), ApiError> {
     ensure_path_safe_identifier(kind, "kind")?;
     descriptor(kind).map(|_| ()).ok_or_else(|| {

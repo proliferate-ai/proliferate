@@ -256,6 +256,69 @@ fn settle_a_row(state: &AppState, harness: &str) {
     assert!(committed, "the observation must land on the row we started");
 }
 
+/// A probe stamps the basis it STARTED at, and any auth apply moves the basis
+/// under it — `apply_state_file` writes `state.json` BEFORE it pokes, so the
+/// interleaving is the designed one, not a rare race. The row is then `probing` at
+/// a basis nobody asked about, and judging the basis before the row would serve a
+/// genuinely running probe as settled: the client stops polling, the observation
+/// lands, and the UI never updates.
+#[tokio::test]
+async fn an_in_flight_probe_survives_a_basis_move_under_it() {
+    let home = TempRuntimeHome::new("basis-move-mid-probe");
+    home.write_manifest(HARNESS, Some("1.0.0"), Some("sha-1"), "managed");
+    home.write_state_json(&gateway_state(1, &[(HARNESS, "test-not-a-real-key")]));
+    let state = app_state(home.path().to_path_buf());
+    begin_a_probe(&state, HARNESS);
+
+    let before = launch_options_payload(state.clone()).await;
+    assert_eq!(before["probePhase"], Value::from("queued"));
+
+    // The auth apply that lands mid-probe: the state file moves first, so every
+    // harness's basis moves while this harness's row is still `probing`.
+    home.write_state_json(&gateway_state(2, &[("claude", "test-not-a-real-key")]));
+
+    let after = launch_options_payload(state).await;
+    assert_eq!(after["state"], Value::from("detecting"));
+    assert_eq!(
+        after["probePhase"],
+        Value::from("queued"),
+        "the probe did not stop running because the basis moved under it: {after}"
+    );
+}
+
+/// The same interleaving on a runtime that cannot read a slot at all. Its only
+/// source is the row, so a basis-gated read would omit the field entirely — which
+/// the client also treats as terminal.
+#[tokio::test]
+async fn a_read_only_runtime_keeps_reporting_a_probe_across_a_basis_move() {
+    let home = TempRuntimeHome::new("basis-move-read-only");
+    home.write_manifest(HARNESS, Some("1.0.0"), Some("sha-1"), "managed");
+    home.write_state_json(&gateway_state(1, &[(HARNESS, "test-not-a-real-key")]));
+    let _owner = ProbeEngineLock::try_acquire(home.path()).expect("take the engine lock first");
+
+    let state = app_state(home.path().to_path_buf());
+    assert_eq!(state.launch_probe_service.mode(), ProbeEngineMode::ReadOnly);
+    begin_a_probe(&state, HARNESS);
+    home.write_state_json(&gateway_state(2, &[("claude", "test-not-a-real-key")]));
+
+    let payload = launch_options_payload(state).await;
+    assert_eq!(payload["state"], Value::from("detecting"));
+    assert_eq!(
+        payload["probePhase"],
+        Value::from("queued"),
+        "absent reads as terminal to a client, so it must not be absent here: {payload}"
+    );
+}
+
+/// Leave the row exactly as an attempt in flight leaves it: `probing`, stamped
+/// with the basis at the moment it started.
+fn begin_a_probe(state: &AppState, harness: &str) {
+    state
+        .launch_options_service
+        .begin_probe(harness, &chrono::Utc::now().to_rfc3339())
+        .expect("record a durable probe start");
+}
+
 fn temp_runtime_home(prefix: &str) -> PathBuf {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)

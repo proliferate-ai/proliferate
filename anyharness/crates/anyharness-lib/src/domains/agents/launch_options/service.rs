@@ -42,7 +42,7 @@ pub enum LaunchSelectionUnsupported {
 }
 
 /// One read of the launch-option document: the projected response, and whether
-/// the row behind it has a probe in flight for the current basis. The two travel
+/// the row behind it has a probe in flight. The two travel
 /// together so that a caller reporting both cannot derive them from two sources
 /// and let them disagree.
 pub struct LaunchOptionsRead {
@@ -69,8 +69,7 @@ impl HarnessLaunchOptionsService {
     }
 
     /// [`Self::read`], plus the one fact about the STORED row that the projection
-    /// cannot carry: whether a probe is in flight for the basis this response is
-    /// about.
+    /// cannot carry: whether that row has a probe in flight.
     ///
     /// A surface that reports the state and the probe phase together must take
     /// both from here rather than re-deriving the phase from the projected state.
@@ -84,12 +83,16 @@ impl HarnessLaunchOptionsService {
         let current_basis = self.basis_revision(harness_kind);
         self.store.read(harness_kind).map(|row| {
             row.map(|row| {
+                // The ROW's own answer, read before the basis is judged. A probe
+                // stamps the basis it STARTED at and nothing pins it for the
+                // attempt's duration, so any auth apply moves the basis under an
+                // in-flight probe — and that apply is precisely the event whose
+                // result the client is waiting for. Judging the basis first would
+                // report the running probe as settled.
+                let probe_in_flight = row.probe_state == ProbeState::Probing;
                 if row.basis_revision != current_basis {
                     return LaunchOptionsRead {
-                        // Nothing has been observed for THIS basis and no attempt
-                        // covers it either: `begin_probe` stamps the current basis,
-                        // so an in-flight probe never lands in this arm.
-                        probe_in_flight: false,
+                        probe_in_flight,
                         response: HarnessLaunchOptionsResponse {
                             harness_kind: row.harness_kind,
                             basis_revision: current_basis,
@@ -103,7 +106,7 @@ impl HarnessLaunchOptionsService {
                     };
                 }
                 LaunchOptionsRead {
-                    probe_in_flight: row.probe_state == ProbeState::Probing,
+                    probe_in_flight,
                     response: project_response(row),
                 }
             })

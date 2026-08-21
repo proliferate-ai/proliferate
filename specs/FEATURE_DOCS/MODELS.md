@@ -99,11 +99,14 @@ response therefore also carries `probePhase` for that harness (`idle`, `queued`,
 
 `probePhase` is derived from the same durable row as `state`, and the read returns
 the two together so no caller can derive them apart: a row whose `probe_state` is
-`probing` for the current basis reports at least `queued`, and the scheduler's
-in-memory slot only refines that to `running`. The basis qualifier is load-bearing
-rather than pedantic — a settled row whose basis has moved is served as
-`detecting` with no probe in flight at all, and it must read as `idle` so a
-harness excluded from unattended probes is not polled forever. The slot alone would
+`probing` reports at least `queued`, and the scheduler's in-memory slot only
+refines that to `running`. The row decides in both directions, which matters
+wherever the basis has moved and the response is `detecting` for that reason
+alone. A settled row there reports `idle`, so a harness no unattended poke may
+refresh is not polled forever; a row still `probing` there keeps reporting
+`queued`, because an auth change moves every harness's basis and can land under a
+probe that is genuinely running — the very probe whose result the client is
+waiting for. The slot alone would
 not do, because a probe writes `probing` durably before it is admitted to the
 slot and then resolves a model plan, so a client polling in between would be told
 `detecting` with a settled `idle` and would stop. The field is omitted only when

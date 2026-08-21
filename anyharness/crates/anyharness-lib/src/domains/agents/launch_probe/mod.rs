@@ -17,6 +17,7 @@
 //! - [`status`] projects the polled status surface (pure),
 //! - [`detail`] makes a harness's own error text safe to persist (pure),
 //! - [`backoff`] spreads the failure-retry window (pure),
+//! - [`live_state`] holds one slot's live phase and the RAII guard over it,
 //! - [`attempt`] executes one admitted attempt and persists its outcome,
 //! - [`universe`] serves the observation to launch validation,
 //! - this file is the reconciler: single-flight, the pokes, and the brakes.
@@ -32,6 +33,7 @@
 mod attempt;
 mod backoff;
 pub mod config;
+mod live_state;
 pub mod lock;
 pub mod probe;
 pub mod targets;
@@ -53,45 +55,9 @@ use crate::domains::agents::route_auth::{self, GatewayModelResolve, RouteAuthErr
 use crate::domains::agents::auth_state::{AuthRuntimeInputs, ProbeLifecycle, ProbePhase};
 
 pub use config::{PokeReason, ProbeEngineConfig, ProbeEngineMode, RefreshError};
+use live_state::{HarnessRuntimeState, LiveState, LiveStateGuard};
 use probe::ProbeRunner;
 use targets::ProbeTargets;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LiveState {
-    Idle,
-    Queued,
-    Running,
-}
-
-/// The engine's live, in-memory view of one harness.
-///
-/// Not persisted, deliberately: a restart costs at most one extra attempt, the
-/// same tradeoff the spec already accepts for the Worker's upload state. Persisting
-/// backoff would mean a machine could boot already-throttled with no way for a user
-/// to tell why.
-#[derive(Debug)]
-struct HarnessRuntimeState {
-    /// What a polling surface is told. `Queued` is set the moment an attempt is
-    /// admitted to this slot — BEFORE it waits on the single-flight gate and the
-    /// machine-wide semaphore — so a probe that is genuinely pending never reports
-    /// `idle`. At `max_concurrent_probes = 1` that wait is the common case, not an
-    /// edge one.
-    live: LiveState,
-    consecutive_failures: u32,
-    next_attempt_at: Option<DateTime<Utc>>,
-    last_attempt_at: Option<DateTime<Utc>>,
-}
-
-impl Default for HarnessRuntimeState {
-    fn default() -> Self {
-        Self {
-            live: LiveState::Idle,
-            consecutive_failures: 0,
-            next_attempt_at: None,
-            last_attempt_at: None,
-        }
-    }
-}
 
 struct HarnessSlot {
     /// Serializes attempts for this harness — the single-flight gate. Coalescing
@@ -99,62 +65,6 @@ struct HarnessSlot {
     /// probed for them, which is the whole coalescing mechanism.
     attempt_gate: tokio::sync::Mutex<()>,
     state: Mutex<HarnessRuntimeState>,
-}
-
-/// RAII guard over one [`HarnessSlot`]'s live state, for the lifetime of a single
-/// attempt (F-036).
-///
-/// Before this guard, `run_attempt` set `Queued`/`Running`/`Idle` as three bare
-/// statements straddling await points (the single-flight gate, the machine-wide
-/// semaphore, and the probe itself). Dropping the caller's future anywhere
-/// between the first write and the last — a client that disconnects mid
-/// `refresh_now`, a task that gets aborted — skipped the final `Idle` write and
-/// left the slot pinned at `Queued` or `Running` forever, because the in-flight
-/// check treats both as in-flight and refuses every subsequent poke for that
-/// harness. A wedge like that is invisible from the status surface too: it reads
-/// a plausible `queued`/`running` forever.
-///
-/// The fix mirrors two guards this module already has: `ProbeScratch` removes its
-/// scratch root on `Drop`, and the `CancellationToken` guard in `probe.rs` fires
-/// cancellation on `Drop`. Both make their piece of attempt state correct by
-/// construction, covering return, `?`, panic and future-drop alike.
-struct LiveStateGuard {
-    slot: Arc<HarnessSlot>,
-}
-
-impl LiveStateGuard {
-    /// Admits the attempt: sets `Queued` immediately, BEFORE the single-flight
-    /// gate and the machine-wide semaphore, so a probe that is genuinely pending
-    /// never reports `idle`.
-    fn admit(slot: Arc<HarnessSlot>) -> Self {
-        let guard = Self { slot };
-        guard.set(LiveState::Queued);
-        guard
-    }
-
-    /// The attempt cleared both concurrency waits and is now inside the probe
-    /// itself.
-    fn running(&self) {
-        self.set(LiveState::Running);
-    }
-
-    fn set(&self, live: LiveState) {
-        self.slot
-            .state
-            .lock()
-            .expect("model snapshot slot poisoned")
-            .live = live;
-    }
-}
-
-impl Drop for LiveStateGuard {
-    fn drop(&mut self) {
-        // Every exit out of `run_attempt` lands here: the success return, the
-        // failure return, an early `?`, a panic unwinding through the frame, or —
-        // the case F-036 proved reachable — the whole future being dropped
-        // without any of `run_attempt`'s own code running again.
-        self.set(LiveState::Idle);
-    }
 }
 
 pub struct LaunchProbeService {
@@ -256,8 +166,8 @@ impl LaunchProbeService {
     /// the launch-options response, which cannot otherwise tell an active probe
     /// apart from a provisional row nothing will ever refresh.
     ///
-    /// `durable_in_flight` is the STORED row's own answer (`ProbeState::Probing`
-    /// for the CURRENT basis) and it outranks the live slot: the row
+    /// `durable_in_flight` is the STORED row's own answer (`ProbeState::Probing`,
+    /// whatever basis the row carries) and it outranks the live slot: the row
     /// is a fact every reader of it shares, while the slot is one process's
     /// in-memory bookkeeping that lags the durable write. Sourcing the phase from
     /// the slot alone let `state` and the phase disagree — a `detecting` response
@@ -485,6 +395,13 @@ impl LaunchProbeService {
         }
         let poked_at = Utc::now();
         let slot = self.slot(harness_kind);
+        // Admitted BEFORE the gate wait, which is what `LiveStateGuard` has always
+        // claimed and is the common case at `max_concurrent_probes = 1`. The same
+        // event that moves the auth basis is the one that invalidates the client's
+        // cache, so a slot that reads `idle` across this wait stops its polling for
+        // good. Every exit below drops the guard, including a coalesce return and
+        // this future being abandoned mid-wait.
+        let live_state = self.admit_attempt(slot.clone());
         let _attempt_gate = slot.attempt_gate.lock().await;
         // The coalesce: the previous holder usually probed for this poke already.
         // Failed attempts count too — N pokes racing a failing probe coalesce
@@ -495,7 +412,7 @@ impl LaunchProbeService {
         if !self.backoff_admits(&slot, Utc::now()) {
             return;
         }
-        if let Err(error) = self.run_attempt(harness_kind, &slot, reason).await {
+        if let Err(error) = self.run_attempt(harness_kind, &slot, reason, live_state).await {
             // Automatic pokes swallow errors (the document's `lastAttempt` carries
             // them); only a user-initiated refresh surfaces them.
             tracing::debug!(
@@ -528,9 +445,10 @@ impl LaunchProbeService {
         self.plan_producer.invalidate_gateway_plan(harness_kind);
 
         let slot = self.slot(harness_kind);
+        let live_state = self.admit_attempt(slot.clone());
         let _attempt_gate = slot.attempt_gate.lock().await;
 
-        self.run_attempt(harness_kind, &slot, PokeReason::Manual)
+        self.run_attempt(harness_kind, &slot, PokeReason::Manual, live_state)
             .await
     }
 
@@ -576,8 +494,9 @@ impl LaunchProbeService {
     }
 
     /// Admit an attempt to `slot`'s live state, RAII-style: `Queued` immediately,
-    /// `Idle` on `Drop` — regardless of which of `run_attempt`'s exits runs,
-    /// including a future dropped mid-probe (F-036). See [`LiveStateGuard`].
+    /// and back to `Idle` when the LAST admitted attempt lets go — regardless of
+    /// which exit runs, including a future dropped mid-probe (F-036) or abandoned
+    /// while queued on the gate. See [`LiveStateGuard`].
     fn admit_attempt(&self, slot: Arc<HarnessSlot>) -> LiveStateGuard {
         LiveStateGuard::admit(slot)
     }
