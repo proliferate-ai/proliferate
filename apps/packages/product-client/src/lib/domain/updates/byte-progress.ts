@@ -14,6 +14,25 @@ export function formatByteProgress(
 }
 
 /**
+ * The install-progress toast's downloading-phase line: "«downloaded» of
+ * «total» MB downloaded", or "«downloaded» MB downloaded" when the total is
+ * unknown. Unlike `formatByteProgress`, the unit is stated once at the end of
+ * the sentence rather than after each number — the shape the design artifact
+ * (Toast - Install Progress Set) specifies verbatim.
+ */
+export function formatDownloadedMegabytesLine(
+  downloadedBytes: number,
+  totalBytes: number | null,
+): string {
+  const downloaded = formatMegabytes(downloadedBytes).replace(/ MB$/, "");
+  if (totalBytes !== null && totalBytes > 0) {
+    const total = formatMegabytes(totalBytes).replace(/ MB$/, "");
+    return `${downloaded} of ${total} MB downloaded`;
+  }
+  return `${downloaded} MB downloaded`;
+}
+
+/**
  * Remaining download time from the average rate so far, as "10s left" /
  * "2m left".
  *

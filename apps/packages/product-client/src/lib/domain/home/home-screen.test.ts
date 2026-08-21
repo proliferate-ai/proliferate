@@ -3,7 +3,7 @@ import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import {
   buildHomeOnboardingCards,
   findHomeUnconfiguredGitHubRepository,
-  resolveHomeModelProbeCardState,
+  resolveHomeReadinessCardModel,
 } from "#product/lib/domain/home/home-screen";
 
 const githubRepository = {
@@ -131,52 +131,82 @@ describe("findHomeUnconfiguredGitHubRepository", () => {
   });
 });
 
-describe("resolveHomeModelProbeCardState", () => {
-  const baseArgs = {
-    dismissed: false,
-    agentsLoading: false,
-    isReconciling: false,
-    harnessKinds: ["opencode"],
-    modelCount: 3,
-    agentSetupCardVisible: false,
-  };
+describe("resolveHomeReadinessCardModel", () => {
+  const grok = { kind: "grok", displayName: "Grok" };
+  const claude = { kind: "claude", displayName: "Claude" };
+  const codex = { kind: "codex", displayName: "Codex" };
+  const opencode = { kind: "opencode", displayName: "OpenCode" };
+  const cursor = { kind: "cursor", displayName: "Cursor" };
 
-  it("is hidden when dismissed", () => {
-    expect(resolveHomeModelProbeCardState({ ...baseArgs, dismissed: true }))
-      .toEqual({ kind: "hidden" });
+  it("is null for a blocked gate, regardless of readiness", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "blocked",
+      readyAgents: [grok],
+      installingAgents: [claude],
+    })).toBeNull();
   });
 
-  it("probes while reconciling, even mid-load", () => {
-    expect(resolveHomeModelProbeCardState({
-      ...baseArgs,
-      isReconciling: true,
-      agentsLoading: true,
-    })).toEqual({ kind: "probing", harnessKinds: ["opencode"] });
+  it("is null while nothing is ready yet", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "selection_required",
+      readyAgents: [],
+      installingAgents: [claude],
+    })).toBeNull();
   });
 
-  it("is hidden while agents are still loading", () => {
-    expect(resolveHomeModelProbeCardState({ ...baseArgs, agentsLoading: true }))
-      .toEqual({ kind: "hidden" });
+  it("is null once every agent has settled (ruling 4: no 'done' card)", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "launchable",
+      readyAgents: [grok],
+      installingAgents: [],
+    })).toBeNull();
   });
 
-  it("reports available models once probing settles", () => {
-    expect(resolveHomeModelProbeCardState(baseArgs)).toEqual({
-      kind: "done",
-      modelCount: 3,
-      harnessKinds: ["opencode"],
+  it("names the lone still-installing agent", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "selection_required",
+      readyAgents: [grok],
+      installingAgents: [claude],
+    })).toEqual({
+      agentKind: "grok",
+      title: "Grok is ready.",
+      description: "You can start now. Claude is still installing.",
     });
   });
 
-  it("prompts to connect a provider when no models exist", () => {
-    expect(resolveHomeModelProbeCardState({ ...baseArgs, modelCount: 0 }))
-      .toEqual({ kind: "none" });
+  it("names both still-installing agents when there are exactly two", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "selection_required",
+      readyAgents: [grok],
+      installingAgents: [claude, codex],
+    })).toEqual({
+      agentKind: "grok",
+      title: "Grok is ready.",
+      description: "You can start now. Claude and Codex are still installing.",
+    });
   });
 
-  it("suppresses the none state when the agent-setup card is already shown", () => {
-    expect(resolveHomeModelProbeCardState({
-      ...baseArgs,
-      modelCount: 0,
-      agentSetupCardVisible: true,
-    })).toEqual({ kind: "hidden" });
+  it("names the first and overflows the rest as a count (the artifact's 4-agent shape)", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "selection_required",
+      readyAgents: [grok],
+      installingAgents: [claude, codex, opencode, cursor],
+    })).toEqual({
+      agentKind: "grok",
+      title: "Grok is ready.",
+      description: "You can start now. Claude and 3 others are still installing.",
+    });
+  });
+
+  it("drops 'You can start now.' once the gate is launchable", () => {
+    expect(resolveHomeReadinessCardModel({
+      gateKind: "launchable",
+      readyAgents: [grok],
+      installingAgents: [claude, codex, opencode, cursor],
+    })).toEqual({
+      agentKind: "grok",
+      title: "Grok is ready.",
+      description: "Claude and 3 others are still installing.",
+    });
   });
 });

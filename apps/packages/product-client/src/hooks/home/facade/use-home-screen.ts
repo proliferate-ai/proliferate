@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
@@ -20,51 +20,17 @@ import {
 } from "#product/lib/domain/settings/navigation";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
-import {
-  readPersistedString,
-  writePersistedString,
-} from "#product/lib/infra/persistence/product-storage";
-
-const HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY =
-  "proliferate.home.modelProbeCardDismissed";
-type HomeModelProbeDismissalState = "loading" | "visible" | "dismissed";
 
 // Owns the Home screen facade consumed by the component. Does not own Home Next launch flow.
 export function useHomeScreen() {
   const navigate = useNavigate();
-  const storage = useProductStorageContext();
   const { isAddingRepo } = useAddRepo();
   const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
   const {
     readyAgents,
+    installingAgents,
     isLoading: agentsLoading,
-    isReconciling,
   } = useAgentCatalog();
-  const [modelProbeDismissalState, setModelProbeDismissalState] =
-    useState<HomeModelProbeDismissalState>("loading");
-  useEffect(() => {
-    let cancelled = false;
-    // Bare "1" sentinel string (never JSON): read raw to preserve the existing
-    // dismissal with zero migration. A late read after unmount is discarded.
-    void readPersistedString(storage, HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY, {
-      isStale: () => cancelled,
-    }).then((result) => {
-      if (result.status === "settled") {
-        const hydratedState = result.value === "1" ? "dismissed" : "visible";
-        setModelProbeDismissalState((current) =>
-          current === "loading" ? hydratedState : current
-        );
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [storage]);
-  const dismissModelProbeCard = useCallback(() => {
-    setModelProbeDismissalState("dismissed");
-    void writePersistedString(storage, HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY, "1");
-  }, [storage]);
   const { cloudActive } = useCloudAvailabilityState();
   const {
     data: repoConfigs,
@@ -147,11 +113,6 @@ export function useHomeScreen() {
     }
   }
 
-  const readyHarnessKinds = useMemo(
-    () => readyAgents.map((agent) => agent.kind),
-    [readyAgents],
-  );
-
   // Ack-gated onboarding "setting up" step (agent-auth.md, Proof C7). The timer
   // step and the evidence-bound card are mutually exclusive on the
   // agentAuthEvidencePanes flag: exactly one is ever live, the other dormant.
@@ -164,17 +125,10 @@ export function useHomeScreen() {
     authSetupEvidence,
     isAddingRepo,
     handleHomeAction,
-    // Model-probe card inputs (UX spec §10). The model count itself lives with
-    // the home model-selection state, so the screen combines these with its
-    // model groups via resolveHomeModelProbeCardState.
-    modelProbeInputs: modelProbeDismissalState === "loading"
-      ? undefined
-      : {
-        dismissed: modelProbeDismissalState === "dismissed",
-        agentsLoading,
-        isReconciling,
-        harnessKinds: readyHarnessKinds,
-      },
-    dismissModelProbeCard,
+    // Per-agent readiness (UX spec §10 revision, ruling 4): the screen binds
+    // these to the model gate to resolve the readiness card via
+    // resolveHomeReadinessCardModel.
+    readyAgents,
+    installingAgents,
   };
 }

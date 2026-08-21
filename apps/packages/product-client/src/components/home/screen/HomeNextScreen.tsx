@@ -26,7 +26,7 @@ import {
 } from "#product/lib/domain/home/home-composer-controls";
 import { resolveHomeModelGateNotice } from "#product/lib/domain/home/home-model-gate";
 import { type HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
-import { resolveHomeModelProbeCardState } from "#product/lib/domain/home/home-screen";
+import { resolveHomeReadinessCardModel } from "#product/lib/domain/home/home-screen";
 import { resolveHomeTargetLaunchKindForRepository } from "#product/lib/domain/home/home-target-picker";
 
 export function HomeNextScreen() {
@@ -48,8 +48,8 @@ export function HomeNextScreen() {
     handleHomeAction,
     authSetupStep,
     authSetupEvidence,
-    modelProbeInputs,
-    dismissModelProbeCard,
+    readyAgents,
+    installingAgents,
   } = useHomeScreen();
   const homeNext = useHomeNextState({
     desktopTargetsAvailable,
@@ -114,22 +114,19 @@ export function HomeNextScreen() {
   const promptTarget = destination === "repository"
     ? homeNext.selectedRepository?.name?.trim()
     : null;
-  // Model-probe onboarding card (spec §10). Inputs may be absent when the
-  // facade is mocked; hide the card in that case.
-  const modelProbeState = modelProbeInputs
-    ? resolveHomeModelProbeCardState({
-      ...modelProbeInputs,
-      modelCount: homeNext.modelGroups.reduce(
-        (count, group) => count + group.models.length,
-        0,
-      ),
-      agentSetupCardVisible: onboardingCards.some((card) => card.id === "agent-defaults"),
-    })
-    : undefined;
+  // Readiness card (UX spec §10 revision, ruling 4): bound to per-agent
+  // readiness and the two gate values it may consume (selection_required,
+  // launchable). Unmounts entirely once the install job resolves — there is
+  // no "done" state, so a null result just omits the card.
+  const readinessCard = resolveHomeReadinessCardModel({
+    gateKind: homeNext.modelGate.kind,
+    readyAgents,
+    installingAgents,
+  });
   const homeOnboardingVisible = onboardingCards.length > 0
     || authSetupStep === "settingUp"
     || (authSetupEvidence !== undefined && authSetupEvidence !== null)
-    || (modelProbeState !== undefined && modelProbeState.kind !== "hidden");
+    || readinessCard !== null;
   // One mapping, keyed on the gate. Every silent arm is silent on purpose:
   // selection_required and observed_empty are cured by the enabled picker
   // itself (owner revisions r2/r3), and the in-flight arms belong to the
@@ -232,9 +229,8 @@ export function HomeNextScreen() {
                     onSelect={(card) => handleHomeAction(card.id)}
                     authSetup={authSetupStep}
                     authSetupEvidence={authSetupEvidence}
-                    modelProbe={modelProbeState}
+                    readinessCard={readinessCard}
                     onOpenAgents={() => handleHomeAction("agent-settings")}
-                    onDismissModelProbe={dismissModelProbeCard}
                   />
                 </DebugProfiler>
               </div>

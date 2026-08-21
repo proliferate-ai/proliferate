@@ -22,48 +22,72 @@ export interface HomeOnboardingCardModel {
   icon: HomeOnboardingIcon;
 }
 
-/**
- * Model-probe onboarding card state (UX spec §10). "probing" while the
- * harness reconcile/model discovery runs, "done" once launchable models are
- * known, "none" when no provider is connected, "hidden" when dismissed or
- * still loading.
- */
-export type HomeModelProbeCardState =
-  | { kind: "probing"; harnessKinds: string[] }
-  | { kind: "done"; modelCount: number; harnessKinds: string[] }
-  | { kind: "none" }
-  | { kind: "hidden" };
+/** The minimal agent identity the readiness card needs to name someone. */
+export interface HomeReadinessAgent {
+  kind: string;
+  displayName: string;
+}
 
-export function resolveHomeModelProbeCardState(args: {
-  dismissed: boolean;
-  agentsLoading: boolean;
-  isReconciling: boolean;
-  harnessKinds: readonly string[];
-  modelCount: number;
-  /** When the "set up agents" card is already shown, the probe card's
-   * "none" state would duplicate it — suppress it. */
-  agentSetupCardVisible: boolean;
-}): HomeModelProbeCardState {
-  if (args.dismissed) {
-    return { kind: "hidden" };
+/** The readiness card's bound content — never a "done" state (ruling 4). */
+export interface HomeReadinessCardModel {
+  /** Provider kind of the first ready agent, for the card's icon. */
+  agentKind: string;
+  title: string;
+  description: string;
+}
+
+/**
+ * Names the still-installing agents for the readiness card's secondary line.
+ *
+ * Names always; a count is only the OVERFLOW past the first name — so two
+ * installing agents are both named ("Claude and Codex"), and three or more
+ * name the first and count the rest ("Claude and 3 others"), which is the
+ * exact shape the design artifact shows for a 4-agent install.
+ */
+function describeStillInstalling(installingNames: readonly string[]): string {
+  if (installingNames.length === 0) {
+    return "";
   }
-  if (args.isReconciling) {
-    return { kind: "probing", harnessKinds: [...args.harnessKinds] };
+  if (installingNames.length === 1) {
+    return `${installingNames[0]} is still installing.`;
   }
-  if (args.agentsLoading) {
-    return { kind: "hidden" };
+  const [first, second, ...rest] = installingNames;
+  if (rest.length === 0) {
+    return `${first} and ${second} are still installing.`;
   }
-  if (args.modelCount > 0) {
-    return {
-      kind: "done",
-      modelCount: args.modelCount,
-      harnessKinds: [...args.harnessKinds],
-    };
+  const overflow = rest.length + 1;
+  return `${first} and ${overflow} others are still installing.`;
+}
+
+/**
+ * The readiness card replacing the deleted model-probe card (UX spec §10
+ * revision, ruling 4). Bound to per-agent readiness rather than a model
+ * count: it exists only while the gate has resolved to something launchable
+ * (or a selection away from it) AND the install job is still partially
+ * running. There is no "done" state — the card unmounts entirely once every
+ * agent has settled, which is the caller's job (this only returns null).
+ */
+export function resolveHomeReadinessCardModel(args: {
+  gateKind: "launchable" | "selection_required" | "blocked";
+  readyAgents: readonly HomeReadinessAgent[];
+  installingAgents: readonly HomeReadinessAgent[];
+}): HomeReadinessCardModel | null {
+  if (args.gateKind !== "selection_required" && args.gateKind !== "launchable") {
+    return null;
   }
-  if (args.agentSetupCardVisible) {
-    return { kind: "hidden" };
+  const [firstReady] = args.readyAgents;
+  if (!firstReady || args.installingAgents.length === 0) {
+    return null;
   }
-  return { kind: "none" };
+  const startNowPrefix = args.gateKind === "selection_required"
+    ? "You can start now. "
+    : "";
+  return {
+    agentKind: firstReady.kind,
+    title: `${firstReady.displayName} is ready.`,
+    description:
+      `${startNowPrefix}${describeStillInstalling(args.installingAgents.map((agent) => agent.displayName))}`,
+  };
 }
 
 export interface HomeRepositoryIdentity {

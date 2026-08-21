@@ -99,7 +99,7 @@ vi.mock("#product/hooks/home/facade/use-home-screen", () => ({
   useHomeScreen: () => ({
     onboardingCards: screenMocks.onboardingCards,
     isAddingRepo: false,
-    handleHomeAction: screenMocks.handleHomeAction,
+    handleHomeAction: screenMocks.handleHomeAction, readyAgents: [], installingAgents: [],
   }),
 }));
 
