@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 const workflowRoot = new URL("../../.github/workflows/", import.meta.url);
@@ -28,24 +28,33 @@ test("same-version desktop release runs share one non-cancelling concurrency loc
   );
 });
 
-test("release coordinators pass the title into the desktop release lane", async () => {
-  const [nightly, hotfix, promote, deployDesktop] = await Promise.all([
-    workflow("nightly-release-train.yml"),
-    workflow("hotfix-production.yml"),
-    workflow("promote-production.yml"),
+test("the desktop title entrypoint survives the coordinator collapse", async () => {
+  // The three release coordinators collapsed into one release.yml whose
+  // dispatch inputs are surfaces, skip_build, ref, and dry_run, so a titled
+  // desktop release is dispatched on release-desktop.yml itself. The reusable
+  // pass-through must therefore stay intact.
+  const [deployDesktop, release] = await Promise.all([
     workflow("_deploy-desktop.yml"),
+    workflow("release.yml"),
   ]);
-
-  for (const source of [nightly, hotfix, promote]) {
-    assert.match(source, /workflow_dispatch:[\s\S]*?release_title:/);
-    assert.match(
-      source,
-      /release_title: \$\{\{ github\.event\.inputs\.release_title \|\| '' \}\}/,
-    );
-  }
 
   assert.match(deployDesktop, /workflow_call:[\s\S]*?release_title:/);
   assert.match(deployDesktop, /release_title: \$\{\{ inputs\.release_title \}\}/);
+  // Scope this to the dispatch inputs: `dry_run:` also appears in the reusable
+  // `with:` blocks further down, so an unscoped match would pass on a file that
+  // has no dry_run input at all.
+  const dispatchInputs = release.slice(
+    release.indexOf("  workflow_dispatch:"),
+    release.indexOf("\npermissions:"),
+  );
+  assert.deepEqual(
+    [...dispatchInputs.matchAll(/^      ([a-z_]+):$/gm)].map((match) => match[1]).sort(),
+    ["dry_run", "ref", "skip_build", "surfaces"],
+  );
+
+  const retired = ["nightly-release-train.yml", "hotfix-production.yml", "promote-production.yml"];
+  const present = (await readdir(workflowRoot)).filter((name) => retired.includes(name));
+  assert.deepEqual(present, []);
 });
 
 test("runtime production builds stamp both version and deterministic source SHA", async () => {

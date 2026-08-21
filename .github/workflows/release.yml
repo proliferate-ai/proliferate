@@ -1,33 +1,47 @@
-name: Nightly Release Train
+# The one pipeline that moves Main to Production.
+#
+# States: Main (passed CI), Staging (deployed, not e2e-proven), Production.
+# Merging to main deploys nothing; continuous staging is retired and
+# `deploy-staging.yml` is manual-only. This workflow is the single transition
+# from a main commit to production, run unattended by the daily cron or
+# dispatched by hand.
+#
+# Hotfix and promote are inputs here, not separate files:
+#   hotfix  = ref (exact commit on main) + surfaces (exact set)
+#   promote = skip_build on a ref whose artifacts are already built
+name: Release
 
 on:
   schedule:
     - cron: "0 9 * * *"
   workflow_dispatch:
     inputs:
+      surfaces:
+        description: >-
+          Exact comma-separated surfaces to release and deploy, or all. `all` makes every
+          surface eligible and lets change detection since the previous checkpoint pick the
+          ones that moved; an explicit list is an exact override that skips detection.
+        default: all
+        required: false
+        type: string
+      skip_build:
+        description: Deploy an already-built ref; skip the artifact release builds, version bump, and tags.
+        default: false
+        required: false
+        type: boolean
       ref:
-        description: Commit SHA or ref to release. Defaults to main.
-        required: false
-        type: string
-      only_surfaces:
-        description: Exact comma-separated surfaces to release, or all. Defaults to detected changes since the previous train.
-        required: false
-        type: string
-      version_bump:
-        description: Public Proliferate version bump for this train.
-        default: patch
-        required: false
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-      release_title:
-        description: Optional one-line Desktop changelog title (for example, Introducing Grok).
+        description: Commit SHA or ref to release. Must be an ancestor of main.
+        default: main
         required: false
         type: string
       dry_run:
-        description: Plan only; do not push commits, tags, releases, or deploys.
+        description: >-
+          Exercise the whole graph while suppressing every externally visible effect: no
+          version-bump commit, no tags, no artifact releases, no deploy, no product release
+          page. This is the standing way to prove a wiring change before it can ship
+          anything. Composes with the other inputs: with `surfaces` it plans exactly that
+          set, and with `skip_build` it walks the deploy-only shape (which still requires an
+          explicit `surfaces` list, because that guard is part of the wiring being proven).
         default: false
         required: false
         type: boolean
@@ -40,6 +54,8 @@ permissions:
   pull-requests: read
 
 concurrency:
+  # Name kept verbatim from the retired nightly train so a run still in flight
+  # when this file lands cannot deploy production alongside a run of this file.
   group: nightly-release-train
   cancel-in-progress: false
 
@@ -53,12 +69,12 @@ jobs:
       release_id: ${{ steps.meta.outputs.release_id }}
       base_sha: ${{ steps.meta.outputs.base_sha }}
       head_sha: ${{ steps.commit.outputs.head_sha }}
+      skip_build: ${{ steps.meta.outputs.skip_build }}
       dry_run: ${{ steps.meta.outputs.dry_run }}
       product_version: ${{ steps.artifacts.outputs.product_version }}
       product_tag: ${{ steps.artifacts.outputs.product_tag }}
       selected_surfaces: ${{ steps.detect.outputs.selected_surfaces }}
       server: ${{ steps.detect.outputs.server }}
-      workers: ${{ steps.detect.outputs.workers }}
       litellm: ${{ steps.detect.outputs.litellm }}
       web: ${{ steps.detect.outputs.web }}
       desktop: ${{ steps.detect.outputs.desktop }}
@@ -80,10 +96,11 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Resolve train metadata
+      - name: Resolve release metadata
         id: meta
         env:
           INPUT_REF: ${{ github.event.inputs.ref || '' }}
+          SKIP_BUILD: ${{ github.event.inputs.skip_build || 'false' }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           set -euo pipefail
@@ -96,33 +113,70 @@ jobs:
           else
             base_sha="$(git rev-parse "${head_sha}^" 2>/dev/null || git rev-list --max-parents=0 "$head_sha" | tail -n1)"
           fi
-          if [[ -n "$INPUT_REF" && "$INPUT_REF" != "main" && "$DRY_RUN" != "true" ]]; then
+          # Production only ever ships commits that reached main, so an explicit
+          # ref (the hotfix and promote paths) must be an ancestor of main.
+          if [[ -n "$INPUT_REF" && "$INPUT_REF" != "main" ]]; then
             git merge-base --is-ancestor "$head_sha" refs/remotes/origin/main
           fi
           {
             echo "release_id=$release_id"
             echo "base_sha=$base_sha"
             echo "head_sha=$head_sha"
+            echo "skip_build=$SKIP_BUILD"
             echo "dry_run=$DRY_RUN"
           } >> "$GITHUB_OUTPUT"
 
       - name: Detect release surfaces
         id: detect
-        run: >
-          node scripts/ci-cd/detect-deploy-surfaces.mjs
-          --base "${{ steps.meta.outputs.base_sha }}"
-          --head "${{ steps.meta.outputs.head_sha }}"
-          --only "$ONLY_SURFACES"
         env:
-          ONLY_SURFACES: ${{ github.event.inputs.only_surfaces || '' }}
+          SURFACES: ${{ github.event.inputs.surfaces || 'all' }}
+          BASE_SHA: ${{ steps.meta.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.meta.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          # This pipeline acts on five of the detector's surfaces: runtime, server,
+          # and desktop artifact releases, plus server, litellm, and web production
+          # deploys. The detector also knows e2b, mobile, and workers; none of them
+          # has a job here (e2b moves only through the manual Promote Cloud Template
+          # workflow), so selecting them is a no-op.
+          #
+          # `all` (the default) means every surface is eligible and change detection
+          # since the previous checkpoint decides which ones actually moved, so a
+          # night with no changes to a surface does not re-release or redeploy it.
+          # An explicit list is the exact override the hotfix path uses.
+          only=""
+          if [[ "$SURFACES" != "all" ]]; then
+            only="$SURFACES"
+          fi
+          node scripts/ci-cd/detect-deploy-surfaces.mjs \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --only "$only"
 
+      # R7: a promote supplies `ref` but may leave `surfaces` at `all`. When the
+      # promoted ref is itself the previous checkpoint, detection sees an empty
+      # diff, every deploy job's `selected_surfaces != ''` guard is false, and the
+      # run goes green having deployed nothing. That is the wrong failure mode for
+      # the "get these bytes to production now" path, so fail loudly instead.
+      - name: Require an explicit surface set for a deploy-only run
+        if: steps.meta.outputs.skip_build == 'true' && steps.detect.outputs.selected_surfaces == ''
+        run: |
+          echo "::error::skip_build was set but change detection selected no surfaces (base ${{ steps.meta.outputs.base_sha }} == head ${{ steps.meta.outputs.head_sha }}, or nothing deployable changed between them). A deploy-only run must name what to deploy: re-dispatch with an explicit surfaces list, for example 'server,web'."
+          exit 1
+
+      # Version bump, tags, and the product release belong to a build run. A
+      # skip_build run redeploys an exact ref that has already been through a
+      # build run, so it must not move main forward or mint new artifact
+      # identities. The hosted lanes still rebuild their images from that same
+      # source SHA; this is a deterministic redeploy, not an artifact retag.
       - name: Prepare product and artifact versions
         id: artifacts
+        if: steps.meta.outputs.skip_build != 'true'
         run: >
           node scripts/ci-cd/prepare-artifact-release.mjs
           --surfaces "${{ steps.detect.outputs.selected_surfaces }}"
           --release-id "${{ steps.meta.outputs.release_id }}"
-          --version-bump "${{ github.event.inputs.version_bump || 'patch' }}"
+          --version-bump patch
           --dry-run "${{ steps.meta.outputs.dry_run }}"
 
       - name: Verify version tags are free
@@ -130,8 +184,8 @@ jobs:
         # runtime-v*/proliferate-v* tags must be brand new — prepare-artifact-release
         # already picks the next version past every existing tag, so any of these
         # existing at all here means a real collision (e.g. a race with another
-        # train), and we want that to abort before main gets a throwaway commit.
-        if: steps.meta.outputs.dry_run != 'true' && steps.artifacts.outputs.product_tag != ''
+        # run), and we want that to abort before main gets a throwaway commit.
+        if: steps.meta.outputs.skip_build != 'true' && steps.meta.outputs.dry_run != 'true' && steps.artifacts.outputs.product_tag != ''
         env:
           ARTIFACT_TAGS: ${{ steps.artifacts.outputs.artifact_tags }}
           PRODUCT_TAG: ${{ steps.artifacts.outputs.product_tag }}
@@ -150,10 +204,13 @@ jobs:
         id: commit
         env:
           RELEASE_ID: ${{ steps.meta.outputs.release_id }}
+          SKIP_BUILD: ${{ steps.meta.outputs.skip_build }}
           DRY_RUN: ${{ steps.meta.outputs.dry_run }}
         run: |
           set -euo pipefail
-          if [[ "$DRY_RUN" == "true" ]]; then
+          # A dry run computes the bump so the plan is real, then throws it away:
+          # nothing is committed and nothing is pushed to main.
+          if [[ "$SKIP_BUILD" == "true" || "$DRY_RUN" == "true" ]]; then
             echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -168,8 +225,8 @@ jobs:
           git push origin HEAD:main
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Create release train tags
-        if: steps.meta.outputs.dry_run != 'true' && steps.artifacts.outputs.product_tag != ''
+      - name: Create release tags
+        if: steps.meta.outputs.skip_build != 'true' && steps.meta.outputs.dry_run != 'true' && steps.artifacts.outputs.product_tag != ''
         env:
           ARTIFACT_TAGS: ${{ steps.artifacts.outputs.artifact_tags }}
           PRODUCT_TAG: ${{ steps.artifacts.outputs.product_tag }}
@@ -181,34 +238,47 @@ jobs:
             tags="$tags,$ARTIFACT_TAGS"
           fi
           # RELEASE_ID (release-YYYY-MM-DD) is a checkpoint marker, not a version
-          # pointer: nightly-release-train.yml's own "Resolve train metadata" step
-          # is its only reader, and it always excludes *today's* release_id when
-          # picking the previous train tag. A same-day rerun should move it
-          # forward to the new head, not fail the whole train.
+          # pointer: this workflow's own "Resolve release metadata" step is its
+          # only reader, and it always excludes *today's* release_id when picking
+          # the previous checkpoint. A same-day rerun should move it forward to
+          # the new head, not fail the whole run.
           node scripts/ci-cd/create-release-tags.mjs \
             --target "${{ steps.commit.outputs.head_sha }}" \
             --tags "$tags" \
             --movable-tags "$RELEASE_ID" \
             --dry-run false
 
-      - name: Summarize train
+      - name: Summarize plan
         run: |
           {
-            echo "### Nightly release train"
+            echo "### Release plan"
             echo "- Product: \`${{ steps.artifacts.outputs.product_tag || 'no release' }}\`"
-            echo "- Train: \`${{ steps.meta.outputs.release_id }}\`"
+            echo "- Checkpoint: \`${{ steps.meta.outputs.release_id }}\`"
+            echo "- Ref: \`${{ github.event.inputs.ref || 'main' }}\`"
             echo "- Base: \`${{ steps.meta.outputs.base_sha }}\`"
             echo "- Head: \`${{ steps.commit.outputs.head_sha }}\`"
+            echo "- Skip build: \`${{ steps.meta.outputs.skip_build }}\`"
             echo "- Dry run: \`${{ steps.meta.outputs.dry_run }}\`"
+            if [[ "${{ steps.meta.outputs.dry_run }}" == "true" ]]; then
+              echo "- **Dry run: nothing was committed, tagged, released, or deployed.** The versions and tags below are the plan this run would have executed."
+            fi
             echo "- Selected surfaces: \`${{ steps.detect.outputs.selected_surfaces }}\`"
             echo "- Desktop: \`${{ steps.artifacts.outputs.desktop_tag }}\`"
             echo "- Runtime: \`${{ steps.artifacts.outputs.runtime_tag }}\`"
             echo "- Server: \`${{ steps.artifacts.outputs.server_tag }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # ── Release builds ────────────────────────────────────────────────────────────
+  # Artifact identities for this head. Skipped entirely on a promote run, whose
+  # artifacts already exist, and on a dry run. The reusable build lanes have no
+  # cheap no-op switch: their own `dry_run` input still compiles everything, and a
+  # macOS desktop matrix is not a proportionate price for a wiring proof. This is
+  # how the retired train's plan-only dry run behaved too. The deploy lanes below
+  # do have such a switch, so a dry run still walks their call wiring.
+
   release-runtime:
     needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.runtime == 'true' }}
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.skip_build != 'true' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.runtime == 'true' }}
     uses: ./.github/workflows/release-runtime.yml
     with:
       git_sha: ${{ needs.prepare.outputs.head_sha }}
@@ -219,7 +289,7 @@ jobs:
 
   release-server:
     needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.server == 'true' }}
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.skip_build != 'true' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.server == 'true' }}
     permissions:
       contents: write
       packages: write
@@ -234,7 +304,7 @@ jobs:
 
   release-desktop:
     needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.desktop == 'true' }}
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.skip_build != 'true' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.desktop == 'true' }}
     permissions:
       contents: write
       id-token: write
@@ -242,105 +312,91 @@ jobs:
     with:
       git_sha: ${{ needs.prepare.outputs.head_sha }}
       version: ${{ needs.prepare.outputs.desktop_version }}
-      release_title: ${{ github.event.inputs.release_title || '' }}
       dry_run: false
       # Zero-touch auto-prod: publish the updater/download assets so existing
-      # installs auto-update on every train. release-desktop.yml is not bound to a
-      # GitHub Environment, so there is no approval gate on this step.
+      # installs auto-update on every release. release-desktop.yml is not bound
+      # to a GitHub Environment, so there is no approval gate on this step.
       publish_updater: true
       target_os: all
     secrets: inherit
 
-  deploy-server:
-    needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
-    uses: ./.github/workflows/_deploy-server.yml
-    with:
-      environment: staging
-      git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.server == 'true' }}
-    secrets: inherit
-
-  deploy-litellm:
-    needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
-    uses: ./.github/workflows/_deploy-litellm.yml
-    with:
-      environment: staging
-      git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.litellm == 'true' }}
-    secrets: inherit
-
-  deploy-web:
-    needs: [prepare, deploy-server]
-    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
-    uses: ./.github/workflows/_deploy-web.yml
-    with:
-      environment: staging
-      git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.web == 'true' }}
-    secrets: inherit
-
-  # ── Production promotion (zero-touch auto-prod) ───────────────────────────────
-  # Each prod job promotes only after its staging counterpart deploys cleanly, so
-  # the train still validates on staging first — but with no human approval step.
-  # Targets the existing `Production` GitHub Environment (prod cluster, deploy
-  # role, secrets). The Environment's required-reviewer rule must be removed
-  # for these to run unattended.
+  # ── Production deploys ────────────────────────────────────────────────────────
+  # Hosted surfaces deploy from prepare, not from the release builds: each
+  # reusable lane builds its own exact-SHA image. Artifact handoff between the
+  # build jobs and these deploys is a separate follow-up.
+  #
+  # A dry run still calls every lane so the `uses:` resolution, the input wiring,
+  # and the needs-graph edges are all exercised; it just passes `enabled: false`,
+  # which is the same no-op switch an unselected surface uses, so the inner job
+  # that touches AWS or Vercel never starts.
 
   deploy-server-prod:
-    needs: [prepare, deploy-server]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-server.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    needs: [prepare]
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-server.yml
     with:
       environment: Production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.server == 'true' }}
+      enabled: ${{ needs.prepare.outputs.server == 'true' && needs.prepare.outputs.dry_run != 'true' }}
     secrets: inherit
 
   deploy-litellm-prod:
-    needs: [prepare, deploy-litellm]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-litellm.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    needs: [prepare]
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-litellm.yml
     with:
       environment: Production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.litellm == 'true' }}
+      enabled: ${{ needs.prepare.outputs.litellm == 'true' && needs.prepare.outputs.dry_run != 'true' }}
     secrets: inherit
 
   deploy-web-prod:
-    needs: [prepare, deploy-web, deploy-server-prod]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-web.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    # Server before web: the web surface may call API endpoints that only the
+    # new server revision serves, so web waits for a selected server deploy and
+    # does not roll when that deploy failed.
+    needs: [prepare, deploy-server-prod]
+    if: >-
+      ${{
+        always() &&
+        needs.prepare.result == 'success' &&
+        needs.prepare.outputs.selected_surfaces != '' &&
+        (
+          needs.prepare.outputs.dry_run == 'true' ||
+          needs.prepare.outputs.server != 'true' ||
+          needs.deploy-server-prod.result == 'success'
+        )
+      }}
     uses: ./.github/workflows/_deploy-web.yml
     with:
       environment: Production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
-      enabled: ${{ needs.prepare.outputs.web == 'true' }}
+      enabled: ${{ needs.prepare.outputs.web == 'true' && needs.prepare.outputs.dry_run != 'true' }}
     secrets: inherit
 
   publish-product-release:
+    # Gates on the release builds only. Hosted deploys are not artifact
+    # identities, so a product release page can publish while production is
+    # still rolling or after production later fails. On a dry run the builds are
+    # skipped, so the gate falls through to the script's own --dry-run, which
+    # renders the release body without creating or updating anything.
     needs:
       - prepare
       - release-runtime
       - release-server
       - release-desktop
-      - deploy-server
-      - deploy-litellm
-      - deploy-web
     if: >-
       ${{
         always() &&
         needs.prepare.result == 'success' &&
+        needs.prepare.outputs.skip_build != 'true' &&
         needs.prepare.outputs.product_tag != '' &&
         needs.prepare.outputs.selected_surfaces != '' &&
         (
           needs.prepare.outputs.dry_run == 'true' ||
           (
             (needs.prepare.outputs.runtime != 'true' || needs.release-runtime.result == 'success') &&
-            (needs.prepare.outputs.server != 'true' || (needs.release-server.result == 'success' && needs.deploy-server.result == 'success')) &&
-            (needs.prepare.outputs.desktop != 'true' || needs.release-desktop.result == 'success') &&
-            (needs.prepare.outputs.litellm != 'true' || needs.deploy-litellm.result == 'success') &&
-            (needs.prepare.outputs.web != 'true' || needs.deploy-web.result == 'success')
+            (needs.prepare.outputs.server != 'true' || needs.release-server.result == 'success') &&
+            (needs.prepare.outputs.desktop != 'true' || needs.release-desktop.result == 'success')
           )
         )
       }}
@@ -393,30 +449,31 @@ jobs:
       - release-runtime
       - release-server
       - release-desktop
-      - deploy-server
-      - deploy-litellm
-      - deploy-web
       - deploy-server-prod
       - deploy-litellm-prod
       - deploy-web-prod
+      - publish-product-release
     if: ${{ always() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Summarize results
         run: |
           {
-            echo "### Nightly release train result"
+            echo "### Release result"
+            if [[ "${{ needs.prepare.outputs.dry_run }}" == "true" ]]; then
+              echo "- **DRY RUN. No commit, tag, artifact release, deploy, or product release page was produced.**"
+            fi
             echo "- Product: \`${{ needs.prepare.outputs.product_tag || 'no release' }}\`"
-            echo "- Train: \`${{ needs.prepare.outputs.release_id }}\`"
+            echo "- Checkpoint: \`${{ needs.prepare.outputs.release_id }}\`"
             echo "- Head: \`${{ needs.prepare.outputs.head_sha }}\`"
             echo "- Surfaces: \`${{ needs.prepare.outputs.selected_surfaces }}\`"
+            echo "- Skip build: \`${{ needs.prepare.outputs.skip_build }}\`"
+            echo "- Dry run: \`${{ needs.prepare.outputs.dry_run }}\`"
             echo "- Runtime release: \`${{ needs.release-runtime.result }}\`"
             echo "- Server release: \`${{ needs.release-server.result }}\`"
             echo "- Desktop release: \`${{ needs.release-desktop.result }}\`"
-            echo "- Server staging: \`${{ needs.deploy-server.result }}\`"
-            echo "- LiteLLM staging: \`${{ needs.deploy-litellm.result }}\`"
-            echo "- Web staging: \`${{ needs.deploy-web.result }}\`"
             echo "- Server prod: \`${{ needs.deploy-server-prod.result }}\`"
             echo "- LiteLLM prod: \`${{ needs.deploy-litellm-prod.result }}\`"
             echo "- Web prod: \`${{ needs.deploy-web-prod.result }}\`"
+            echo "- Product release: \`${{ needs.publish-product-release.result }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
