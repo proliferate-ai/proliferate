@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use super::npm::platform_npm_bin_relpath;
 use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::installer::seed;
 use crate::domains::agents::model::*;
@@ -66,6 +67,11 @@ fn regenerate_agent_process_launcher(
     if let Some(binary_name) = source_build_binary_name {
         exec_candidates.push(managed_dir.join(platform_binary_filename(binary_name)));
     }
+    // The windows `.cmd` shim sibling first (see `platform_npm_bin_relpath`):
+    // npm's cmd-shim writes both the bare unix shim and the `.cmd` shim into
+    // `.bin`, so on windows both candidates below exist side by side and
+    // this ordering makes the executable one win.
+    exec_candidates.push(managed_dir.join(platform_npm_bin_relpath(executable_relpath)));
     exec_candidates.push(managed_dir.join(executable_relpath));
     let Some(exec_path) = exec_candidates.iter().find(|path| path.exists()).cloned() else {
         return Err(InstallError::MissingManagedArtifact(

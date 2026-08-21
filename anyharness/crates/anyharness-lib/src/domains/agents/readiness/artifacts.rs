@@ -384,10 +384,21 @@ fn launcher_uses_binary_hint(launcher_path: &Path, candidate_binaries: &[String]
     let Ok(contents) = std::fs::read_to_string(launcher_path) else {
         return false;
     };
-    // Unix launchers run the target via `exec "<binary>" ...`; windows batch
-    // launchers have no `exec` and instead spawn it as `"<binary>" ... %*`
-    // (see `launcher.rs::build_batch_launcher_script`). Check both shapes so
-    // this diagnostic still fires on a `.cmd` launcher.
+    // NOTE (corrected after review): this whole match is already inert, on
+    // BOTH platforms, for any launcher this crate actually generates.
+    // Generated launchers always exec an ABSOLUTE path
+    // (`exec "/managed/dir/cursor-agent"` / `"C:\managed\dir\cursor-agent.exe"`),
+    // never the bare `candidate_binaries` name, so neither
+    // `exec "{binary}"` nor the windows-shaped `"{binary}" ` this PR added
+    // can ever match a substring that has a path prefix immediately before
+    // the opening quote. That was true of the pre-existing unix-only check
+    // before this PR too — it is a pre-existing latent gap, not something
+    // introduced or fixed here. The windows-shaped branch below is kept only
+    // for symmetry with the (equally inert) unix branches; it does NOT
+    // restore this diagnostic on `.cmd` launchers. Left as a known follow-up
+    // rather than fixed here, since fixing it for real means matching on the
+    // exec target's file name/stem rather than string-searching for the
+    // bare candidate name.
     candidate_binaries.iter().any(|binary| {
         contents.contains(&format!("exec \"{binary}\""))
             || contents.contains(&format!("exec {binary}"))
