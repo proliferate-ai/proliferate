@@ -111,3 +111,6 @@ async def client(test_engine) -> AsyncGenerator[AsyncClient, None]:  # type: ign
 
     engine_module.engine = original_engine
     engine_module.async_session_factory = original_session_factory
+
+
+# Gate timing probe 2026-08-21, safe to close
