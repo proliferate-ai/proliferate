@@ -108,9 +108,19 @@ class WorkflowDefinitionDocumentV2(WorkflowDefinitionWireModel):
         return value
 
     def document_json(self) -> dict[str, object]:
-        """The normalized stored/frozen form of this document."""
+        """The normalized stored/frozen form of this document.
 
-        return self.model_dump(by_alias=True, mode="json", exclude_none=True)
+        Omitted model/control values stay omitted: an empty map serializes as
+        absent, matching the runtime serializer's ``skip_serializing_if`` —
+        installed runtimes reject definition fields they do not know yet, so
+        the document must never grow a field the author left out.
+        """
+
+        data = self.model_dump(by_alias=True, mode="json", exclude_none=True)
+        for node, dumped in zip(self.nodes, data["nodes"], strict=True):
+            if node.model is not None and not node.model.control_values:
+                dumped["model"].pop("controlValues")
+        return data
 
 
 class WorkflowDefinitionCreateRequestV2(WorkflowDefinitionWireModel):
@@ -188,6 +198,16 @@ class WorkflowInvocationResponseV2(WorkflowInvocationWireModel):
     arguments: dict[str, WorkflowInvocationScalar]
     placement: WorkflowInvocationPlacementV2
     created_at: datetime
+
+    def frozen_json(self) -> dict[str, object]:
+        """The stored/delivered form of this invocation: the wire dump with
+        the definition in its normalized ``document_json`` form, so the
+        courier never hands the runtime a model field the author left empty
+        — including definitions frozen before that rule existed."""
+
+        data: dict[str, object] = self.model_dump(by_alias=True, mode="json", exclude_none=True)
+        data["definition"] = self.definition.document_json()
+        return data
 
 
 def workflow_definition_response_v2(

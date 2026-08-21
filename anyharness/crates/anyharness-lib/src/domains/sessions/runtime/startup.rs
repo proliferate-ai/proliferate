@@ -212,7 +212,7 @@ impl SessionRuntime {
         Ok(handle)
     }
 
-    pub(super) async fn start_live_session(
+    pub(super) async fn start_live_session_inner(
         &self,
         record: &SessionRecord,
         startup_strategy: SessionStartupStrategy,
@@ -503,13 +503,10 @@ impl SessionRuntime {
             .map_err(|unsupported| {
                 map_launch_selection_unsupported(&record.agent_kind, unsupported)
             })?;
-        require_prepared_basis_unchanged(
-            &prepared_basis_revision,
-            &validated_state.basis_revision,
-        )
-        .map_err(|unsupported| {
-            map_launch_selection_unsupported(&record.agent_kind, unsupported)
-        })?;
+        require_prepared_basis_unchanged(&prepared_basis_revision, &validated_state.basis_revision)
+            .map_err(|unsupported| {
+                map_launch_selection_unsupported(&record.agent_kind, unsupported)
+            })?;
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,

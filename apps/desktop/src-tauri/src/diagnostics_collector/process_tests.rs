@@ -103,6 +103,7 @@ async fn accepted_collector_binary_round_trips_protected_launch_health_and_shutd
         binary: built_collector_binary(),
         release: "desktop-test".to_string(),
         environment: "test".to_string(),
+        install_id: None,
         fallback: fallback.clone(),
     };
     assert!(launcher.binary.is_file(), "collector binary must be built");
@@ -244,4 +245,88 @@ async fn rv_2_05_oversized_control_causes_child_exit_not_graceful_shutdown() {
 
     fallback.close().expect("close fallback");
     std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+fn install_id_launcher(
+    install_id: Option<&str>,
+    fallback: &FallbackDiagnosticsWriter,
+) -> CollectorProcessLauncher {
+    CollectorProcessLauncher {
+        binary: built_collector_binary(),
+        release: "desktop-test".to_string(),
+        environment: "test".to_string(),
+        install_id: install_id.map(str::to_owned),
+        fallback: fallback.clone(),
+    }
+}
+
+/// The install id crosses the process seam as an argument, the same way
+/// `--release` and `--environment` do, and the real collector binary accepts
+/// it. This is the desktop half of the `proliferate.install_id` resource
+/// attribute; the collector half is proven in `otlp_dogfood.rs`.
+#[tokio::test]
+async fn an_install_id_crosses_the_process_seam_to_the_real_collector() {
+    let root = std::env::temp_dir().join(format!("collector-install-id-{}", uuid::Uuid::new_v4()));
+    let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
+        .expect("fallback");
+    let launcher = install_id_launcher(Some("install-desktop-test-4b71"), &fallback);
+
+    let mut process = launcher.launch().await.expect("launch with an install id");
+    let health = process.client().health().await.expect("authenticated health");
+    assert_eq!(health.status, HealthStatusV1::Ready);
+    assert_eq!(
+        process.orderly_shutdown().await.expect("shutdown"),
+        CollectorShutdownOutcome::Graceful
+    );
+
+    fallback.close().expect("close fallback");
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn install_id_filter_accepts_exactly_the_collectors_domain() {
+    assert!(retain_valid_install_id(None).is_none());
+
+    for (install_id, accepted) in install_id_domain_cases() {
+        let retained = retain_valid_install_id(Some(install_id.clone()));
+        assert_eq!(
+            retained.as_deref(),
+            accepted.then_some(install_id.as_str()),
+            "unexpected filter result for install id {install_id:?}"
+        );
+    }
+}
+
+/// On the supported target, the real-binary discovery path delegates persisted
+/// install IDs to the platform-neutral filter before constructing the launcher.
+#[cfg(target_os = "macos")]
+#[test]
+fn discover_drops_an_unusable_persisted_install_id() {
+    let root = std::env::temp_dir().join(format!("collector-bad-install-{}", uuid::Uuid::new_v4()));
+    let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
+        .expect("fallback");
+    let launcher = CollectorProcessLauncher::discover_with_binary(
+        built_collector_binary(),
+        "desktop-test".to_owned(),
+        "test".to_owned(),
+        Some("has space".to_owned()),
+        fallback.clone(),
+    )
+    .expect("discover real collector");
+    assert!(launcher.install_id.is_none());
+
+    fallback.close().expect("close fallback");
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+fn install_id_domain_cases() -> [(String, bool); 7] {
+    [
+        ("install-desktop-test-4b71".to_owned(), true),
+        ("x".repeat(128), true),
+        (String::new(), false),
+        ("x".repeat(129), false),
+        ("has space".to_owned(), false),
+        ("has\nnewline".to_owned(), false),
+        ("non-ascii-é".to_owned(), false),
+    ]
 }

@@ -397,6 +397,8 @@ dependencies = [
  "minisign-verify",
  "nucleo-matcher",
  "portable-pty",
+ "proliferate-diagnostics-client",
+ "proliferate-diagnostics-protocol",
  "reqwest 0.12.28",
  "ring",
  "rusqlite",
@@ -4241,7 +4243,7 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.4.21"
+version = "0.4.22"
 dependencies = [
  "base64 0.22.1",
  "chrono",

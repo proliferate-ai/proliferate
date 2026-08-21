@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
@@ -424,3 +425,77 @@ async def test_provider_email_conflict_preserves_409_contract(
         status_code=409,
         detail="An account already exists for this email. Sign in with GitHub to link it.",
     )
+
+
+@pytest.mark.asyncio
+async def test_mobile_token_logs_sign_in_outcome(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    sign_in_log_records: list[logging.LogRecord],
+) -> None:
+    """The sign-in success-rate SLI depends on this log line existing.
+
+    See `server/proliferate/auth/sign_in_observability.py` and
+    `guides/operating/production-alerts.md#sign-in-success-rate`.
+    """
+    failed = await client.post(
+        "/auth/mobile/token",
+        json={
+            "code": "missing-code",
+            "codeVerifier": "missing-verifier",
+            "grantType": "authorization_code",
+        },
+    )
+    assert failed.status_code == 400
+
+    user = await _create_user(db_session, email="sli-mobile@example.com")
+    verifier, challenge = make_pkce_pair()
+    code = await create_desktop_auth_code(
+        user_id=user.id,
+        state="sli-mobile-state",
+        code_challenge=challenge,
+    )
+    succeeded = await client.post(
+        "/auth/mobile/token",
+        json={
+            "code": code,
+            "codeVerifier": verifier,
+            "grantType": "authorization_code",
+        },
+    )
+    assert succeeded.status_code == 200
+
+    records = sign_in_log_records
+    assert len(records) == 2
+    failure_record, success_record = records
+    assert failure_record.event == "auth.sign_in.outcome"
+    assert failure_record.auth_sign_in_outcome == "failure"
+    assert failure_record.auth_sign_in_surface == "mobile"
+    assert failure_record.auth_sign_in_failure_code == "identity_auth_code_invalid"
+    assert success_record.auth_sign_in_outcome == "success"
+    assert success_record.auth_sign_in_surface == "mobile"
+    assert not hasattr(success_record, "auth_sign_in_failure_code")
+
+
+@pytest.mark.asyncio
+async def test_web_token_logs_sign_in_outcome(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    sign_in_log_records: list[logging.LogRecord],
+) -> None:
+    failed = await client.post(
+        "/auth/web/token",
+        json={
+            "code": "missing-code",
+            "codeVerifier": "missing-verifier",
+            "grantType": "authorization_code",
+        },
+    )
+    assert failed.status_code == 400
+
+    records = sign_in_log_records
+    assert len(records) == 1
+    record = records[0]
+    assert record.auth_sign_in_outcome == "failure"
+    assert record.auth_sign_in_surface == "web"
+    assert record.auth_sign_in_failure_code == "identity_auth_code_invalid"

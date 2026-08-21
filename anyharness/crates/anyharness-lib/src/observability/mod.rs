@@ -1,4 +1,5 @@
 pub mod latency;
+pub mod lifecycle;
 pub mod resource_pressure;
 pub mod transcript_phase;
 

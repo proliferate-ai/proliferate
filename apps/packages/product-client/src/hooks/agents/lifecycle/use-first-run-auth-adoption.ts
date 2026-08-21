@@ -17,8 +17,10 @@ import { useHarnessConnectionStore } from "#product/stores/sessions/harness-conn
 
 /**
  * First-run adoption of the managed gateway into auth selections (spec §9).
- * Runs once per app run, and only when the user has zero selections, so a fresh
- * profile that detected no native credentials falls back to the gateway.
+ * Runs once per app run, and only when the user has zero selections, so a
+ * fresh profile falls back to the gateway for each gateway-capable harness
+ * that detected no native credentials — independently per harness, so a
+ * profile with SOME native credentials still falls back for the rest.
  * Harnesses with detected native creds are left on the implicit native state.
  *
  * Fire-and-forget: adoption failures are logged and never surfaced — the

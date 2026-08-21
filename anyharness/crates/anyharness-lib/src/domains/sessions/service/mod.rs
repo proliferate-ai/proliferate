@@ -12,6 +12,7 @@ pub(crate) mod attachments;
 mod capability;
 mod config;
 pub(crate) mod create;
+mod create_lifecycle;
 #[cfg(test)]
 mod create_tests;
 mod history;

@@ -1,4 +1,5 @@
 use super::SessionEventSink;
+use crate::observability::lifecycle;
 use anyharness_contract::v1::{
     ContentPart, ItemCompletedEvent, ItemStartedEvent, PromptProvenance, SessionEvent, StopReason,
     TranscriptItemKind, TranscriptItemPayload, TranscriptItemStatus, TurnEndedEvent,
@@ -20,6 +21,11 @@ impl SessionEventSink {
         self.turn_assistant_messages.clear();
         self.current_turn_id = Some(turn_id.clone());
         self.engine_initiated_turn = false;
+        self.turn_lifecycle = Some(lifecycle::begin_turn_execute(
+            &self.session_id,
+            &turn_id,
+            false,
+        ));
         self.emit_with_ids(
             SessionEvent::TurnStarted(TurnStartedEvent::default()),
             Some(turn_id.clone()),
@@ -83,6 +89,7 @@ impl SessionEventSink {
     }
 
     pub fn turn_ended(&mut self, stop_reason: StopReason) {
+        self.finish_turn_lifecycle(&stop_reason.to_string());
         self.close_open_items();
         self.close_plan_item();
         self.close_tool_items();
@@ -114,6 +121,11 @@ impl SessionEventSink {
         self.current_turn_id = Some(turn_id.clone());
         self.engine_initiated_turn = true;
         self.engine_turn_has_events = false;
+        self.turn_lifecycle = Some(lifecycle::begin_turn_execute(
+            &self.session_id,
+            &turn_id,
+            true,
+        ));
         self.emit_with_ids(
             SessionEvent::TurnStarted(TurnStartedEvent::default()),
             Some(turn_id.clone()),
@@ -152,6 +164,44 @@ impl SessionEventSink {
             && !self.engine_turn_has_events
         {
             self.turn_ended(StopReason::EndTurn);
+        }
+    }
+}
+
+impl SessionEventSink {
+    /// Closes the open turn's lifecycle operation with the stop reason the
+    /// turn actually ended on. A turn with no open guard (a subagent-wake turn,
+    /// or a sink restored from a staged snapshot) closes nothing rather than
+    /// inventing a record.
+    pub(in crate::live::sessions) fn finish_turn_lifecycle(&mut self, stop_reason: &str) {
+        let Some(mut operation) = self.turn_lifecycle.take() else {
+            return;
+        };
+        operation.append([lifecycle::turn_stop_reason(stop_reason)]);
+        operation.terminal(lifecycle::turn_outcome(stop_reason), None);
+    }
+
+    /// Closes the open turn's lifecycle operation with the outcome the durable
+    /// terminal transaction actually committed. This is the production path for
+    /// a prompt turn: `turn_ended` covers the engine-initiated close.
+    pub(in crate::live::sessions) fn commit_turn_lifecycle(
+        &mut self,
+        outcome: crate::live::sessions::model::TerminalTurnOutcome,
+    ) {
+        use crate::live::sessions::model::TerminalTurnOutcome;
+        let Some(mut operation) = self.turn_lifecycle.take() else {
+            return;
+        };
+        operation.append([lifecycle::turn_stop_reason(outcome.as_str())]);
+        match outcome {
+            TerminalTurnOutcome::Completed => operation.succeeded(),
+            TerminalTurnOutcome::Cancelled => {
+                operation.terminal(lifecycle::LifecycleOutcome::Cancelled, None)
+            }
+            TerminalTurnOutcome::Failed => operation.terminal(
+                lifecycle::LifecycleOutcome::Failed,
+                Some(lifecycle::TURN_ERROR),
+            ),
         }
     }
 }

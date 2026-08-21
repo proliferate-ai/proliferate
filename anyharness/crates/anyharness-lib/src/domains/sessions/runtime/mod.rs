@@ -79,6 +79,7 @@ mod replay;
 mod startup;
 mod startup_errors;
 pub(crate) mod startup_facts;
+mod startup_lifecycle;
 mod subagent_lifecycle;
 #[cfg(test)]
 mod tests;

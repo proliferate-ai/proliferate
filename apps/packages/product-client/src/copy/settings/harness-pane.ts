@@ -60,30 +60,119 @@ export const HARNESS_PANE_COPY = {
   runLoginOpening: "Opening...",
   // Section title for the inline all-models panel.
   tabAllModels: "Models",
-  // The one content line of the collapsed Models section (design-handoff v2):
-  // count in foreground, provenance suffix muted.
+  // The one content line of the collapsed Models section (Settings - Harness
+  // Models States handoff, all eight states): count/title in foreground,
+  // provenance suffix muted.
   allModelsSeedSuffix: "shipped catalog, not probed yet",
   allModelsRefresh: "Refresh",
-  allModelsRefreshing: "Refreshing...",
+  allModelsRefreshing: "Refreshing…",
   allModelsEmpty: "No models detected yet.",
-  allModelsLoading: "Loading model catalog...",
-  // Shown while an empty list has a probe in flight.
-  allModelsProbing: "Probing…",
+  // State 1 — initial HTTP loading, no payload yet.
+  allModelsLoading: "Loading models…",
+  // State 2 — state=detecting|refreshing AND probePhase=running: an active
+  // first observation or re-probe. Never paired with a count.
+  allModelsChecking: "Checking available models…",
+  // State 3 — state=detecting AND probePhase=idle (or unknown): a harness
+  // that legitimately sits unobserved forever because it isn't probed
+  // unattended (the Cursor regression fixture). Refresh stays enabled; this
+  // replaces the old indefinite "Probing…" + disabled Refresh bug.
+  allModelsIdleUnobservedTitle: "Models haven't been detected yet",
+  // The trailing "Refresh checks now." names a control that only exists on
+  // the local surface (cloud has no manual-refresh route) — E-R5: never
+  // instruct the user to press a control the section doesn't render.
+  allModelsIdleUnobservedSuffix: (displayName: string, canManuallyRefresh: boolean) =>
+    canManuallyRefresh
+      ? `${displayName} reports models after its first launch. Refresh checks now.`
+      : `${displayName} reports models after its first launch.`,
+  // State 5 — state=observed_empty: a settled, honest zero.
+  allModelsObservedEmptySuffix: (displayName: string, ago: string) =>
+    `${displayName} reported none · ${HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(ago)}`,
   // The composed observation (model-catalog.md "The picker is the
   // observation"): the only freshness display is the probedAt age plus the
   // lastAttempt outcome — age alone never blocks anything, and there is no
   // staleness state.
   allModelsRefreshFailedBadge: "last refresh failed",
+  // State 6 — state=last_good_after_failure: the prior observation stays
+  // rendered, undimmed, with exactly one refresh-failed line appended.
+  allModelsLastGoodAfterFailureSuffix: (ago: string) =>
+    `${HARNESS_PANE_COPY.allModelsRefreshFailedBadge} · ${HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(ago)}`,
+  // State 7 — state=failed_without_observation: no count line exists to
+  // fake; an explicit failure with its enabled cure (ruling 5).
+  allModelsFailedWithoutObservationTitle: "Couldn't check models",
+  allModelsProbeFailureReason: (displayName: string) => `${displayName} didn't answer the probe.`,
+  /**
+   * E-R37: the same failure, seen from a surface that cannot dispatch a probe.
+   * It names Retry because Retry is the control actually rendered, and it says
+   * "checks for" rather than "refreshes" because the button re-reads the stored
+   * result; the probe itself is re-run by whichever runtime owns the engine.
+   */
+  allModelsProbeFailureRecheckSuffix: (displayName: string) =>
+    `${displayName} didn't answer the probe. Retry checks for a newer result.`,
+  // State 8 — the launch-options request itself failed (no payload). Never
+  // rendered as a raw state string.
+  allModelsTransportErrorTitle: "Models couldn't be loaded",
+  allModelsTransportErrorReason: "The runtime didn't respond.",
+  // E-R17 — no payload because the local runtime is still coming up, so the
+  // read has no URL to call. Nothing was asked and nothing failed, and the
+  // connect retry cures it with no user action: say that, never state 8.
+  allModelsRuntimeConnectingTitle: "Connecting to the local runtime",
+  allModelsRuntimeConnectingSuffix: "Models load as soon as it's ready.",
+  // E-R18 — no payload because the account has no cloud workspace, so the
+  // target-scoped read has no target and never runs. Permanent until a
+  // workspace exists, and cloud renders no Refresh to cure it — so this is
+  // neither a spinner nor a failure.
+  allModelsCloudNoWorkspaceTitle: "No cloud workspace yet",
+  allModelsCloudNoWorkspaceSuffix: (displayName: string) =>
+    `${displayName} models are listed once a cloud workspace exists.`,
+  // E-R22/E-R33 — `pollUntilHealthy` gave up. Creating or selecting a session
+  // re-runs the whole bootstrap, so this is not the dead end an earlier round
+  // claimed, but nothing in this pane retries it. Retry restarts the runtime
+  // through the host bridge, which is a control this section does render, so
+  // E-R5 (never name a button that isn't here) is satisfied by naming it.
+  allModelsRuntimeFailedTitle: "The local runtime didn't start",
+  allModelsRuntimeFailedSuffix: "Retry restarts the local runtime.",
+  // E-R34 — there is no local runtime on this host at all (Web has no desktop
+  // bridge, so `connectionState` never leaves its initial "connecting"). A
+  // terminal fact, not a connection in progress: never spin for it.
+  allModelsLocalUnavailableTitle: "Local models aren't available here",
+  allModelsLocalUnavailableSuffix: "The local runtime is part of the Proliferate desktop app.",
+  // E-R23 — query-core parked the request because the browser is offline.
+  // Nothing is in flight and nothing failed; the network returning resumes it.
+  allModelsOfflineTitle: "You're offline",
+  allModelsOfflineSuffix: "Models load when the connection is back.",
+  // E-R28 — the same offline gate parks the refresh MUTATION, which query-core
+  // reports as `pending` with no timeout. The models already on screen are not
+  // waiting on anything, so this says what is actually parked: the refresh.
+  allModelsRefreshOfflineSuffix: "The refresh runs when the connection is back.",
+  // E-R24 — a structured 404 from the cloud read: the target exists and the
+  // server answered, it just has nothing ingested yet. The ordinary first-run
+  // screen for a workspace that has never run an agent, not a failure.
+  allModelsCloudNotObservedSuffix: (displayName: string) =>
+    `${displayName} reports models after its first run in this workspace.`,
+  // A genuine cloud transport failure, kept apart from the local runtime's:
+  // "the runtime didn't respond" names the wrong hop for a cloud API call.
+  // E-R30 — reserved for the case where nothing came back at all. A non-2xx
+  // response IS a response, so claiming silence for it asserts a cause that
+  // was never established.
+  allModelsCloudUnreachableReason: "Proliferate Cloud didn't respond.",
+  // E-R30 — the server answered with an error the pane has no specific arm
+  // for. All that is established is that the read failed at the cloud hop.
+  allModelsCloudErrorReason: "Proliferate Cloud returned an error.",
+  // The enabled-but-never-started read. Unreachable in query-core today, but
+  // enumerated with a cure that works rather than folded into another arm.
+  allModelsNotReadYetTitle: "Models haven't been read yet",
+  allModelsNotReadYetSuffix: "Retry to check now.",
+  allModelsRetry: "Retry",
   allModelsSeedDescription:
     "Showing shipped catalog models — not yet verified by a probe.",
   // Diagnostics-only provenance (attestation + install identity) — never a gate.
   allModelsProvenance: (line: string) => `Observed by ${line}`,
   allModelsModes: (modes: readonly string[]) => `Modes: ${modes.join(", ")}`,
-  // `ago` is the raw duration from formatSnapshotAge ("5m", "2h", "3d", or the
-  // literal "just now" — which must NOT get its own "ago" appended, hence the
-  // special case rather than a blind template).
-  allModelsFreshRefreshedAgo: (ago: string) =>
-    ago === "just now" ? "refreshed just now" : `refreshed ${ago} ago`,
+  // `ago` is the repo's one relative-age string, `formatRelativeTime`
+  // ("2m ago", "3h ago", "3d ago", "now") — already carries its own "ago"
+  // (or none, for "now"), so this is a plain prefix, not a template that
+  // needs its own special-casing.
+  allModelsFreshRefreshedAgo: (ago: string) => `refreshed ${ago}`,
   getApiKey: "Get an API key",
   // PRO-206 — external links from the curated provider doc/console overlay.
   providerConsoleLink: "Get an API key",

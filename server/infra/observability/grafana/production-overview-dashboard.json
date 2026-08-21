@@ -1,0 +1,179 @@
+{
+    "dashboard": {
+        "uid": "prod-overview",
+        "title": "Production Overview",
+        "tags": [
+            "proliferate-server",
+            "production-alerts"
+        ],
+        "timezone": "utc",
+        "schemaVersion": 39,
+        "version": 0,
+        "time": {
+            "from": "now-6h",
+            "to": "now"
+        },
+        "panels": [
+            {
+                "id": 1,
+                "title": "ALB 5xx (5m sum)",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 0
+                },
+                "datasource": {
+                    "type": "cloudwatch",
+                    "uid": "cfvtvusw9bd34d"
+                },
+                "targets": [
+                    {
+                        "refId": "A",
+                        "namespace": "AWS/ApplicationELB",
+                        "metricName": "HTTPCode_Target_5XX_Count",
+                        "dimensions": {
+                            "LoadBalancer": "app/proliferate-prod-alb/785b2edd521cc351"
+                        },
+                        "statistic": "Sum",
+                        "region": "us-east-1"
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "title": "API p95 Latency (s)",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 0
+                },
+                "datasource": {
+                    "type": "cloudwatch",
+                    "uid": "cfvtvusw9bd34d"
+                },
+                "targets": [
+                    {
+                        "refId": "A",
+                        "namespace": "AWS/ApplicationELB",
+                        "metricName": "TargetResponseTime",
+                        "dimensions": {
+                            "LoadBalancer": "app/proliferate-prod-alb/785b2edd521cc351"
+                        },
+                        "statistic": "p95",
+                        "region": "us-east-1"
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "ECS CPU % (proliferate-prod-server)",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 8
+                },
+                "datasource": {
+                    "type": "cloudwatch",
+                    "uid": "cfvtvusw9bd34d"
+                },
+                "targets": [
+                    {
+                        "refId": "A",
+                        "namespace": "AWS/ECS",
+                        "metricName": "CPUUtilization",
+                        "dimensions": {
+                            "ClusterName": "proliferate-prod",
+                            "ServiceName": "proliferate-prod-server"
+                        },
+                        "statistic": "Average",
+                        "region": "us-east-1"
+                    }
+                ],
+                "description": "Dashboard-only visibility. Retired as a paging rule 2026-08-21 (infra symptom, not a product promise) -- see guides/operating/production-alerts.md."
+            },
+            {
+                "id": 4,
+                "title": "CRITICAL_FAILURE count (prod logs)",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 8
+                },
+                "datasource": {
+                    "type": "cloudwatch",
+                    "uid": "cfvtvusw9bd34d"
+                },
+                "targets": [
+                    {
+                        "refId": "A",
+                        "namespace": "Proliferate/Prod",
+                        "metricName": "CriticalFailureCount",
+                        "dimensions": {},
+                        "statistic": "Sum",
+                        "region": "us-east-1"
+                    }
+                ]
+            },
+            {
+                "id": 5,
+                "title": "Analytics ingest errors",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 16
+                },
+                "datasource": {
+                    "type": "cloudwatch",
+                    "uid": "cfvtvusw9bd34d"
+                },
+                "targets": [
+                    {
+                        "refId": "A",
+                        "namespace": "Proliferate/Prod",
+                        "metricName": "AnalyticsIngestErrors",
+                        "dimensions": {},
+                        "statistic": "Sum",
+                        "region": "us-east-1"
+                    }
+                ]
+            },
+            {
+                "id": 6,
+                "title": "Server error rate (10m sum)",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 16
+                },
+                "datasource": {
+                    "type": "cloudwatch",
+                    "uid": "cfvtvusw9bd34d"
+                },
+                "targets": [
+                    {
+                        "refId": "A",
+                        "namespace": "Proliferate/Prod",
+                        "metricName": "ServerErrorLines",
+                        "dimensions": {},
+                        "statistic": "Sum",
+                        "region": "us-east-1"
+                    }
+                ]
+            }
+        ]
+    },
+    "folderUid": "ops-folder",
+    "overwrite": false
+}

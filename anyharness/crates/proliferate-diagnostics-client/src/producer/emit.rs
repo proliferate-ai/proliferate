@@ -11,7 +11,7 @@ use crate::{DiagnosticsComponent, EmitDisposition};
 impl ProducerInner {
     pub(crate) fn try_emit_inner(
         &self,
-        input: crate::DetailedDiagnosticInput,
+        input: super::record::DiagnosticInput,
         is_loss_summary: bool,
     ) -> EmitDisposition {
         let return_snapshot = |state: &mut AdmissionState| {
@@ -143,7 +143,7 @@ impl ProducerInner {
             }
         }
         let _ = self.try_emit_inner(
-            crate::DetailedDiagnosticInput {
+            super::record::DiagnosticInput::Detailed(crate::DetailedDiagnosticInput {
                 name: Cow::Borrowed(name),
                 severity: SeverityV1::Warn,
                 kind: DetailedKindV1::LossSummary,
@@ -155,7 +155,7 @@ impl ProducerInner {
                 stream: None,
                 dropped_count: Some(total),
                 milestone: None,
-            },
+            }),
             true,
         );
     }

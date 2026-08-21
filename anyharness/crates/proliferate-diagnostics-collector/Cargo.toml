@@ -7,10 +7,15 @@ description = "Standalone bounded diagnostics collector for Proliferate Desktop"
 
 [features]
 default = []
-# Internal/dogfood builds only. Compiles the provider-neutral OTLP export
-# adapter into the binary. Customer releases build this package with default
-# features, so no export path, destination read, or credential handling exists
-# in a shipped collector.
+# Widens what a build may export. The provider-neutral OTLP adapter is now
+# compiled into every build, so this feature no longer decides whether an
+# export path exists; it decides what that path admits. Default features
+# compile `ExportPolicy::LifecycleOnly`, so a customer collector can export
+# `record_class == lifecycle` only and the detailed class, the only class that
+# can carry free text, never leaves the machine. This feature compiles
+# `ExportPolicy::All` and adds the per-developer `dev.user` tag. See
+# `src/export/policy.rs`; the desktop release job asserts the compiled policy
+# on every packaged collector.
 internal-dogfood-export = []
 
 [dependencies]

@@ -25,8 +25,8 @@ reason = "D1 adds get_default_organization_for_user (earliest active membership 
 
 [[max_lines]]
 path = "server/proliferate/server/accounts/identity/api.py"
-max_lines = 514
-reason = "desktop-surface provider callbacks now dispatch to an HTML handoff/error page instead of a raw 302 via a new _provider_callback_response helper (PRO-111); split pending"
+max_lines = 526
+reason = "desktop-surface provider callbacks now dispatch to an HTML handoff/error page instead of a raw 302 via a new _provider_callback_response helper (PRO-111); web_token/mobile_token now log the sign-in success-rate SLI outcome via sign_in_observability.py (observability overnight, Lane D, D1); split pending"
 
 [[max_lines]]
 path = "server/proliferate/server/billing/stripe_webhooks.py"

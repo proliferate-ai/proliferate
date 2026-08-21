@@ -41,6 +41,46 @@ pub enum LaunchSelectionUnsupported {
     },
 }
 
+/// One read of the launch-option document: the projected response, and whether
+/// the row behind it has a probe in flight. The two travel
+/// together so that a caller reporting both cannot derive them from two sources
+/// and let them disagree.
+pub struct LaunchOptionsRead {
+    pub response: HarnessLaunchOptionsResponse,
+    pub probe_in_flight: bool,
+    /// When this read was taken. Carried so a caller that also reads the probe
+    /// scheduler can be CHECKED for reading the slot first — see
+    /// `LaunchProbeService::refine_row_claim`, where reading the row first is the
+    /// ordering that turns a committing attempt into an apparent orphan.
+    pub read_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl LaunchOptionsRead {
+    /// Re-project this read with the row's in-flight claim withdrawn — the ORPHAN
+    /// case, where a durable `probing` outlived the attempt that wrote it.
+    ///
+    /// Withdrawing it from the phase alone is not enough, and leaving the state at
+    /// `refreshing` was the worse half of the bug: `begin_probe` does not clear
+    /// `options_json`, so a harness with an observation that a user pressed Refresh
+    /// on keeps serving `refreshing` — which a client waits on WITHOUT consulting
+    /// the phase, because a refresh over readable data is the one state where
+    /// waiting needs no second opinion. The row's last observation is the honest
+    /// answer: those models really were seen, at `observedAt`, and nothing is
+    /// running now.
+    pub fn settle_orphan(&mut self) {
+        self.probe_in_flight = false;
+        self.response.state = match self.response.options.as_ref() {
+            Some(options) if options.models.is_empty() && options.controls.is_empty() => {
+                HarnessLaunchOptionsState::ObservedEmpty
+            }
+            Some(_) => HarnessLaunchOptionsState::Observed,
+            // Nothing was ever observed for this basis. `detecting` stays true, and
+            // an idle phase is what makes a client read it as an answer.
+            None => HarnessLaunchOptionsState::Detecting,
+        };
+    }
+}
+
 impl HarnessLaunchOptionsService {
     pub fn new(db: Db, runtime_home: PathBuf) -> Self {
         Self {
@@ -54,22 +94,55 @@ impl HarnessLaunchOptionsService {
     }
 
     pub fn read(&self, harness_kind: &str) -> anyhow::Result<Option<HarnessLaunchOptionsResponse>> {
+        Ok(self
+            .read_with_probe_state(harness_kind)?
+            .map(|read| read.response))
+    }
+
+    /// [`Self::read`], plus the one fact about the STORED row that the projection
+    /// cannot carry: whether that row has a probe in flight.
+    ///
+    /// A surface that reports the state and the probe phase together must take
+    /// both from here rather than re-deriving the phase from the projected state.
+    /// The projection is NOT a function of `probe_state`: the basis-mismatch arm
+    /// below synthesizes `detecting` for a settled row, and re-deriving from that
+    /// reports a harness nothing will ever probe as perpetually queued.
+    pub fn read_with_probe_state(
+        &self,
+        harness_kind: &str,
+    ) -> anyhow::Result<Option<LaunchOptionsRead>> {
         let current_basis = self.basis_revision(harness_kind);
+        let read_at = chrono::Utc::now();
         self.store.read(harness_kind).map(|row| {
             row.map(|row| {
+                // The ROW's own answer, read before the basis is judged. A probe
+                // stamps the basis it STARTED at and nothing pins it for the
+                // attempt's duration, so any auth apply moves the basis under an
+                // in-flight probe — and that apply is precisely the event whose
+                // result the client is waiting for. Judging the basis first would
+                // report the running probe as settled.
+                let probe_in_flight = row.probe_state == ProbeState::Probing;
                 if row.basis_revision != current_basis {
-                    return HarnessLaunchOptionsResponse {
-                        harness_kind: row.harness_kind,
-                        basis_revision: current_basis,
-                        revision: row.revision.saturating_add(1),
-                        state: HarnessLaunchOptionsState::Detecting,
-                        options: None,
-                        observed_at: None,
-                        probe_attempted_at: row.probe_attempted_at,
-                        probe_failure_code: None,
+                    return LaunchOptionsRead {
+                        probe_in_flight,
+                        read_at,
+                        response: HarnessLaunchOptionsResponse {
+                            harness_kind: row.harness_kind,
+                            basis_revision: current_basis,
+                            revision: row.revision.saturating_add(1),
+                            state: HarnessLaunchOptionsState::Detecting,
+                            options: None,
+                            observed_at: None,
+                            probe_attempted_at: row.probe_attempted_at,
+                            probe_failure_code: None,
+                        },
                     };
                 }
-                project_response(row)
+                LaunchOptionsRead {
+                    probe_in_flight,
+                    read_at,
+                    response: project_response(row),
+                }
             })
         })
     }

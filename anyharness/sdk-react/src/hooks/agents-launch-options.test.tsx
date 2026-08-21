@@ -215,6 +215,28 @@ describe("launch-option convergence", () => {
     expect(result.current).toBe(settled);
     expect(result.current[0]).toBe(claudeEntry);
   });
+
+  it("does not call a disabled fan-out pending", async () => {
+    mocks.getLaunchOptions.mockResolvedValue(
+      response({ revision: 1, state: "observed", models: ["m-1"] }),
+    );
+
+    const { result } = renderHook(
+      () => useAgentLaunchOptionsListQuery({ harnessKinds: ["claude", "codex"] }),
+      // No runtime URL: the queries are disabled, so nothing is in flight and
+      // nothing will resolve them. React Query still calls that status "pending".
+      { wrapper: wrapper("") },
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mocks.getLaunchOptions).not.toHaveBeenCalled();
+    expect(result.current.map((entry) => entry.isPending)).toEqual([false, false]);
+    expect(result.current.map((entry) => entry.isError)).toEqual([false, false]);
+    expect(result.current.map((entry) => entry.data)).toEqual([null, null]);
+  });
 });
 
 function response({
@@ -248,11 +270,11 @@ function response({
   };
 }
 
-function wrapper() {
+function wrapper(runtimeUrl = "http://local-runtime.test") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>
-      <AnyHarnessRuntime runtimeUrl="http://local-runtime.test">
+      <AnyHarnessRuntime runtimeUrl={runtimeUrl}>
         {children}
       </AnyHarnessRuntime>
     </QueryClientProvider>
