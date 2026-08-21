@@ -23,7 +23,21 @@ from proliferate.db.models.base import Base
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers defaults to True, which silently sets
+    # `.disabled = True` on every logger that already exists at this point
+    # and is not itself named in alembic.ini's [loggers] section -- forever,
+    # for the life of the process, not just for the migration run. In the
+    # test suite this reliably disabled `proliferate.auth.sign_in` (created
+    # at import time by `proliferate.main` -> the desktop/identity auth
+    # routers -> `sign_in_observability.py`) the moment any test imported
+    # `proliferate.main` before the first migration ran in that pytest-xdist
+    # worker, permanently silencing the sign-in SLI log line for every later
+    # test in that worker (root-caused via PR #2181 CI: `test-integration`
+    # shard 3, two caplog assertions failing with zero captured records
+    # despite the log call demonstrably executing). False is the standard,
+    # documented fix: apply alembic.ini's own logger configuration
+    # additively instead of tearing down everything else already configured.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

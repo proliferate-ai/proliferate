@@ -36,6 +36,7 @@ from proliferate.auth.errors import AuthFlowError
 from proliferate.auth.identity.models import PasswordLoginRequest
 from proliferate.auth.identity.password import request_client_ip
 from proliferate.auth.oauth import github_oauth_client
+from proliferate.auth.sign_in_observability import log_sign_in_failure, log_sign_in_success
 from proliferate.auth.users import UserManager, get_user_manager
 from proliferate.config import settings
 from proliferate.constants.auth import (
@@ -44,6 +45,7 @@ from proliferate.constants.auth import (
     SUPPORTED_CODE_CHALLENGE_METHODS,
 )
 from proliferate.db.engine import get_async_session
+from proliferate.errors import ProliferateError
 from proliferate.server.accounts.desktop.service import (
     build_github_callback_url,
     exchange_desktop_token,
@@ -255,7 +257,13 @@ async def exchange_token(
     db: AsyncSession = Depends(get_async_session),
 ) -> TokenResponse:
     """Exchange an authorization code + PKCE code_verifier for JWT tokens."""
-    return await exchange_desktop_token(db, body)
+    try:
+        result = await exchange_desktop_token(db, body)
+    except ProliferateError as exc:
+        log_sign_in_failure("desktop", failure_code=exc.code)
+        raise
+    log_sign_in_success("desktop")
+    return result
 
 
 # ── Refresh token endpoint ──
