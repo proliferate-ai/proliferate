@@ -85,8 +85,48 @@ def test_run_snapshot_fixture_parses_as_frozen_invocation() -> None:
     assert response.schema_version == 2
     assert response.placement.mode == "worktree"
     assert validate_definition_v2_document(response.definition) is None
-    round_tripped = response.model_dump(by_alias=True, mode="json", exclude_none=True)
-    assert round_tripped == fixture
+    # The fixture is the frozen/delivered form, so it round-trips through
+    # `frozen_json` — the dump whose definition omits empty control values.
+    assert response.frozen_json() == fixture
+
+
+def test_empty_control_values_stay_omitted_in_the_stored_form() -> None:
+    """An explicit `controlValues: {}` (what pre-fix saves stored) normalizes
+    to an absent key, so the stored/frozen document matches what the runtime
+    serializer would emit and never carries a field the author left out."""
+    document = WorkflowDefinitionDocumentV2.model_validate(
+        {
+            "schemaVersion": 2,
+            "nodes": [
+                {
+                    "id": "n_only",
+                    "type": "agent",
+                    "title": "Do the job",
+                    "prompt": "Do the job.",
+                    "model": {
+                        "agentKind": "codex",
+                        "modelId": "codex-large",
+                        "controlValues": {},
+                    },
+                }
+            ],
+        }
+    )
+    assert document.document_json() == {
+        "schemaVersion": 2,
+        "nodes": [
+            {
+                "id": "n_only",
+                "type": "agent",
+                "title": "Do the job",
+                "prompt": "Do the job.",
+                "model": {"agentKind": "codex", "modelId": "codex-large"},
+            }
+        ],
+        "edges": [],
+        "inputs": [],
+        "docTemplates": [],
+    }
 
 
 def test_schema_version_must_be_exact_integer() -> None:
