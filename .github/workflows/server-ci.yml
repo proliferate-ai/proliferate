@@ -109,9 +109,84 @@ jobs:
           uv run --python 3.12 --frozen --extra dev python scripts/check_mypy_baseline.py
           --github-event-base
 
-  test:
+  # tests/unit is not actually free of live-infra dependencies: 113 test
+  # functions across 20 files resolve the test_engine/db_session/client/
+  # single_org_client fixtures (tests/conftest.py, tests/unit/test_first_run_claim.py:64,
+  # tests/unit/test_registration_page.py:54, tests/unit/test_self_registration.py:53, etc.)
+  # which open a real Postgres connection, and
+  # tests/unit/test_redis_lock.py:108 and :138 exercise a live Redis over
+  # settings.redbeat_redis_url. Moving those ~115 tests out of tests/unit or
+  # reworking the fixtures to fake the backends would be well past a minimal
+  # conftest change, so this lane keeps the service containers as the
+  # documented fallback (see PR body) -- only the xdist fan-out and the
+  # lock-table bump are dropped, since a serial, single-connection run never
+  # needs them.
+  test-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
+      JWT_SECRET: test-jwt-secret
+      CLOUD_SECRET_KEY: test-cloud-secret
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proliferate
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proliferate -d proliferate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Build artifact runtime
+        run: pnpm -C server/artifact-runtime build
+        working-directory: .
+
+      - name: Install dependencies
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Run unit tests
+        run: pytest tests/unit -q --durations=20
+
+  test-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
       DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
       JWT_SECRET: test-jwt-secret
@@ -189,12 +264,64 @@ jobs:
           docker exec "$container" psql -U proliferate -d proliferate \
             -c 'SHOW max_locks_per_transaction;'
 
-      - name: Run tests
-        run: pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py -n 4 -q --durations=20
+      # Deterministic file-level partition: list every integration test file
+      # plus the one e2e file this lane also carries, sort them (independent
+      # of filesystem traversal order), and take every third file starting at
+      # this shard's offset. Whole files stay together -- xdist distributes
+      # within a shard -- so no test can land in two shards or in none, and
+      # the partition is identical across workers, runs, and reruns because
+      # it depends only on the file list sorted under LC_ALL=C, never on
+      # collection or runtime order. Collation is pinned explicitly: the
+      # shard a file lands in is a function of its index in the sorted list,
+      # so a locale that ordered punctuation or case differently would move
+      # files between shards. The three shards would still union to the whole
+      # suite, so such a drift is invisible in the pass/fail signal -- pinning
+      # LC_ALL=C is what makes reruns comparable rather than merely green.
+      #
+      # `mapfile < <(...)` reads from a process substitution, which is not a
+      # pipeline, so `set -o pipefail` cannot observe a failing `find` and the
+      # step would happily continue with a short or empty list. The floor
+      # checks below are the actual guard: a rename or move under
+      # tests/integration that collapses the list fails the shard loudly
+      # instead of silently testing almost nothing.
+      - name: Partition integration test files (shard ${{ matrix.shard }} of 3)
+        id: partition
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(
+            { find tests/integration -type f \( -name 'test_*.py' -o -name '*_test.py' \); \
+              echo tests/e2e/cloud/test_e2b_webhooks.py; } | LC_ALL=C sort -u
+          )
+          echo "Total integration test files: ${#files[@]}"
+          if (( ${#files[@]} < 100 )); then
+            echo "Refusing to shard: discovered only ${#files[@]} integration test files (expected >= 100)." >&2
+            echo "The find over tests/integration collapsed -- check for a moved or renamed test tree." >&2
+            exit 1
+          fi
+          shard_files=()
+          for i in "${!files[@]}"; do
+            if (( i % 3 == SHARD - 1 )); then
+              shard_files+=("${files[$i]}")
+            fi
+          done
+          if (( ${#shard_files[@]} == 0 )); then
+            echo "Refusing to run: shard ${SHARD} of 3 was assigned no files out of ${#files[@]}." >&2
+            exit 1
+          fi
+          echo "Shard ${SHARD} owns ${#shard_files[@]} files:"
+          printf '  %s\n' "${shard_files[@]}"
+          printf '%s\n' "${shard_files[@]}" > shard_files.txt
+
+      # -r so that an empty shard_files.txt runs nothing and fails, rather
+      # than invoking a bare `pytest` that would collect the entire suite.
+      - name: Run integration tests (shard ${{ matrix.shard }} of 3)
+        run: xargs -r -a shard_files.txt pytest -n 4 -q --durations=20
 
   docker:
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, test-unit, test-integration]
     # Reusable-workflow calls inherit the caller's event name (never
     # "workflow_call"), so this leg is driven by inputs.publish/dry_run instead.
     # inputs.* are empty on plain push/PR events, so the comparisons stay false
@@ -294,7 +421,7 @@ jobs:
 
   self-hosted-release-assets:
     runs-on: ubuntu-latest
-    needs: [lint, test, docker]
+    needs: [lint, test-unit, test-integration, docker]
     # Same input-driven gate as the docker job (see note above): a server-v tag
     # push, or an explicit publish call from a release train / hotfix workflow.
     if: (startsWith(github.ref, 'refs/tags/server-v')) || (inputs.publish == true && inputs.dry_run != true)
