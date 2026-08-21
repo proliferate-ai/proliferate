@@ -770,9 +770,13 @@ jobs:
   # Deliberately NOT required, with reasons:
   #   intent-tests (provisional) / intent-billing (provisional)
   #       continue-on-error by design; intent-tests.yml says do not require yet.
-  #   docker / self-hosted-release-assets (Server CI)
-  #       release-only, `skipped` on every PR; server-ci-ok exempts them by
-  #       detecting their `server-v` tag gate, not by name.
+  #   docker / self-hosted-release-assets (Build Server Artifacts)
+  #       release-only, and no longer in Server CI at all: they moved to
+  #       _build-server.yml, which release.yml calls directly so a release does
+  #       not re-run the suite its SHA already passed to reach main. They never
+  #       run on a PR. server-ci-ok still derives a release-only exemption from
+  #       a `server-v` tag gate rather than by name, so a release-gated job
+  #       cannot silently reappear inside Server CI outside the rollup.
   #   Vercel / Vercel Preview Comments
   #       third-party.
   #

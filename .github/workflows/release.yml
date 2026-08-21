@@ -309,10 +309,12 @@ jobs:
     permissions:
       contents: write
       packages: write
-    uses: ./.github/workflows/server-ci.yml
+    # `_build-server.yml`, not `server-ci.yml`: this head is already on `main`,
+    # so `server-ci-ok` has already gated it. The build brick carries no lint or
+    # test jobs on purpose -- see the note at the top of that file.
+    uses: ./.github/workflows/_build-server.yml
     with:
       git_sha: ${{ needs.prepare.outputs.head_sha }}
-      comparison_sha: ${{ needs.prepare.outputs.base_sha }}
       version: ${{ needs.prepare.outputs.server_version }}
       dry_run: false
       publish: true

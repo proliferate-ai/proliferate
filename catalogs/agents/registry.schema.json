@@ -193,6 +193,9 @@
             },
             "platformMap": {
               "$ref": "#/$defs/nonEmptyStringMap"
+            },
+            "binaryNameMap": {
+              "$ref": "#/$defs/nonEmptyStringMap"
             }
           }
         },

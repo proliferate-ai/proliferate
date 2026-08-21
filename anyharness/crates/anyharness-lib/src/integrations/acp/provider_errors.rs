@@ -1,8 +1,12 @@
+use agent_client_protocol as acp;
 use anyharness_contract::v1::ErrorEventDetails;
 
 const ANTHROPIC_PROVIDER: &str = "anthropic";
 pub const PROVIDER_RATE_LIMIT_CODE: &str = "provider_rate_limit";
 pub const NETWORK_CONNECTION_CODE: &str = "network_connection";
+pub const PROVIDER_MODEL_UNAVAILABLE_CODE: &str = "provider_model_unavailable";
+pub const PROVIDER_MODEL_CONFIGURATION_UNSUPPORTED_CODE: &str =
+    "provider_model_configuration_unsupported";
 pub const OPUS_4_7_MODEL_ID: &str = "claude-opus-4-7";
 pub const OPUS_4_6_FALLBACK_MODEL_ID: &str = "claude-opus-4-6";
 
@@ -70,6 +74,43 @@ pub fn classify_network_connection_error(message: &str) -> Option<ErrorEventDeta
     Some(ErrorEventDetails::NetworkConnection {
         provider: extract_claude_model_id(message).map(|_| ANTHROPIC_PROVIDER.to_string()),
     })
+}
+
+/// Reduces the two bounded provider-model failures exposed by the ACP adapter
+/// to stable product error codes. The adapter currently preserves the
+/// provider message and an `APIError`/`session` discriminator, but not the
+/// provider HTTP status or retryability. Require that full surviving envelope
+/// so similar prose from another harness cannot acquire this classification.
+pub fn classify_provider_model_error(agent_kind: &str, error: &acp::Error) -> Option<&'static str> {
+    if agent_kind != "opencode"
+        || !matches!(error.code, acp::ErrorCode::InternalError)
+        || !has_opencode_session_api_error_data(error.data.as_ref())
+    {
+        return None;
+    }
+
+    let message = error.message.to_ascii_lowercase();
+    if message.contains("provided model identifier is invalid") {
+        return Some(PROVIDER_MODEL_UNAVAILABLE_CODE);
+    }
+    if message.contains("the model returned the following errors")
+        && message.contains("thinking.type.enabled")
+        && message.contains("is not supported for this model")
+        && message.contains("thinking.type.adaptive")
+        && message.contains("output_config.effort")
+    {
+        return Some(PROVIDER_MODEL_CONFIGURATION_UNSUPPORTED_CODE);
+    }
+
+    None
+}
+
+fn has_opencode_session_api_error_data(data: Option<&serde_json::Value>) -> bool {
+    data.and_then(serde_json::Value::as_object)
+        .is_some_and(|data| {
+            data.get("errorName").and_then(serde_json::Value::as_str) == Some("APIError")
+                && data.get("service").and_then(serde_json::Value::as_str) == Some("session")
+        })
 }
 
 fn extract_claude_model_id(message: &str) -> Option<String> {
@@ -165,9 +206,7 @@ mod tests {
     #[test]
     fn network_classifier_populates_provider_when_model_present() {
         let Some(ErrorEventDetails::NetworkConnection { provider }) =
-            classify_network_connection_error(
-                "fetch failed while streaming from claude-opus-4-7",
-            )
+            classify_network_connection_error("fetch failed while streaming from claude-opus-4-7")
         else {
             panic!("expected network connection details");
         };
@@ -186,10 +225,82 @@ mod tests {
     #[test]
     fn network_classifier_rejects_false_positives() {
         // "dns" as a bare substring should NOT match (e.g. CDN URLs, library names)
-        assert!(classify_network_connection_error("failed to load from cdns.cloudflare.com").is_none());
+        assert!(
+            classify_network_connection_error("failed to load from cdns.cloudflare.com").is_none()
+        );
         assert!(classify_network_connection_error("adns library error").is_none());
         // Server-initiated stream close is NOT a client-side network failure
-        assert!(classify_network_connection_error("connection closed by server after max_duration").is_none());
-        assert!(classify_network_connection_error("SSE connection closed due to load shedding").is_none());
+        assert!(classify_network_connection_error(
+            "connection closed by server after max_duration"
+        )
+        .is_none());
+        assert!(
+            classify_network_connection_error("SSE connection closed due to load shedding")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn classifies_opencode_provider_model_failures() {
+        let invalid_model = opencode_session_api_error(
+            "Internal error: undefined: The provided model identifier is invalid.",
+        );
+        assert_eq!(
+            classify_provider_model_error("opencode", &invalid_model),
+            Some(PROVIDER_MODEL_UNAVAILABLE_CODE),
+        );
+
+        let unsupported_configuration = opencode_session_api_error(
+            "Internal error: undefined: The model returned the following errors: \"thinking.type.enabled\" is not supported for this model. Use \"thinking.type.adaptive\" and \"output_config.effort\" to control thinking behavior.",
+        );
+        assert_eq!(
+            classify_provider_model_error("opencode", &unsupported_configuration),
+            Some(PROVIDER_MODEL_CONFIGURATION_UNSUPPORTED_CODE),
+        );
+    }
+
+    #[test]
+    fn provider_model_classifier_requires_the_opencode_session_api_envelope() {
+        let message = "Internal error: undefined: The provided model identifier is invalid.";
+        let exact = opencode_session_api_error(message);
+        assert_eq!(classify_provider_model_error("claude", &exact), None);
+
+        let wrong_service = acp::Error::internal_error().data(serde_json::json!({
+            "errorName": "APIError",
+            "service": "auth",
+        }));
+        assert_eq!(
+            classify_provider_model_error("opencode", &wrong_service),
+            None,
+        );
+
+        let wrong_code = acp::Error::new(-32602, message).data(serde_json::json!({
+            "errorName": "APIError",
+            "service": "session",
+        }));
+        assert_eq!(classify_provider_model_error("opencode", &wrong_code), None,);
+        assert_eq!(
+            classify_provider_model_error(
+                "opencode",
+                &opencode_session_api_error("Internal error: undefined: Request failed."),
+            ),
+            None,
+        );
+        assert_eq!(
+            classify_provider_model_error(
+                "opencode",
+                &opencode_session_api_error(
+                    "Internal error: undefined: The model returned the following errors: tools are not supported for this model.",
+                ),
+            ),
+            None,
+        );
+    }
+
+    fn opencode_session_api_error(message: &str) -> acp::Error {
+        acp::Error::new(-32603, message).data(serde_json::json!({
+            "errorName": "APIError",
+            "service": "session",
+        }))
     }
 }

@@ -295,11 +295,18 @@ impl BridgeHost for RealBridgeHost {
     }
 
     fn supervisor_live(&self, supervisor_binary: &Path) -> bool {
+        // A fixed program with fixed arguments: no shell needed on any
+        // platform. The redirects the old `sh -c` wrapper carried are the null
+        // stdout/stderr below, and `pgrep`'s own exit status is unchanged, so
+        // the returned bool is identical on unix - including the "pgrep is
+        // missing" case, which was a non-zero shell status and is now a spawn
+        // error, both mapping to `false`.
         let pattern = pgrep_pattern_for_path(&supervisor_binary.to_string_lossy());
-        let script = format!("pgrep -f {} > /dev/null 2>&1", shell_single_quote(&pattern));
-        std::process::Command::new("sh")
-            .arg("-c")
-            .arg(&script)
+        std::process::Command::new("pgrep")
+            .arg("-f")
+            .arg(&pattern)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .status()
             .map(|status| status.success())
             .unwrap_or(false)
@@ -316,13 +323,14 @@ impl BridgeHost for RealBridgeHost {
             self.anyharness_binary.as_deref(),
             self.worker_binary.as_deref(),
         );
-        let status = std::process::Command::new("bash")
-            .arg("-lc")
-            .arg(&script)
-            .status()
-            .map_err(|error| WorkerError::BridgeSpawn {
-                detail: format!("failed to spawn supervisor launch shell: {error}"),
-            })?;
+        let status = crate::posix_shell::run_script(
+            crate::posix_shell::ScriptShell::BashLogin,
+            &script,
+            None,
+        )
+        .map_err(|error| WorkerError::BridgeSpawn {
+            detail: format!("failed to spawn supervisor launch shell: {error}"),
+        })?;
         if !status.success() {
             return Err(WorkerError::BridgeSpawn {
                 detail: format!("supervisor launch shell exited with {status}"),
@@ -389,6 +397,15 @@ fn detached_supervisor_launch_script(
 /// Escape a path for a `pgrep -f` pattern so the pgrep shell never matches its
 /// own command line — identical to the server bootstrap's
 /// `_pgrep_pattern_for_path` and `anyharness_update`'s escaper.
+///
+/// Still load-bearing for the two callers that build shell scripts
+/// (`detached_supervisor_launch_script` here and `stop_runtime_script` in
+/// `anyharness_update`): there the pattern is interpolated into a script whose
+/// own command line contains it, so an unescaped pattern would match the shell
+/// running the search. It is vestigial but harmless for `supervisor_live`,
+/// which now spawns `pgrep` directly with no shell in between and therefore
+/// has no such process to exclude. Kept uniform on purpose so all three
+/// callers pass byte-identical patterns.
 fn pgrep_pattern_for_path(path: &str) -> String {
     if let Some(rest) = path.strip_prefix('/') {
         format!("[/]{rest}")

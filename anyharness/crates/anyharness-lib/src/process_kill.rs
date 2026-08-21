@@ -11,11 +11,26 @@
 //! `DOMAIN_LIVE_VALVE` boundary rule. See the R3 delivery spec's
 //! Contradictions C4.
 //!
-//! Everything here is unix-only: the enumeration is genuinely two
-//! implementations (macOS via libproc, Linux via `/proc`) behind one
-//! `#[cfg]`, and the escalation always runs on a detached task so a dropped
-//! or timed-out caller future can never strand a TERM-ignoring process
-//! between the TERM and the KILL.
+//! The enumeration is genuinely one implementation per platform - macOS via
+//! libproc, Linux via `/proc`, Windows via a `CreateToolhelp32Snapshot`
+//! parent-link walk in `process_kill_windows.rs` - behind one `#[cfg]`, and
+//! on every platform the escalation runs on a detached task so a dropped or
+//! timed-out caller future can never strand a half-killed target between the
+//! first signal and the last.
+//!
+//! What a caller passes differs by platform and the two functions below name
+//! the unix concepts because that is where the distinction is real. Windows
+//! has neither process groups nor sessions, and every call site derives its
+//! integer from a direct child's pid (`process_group(0)` at the spawn sites is
+//! `#[cfg(unix)]`), so both entry points collapse to one descendant-tree kill
+//! rooted at that pid. The CONTRACT is identical on both platforms: the
+//! returned `(total, git)` is the census taken before anything is signaled,
+//! `(0, 0)` means nothing was running, and the call resolves only once the
+//! target is confirmed dead or the confirmation budget is spent. Two places
+//! where Windows is genuinely weaker, both documented in
+//! `process_kill_windows.rs`: the kill is not atomic against a tree that
+//! grows mid-kill (unix's `kill(-pgid)` is), and an adoption whose identity
+//! cannot be proven is refused rather than guessed at.
 
 use std::time::Duration;
 
@@ -349,13 +364,61 @@ mod unix_impl {
 #[cfg(unix)]
 pub use unix_impl::{kill_group_and_await, kill_session_and_await};
 
-#[cfg(not(unix))]
-pub async fn kill_group_and_await(_pgid: i32) -> (usize, usize) {
+/// The tree bookkeeping the Windows kill path runs on. It contains no FFI, so
+/// it is compiled under `test` on every platform and its unit tests run on the
+/// ordinary Linux and macOS jobs - which is where the multi-pass escalation
+/// logic actually gets exercised, since a real-process Windows test never
+/// reaches the second pass.
+#[cfg(any(windows, test))]
+#[path = "process_kill_tree.rs"]
+mod tree;
+
+#[cfg(windows)]
+#[path = "process_kill_windows.rs"]
+mod windows_impl;
+
+/// Windows: the pgid a caller holds is only ever the direct child's pid (see
+/// this module's header), so this kills the descendant tree rooted at it.
+/// Same `(total, git)` census, same detached escalation, same deadline
+/// semantics as the unix path; the one behavioral difference is that
+/// `TerminateProcess` is unconditional, so there is no graceful rung before
+/// it (`process_kill_windows.rs` explains why one is not reachable from the
+/// current spawn sites).
+#[cfg(windows)]
+pub async fn kill_group_and_await(pgid: i32) -> (usize, usize) {
+    windows_impl::kill_tree_and_await(pgid).await
+}
+
+/// Windows: PTY sessions do not exist as a kernel concept, and portable-pty's
+/// ConPTY backend has no `setsid()` to make the child a session leader, so
+/// `sid` here is just the PTY child's pid and the shell's jobs are its
+/// ordinary descendants. Same tree kill as [`kill_group_and_await`].
+#[cfg(windows)]
+pub async fn kill_session_and_await(sid: i32) -> (usize, usize) {
+    windows_impl::kill_tree_and_await(sid).await
+}
+
+/// No other platform is a build target for this runtime. Returning the bare
+/// `(0, 0)` here would be indistinguishable from a successful kill of nothing,
+/// so the stub is loud instead of silent: a caller that believes a live plane
+/// has quiesced when nothing was killed is worse than an error, because
+/// archive then proceeds against a workspace whose processes are still
+/// holding it.
+#[cfg(not(any(unix, windows)))]
+pub async fn kill_group_and_await(pgid: i32) -> (usize, usize) {
+    tracing::error!(
+        pgid,
+        "process_kill: no process-kill implementation for this platform; NOTHING was killed"
+    );
     (0, 0)
 }
 
-#[cfg(not(unix))]
-pub async fn kill_session_and_await(_sid: i32) -> (usize, usize) {
+#[cfg(not(any(unix, windows)))]
+pub async fn kill_session_and_await(sid: i32) -> (usize, usize) {
+    tracing::error!(
+        sid,
+        "process_kill: no process-kill implementation for this platform; NOTHING was killed"
+    );
     (0, 0)
 }
 

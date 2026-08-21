@@ -214,6 +214,151 @@ test("direct_archive pins resolve onto the catalog archive source", async () => 
   }
 });
 
+test("windows direct binaries resolve their per-platform artifact name", async () => {
+  const root = mkdtempSync(join(tmpdir(), "resolve-agent-pins-win-"));
+  const requests = [];
+  const checksum = "d".repeat(64);
+  const server = createServer((request, response) => {
+    requests.push(request.url);
+    if (request.url === "/1.0.0/manifest.json") {
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({
+        version: "1.0.0",
+        platforms: { "win32-x64": { binary: "claude.exe", checksum, size: 42 } },
+      }));
+      return;
+    }
+    response.statusCode = 500;
+    response.end("binary should not be downloaded");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+
+  const catalogPath = join(root, "catalog.json");
+  const registryPath = join(root, "registry.json");
+  writeFileSync(catalogPath, JSON.stringify({
+    agents: [{
+      kind: "claude",
+      harness: {
+        native: { version: "1.0.0", source: { kind: "binary", targets: {} } },
+        agentProcess: { version: "0.44.0" },
+      },
+    }],
+  }));
+  writeFileSync(registryPath, JSON.stringify({
+    agents: [{
+      kind: "claude",
+      native: {
+        install: {
+          kind: "direct_binary",
+          latestVersionUrl: `http://127.0.0.1:${port}/latest`,
+          binaryUrlTemplate: `http://127.0.0.1:${port}/{version}/{platform}/{binary}`,
+          platformMap: { windows_x64: "win32-x64" },
+          binaryNameMap: { windows_x64: "claude.exe" },
+        },
+      },
+      agentProcess: {
+        install: {
+          kind: "managed_npm_package",
+          package: "git+https://example.test/claude-agent-acp.git#abc123",
+          executableRelpath: "node_modules/.bin/claude-agent-acp",
+        },
+      },
+    }],
+  }));
+
+  try {
+    const result = await run(process.execPath, [
+      resolver,
+      "--agent", "claude",
+      "--keep-versions",
+      "--platforms", "windows_x64",
+      "--catalog", catalogPath,
+      "--registry", registryPath,
+    ]);
+    assert.equal(result.code, 0, result.stderr);
+    const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
+    // --keep-versions must not consult the latest-version channel at all.
+    assert.deepEqual(requests, ["/1.0.0/manifest.json"]);
+    assert.equal(catalog.agents[0].harness.native.version, "1.0.0");
+    assert.equal(
+      catalog.agents[0].harness.native.source.targets.windows_x64.url,
+      `http://127.0.0.1:${port}/1.0.0/win32-x64/claude.exe`,
+    );
+    assert.equal(
+      catalog.agents[0].harness.native.source.targets.windows_x64.sha256,
+      checksum,
+    );
+  } finally {
+    server.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--keep-versions refuses to adopt a newer ACP registry release", async () => {
+  const root = mkdtempSync(join(tmpdir(), "resolve-keep-versions-"));
+  const server = createServer((request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      agents: [{
+        id: "opencode",
+        version: "2.0.0",
+        distribution: {
+          binary: {
+            "darwin-aarch64": {
+              archive: "https://downloads.test/opencode-2.0.0.zip",
+              cmd: "./opencode",
+              sha256: "e".repeat(64),
+            },
+          },
+        },
+      }],
+    }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+
+  const pinned = {
+    kind: "archive",
+    targets: {
+      macos_arm64: {
+        url: "https://downloads.test/opencode-1.0.0.zip",
+        sha256: "f".repeat(64),
+        expectedBinary: "./opencode",
+      },
+    },
+    args: [],
+  };
+  const catalogPath = join(root, "catalog.json");
+  const registryPath = join(root, "registry.json");
+  writeFileSync(catalogPath, JSON.stringify({
+    agents: [{ kind: "opencode", harness: { agentProcess: { version: "1.0.0", source: pinned } } }],
+  }));
+  writeFileSync(registryPath, JSON.stringify({
+    agents: [{
+      kind: "opencode",
+      agentProcess: { install: { kind: "registry_backed", registryId: "opencode" } },
+    }],
+  }));
+
+  try {
+    const result = await run(process.execPath, [
+      resolver,
+      "--agent", "opencode",
+      "--keep-versions",
+      "--catalog", catalogPath,
+      "--registry", registryPath,
+    ], { ANYHARNESS_ACP_REGISTRY_URL: `http://127.0.0.1:${port}/registry.json` });
+    assert.equal(result.code, 0, result.stderr);
+    const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
+    assert.equal(catalog.agents[0].harness.agentProcess.version, "1.0.0");
+    assert.deepEqual(catalog.agents[0].harness.agentProcess.source, pinned);
+  } finally {
+    server.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 function run(command, args, extraEnv = {}) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {

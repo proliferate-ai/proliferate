@@ -402,18 +402,21 @@ jobs:
       # target/debug) purely to print a static document. "Build Rust binaries for
       # target" above already produced a release `anyharness` for this target,
       # and `openapi_json()` has no profile-dependent cfg, so both binaries emit
-      # the same JSON. ANYHARNESS_OPENAPI_BIN points the script at the binary we
-      # already have; the guard below refuses to run rather than silently
-      # falling back to `cargo run`.
+      # the same JSON. scripts/generate-anyharness-openapi.mjs (which
+      # generate:openapi now runs) takes a prebuilt runtime when SKIP_RUST is
+      # set and ANYHARNESS_DEV_RUNTIME_BIN is executable, so point it at the
+      # binary we already have; the guard below refuses to run rather than
+      # silently falling back to `cargo run`.
       - name: Generate and build SDK
         if: steps.filter.outputs.skip != 'true'
         shell: bash
         env:
-          ANYHARNESS_OPENAPI_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/anyharness${{ matrix.runner_os == 'windows' && '.exe' || '' }}
+          SKIP_RUST: "1"
+          ANYHARNESS_DEV_RUNTIME_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/anyharness${{ matrix.runner_os == 'windows' && '.exe' || '' }}
         run: |
           pnpm install
-          if [[ ! -x "$ANYHARNESS_OPENAPI_BIN" ]]; then
-            echo "::error::Expected the release anyharness binary at $ANYHARNESS_OPENAPI_BIN (produced by 'Build Rust binaries for target'). Refusing to fall back to a dev-profile 'cargo run'."
+          if [[ ! -x "$ANYHARNESS_DEV_RUNTIME_BIN" ]]; then
+            echo "::error::Expected the release anyharness binary at $ANYHARNESS_DEV_RUNTIME_BIN (produced by 'Build Rust binaries for target'). Refusing to fall back to a dev-profile 'cargo run'."
             exit 1
           fi
           cd anyharness/sdk && pnpm run generate && pnpm run build
@@ -809,7 +812,13 @@ jobs:
         with:
           path: all-artifacts
           pattern: desktop-*
-          merge-multiple: false
+          # merge-multiple keeps the extracted layout deterministic: with
+          # `false`, download-artifact@v8 nests each artifact in its own
+          # directory ONLY when two or more artifacts match — a single match
+          # (ARM-only, since Intel is paused) extracts flat and broke the
+          # 0.4.22 publish. Merged-flat is the one layout every artifact
+          # count produces.
+          merge-multiple: true
 
       - name: List artifacts
         run: find all-artifacts -type f | sort
@@ -849,7 +858,13 @@ jobs:
         with:
           path: all-artifacts
           pattern: desktop-*
-          merge-multiple: false
+          # merge-multiple keeps the extracted layout deterministic: with
+          # `false`, download-artifact@v8 nests each artifact in its own
+          # directory ONLY when two or more artifacts match — a single match
+          # (ARM-only, since Intel is paused) extracts flat and broke the
+          # 0.4.22 publish. Merged-flat is the one layout every artifact
+          # count produces.
+          merge-multiple: true
 
       - name: List artifacts
         run: find all-artifacts -type f | sort

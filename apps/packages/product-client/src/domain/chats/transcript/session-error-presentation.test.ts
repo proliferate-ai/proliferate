@@ -23,8 +23,113 @@ describe("presentSessionError", () => {
       title: "Anthropic rate limit reached",
       description: "This chat exceeded the provider limit for Opus 4.7. Try again later or switch to Opus 4.6.",
       fallbackModelLabel: "Opus 4.6",
-      technicalDetail: "provider returned 429 with a long upstream explanation",
+      technicalDetail: "Error: provider returned 429 with a long upstream explanation",
+      recoveryAction: null,
     });
+  });
+
+  it("turns the bounded unavailable-model code into an actionable recovery", () => {
+    const presentation = presentSessionError(errorItem({
+      code: "provider_model_unavailable",
+      message: "An updated harness message that does not need phrase matching",
+      sourceAgentKind: "opencode",
+    }));
+
+    expect(presentation).toMatchObject({
+      title: "Model unavailable",
+      description:
+        "The selected model isn't available from this provider. Choose another model, then try again.",
+      recoveryAction: "choose_model",
+    });
+    expect(presentation.technicalDetail).toContain(
+      "Error code: provider_model_unavailable",
+    );
+  });
+
+  it("uses the bounded configuration code when provider wording changes", () => {
+    const presentation = presentSessionError(errorItem({
+      code: "provider_model_configuration_unsupported",
+      message: "A future provider message",
+      sourceAgentKind: "opencode",
+    }));
+
+    expect(presentation).toMatchObject({
+      title: "Model settings unsupported",
+      description:
+        "The provider rejected the reasoning settings for this model. Choose another model, then try again.",
+      recoveryAction: "choose_model",
+    });
+  });
+
+  it("recognizes a legacy invalid-model error without promoting diagnostics into copy", () => {
+    const raw = `Internal error: undefined: The provided model identifier is invalid.: {
+  "errorName": "APIError",
+  "service": "session"
+}`;
+    const presentation = presentSessionError(errorItem({
+      message: raw,
+      sourceAgentKind: "opencode",
+    }));
+
+    expect(presentation).toMatchObject({
+      title: "Model unavailable",
+      description:
+        "The selected model isn't available from this provider. Choose another model, then try again.",
+      technicalDetail: raw,
+      recoveryAction: "choose_model",
+    });
+    expect(presentation.description).not.toContain("undefined");
+    expect(presentation.description).not.toContain("APIError");
+  });
+
+  it("recognizes a legacy unsupported-reasoning error and keeps the cause in details", () => {
+    const raw = `Internal error: undefined: The model returned the following errors: "thinking.type.enabled" is not supported for this model. Use "thinking.type.adaptive" and "output_config.effort" to control thinking behavior.: {
+  "errorName": "APIError",
+  "service": "session"
+}`;
+    const presentation = presentSessionError(errorItem({
+      message: raw,
+      sourceAgentKind: "opencode",
+    }));
+
+    expect(presentation).toMatchObject({
+      title: "Model settings unsupported",
+      description:
+        "The provider rejected the reasoning settings for this model. Choose another model, then try again.",
+      technicalDetail: raw,
+      recoveryAction: "choose_model",
+    });
+    expect(presentation.description).not.toContain("thinking.type.enabled");
+    expect(presentation.description).not.toContain("undefined");
+  });
+
+  it("sanitizes transport wrappers in generic copy without discarding technical detail", () => {
+    const raw = `Internal error: undefined: Something else failed.: {
+  "errorName": "APIError",
+  "service": "session"
+}`;
+    const presentation = presentSessionError(errorItem({
+      message: raw,
+      sourceAgentKind: "claude",
+    }));
+
+    expect(presentation).toMatchObject({
+      title: "Chat stopped",
+      description: "Something else failed.",
+      technicalDetail: raw,
+      recoveryAction: null,
+    });
+  });
+
+  it("does not misclassify unrelated unsupported model capabilities", () => {
+    const presentation = presentSessionError(errorItem({
+      message:
+        "Internal error: undefined: The model returned the following errors: tools are not supported for this model.",
+      sourceAgentKind: "opencode",
+    }));
+
+    expect(presentation.title).toBe("Chat stopped");
+    expect(presentation.recoveryAction).toBeNull();
   });
 
   it("keeps generic failures short and moves long text into details", () => {

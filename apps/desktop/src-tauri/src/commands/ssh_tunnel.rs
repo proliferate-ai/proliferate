@@ -714,16 +714,15 @@ async fn wait_for_anyharness(local_url: &str) -> Result<(), String> {
 }
 
 fn expand_home_path(path: &str) -> Result<PathBuf, String> {
+    // `home_dir_os` keeps `var_os` semantics (see its doc comment) and adds the
+    // windows `USERPROFILE` fallback; unix resolution is unchanged.
+    let home = || crate::app_config::home_dir_os().ok_or_else(|| "HOME is not set.".to_string());
+
     if path == "~" {
-        return std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| "HOME is not set.".to_string());
+        return home();
     }
     if let Some(rest) = path.strip_prefix("~/") {
-        let home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| "HOME is not set.".to_string())?;
-        return Ok(home.join(rest));
+        return Ok(home()?.join(rest));
     }
     Ok(PathBuf::from(path))
 }

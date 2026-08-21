@@ -197,7 +197,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         if: steps.preflight.outputs.enabled == 'true'
         with:
-          workspaces: ". -> target/runtime-local"
+          workspaces: "."
 
       - name: Install workspace dependencies
         if: steps.preflight.outputs.enabled == 'true'
@@ -217,9 +217,10 @@ jobs:
 
       - name: Build the AnyHarness runtime binary
         if: steps.preflight.outputs.enabled == 'true'
-        # Same target dir the Makefile's dev-artifacts check reads
-        # (DEV_ANYHARNESS_TARGET_DIR), so `make release-e2e`'s downstream tooling
-        # and a laptop run resolve the same binary.
+        # Builds the workspace once and copies the runtime into
+        # DEV_ANYHARNESS_TARGET_DIR, so downstream tooling and a laptop run
+        # resolve the same binary. Cargo state lives in the workspace target dir,
+        # which is what rust-cache above is pointed at.
         run: make build-rust
 
       - name: Boot the server + AnyHarness runtime, then run the tier-3 runner

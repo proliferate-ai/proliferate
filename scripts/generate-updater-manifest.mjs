@@ -25,10 +25,6 @@ function findFiles(dir, matcher) {
   return files;
 }
 
-function pathIncludes(relPath, segment) {
-  return relPath.split("/").includes(segment);
-}
-
 const args = parseArgs();
 const version = args.version;
 const artifactsDir = args["artifacts-dir"];
@@ -74,15 +70,18 @@ if (!version || !artifactsDir || !baseUrl || !output) {
   process.exit(1);
 }
 
-// Platform mapping: Tauri platform key -> artifact patterns
+// Platform mapping: Tauri platform key -> artifact filename patterns.
+// Matchers test filenames only, never directory layout: download-artifact@v8
+// nests each artifact in a directory named after it when several artifacts
+// match the pattern, but extracts FLAT when exactly one matches (or when
+// merge-multiple is set). Requiring a path segment here is what broke the
+// 0.4.22 publish after the paused Intel lane left a single artifact.
 const platforms = [
   {
     key: "darwin-aarch64",
     artifactMatcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-aarch64-apple-darwin") &&
       /(aarch64|arm64).*\.app\.tar\.gz$/i.test(name),
     sigMatcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-aarch64-apple-darwin") &&
       /(aarch64|arm64).*\.app\.tar\.gz\.sig$/i.test(name),
   },
   {
@@ -93,11 +92,29 @@ const platforms = [
     // artifact is not a manifest-generation failure.
     optional: true,
     artifactMatcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.app\.tar\.gz$/i.test(name),
     sigMatcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.app\.tar\.gz\.sig$/i.test(name),
+  },
+  {
+    key: "windows-x86_64",
+    // "windows-x86_64" is the exact platform key Tauri v2's updater expects
+    // for this target: it follows the same <os>-<arch> shape as the darwin-*
+    // keys above, and apps/desktop/src-tauri/tauri.conf.json already carries
+    // an updater.windows block for this same build. The artifact matched
+    // here is the NSIS setup.exe, not the MSI: it is what Tauri's updater
+    // downloads and verifies, and per release-desktop.yml's publish-updater
+    // job only "*-setup.exe"/"*-setup.exe.sig" (not "*.msi") are copied to
+    // the downloads bucket this manifest's --base-url points at. The
+    // "-setup.exe" suffix is what separates this platform from darwin-x86_64
+    // under the filename-only matching above; no directory segment is
+    // required, so a flat extraction resolves it just as well as a nested one.
+    // Optional: the Windows leg is an opt-in beta gated behind release.yml's
+    // enable_windows_beta input (defaulted false), so a missing or failed
+    // Windows build must never fail a mac-only release.
+    optional: true,
+    artifactMatcher: (relPath, name) => /(x64|x86_64).*-setup\.exe$/i.test(name),
+    sigMatcher: (relPath, name) => /(x64|x86_64).*-setup\.exe\.sig$/i.test(name),
   },
 ];
 
@@ -115,7 +132,11 @@ for (const platform of platforms) {
   const artifactFiles = findFiles(artifactsDir, platform.artifactMatcher);
 
   if (sigFiles.length === 0 || artifactFiles.length === 0) {
-    if (platform.optional) {
+    // Only a fully absent optional platform is a silent skip. A platform
+    // with just one of the two present is never skipped, optional or not: a
+    // signed updater feed must never carry an unsigned entry, and a
+    // signature with no matching artifact is equally a broken publish.
+    if (platform.optional && sigFiles.length === 0 && artifactFiles.length === 0) {
       console.warn(`Skipping ${platform.key}: no artifacts found (optional platform).`);
       continue;
     }

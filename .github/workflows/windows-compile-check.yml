@@ -1,0 +1,76 @@
+name: Windows compile check
+
+# The runtime already builds and ships for Windows on every release, but nothing
+# has compiled the desktop crate for Windows since desktop releases were
+# disabled on 2026-04-13. That makes every Windows estimate guesswork. This job
+# turns the unknown into an error list.
+#
+# Non-blocking on purpose: it is a probe, not a gate, until the errors are fixed.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/desktop/src-tauri/**"
+      - "anyharness/crates/**"
+      - ".github/workflows/windows-compile-check.yml"
+      - "Cargo.lock"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    # Known green: release-runtime.yml ships these targets today. Here as the
+    # control, so a red desktop job cannot be blamed on the toolchain.
+    name: runtime crates (control)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo check
+        run: cargo check --target x86_64-pc-windows-msvc -p anyharness -p proliferate-worker -p proliferate-supervisor
+
+  desktop:
+    name: desktop crates (the unknown)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo check
+        # Keep going past the first failure so one run yields the whole list
+        # rather than one error at a time.
+        run: cargo check --target x86_64-pc-windows-msvc -p proliferate --keep-going 2>&1 | tee check.log
+        shell: bash
+      - name: Error summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### Windows desktop compile errors" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          grep -E '^error' check.log | sort | uniq -c | sort -rn | head -50 >> $GITHUB_STEP_SUMMARY || echo "no errors" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "total errors: $(grep -cE '^error' check.log || echo 0)" >> $GITHUB_STEP_SUMMARY
+          echo "files implicated:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          grep -oE '\-\-> [^:]+' check.log | sed 's/--> //' | sort -u | head -60 >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: windows-desktop-check-log
+          path: check.log

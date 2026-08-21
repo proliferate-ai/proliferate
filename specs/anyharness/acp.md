@@ -365,6 +365,12 @@ When that happens the actor is responsible for:
 - updating durable session status
 - emitting normalized error or session-ended events
 
+Known provider-model rejections exposed through ACP are reduced to bounded
+`ErrorEvent.code` values at the integration boundary. The original provider
+message remains the technical detail; clients use the bounded code for
+authored, actionable copy. A classification never changes launch-option
+membership, retries a non-retryable request, or selects another model.
+
 ## Extension Points
 
 Add behavior under `live/sessions/**` when it changes live ACP execution itself,

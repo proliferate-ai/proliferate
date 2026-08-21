@@ -61,10 +61,12 @@ pub(in crate::live::terminals) async fn run_setup_process(
     )
     .await;
 
-    let mut cmd = tokio::process::Command::new("/bin/sh");
-    cmd.arg("-lc")
-        .arg(&command)
-        .current_dir(&workspace_path)
+    // The setup command is a user-authored string that may use pipes, `&&`,
+    // globs and variable expansion, so it genuinely needs a shell. Which shell,
+    // and how the string is quoted into it, is the host's business rather than
+    // this module's.
+    let mut cmd = crate::host_shell::command_string_shell(&command);
+    cmd.current_dir(&workspace_path)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     cmd.kill_on_drop(true);

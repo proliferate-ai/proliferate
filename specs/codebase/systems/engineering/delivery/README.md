@@ -215,10 +215,11 @@ Each checked-in workflow appears exactly once below. Trigger posture describes
 how the file can run; it does not imply that the workflow is a merge or release
 gate.
 
-### Reusable deploy lanes
+### Reusable build and deploy lanes
 
 | Workflow | Trigger and posture | Role |
 | --- | --- | --- |
+| `_build-server.yml` | Reusable only | Build and publish the server and LiteLLM GHCR images and the self-hosted release assets for one already-gated commit, and mint its `server-v` tag. Carries no lint or test job: tests gate the PR to `main` transition, and this lane only ever runs on a commit that already reached `main`. |
 | `_deploy-desktop.yml` | Reusable only | Validate/build Desktop for staging or call the Desktop publisher for production. |
 | `_deploy-litellm.yml` | Reusable only | Build and roll the LiteLLM ECS service when its environment switch is enabled. |
 | `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, conditionally roll the Celery worker and Beat before the API, roll the API, and verify health. API, worker, and Beat are all pinned to the one candidate image by its **immutable `repo@sha256:` digest** (resolved from the build/push output), never a mutable tag, so all three planes run the byte-identical image and a later tag move cannot change what a rolled service runs. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, preserves the support-feed secret, and explicitly authors the API's checked-in environment-bound Redis and E2B-key field references after account, region, secret-identity, DNS-safe Redis, and nonempty-key preflights. The conditional background re-image authors the same exact key projection plus the reviewed template, and asserts the full contract before and after registration. |
@@ -239,13 +240,11 @@ gate.
 | `release-e2e-selfhost.yml` | Scheduled, manual, or reusable | Run self-host artifact-chain and optional provisioning qualification. Tier 4 and self-host provisioning use separate non-cancelling job groups; no current release coordinator calls it. |
 | `release-e2e.yml` | Scheduled or manual | Run live Tier 3 release qualification; it is not a per-PR merge gate. Local, staging, Tier 2, managed-cloud, and self-host use independent non-cancelling job groups, so unrelated worlds may overlap while same-world runs do not. These groups do not promise FIFO ordering. |
 | `self-host-smoke.yml` | Pull request, push to `main`, or manual | Smoke the production Compose path when relevant paths change. Branch-protection status is not encoded here. |
-| `server-ci.yml` | Relevant push/PR, `server-v*` tag, manual, or reusable | Validate/package the server and publish self-host images/assets when invoked as a release. |
+| `server-ci.yml` | Relevant push/PR, manual, or reusable | Validate the server. It is a gate, not a publisher: the release image and asset build lives in `_build-server.yml`. |
 
 Server CI's shrink-only mypy census compares a pull request with its base SHA
 and a push with the event's pre-push SHA. Manual and reusable invocations must
-supply an explicit comparison SHA; the release coordinator passes the base
-selected by its prepare job. A new release tag uses its source commit's
-parent because that source commit already passed the `main` push gate.
+supply an explicit comparison SHA.
 
 ### Hosted deployment and release coordinators
 
@@ -348,10 +347,14 @@ strictly stronger, and a per-lane name is a name that can rot. Because a
 lane never requires a branch-protection edit.
 
 Excluded on purpose: `intent-tests (provisional)` and `intent-billing
-(provisional)` are `continue-on-error` while the harness earns trust;
-`docker` and `self-hosted-release-assets` are release-only jobs that skip on
-every pull request, and `server-ci-ok` exempts them by detecting their
-`server-v` tag gate rather than by name; the Vercel checks are third-party.
+(provisional)` are `continue-on-error` while the harness earns trust; the Vercel
+checks are third-party. `docker` and `self-hosted-release-assets` used to be
+excluded as release-only jobs inside Server CI; they now live in
+`_build-server.yml` and are outside the rollup's file entirely. Server CI's
+drift guard still derives a release-only exemption from a job's `server-v` tag
+gate rather than by name, so a future release-gated job cannot silently join or
+leave the rollup, but the exempt set is empty today and every job in the file is
+covered.
 
 Server CI carries no `on.pull_request.paths` filter, because a path-skipped
 workflow never reports a conclusion at all and a required check pointing into it
