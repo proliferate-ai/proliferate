@@ -50,7 +50,7 @@ reason = "goal service regression tests for pending_op idempotency"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
-max_lines = 706
+max_lines = 703
 reason = "loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam; fire executor moved to its owning module in PR5; unit tests split to runtime_tests.rs to fit the extension-response decode diagnostic)"
 
 [[max_lines]]
