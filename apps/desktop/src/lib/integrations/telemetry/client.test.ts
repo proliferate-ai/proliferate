@@ -219,4 +219,31 @@ describe("desktop telemetry client", () => {
       },
     );
   });
+
+  it("emits auth_signed_in to PostHog as the signup funnel anchor", async () => {
+    const client = await loadTelemetryClient();
+
+    expect(client.isVendorPostHogEventAllowed("auth_signed_in")).toBe(true);
+
+    client.trackProductEvent("auth_signed_in", {
+      provider: "google",
+      source: "desktop_callback",
+    });
+
+    expect(mocks.trackDesktopPostHogEventMock).toHaveBeenCalledWith(
+      "auth_signed_in",
+      {
+        provider: "google",
+        source: "desktop_callback",
+      },
+    );
+  });
+
+  it("does not emit auth_sign_in_failed to PostHog (diagnostic-only, stays in Sentry)", async () => {
+    const client = await loadTelemetryClient();
+
+    expect(client.isVendorPostHogEventAllowed("auth_sign_in_failed")).toBe(
+      false,
+    );
+  });
 });
