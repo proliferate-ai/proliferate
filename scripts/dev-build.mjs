@@ -54,6 +54,8 @@ const IGNORED = new Set([
   "test-results",
   "playwright-report",
   "blob-report",
+  "__pycache__",
+  "htmlcov",
 ]);
 
 // Files a package's own build writes back into its source tree. Hashing them
@@ -135,11 +137,17 @@ function ensureOpenapi() {
   const generated = path.join(repoRoot, "anyharness/sdk/generated/openapi.json");
   const stamp = path.join(repoRoot, "anyharness/sdk/generated/.dev-build-key");
 
-  // Same resolution order as the Makefile: an explicit prebuilt runtime wins,
-  // otherwise the binary cargo just produced. build-rust is a prerequisite of
-  // dev-build, so in the cargo case that file is fresh by the time we get here.
+  // Same resolution order as the Makefile for the env vars it checks: an
+  // explicit prebuilt runtime wins, otherwise the binary cargo just produced.
+  // main() runs build-rust before calling this, so in the cargo case that file
+  // is fresh by the time we get here. This does not handle a [build]
+  // target-dir set in .cargo/config.toml, unlike the Makefile's cargo-metadata
+  // resolution; the only consequence is a missed warm path (the schema
+  // regenerates on every launch instead of being skipped), never a stale one.
   const explicit = process.env.ANYHARNESS_DEV_RUNTIME_BIN;
-  const built = path.join(process.env.CARGO_TARGET_DIR || path.join(repoRoot, "target"), "debug/anyharness");
+  const targetDir =
+    process.env.CARGO_TARGET_DIR || process.env.CARGO_BUILD_TARGET_DIR || path.join(repoRoot, "target");
+  const built = path.join(targetDir, "debug/anyharness");
   const source = explicit && fs.existsSync(explicit) ? explicit : built;
 
   let key;

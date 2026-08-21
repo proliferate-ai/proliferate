@@ -64,6 +64,10 @@ references/
 # Generated cloud client OpenAPI spec (intermediate artifact, regenerated from Python)
 server/openapi.json
 
+# dev-build.mjs staleness stamps for generated OpenAPI clients
+anyharness/sdk/generated/.dev-build-key
+cloud/sdk/src/generated/.dev-build-key
+
 # Tauri build outputs and sidecar binaries
 apps/desktop/src-tauri/binaries/
 apps/desktop/src-tauri/gen/

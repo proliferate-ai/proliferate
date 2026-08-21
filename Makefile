@@ -1584,11 +1584,11 @@ build-rust:
 	@if [ -n "$(SKIP_RUST)" ] && [ "$(SKIP_RUST)" != "0" ]; then \
 		echo "SKIP_RUST set — skipping cargo builds (runtime: $${ANYHARNESS_DEV_RUNTIME_BIN:-<unset>})"; \
 	else \
-		$(CARGO) build --workspace && \
+		$(CARGO) build --workspace || exit 1; \
 		target_dir=$$($(CARGO) metadata --format-version 1 --no-deps --offline 2>/dev/null \
 			| node -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>{try{process.stdout.write(JSON.parse(b).target_directory)}catch{}})'); \
 		target_dir="$${target_dir:-target}"; \
-		mkdir -p "$(DEV_ANYHARNESS_TARGET_DIR)/debug" && \
+		mkdir -p "$(DEV_ANYHARNESS_TARGET_DIR)/debug" || exit 1; \
 		if [ "$$target_dir/debug/anyharness" -ef "$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness" ]; then \
 			:; \
 		else \
