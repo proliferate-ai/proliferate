@@ -270,8 +270,20 @@ jobs:
       # this shard's offset. Whole files stay together -- xdist distributes
       # within a shard -- so no test can land in two shards or in none, and
       # the partition is identical across workers, runs, and reruns because
-      # it depends only on the sorted file list, never on collection or
-      # runtime order.
+      # it depends only on the file list sorted under LC_ALL=C, never on
+      # collection or runtime order. Collation is pinned explicitly: the
+      # shard a file lands in is a function of its index in the sorted list,
+      # so a locale that ordered punctuation or case differently would move
+      # files between shards. The three shards would still union to the whole
+      # suite, so such a drift is invisible in the pass/fail signal -- pinning
+      # LC_ALL=C is what makes reruns comparable rather than merely green.
+      #
+      # `mapfile < <(...)` reads from a process substitution, which is not a
+      # pipeline, so `set -o pipefail` cannot observe a failing `find` and the
+      # step would happily continue with a short or empty list. The floor
+      # checks below are the actual guard: a rename or move under
+      # tests/integration that collapses the list fails the shard loudly
+      # instead of silently testing almost nothing.
       - name: Partition integration test files (shard ${{ matrix.shard }} of 3)
         id: partition
         env:
@@ -280,21 +292,32 @@ jobs:
           set -euo pipefail
           mapfile -t files < <(
             { find tests/integration -type f \( -name 'test_*.py' -o -name '*_test.py' \); \
-              echo tests/e2e/cloud/test_e2b_webhooks.py; } | sort -u
+              echo tests/e2e/cloud/test_e2b_webhooks.py; } | LC_ALL=C sort -u
           )
           echo "Total integration test files: ${#files[@]}"
+          if (( ${#files[@]} < 100 )); then
+            echo "Refusing to shard: discovered only ${#files[@]} integration test files (expected >= 100)." >&2
+            echo "The find over tests/integration collapsed -- check for a moved or renamed test tree." >&2
+            exit 1
+          fi
           shard_files=()
           for i in "${!files[@]}"; do
             if (( i % 3 == SHARD - 1 )); then
               shard_files+=("${files[$i]}")
             fi
           done
+          if (( ${#shard_files[@]} == 0 )); then
+            echo "Refusing to run: shard ${SHARD} of 3 was assigned no files out of ${#files[@]}." >&2
+            exit 1
+          fi
           echo "Shard ${SHARD} owns ${#shard_files[@]} files:"
           printf '  %s\n' "${shard_files[@]}"
           printf '%s\n' "${shard_files[@]}" > shard_files.txt
 
+      # -r so that an empty shard_files.txt runs nothing and fails, rather
+      # than invoking a bare `pytest` that would collect the entire suite.
       - name: Run integration tests (shard ${{ matrix.shard }} of 3)
-        run: xargs -a shard_files.txt pytest -n 4 -q --durations=20
+        run: xargs -r -a shard_files.txt pytest -n 4 -q --durations=20
 
   docker:
     runs-on: ubuntu-latest
