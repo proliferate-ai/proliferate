@@ -8,7 +8,7 @@
 
 [[max_lines]]
 path = "apps/desktop/src-tauri/src/commands/ssh_tunnel.rs"
-max_lines = 729
+max_lines = 728
 reason = "existing desktop native oversized file"
 
 [[max_lines]]
