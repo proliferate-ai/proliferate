@@ -4,8 +4,9 @@
 //
 // This exists as a script rather than an inline npm script because the inline
 // version was `mkdir -p ... && cd ../.. && cargo run ... > file`, which is
-// POSIX shell. npm runs package scripts through cmd.exe on Windows, where
-// `mkdir -p` creates a directory literally named `-p` and the step then fails.
+// POSIX shell. npm runs package scripts through cmd.exe on Windows, and that
+// command does not work there: cmd's `md` reports "The syntax of the command
+// is incorrect." and creates nothing, so the `&&` chain never reaches cargo.
 // That single line is why desktop Windows releases were disabled in
 // 3d3c0504b8 ("until the SDK generation step is Windows-safe").
 //
@@ -48,6 +49,8 @@ const useRuntimeBin =
     }
   })();
 
+// `||` rather than `??`: an empty CARGO is a misconfiguration, and passing
+// "" to spawnSync throws ERR_INVALID_ARG_VALUE instead of saying anything useful.
 const cargo = process.env.CARGO || "cargo";
 const command = useRuntimeBin ? runtimeBin : cargo;
 const args = useRuntimeBin ? ["print-openapi"] : ["run", "--bin", "anyharness", "--", "print-openapi"];
