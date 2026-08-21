@@ -253,18 +253,22 @@ fn batch_escape(s: &str) -> Result<String, LauncherError> {
     Ok(s.replace('%', "%%"))
 }
 
-/// Like `batch_escape`, but also wraps the token in quotes when it contains
-/// whitespace — the batch analogue of `shell_escape`'s quoting decision for
-/// positional arguments (`%` still needs doubling whether or not the token is
-/// quoted).
+/// Like `batch_escape`, but for a positional argument: ALWAYS wraps the
+/// token in quotes, unconditionally, rather than only when it contains
+/// whitespace. `shell_escape`'s whitespace-only heuristic is right for a
+/// POSIX shell, where an unquoted `&`, `|`, `<`, `>`, `^`, `(` or `)` is
+/// still just a plain character once nothing forces word-splitting. cmd.exe
+/// is different: those characters are metacharacters (pipe, redirection,
+/// escape, subshell grouping) whether or not the token has whitespace in
+/// it, so an unquoted single-word argument can still be reinterpreted by
+/// cmd.exe. No catalog-declared arg exercises this today (`[]`, `["acp"]`,
+/// `["agent", "stdio"]`), but the catalog is remotely syncable, so that is a
+/// property of current data, not of this code — always quoting removes the
+/// hazard rather than special-casing the metacharacter set.
 #[cfg(any(windows, test))]
 fn batch_escape_arg(s: &str) -> Result<String, LauncherError> {
     let escaped = batch_escape(s)?;
-    if s.contains(|c: char| c.is_whitespace()) {
-        Ok(format!("\"{escaped}\""))
-    } else {
-        Ok(escaped)
-    }
+    Ok(format!("\"{escaped}\""))
 }
 
 #[cfg(test)]
@@ -403,15 +407,17 @@ mod tests {
     }
 
     #[test]
-    fn batch_script_quotes_whitespace_args_and_forwards_the_rest() {
+    fn batch_script_always_quotes_args_even_without_whitespace() {
         let env = HashMap::new();
         let args = vec!["--acp".to_string(), "two words".to_string()];
         let script =
             build_batch_launcher_script(Path::new(r"C:\agents\claude.exe"), &args, &env, &[])
                 .expect("build batch script");
         assert!(
-            script.contains("\"C:\\agents\\claude.exe\" --acp \"two words\" %*\r\n"),
-            "unquoted simple args pass through, whitespace args get quoted: {script:?}"
+            script.contains("\"C:\\agents\\claude.exe\" \"--acp\" \"two words\" %*\r\n"),
+            "every arg is quoted unconditionally, not only ones with whitespace \
+             (cmd.exe metacharacters like & | < > ^ ( ) are hazardous unquoted \
+             even in a single-word token): {script:?}"
         );
     }
 
@@ -428,9 +434,50 @@ mod tests {
     }
 
     #[test]
-    fn batch_escape_arg_quotes_only_whitespace_tokens() {
-        assert_eq!(batch_escape_arg("--acp").unwrap(), "--acp");
+    fn batch_escape_arg_always_quotes_even_a_single_word_token() {
+        // A mutation that keeps the whitespace-quoting branch but drops the
+        // unconditional-quote requirement (i.e. reintroduces the
+        // whitespace-only heuristic) must fail this assertion.
+        assert_eq!(batch_escape_arg("--acp").unwrap(), "\"--acp\"");
         assert_eq!(batch_escape_arg("two words").unwrap(), "\"two words\"");
+        // cmd.exe metacharacters in a single, whitespace-free token: only
+        // safe unquoted-vs-quoted distinction that matters is "always".
+        assert_eq!(batch_escape_arg("a&b").unwrap(), "\"a&b\"");
+        assert_eq!(batch_escape_arg("a|b").unwrap(), "\"a|b\"");
+        assert_eq!(batch_escape_arg("(a)").unwrap(), "\"(a)\"");
+    }
+
+    #[test]
+    fn batch_escape_arg_still_doubles_percent_and_rejects_quote() {
+        // Coverage hole closed: a mutation that keeps whitespace-quoting but
+        // drops the `%`/`"` handling in `batch_escape_arg` stayed green
+        // before this test existed, because every prior assertion on `%`/`"`
+        // went through an ENV value, never through the argument path.
+        assert_eq!(batch_escape_arg("100%").unwrap(), "\"100%%\"");
+        let error = batch_escape_arg(r#"has"quote"#).unwrap_err();
+        assert!(matches!(error, LauncherError::UnsupportedBatchValue(_)));
+    }
+
+    #[test]
+    fn batch_script_drives_percent_and_quote_through_the_argument_path() {
+        // Same coverage hole, exercised end-to-end through
+        // `build_batch_launcher_script`'s `extra_args`, not just the
+        // `batch_escape_arg` unit above.
+        let env = HashMap::new();
+        let args = vec!["--load=50%".to_string()];
+        let script =
+            build_batch_launcher_script(Path::new(r"C:\agents\claude.exe"), &args, &env, &[])
+                .expect("build batch script");
+        assert!(
+            script.contains("\"--load=50%%\""),
+            "a literal percent in an ARG must be doubled: {script:?}"
+        );
+
+        let bad_args = vec!["has\"quote".to_string()];
+        let error =
+            build_batch_launcher_script(Path::new(r"C:\agents\claude.exe"), &bad_args, &env, &[])
+                .unwrap_err();
+        assert!(matches!(error, LauncherError::UnsupportedBatchValue(_)));
     }
 
     #[test]
