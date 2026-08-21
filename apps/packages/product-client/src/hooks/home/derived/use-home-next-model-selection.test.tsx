@@ -472,9 +472,9 @@ describe("useHomeNextModelSelection", () => {
 
   it("never carries a local refusal onto a cloud target", async () => {
     // Cloud never calls the mutation, so nothing there could clear a stale
-    // refusal. Two mechanisms stop it (the `!isCloudTarget` read mask and the
-    // reset of the counters on target kind); this proves the OUTCOME, not
-    // either alone — removing just one still passes, removing both fails.
+    // refusal. The `!isCloudTarget` read mask is now the ONLY mechanism —
+    // the counter reset that used to back it up was over-broad and is gone —
+    // so removing it alone is what this test fails on.
     mocks.agents = [{ kind: "claude", readiness: "ready" }];
     mocks.readyAgents = [{ kind: "claude" }];
     mocks.data = { ...response(), state: "observed", probePhase: "idle", options: null };
@@ -494,9 +494,11 @@ describe("useHomeNextModelSelection", () => {
     expect(view.result.current.retryRejected).toBe(false);
   });
 
-  it("drops a batch that settles after the target changed", async () => {
-    // Without the run-id guard, a late `allSettled` overwrites the reset and
-    // resurrects a refusal on a target nothing was ever asked of.
+  it("still reports a refusal owed from before the target flipped", async () => {
+    // The probe is keyed on `harnessKind` and is machine-global, so a
+    // local->cloud->local flip does not make an owed tally stale. Discarding
+    // it left a refused refresh with NO receipt at all, and the settled
+    // sentence rendering while the probes were still running.
     mocks.agents = [{ kind: "claude", readiness: "ready" }];
     mocks.readyAgents = [{ kind: "claude" }];
     mocks.data = { ...response(), state: "observed", probePhase: "idle", options: null };
@@ -513,7 +515,7 @@ describe("useHomeNextModelSelection", () => {
     view.rerender({ target: LOCAL_TARGET });
     await settleProbes(["refuse"]);
     expect(view.result.current.retryPending).toBe(false);
-    expect(view.result.current.retryRejected).toBe(false);
+    expect(view.result.current.retryRejected).toBe(true);
   });
 
   it("states an all-unsupported catalog terminally instead of offering a probe", () => {
@@ -526,6 +528,9 @@ describe("useHomeNextModelSelection", () => {
       kind: "blocked",
       reason: "agents_unsupported",
     });
+    // Navigation has to land on an agent that IS unsupported, or the notice's
+    // whole justification ("see which ones and why") is false.
+    expect(result.current.unsupportedHarnessKind).toBe("claude");
   });
 
   it("keeps a cloud sandbox that reported no models from claiming it has no agents", () => {

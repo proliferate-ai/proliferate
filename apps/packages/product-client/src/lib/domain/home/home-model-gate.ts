@@ -34,9 +34,9 @@ export type HomeModelGateBlockedReason =
   | "observed_empty"
   /**
    * Every agent the runtime knows about is unsupported on this machine. The
-   * only terminal state in the union: no probe can produce a model and no
-   * button can change that, so it is the one reason whose notice offers no
-   * action rather than one that quietly does nothing.
+   * only state in the union with no cure: no probe can produce a model and no
+   * button can change that, so its notice offers NAVIGATION to the agents
+   * pane rather than a repair that would quietly do nothing.
    */
   | "agents_unsupported"
   /** The probe ran and failed without ever producing an observation. */
