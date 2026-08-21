@@ -2,11 +2,13 @@ import { useMemo } from "react";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import {
   resolveHomeReadinessCardModel,
+  type HomeInstallAgentOutcome,
   type HomeInstallProgressComponent,
   type HomeReadinessCardModel,
 } from "#product/lib/domain/home/home-screen";
 
 const EMPTY_COMPONENTS: readonly HomeInstallProgressComponent[] = [];
+const EMPTY_OUTCOMES: readonly HomeInstallAgentOutcome[] = [];
 
 /**
  * Sources the Home readiness card from the live reconcile job snapshot
@@ -31,16 +33,21 @@ export function useHomeInstallationReadiness(
   const { reconcileSnapshot, reconcileIsError } = useAgentCatalog();
   const progressComponents = reconcileSnapshot?.progress?.components ?? EMPTY_COMPONENTS;
   const jobStatus = reconcileSnapshot?.status ?? null;
+  // Pushed per agent as the job completes it, so these arrive mid-job and
+  // discriminate a component-layer skip (already installed) from an
+  // outcome-layer one (nothing installed). See groupInstallProgressByAgent.
+  const agentOutcomes = reconcileSnapshot?.results ?? EMPTY_OUTCOMES;
 
   return useMemo(
     () => resolveHomeReadinessCardModel({
       gateKind,
       jobStatus,
+      agentOutcomes,
       // A retained snapshot the poll can no longer refresh is not evidence of
       // anything current, whatever status it froze at (D-R10).
       snapshotIsStale: reconcileIsError,
       progressComponents,
     }),
-    [gateKind, jobStatus, progressComponents, reconcileIsError],
+    [agentOutcomes, gateKind, jobStatus, progressComponents, reconcileIsError],
   );
 }

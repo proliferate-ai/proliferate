@@ -152,12 +152,17 @@ describe("resolveHomeReadinessCardModel", () => {
   function resolveCard(
     args: Omit<
       Parameters<typeof resolveHomeReadinessCardModel>[0],
-      "jobStatus" | "snapshotIsStale"
-    > & { jobStatus?: string | null; snapshotIsStale?: boolean },
+      "jobStatus" | "snapshotIsStale" | "agentOutcomes"
+    > & {
+      jobStatus?: string | null;
+      snapshotIsStale?: boolean;
+      agentOutcomes?: readonly { kind: string; outcome: string }[];
+    },
   ) {
     return resolveHomeReadinessCardModel({
       jobStatus: "running",
       snapshotIsStale: false,
+      agentOutcomes: [],
       ...args,
     });
   }
@@ -218,57 +223,106 @@ describe("resolveHomeReadinessCardModel", () => {
     })).toBeNull();
   });
 
-  // D-R11. The runtime skips a component when nothing was installed for it:
-  // cursor cannot reach Ready in cloud, the agent is not managed-installed on
-  // an installed-only pass, the platform is unsupported, or the binary was
-  // already on PATH. Only the last is anything like ready, and the phase
-  // cannot tell them apart — the same reason the terminal toast in this file's
-  // sibling refuses to count a skipped result as a meaningful outcome. So a
-  // skipped agent is not ready; it is also not installing, since nothing is
-  // happening to it. The card simply says nothing about it.
-  it("never calls a skipped agent ready", () => {
-    expect(resolveCard({
-      gateKind: "launchable",
-      progressComponents: [cursorComponent("skipped"), claudeComponent("downloading")],
-    })).toBeNull();
-
-    expect(resolveCard({
-      gateKind: "launchable",
-      progressComponents: [
-        { agent: "cursor", phase: "completed" },
-        { agent: "cursor", phase: "skipped" },
-        claudeComponent("downloading"),
-      ],
-    })).toBeNull();
-  });
-
-  it("does not name a settled skipped agent as still installing either", () => {
-    expect(resolveCard({
-      gateKind: "launchable",
-      progressComponents: [
-        codexComponent("completed"),
-        cursorComponent("skipped"),
-        claudeComponent("downloading"),
-      ],
-    })).toEqual({
-      agentKind: "codex",
-      title: "Codex is ready.",
-      description: "You can start now. Claude Code is still installing.",
+  // D-R11 as corrected by D-R16. `skipped` reaches the card from two runtime
+  // layers that mean opposite things: install_pinned_role reports a skipped
+  // COMPONENT for any artifact already on disk (the steady state of an
+  // up-to-date agent, and the card's most common real case), while
+  // AgentReconcileOutcome::Skipped means nothing was installed at all. The
+  // phase cannot separate them; the job's per-agent result can, and does so
+  // from the same snapshot the sibling toast already reads.
+  describe("skipped components", () => {
+    it("is ready when the job's result says the agent was already installed", () => {
+      // The main path: reconcile of an up-to-date machine while one new agent
+      // downloads. Round 3's rule blanked the card here entirely.
+      expect(resolveCard({
+        gateKind: "launchable",
+        progressComponents: [
+          claudeComponent("skipped"),
+          codexComponent("skipped"),
+          grokComponent("downloading"),
+        ],
+        agentOutcomes: [
+          { kind: "claude", outcome: "already_installed" },
+          { kind: "codex", outcome: "already_installed" },
+        ],
+      })).toEqual({
+        agentKind: "claude",
+        title: "Claude Code is ready.",
+        description: "You can start now. Grok is still installing.",
+      });
     });
-  });
 
-  it("still counts an agent with a moving component as installing despite a skipped sibling", () => {
-    expect(resolveCard({
-      gateKind: "launchable",
-      progressComponents: [
-        codexComponent("completed"),
-        { agent: "cursor", phase: "skipped" },
-        { agent: "cursor", phase: "downloading" },
-      ],
-    })).toEqual({
-      agentKind: "codex",
-      title: "Codex is ready.",
-      description: "You can start now. Cursor is still installing.",
+    it("is ready for a mix of completed and skipped components under an installed result", () => {
+      expect(resolveCard({
+        gateKind: "launchable",
+        progressComponents: [
+          { agent: "cursor", phase: "completed" },
+          { agent: "cursor", phase: "skipped" },
+          claudeComponent("downloading"),
+        ],
+        agentOutcomes: [{ kind: "cursor", outcome: "installed" }],
+      })).toMatchObject({ agentKind: "cursor", title: "Cursor is ready." });
+    });
+
+    it("stays silent when the job's result says the agent itself was skipped", () => {
+      // The outcome layer: cursor in cloud, unsupported platform, not
+      // managed-installed. Nothing is on disk, so "Cursor is ready." is a lie.
+      expect(resolveCard({
+        gateKind: "launchable",
+        progressComponents: [cursorComponent("skipped"), claudeComponent("downloading")],
+        agentOutcomes: [{ kind: "cursor", outcome: "skipped" }],
+      })).toBeNull();
+    });
+
+    it("stays silent before the agent's result has been pushed", () => {
+      // Real mid-job window: finish_agent_components stamps the phases before
+      // job.results.push(result) lands. Claiming ready off the phase alone is
+      // exactly the guess this fix exists to avoid.
+      expect(resolveCard({
+        gateKind: "launchable",
+        progressComponents: [cursorComponent("skipped"), claudeComponent("downloading")],
+        agentOutcomes: [],
+      })).toBeNull();
+    });
+
+    it("does not name a settled skipped agent as still installing", () => {
+      expect(resolveCard({
+        gateKind: "launchable",
+        progressComponents: [
+          codexComponent("completed"),
+          cursorComponent("skipped"),
+          claudeComponent("downloading"),
+        ],
+        agentOutcomes: [{ kind: "cursor", outcome: "skipped" }],
+      })).toEqual({
+        agentKind: "codex",
+        title: "Codex is ready.",
+        description: "You can start now. Claude Code is still installing.",
+      });
+    });
+
+    it("still counts an agent with a moving component as installing despite a skipped sibling", () => {
+      expect(resolveCard({
+        gateKind: "launchable",
+        progressComponents: [
+          codexComponent("completed"),
+          { agent: "cursor", phase: "skipped" },
+          { agent: "cursor", phase: "downloading" },
+        ],
+        agentOutcomes: [{ kind: "cursor", outcome: "already_installed" }],
+      })).toEqual({
+        agentKind: "codex",
+        title: "Codex is ready.",
+        description: "You can start now. Cursor is still installing.",
+      });
+    });
+
+    it("keeps a failed component excluded whatever the result says", () => {
+      expect(resolveCard({
+        gateKind: "launchable",
+        progressComponents: [cursorComponent("failed"), claudeComponent("downloading")],
+        agentOutcomes: [{ kind: "cursor", outcome: "already_installed" }],
+      })).toBeNull();
     });
   });
 

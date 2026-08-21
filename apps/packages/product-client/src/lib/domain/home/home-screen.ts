@@ -54,6 +54,16 @@ export interface HomeInstallProgressComponent {
 }
 
 /**
+ * One entry of the job's per-agent results (D-R16). The card needs these
+ * alongside the component phases because a `skipped` component is ambiguous
+ * on its own; see groupInstallProgressByAgent.
+ */
+export interface HomeInstallAgentOutcome {
+  kind: string;
+  outcome: string;
+}
+
+/**
  * The phases the runtime stamps once a component can no longer change
  * (`finish_agent_components`). Everything else — queued, downloading,
  * verifying, extracting, installing, finalizing — is still moving.
@@ -61,28 +71,56 @@ export interface HomeInstallProgressComponent {
 const TERMINAL_COMPONENT_PHASES = new Set(["completed", "skipped", "failed"]);
 
 /**
+ * The per-agent outcomes that mean this job left the agent usable. Same pair
+ * `HarnessUpdateToastPresenter.hasAnyMeaningfulOutcome` reads, deliberately:
+ * the card and the toast must not disagree about whether an agent is there.
+ */
+const INSTALLED_AGENT_OUTCOMES = new Set(["installed", "already_installed"]);
+
+/**
  * Groups a job's components by agent into who is ready, who is still moving,
  * and who is neither.
  *
+ * `skipped` is the hard case (D-R11, corrected by D-R16), because the runtime
+ * emits it from two layers that mean opposite things:
+ *
+ *  - The COMPONENT layer, `install_pinned_role` (installer/service.rs:377-387),
+ *    reports `Skipped` whenever the artifact is already a valid executable and
+ *    the plan did not force a reinstall. That is the steady state of an
+ *    already-installed agent, so a routine reconcile of an up-to-date machine
+ *    is all-`skipped` — and `finish_agent_components`
+ *    (reconcile/execution.rs:541-548) only stamps components that are not
+ *    already terminal, so that phase survives to job completion. This agent is
+ *    READY, and it is the card's most common real case.
+ *  - The OUTCOME layer, `AgentReconcileOutcome::Skipped`, means nothing was
+ *    installed and nothing is usable: cursor cannot reach Ready in cloud, the
+ *    agent is not managed-installed on an installed-only pass, the platform is
+ *    unsupported. Calling this one ready would be a lie.
+ *
+ * The phase cannot tell the two apart, which is why treating every `skipped`
+ * as ready (round 2) and treating every `skipped` as unclaimable (round 3)
+ * were both wrong: the first lies about an uninstallable agent, the second
+ * blanks the card for every already-installed one. The discriminator is the
+ * job's own per-agent results, pushed as each agent completes
+ * (reconcile/execution.rs:436) and already on the wire as `already_installed`
+ * (agents_contract.rs:179) — the same field the toast beside this card reads
+ * in `hasAnyMeaningfulOutcome`, which is why that surface says "Agent tools
+ * updated" for exactly the job this card used to go dark on. So a settled
+ * agent carrying a `skipped` is ready when its result says `installed` or
+ * `already_installed`, and silent otherwise (including before its result has
+ * been pushed, which is a real mid-job window).
+ *
  * An agent with any `failed` component is excluded from both sets — a failure
  * is the terminal toast's decision to report, not this card's; showing it as
- * "still installing" would be false, and as "ready" would be worse.
- *
- * `skipped` is excluded from ready for the same reason (D-R11). The runtime
- * skips a component because nothing was installed for it: cursor cannot reach
- * Ready in cloud, the agent is not managed-installed on an installed-only
- * pass, the platform is unsupported, or the binary was already on PATH. Only
- * the last of those is anything like "ready", and the phase alone cannot tell
- * them apart — the same reason the toast beside it refuses to count a skipped
- * result as a meaningful outcome. So a settled agent is ready only when every
- * one of its components actually completed; a settled agent carrying a
- * `skipped` is neither ready nor installing, and the card says nothing about
- * it. An agent that still has a moving component is installing regardless,
- * since a skip on one component does not stop the others.
+ * "still installing" would be false, and as "ready" would be worse. An agent
+ * that still has a moving component is installing regardless, since a skip on
+ * one component does not stop the others.
  */
 function groupInstallProgressByAgent(
   components: readonly HomeInstallProgressComponent[],
+  agentOutcomes: readonly HomeInstallAgentOutcome[],
 ): { readyAgents: HomeReadinessAgent[]; installingAgents: HomeReadinessAgent[] } {
+  const outcomeByKind = new Map(agentOutcomes.map((result) => [result.kind, result.outcome]));
   const phasesByAgent = new Map<string, string[]>();
   for (const component of components) {
     const phases = phasesByAgent.get(component.agent);
@@ -103,6 +141,11 @@ function groupInstallProgressByAgent(
     if (phases.some((phase) => !TERMINAL_COMPONENT_PHASES.has(phase))) {
       installingAgents.push(agent);
     } else if (phases.every((phase) => phase === "completed")) {
+      readyAgents.push(agent);
+    } else if (INSTALLED_AGENT_OUTCOMES.has(outcomeByKind.get(agentKind) ?? "")) {
+      // Settled with a skipped component, and the job's own result says
+      // something is on disk for this agent: the component-layer skip, i.e.
+      // already installed.
       readyAgents.push(agent);
     }
   }
@@ -176,6 +219,7 @@ export function resolveHomeReadinessCardModel(args: {
   jobStatus: string | null | undefined;
   snapshotIsStale: boolean;
   progressComponents: readonly HomeInstallProgressComponent[];
+  agentOutcomes: readonly HomeInstallAgentOutcome[];
 }): HomeReadinessCardModel | null {
   if (args.gateKind !== "selection_required" && args.gateKind !== "launchable") {
     return null;
@@ -183,7 +227,10 @@ export function resolveHomeReadinessCardModel(args: {
   if (!isLiveInstallJob(args.jobStatus, args.snapshotIsStale)) {
     return null;
   }
-  const { readyAgents, installingAgents } = groupInstallProgressByAgent(args.progressComponents);
+  const { readyAgents, installingAgents } = groupInstallProgressByAgent(
+    args.progressComponents,
+    args.agentOutcomes,
+  );
   const [firstReady] = readyAgents;
   if (!firstReady || installingAgents.length === 0) {
     return null;

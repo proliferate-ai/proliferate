@@ -114,6 +114,41 @@ describe("useHomeInstallationReadiness (job-snapshot wiring)", () => {
   });
 
   /**
+   * D-R16: the card's most common real case, driven through the real hook.
+   * A reconcile of an up-to-date machine reports every already-installed
+   * component as `skipped` (install_pinned_role), and those phases survive to
+   * job completion. Reading phases alone blanked the card here.
+   */
+  it("names already-installed agents ready from the job's own results", () => {
+    catalogMocks.reconcileSnapshot = {
+      jobId: "job-uptodate",
+      status: "running",
+      currentAgent: "grok",
+      results: [
+        { kind: "claude", outcome: "already_installed", installedArtifacts: [] },
+        { kind: "codex", outcome: "already_installed", installedArtifacts: [] },
+      ],
+      progress: {
+        downloadedBytes: 0,
+        downloadSizeBytes: null,
+        completedComponents: 2,
+        totalComponents: 3,
+        components: [
+          { agent: "claude", role: "native_cli", phase: "skipped", downloadedBytes: 0, downloadSizeBytes: null },
+          { agent: "codex", role: "native_cli", phase: "skipped", downloadedBytes: 0, downloadSizeBytes: null },
+          { agent: "grok", role: "native_cli", phase: "downloading", downloadedBytes: 1_000_000, downloadSizeBytes: 9_000_000 },
+        ],
+      },
+    };
+    const { result } = renderHook(() => useHomeInstallationReadiness("launchable"));
+    expect(result.current).toEqual({
+      agentKind: "claude",
+      title: "Claude Code is ready.",
+      description: "You can start now. Grok is still installing.",
+    });
+  });
+
+  /**
    * D-R10: the card used to read phases alone, so a snapshot that stopped
    * being updated left a permanent, false progress claim on the home screen.
    * Both cases below are frozen snapshots whose components still read as a
