@@ -127,18 +127,25 @@ ${["hover", "enter", "exit", "disclosure", "panel", "pop", "emphasized"]
 ].join("\n\n");
 
 /**
- * Read a text file with line endings normalised to LF.
+ * Read a CHECKED-OUT source file with line endings normalised to LF.
  *
- * Several assertions below compare against literals joined with `\n`. A
- * working tree carrying CRLF (a Windows editor, or a checkout predating
+ * Several assertions below compare against literals joined with `\n`. A working
+ * tree carrying CRLF (a Windows editor, or a checkout predating
  * `.gitattributes`) would fail those with a message that names the CSS rather
  * than the line endings, so normalise at the read instead.
+ *
+ * Only for files that come out of git. Generated output is read raw, so its
+ * byte-identity check stays exact.
  */
 async function readText(path) {
   return (await readFile(path, "utf8")).replace(/\r\n/g, "\n");
 }
 
-const generated = await readText(resolve(root, "dist/theme.css"));
+// Deliberately NOT readText: dist/theme.css is untracked, gitignored, and
+// written fresh by generate-theme.mjs from an in-memory string moments earlier,
+// so a git checkout can never give it CRLF. Normalising here would only loosen
+// the byte-identity check this script exists to make.
+const generated = await readFile(resolve(root, "dist/theme.css"), "utf8");
 assert(
   generated === `${expectedCss}\n`,
   "dist/theme.css drifted from an independent projection of the token authority",
