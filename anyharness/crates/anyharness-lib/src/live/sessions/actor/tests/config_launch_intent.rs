@@ -202,7 +202,7 @@ fn seam_intent(config_id: &str, value: &str) -> ResolvedLaunchIntent {
 /// decided by the pre-wire membership check, so the fake connection is never
 /// asked to answer a request.
 #[tokio::test(flavor = "current_thread")]
-async fn launch_intent_seam_drops_only_unoffered_quality_values() {
+async fn launch_intent_seam_drops_only_quality_controls() {
     tokio::task::LocalSet::new()
         .run_until(async {
             let fake = super::config_direct_setter::fake_connection(
@@ -210,10 +210,15 @@ async fn launch_intent_seam_drops_only_unoffered_quality_values() {
             )
             .await;
 
-            // A control id the live statement never surfaced at all is a
-            // vocabulary disagreement and stays fatal.
+            // Harnesses narrow the control SET per model, not just a control's
+            // value set: claude surfaces `fast` only under opus and drops
+            // `effort` under haiku, while the create-time observation is
+            // harness-level and carries the union. A QUALITY control the
+            // applied model never surfaced therefore launches without it
+            // rather than failing the start, exactly like an unoffered
+            // quality VALUE below.
             let mut startup_state = seam_startup_state();
-            let error = apply_resolved_launch_intent(
+            apply_resolved_launch_intent(
                 &fake.conn,
                 "native-1",
                 "session-1",
@@ -222,9 +227,25 @@ async fn launch_intent_seam_drops_only_unoffered_quality_values() {
                 &mut startup_state,
             )
             .await
-            .expect_err("a never-surfaced control id must refuse the start");
+            .expect("a never-surfaced quality control must be dropped, not fatal");
+
+            // A POSTURE control the live statement never surfaced still
+            // refuses: launching at the harness default after the user
+            // explicitly selected a collaboration mode is a silent behavior
+            // change, which is worse than refusing the start.
+            let mut startup_state = seam_startup_state();
+            let error = apply_resolved_launch_intent(
+                &fake.conn,
+                "native-1",
+                "session-1",
+                "codex",
+                &seam_intent("collaboration_mode", "chat"),
+                &mut startup_state,
+            )
+            .await
+            .expect_err("a never-surfaced posture control must refuse the start");
             assert!(
-                error.to_string().contains("web_search"),
+                error.to_string().contains("collaboration_mode"),
                 "unexpected error: {error}"
             );
 
@@ -260,6 +281,74 @@ async fn launch_intent_seam_drops_only_unoffered_quality_values() {
             )
             .await
             .expect("an unoffered quality value must be dropped, not fatal");
+        })
+        .await;
+}
+
+/// Regression for the live claude symptom: the harness narrows its control SET
+/// per model. Under `opus` the live statement carries `mode`, `effort` and
+/// `fast`; under `sonnet` it carries only `mode` and `effort`, and under
+/// `haiku` only `mode`. The launch observation is harness-level, so it carries
+/// the union — including the harness default `fast: off` that a user who never
+/// touched the control still launches with. Refusing the absent id failed the
+/// start of every non-opus claude session with
+/// `requested controls are absent from the live claude session: ["fast"]`.
+#[tokio::test(flavor = "current_thread")]
+async fn claude_model_narrowed_control_set_launches_without_the_absent_control() {
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            let fake = super::config_direct_setter::fake_connection(
+                serde_json::json!({ "ok": true }),
+            )
+            .await;
+
+            // The live statement a `sonnet` claude session publishes: no `fast`.
+            let mut startup_state = SessionStartupState {
+                current_mode_id: None,
+                legacy_mode_state: None,
+                config_options: vec![
+                    acp::schema::SessionConfigOption::select(
+                        "mode",
+                        "Mode",
+                        "default",
+                        vec![acp::schema::SessionConfigSelectOption::new(
+                            "default", "Default",
+                        )],
+                    ),
+                    acp::schema::SessionConfigOption::select(
+                        "effort",
+                        "Effort",
+                        "high",
+                        vec![acp::schema::SessionConfigSelectOption::new("high", "High")],
+                    ),
+                ],
+                current_model_id: Some("sonnet".to_string()),
+                available_models: session_model_options(&["sonnet"]),
+                prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+            };
+
+            let intent = ResolvedLaunchIntent {
+                model_id: None,
+                control_values: [
+                    ("mode".to_string(), "default".to_string()),
+                    ("effort".to_string(), "high".to_string()),
+                    ("fast".to_string(), "off".to_string()),
+                ]
+                .into_iter()
+                .collect(),
+                created_at: "2026-08-21T00:00:00Z".to_string(),
+            };
+
+            apply_resolved_launch_intent(
+                &fake.conn,
+                "native-1",
+                "session-1",
+                "claude",
+                &intent,
+                &mut startup_state,
+            )
+            .await
+            .expect("a control the applied model does not surface must not fail the start");
         })
         .await;
 }

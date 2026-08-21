@@ -1,5 +1,7 @@
 use agent_client_protocol as acp;
-use anyharness_contract::v1::ConfigApplyState;
+use anyharness_contract::v1::{
+    ConfigApplyState, RawSessionConfigOption, SessionConfigOptionType,
+};
 
 use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::domains::sessions::live_config::controls::option_matches_key;
@@ -23,11 +25,18 @@ use crate::live::sessions::actor::state::{SessionActor, SessionStartupState};
 /// live harness statement both advertises and positively confirms. Model is
 /// first; controls follow the harness-advertised order.
 ///
-/// The one carve-out is per-model value narrowing on a NON-posture control: a
-/// quality knob the live statement still surfaces but whose requested value it
-/// no longer offers under the applied model launches at the session default
-/// instead of failing the start. Posture controls and control ids the live
-/// statement never surfaced at all stay fail-closed.
+/// The one carve-out is per-model narrowing on a NON-posture control. A
+/// harness narrows both a control's VALUE set and the control SET itself per
+/// model: codex drops `max` from reasoning_effort under some models, and
+/// claude surfaces `fast` only under opus while haiku loses `effort` as well.
+/// The create-time observation is harness-level, so it carries the union. A
+/// quality knob whose requested value — or whose whole row — the applied model
+/// does not offer therefore launches without it instead of failing the start.
+///
+/// Posture controls stay fail-closed in both cases: launching a collaboration
+/// mode, mode / approval policy or sandbox mode at the harness default after
+/// the user explicitly selected against it is a silent behavior change, which
+/// is strictly worse than refusing the start.
 pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
@@ -190,15 +199,39 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
             "requested control 'mode' value '{value}' was not confirmed by the live {agent_kind} session"
         );
     }
-    // A control id the live statement never surfaced at all is a vocabulary
-    // disagreement between the create-time observation and the live session,
-    // not per-model value narrowing. Dropping it would make every future user
-    // selection for that control a silent perpetual no-op, so it stays fatal.
+    // Harnesses narrow the control SET per model, not just a control's value
+    // set: claude surfaces `fast` only under opus, and drops `effort` as well
+    // under haiku. The create-time observation is harness-level, so it carries
+    // the union — including the harness default `fast: off` that a user who
+    // never touched the control still launches with. Refusing every id the
+    // applied model does not surface therefore failed the start of every
+    // non-opus claude session.
+    //
+    // An absent QUALITY control is the same per-model narrowing the offered-
+    // but-unavailable value branch already drops to the session default. An
+    // absent POSTURE control stays fatal: launching at the harness default
+    // after the user explicitly selected a mode or collaboration mode is a
+    // silent behavior change, which is worse than refusing the start.
+    let absent_posture_ids = pending
+        .keys()
+        .filter(|config_id| absent_control_is_posture(config_id))
+        .cloned()
+        .collect::<Vec<_>>();
     anyhow::ensure!(
-        pending.is_empty(),
-        "requested controls are absent from the live {agent_kind} session: {:?}",
-        pending.keys().collect::<Vec<_>>()
+        absent_posture_ids.is_empty(),
+        "requested controls are absent from the live {agent_kind} session: {absent_posture_ids:?}"
     );
+    for (config_id, _) in std::mem::take(&mut pending) {
+        log_initial_config_apply(session_id, agent_kind, &config_id, "membership_dropped");
+        tracing::warn!(
+            session_id,
+            harness_kind = agent_kind,
+            control_id = %config_id,
+            event = "session.initial_config.dropped",
+            "requested control is absent from the live session under the applied model; launching without it"
+        );
+        dropped_control_ids.push(config_id);
+    }
     let mut confirmed_intent = intent_without_dropped_controls(intent, &dropped_control_ids);
     confirmed_intent.model_id = resolved_model_id;
     if let Err(error) = ensure_resolved_launch_intent_confirmed(startup_state, &confirmed_intent) {
@@ -270,6 +303,30 @@ fn is_posture_control(startup_state: &SessionStartupState, config_id: &str) -> b
         option_matches_key(&raw, NormalizedControlKind::Mode)
             || option_matches_key(&raw, NormalizedControlKind::CollaborationMode)
     })
+}
+
+/// Whether a control id the live statement never surfaced is a posture control.
+///
+/// `is_posture_control` classifies a live option, so it cannot answer for an id
+/// that is absent: the lookup returns `None` and every absent id would read as
+/// non-posture. Classifying the bare id through the same `option_matches_key`
+/// vocabulary keeps one definition of posture instead of a second id list that
+/// could drift from it.
+fn absent_control_is_posture(config_id: &str) -> bool {
+    if config_id == LEGACY_MODE_COMPAT_CONFIG_ID {
+        return true;
+    }
+    let probe = RawSessionConfigOption {
+        id: config_id.to_string(),
+        name: String::new(),
+        description: None,
+        category: None,
+        option_type: SessionConfigOptionType::Select,
+        current_value: String::new(),
+        options: Vec::new(),
+    };
+    option_matches_key(&probe, NormalizedControlKind::Mode)
+        || option_matches_key(&probe, NormalizedControlKind::CollaborationMode)
 }
 
 pub(in crate::live::sessions::actor) fn intent_without_dropped_controls(
@@ -491,7 +548,7 @@ impl SessionActor {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_requested_model_id;
+    use super::{absent_control_is_posture, resolve_requested_model_id};
 
     fn live(ids: &[&str]) -> Vec<String> {
         ids.iter().map(|value| value.to_string()).collect()
@@ -549,5 +606,38 @@ mod tests {
     fn bracket_only_request_fails_closed() {
         let ids = live(&["default", "sonnet"]);
         assert_eq!(resolve_requested_model_id(&ids, "[1m]"), None);
+    }
+
+    // Absent-control disposition. claude narrows the control SET per model:
+    // `fast` exists only under opus, and haiku drops `effort` too. A quality
+    // control the applied model does not surface must launch without it
+    // instead of failing the start; a posture control must still refuse.
+
+    #[test]
+    fn absent_fast_control_is_not_posture() {
+        assert!(!absent_control_is_posture("fast"));
+        assert!(!absent_control_is_posture("fast_mode"));
+    }
+
+    #[test]
+    fn absent_quality_controls_are_not_posture() {
+        assert!(!absent_control_is_posture("effort"));
+        assert!(!absent_control_is_posture("reasoning_effort"));
+        assert!(!absent_control_is_posture("verbosity"));
+    }
+
+    #[test]
+    fn absent_mode_family_stays_posture() {
+        assert!(absent_control_is_posture("mode"));
+        assert!(absent_control_is_posture("collaboration_mode"));
+        assert!(absent_control_is_posture("sandbox_mode"));
+        assert!(absent_control_is_posture("approval_policy"));
+    }
+
+    #[test]
+    fn absent_model_control_never_reads_as_posture_mode() {
+        // "model" contains "mode": the model row must not be judged against
+        // the posture vocabulary.
+        assert!(!absent_control_is_posture("model"));
     }
 }
