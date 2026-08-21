@@ -10,6 +10,7 @@ use crate::domains::agents::model::*;
 use crate::integrations::agent_cli::executable::{
     find_in_path, find_real_binary_in_path, is_valid_executable,
 };
+use crate::integrations::agent_cli::launcher::managed_launcher_file_name;
 
 pub(super) fn resolve_native_artifact(
     spec: &NativeArtifactSpec,
@@ -171,7 +172,7 @@ pub(super) fn managed_launcher_candidates(
     executable_relpath: Option<&Path>,
 ) -> Vec<PathBuf> {
     let mut paths = vec![];
-    paths.push(managed_dir.join(format!("{}-launcher", kind.as_str())));
+    paths.push(managed_dir.join(managed_launcher_file_name(kind.as_str())));
 
     if let Some(executable_relpath) = executable_relpath {
         paths.push(managed_dir.join(executable_relpath));
@@ -383,9 +384,15 @@ fn launcher_uses_binary_hint(launcher_path: &Path, candidate_binaries: &[String]
     let Ok(contents) = std::fs::read_to_string(launcher_path) else {
         return false;
     };
+    // Unix launchers run the target via `exec "<binary>" ...`; windows batch
+    // launchers have no `exec` and instead spawn it as `"<binary>" ... %*`
+    // (see `launcher.rs::build_batch_launcher_script`). Check both shapes so
+    // this diagnostic still fires on a `.cmd` launcher.
     candidate_binaries.iter().any(|binary| {
         contents.contains(&format!("exec \"{binary}\""))
             || contents.contains(&format!("exec {binary}"))
+            || contents.contains(&format!("\"{binary}\" "))
+            || contents.contains(&format!("\"{binary}\"\r\n"))
     })
 }
 
