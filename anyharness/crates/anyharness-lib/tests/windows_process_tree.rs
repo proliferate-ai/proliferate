@@ -83,6 +83,30 @@ fn wait_for_children(pid: u32) -> Vec<(u32, String)> {
     }
 }
 
+/// The whole descendant tree of `pid` per the CIM process table. Git for
+/// Windows layers a shim, so "the git process" is not one process.
+fn descendants_of(pid: u32) -> Vec<(u32, String)> {
+    let mut found: Vec<(u32, String)> = Vec::new();
+    let mut frontier = vec![pid];
+    for _ in 0..8 {
+        let mut next = Vec::new();
+        for parent in frontier {
+            for (child, name) in children_of(parent) {
+                if found.iter().any(|(seen, _)| *seen == child) {
+                    continue;
+                }
+                found.push((child, name));
+                next.push(child);
+            }
+        }
+        if next.is_empty() {
+            break;
+        }
+        frontier = next;
+    }
+    found
+}
+
 fn wait_for_named_child(pid: u32, name: &str) -> Option<u32> {
     let deadline = Instant::now() + CHILD_START_BUDGET;
     loop {
@@ -168,10 +192,35 @@ async fn the_census_counts_a_real_git_exe_grandchild() {
     let git_pid = wait_for_named_child(root_pid, "git.exe")
         .unwrap_or_else(|| panic!("cmd.exe never started git.exe under pid {root_pid}"));
 
+    // The negative control for the whole point of this test, read from the
+    // independent oracle: every git process in the tree is named `git.exe`,
+    // never a bare `git`. The unix path's exact `"git"` comparison would
+    // therefore have counted ZERO here while looking entirely correct.
+    let tree = descendants_of(root_pid);
+    let git_names: Vec<String> = tree
+        .iter()
+        .map(|(_, name)| name.clone())
+        .filter(|name| name.to_ascii_lowercase().starts_with("git"))
+        .collect();
+    assert!(
+        !git_names.is_empty(),
+        "the CIM oracle saw no git process under pid {root_pid}; tree was {tree:?}"
+    );
+    assert!(
+        git_names.iter().all(|name| name != "git"),
+        "expected Windows-shaped names that an exact \"git\" comparison would miss, saw {git_names:?}"
+    );
+
     let (total, git) = kill_group_and_await(root_pid as i32).await;
-    assert_eq!(
-        git, 1,
-        "the census must recognise the real git.exe at pid {git_pid} as git; total was {total}"
+    // NOT `== 1`. Git for Windows resolves `git` to a shim in `cmd\git.exe`
+    // that launches the real `git.exe` from `mingw64\bin`, so a single `git`
+    // invocation is two `git.exe` processes and this tree is three deep. The
+    // load-bearing claim is that the count is NONZERO, because that is exactly
+    // what R2's `repair_kill_debris` branches on (`killed_git > 0`); an exact
+    // `"git"` comparison would have made it zero forever.
+    assert!(
+        git >= 1,
+        "the census counted {git} git processes out of {total}; the real git.exe at pid {git_pid} must be recognised (oracle saw {git_names:?})"
     );
     assert!(
         total >= 2,
