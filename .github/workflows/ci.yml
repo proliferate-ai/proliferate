@@ -733,3 +733,172 @@ jobs:
           name: workflow-definition-lifecycle-traces
           path: tests/intent/test-results/
           retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # THE REQUIRED STATUS CHECKS FOR `main`.
+  #
+  # Checked in here because the list is the enforcement backbone and must not
+  # live only in a merged PR description. Names below are check-run DISPLAY
+  # names, exactly as `gh pr checks` prints them.
+  #
+  #   ci-ok                            (CI            -- this file, below)
+  #   server-ci-ok                     (Server CI     -- server-ci.yml)
+  #   Analyze (javascript-typescript)  (CodeQL)
+  #   Analyze (python)                 (CodeQL)
+  #   Analyze (rust)                   (CodeQL)
+  #   Validate PR title and labels     (PR Metadata)
+  #   Detect smoke-relevant changes    (Self-Host Smoke)
+  #   Production compose smoke         (Self-Host Smoke)
+  #
+  # Why rollups instead of the individual lanes: branch protection cannot tell
+  # "no red X" from "actually verified". A required check that reports
+  # `skipped`, or that stops resolving because its job was renamed or deleted,
+  # is treated as SATISFIED. So a required-checks list made of per-lane names
+  # degrades silently to green exactly when the lanes stop running. `ci-ok` and
+  # `server-ci-ok` invert that: each `needs:` every lane in its workflow, runs
+  # `if: always()`, fails on any result other than `success` (failure, skipped,
+  # and cancelled alike), and carries a drift guard that fails if a job exists
+  # in the file but not in its `needs:` list.
+  #
+  # Two consequences worth stating, because they are the payoff:
+  #   - Sharding or renaming a lane never needs a branch-protection edit. A
+  #     `needs:` entry on a matrix job covers every shard, and the drift guard
+  #     catches a lane that leaves the rollup.
+  #   - No individual lane name from ci.yml or server-ci.yml belongs on the
+  #     list. Adding one back is not extra safety, it is a name that can rot.
+  #
+  # Deliberately NOT required, with reasons:
+  #   intent-tests (provisional) / intent-billing (provisional)
+  #       continue-on-error by design; intent-tests.yml says do not require yet.
+  #   docker / self-hosted-release-assets (Server CI)
+  #       release-only, `skipped` on every PR; server-ci-ok exempts them by
+  #       detecting their `server-v` tag gate, not by name.
+  #   Vercel / Vercel Preview Comments
+  #       third-party.
+  #
+  # Any change to the set of required checks belongs in this comment and in
+  # specs/codebase/systems/engineering/delivery/README.md, in the same commit.
+  # ---------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------
+  # Absence gate.
+  #
+  # A per-lane required check answers "did this lane go red?". It cannot answer
+  # "did this lane run at all?": branch protection treats a check that never
+  # reports a conclusion, or reports `skipped`, as satisfied. So a lane deleted
+  # from this file, an `if:` that quietly evaluated false, a cancelled run, or a
+  # required-check name that no longer matches any job all read as green. "No
+  # red X" and "actually verified" are indistinguishable.
+  #
+  # This job makes them distinguishable. It `needs:` every other job in this
+  # workflow, runs with `if: always()` so it reports even when dependencies
+  # fail, and succeeds ONLY when every dependency concluded `success`. failure,
+  # skipped, and cancelled are all fatal, and the offending lanes are named in
+  # the failure output. Make `ci-ok` the required check and absence becomes red
+  # instead of invisible.
+  #
+  # `if: always()` is load-bearing: without it this job inherits the implicit
+  # `success()` gate, would be SKIPPED whenever a dependency failed, and would
+  # then report the very `skipped` conclusion branch protection accepts.
+  #
+  # A `needs:` entry on a matrix job (shared-frontend-packages) covers every
+  # shard -- the aggregate result is `success` only if all shards succeeded.
+  #
+  # No language toolchain, no dependency install, no build: a sparse checkout of
+  # this one file plus preinstalled bash/jq/ruby. Seconds of runner time.
+  #
+  # `needs:` cannot cross workflows, so this rolls up ci.yml ONLY. Server CI,
+  # CodeQL, PR Metadata, Self-Host Smoke, and Intent Tests are separate
+  # workflows and still need their own entries in the required-checks list.
+  ci-ok:
+    name: ci-ok
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - repo-shape
+      - terraform-validate
+      - ci-cd-config
+      - candidate-build-handoff
+      - cargo-check
+      - sdk-build
+      - desktop-frontend
+      - mobile-typecheck
+      - web-frontend
+      - login-budget
+      - shared-frontend-checks
+      - shared-frontend-packages
+      - scroll-physics
+      - workflow-definition-lifecycle
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/workflows/ci.yml
+          sparse-checkout-cone-mode: false
+
+      # Guards the guard. A job added to this file but not to `needs:` above
+      # would be silently outside the rollup, which is the same absence hole one
+      # level up. Compare the parsed job list against the resolved `needs` keys
+      # and fail on any drift in either direction.
+      - name: Assert the rollup covers every job in ci.yml
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          # Psych 4 (Ruby 3.1+) makes YAML.load_file a safe_load, where a YAML
+          # anchor anywhere in ci.yml raises Psych::AliasesNotEnabled and reds
+          # THIS gate with an error nobody would connect to an anchor.
+          # `unsafe_load_file` permits aliases and exists only on Psych 4, so it
+          # is feature-detected rather than assumed: on Psych 3 plain
+          # `load_file` already permits them. Note this is about the diagnostic,
+          # not safety -- either way the gate fails closed, and ci-cd-config's
+          # "Check workflow YAML parses" step is what owns YAML validity.
+          declared="$(ruby -ryaml -rjson -e '
+            path = ".github/workflows/ci.yml"
+            doc = YAML.respond_to?(:unsafe_load_file) ? YAML.unsafe_load_file(path) : YAML.load_file(path)
+            puts JSON.generate((doc["jobs"].keys - ["ci-ok"]).sort)
+          ')"
+          covered="$(jq -c 'keys' <<<"$NEEDS_JSON")"
+          missing="$(jq -rn --argjson a "$declared" --argjson b "$covered" '($a - $b) | join(", ")')"
+          extra="$(jq -rn --argjson a "$declared" --argjson b "$covered" '($b - $a) | join(", ")')"
+          if [[ -n "$missing" ]]; then
+            echo "::error::ci.yml job(s) missing from the ci-ok needs list: ${missing}. Add them, or the rollup certifies a commit those lanes never verified."
+          fi
+          if [[ -n "$extra" ]]; then
+            echo "::error::ci-ok needs entries that are not jobs in ci.yml: ${extra}."
+          fi
+          [[ -z "$missing" && -z "$extra" ]]
+          echo "ci-ok covers all $(jq -r 'length' <<<"$declared") job(s) in ci.yml."
+
+      # skipped and cancelled are failures here, on purpose: a lane that did not
+      # run did not verify anything, and this check exists to say so out loud.
+      - name: Assert every CI lane concluded success
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          bad=()
+          count=0
+          while IFS=$'\t' read -r lane result; do
+            count=$((count + 1))
+            printf '%-34s %s\n' "$lane" "$result"
+            if [[ "$result" != "success" ]]; then
+              bad+=("${lane} (${result})")
+            fi
+          done < <(jq -r 'to_entries[] | [.key, .value.result] | @tsv' <<<"$NEEDS_JSON")
+
+          # Belt-and-braces rather than an independent safety property: with a
+          # hardcoded needs list, an empty resolution would already have tripped
+          # the drift guard's `missing` branch one step earlier, and a needs
+          # entry naming a nonexistent job makes the whole workflow invalid so
+          # it never runs and the check stays Pending (also fail-closed). Kept
+          # because it costs nothing and covers a shape neither of those does.
+          if [[ "$count" -eq 0 ]]; then
+            echo "::error::ci-ok resolved zero dependencies. The needs list is empty or unresolvable; CI verified nothing."
+            exit 1
+          fi
+          if [[ "${#bad[@]}" -gt 0 ]]; then
+            echo "::error::CI did not verify this commit. Not green: ${bad[*]}"
+            exit 1
+          fi
+          echo "All ${count} CI lanes concluded success."

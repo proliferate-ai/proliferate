@@ -12,15 +12,21 @@ on:
       - "pnpm-workspace.yaml"
       - "scripts/validate-agent-catalog.mjs"
       - "server/**"
+  # Deliberately no on.pull_request.paths filter. A path-skipped workflow never
+  # reports a conclusion at all, so a required check naming these jobs would sit
+  # Pending forever on every non-server PR and make it unmergeable -- and the
+  # only way to avoid that today is to leave the server lanes off the required
+  # list entirely, which is exactly the absence hole ci-ok exists to close.
+  #
+  # So the workflow runs on EVERY pull request, and the cheap `changes` job
+  # below diffs the merge base against the same path list that used to sit on
+  # this trigger. On a non-server diff the heavy lanes short-circuit and report
+  # SUCCESS in well under a minute rather than being job-level `if:`-skipped.
+  # That distinction is the whole point: `skipped` is a conclusion branch
+  # protection silently accepts, so an absence-is-fatal required check must
+  # never be satisfied by one. Every server lane now always reports a real
+  # green/red, on every PR, with no path-filter trust anywhere in the chain.
   pull_request:
-    paths:
-      - ".dockerignore"
-      - ".github/workflows/server-ci.yml"
-      - "catalogs/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "scripts/validate-agent-catalog.mjs"
-      - "server/**"
   workflow_dispatch:
     inputs:
       comparison_sha:
@@ -58,47 +64,179 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  lint:
+  # Cheap relevance probe that replaces the removed on.pull_request.paths
+  # filter. Checkout + one git diff, no toolchains. The path list below is the
+  # filter that used to live on the trigger, kept verbatim so the set of PRs
+  # whose server lanes actually execute is unchanged; only the reporting
+  # behaviour on the other PRs changes (a real green instead of no conclusion).
+  #
+  # Every non-pull_request caller -- main/tag pushes, workflow_dispatch, and the
+  # release/hotfix workflow_call entrypoints -- is unconditionally relevant.
+  #
+  # This job is lane-agnostic on purpose: it publishes ONE `relevant` flag and
+  # any number of downstream lanes consume it. A new lane needs exactly three
+  # things and nothing more: `needs: changes`, the green no-op step, and
+  # `if: needs.changes.outputs.relevant == 'true'` on every one of its other
+  # steps. Do not reintroduce a paths filter, and do not gate a lane at the job
+  # level -- that produces `skipped`, the conclusion this whole arrangement
+  # exists to avoid.
+  changes:
+    name: Detect server-relevant changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.detect.outputs.relevant }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.git_sha || github.ref }}
+          fetch-depth: 0
+
+      - name: Diff against merge base
+        id: detect
+        working-directory: .
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+          GIT_SHA_INPUT: ${{ inputs.git_sha || '' }}
+        run: |
+          set -euo pipefail
+
+          # A reusable-workflow call inherits the CALLER's event name and never
+          # reports "workflow_call" (see the docker job's comment below), so the
+          # event name alone cannot identify a release invocation. Both callers
+          # today are non-PR (hotfix-production.yml is workflow_dispatch,
+          # nightly-release-train.yml is schedule/workflow_dispatch), but a
+          # future PR-triggered caller would otherwise compute relevance from
+          # the PR's diff and could ship with the server lanes no-opped. A
+          # non-empty inputs.git_sha only ever comes from a workflow_call, so
+          # treat it as unconditionally relevant regardless of event name.
+          if [[ -n "$GIT_SHA_INPUT" ]]; then
+            echo "Reusable call for ${GIT_SHA_INPUT}; always runs the server lanes."
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "Event $GITHUB_EVENT_NAME always runs the server lanes."
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base="$(git merge-base "origin/${BASE_REF}" HEAD)"
+
+          # Captured into a variable rather than read through `done < <(...)`.
+          # A process substitution is not a pipeline, so neither `set -e` nor
+          # `set -o pipefail` can observe a failing `git diff`: the loop would
+          # read zero lines, `relevant` would keep its `false` initializer, and
+          # both server lanes would report a real green on a real server PR --
+          # strictly worse than the path-skip this replaces, because it looks
+          # verified. Command substitution IS covered by `set -e`, so a failing
+          # `git diff` now aborts the step, which (per the != 'false' gating on
+          # the lanes below) makes the real suites run.
+          changed="$(git diff --name-only "$base" HEAD)"
+
+          # Floor guard, same standard #2137 applies to its shard partition: a
+          # pull request always changes at least one file, so an empty list
+          # means the diff did not describe this PR. Fail loudly instead of
+          # silently concluding "nothing server-relevant here".
+          if [[ -z "$changed" ]]; then
+            echo "Refusing to classify: git diff ${base}..HEAD listed no changed files." >&2
+            echo "A pull request always changes at least one path; the base resolution is wrong." >&2
+            exit 1
+          fi
+
+          relevant=false
+          while IFS= read -r file; do
+            case "$file" in
+              .dockerignore|.github/workflows/server-ci.yml)
+                relevant=true
+                ;;
+              pnpm-lock.yaml|pnpm-workspace.yaml|scripts/validate-agent-catalog.mjs)
+                relevant=true
+                ;;
+              catalogs/*|server/*)
+                relevant=true
+                ;;
+            esac
+          done <<<"$changed"
+          echo "Changed paths since ${base}: $(wc -l <<<"$changed")"
+          echo "Server-relevant changes since ${base}: ${relevant}"
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
+  lint:
+    needs: changes
+    # `always()` so a failed or cancelled `changes` job can never turn this
+    # lane into a `skipped` conclusion. See the no-op step's polarity note.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # Reports SUCCESS, not `skipped`, when the diff cannot change this lane's
+      # result. `skipped` is the conclusion branch protection silently accepts,
+      # so it is exactly what an absence-is-fatal required check must never be
+      # satisfied by; every other step in this job is individually gated
+      # instead, and the job ends green in well under a minute.
+      #
+      # Note the polarity. This step fires only on an explicit `false`, while
+      # every real step fires on `!= 'false'`. An unset or empty output -- which
+      # is precisely what a FAILED or CANCELLED `changes` job produces -- runs
+      # the real suite rather than going green. The gate is fail-closed by
+      # construction, not by `Detect server-relevant changes` happening to be on
+      # the required-checks list.
+      - name: No server-relevant changes
+        if: needs.changes.outputs.relevant == 'false'
+        working-directory: .
+        run: |
+          echo "No server-relevant paths in this diff; nothing for this lane to verify."
+          echo "Reporting success (not skipped) so this check always reports a conclusion."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.relevant != 'false'
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
           fetch-depth: 2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.changes.outputs.relevant != 'false'
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
+        if: needs.changes.outputs.relevant != 'false'
         with:
           version: 10
       - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.relevant != 'false'
       - uses: actions/setup-python@v7
+        if: needs.changes.outputs.relevant != 'false'
         with:
           python-version: "3.12"
 
       - name: Validate catalogs
+        if: needs.changes.outputs.relevant != 'false'
         run: |
           node scripts/validate-agent-catalog.mjs
         working-directory: .
 
       - name: Install workspace dependencies
+        if: needs.changes.outputs.relevant != 'false'
         run: pnpm install --frozen-lockfile
         working-directory: .
 
       - name: Build artifact runtime
+        if: needs.changes.outputs.relevant != 'false'
         run: pnpm -C server/artifact-runtime build
         working-directory: .
 
       - name: Install dependencies
+        if: needs.changes.outputs.relevant != 'false'
         run: uv sync --python 3.12 --frozen --extra dev
 
       - name: Ruff check
+        if: needs.changes.outputs.relevant != 'false'
         run: uv run --python 3.12 --frozen --extra dev ruff check proliferate/ tests/
 
       - name: Ruff format check
+        if: needs.changes.outputs.relevant != 'false'
         run: uv run --python 3.12 --frozen --extra dev ruff format --check proliferate/ tests/
 
       - name: Mypy diagnostic ratchet
+        if: needs.changes.outputs.relevant != 'false'
         env:
           MYPY_COMPARISON_SHA: ${{ inputs.comparison_sha || '' }}
           MYPY_EVENT_NAME: ${{ github.event_name }}
@@ -121,7 +259,20 @@ jobs:
   # documented fallback (see PR body) -- only the xdist fan-out and the
   # lock-table bump are dropped, since a serial, single-connection run never
   # needs them.
+  # Known, accepted cost of always reporting a real conclusion: Actions has no
+  # conditional `services:` block, so Postgres and Redis boot even on a no-op
+  # run, and a service-container health-check flake can red a lane that had
+  # nothing to verify. The reviewed alternative -- job-level `if:`-skip the lane
+  # and let `server-ci-ok` launder it into one green -- was rejected because it
+  # reinstates `skipped` as a load-bearing conclusion in the exact workflow this
+  # PR is de-skipping. If the boot proves flaky in practice, the honest fix is
+  # to move these suites onto a self-provisioned Postgres/Redis started by a
+  # gated step, not to reintroduce the skip.
   test-unit:
+    needs: changes
+    # `always()` so a failed or cancelled `changes` job can never turn this
+    # lane into a `skipped` conclusion. See the no-op step's polarity note.
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -152,35 +303,75 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
+      # Reports SUCCESS, not `skipped`, when the diff cannot change this lane's
+      # result. `skipped` is the conclusion branch protection silently accepts,
+      # so it is exactly what an absence-is-fatal required check must never be
+      # satisfied by; every other step in this job is individually gated
+      # instead, and the job ends green in well under a minute.
+      #
+      # Note the polarity. This step fires only on an explicit `false`, while
+      # every real step fires on `!= 'false'`. An unset or empty output -- which
+      # is precisely what a FAILED or CANCELLED `changes` job produces -- runs
+      # the real suite rather than going green. The gate is fail-closed by
+      # construction, not by `Detect server-relevant changes` happening to be on
+      # the required-checks list.
+      - name: No server-relevant changes
+        if: needs.changes.outputs.relevant == 'false'
+        working-directory: .
+        run: |
+          echo "No server-relevant paths in this diff; nothing for this lane to verify."
+          echo "Reporting success (not skipped) so this check always reports a conclusion."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.relevant != 'false'
         with:
           ref: ${{ inputs.git_sha || github.ref }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.changes.outputs.relevant != 'false'
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
+        if: needs.changes.outputs.relevant != 'false'
         with:
           version: 10
       - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.relevant != 'false'
       - uses: actions/setup-python@v7
+        if: needs.changes.outputs.relevant != 'false'
         with:
           python-version: "3.12"
 
       - name: Install workspace dependencies
+        if: needs.changes.outputs.relevant != 'false'
         run: pnpm install --frozen-lockfile
         working-directory: .
 
       - name: Build artifact runtime
+        if: needs.changes.outputs.relevant != 'false'
         run: pnpm -C server/artifact-runtime build
         working-directory: .
 
       - name: Install dependencies
+        if: needs.changes.outputs.relevant != 'false'
         run: uv pip install --system -e ".[dev]"
 
       - name: Run unit tests
+        if: needs.changes.outputs.relevant != 'false'
         run: pytest tests/unit -q --durations=20
 
+  # Known, accepted cost of always reporting a real conclusion: Actions has no
+  # conditional `services:` block, so Postgres and Redis boot even on a no-op
+  # run, and a service-container health-check flake can red a lane that had
+  # nothing to verify. The reviewed alternative -- job-level `if:`-skip the lane
+  # and let `server-ci-ok` launder it into one green -- was rejected because it
+  # reinstates `skipped` as a load-bearing conclusion in the exact workflow this
+  # PR is de-skipping. If the boot proves flaky in practice, the honest fix is
+  # to move these suites onto a self-provisioned Postgres/Redis started by a
+  # gated step, not to reintroduce the skip.
   test-integration:
+    needs: changes
+    # `always()` so a failed or cancelled `changes` job can never turn this
+    # lane into a `skipped` conclusion. See the no-op step's polarity note.
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 75
     strategy:
@@ -215,29 +406,55 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
+      # Reports SUCCESS, not `skipped`, when the diff cannot change this lane's
+      # result. `skipped` is the conclusion branch protection silently accepts,
+      # so it is exactly what an absence-is-fatal required check must never be
+      # satisfied by; every other step in this job is individually gated
+      # instead, and the job ends green in well under a minute.
+      #
+      # Note the polarity. This step fires only on an explicit `false`, while
+      # every real step fires on `!= 'false'`. An unset or empty output -- which
+      # is precisely what a FAILED or CANCELLED `changes` job produces -- runs
+      # the real suite rather than going green. The gate is fail-closed by
+      # construction, not by `Detect server-relevant changes` happening to be on
+      # the required-checks list.
+      - name: No server-relevant changes
+        if: needs.changes.outputs.relevant == 'false'
+        working-directory: .
+        run: |
+          echo "No server-relevant paths in this diff; nothing for this lane to verify."
+          echo "Reporting success (not skipped) so this check always reports a conclusion."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.relevant != 'false'
         with:
           ref: ${{ inputs.git_sha || github.ref }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.changes.outputs.relevant != 'false'
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
+        if: needs.changes.outputs.relevant != 'false'
         with:
           version: 10
       - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.relevant != 'false'
       - uses: actions/setup-python@v7
+        if: needs.changes.outputs.relevant != 'false'
         with:
           python-version: "3.12"
 
       - name: Install workspace dependencies
+        if: needs.changes.outputs.relevant != 'false'
         run: pnpm install --frozen-lockfile
         working-directory: .
 
       - name: Build artifact runtime
+        if: needs.changes.outputs.relevant != 'false'
         run: pnpm -C server/artifact-runtime build
         working-directory: .
 
       - name: Install dependencies
+        if: needs.changes.outputs.relevant != 'false'
         run: uv pip install --system -e ".[dev]"
 
       # Four workers means four concurrent 78-table TRUNCATEs and four
@@ -248,6 +465,7 @@ jobs:
       # postmaster-level, and service containers take no command line, so it has
       # to be written to postgresql.auto.conf and the container bounced.
       - name: Raise the Postgres lock table for parallel workers
+        if: needs.changes.outputs.relevant != 'false'
         run: |
           set -euo pipefail
           container="$(docker ps --filter 'ancestor=postgres:16-alpine' --format '{{.ID}}' | head -1)"
@@ -285,6 +503,7 @@ jobs:
       # tests/integration that collapses the list fails the shard loudly
       # instead of silently testing almost nothing.
       - name: Partition integration test files (shard ${{ matrix.shard }} of 3)
+        if: needs.changes.outputs.relevant != 'false'
         id: partition
         env:
           SHARD: ${{ matrix.shard }}
@@ -317,6 +536,7 @@ jobs:
       # -r so that an empty shard_files.txt runs nothing and fails, rather
       # than invoking a bare `pytest` that would collect the entire suite.
       - name: Run integration tests (shard ${{ matrix.shard }} of 3)
+        if: needs.changes.outputs.relevant != 'false'
         run: xargs -r -a shard_files.txt pytest -n 4 -q --durations=20
 
   docker:
@@ -561,3 +781,117 @@ jobs:
             artifacts/proliferate-selfhost-aws-launch.sh
             artifacts/proliferate-deploy.tar.gz
             artifacts/self-hosted-assets.SHA256SUMS
+
+  # ---------------------------------------------------------------------------
+  # Absence gate for this workflow, mirroring `ci-ok` in ci.yml. `needs:` cannot
+  # cross workflows, so each workflow that carries required checks needs its own
+  # rollup; this is Server CI's.
+  #
+  # Making THIS the single required name (instead of the individual lanes) is
+  # what makes the required-checks list split-proof: #2137 turned `test` into
+  # `test-unit` plus a 3-way-sharded `test-integration`, which under per-lane
+  # required checks would have been a coordinated branch-protection edit in the
+  # same window as the merge. Under this rollup it is a diff to one file that
+  # the drift guard below verifies.
+  #
+  # Fails when any dependency concluded anything other than `success` --
+  # failure, skipped, and cancelled are all fatal and the offending lanes are
+  # named. `if: always()` is load-bearing for the same reason as in ci.yml:
+  # without it the job inherits the implicit `success()` gate and would itself
+  # report `skipped` whenever a dependency failed.
+  #
+  # A `needs:` entry on a matrix job (`test-integration`) covers every shard;
+  # the aggregate result is `success` only when all three succeeded.
+  server-ci-ok:
+    name: server-ci-ok
+    needs:
+      - changes
+      - lint
+      - test-unit
+      - test-integration
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/workflows/server-ci.yml
+          sparse-checkout-cone-mode: false
+
+      # Guards the guard, as ci-ok does for ci.yml -- a lane added to this file
+      # but not to `needs:` above would sit outside the rollup, which is the
+      # same absence hole one level up.
+      #
+      # Two job classes are legitimately outside the rollup, and the exemption
+      # is DERIVED rather than hardcoded so it cannot rot: `docker` and
+      # `self-hosted-release-assets` publish release artifacts and carry a
+      # job-level `if:` gated on the `server-v` tag, so they are `skipped` on
+      # every pull request by design. Rolling them up would make this check
+      # permanently red on PRs. Identifying them by that gate -- rather than by
+      # name -- means that if anyone ever removes the release gate from one of
+      # them, it stops being exempt and the drift guard demands it join
+      # `needs:`. The exempt set is printed on every run so the exemption is
+      # visible rather than implied.
+      #
+      # `working-directory: .` on both run steps: this file sets
+      # `defaults.run.working-directory: server`, and the sparse checkout above
+      # deliberately materializes only the workflow file, so `server/` does not
+      # exist in this job and bash cannot start there.
+      - name: Assert the rollup covers every non-release job in server-ci.yml
+        working-directory: .
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          # unsafe_load_file feature-detect: see the matching note on ci-ok.
+          declared="$(ruby -ryaml -rjson -e '
+            path = ".github/workflows/server-ci.yml"
+            doc = YAML.respond_to?(:unsafe_load_file) ? YAML.unsafe_load_file(path) : YAML.load_file(path)
+            release, gated = doc["jobs"].partition { |_, spec| spec["if"].to_s.include?("refs/tags/server-v") }
+            warn "Release-only jobs exempt from the rollup: #{release.map(&:first).sort.join(", ")}"
+            puts JSON.generate((gated.map(&:first) - ["server-ci-ok"]).sort)
+          ')"
+          covered="$(jq -c 'keys' <<<"$NEEDS_JSON")"
+          missing="$(jq -rn --argjson a "$declared" --argjson b "$covered" '($a - $b) | join(", ")')"
+          extra="$(jq -rn --argjson a "$declared" --argjson b "$covered" '($b - $a) | join(", ")')"
+          if [[ -n "$missing" ]]; then
+            echo "::error::server-ci.yml job(s) missing from the server-ci-ok needs list: ${missing}. Add them, or the rollup certifies a commit those lanes never verified."
+          fi
+          if [[ -n "$extra" ]]; then
+            echo "::error::server-ci-ok needs entries that are not non-release jobs in server-ci.yml: ${extra}."
+          fi
+          [[ -z "$missing" && -z "$extra" ]]
+          echo "server-ci-ok covers all $(jq -r 'length' <<<"$declared") non-release job(s) in server-ci.yml."
+
+      # skipped and cancelled are failures here, on purpose. Note that the
+      # lanes cannot legitimately be skipped any more: every one carries
+      # `if: always()`, and a diff with nothing server-relevant produces a real
+      # green from the no-op step rather than an absent one. So a `skipped`
+      # arriving here means something structural changed, and it should be red.
+      - name: Assert every Server CI lane concluded success
+        working-directory: .
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          bad=()
+          count=0
+          while IFS=$'\t' read -r lane result; do
+            count=$((count + 1))
+            printf '%-24s %s\n' "$lane" "$result"
+            if [[ "$result" != "success" ]]; then
+              bad+=("${lane} (${result})")
+            fi
+          done < <(jq -r 'to_entries[] | [.key, .value.result] | @tsv' <<<"$NEEDS_JSON")
+
+          # Belt-and-braces, like ci-ok's equivalent: the drift guard above
+          # would already have failed on `missing` before this could be hit.
+          if [[ "$count" -eq 0 ]]; then
+            echo "::error::server-ci-ok resolved zero dependencies. Server CI verified nothing."
+            exit 1
+          fi
+          if [[ "${#bad[@]}" -gt 0 ]]; then
+            echo "::error::Server CI did not verify this commit. Not green: ${bad[*]}"
+            exit 1
+          fi
+          echo "All ${count} Server CI lanes concluded success."
