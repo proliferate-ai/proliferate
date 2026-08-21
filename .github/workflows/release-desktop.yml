@@ -703,7 +703,13 @@ jobs:
         with:
           path: all-artifacts
           pattern: desktop-*
-          merge-multiple: false
+          # merge-multiple keeps the extracted layout deterministic: with
+          # `false`, download-artifact@v8 nests each artifact in its own
+          # directory ONLY when two or more artifacts match — a single match
+          # (ARM-only, since Intel is paused) extracts flat and broke the
+          # 0.4.22 publish. Merged-flat is the one layout every artifact
+          # count produces.
+          merge-multiple: true
 
       - name: List artifacts
         run: find all-artifacts -type f | sort
@@ -743,7 +749,13 @@ jobs:
         with:
           path: all-artifacts
           pattern: desktop-*
-          merge-multiple: false
+          # merge-multiple keeps the extracted layout deterministic: with
+          # `false`, download-artifact@v8 nests each artifact in its own
+          # directory ONLY when two or more artifacts match — a single match
+          # (ARM-only, since Intel is paused) extracts flat and broke the
+          # 0.4.22 publish. Merged-flat is the one layout every artifact
+          # count produces.
+          merge-multiple: true
 
       - name: List artifacts
         run: find all-artifacts -type f | sort
