@@ -73,6 +73,8 @@ The actor's exit sequence signals the agent's process GROUP on every exit, not o
 
 The idle clock is the reaper's own observation ledger, held in the sweep task rather than on the handle. Each sweep records the first tick at which a session was seen quiescent, keyed by the live snapshot's `updated_at` activity marker. Any non-quiescent observation drops the record, and a changed activity marker restarts it, so what is measured is continuous idleness rather than cumulative idleness. Sweep cadence is `min(threshold / 4, 15s)`, which bounds how much later than the threshold a reap can land.
 
+Known gap in that marker, surfaced by review and left open deliberately. `updated_at` is written by `set_execution_phase`, the four pending-interaction mutators, and `mark_activity_at` (from `actor/notifications/dispatch.rs`, gated on `event.updates_session_activity_at()`). Turn traffic is covered because the phase flips both ways. Not covered: model, mode and thinking-level changes on an idle session, `RunDomainOp`, `CallAgentExtMethod`, and the fork lifecycle commands. A user who spends two minutes reconfiguring an idle session without prompting it can still be reaped. The cost of that is one cold start, not lost work, because the conditional unload refuses while any of those commands is still in the mailbox; widening the marker means adding a reset call site to every activity source, which is a larger change than this feature justifies and is worth doing when there is a second reason to touch those sites.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Running
