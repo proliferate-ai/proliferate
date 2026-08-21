@@ -389,11 +389,10 @@ describe("terminal triple", () => {
    * install task itself dying. That path pushes no per-agent result for the
    * agent that died, so there is nobody to name — and the old copy
    * interpolated the empty name list anyway, producing a description that
-   * began with a space and named no subject at all. The job's `message` is
-   * the only thing that knows what happened, and it was being discarded.
+   * began with a space, named no subject, and offered no route.
    */
   describe("a failed job with no failed result", () => {
-    it("does not print a subject-less sentence, and surfaces the job's reason", () => {
+    it("writes a subject-less failure as a sentence, keeping the still-usable clause", () => {
       const { rerender } = render(<HarnessUpdateToastPresenter />);
       vi.clearAllMocks();
 
@@ -413,27 +412,31 @@ describe("terminal triple", () => {
       };
       expect(toastInput.title).toBe("Some agent tools aren't ready");
       expect(toastInput.description).toBe(
-        "The install did not finish. agent reconcile task failed: panic. "
-          + "Claude Code installed and remain usable.",
+        "The install stopped before it finished. Claude Code installed and remain usable. "
+          + "You can retry from agent settings.",
       );
       expect(toastInput.description.startsWith(" ")).toBe(false);
       expect(toastInput.description).not.toContain(" failed (an unexpected error)");
     });
 
-    it("still says something when the job carries no message either", () => {
+    it("says what happened and where to go, never the runtime's own message", () => {
+      // `message` is internal text with no width budget and nothing a person
+      // can act on, so the description stays a written sentence whatever the
+      // runtime put in there.
       const { rerender } = render(<HarnessUpdateToastPresenter />);
       vi.clearAllMocks();
 
       state.localSnapshot = {
         ...state.defaultLocalSnapshot,
         status: "failed",
+        message: "agent reconcile task failed: panic: called `Option::unwrap()` on a `None` value",
         results: [],
       };
       rerender(<HarnessUpdateToastPresenter />);
 
       expect(raisedWithId(HARNESS_UPDATE_TOAST_ID)).toMatchObject({
         title: "Some agent tools aren't ready",
-        description: "The install did not finish.",
+        description: "The install stopped before it finished. You can retry from agent settings.",
       });
     });
 
@@ -454,6 +457,8 @@ describe("terminal triple", () => {
       };
       rerender(<HarnessUpdateToastPresenter />);
 
+      // The named form says who and why, and the secondary action carries the
+      // route, so it does not also take the subject-less retry sentence.
       expect(raisedWithId(HARNESS_UPDATE_TOAST_ID)).toMatchObject({
         description: "Codex failed (not enough disk space).",
       });

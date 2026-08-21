@@ -67,11 +67,6 @@ function joinNames(names: readonly string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-/** One sentence, whatever the source text ended with. */
-function asSentence(text: string): string {
-  return /[.!?]$/.test(text) ? text : `${text}.`;
-}
-
 /**
  * The partial-failure terminal's description: names who failed and why, and
  * who is still usable. Reuses the typed-failure reason map; a mixed set of
@@ -82,14 +77,15 @@ function asSentence(text: string): string {
  * marks the whole job failed on the one path where the install task itself
  * dies, and that path pushes no per-agent result for the agent that died, so
  * there is no name to print. The old copy interpolated the empty name list
- * anyway and rendered " failed (an unexpected error)." — a leading space and
- * no subject. With no subject to name, the job's own message is the only
- * thing that knows what happened, so it is surfaced instead of discarded.
+ * anyway and rendered " failed (an unexpected error)." — a leading space, no
+ * subject, and no route. That case now gets a written sentence of its own.
+ *
+ * Deliberately not the job's `message`: it is internal runtime text ("agent
+ * reconcile task failed: panic: ...") with no width budget, no guarantee of
+ * being a sentence, and nothing a person can act on. A toast is the wrong
+ * home for it; the retry route is the useful thing to say instead.
  */
-function describePartialFailure(
-  results: readonly ReconcileAgentResult[],
-  jobMessage: string | null | undefined,
-): string {
+function describePartialFailure(results: readonly ReconcileAgentResult[]): string {
   const failed = results.filter((result) => result.outcome === "failed");
   const installed = results.filter((result) =>
     result.outcome === "installed" || result.outcome === "already_installed"
@@ -104,16 +100,18 @@ function describePartialFailure(
   const reason = kinds.size === 1
     ? FAILURE_KIND_REASON[[...kinds][0]] ?? "an unexpected error"
     : "an unexpected error";
-  const detail = jobMessage?.trim();
-  const failedSentence = failedNames.length > 0
+  const named = failedNames.length > 0;
+  const failedSentence = named
     ? `${joinNames(failedNames)} failed (${reason}).`
-    : detail
-      ? `The install did not finish. ${asSentence(detail)}`
-      : "The install did not finish.";
-  if (installedNames.length === 0) {
-    return failedSentence;
-  }
-  return `${failedSentence} ${joinNames(installedNames)} installed and remain usable.`;
+    : "The install stopped before it finished.";
+  const installedSentence = installedNames.length > 0
+    ? `${joinNames(installedNames)} installed and remain usable.`
+    : "";
+  // Only when nobody is named: the named form already says who and why, and
+  // the secondary action carries the route. With no subject and no reason,
+  // this sentence is the only actionable thing in the description.
+  const retrySentence = named ? "" : "You can retry from agent settings.";
+  return [failedSentence, installedSentence, retrySentence].filter(Boolean).join(" ");
 }
 
 /**
@@ -195,7 +193,7 @@ function useHarnessProgressToast({
               tone: "warning",
               badge: "AGENTS",
               title: "Some agent tools aren't ready",
-              description: describePartialFailure(results, snapshot?.message),
+              description: describePartialFailure(results),
               secondary: {
                 label: "Open agent settings",
                 onClick: () => {
