@@ -44,6 +44,10 @@ jobs:
   windows:
     name: package script on windows
     runs-on: windows-latest
+    # If cmd's `md` ever starts accepting the POSIX form, a reverted script would
+    # reach `cargo run`, and cargo is on this image. That turns a 20 second guard
+    # into a full Windows runtime build. Cap it.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -105,6 +109,7 @@ jobs:
   linux:
     name: invoke and write path with a stubbed runtime
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -129,9 +134,14 @@ jobs:
       - name: Happy path writes a parseable schema
         working-directory: anyharness/sdk
         run: |
+          # Remove the tracked schema first. Without this a script that did
+          # nothing at all would still find a parseable file and pass.
+          rm -f generated/openapi.json
           CARGO="$RUNNER_TEMP/stub/cargo" npm run generate:openapi
           node -e "JSON.parse(require('fs').readFileSync('generated/openapi.json','utf8'))"
-          echo "ok: schema written and parses"
+          grep -q '"title":"stub"' generated/openapi.json \
+            || { echo "the file on disk is not what the stub emitted"; exit 1; }
+          echo "ok: the stub's schema was written and parses"
 
       - name: A failing runtime must not truncate an existing schema
         working-directory: anyharness/sdk

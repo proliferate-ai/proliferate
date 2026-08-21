@@ -7,8 +7,8 @@
 // POSIX shell. npm runs package scripts through cmd.exe on Windows, and that
 // command does not work there: cmd's `md` reports "The syntax of the command
 // is incorrect." and creates nothing, so the `&&` chain never reaches cargo.
-// That single line is why desktop Windows releases were disabled in
-// 3d3c0504b8 ("until the SDK generation step is Windows-safe").
+// That single line is the stated reason desktop Windows releases were
+// disabled in 3d3c0504b8 ("until the SDK generation step is Windows-safe").
 //
 // Doing the directory creation, the cargo invocation and the file write in
 // node keeps the behaviour identical on every platform and removes the shell
@@ -49,8 +49,8 @@ const useRuntimeBin =
     }
   })();
 
-// `||` rather than `??`: an empty CARGO is a misconfiguration, and passing
-// "" to spawnSync throws ERR_INVALID_ARG_VALUE instead of saying anything useful.
+// `||` rather than `??` so an empty CARGO falls back to "cargo" and reports a
+// normal missing-runtime error, rather than throwing ERR_INVALID_ARG_VALUE.
 const cargo = process.env.CARGO || "cargo";
 const command = useRuntimeBin ? runtimeBin : cargo;
 const args = useRuntimeBin ? ["print-openapi"] : ["run", "--bin", "anyharness", "--", "print-openapi"];
