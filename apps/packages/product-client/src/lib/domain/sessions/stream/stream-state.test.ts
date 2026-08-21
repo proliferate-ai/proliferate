@@ -48,6 +48,57 @@ describe("session-stream-state", () => {
     });
   });
 
+  describe("replaySessionHistory", () => {
+    it("stops replay at the first hole and lets the live stream recover the tail", () => {
+      const state = replaySessionHistory("session-1", [
+        turnStarted(1),
+        assistantStarted(2, "assistant-1", "Hello"),
+        turnEnded(4),
+      ]);
+
+      expect(state.events.map((event) => event.seq)).toEqual([1, 2]);
+      expect(state.transcript.lastSeq).toBe(2);
+
+      const result = applyStreamEnvelope(state, turnEnded(3));
+
+      expect(result.status).toBe("applied");
+    });
+
+    it("does not treat a mid-stream replay start as a gap", () => {
+      const state = replaySessionHistory("session-1", [
+        turnStarted(6),
+        assistantStarted(7, "assistant-1", "Hello"),
+        assistantCompleted(8, "assistant-1", "Hello"),
+      ]);
+
+      expect(state.events.map((event) => event.seq)).toEqual([6, 7, 8]);
+      expect(state.transcript.lastSeq).toBe(8);
+    });
+
+    it("sorts unsorted input before replaying", () => {
+      const state = replaySessionHistory("session-1", [
+        turnStarted(2),
+        turnStarted(3),
+        turnStarted(1),
+      ]);
+
+      expect(state.events.map((event) => event.seq)).toEqual([1, 2, 3]);
+      expect(state.transcript.lastSeq).toBe(3);
+    });
+
+    it("skips duplicate seqs within input without breaking the run", () => {
+      const state = replaySessionHistory("session-1", [
+        turnStarted(1),
+        turnStarted(2),
+        turnStarted(2),
+        turnStarted(3),
+      ]);
+
+      expect(state.events.map((event) => event.seq)).toEqual([1, 2, 3]);
+      expect(state.transcript.lastSeq).toBe(3);
+    });
+  });
+
   it("ignores duplicate stream envelopes", () => {
     const state = replaySessionHistory("session-1", [turnStarted(1)]);
 
