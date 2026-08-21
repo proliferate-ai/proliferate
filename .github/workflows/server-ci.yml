@@ -832,7 +832,13 @@ jobs:
       # them, it stops being exempt and the drift guard demands it join
       # `needs:`. The exempt set is printed on every run so the exemption is
       # visible rather than implied.
+      #
+      # `working-directory: .` on both run steps: this file sets
+      # `defaults.run.working-directory: server`, and the sparse checkout above
+      # deliberately materializes only the workflow file, so `server/` does not
+      # exist in this job and bash cannot start there.
       - name: Assert the rollup covers every non-release job in server-ci.yml
+        working-directory: .
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
@@ -863,6 +869,7 @@ jobs:
       # green from the no-op step rather than an absent one. So a `skipped`
       # arriving here means something structural changed, and it should be red.
       - name: Assert every Server CI lane concluded success
+        working-directory: .
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
