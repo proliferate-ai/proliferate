@@ -22,6 +22,10 @@ on:
           - macos
           - windows
         default: all
+      enable_windows_beta:
+        description: "Opt into building the Windows beta leg (never on by default; see B2 in PR #2150)"
+        type: boolean
+        default: false
       allow_unsigned:
         description: "Allow ad-hoc (unsigned) macOS builds when APPLE_SIGNING_IDENTITY is not configured"
         type: boolean
@@ -53,6 +57,10 @@ on:
         description: "Target OS"
         type: string
         default: all
+      enable_windows_beta:
+        description: "Opt into building the Windows beta leg (never on by default; see B2 in PR #2150)"
+        type: boolean
+        default: false
       allow_unsigned:
         description: "Allow ad-hoc (unsigned) macOS builds when APPLE_SIGNING_IDENTITY is not configured"
         type: boolean
@@ -109,7 +117,11 @@ jobs:
           #   runner_os: macos
           # Windows was removed 2026-04-13 by 3d3c0504b8 because the SDK
           # generate step was POSIX-shell only. That step is node now, so the
-          # leg is back for the beta.
+          # leg is back for the beta. The matrix entry itself is unconditional;
+          # "Decide whether to build this matrix entry" below is what actually
+          # keeps it from running unless `enable_windows_beta` is explicitly
+          # true, so it never rides along on push, workflow_call or
+          # unattended workflow_dispatch runs.
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             runner_os: windows
@@ -133,12 +145,21 @@ jobs:
         shell: bash
         env:
           TARGET_OS: ${{ inputs.target_os || 'all' }}
+          # `inputs.enable_windows_beta` is only populated on workflow_dispatch
+          # and workflow_call. A `push` (desktop-v* tag) event carries no
+          # inputs at all, so this is empty/false there too, and the Windows
+          # leg cannot ride along on a tag push. Every workflow_call caller
+          # must opt in explicitly; none does today (see guides/deploying/releases.md).
+          ENABLE_WINDOWS_BETA: ${{ inputs.enable_windows_beta && 'true' || 'false' }}
         run: |
+          skip=false
           if [[ "${{ github.event_name }}" != "push" ]] && [[ "$TARGET_OS" != "all" ]] && [[ "$TARGET_OS" != "${{ matrix.runner_os }}" ]]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            skip=true
           fi
+          if [[ "${{ matrix.runner_os }}" == "windows" ]] && [[ "$ENABLE_WINDOWS_BETA" != "true" ]]; then
+            skip=true
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
 
       - name: Validate release ref
         if: steps.filter.outputs.skip != 'true' && github.event_name == 'workflow_dispatch' && !inputs.dry_run && !inputs.git_sha
@@ -326,7 +347,7 @@ jobs:
         shell: bash
         run: |
           echo "::warning::Windows beta ships a placeholder diagnostics collector. proliferate-diagnostics-collector does not compile for x86_64-pc-windows-msvc, so in-app diagnostics capture, the support-report snapshot and the collector-backed export path are all unavailable in this build."
-          echo "::warning::Windows beta ships no bundled agent seed. agent-seed.inputs.json pins Node only for the two Apple targets and build-agent-seed.mjs is native-macOS-only, so this build sets PROLIFERATE_AGENT_SEED_EXPECTED with no seed present and agents fall back to whatever Node the machine already has."
+          echo "::warning::Windows beta ships no bundled agent seed. agent-seed.inputs.json pins Node only for the two Apple targets and build-agent-seed.mjs is native-macOS-only, so this build sets ANYHARNESS_AGENT_SEED_EXPECTED with no seed present. No managed agent launcher can run on Windows yet (see PR body), so there is no fallback to \"whatever Node the machine already has\" either."
           echo "::warning::Windows installers are not Authenticode signed. First launch shows a click-through SmartScreen warning. The Tauri updater minisign signature is separate and is applied."
 
       - name: Stage Proliferate debug helper for target

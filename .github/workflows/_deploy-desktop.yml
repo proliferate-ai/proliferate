@@ -24,6 +24,10 @@ on:
       target_os:
         default: all
         type: string
+      enable_windows_beta:
+        description: "Opt into building the Windows beta leg (never on by default; see B2 in PR #2150)"
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -166,6 +170,7 @@ jobs:
               echo "- Dry run: \`${{ inputs.dry_run }}\`"
               echo "- Publish updater: \`${{ inputs.publish_updater }}\`"
               echo "- Target OS: \`${{ inputs.target_os }}\`"
+              echo "- Windows beta enabled: \`${{ inputs.enable_windows_beta }}\`"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -183,4 +188,5 @@ jobs:
       publish_updater: ${{ inputs.publish_updater }}
       release_title: ${{ inputs.release_title }}
       target_os: ${{ inputs.target_os }}
+      enable_windows_beta: ${{ inputs.enable_windows_beta }}
     secrets: inherit

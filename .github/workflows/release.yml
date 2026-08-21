@@ -336,6 +336,13 @@ jobs:
       # to a GitHub Environment, so there is no approval gate on this step.
       publish_updater: true
       target_os: all
+      # Deliberately not opted into the Windows beta leg (see B2 in PR #2150):
+      # this is the unattended zero-touch auto-prod path with no approval
+      # gate, and the Windows leg has never completed a real build. Leaving
+      # this at its `false` default means `target_os: all` still only builds
+      # macOS here. Flip to `true` only once the Windows leg has a proven
+      # green dry run and B1 (continue-on-error run-conclusion) is resolved.
+      enable_windows_beta: false
     secrets: inherit
 
   # ── Production deploys ────────────────────────────────────────────────────────
