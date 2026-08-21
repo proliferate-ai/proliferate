@@ -7,32 +7,16 @@
 //! ABSENT only when nothing is in flight durably and this runtime does not own
 //! the probe engine, so the phase is genuinely unknowable here.
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use axum::extract::{Path as AxumPath, State};
 use serde_json::Value;
 
-use super::agent_launch_options::get_launch_options;
-use crate::app::AppState;
+use super::agent_launch_options_test_fixtures::*;
 use crate::domains::agents::auth_state::ProbePhase;
-use crate::domains::agents::installer::seed::AgentSeedStore;
-use crate::domains::agents::launch_options::{HarnessLaunchOptions, HarnessLaunchOptionsService};
 use crate::domains::agents::launch_probe::lock::ProbeEngineLock;
 use crate::domains::agents::launch_probe::targets::{ProbeTargets, RuntimeProbeTargets};
 use crate::domains::agents::launch_probe::test_support::{
-    gateway_state, wait_until, CountingPlanProducer, FakeRunner, FixedTargets, TempRuntimeHome,
+    gateway_state, wait_until, TempRuntimeHome,
 };
-use crate::domains::agents::launch_probe::{
-    LaunchProbeService, PokeReason, ProbeEngineConfig, ProbeEngineMode,
-};
-use crate::persistence::Db;
-
-const HARNESS: &str = "opencode";
-/// The harness excluded from every unattended poke, so nothing but a human ever
-/// moves its row off a stale basis.
-const CURSOR: &str = "cursor";
+use crate::domains::agents::launch_probe::{PokeReason, ProbeEngineMode};
 
 /// A probe that has cleared both concurrency waits and is inside the harness
 /// reports `running`, so a `detecting` response is legible as "wait, this is
@@ -40,39 +24,22 @@ const CURSOR: &str = "cursor";
 #[tokio::test]
 async fn probe_phase_is_running_while_an_attempt_is_in_flight() {
     let home = TempRuntimeHome::new("probe-phase-running");
-    home.write_manifest(HARNESS, Some("1.0.0"), Some("sha-1"), "managed");
-    home.write_state_json(&gateway_state(1, &[(HARNESS, "test-not-a-real-key")]));
-
-    let (runner, release) = FakeRunner::gated();
-    let engine = Arc::new(
-        LaunchProbeService::with_parts(
-            home.path().to_path_buf(),
-            Arc::new(CountingPlanProducer::new(vec!["m-1"])),
-            Arc::new(FixedTargets::single(HARNESS)),
-            runner.clone(),
-            ProbeEngineConfig::default(),
-        )
-        .with_launch_options(Arc::new(HarnessLaunchOptionsService::new(
-            Db::open_in_memory().expect("in-memory db"),
-            home.path().to_path_buf(),
-        ))),
-    );
-    assert_eq!(engine.mode(), ProbeEngineMode::Owner);
+    let (_state, engine, release) = state_with_a_gated_engine(&home, HARNESS);
     assert_eq!(
-        engine.probe_phase(HARNESS, chrono::Utc::now(), false),
+        engine.probe_phase(HARNESS, chrono::Utc::now(), None),
         Some(ProbePhase::Idle),
         "no attempt has been admitted yet"
     );
 
     engine.clone().poke_harness(HARNESS, PokeReason::Startup);
     wait_until("the attempt reaches the harness", || {
-        engine.probe_phase(HARNESS, chrono::Utc::now(), false) == Some(ProbePhase::Running)
+        engine.probe_phase(HARNESS, chrono::Utc::now(), None) == Some(ProbePhase::Running)
     })
     .await;
 
     release.send(true).expect("release the fake probe");
     wait_until("the attempt settles", || {
-        engine.probe_phase(HARNESS, chrono::Utc::now(), false) == Some(ProbePhase::Idle)
+        engine.probe_phase(HARNESS, chrono::Utc::now(), None) == Some(ProbePhase::Idle)
     })
     .await;
 }
@@ -118,62 +85,103 @@ async fn launch_options_omit_probe_phase_when_the_runtime_does_not_own_the_engin
     let _ = std::fs::remove_dir_all(&home);
 }
 
-/// Why the ROW outranks a missing slot. An owner admits before `begin_probe`, so
-/// for an owner the slot always leads the row — but a read-only runtime never
-/// admits anything, so its slot map is empty for a harness the OWNER is probing
-/// right now. The row is the only source it has, and without it the response would
-/// be `detecting` with no phase, which a client reads as terminal.
+/// Why the ROW outranks a missing slot, with an owner that is REALLY probing —
+/// not a bare lock file standing in for one. An owner admits before `begin_probe`,
+/// so for an owner the slot leads the row; a read-only runtime never admits
+/// anything, so its slot map is empty for a harness the owner has in flight right
+/// now. The row is the only source it has, and without it the response would be
+/// `detecting` with no phase, which a client reads as terminal.
 #[tokio::test]
-async fn a_read_only_runtime_has_no_slot_to_read_so_the_row_answers() {
-    let home = temp_runtime_home("row-outranks-missing-slot");
-    let _owner = ProbeEngineLock::try_acquire(&home).expect("take the engine lock first");
-    let state = app_state(home.clone());
-    assert_eq!(state.launch_probe_service.mode(), ProbeEngineMode::ReadOnly);
-    state
-        .launch_options_service
-        .begin_probe(HARNESS, &chrono::Utc::now().to_rfc3339())
-        .expect("record a durable probe start");
+async fn a_read_only_runtime_reports_the_probe_its_owner_is_really_running() {
+    let home = TempRuntimeHome::new("read-only-sees-a-real-probe");
+    let (owner, engine, release) = state_with_a_gated_engine(&home, HARNESS);
+    let attempt = spawn_refresh(&engine, HARNESS);
+    wait_until("the owner's attempt reaches the harness", || {
+        engine.probe_phase(HARNESS, chrono::Utc::now(), None) == Some(ProbePhase::Running)
+    })
+    .await;
+
+    let reader = read_only_view(&home, &owner);
     assert_eq!(
-        state
+        reader
             .launch_probe_service
-            .probe_phase(HARNESS, chrono::Utc::now(), false),
+            .probe_phase(HARNESS, chrono::Utc::now(), None),
         None,
         "no slot to read, so the slot alone answers nothing at all"
     );
 
-    let payload = launch_options_payload(state).await;
+    let payload = payload_for(reader, HARNESS).await;
     assert_eq!(payload["state"], Value::from("detecting"));
     assert_eq!(
         payload["probePhase"],
         Value::from("queued"),
         "the row the owner wrote is what makes this response legible: {payload}"
     );
-    let _ = std::fs::remove_dir_all(&home);
+    let _ = release.send(true);
+    let _ = attempt.await;
 }
 
-/// A read-only runtime shares the document with the owner that is probing it. It
-/// cannot read the owner's slot, but it can read the row the owner wrote — so it
-/// converges instead of stalling on an absent field its client reads as terminal.
+/// The bound that keeps the previous test from becoming a permanent 1.5s poll. The
+/// engine lock is taken once at construction and never retried, and a sealed
+/// container home has no owner at all, so "the owner will rewrite the row" is not
+/// something a read-only runtime may assume. An attempt older than any queue could
+/// explain is abandoned, and the response must say so in BOTH fields.
 #[tokio::test]
-async fn read_only_runtimes_report_the_durable_phase_the_owner_wrote() {
-    let home = temp_runtime_home("read-only-probing");
-    let _owner = ProbeEngineLock::try_acquire(&home).expect("take the engine lock first");
-
-    let state = app_state(home.clone());
-    assert_eq!(state.launch_probe_service.mode(), ProbeEngineMode::ReadOnly);
-    state
+async fn an_abandoned_row_stops_asking_a_read_only_runtime_to_wait() {
+    let home = TempRuntimeHome::new("read-only-abandoned-row");
+    let (owner, _engine, _release) = state_with_a_gated_engine(&home, HARNESS);
+    observe_models(&owner, HARNESS);
+    // The refresh a user pressed, whose future was then dropped, long ago.
+    owner
         .launch_options_service
-        .begin_probe(HARNESS, &chrono::Utc::now().to_rfc3339())
-        .expect("record a durable probe start");
+        .begin_probe(HARNESS, &hours_ago(2))
+        .expect("strand a row at probing");
 
-    let payload = launch_options_payload(state).await;
-    assert_eq!(payload["state"], Value::from("detecting"));
-    assert_eq!(
-        payload["probePhase"],
-        Value::from("queued"),
-        "the row is a fact about the harness, not about who owns the engine: {payload}"
+    let reader = read_only_view(&home, &owner);
+    let payload = payload_for(reader, HARNESS).await;
+    assert!(
+        payload.get("probePhase").is_none(),
+        "nothing is running and nothing here can tell otherwise: {payload}"
     );
-    let _ = std::fs::remove_dir_all(&home);
+    assert_eq!(
+        payload["state"],
+        Value::from("observed"),
+        "the last observation is the honest answer, not a refresh nobody is doing: {payload}"
+    );
+    assert_eq!(payload["observedAt"], Value::from(OBSERVED_AT));
+}
+
+/// The sizing trap in the other direction. `begin_probe` runs BEFORE the
+/// machine-wide semaphore, so a whole-machine pass over K harnesses legitimately
+/// leaves the last row `probing` for as long as every probe ahead of it may take.
+/// A bound of three probe timeouts — the tempting reuse of `sweep_age_multiplier` —
+/// would call this row abandoned and report a genuinely queued probe as settled.
+#[tokio::test]
+async fn a_queued_probe_behind_a_whole_machine_pass_is_never_reported_idle() {
+    let home = TempRuntimeHome::new("whole-machine-pass");
+    let (owner, _engine, _release) = state_with_a_gated_engine(&home, HARNESS);
+    let queued = ["claude", "codex", "cursor", "grok", HARNESS];
+    assert!(queued.len() >= 4, "the trap only opens from K = 4 upward");
+
+    // Every row is admitted up front, as a pass does; the last one waits behind all
+    // the probes ahead of it. Three probe timeouts of waiting is ordinary here.
+    for harness in queued {
+        owner
+            .launch_options_service
+            .begin_probe(harness, &seconds_ago(135))
+            .expect("admit a queued attempt");
+    }
+
+    let reader = read_only_view(&home, &owner);
+    for harness in queued {
+        let payload = payload_for(reader.clone(), harness).await;
+        assert_eq!(
+            payload["probePhase"],
+            Value::from("queued"),
+            "{harness} is queued behind the pass, not abandoned: {payload}"
+        );
+        assert_eq!(payload["state"], Value::from("detecting"));
+    }
 }
 
 /// A settled row whose BASIS has moved is not an in-flight probe, however it
@@ -237,21 +245,6 @@ async fn a_stale_basis_does_not_spin_the_harness_no_poke_can_converge() {
     );
 }
 
-/// Drive one attempt to a terminal, settled row at the CURRENT basis, through
-/// the same writes a real probe makes.
-fn settle_a_row(state: &AppState, harness: &str) {
-    let now = chrono::Utc::now().to_rfc3339();
-    let started = state
-        .launch_options_service
-        .begin_probe(harness, &now)
-        .expect("begin a probe");
-    let committed = state
-        .launch_options_service
-        .record_success(&started, &HarnessLaunchOptions::default(), &now)
-        .expect("record the observation");
-    assert!(committed, "the observation must land on the row we started");
-}
-
 /// A probe stamps the basis it STARTED at, and any auth apply moves the basis
 /// under it — `apply_state_file` writes `state.json` BEFORE it pokes, so the
 /// interleaving is the designed one, not a rare race. A genuinely running attempt
@@ -264,7 +257,7 @@ async fn an_in_flight_probe_survives_a_basis_move_under_it() {
     let (state, engine, release) = state_with_a_gated_engine(&home, HARNESS);
     let attempt = spawn_refresh(&engine, HARNESS);
     wait_until("the attempt reaches the harness", || {
-        engine.probe_phase(HARNESS, chrono::Utc::now(), false) == Some(ProbePhase::Running)
+        engine.probe_phase(HARNESS, chrono::Utc::now(), None) == Some(ProbePhase::Running)
     })
     .await;
 
@@ -298,7 +291,7 @@ async fn an_orphaned_probing_row_reports_the_owners_idle_slot() {
     let (state, engine, release) = state_with_a_gated_engine(&home, HARNESS);
     let attempt = spawn_refresh(&engine, HARNESS);
     wait_until("the attempt reaches the harness", || {
-        engine.probe_phase(HARNESS, chrono::Utc::now(), false) == Some(ProbePhase::Running)
+        engine.probe_phase(HARNESS, chrono::Utc::now(), None) == Some(ProbePhase::Running)
     })
     .await;
 
@@ -306,7 +299,7 @@ async fn an_orphaned_probing_row_reports_the_owners_idle_slot() {
     // releases the row.
     attempt.abort();
     wait_until("the dropped future releases the slot", || {
-        engine.probe_phase(HARNESS, chrono::Utc::now(), false) == Some(ProbePhase::Idle)
+        engine.probe_phase(HARNESS, chrono::Utc::now(), None) == Some(ProbePhase::Idle)
     })
     .await;
     assert!(
@@ -356,7 +349,7 @@ async fn an_orphaned_cursor_row_never_asks_a_client_to_keep_waiting() {
     assert_eq!(
         state
             .launch_probe_service
-            .probe_phase(CURSOR, chrono::Utc::now(), false),
+            .probe_phase(CURSOR, chrono::Utc::now(), None),
         Some(ProbePhase::Idle),
         "the owner admits before it writes the row, so an idle slot means orphan"
     );
@@ -371,118 +364,78 @@ async fn an_orphaned_cursor_row_never_asks_a_client_to_keep_waiting() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
-/// The same interleaving on a runtime that cannot read a slot at all. Its only
-/// source is the row, so a basis-gated read would omit the field entirely — which
-/// the client also treats as terminal.
+/// The basis moving under a REAL probe, seen from a runtime that cannot read a
+/// slot at all. Its only source is the row, so a basis-gated read would omit the
+/// field entirely — which the client also treats as terminal.
 #[tokio::test]
 async fn a_read_only_runtime_keeps_reporting_a_probe_across_a_basis_move() {
     let home = TempRuntimeHome::new("basis-move-read-only");
-    home.write_manifest(HARNESS, Some("1.0.0"), Some("sha-1"), "managed");
-    home.write_state_json(&gateway_state(1, &[(HARNESS, "test-not-a-real-key")]));
-    let _owner = ProbeEngineLock::try_acquire(home.path()).expect("take the engine lock first");
+    let (owner, engine, release) = state_with_a_gated_engine(&home, HARNESS);
+    let attempt = spawn_refresh(&engine, HARNESS);
+    wait_until("the owner's attempt reaches the harness", || {
+        engine.probe_phase(HARNESS, chrono::Utc::now(), None) == Some(ProbePhase::Running)
+    })
+    .await;
 
-    let state = app_state(home.path().to_path_buf());
-    assert_eq!(state.launch_probe_service.mode(), ProbeEngineMode::ReadOnly);
-    begin_a_probe(&state, HARNESS);
+    let reader = read_only_view(&home, &owner);
     home.write_state_json(&gateway_state(2, &[("claude", "test-not-a-real-key")]));
 
-    let payload = launch_options_payload(state).await;
+    let payload = payload_for(reader, HARNESS).await;
     assert_eq!(payload["state"], Value::from("detecting"));
     assert_eq!(
         payload["probePhase"],
         Value::from("queued"),
         "absent reads as terminal to a client, so it must not be absent here: {payload}"
     );
-}
-
-/// Leave the row exactly as an attempt in flight leaves it: `probing`, stamped
-/// with the basis at the moment it started.
-fn begin_a_probe(state: &AppState, harness: &str) {
-    state
-        .launch_options_service
-        .begin_probe(harness, &chrono::Utc::now().to_rfc3339())
-        .expect("record a durable probe start");
+    let _ = release.send(true);
+    let _ = attempt.await;
 }
 
 /// A real `AppState` served by an OWNER engine whose runner is gated, so a test can
 /// hold an attempt inside the probe and read the wire while it is there. The state
 /// and the engine share one launch-option store, which is what makes the row and
 /// the slot two views of the same attempt.
-fn state_with_a_gated_engine(
-    home: &TempRuntimeHome,
-    harness: &str,
-) -> (
-    AppState,
-    Arc<LaunchProbeService>,
-    tokio::sync::watch::Sender<bool>,
-) {
-    home.write_manifest(harness, Some("1.0.0"), Some("sha-1"), "managed");
-    home.write_state_json(&gateway_state(1, &[(harness, "test-not-a-real-key")]));
+/// THE `refreshing` ORPHAN. `begin_probe` does not clear `options_json`, so a
+/// harness with 180 observed models that a user pressed Refresh on keeps every one
+/// of them in the row — and the projection calls that `refreshing`. Drop the
+/// refresh future (a page reload while the request is in flight) and the row is
+/// stranded: the owner served `refreshing` + `idle` forever, and a client waits on
+/// `refreshing` WITHOUT consulting the phase, so it polled forever. Withdrawing the
+/// claim from the phase alone does not fix that; the state has to withdraw it too.
+#[tokio::test]
+async fn an_observed_harness_orphan_serves_its_last_observation() {
+    let home = TempRuntimeHome::new("observed-harness-orphan");
+    let (state, engine, release) = state_with_a_gated_engine(&home, HARNESS);
+    observe_models(&state, HARNESS);
 
-    let store = Arc::new(HarnessLaunchOptionsService::new(
-        Db::open_in_memory().expect("in-memory db"),
-        home.path().to_path_buf(),
-    ));
-    let (runner, release) = FakeRunner::gated();
-    let engine = Arc::new(
-        LaunchProbeService::with_parts(
-            home.path().to_path_buf(),
-            Arc::new(CountingPlanProducer::new(vec!["m-1"])),
-            Arc::new(FixedTargets::single(harness)),
-            runner,
-            ProbeEngineConfig::default(),
-        )
-        .with_launch_options(store.clone()),
-    );
-    assert_eq!(engine.mode(), ProbeEngineMode::Owner);
-
-    let mut state = app_state(home.path().to_path_buf());
-    state.launch_options_service = store;
-    state.launch_probe_service = engine.clone();
-    (state, engine, release)
-}
-
-/// The refresh an axum handler awaits — and whose future a disconnecting client
-/// drops.
-fn spawn_refresh(engine: &Arc<LaunchProbeService>, harness: &str) -> tokio::task::JoinHandle<()> {
-    let engine = engine.clone();
-    let harness = harness.to_string();
-    tokio::spawn(async move {
-        let _ = engine.refresh_now(&harness).await;
+    let attempt = spawn_refresh(&engine, HARNESS);
+    wait_until("the refresh reaches the harness", || {
+        engine.probe_phase(HARNESS, chrono::Utc::now(), None) == Some(ProbePhase::Running)
     })
-}
+    .await;
+    attempt.abort();
+    wait_until("the dropped future releases the slot", || {
+        engine.probe_phase(HARNESS, chrono::Utc::now(), None) == Some(ProbePhase::Idle)
+    })
+    .await;
 
-fn temp_runtime_home(prefix: &str) -> PathBuf {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("unix timestamp")
-        .as_nanos();
-    let path = std::env::temp_dir().join(format!("anyharness-launch-phase-{prefix}-{unique}"));
-    std::fs::create_dir_all(&path).expect("create runtime home");
-    path
-}
-
-fn app_state(runtime_home: PathBuf) -> AppState {
-    AppState::new(
-        runtime_home,
-        "http://127.0.0.1:8457".to_string(),
-        Db::open_in_memory().expect("in-memory db"),
-        false,
-        AgentSeedStore::not_configured_dev(),
-    )
-    .expect("app state")
-}
-
-/// The SERIALIZED body, so the assertions read the wire and not the projection
-/// type — an absent field and a `null` one are the same value in Rust and
-/// different bytes to a client.
-async fn launch_options_payload(state: AppState) -> Value {
-    payload_for(state, HARNESS).await
-}
-
-async fn payload_for(state: AppState, harness: &str) -> Value {
-    let response = get_launch_options(State(state), AxumPath(harness.to_string()))
-        .await
-        .expect("launch options");
-    serde_json::to_value(&response.0).expect("serialize launch options")
+    let payload = payload_for(state, HARNESS).await;
+    assert_eq!(
+        payload["probePhase"],
+        Value::from("idle"),
+        "nothing is running: {payload}"
+    );
+    assert_eq!(
+        payload["state"],
+        Value::from("observed"),
+        "a refresh nobody is doing must not be reported as one, or the client polls \
+         forever and slice E spins a disabled Refresh button: {payload}"
+    );
+    assert_eq!(payload["observedAt"], Value::from(OBSERVED_AT));
+    assert_eq!(
+        payload["options"]["models"][0]["id"],
+        Value::from("m-1"),
+        "the models really were seen, and they are still the truth: {payload}"
+    );
+    let _ = release.send(true);
 }

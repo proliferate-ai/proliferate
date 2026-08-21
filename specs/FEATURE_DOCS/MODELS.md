@@ -118,6 +118,21 @@ no slot to refine anything with, because it never admits an attempt; the row is
 its only source, and reporting it is what keeps a runtime that shares the document
 converging with the owner probing it.
 
+The row's claim is therefore believed on trust by a read-only runtime, so it is
+believed only for a bounded time. An attempt older than one whole-machine pass —
+the per-probe timeout times every registered harness plus one, since the engine
+runs one probe at a time — is abandoned: no attempt can legitimately still be
+queued behind that much work, and past it the slot (or, read-only, nothing) is the
+answer. The bound has to clear a real queue, not just one timeout, or a probe
+waiting its turn behind a full pass is called abandoned while it is about to run.
+
+When a claim is withdrawn this way, the STATE withdraws it too, not only the
+phase. `refreshing` is waited on without consulting `probePhase` at all, so a row
+vetoed as an orphan is projected as though it were settled: its last observation
+if it has one, `detecting` if it never had one. Otherwise the response would
+contradict itself — a `refreshing` state next to an `idle` phase — and the client
+that reads the state would keep polling an attempt the phase already denied.
+
 The field is omitted only when nothing is in flight in the row AND the serving
 runtime does not own the probe engine for its runtime home, the one case where no
 source can answer.

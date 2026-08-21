@@ -39,9 +39,9 @@ pub mod probe;
 pub mod targets;
 
 #[cfg(test)]
-mod runner_tests;
-#[cfg(test)]
 mod contradiction_tests;
+#[cfg(test)]
+mod runner_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
 
@@ -51,8 +51,8 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
 
-use crate::domains::agents::route_auth::{self, GatewayModelResolve, RouteAuthError};
 use crate::domains::agents::auth_state::{AuthRuntimeInputs, ProbeLifecycle, ProbePhase};
+use crate::domains::agents::route_auth::{self, GatewayModelResolve, RouteAuthError};
 
 pub use config::{PokeReason, ProbeEngineConfig, ProbeEngineMode, RefreshError};
 use live_state::{HarnessRuntimeState, LiveState, LiveStateGuard};
@@ -77,10 +77,15 @@ pub struct LaunchProbeService {
     targets: Arc<dyn ProbeTargets>,
     runner: Arc<dyn ProbeRunner>,
     config: ProbeEngineConfig,
+    /// How long a durable `probing` row may be believed before it is treated as
+    /// abandoned. Computed once: the registry's size cannot change at runtime, and
+    /// a read must not pay for an install scan.
+    abandoned_attempt_after: chrono::Duration,
     /// Atomic cutover sink/read owner. The probe scheduler remains here only
     /// until the module rename is complete; executable launch truth is written
     /// exclusively through this service.
-    launch_options: Option<Arc<crate::domains::agents::launch_options::HarnessLaunchOptionsService>>,
+    launch_options:
+        Option<Arc<crate::domains::agents::launch_options::HarnessLaunchOptionsService>>,
 }
 
 impl LaunchProbeService {
@@ -106,6 +111,7 @@ impl LaunchProbeService {
         config: ProbeEngineConfig,
     ) -> Self {
         let engine_lock = lock::ProbeEngineLock::try_acquire(&runtime_home);
+        let abandoned_attempt_after = abandoned_attempt_after(&config);
         let service = Self {
             runtime_home,
             engine_lock,
@@ -117,6 +123,7 @@ impl LaunchProbeService {
             targets,
             runner,
             config,
+            abandoned_attempt_after,
             launch_options: None,
         };
         // The orphan sweep, live from the moment ownership is decided.
@@ -153,11 +160,7 @@ impl LaunchProbeService {
     /// Runtime evidence used by the canonical agent-readiness projection.
     /// Launch-option observation replaces the deleted model-snapshot/trial
     /// authority; no catalog or trial verdict is folded here.
-    pub fn auth_runtime_inputs(
-        &self,
-        harness_kind: &str,
-        now: DateTime<Utc>,
-    ) -> AuthRuntimeInputs {
+    pub fn auth_runtime_inputs(&self, harness_kind: &str, now: DateTime<Utc>) -> AuthRuntimeInputs {
         let (phase, next_attempt_at) = self.live_phase(harness_kind, now);
         self.auth_runtime_inputs_from_options(harness_kind, now, phase, next_attempt_at)
     }
@@ -187,23 +190,41 @@ impl LaunchProbeService {
         &self,
         harness_kind: &str,
         now: DateTime<Utc>,
-        durable_in_flight: bool,
+        in_flight_since: Option<DateTime<Utc>>,
     ) -> Option<ProbePhase> {
         let live = self
             .is_owner()
             .then(|| self.live_phase(harness_kind, now).0);
-        match (durable_in_flight, live) {
-            (true, Some(ProbePhase::Running)) => Some(ProbePhase::Running),
+        // The row claims nothing, or claims something too old to believe. Either
+        // way only the slot can answer, and for a read-only runtime that is
+        // nothing at all.
+        let Some(started_at) = in_flight_since else {
+            return live;
+        };
+        if self.attempt_is_abandoned(started_at, now) {
+            return live;
+        }
+        match live {
+            Some(ProbePhase::Running) => Some(ProbePhase::Running),
             // The owner admits BEFORE `begin_probe`, so a probing row over a slot
             // that is idle (or serving out a backoff) is an orphan no attempt
             // backs: report the slot, not the row.
-            (true, Some(phase @ (ProbePhase::Idle | ProbePhase::Backoff))) => Some(phase),
+            Some(phase @ (ProbePhase::Idle | ProbePhase::Backoff)) => Some(phase),
             // Either the owner's slot is `queued`, or there is no slot to read
             // because this runtime does not own the engine. Both mean the row's
             // in-flight attempt is the best answer available.
-            (true, _) => Some(ProbePhase::Queued),
-            (false, live) => live,
+            _ => Some(ProbePhase::Queued),
         }
+    }
+
+    /// Has a durable `probing` row outlived any attempt that could still be behind
+    /// it? Nothing releases the row when an attempt's future is dropped, and a
+    /// READ-ONLY runtime has no slot to notice that with — it may not even have an
+    /// owner to wait for, since the engine lock is taken once at construction and
+    /// a sealed-container home has no owner at all. Without this bound such a row
+    /// polls a client every 1.5s for the life of the process.
+    fn attempt_is_abandoned(&self, started_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
+        now.signed_duration_since(started_at) > self.abandoned_attempt_after
     }
 
     /// The slot read both phase surfaces share. An unknown harness has no slot
@@ -239,7 +260,11 @@ impl LaunchProbeService {
             .as_ref()
             .and_then(|value| value.observed_at.as_deref())
             .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
-            .map(|value| now.signed_duration_since(value.with_timezone(&Utc)).num_seconds().max(0));
+            .map(|value| {
+                now.signed_duration_since(value.with_timezone(&Utc))
+                    .num_seconds()
+                    .max(0)
+            });
         let last_failure_detail = response
             .as_ref()
             .and_then(|value| value.probe_failure_code.clone());
@@ -420,7 +445,13 @@ impl LaunchProbeService {
         // The coalesce: the previous holder usually probed for this poke already.
         // Failed attempts count too — N pokes racing a failing probe coalesce
         // onto its one failure rather than each retrying it.
-        if attempt_covers(slot.state.lock().expect("probe slot poisoned").last_attempt_at, poked_at) {
+        if attempt_covers(
+            slot.state
+                .lock()
+                .expect("probe slot poisoned")
+                .last_attempt_at,
+            poked_at,
+        ) {
             return;
         }
         if !self.backoff_admits(&slot, Utc::now()) {
@@ -447,10 +478,7 @@ impl LaunchProbeService {
     /// A coalesced winner is adopted only when its SUCCESSFUL observation landed
     /// after this request was made — "refreshed just now" must never label a
     /// result that predates the press.
-    pub async fn refresh_now(
-        &self,
-        harness_kind: &str,
-    ) -> Result<(), RefreshError> {
+    pub async fn refresh_now(&self, harness_kind: &str) -> Result<(), RefreshError> {
         if !self.is_owner() {
             return Err(RefreshError::NotOwner);
         }
@@ -485,7 +513,10 @@ impl LaunchProbeService {
         }
     }
 
-    fn material(&self, harness_kind: &str) -> Result<route_auth::ProbeAuthMaterial, RouteAuthError> {
+    fn material(
+        &self,
+        harness_kind: &str,
+    ) -> Result<route_auth::ProbeAuthMaterial, RouteAuthError> {
         route_auth::probe_auth_material(&self.runtime_home, harness_kind)
     }
 
@@ -506,7 +537,11 @@ impl LaunchProbeService {
     /// attempt). Exposed on the impl only so tests can pin it; the arithmetic is
     /// a free function in `backoff.rs`.
     #[cfg(test)]
-    pub(crate) fn test_jittered_backoff(harness_kind: &str, attempt: u32, base_seconds: u64) -> i64 {
+    pub(crate) fn test_jittered_backoff(
+        harness_kind: &str,
+        attempt: u32,
+        base_seconds: u64,
+    ) -> i64 {
         backoff::jittered_backoff_seconds(harness_kind, attempt, base_seconds)
     }
 
@@ -519,9 +554,25 @@ impl LaunchProbeService {
     }
 }
 
+/// How long a durable `probing` row may be believed.
+///
+/// It MUST exceed `K x per_probe_timeout`. An attempt is written to the row by
+/// `begin_probe` BEFORE it waits on the machine-wide semaphore, so a whole-machine
+/// pass legitimately leaves the last harness's row `probing` behind every probe
+/// queued ahead of it. `sweep_age_multiplier` (3 timeouts) is the tempting reuse
+/// and is TOO TIGHT from K = 4 harnesses upward: it would report a genuinely
+/// queued probe as settled, which is the stall this whole field exists to avoid,
+/// arriving by the other door. K is the registry's size — every harness that can
+/// be queued — plus one timeout of headroom for the attempt that is running.
+fn abandoned_attempt_after(config: &ProbeEngineConfig) -> chrono::Duration {
+    let queue_depth = u32::try_from(crate::domains::agents::registry::built_in_registry().len())
+        .unwrap_or(u32::MAX)
+        .saturating_add(1);
+    chrono::Duration::from_std(config.per_probe_timeout.saturating_mul(queue_depth))
+        .unwrap_or_else(|_| chrono::Duration::hours(1))
+}
+
 /// Does an attempt stamped `attempt_at` cover a poke made at `poked_at`?
 fn attempt_covers(attempt_at: Option<DateTime<Utc>>, poked_at: DateTime<Utc>) -> bool {
-    attempt_at
-        .map(|at| at >= poked_at)
-        .unwrap_or(false)
+    attempt_at.map(|at| at >= poked_at).unwrap_or(false)
 }

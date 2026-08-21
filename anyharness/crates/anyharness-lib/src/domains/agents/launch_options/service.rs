@@ -50,6 +50,32 @@ pub struct LaunchOptionsRead {
     pub probe_in_flight: bool,
 }
 
+impl LaunchOptionsRead {
+    /// Re-project this read with the row's in-flight claim withdrawn — the ORPHAN
+    /// case, where a durable `probing` outlived the attempt that wrote it.
+    ///
+    /// Withdrawing it from the phase alone is not enough, and leaving the state at
+    /// `refreshing` was the worse half of the bug: `begin_probe` does not clear
+    /// `options_json`, so a harness with an observation that a user pressed Refresh
+    /// on keeps serving `refreshing` — which a client waits on WITHOUT consulting
+    /// the phase, because a refresh over readable data is the one state where
+    /// waiting needs no second opinion. The row's last observation is the honest
+    /// answer: those models really were seen, at `observedAt`, and nothing is
+    /// running now.
+    pub fn settle_orphan(&mut self) {
+        self.probe_in_flight = false;
+        self.response.state = match self.response.options.as_ref() {
+            Some(options) if options.models.is_empty() && options.controls.is_empty() => {
+                HarnessLaunchOptionsState::ObservedEmpty
+            }
+            Some(_) => HarnessLaunchOptionsState::Observed,
+            // Nothing was ever observed for this basis. `detecting` stays true, and
+            // an idle phase is what makes a client read it as an answer.
+            None => HarnessLaunchOptionsState::Detecting,
+        };
+    }
+}
+
 impl HarnessLaunchOptionsService {
     pub fn new(db: Db, runtime_home: PathBuf) -> Self {
         Self {

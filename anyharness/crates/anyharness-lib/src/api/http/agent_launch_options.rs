@@ -84,11 +84,18 @@ async fn response_for(
         .read_with_probe_state(kind)
         .map_err(|error| ApiError::internal(format!("launch-options read failed: {error}")))?
     {
-        Some(read) => {
+        Some(mut read) => {
             // The in-flight bit travels WITH the response, out of the same row, so
             // the state and the phase cannot be derived apart and drift. Read after
             // the row too, so the phase is never older than the state it qualifies.
-            let probe_phase = probe_phase_for(state, kind, read.probe_in_flight);
+            let probe_phase = probe_phase_for(state, kind, attempt_started_at(&read));
+            if read.probe_in_flight && !phase_is_in_flight(probe_phase.as_ref()) {
+                // The row claimed an attempt and nothing honoured the claim. The
+                // state has to withdraw it too: `refreshing` is waited on without
+                // consulting the phase at all, so a phase-only withdrawal would
+                // leave the wire contradicting itself and the client polling.
+                read.settle_orphan();
+            }
             Ok(to_contract(read.response, readiness, probe_phase))
         }
         // No row at all: nothing is durably in flight, whatever a slot might say.
@@ -102,7 +109,7 @@ async fn response_for(
             probe_attempted_at: chrono::Utc::now().to_rfc3339(),
             probe_failure_code: None,
             readiness,
-            probe_phase: probe_phase_for(state, kind, false),
+            probe_phase: probe_phase_for(state, kind, None),
         }),
     }
 }
@@ -170,12 +177,32 @@ fn refresh_error(error: crate::domains::agents::launch_probe::RefreshError) -> A
 fn probe_phase_for(
     state: &AppState,
     kind: &str,
-    durable_in_flight: bool,
+    in_flight_since: Option<chrono::DateTime<chrono::Utc>>,
 ) -> Option<AgentAuthProbePhase> {
     state
         .launch_probe_service
-        .probe_phase(kind, chrono::Utc::now(), durable_in_flight)
+        .probe_phase(kind, chrono::Utc::now(), in_flight_since)
         .map(probe_phase_to_contract)
+}
+
+/// When the row's in-flight attempt began, for the age bound that decides whether
+/// it can still be believed. An unparseable stamp is not believed at all: a claim
+/// whose age cannot be established is exactly the claim that could be forever old.
+fn attempt_started_at(read: &domain::LaunchOptionsRead) -> Option<chrono::DateTime<chrono::Utc>> {
+    if !read.probe_in_flight {
+        return None;
+    }
+    chrono::DateTime::parse_from_rfc3339(&read.response.probe_attempted_at)
+        .ok()
+        .map(|value| value.with_timezone(&chrono::Utc))
+}
+
+/// Is the response's phase one a client should keep waiting on?
+fn phase_is_in_flight(phase: Option<&AgentAuthProbePhase>) -> bool {
+    matches!(
+        phase,
+        Some(AgentAuthProbePhase::Queued | AgentAuthProbePhase::Running)
+    )
 }
 
 fn readiness_to_contract(status: ResolvedAgentStatus) -> AgentReadinessState {
