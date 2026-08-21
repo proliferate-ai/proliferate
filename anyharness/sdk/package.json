@@ -16,7 +16,7 @@
     "generated/openapi.json"
   ],
   "scripts": {
-    "generate:openapi": "mkdir -p generated src/generated && cd ../.. && cargo run --bin anyharness -- print-openapi > anyharness/sdk/generated/openapi.json",
+    "generate:openapi": "node ../../scripts/generate-anyharness-openapi.mjs",
     "generate:types": "npx openapi-typescript generated/openapi.json -o src/generated/openapi.ts",
     "generate": "npm run generate:openapi && npm run generate:types",
     "build": "tsc",

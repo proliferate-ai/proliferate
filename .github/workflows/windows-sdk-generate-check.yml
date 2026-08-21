@@ -1,0 +1,132 @@
+name: Windows SDK generate check
+
+# `anyharness/sdk`'s `generate:openapi` script used to be a POSIX shell one
+# liner (`mkdir -p ... && cd ../.. && cargo run ... > file`). npm runs package
+# scripts through cmd.exe on Windows, where `mkdir -p` creates a directory
+# literally named `-p`, so the step failed. That single line is the stated
+# reason desktop Windows releases were disabled in 3d3c0504b8 ("until the SDK
+# generation step is Windows-safe").
+#
+# This is the regression guard, and it builds nothing.
+#
+# The windows job covers what was actually broken: directory creation and path
+# handling under cmd.exe. It cannot exercise the cargo invocation itself,
+# because Node refuses to spawn `.cmd` stubs without a shell (CVE-2024-27980)
+# and a real `cargo run` here would mean a full Windows runtime build. The
+# linux job covers the invoke, validate and write path with a shell stub. The
+# two together cover the whole script.
+
+on:
+  pull_request:
+    paths:
+      - "scripts/generate-anyharness-openapi.mjs"
+      - "anyharness/sdk/package.json"
+      - ".github/workflows/windows-sdk-generate-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: directory handling on windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Negative control, the old shell form is broken under cmd.exe
+        shell: cmd
+        run: |
+          mkdir oldform
+          cd oldform
+          mkdir -p generated src/generated
+          if exist "generated\openapi.json" (
+            echo UNEXPECTED: cmd.exe produced generated/openapi.json, this guard is no longer meaningful
+            exit /b 1
+          )
+          if not exist "generated" (
+            echo confirmed: the old form did not create a usable generated directory
+          )
+          if exist "-p" (
+            echo confirmed: cmd.exe created a directory literally named -p
+          )
+
+      # Both directories are checked in, so they have to go before the run or
+      # the assertion below would pass without the script doing anything.
+      - name: Remove the generated directories
+        shell: bash
+        run: rm -rf anyharness/sdk/generated anyharness/sdk/src/generated
+
+      - name: The node form recreates both directories on windows
+        shell: cmd
+        env:
+          CARGO: this-runtime-does-not-exist
+        run: |
+          cd anyharness\sdk
+          node ..\..\scripts\generate-anyharness-openapi.mjs
+          if "%ERRORLEVEL%" == "0" (
+            echo UNEXPECTED: a missing runtime should have failed the script
+            exit /b 1
+          )
+          echo confirmed: the script failed loudly on a missing runtime, as intended
+
+      - name: Assert both directories were recreated and nothing partial landed
+        shell: bash
+        run: |
+          test -d anyharness/sdk/generated || { echo "generated/ was not created"; exit 1; }
+          test -d anyharness/sdk/src/generated || { echo "src/generated/ was not created"; exit 1; }
+          test ! -e anyharness/sdk/generated/openapi.json || { echo "a schema was written despite the runtime failing"; exit 1; }
+          test ! -e "anyharness/sdk/-p" || { echo "the POSIX flag leaked into a directory name"; exit 1; }
+          echo "ok: both directories recreated on windows, no partial schema written"
+
+  linux:
+    name: invoke and write path with a stubbed runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Stub the runtime
+        run: |
+          mkdir -p "$RUNNER_TEMP/stub"
+          printf '#!/bin/sh\necho %s\n' '{"openapi":"3.0.0","info":{"title":"stub","version":"1"},"paths":{}}' > "$RUNNER_TEMP/stub/cargo"
+          chmod +x "$RUNNER_TEMP/stub/cargo"
+          printf '#!/bin/sh\nexit 101\n' > "$RUNNER_TEMP/stub/cargo-fail"
+          chmod +x "$RUNNER_TEMP/stub/cargo-fail"
+          printf '#!/bin/sh\necho not json\n' > "$RUNNER_TEMP/stub/cargo-garbage"
+          chmod +x "$RUNNER_TEMP/stub/cargo-garbage"
+
+      - name: Happy path writes a parseable schema
+        working-directory: anyharness/sdk
+        run: |
+          CARGO="$RUNNER_TEMP/stub/cargo" node ../../scripts/generate-anyharness-openapi.mjs
+          node -e "JSON.parse(require('fs').readFileSync('generated/openapi.json','utf8'))"
+          echo "ok: schema written and parses"
+
+      - name: A failing runtime must not truncate an existing schema
+        working-directory: anyharness/sdk
+        run: |
+          before="$(cat generated/openapi.json)"
+          if CARGO="$RUNNER_TEMP/stub/cargo-fail" node ../../scripts/generate-anyharness-openapi.mjs; then
+            echo "a failing runtime should have failed the script"
+            exit 1
+          fi
+          after="$(cat generated/openapi.json)"
+          [ "$before" = "$after" ] || { echo "the existing schema was clobbered by a failed run"; exit 1; }
+          echo "ok: existing schema survived a failed runtime"
+
+      - name: Invalid output must be rejected before it is written
+        working-directory: anyharness/sdk
+        run: |
+          before="$(cat generated/openapi.json)"
+          if CARGO="$RUNNER_TEMP/stub/cargo-garbage" node ../../scripts/generate-anyharness-openapi.mjs; then
+            echo "non-JSON output should have failed the script"
+            exit 1
+          fi
+          [ "$before" = "$(cat generated/openapi.json)" ] || { echo "invalid output reached disk"; exit 1; }
+          echo "ok: invalid output rejected"

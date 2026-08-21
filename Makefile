@@ -1569,16 +1569,13 @@ cloud-client-generate: cloud-openapi
 # SKIP_RUST=1 means "no cargo in this worktree". Honor it here too: the
 # prebuilt runtime emits the same schema, so a frontend-only worktree does not
 # need a toolchain just to regenerate the SDK. Without this the flag leaks and
-# `SKIP_RUST=1 make build` still invokes cargo.
+# `SKIP_RUST=1 make build` still invokes cargo. The cargo-vs-prebuilt-runtime
+# choice and the directory/file writes live in generate-anyharness-openapi.mjs
+# rather than in this recipe, because npm runs package scripts through cmd.exe
+# on Windows and a `mkdir -p ... && cargo run ... > file` shell chain breaks
+# there; see the script's header comment for details.
 sdk-generate:
-	mkdir -p anyharness/sdk/generated
-	@runtime_bin="$${ANYHARNESS_DEV_RUNTIME_BIN:-}"; \
-	if [ -n "$(SKIP_RUST)" ] && [ "$(SKIP_RUST)" != "0" ] && [ -n "$$runtime_bin" ] && [ -x "$$runtime_bin" ]; then \
-		echo "sdk-generate: SKIP_RUST set, using prebuilt runtime $$runtime_bin"; \
-		"$$runtime_bin" print-openapi > anyharness/sdk/generated/openapi.json; \
-	else \
-		$(CARGO) run --bin anyharness -- print-openapi > anyharness/sdk/generated/openapi.json; \
-	fi
+	CARGO="$(CARGO)" SKIP_RUST="$(SKIP_RUST)" node scripts/generate-anyharness-openapi.mjs
 	cd anyharness/sdk && npx openapi-typescript generated/openapi.json -o src/generated/openapi.ts
 
 sdk-build: sdk-generate
