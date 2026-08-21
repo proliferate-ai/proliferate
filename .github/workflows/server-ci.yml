@@ -165,8 +165,32 @@ jobs:
       - name: Install dependencies
         run: uv pip install --system -e ".[dev]"
 
+      # Four workers means four concurrent 78-table TRUNCATEs and four
+      # concurrent full alembic upgrades, each holding an AccessExclusiveLock on
+      # every table, index, and sequence it touches. Postgres sizes its shared
+      # lock table at max_locks_per_transaction * max_connections, and the
+      # 64 * 100 default overflows with "out of shared memory". This GUC is
+      # postmaster-level, and service containers take no command line, so it has
+      # to be written to postgresql.auto.conf and the container bounced.
+      - name: Raise the Postgres lock table for parallel workers
+        run: |
+          set -euo pipefail
+          container="$(docker ps --filter 'ancestor=postgres:16-alpine' --format '{{.ID}}' | head -1)"
+          test -n "$container"
+          docker exec "$container" psql -U proliferate -d proliferate \
+            -c 'ALTER SYSTEM SET max_locks_per_transaction = 1024;'
+          docker restart "$container"
+          for _ in $(seq 1 60); do
+            if docker exec "$container" pg_isready -U proliferate -d proliferate >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec "$container" psql -U proliferate -d proliferate \
+            -c 'SHOW max_locks_per_transaction;'
+
       - name: Run tests
-        run: pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py -q --durations=20
+        run: pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py -n 4 -q --durations=20
 
   docker:
     runs-on: ubuntu-latest
