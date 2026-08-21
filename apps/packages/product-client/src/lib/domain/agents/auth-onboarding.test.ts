@@ -78,13 +78,28 @@ describe("resolveAgentAuthDisplay", () => {
 });
 
 describe("planFirstRunAuthAdoption", () => {
-  it("writes nothing when native creds are detected (native is implicit)", () => {
+  it("adopts the gateway ONLY for the non-native installed agents when credentials are mixed (THE BUG CASE)", () => {
+    // Regression guard for the fixed bug: adoption used to early-return []
+    // for the WHOLE list the moment any single agent had detected native
+    // auth. Per AGENT_AUTH.md ("adopts the gateway for harnesses without
+    // native logins"), each harness must decide independently — one
+    // harness's native login must not suppress adoption for the others.
     const actions = planFirstRunAuthAdoption({
       agents: [
-        agent({ kind: "claude" }),
-        agent({ kind: "codex" }),
-        agent({ kind: "grok", credentialState: "login_required" }),
+        agent({ kind: "claude" }), // native — excluded
+        agent({ kind: "codex" }), // native — excluded
+        agent({ kind: "grok", credentialState: "login_required" }), // not native, installed — adopts
       ],
+      selectionCount: 0,
+      gatewayEnabled: true,
+    });
+
+    expect(actions).toEqual([{ harnessKind: "grok", surface: "local" }]);
+  });
+
+  it("writes nothing when every installed agent already has native credentials (all-native)", () => {
+    const actions = planFirstRunAuthAdoption({
+      agents: [agent({ kind: "claude" }), agent({ kind: "codex" })],
       selectionCount: 0,
       gatewayEnabled: true,
     });
@@ -102,10 +117,11 @@ describe("planFirstRunAuthAdoption", () => {
     expect(actions).toEqual([]);
   });
 
-  it("preselects the gateway for installed harnesses when nothing is detected", () => {
+  it("preselects the gateway for EVERY installed harness when nothing is detected, excluding not-installed/install-required agents", () => {
     const actions = planFirstRunAuthAdoption({
       agents: [
         agent({ kind: "claude", credentialState: "login_required" }),
+        agent({ kind: "grok", credentialState: "login_required" }),
         agent({
           kind: "codex",
           credentialState: "unknown",
@@ -119,6 +135,7 @@ describe("planFirstRunAuthAdoption", () => {
 
     expect(actions).toEqual([
       { harnessKind: "claude", surface: "local" },
+      { harnessKind: "grok", surface: "local" },
     ]);
   });
 
@@ -143,9 +160,10 @@ describe("planFirstRunAuthAdoption", () => {
     ]);
   });
 
-  it("still defers to a genuine native login alongside a routed harness", () => {
-    // The other direction: one genuine native login still means "leave
-    // everything alone", even when a different harness is route-ready.
+  it("still adopts the gateway for the routed harness even when a different harness is genuinely native", () => {
+    // The other direction: a genuine native login on one harness (codex)
+    // must not suppress adoption for a route-ready harness (claude) that is
+    // NOT natively authed. Per-harness independence cuts both ways.
     const actions = planFirstRunAuthAdoption({
       agents: [
         agent({ kind: "claude", credentialsFromRoute: true }),
@@ -155,7 +173,7 @@ describe("planFirstRunAuthAdoption", () => {
       gatewayEnabled: true,
     });
 
-    expect(actions).toEqual([]);
+    expect(actions).toEqual([{ harnessKind: "claude", surface: "local" }]);
   });
 
   it("does nothing when nothing is detected and the gateway is disabled", () => {
