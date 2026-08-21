@@ -283,17 +283,44 @@ async fn an_install_id_crosses_the_process_seam_to_the_real_collector() {
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 
-/// The production discovery path applies the collector's exact
-/// bounded-graphic-ASCII domain. A bad persisted identity costs only the
-/// attribute, never the collector launch.
 #[test]
-fn discover_accepts_exactly_the_collectors_install_id_domain() {
+fn install_id_filter_accepts_exactly_the_collectors_domain() {
+    assert!(retain_valid_install_id(None).is_none());
+
+    for (install_id, accepted) in install_id_domain_cases() {
+        let retained = retain_valid_install_id(Some(install_id.clone()));
+        assert_eq!(
+            retained.as_deref(),
+            accepted.then_some(install_id.as_str()),
+            "unexpected filter result for install id {install_id:?}"
+        );
+    }
+}
+
+/// On the supported target, the real-binary discovery path delegates persisted
+/// install IDs to the platform-neutral filter before constructing the launcher.
+#[cfg(target_os = "macos")]
+#[test]
+fn discover_drops_an_unusable_persisted_install_id() {
     let root = std::env::temp_dir().join(format!("collector-bad-install-{}", uuid::Uuid::new_v4()));
     let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
         .expect("fallback");
-    let binary = built_collector_binary();
+    let launcher = CollectorProcessLauncher::discover_with_binary(
+        built_collector_binary(),
+        "desktop-test".to_owned(),
+        "test".to_owned(),
+        Some("has space".to_owned()),
+        fallback.clone(),
+    )
+    .expect("discover real collector");
+    assert!(launcher.install_id.is_none());
 
-    let discovered = [
+    fallback.close().expect("close fallback");
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
+fn install_id_domain_cases() -> [(String, bool); 7] {
+    [
         ("install-desktop-test-4b71".to_owned(), true),
         ("x".repeat(128), true),
         (String::new(), false),
@@ -302,28 +329,4 @@ fn discover_accepts_exactly_the_collectors_install_id_domain() {
         ("has\nnewline".to_owned(), false),
         ("non-ascii-é".to_owned(), false),
     ]
-    .into_iter()
-    .map(|(install_id, accepted)| {
-        let result = CollectorProcessLauncher::discover_with_binary(
-            binary.clone(),
-            "desktop-test".to_owned(),
-            "test".to_owned(),
-            Some(install_id.clone()),
-            fallback.clone(),
-        );
-        (install_id, accepted, result)
-    })
-    .collect::<Vec<_>>();
-
-    for (install_id, accepted, result) in discovered {
-        let launcher = result.expect("discover real collector");
-        assert_eq!(
-            launcher.install_id.as_deref(),
-            accepted.then_some(install_id.as_str()),
-            "unexpected discovery result for install id {install_id:?}"
-        );
-    }
-
-    fallback.close().expect("close fallback");
-    std::fs::remove_dir_all(root).expect("cleanup");
 }

@@ -35,8 +35,10 @@ pub(super) fn validate_label(value: &str) -> Result<(), CollectorLaunchError> {
     Ok(())
 }
 
-pub(super) fn is_valid_install_id(value: &str) -> bool {
-    !value.is_empty() && value.len() <= 128 && value.bytes().all(|byte| byte.is_ascii_graphic())
+pub(super) fn retain_valid_install_id(install_id: Option<String>) -> Option<String> {
+    install_id.filter(|value| {
+        !value.is_empty() && value.len() <= 128 && value.bytes().all(|byte| byte.is_ascii_graphic())
+    })
 }
 
 pub(super) fn supported_target(target: &str) -> bool {
