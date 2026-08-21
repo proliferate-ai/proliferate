@@ -99,19 +99,19 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 
 ## Self-hosting
 
-Proliferate is AGPL-3.0 — the whole stack: desktop client and cloud
-control plane. Download the app from [proliferate.com](https://proliferate.com)
+Proliferate is AGPL-3.0. That covers the whole stack, including the desktop
+client and the cloud control plane. Download the app from [proliferate.com](https://proliferate.com)
 or follow the [quickstart](https://proliferate.com/docs/product/quickstart) to
 get going in a minute.
 
 The full Proliferate control plane is self-hostable. Start with the
-[deployment docs](https://proliferate.com/docs/deployment) — Docker, AWS, GCP,
-Azure, Kubernetes, and air-gapped operation.
+[deployment docs](https://proliferate.com/docs/deployment), which cover Docker,
+AWS, GCP, Azure, Kubernetes, and air-gapped operation.
 
-- **Docker Compose:** [self-hosted-deploy.md](./guides/deploying/self-hosted-deploy.md) —
-  Caddy + Postgres + API, with bootstrap and update scripts
-- **AWS (one-click):** [self-hosted-aws.md](./guides/deploying/self-hosted-aws.md) —
-  CloudFormation wrapper that provisions the stack on EC2
+- **Docker Compose:** [self-hosted-deploy.md](./guides/deploying/self-hosted-deploy.md)
+  runs Caddy, Postgres, and the API, with bootstrap and update scripts
+- **AWS (one-click):** [self-hosted-aws.md](./guides/deploying/self-hosted-aws.md)
+  is a CloudFormation wrapper that provisions the stack on EC2
 - **Configuration:** [`server/deploy/.env.production.example`](./server/deploy/.env.production.example)
   documents every required and optional setting
 
