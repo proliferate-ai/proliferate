@@ -126,7 +126,19 @@ ${["hover", "enter", "exit", "disclosure", "panel", "pop", "emphasized"]
 }`,
 ].join("\n\n");
 
-const generated = await readFile(resolve(root, "dist/theme.css"), "utf8");
+/**
+ * Read a text file with line endings normalised to LF.
+ *
+ * Several assertions below compare against literals joined with `\n`. A
+ * working tree carrying CRLF (a Windows editor, or a checkout predating
+ * `.gitattributes`) would fail those with a message that names the CSS rather
+ * than the line endings, so normalise at the read instead.
+ */
+async function readText(path) {
+  return (await readFile(path, "utf8")).replace(/\r\n/g, "\n");
+}
+
+const generated = await readText(resolve(root, "dist/theme.css"));
 assert(
   generated === `${expectedCss}\n`,
   "dist/theme.css drifted from an independent projection of the token authority",
@@ -523,7 +535,7 @@ assert(
   "the generated theme must contain exactly one flattened light root",
 );
 
-const productCss = await readFile(resolve(root, "src/css/product.css"), "utf8");
+const productCss = await readText(resolve(root, "src/css/product.css"));
 for (const { selector, body } of topLevelBlocks(productCss)) {
   const ownsGlobalScope =
     selector.startsWith("@theme") ||
@@ -627,7 +639,7 @@ checkRawMotionAuthority(generated, "dist/theme.css");
  * 7. One authority entry per token name in the source manifest
  * ------------------------------------------------------------------ */
 
-const tokenSource = await readFile(resolve(root, "src/tokens.ts"), "utf8");
+const tokenSource = await readText(resolve(root, "src/tokens.ts"));
 const manifest =
   tokenSource
     .split("export const themeTokens = {")[1]
