@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use super::npm::platform_binary_filename;
 use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::installer::seed;
 use crate::domains::agents::model::*;
-use crate::domains::agents::readiness::paths::artifact_root;
+use crate::domains::agents::readiness::paths::{artifact_root, managed_pinned_binary_path};
 use crate::domains::agents::registry::built_in_registry;
-use crate::integrations::agent_cli::executable::is_valid_executable;
+use crate::integrations::agent_cli::executable::{is_valid_executable, platform_binary_filename};
 use crate::integrations::agent_cli::launcher::generate_launcher_script_atomic;
 
 pub(super) fn regenerate_seeded_agent_launchers(
@@ -84,7 +83,8 @@ fn regenerate_agent_process_launcher(
 pub(super) fn launcher_path_prefixes(runtime_home: &Path, kind: &AgentKind) -> Vec<PathBuf> {
     let mut prefixes = Vec::new();
     let managed_native_dir = artifact_root(runtime_home, kind, &ArtifactRole::NativeCli);
-    let managed_native_binary = managed_native_dir.join(kind.as_str());
+    let managed_native_binary =
+        managed_pinned_binary_path(runtime_home, kind, &ArtifactRole::NativeCli);
     if is_valid_executable(&managed_native_binary) {
         prefixes.push(managed_native_dir);
     }

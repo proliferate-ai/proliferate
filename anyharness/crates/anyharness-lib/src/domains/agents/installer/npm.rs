@@ -8,7 +8,7 @@ use super::managed_npm::{
 use super::downloads::activate_local_tree;
 use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::model::ArtifactRole;
-use crate::integrations::agent_cli::executable::make_executable;
+use crate::integrations::agent_cli::executable::{make_executable, platform_binary_filename};
 use crate::integrations::agent_cli::launcher::{
     generate_launcher_script, generate_launcher_script_atomic,
 };
@@ -479,14 +479,6 @@ fn install_npm_package_into_prefix(package: &str, managed_dir: &Path) -> Result<
             .stderr(Stdio::piped()),
     )
     .map(|_| ())
-}
-
-pub(super) fn platform_binary_filename(binary_name: &str) -> PathBuf {
-    if cfg!(windows) {
-        PathBuf::from(format!("{binary_name}.exe"))
-    } else {
-        PathBuf::from(binary_name)
-    }
 }
 
 pub(super) fn run_command_capture(
