@@ -1,17 +1,44 @@
 {
   "schemaVersion": 1,
-  "phase": "e1-phase1",
-  "description": "Safe, normalized definitions for the six existing production Grafana alert rules: immutable identity (UID, title, severity), the approved label/annotation overlay (log annotations only on bfrmh7e7x2k8wd), and the complete query/expression model captured 2026-07-14 via a read-only (GET-only) ruler read with the dedicated Viewer credential. queryChecksum is sha256 of the canonical JSON serialization of queryModel; scripts/ops/grafana-alerting.mjs check verifies checksum consistency offline and detects drift against a live export. This file never contains a token, webhook credential, dashboard cookie, or unrelated exported workspace object. ECS CPU > 90% for 15m (cfrmh7d7od8g0c) was retired 2026-08-21 as an infra symptom, not a product promise, and removed from this allowlist; it remains queryable on the Production Overview dashboard.",
+  "phase": "e1-phase1-rebuild",
+  "description": "Safe, normalized definitions for the five production Grafana alert rules as re-created live in the new workspace proliferate-ops-rebuild on 2026-08-21 (Lane A3, overnight observability push). Byte-identical rule identity/query logic to production-alerts.json, with datasourceUid repointed at this workspace's own CloudWatch data source (cfvtvusw9bd34d) and folderUID repointed at this workspace's ops-folder. ECS CPU > 90% for 15m is intentionally absent (retired as a paging rule; still queryable on the Production Overview dashboard). Notification path: root notification policy receiver grafana-default-sns, an sns-type contact point whose settings.topic was repointed at the existing arn:aws:sns:us-east-1:157466816238:grafana-proliferate-ops-alerts topic (already has a confirmed email subscription for pablo@pablohansen.com and the workspace IAM role already had sns:Publish on it). This file is the reviewable record of live state; scripts/ops/grafana-rebuild-bootstrap.mjs check validates it offline, and (network-gated) reconciles live state against it.",
   "target": {
     "awsAccount": "157466816238",
     "awsRegion": "us-east-1",
-    "grafanaWorkspaceId": "g-e532d030d8",
-    "grafanaWorkspaceName": "proliferate-ops",
+    "grafanaWorkspaceId": "g-48655e6419",
+    "grafanaWorkspaceName": "proliferate-ops-rebuild",
     "grafanaVersion": "10.4"
   },
   "component": "proliferate-server",
   "runbook": "guides/operating/production-alerts.md",
   "runbookUrlBase": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md",
+  "dataSource": {
+    "uid": "cfvtvusw9bd34d",
+    "type": "cloudwatch",
+    "authType": "default",
+    "defaultRegion": "us-east-1"
+  },
+  "folder": {
+    "uid": "ops-folder",
+    "title": "production-alerts"
+  },
+  "notificationPolicy": {
+    "receiver": "grafana-default-sns"
+  },
+  "contactPoint": {
+    "name": "grafana-default-sns",
+    "type": "sns",
+    "settings": {
+      "topic": "arn:aws:sns:us-east-1:157466816238:grafana-proliferate-ops-alerts",
+      "authProvider": "default",
+      "messageFormat": "json"
+    }
+  },
+  "dashboard": {
+    "uid": "prod-overview",
+    "folderUid": "ops-folder",
+    "title": "Production Overview"
+  },
   "rules": [
     {
       "uid": "dfrmh7bc4yqrkf",
@@ -36,7 +63,7 @@
               "from": 600,
               "to": 0
             },
-            "datasourceUid": "cfrbuwtvlfsowb",
+            "datasourceUid": "cfvtvusw9bd34d",
             "model": {
               "dimensions": {
                 "LoadBalancer": "app/proliferate-prod-alb/785b2edd521cc351"
@@ -114,7 +141,7 @@
         "folderUID": "ops-folder",
         "isPaused": false
       },
-      "queryChecksum": "e1ab03fefbc7119ae9be42a3c1b93fc70425d708997183c09c22964298d928cd"
+      "queryChecksum": "8c327c27ba14af990d5287538d5b950b6253e5802824b50d2dde40b422e96bb1"
     },
     {
       "uid": "bfrmh7c7ecbnkb",
@@ -139,7 +166,7 @@
               "from": 600,
               "to": 0
             },
-            "datasourceUid": "cfrbuwtvlfsowb",
+            "datasourceUid": "cfvtvusw9bd34d",
             "model": {
               "dimensions": {
                 "LoadBalancer": "app/proliferate-prod-alb/785b2edd521cc351"
@@ -217,7 +244,7 @@
         "folderUID": "ops-folder",
         "isPaused": false
       },
-      "queryChecksum": "0e1aca32091a82c24e1d6210f41fe03ae1448de612a3e783b7ad67c0df025fba"
+      "queryChecksum": "0a10c9b035212b171bc8ffbe5dcecf0b7d731f46261909262696071132486bd3"
     },
     {
       "uid": "bfrmh7e7x2k8wd",
@@ -245,7 +272,7 @@
               "from": 600,
               "to": 0
             },
-            "datasourceUid": "cfrbuwtvlfsowb",
+            "datasourceUid": "cfvtvusw9bd34d",
             "model": {
               "dimensions": {},
               "intervalMs": 1000,
@@ -321,7 +348,7 @@
         "folderUID": "ops-folder",
         "isPaused": false
       },
-      "queryChecksum": "e7b19c541f7adc5fe3c75891af176c45661e12838b69ed889cc795550e8a8304"
+      "queryChecksum": "fdd2e8416caffbb8a049d8802a37fba8eb3b8274356170bcc819fec9143249c5"
     },
     {
       "uid": "cfrmh7f2sbe2od",
@@ -346,7 +373,7 @@
               "from": 600,
               "to": 0
             },
-            "datasourceUid": "cfrbuwtvlfsowb",
+            "datasourceUid": "cfvtvusw9bd34d",
             "model": {
               "dimensions": {},
               "intervalMs": 1000,
@@ -422,7 +449,7 @@
         "folderUID": "ops-folder",
         "isPaused": false
       },
-      "queryChecksum": "b9a3d8b2e5da676d1c2f1dc52ffafdd44406a5a7e3bf73175b85a32e9cd835ec"
+      "queryChecksum": "76973128d94a2af11725b3012dc7ce778f51cfe2d953527f12b3d13267dbb418"
     },
     {
       "uid": "cfrmh7fttw4jke",
@@ -447,7 +474,7 @@
               "from": 600,
               "to": 0
             },
-            "datasourceUid": "cfrbuwtvlfsowb",
+            "datasourceUid": "cfvtvusw9bd34d",
             "model": {
               "dimensions": {},
               "intervalMs": 1000,
@@ -523,7 +550,7 @@
         "folderUID": "ops-folder",
         "isPaused": false
       },
-      "queryChecksum": "845d22464989c1572f6ee2899b60082d33fb9336b18d4df3ebba2dd2518bb1c5"
+      "queryChecksum": "a6488f31a4f9c5b4667c300a151dc17da703ad4778661194075d5e5f3b96de44"
     }
   ]
 }
