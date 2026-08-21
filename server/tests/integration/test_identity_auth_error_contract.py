@@ -431,15 +431,13 @@ async def test_provider_email_conflict_preserves_409_contract(
 async def test_mobile_token_logs_sign_in_outcome(
     client: AsyncClient,
     db_session: AsyncSession,
-    caplog: pytest.LogCaptureFixture,
+    sign_in_log_records: list[logging.LogRecord],
 ) -> None:
     """The sign-in success-rate SLI depends on this log line existing.
 
     See `server/proliferate/auth/sign_in_observability.py` and
     `guides/operating/production-alerts.md#sign-in-success-rate`.
     """
-    caplog.set_level(logging.INFO, logger="proliferate.auth.sign_in")
-
     failed = await client.post(
         "/auth/mobile/token",
         json={
@@ -467,7 +465,7 @@ async def test_mobile_token_logs_sign_in_outcome(
     )
     assert succeeded.status_code == 200
 
-    records = [r for r in caplog.records if r.name == "proliferate.auth.sign_in"]
+    records = sign_in_log_records
     assert len(records) == 2
     failure_record, success_record = records
     assert failure_record.event == "auth.sign_in.outcome"
@@ -483,10 +481,8 @@ async def test_mobile_token_logs_sign_in_outcome(
 async def test_web_token_logs_sign_in_outcome(
     client: AsyncClient,
     db_session: AsyncSession,
-    caplog: pytest.LogCaptureFixture,
+    sign_in_log_records: list[logging.LogRecord],
 ) -> None:
-    caplog.set_level(logging.INFO, logger="proliferate.auth.sign_in")
-
     failed = await client.post(
         "/auth/web/token",
         json={
@@ -497,7 +493,7 @@ async def test_web_token_logs_sign_in_outcome(
     )
     assert failed.status_code == 400
 
-    records = [r for r in caplog.records if r.name == "proliferate.auth.sign_in"]
+    records = sign_in_log_records
     assert len(records) == 1
     record = records[0]
     assert record.auth_sign_in_outcome == "failure"

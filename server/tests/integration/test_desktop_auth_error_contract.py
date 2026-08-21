@@ -170,15 +170,13 @@ async def test_stale_refresh_generation_keeps_raw_detail(
 @pytest.mark.asyncio
 async def test_token_exchange_logs_sign_in_failure_outcome(
     client: AsyncClient,
-    caplog: pytest.LogCaptureFixture,
+    sign_in_log_records: list[logging.LogRecord],
 ) -> None:
     """The sign-in success-rate SLI depends on this log line existing.
 
     See `server/proliferate/auth/sign_in_observability.py` and
     `guides/operating/production-alerts.md#sign-in-success-rate`.
     """
-    caplog.set_level(logging.INFO, logger="proliferate.auth.sign_in")
-
     response = await client.post(
         "/auth/desktop/token",
         json={
@@ -189,7 +187,7 @@ async def test_token_exchange_logs_sign_in_failure_outcome(
     )
 
     assert response.status_code == 400
-    records = [r for r in caplog.records if r.name == "proliferate.auth.sign_in"]
+    records = sign_in_log_records
     assert len(records) == 1
     record = records[0]
     assert record.event == "auth.sign_in.outcome"
@@ -202,9 +200,8 @@ async def test_token_exchange_logs_sign_in_failure_outcome(
 async def test_token_exchange_logs_sign_in_success_outcome(
     client: AsyncClient,
     db_session: AsyncSession,
-    caplog: pytest.LogCaptureFixture,
+    sign_in_log_records: list[logging.LogRecord],
 ) -> None:
-    caplog.set_level(logging.INFO, logger="proliferate.auth.sign_in")
     user = await _create_active_user(db_session)
 
     payload = await mint_desktop_token_payload(
@@ -214,7 +211,7 @@ async def test_token_exchange_logs_sign_in_success_outcome(
     )
 
     assert "access_token" in payload
-    records = [r for r in caplog.records if r.name == "proliferate.auth.sign_in"]
+    records = sign_in_log_records
     assert len(records) == 1
     record = records[0]
     assert record.event == "auth.sign_in.outcome"
