@@ -106,10 +106,13 @@ test("a dry run walks the graph without any externally visible effect", () => {
   // Nothing is pushed to main and no tag is minted.
   const commit = section("- name: Commit version bumps", "- name: Create release tags");
   assert.match(commit, /if \[\[ "\$SKIP_BUILD" == "true" \|\| "\$DRY_RUN" == "true" \]\]; then/);
-  assert.ok(
-    commit.indexOf('exit 0') < commit.indexOf("git push origin HEAD:main"),
-    "the dry-run early return must precede the push to main",
+  const earlyReturn = commit.indexOf("exit 0");
+  const pushToMain = commit.indexOf(
+    'push "https://x-access-token:${RELEASE_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main',
   );
+  assert.notEqual(earlyReturn, -1, "the commit step must keep its dry-run early return");
+  assert.notEqual(pushToMain, -1, "the commit step must push to main with RELEASE_PUSH_TOKEN");
+  assert.ok(earlyReturn < pushToMain, "the dry-run early return must precede the push to main");
   for (const step of ["- name: Verify version tags are free", "- name: Create release tags"]) {
     assert.match(
       section(step, "\n      - name:"),
