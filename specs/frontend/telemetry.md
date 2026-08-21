@@ -119,10 +119,13 @@ session replay, and telemetry-related provider and hook ownership.
 - Route identifiers never reach a replay payload. Masking hides page content
   and does nothing about URLs, so URL reduction is a separate mechanism:
   `product-client/src/domain/telemetry/route-id-redaction.ts` reduces every URL
-  to a bounded route template from a closed table, at the recorder boundary
-  (`maskAttributeFn`) and at the capture boundary (`before_send`, which also
-  covers the rrweb Meta event `href` and every `$current_url`-style property).
-  A pathname matching no template becomes `/unknown`.
+  to a bounded route template from a closed table. The load-bearing boundary is
+  `before_send`, which covers every `$current_url`-style property, the rrweb
+  Meta event `href`, and every URL-valued DOM attribute inside
+  `$snapshot_data`. The same reducer is also wired as the recorder-boundary
+  `maskAttributeFn`, but the pinned `posthog-js@1.386.8` never invokes it, so
+  that boundary is dormant forward-compatibility and must not be counted as
+  coverage. A pathname matching no template becomes `/unknown`.
 - Widening Desktop recording to customers, or re-enabling replay on any other
   surface, requires a new reviewed source change that first proves, with
   synthetic sensitive content, the route/screen block-and-mask policy,

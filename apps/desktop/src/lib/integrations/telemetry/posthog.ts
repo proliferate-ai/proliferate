@@ -14,9 +14,21 @@ let sessionReplayStarted = false;
  * (`maskAllInputs`, `maskTextSelector: "*"`, `blockSelector`) hides rendered
  * page *content*. It does nothing about URLs, which is exactly why the
  * 2026-08-18 disable (#2093) could not be answered with masking alone.
- * `maskAttributeFn` closes the attribute half of that gap at the recorder
- * boundary, and `before_send` closes the event-property and rrweb Meta-event
- * half. Network capture is refused outright rather than masked.
+ * Network capture is refused outright rather than masked.
+ *
+ * `before_send` is the single load-bearing boundary for route identifiers.
+ * It must keep covering URL-valued DOM attributes inside `$snapshot_data`,
+ * not only the rrweb Meta event and the `$current_url`-style properties. Do
+ * not narrow it on the assumption that `maskAttributeFn` covers attributes:
+ * the pinned `posthog-js@1.386.8` never invokes that callback. Its bundled
+ * recorder contains zero occurrences of the name, and the SDK forwards
+ * exactly three masking keys to rrweb (`maskAllInputs`, `maskTextSelector`,
+ * `blockSelector`) in the `Th` getter of `dist/lazy-recorder.js`. The option
+ * is declared only by the newer transitive `@posthog/types@1.404.1`, which is
+ * why it typechecks. It is kept here so the recorder boundary starts working
+ * on its own the day the SDK pin moves to a version that honors it, and
+ * `route-id-redaction.test.ts` asserts the capture boundary closes the leak
+ * without it.
  */
 export const DESKTOP_SESSION_RECORDING_OPTIONS = {
   maskAllInputs: true,

@@ -232,9 +232,16 @@ export function redactRouteIdentifiersInText(value: string): string {
 }
 
 /**
- * Redact one serialized DOM attribute. Passed to posthog-js as
- * `session_recording.maskAttributeFn`, which is invoked for every non-empty
- * string-valued attribute in the final serialized representation.
+ * Redact one serialized DOM attribute.
+ *
+ * Called from two places, and only one of them runs today. The capture
+ * boundary (`before_send` -> `redactRouteIdentifiersInCapture`) reaches every
+ * attribute inside `$snapshot_data` and is what actually closes the leak. It
+ * is also wired as posthog-js `session_recording.maskAttributeFn`, which the
+ * pinned `posthog-js@1.386.8` never invokes: the option is declared by the
+ * newer transitive `@posthog/types@1.404.1` but the SDK forwards only
+ * `maskAllInputs`, `maskTextSelector`, and `blockSelector` to rrweb. Treat the
+ * recorder boundary as dormant forward-compatibility, never as coverage.
  */
 export function redactRouteIdentifiersInAttribute(name: string, value: string): string {
   const normalizedName = name.toLowerCase();

@@ -235,6 +235,39 @@ describe("redactRouteIdentifiersInCapture", () => {
     expect(serialized).not.toContain("[truncated]");
   });
 
+  it("closes the DOM-attribute half without the recorder callback", () => {
+    // Guards the one thing a reader is most likely to get wrong. Desktop also
+    // wires this module as posthog-js `session_recording.maskAttributeFn`, but
+    // the pinned posthog-js@1.386.8 never invokes it: the option is declared
+    // only by the newer transitive @posthog/types@1.404.1, and the SDK
+    // forwards exactly maskAllInputs/maskTextSelector/blockSelector to rrweb.
+    // So `before_send` alone has to reach serialized DOM attributes. If this
+    // test is ever weakened because "the recorder masks attributes", the
+    // 2026-08-18 leak reopens.
+    const redacted = redactRouteIdentifiersInCapture(buildSnapshotCapture());
+    const stream = (redacted?.properties as Record<string, unknown>)
+      .$snapshot_data as Array<Record<string, unknown>>;
+
+    const documentNode = (stream[1].data as { node: Record<string, unknown> }).node;
+    const html = (documentNode.childNodes as Array<Record<string, unknown>>)[1];
+    const head = (html.childNodes as Array<Record<string, unknown>>)[0];
+    const link = (head.childNodes as Array<Record<string, unknown>>)[0];
+
+    // `<link rel="canonical" href>` in the serialized head.
+    expect((link.attributes as Record<string, string>).href).toBe(
+      `${ORIGIN}/workflows/:workflowId`,
+    );
+
+    // `<a href>` fourteen levels below the shared scrubber's depth cap.
+    let node = (html.childNodes as Array<Record<string, unknown>>)[1];
+    while ((node.tagName as string) !== "a") {
+      node = (node.childNodes as Array<Record<string, unknown>>)[0];
+    }
+    expect((node.attributes as Record<string, string>).href).toBe(
+      "/workspaces/:workspaceId",
+    );
+  });
+
   it("redacts attribute-mutation and custom rrweb events", () => {
     const redacted = redactRouteIdentifiersInCapture(buildSnapshotCapture());
     const stream = (redacted?.properties as Record<string, unknown>)

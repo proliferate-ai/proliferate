@@ -50,9 +50,13 @@ The recorder is pinned to `maskAllInputs`, `maskTextSelector="*"` (all text
 masked), `blockSelector="[data-telemetry-block]"`, no font collection, no
 cross-origin iframes, no network headers or bodies, and a
 `maskCapturedNetworkRequestFn` that drops every captured request. URLs are
-handled separately from masking: `maskAttributeFn` reduces URL-valued DOM
-attributes at the recorder boundary, and the `before_send` scrubber reduces
-event properties and the rrweb Meta event `href`.
+handled separately from masking, and entirely at the `before_send` boundary:
+the scrubber reduces event properties, the rrweb Meta event `href`, and every
+URL-valued DOM attribute inside `$snapshot_data`. The same reducer is also
+wired as the recorder-boundary `maskAttributeFn`, but the pinned
+`posthog-js@1.386.8` forwards only `maskAllInputs`, `maskTextSelector`, and
+`blockSelector` to rrweb and never invokes the callback, so that boundary is
+dormant forward-compatibility rather than live coverage.
 
 Only these Desktop product events reach PostHog:
 

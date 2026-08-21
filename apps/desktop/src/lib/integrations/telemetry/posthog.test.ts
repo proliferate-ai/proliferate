@@ -96,7 +96,12 @@ describe("desktop PostHog adapter", () => {
     expect(options.recordBody).toBe(false);
     expect(options.maskCapturedNetworkRequestFn()).toBeNull();
 
-    // The recorder-boundary half of the route-id fix.
+    // Dormant forward-compatibility, NOT coverage: the pinned
+    // posthog-js@1.386.8 forwards only maskAllInputs/maskTextSelector/
+    // blockSelector to rrweb and never invokes this callback. It is asserted
+    // so the wiring stays correct for a future SDK pin. The live proof that
+    // route ids never reach a payload is the before_send boundary, in
+    // product-client's route-id-redaction.test.ts.
     expect(options.maskAttributeFn("href", "/workflows/wf-secret-id")).toBe(
       "/workflows/:workflowId",
     );
