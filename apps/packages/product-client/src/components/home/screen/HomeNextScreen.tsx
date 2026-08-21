@@ -139,6 +139,7 @@ export function HomeNextScreen() {
   // A refused probe writes no durable state, so the gate cannot move and the
   // same sentence would render again unchanged. The notice says so instead.
   const modelAvailabilityNotice = resolveHomeModelGateNotice(homeNext.modelGate, {
+    refreshPending: homeNext.retryPending,
     refreshRejected: homeNext.retryRejected,
   });
   const runModelGateNoticeAction = () => {
@@ -322,16 +323,20 @@ export function HomeNextScreen() {
               modelAvailabilityNoticeSlot={modelAvailabilityNotice ? (
                 <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-ui-sm text-muted-foreground">
                   <span>{modelAvailabilityNotice.text}</span>
-                  {/* Ruling 5: every notice carries an ENABLED action that
-                      cures the state it describes. */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={runModelGateNoticeAction}
-                    className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
-                  >
-                    {modelAvailabilityNotice.actionLabel}
-                  </Button>
+                  {/* Ruling 5: a notice that names a cure carries an ENABLED
+                      action for it. The single terminal state names none —
+                      a button that cannot change anything is the dead end
+                      this gate removes, not a cure. */}
+                  {modelAvailabilityNotice.action ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={runModelGateNoticeAction}
+                      className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                    >
+                      {modelAvailabilityNotice.actionLabel}
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
               submitDisabledReasonCtaSlot={

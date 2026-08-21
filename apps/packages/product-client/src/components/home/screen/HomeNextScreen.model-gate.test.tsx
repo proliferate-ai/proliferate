@@ -46,6 +46,7 @@ const screenMocks = vi.hoisted(() => {
     hasKnownAgents: true,
     retryModelObservation: () => {},
     retryRejected: false,
+    retryPending: false,
     canLaunchTarget: true,
     effectiveModelSelection: { kind: "codex", modelId: "gpt-5.4" },
     launchTarget: { kind: "cowork" },
@@ -254,6 +255,7 @@ function resetHomeNext() {
   screenMocks.homeNext.hasKnownAgents = true;
   screenMocks.homeNext.retryModelObservation = screenMocks.retryModelObservation;
   screenMocks.homeNext.retryRejected = false;
+  screenMocks.homeNext.retryPending = false;
   screenMocks.homeNext.canLaunchTarget = true;
   screenMocks.homeNext.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
   screenMocks.homeNext.launchTarget = { kind: "cowork" };
@@ -297,6 +299,9 @@ describe("HomeNextScreen model gate", () => {
     expect(screen.queryByText(/Couldn't check your models/i)).toBeNull();
     expect(screen.queryByText(/Models couldn't be loaded/i)).toBeNull();
     expect(screen.queryByText(/hasn't reported launch options/i)).toBeNull();
+    expect(screen.queryByText(/Models haven't been detected/i)).toBeNull();
+    expect(screen.queryByText(/Couldn't refresh your models/i)).toBeNull();
+    expect(screen.queryByText(/No agents are supported/i)).toBeNull();
   });
 
   it("renders setup guidance only for agent_setup_required", () => {
@@ -472,5 +477,38 @@ describe("HomeNextScreen model gate", () => {
     render(<HomeNextScreen />);
     expect(screen.getByText("Finish agent setup to start a chat.")).toBeTruthy();
     expect(screen.queryByText("Couldn't refresh your models.")).toBeNull();
+  });
+
+  it("keeps the sentence that says a probe RAN and failed", () => {
+    // "Couldn't check your models." carries strictly more than a refusal does.
+    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "observation_failed" };
+    screenMocks.homeNext.retryRejected = true;
+    render(<HomeNextScreen />);
+    expect(screen.getByText("Couldn't check your models.")).toBeTruthy();
+    expect(screen.queryByText("Couldn't refresh your models.")).toBeNull();
+  });
+
+  it("says a refresh is running rather than that nothing was detected", () => {
+    // Serialized probes, up to 45s per kind, and no polling of a settled row:
+    // the terminal sentence would otherwise sit over live work.
+    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "observation_idle" };
+    screenMocks.homeNext.retryPending = true;
+    screenMocks.homeNext.retryRejected = true;
+    render(<HomeNextScreen />);
+    expect(screen.getByText("Refreshing your models…")).toBeTruthy();
+    expect(screen.queryByText("Models haven't been detected yet.")).toBeNull();
+    expect(screen.queryByText("Couldn't refresh your models.")).toBeNull();
+  });
+
+  it("offers nothing to press when no agent can ever run here", () => {
+    // The only terminal gate: a Refresh would re-read an identical built-in
+    // registry forever, so a button would be the dead end, not the cure.
+    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "agents_unsupported" };
+    render(<HomeNextScreen />);
+    expect(screen.getByText("No agents are supported on this machine.")).toBeTruthy();
+    for (const name of ["Refresh", "Retry", "Check again", "Agents"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    expect(screenMocks.retryModelObservation).not.toHaveBeenCalled();
   });
 });

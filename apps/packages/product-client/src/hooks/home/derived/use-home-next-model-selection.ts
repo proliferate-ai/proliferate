@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type {
   AgentAuthProbePhase,
@@ -30,6 +30,26 @@ import {
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
+
+interface RefreshAttempt {
+  attempted: number;
+  settled: number;
+  refused: number;
+}
+
+const IDLE_REFRESH_ATTEMPT: RefreshAttempt = { attempted: 0, settled: 0, refused: 0 };
+
+function isRefreshInFlight(attempt: RefreshAttempt): boolean {
+  return attempt.attempted > 0 && attempt.settled < attempt.attempted;
+}
+
+/** Refused only when NOTHING got through: one kind succeeding means the
+ * refresh did something, whatever another kind answered. */
+function isRefreshRefused(attempt: RefreshAttempt): boolean {
+  return attempt.attempted > 0
+    && attempt.settled === attempt.attempted
+    && attempt.refused === attempt.attempted;
+}
 
 interface UseHomeNextModelSelectionArgs {
   modelSelectionOverride: HomeNextModelSelection | null;
@@ -205,6 +225,22 @@ export function useHomeNextModelSelection({
     targetLaunchOptions.isTargetUnobserved,
   ]);
 
+  /**
+   * The outcome of the probes THIS notice's action started.
+   *
+   * Counted here rather than read off the mutation, because one `useMutation`
+   * observer tracks only its most recent call: fire two kinds, have one
+   * refused and one succeed, and `isError` reports whichever finished last.
+   * The user would be told the refresh was refused because of start order.
+   */
+  const [refreshAttempt, setRefreshAttempt] = useState(IDLE_REFRESH_ATTEMPT);
+  // A refusal belongs to the target it was refused on. Switching targets must
+  // not carry "Couldn't refresh your models." to a target nothing was ever
+  // asked of — and on cloud nothing can clear it, since cloud never probes.
+  const launchTargetKind = launchTarget?.kind ?? null;
+  useEffect(() => {
+    setRefreshAttempt(IDLE_REFRESH_ATTEMPT);
+  }, [launchTargetKind]);
   const refreshLaunchOptions = useRefreshHarnessLaunchOptionsMutation();
   const refetchTargetLaunchOptions = targetLaunchOptions.refetch;
   const refetchLaunchOptionsKind = useRefetchAgentLaunchOptionsKind();
@@ -246,13 +282,13 @@ export function useHomeNextModelSelection({
       void refetchAgents();
       return;
     }
+    const probeKinds: string[] = [];
     for (const observation of observations) {
       if (
         !isCloudTarget
         && (awaitsFirstProbe || observation.state === "failed_without_observation")
       ) {
-        refreshMutate(observation.harnessKind);
-        repaired = true;
+        probeKinds.push(observation.harnessKind);
         continue;
       }
       if (!observation.isError) {
@@ -262,6 +298,23 @@ export function useHomeNextModelSelection({
         refetchTargetLaunchOptions();
       } else {
         refetchLaunchOptionsKind(observation.harnessKind);
+      }
+      repaired = true;
+    }
+    if (probeKinds.length > 0) {
+      setRefreshAttempt({ attempted: probeKinds.length, settled: 0, refused: 0 });
+      for (const harnessKind of probeKinds) {
+        refreshMutate(harnessKind, {
+          onError: () => setRefreshAttempt((attempt) => ({
+            ...attempt,
+            settled: attempt.settled + 1,
+            refused: attempt.refused + 1,
+          })),
+          onSuccess: () => setRefreshAttempt((attempt) => ({
+            ...attempt,
+            settled: attempt.settled + 1,
+          })),
+        });
       }
       repaired = true;
     }
@@ -310,9 +363,14 @@ export function useHomeNextModelSelection({
     error: (isCloudTarget ? null : agentsQueryError) ?? targetLaunchOptions.error,
     modelGate,
     retryModelObservation,
-    /** The last refresh was REFUSED by the runtime. A rejection writes no
-     * durable state, so nothing else on screen would ever change. */
-    retryRejected: refreshLaunchOptions.isError,
+    /** A probe this notice started is still running. Serialized, up to 45s per
+     * kind, and the launch-options query does not poll a settled row — so
+     * without this the settled sentence is rendered over live work. */
+    retryPending: !isCloudTarget && isRefreshInFlight(refreshAttempt),
+    /** EVERY kind attempted was refused. A rejection writes no durable state,
+     * so nothing else on screen would ever change. Scoped to local: cloud
+     * never calls the mutation, so nothing there could clear it. */
+    retryRejected: !isCloudTarget && isRefreshRefused(refreshAttempt),
   };
 }
 

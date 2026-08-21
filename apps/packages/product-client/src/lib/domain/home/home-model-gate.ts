@@ -32,6 +32,13 @@ export type HomeModelGateBlockedReason =
   /** A settled observation that found no models. The agents are fine; they
    * reported nothing. */
   | "observed_empty"
+  /**
+   * Every agent the runtime knows about is unsupported on this machine. The
+   * only terminal state in the union: no probe can produce a model and no
+   * button can change that, so it is the one reason whose notice offers no
+   * action rather than one that quietly does nothing.
+   */
+  | "agents_unsupported"
   /** The probe ran and failed without ever producing an observation. */
   | "observation_failed"
   /**
@@ -42,12 +49,15 @@ export type HomeModelGateBlockedReason =
    * until a user asks. Reporting it as in-flight is the "Probing…" that never
    * ends; reporting nothing at all is a dead end with no cure on screen.
    *
-   * This is also where a `backoff` probe phase lands, deliberately. A retry IS
-   * armed for a future time, so it is tempting to call it in flight — but
-   * `observation_pending` is not polled, so classifying it that way would
-   * manufacture a new permanently-silent state, which is the exact bug this
-   * reason exists to remove. "Models haven't been detected yet." is literally
-   * true of a backed-off harness, and the Refresh does not wait for the timer.
+   * A `backoff` probe phase lands here too, deliberately. `probe_phase` only
+   * returns `Backoff` when the durable row is NOT in flight — an in-flight row
+   * is forced to `queued`/`running` — so backoff always arrives on a SETTLED
+   * row (an `observed` or `last_good_after_failure` row with zero models and a
+   * retry armed for a future time), never on a `detecting` one. Calling it
+   * in-flight would map it to `observation_pending`, which is not polled, and
+   * so would manufacture a new permanently-silent state — the exact bug this
+   * reason removes. The sentence is true of it, and `refresh_now` never
+   * consults the backoff timer, so the cure works immediately.
    */
   | "observation_idle"
   /** The launch-option request itself failed; there is no state to read. */
@@ -136,6 +146,14 @@ export function resolveHomeModelGate(input: HomeModelGateInput): HomeModelGate {
   if (input.agentReadiness.some(readinessNeedsSetup)) {
     return blocked("agent_setup_required");
   }
+  // Before any "nobody has looked" story: nothing CAN look. Requires at least
+  // one known agent, so an empty catalog never claims this.
+  if (
+    input.agentReadiness.length > 0
+    && input.agentReadiness.every((readiness) => readiness === "unsupported")
+  ) {
+    return blocked("agents_unsupported");
+  }
   if (input.observations.some((observation) => observation.state === "observed_empty")) {
     return blocked("observed_empty");
   }
@@ -200,8 +218,9 @@ export function isSettledUnobservedHarness(
  *  - `unsupported`: NOT setup. Nothing the user can do makes this agent run on
  *    this machine, so it must never speak for the whole catalog — a single
  *    unsupported agent alongside working ones would otherwise pin Home to a
- *    setup notice forever. It falls through to `observation_idle`, which has
- *    a real cure, so it is never silent.
+ *    setup notice forever. When it is the ONLY thing the catalog holds, the
+ *    dedicated `agents_unsupported` reason states that plainly instead of
+ *    offering a Refresh that re-reads the same list forever.
  */
 export function readinessNeedsSetup(readiness: AgentReadinessState): boolean {
   switch (readiness) {
@@ -247,6 +266,7 @@ export const HOME_MODEL_GATE_BLOCKED_REASONS = [
   "observation_pending",
   "agent_setup_required",
   "observed_empty",
+  "agents_unsupported",
   "observation_failed",
   "observation_idle",
   "transport_error",
@@ -289,6 +309,7 @@ export function resolveHomeModelSelectorAvailability(
     case "target_missing":
     case "target_unobserved":
     case "agent_setup_required":
+    case "agents_unsupported":
     case "observation_failed":
     case "observation_idle":
     case "transport_error":
@@ -296,100 +317,19 @@ export function resolveHomeModelSelectorAvailability(
   }
 }
 
-/** The action a blocked notice offers. Each one cures its own state. */
-export type HomeModelGateNoticeAction =
-  | "agent_settings"
-  | "retry_probe"
-  | "refetch_launch_options"
-  | "check_target_again";
-
-export interface HomeModelGateNotice {
-  text: string;
-  actionLabel: string;
-  action: HomeModelGateNoticeAction;
-}
-
-export const HOME_MODEL_GATE_AGENT_SETUP_NOTICE = "Finish agent setup to start a chat.";
-
-/**
- * Shown in place of a probe-cured notice when the probe itself was REFUSED.
- *
- * A rejected refresh writes no durable state, so the underlying gate does not
- * move and the same sentence would render again unchanged — a button that
- * appears to do nothing, forever. (A probe that runs and FAILS is already
- * visible: the runtime records `failed_without_observation` and the gate flips
- * to "Couldn't check your models.")
- */
-export const HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE = "Couldn't refresh your models.";
-
-/**
- * The visible line under the composer, or `null` for the states that must stay
- * silent.
- *
- * `selection_required` and `observed_empty` are deliberately silent (owner
- * revisions r2 and r3): both are cured by the enabled picker itself, and a
- * sentence next to a control that already says what to do reads as a dead end
- * rather than an instruction. `querying` / `observation_pending` are silent
- * because work is in flight and the toast already owns that story.
- */
-export function resolveHomeModelGateNotice(
-  gate: HomeModelGate,
-  options: { refreshRejected?: boolean } = {},
-): HomeModelGateNotice | null {
-  const notice = resolveGateNotice(gate);
-  // Only a notice whose action FIRES a probe can have that probe refused; the
-  // others never call the mutation, so its error says nothing about them.
-  if (notice && options.refreshRejected && notice.action === "retry_probe") {
-    return { ...notice, text: HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE };
-  }
-  return notice;
-}
-
-function resolveGateNotice(gate: HomeModelGate): HomeModelGateNotice | null {
-  if (gate.kind !== "blocked") {
-    return null;
-  }
-  switch (gate.reason) {
-    case "agent_setup_required":
-      return {
-        text: HOME_MODEL_GATE_AGENT_SETUP_NOTICE,
-        actionLabel: "Agents",
-        action: "agent_settings",
-      };
-    case "observation_failed":
-      return {
-        text: "Couldn't check your models.",
-        actionLabel: "Retry",
-        action: "retry_probe",
-      };
-    // Same words and the same cure as the Settings models section, which
-    // solved this state first: an honest "nobody has looked yet" plus a
-    // Refresh that looks. Never "Probing…" — nothing is probing.
-    case "observation_idle":
-      return {
-        text: "Models haven't been detected yet.",
-        actionLabel: "Refresh",
-        action: "retry_probe",
-      };
-    case "transport_error":
-      return {
-        text: "Models couldn't be loaded.",
-        actionLabel: "Retry",
-        action: "refetch_launch_options",
-      };
-    case "target_unobserved":
-      return {
-        text: "Proliferate Cloud hasn't reported launch options yet.",
-        actionLabel: "Check again",
-        action: "check_target_again",
-      };
-    case "target_missing":
-    case "querying":
-    case "observation_pending":
-    case "observed_empty":
-      return null;
-  }
-}
+// Notice resolution lives in a sibling module purely for size; this file stays
+// the one import path every consumer uses, so nothing downstream moves.
+export {
+  HOME_MODEL_GATE_AGENT_SETUP_NOTICE,
+  HOME_MODEL_GATE_AGENTS_UNSUPPORTED_NOTICE,
+  HOME_MODEL_GATE_REFRESHING_NOTICE,
+  HOME_MODEL_GATE_REFRESH_REJECTED_NOTICE,
+  resolveHomeModelGateNotice,
+} from "#product/lib/domain/home/home-model-gate-notice";
+export type {
+  HomeModelGateNotice,
+  HomeModelGateNoticeAction,
+} from "#product/lib/domain/home/home-model-gate-notice";
 
 /** The disabled Send's tooltip and accessible name while a model is unchosen. */
 export const HOME_MODEL_GATE_SEND_BLOCKED_REASON = "Choose a model";

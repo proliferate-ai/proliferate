@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useHomeNextModelSelection } from "#product/hooks/home/derived/use-home-next-model-selection";
@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
   refetchKind: vi.fn(),
   refetchAgents: vi.fn(),
   refreshMutate: vi.fn(),
-  refreshIsError: false,
+  refreshCalls: [] as Array<{
+    kind: string;
+    options?: { onSuccess?: () => void; onError?: () => void };
+  }>,
   otherEntries: [] as Array<{
     harnessKind: string;
     data: Record<string, unknown> | null;
@@ -50,10 +53,7 @@ vi.mock("#product/hooks/access/anyharness/agents/use-refetch-agent-launch-option
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
-  useRefreshHarnessLaunchOptionsMutation: () => ({
-    mutate: mocks.refreshMutate,
-    isError: mocks.refreshIsError,
-  }),
+  useRefreshHarnessLaunchOptionsMutation: () => ({ mutate: mocks.refreshMutate }),
 }));
 
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
@@ -77,6 +77,12 @@ const CLOUD_TARGET = {
   baseBranch: "main",
 } as const;
 
+type LaunchTarget = typeof LOCAL_TARGET | typeof CLOUD_TARGET | null;
+
+function renderSelection(launchTarget: LaunchTarget) {
+  return renderHook(() => useHomeNextModelSelection({ modelSelectionOverride: null, launchTarget }));
+}
+
 describe("useHomeNextModelSelection", () => {
   beforeEach(() => {
     mocks.args = null;
@@ -86,8 +92,10 @@ describe("useHomeNextModelSelection", () => {
     mocks.refetch = vi.fn();
     mocks.refetchKind = vi.fn();
     mocks.refetchAgents = vi.fn();
-    mocks.refreshMutate = vi.fn();
-    mocks.refreshIsError = false;
+    mocks.refreshCalls = [];
+    mocks.refreshMutate = vi.fn((kind: string, options?: Record<string, () => void>) => {
+      mocks.refreshCalls.push({ kind, options });
+    });
     mocks.otherEntries = [];
     mocks.agents = [];
     mocks.readyAgents = [];
@@ -105,10 +113,7 @@ describe("useHomeNextModelSelection", () => {
 
   it("uses the exact observed default and keeps an unknown upstream id reachable", () => {
     mocks.data = response();
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     expect(result.current.modelGate).toEqual({ kind: "launchable" });
     expect(mocks.args).toEqual({ harnessKind: "claude", launchTarget: LOCAL_TARGET });
     expect(result.current.effectiveModelSelection).toEqual({ kind: "claude", modelId: "fable" });
@@ -122,10 +127,7 @@ describe("useHomeNextModelSelection", () => {
     mocks.data = response();
     mocks.readyAgents = [{ kind: "claude" }, { kind: "codex" }];
     mocks.otherEntries = [entry("codex", codexResponse())];
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     // Negative control against the cutover regression: the launch picker must
     // not collapse to the requested harness alone.
     expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["claude", "codex"]);
@@ -137,29 +139,20 @@ describe("useHomeNextModelSelection", () => {
     mocks.data = response();
     mocks.readyAgents = [{ kind: "claude" }, { kind: "codex" }];
     mocks.otherEntries = [entry("codex", null, { isPending: true })];
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["claude"]);
     expect(result.current.modelGate).toEqual({ kind: "launchable" });
   });
 
   it("offers no explicit model before the target has an observation", () => {
     mocks.isTargetUnobserved = true;
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: CLOUD_TARGET,
-    }));
+    const { result } = renderSelection(CLOUD_TARGET);
     expect(result.current.modelGate).toEqual({ kind: "blocked", reason: "target_unobserved" });
     expect(result.current.effectiveModelSelection).toBeNull();
   });
 
   it("offers no explicit model when no launch target is selected", () => {
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: null,
-    }));
+    const { result } = renderSelection(null);
     expect(result.current.modelGate).toEqual({ kind: "blocked", reason: "target_missing" });
     expect(result.current.effectiveModelSelection).toBeNull();
   });
@@ -170,18 +163,12 @@ describe("useHomeNextModelSelection", () => {
     mocks.agents = [{ kind: "claude", readiness: "ready" }, { kind: "codex", readiness: "ready" }];
     mocks.readyAgents = [{ kind: "claude" }, { kind: "codex" }];
     mocks.otherEntries = [entry("codex", null, { isPending: true })];
-    const querying = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const querying = renderSelection(LOCAL_TARGET);
     expect(querying.result.current.modelGate).toEqual({ kind: "blocked", reason: "querying" });
     querying.unmount();
 
     mocks.otherEntries = [entry("codex", null, { isError: true })];
-    const failed = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const failed = renderSelection(LOCAL_TARGET);
     expect(failed.result.current.modelGate).toEqual({
       kind: "blocked",
       reason: "transport_error",
@@ -192,10 +179,7 @@ describe("useHomeNextModelSelection", () => {
     mocks.agents = [{ kind: "claude", readiness: "ready" }];
     mocks.readyAgents = [{ kind: "claude" }];
     mocks.data = { ...response(), state: "detecting", probePhase: "running", options: null };
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     expect(result.current.modelGate).toEqual({
       kind: "blocked",
       reason: "observation_pending",
@@ -204,10 +188,7 @@ describe("useHomeNextModelSelection", () => {
 
   it("reads agent_setup_required only from real install/login readiness", () => {
     mocks.agents = [{ kind: "claude", readiness: "install_required" }];
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     expect(result.current.modelGate).toEqual({
       kind: "blocked",
       reason: "agent_setup_required",
@@ -219,10 +200,7 @@ describe("useHomeNextModelSelection", () => {
     // target; on a cloud target they are a different machine's business.
     mocks.agents = [{ kind: "claude", readiness: "install_required" }];
     mocks.agentsError = true;
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: CLOUD_TARGET,
-    }));
+    const { result } = renderSelection(CLOUD_TARGET);
     // Neither the local readiness nor the local catalog's failure reaches it:
     // the honest answer is that nothing has looked at the sandbox yet.
     expect(result.current.modelGate).toEqual({
@@ -247,10 +225,7 @@ describe("useHomeNextModelSelection", () => {
         defaults: { modelId: "also-gone", controlValues: {} },
       },
     };
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     // No first-model fallback: the rows stay on offer, the selection does not
     // happen, and the gate says so.
     expect(result.current.modelGate).toEqual({ kind: "selection_required" });
@@ -277,10 +252,7 @@ describe("useHomeNextModelSelection", () => {
     mocks.readyAgents = [{ kind: "claude" }, { kind: "codex" }];
     mocks.data = { ...response(), state: "detecting", probePhase: "idle", options: null };
     mocks.otherEntries = [entry("codex", codexResponse())];
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     expect(result.current.modelGate).toEqual({ kind: "selection_required" });
     expect(result.current.effectiveModelSelection).toBeNull();
     expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["codex"]);
@@ -289,10 +261,7 @@ describe("useHomeNextModelSelection", () => {
   it("keeps refreshing and last_good_after_failure launchable", () => {
     for (const state of ["refreshing", "last_good_after_failure"] as const) {
       mocks.data = { ...response(), state, probePhase: "running" };
-      const { result, unmount } = renderHook(() => useHomeNextModelSelection({
-        modelSelectionOverride: null,
-        launchTarget: LOCAL_TARGET,
-      }));
+      const { result, unmount } = renderSelection(LOCAL_TARGET);
       expect(result.current.modelGate).toEqual({ kind: "launchable" });
       unmount();
     }
@@ -302,25 +271,19 @@ describe("useHomeNextModelSelection", () => {
     mocks.agents = [{ kind: "claude", readiness: "ready" }];
     mocks.readyAgents = [{ kind: "claude" }];
     mocks.data = { ...response(), state: "failed_without_observation", options: null };
-    const failed = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const failed = renderSelection(LOCAL_TARGET);
     expect(failed.result.current.modelGate).toEqual({
       kind: "blocked",
       reason: "observation_failed",
     });
     failed.result.current.retryModelObservation();
-    expect(mocks.refreshMutate).toHaveBeenCalledWith("claude");
+    expect(mocks.refreshMutate).toHaveBeenCalledWith("claude", expect.anything());
     expect(mocks.refetch).not.toHaveBeenCalled();
     failed.unmount();
 
     mocks.data = undefined;
     mocks.targetIsError = true;
-    const broken = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const broken = renderSelection(LOCAL_TARGET);
     expect(broken.result.current.modelGate).toEqual({
       kind: "blocked",
       reason: "transport_error",
@@ -345,16 +308,13 @@ describe("useHomeNextModelSelection", () => {
       probePhase: "idle",
       options: null,
     };
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     expect(result.current.modelGate).toEqual({
       kind: "blocked",
       reason: "observation_idle",
     });
     result.current.retryModelObservation();
-    expect(mocks.refreshMutate).toHaveBeenCalledWith("cursor");
+    expect(mocks.refreshMutate).toHaveBeenCalledWith("cursor", expect.anything());
     expect(mocks.refetch).not.toHaveBeenCalled();
   });
 
@@ -372,10 +332,7 @@ describe("useHomeNextModelSelection", () => {
       options: { models: [], controls: [], defaults: { modelId: null, controlValues: {} } },
     };
     mocks.otherEntries = [entry("codex", null, { isError: true })];
-    const fanout = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const fanout = renderSelection(LOCAL_TARGET);
     fanout.result.current.retryModelObservation();
     expect(mocks.refetchKind).toHaveBeenCalledWith("codex");
     expect(mocks.refetch).not.toHaveBeenCalled();
@@ -386,10 +343,7 @@ describe("useHomeNextModelSelection", () => {
     mocks.otherEntries = [];
     mocks.data = undefined;
     mocks.agentsError = true;
-    const catalog = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const catalog = renderSelection(LOCAL_TARGET);
     expect(catalog.result.current.modelGate).toEqual({
       kind: "blocked",
       reason: "transport_error",
@@ -399,7 +353,9 @@ describe("useHomeNextModelSelection", () => {
   });
 
   it.each([
-    ["a backed-off probe", { state: "detecting", probePhase: "backoff" }],
+    // `probe_phase` forces queued/running for an in-flight row, so backoff can
+    // only arrive on a SETTLED one — `{detecting, backoff}` is not a wire shape.
+    ["a backed-off retry on a settled row", { state: "observed", probePhase: "backoff" }],
     ["a runtime that owns no probe engine", { state: "detecting", probePhase: null }],
     ["an observation with zero models", { state: "observed", probePhase: "idle" }],
     ["a zero-model last_good_after_failure", { state: "last_good_after_failure", probePhase: "idle" }],
@@ -410,16 +366,13 @@ describe("useHomeNextModelSelection", () => {
     mocks.agents = [{ kind: "claude", readiness: "ready" }];
     mocks.readyAgents = [{ kind: "claude" }];
     mocks.data = { ...response(), ...overrides, options: null };
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     expect(result.current.modelGate).toEqual({
       kind: "blocked",
       reason: "observation_idle",
     });
     result.current.retryModelObservation();
-    expect(mocks.refreshMutate).toHaveBeenCalledWith("claude");
+    expect(mocks.refreshMutate).toHaveBeenCalledWith("claude", expect.anything());
     expect(mocks.refetch).not.toHaveBeenCalled();
   });
 
@@ -431,10 +384,7 @@ describe("useHomeNextModelSelection", () => {
       defaultChatAgentKind: "",
       defaultChatModelIdByAgentKind: {},
     });
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     expect(result.current.modelGate).toEqual({
       kind: "blocked",
       reason: "observation_idle",
@@ -448,10 +398,7 @@ describe("useHomeNextModelSelection", () => {
     // A cloud response carries no probePhase, so cloud always lands in the
     // residual — and there the sandbox re-read genuinely IS the cure.
     mocks.data = undefined;
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: CLOUD_TARGET,
-    }));
+    const { result } = renderSelection(CLOUD_TARGET);
     expect(result.current.modelGate).toEqual({
       kind: "blocked",
       reason: "observation_idle",
@@ -461,13 +408,72 @@ describe("useHomeNextModelSelection", () => {
     expect(mocks.refreshMutate).not.toHaveBeenCalled();
   });
 
-  it("reports a refused refresh so the notice can stop repeating itself", () => {
-    mocks.refreshIsError = true;
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+  it("claims refusal only when nothing got through, and reports the wait", () => {
+    // One `useMutation` observer tracks only its last call, so reading `isError`
+    // off it made the claim depend on which kind finished last, not on truth.
+    mocks.agents = [
+      { kind: "claude", readiness: "ready" },
+      { kind: "codex", readiness: "ready" },
+    ];
+    mocks.readyAgents = [{ kind: "claude" }, { kind: "codex" }];
+    mocks.data = { ...response(), state: "observed", probePhase: "idle", options: null };
+    mocks.otherEntries = [entry("codex", { ...codexResponse(), state: "observed", options: null })];
+    const { result } = renderSelection(LOCAL_TARGET);
+    expect(result.current.retryPending).toBe(false);
+
+    act(() => result.current.retryModelObservation());
+    expect(mocks.refreshCalls.map((call) => call.kind)).toEqual(["claude", "codex"]);
+    // Still running: the settled sentence must not be rendered over live work.
+    expect(result.current.retryPending).toBe(true);
+    expect(result.current.retryRejected).toBe(false);
+
+    act(() => mocks.refreshCalls[0].options?.onError?.());
+    expect(result.current.retryPending).toBe(true);
+    act(() => mocks.refreshCalls[1].options?.onSuccess?.());
+    // One kind refused, one succeeded: the refresh DID something.
+    expect(result.current.retryPending).toBe(false);
+    expect(result.current.retryRejected).toBe(false);
+
+    act(() => result.current.retryModelObservation());
+    act(() => {
+      mocks.refreshCalls[2].options?.onError?.();
+      mocks.refreshCalls[3].options?.onError?.();
+    });
     expect(result.current.retryRejected).toBe(true);
+  });
+
+  it("never carries a local refusal onto a cloud target", () => {
+    // Cloud never calls the mutation, so nothing on that path could clear a
+    // stale refusal: it would be a permanent, uncurable false failure claim.
+    // Two mechanisms stop it (the `!isCloudTarget` scope and the reset on
+    // target kind) and this proves the OUTCOME, not either one alone: removing
+    // just one still passes, removing both fails.
+    mocks.agents = [{ kind: "claude", readiness: "ready" }];
+    mocks.readyAgents = [{ kind: "claude" }];
+    mocks.data = { ...response(), state: "observed", probePhase: "idle", options: null };
+    const view = renderHook(
+      ({ target }: { target: typeof LOCAL_TARGET | typeof CLOUD_TARGET }) =>
+        useHomeNextModelSelection({ modelSelectionOverride: null, launchTarget: target }),
+      { initialProps: { target: LOCAL_TARGET as typeof LOCAL_TARGET | typeof CLOUD_TARGET } },
+    );
+    act(() => view.result.current.retryModelObservation());
+    act(() => mocks.refreshCalls[0].options?.onError?.());
+    expect(view.result.current.retryRejected).toBe(true);
+
+    view.rerender({ target: CLOUD_TARGET });
+    expect(view.result.current.retryRejected).toBe(false);
+  });
+
+  it("states an all-unsupported catalog terminally instead of offering a probe", () => {
+    mocks.agents = [
+      { kind: "claude", readiness: "unsupported" },
+      { kind: "codex", readiness: "unsupported" },
+    ];
+    const { result } = renderSelection(LOCAL_TARGET);
+    expect(result.current.modelGate).toEqual({
+      kind: "blocked",
+      reason: "agents_unsupported",
+    });
   });
 
   it("keeps a cloud sandbox that reported no models from claiming it has no agents", () => {
@@ -479,10 +485,7 @@ describe("useHomeNextModelSelection", () => {
       state: "observed_empty",
       options: { models: [], controls: [], defaults: { modelId: null, controlValues: {} } },
     };
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: CLOUD_TARGET,
-    }));
+    const { result } = renderSelection(CLOUD_TARGET);
     expect(result.current.modelGate).toEqual({ kind: "blocked", reason: "observed_empty" });
     expect(result.current.hasKnownAgents).toBe(true);
   });
@@ -495,10 +498,7 @@ describe("useHomeNextModelSelection", () => {
       state: "observed_empty",
       options: { models: [], controls: [], defaults: { modelId: null, controlValues: {} } },
     };
-    const { result } = renderHook(() => useHomeNextModelSelection({
-      modelSelectionOverride: null,
-      launchTarget: LOCAL_TARGET,
-    }));
+    const { result } = renderSelection(LOCAL_TARGET);
     expect(result.current.modelGate).toEqual({ kind: "blocked", reason: "observed_empty" });
     // The catalog still knows the agent, so the picker keeps a truthful label.
     expect(result.current.hasKnownAgents).toBe(true);

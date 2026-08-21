@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "#product/components/home/screen/HomeNextScreen";
+import { HOME_MODEL_GATE_SEND_BLOCKED_REASON } from "#product/lib/domain/home/home-model-gate";
 import {
   HOME_NEXT_TARGET_SELECTION_STORAGE_KEY,
   hydrateHomeNextTargetSelection,
@@ -176,16 +177,13 @@ vi.mock("#product/components/workspace/chat/input/ComposerRichTextEditor", () =>
     <textarea aria-label="Prompt" data-editor-snapshot={snapshot?.payload} value={value} onChange={(event) => onChange(event.target.value, event.timeStamp, { version: 1, payload: "home-editor-snapshot" })} onKeyDown={onKeyDown} disabled={disabled} />
   ),
 }));
-
 vi.mock("#product/components/workspace/chat/input/ChatComposerActions", () => ({
-  ChatComposerActions: ({
-    isDisabled,
-    onSubmit,
-  }: {
-    isDisabled: boolean;
-    onSubmit: () => void;
+  // `disabledReason` is the accessible NAME on the real control.
+  ChatComposerActions: (props: {
+    isDisabled: boolean; disabledReason?: string | null; onSubmit: () => void;
   }) => (
-    <button type="button" disabled={isDisabled} onClick={onSubmit}>
+    <button type="button" disabled={props.isDisabled} onClick={props.onSubmit}
+      aria-label={props.disabledReason ?? undefined}>
       Submit
     </button>
   ),
@@ -231,15 +229,17 @@ describe("HomeNextScreen model availability notices", () => {
     cleanup();
   });
 
-  it("does not render model-derived submit-disabled reasons after typing", () => {
-    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "agent_setup_required" };
+  // Was three queries for deleted ModelAvailabilityState copy no source emits.
+  it.each([
+    [{ kind: "blocked", reason: "agent_setup_required" }, false],
+    [{ kind: "selection_required" }, true],
+  ] as const)("names the unchosen model on Send for %j", (modelGate, named) => {
+    screenMocks.homeNext.modelGate = modelGate;
     render(<HomeNextScreen />);
-
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "hello" } });
+    const name = HOME_MODEL_GATE_SEND_BLOCKED_REASON;
+    expect(screen.queryByRole("button", { name }) !== null).toBe(named);
 
-    expect(screen.queryByText("No ready models")).toBeNull();
-    expect(screen.queryByText("Loading models")).toBeNull();
-    expect(screen.queryByText("Couldn't load models")).toBeNull();
   });
 
   it("caps the home composer using the scaled textarea line-height", () => {
