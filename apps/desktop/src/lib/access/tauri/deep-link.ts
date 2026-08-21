@@ -16,12 +16,13 @@ interface DeepLinkSubscription {
 const subscriptions = new Set<DeepLinkSubscription>()
 
 // At most one native live listener is ever registered; this memoizes the
-// in-flight/settled registration so concurrent subscribers share it.
+// in-flight/successful registration so concurrent subscribers share it. A
+// rejected attempt resets the memo so the next subscriber retries.
 let liveListenerPromise: Promise<void> | null = null
 
 function ensureLiveListener(): Promise<void> {
   if (!liveListenerPromise) {
-    liveListenerPromise = Promise.resolve()
+    const attempt = Promise.resolve()
       .then(() =>
         onOpenUrl((urls) => {
           for (const url of urls) {
@@ -34,6 +35,14 @@ function ensureLiveListener(): Promise<void> {
         }),
       )
       .then(() => undefined)
+    attempt.catch(() => {
+      // A transient registration failure must not be cached for the process;
+      // reset so the next subscriber retries.
+      if (liveListenerPromise === attempt) {
+        liveListenerPromise = null
+      }
+    })
+    liveListenerPromise = attempt
   }
   return liveListenerPromise
 }
@@ -109,13 +118,17 @@ export function ensureDeepLinkBridge(handler: DeepLinkUrlHandler): Promise<void>
   if (!deepLinkBridgePromise) {
     deepLinkBridgePromise = (async () => {
       // Drain the initial snapshot exactly like the pre-multiplex bridge: each
-      // URL is awaited in order and a handler rejection is contained here rather
-      // than escaping as an unhandled rejection.
+      // URL is awaited in order and rejections are contained per-URL so a single
+      // failing handler cannot drop the rest of the queued urls.
       try {
         const currentUrls = await getCurrent()
         if (currentUrls?.length) {
           for (const url of currentUrls) {
-            await handler(url)
+            try {
+              await handler(url)
+            } catch {
+              // A failing handler must not drop the remaining queued urls.
+            }
           }
         }
       } catch {
