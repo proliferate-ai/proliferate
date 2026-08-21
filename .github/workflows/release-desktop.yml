@@ -376,7 +376,8 @@ jobs:
               --anyharness-bin "$PWD/target/${{ matrix.target }}/release/anyharness" \
               --runtime-home "$seed_runtime" \
               --output-dir "$PWD/apps/desktop/src-tauri/agent-seeds" || seed_exit=$?
-            echo "$seed_exit" > "$RUNNER_TEMP/agent-seed.status"
+            echo "$seed_exit" > "$RUNNER_TEMP/agent-seed.status.tmp"
+            mv -f "$RUNNER_TEMP/agent-seed.status.tmp" "$RUNNER_TEMP/agent-seed.status"
           ) </dev/null > "$RUNNER_TEMP/agent-seed.log" 2>&1 &
           disown 2>/dev/null || true
           echo "Agent seed build started in the background (pid $!)."
@@ -701,18 +702,26 @@ jobs:
       # notarized builds of the same commit. One pass makes them the same
       # stapled bundle. These assertions are the standing proof that the single
       # notarization actually covered every shipped payload; if a future change
-      # reintroduces a second pass, or drops the app bundle type (which is what
-      # silently disables updater artifacts in tauri-bundler 2.9.4), the counts
-      # below stop matching and the release fails here instead of shipping.
+      # reintroduces a second pass, the counts below stop matching and the
+      # release fails here instead of shipping. Dropping the `app` bundle type
+      # does NOT trip this count — a dmg-only build notarizes its own
+      # throwaway `.app` once, so submits stays 1 — that regression is instead
+      # caught below, by the missing-`.app`-on-disk check and the missing
+      # updater tarball check.
       - name: Verify macOS notarization and stapling
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
         shell: bash
         env:
           _SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          _API_KEY: ${{ secrets.APPLE_API_KEY }}
         run: |
-          if [[ -z "$_SIGNING_IDENTITY" || -z "$_API_KEY" ]]; then
-            echo "No Apple signing identity / notary key configured (ad-hoc build); skipping notarization assertions."
+          # Keyed on the same condition "Build Tauri app" uses to choose its
+          # signed vs. ad-hoc path (`-n "$_SIGNING_IDENTITY"`). A signing
+          # identity with no notary key is a misconfiguration, not a
+          # legitimate skip case, so it must fall through and hard-fail below
+          # on the missing "Notarizing"/"Stapling" log lines rather than
+          # no-op here.
+          if [[ -z "$_SIGNING_IDENTITY" ]]; then
+            echo "No Apple signing identity configured (ad-hoc build); skipping notarization assertions."
             exit 0
           fi
 
@@ -748,7 +757,7 @@ jobs:
           assert_notarized "$app" "built .app"
 
           # 2. The .app actually inside the DMG customers download.
-          dmg=$(compgen -G "$base/dmg/*.dmg" | head -n 1)
+          dmg=$(compgen -G "$base/dmg/*.dmg" | head -n 1 || true)
           [[ -n "$dmg" ]] || { echo "::error::No DMG to inspect"; exit 1; }
           mount_dir=$(mktemp -d)
           attach_out=$(hdiutil attach "$dmg" -readonly -nobrowse -noautoopen -mountpoint "$mount_dir")
@@ -771,8 +780,9 @@ jobs:
           # stuck volume must never turn a passing gate into a red release:
           # try the device, then the mount point, then force, then warn. The
           # retry is worth keeping — Spotlight can hold a fresh volume busy.
-          # Every branch is an `if` condition so errexit can never fire inside
-          # the function, whatever the call site looks like.
+          # Every branch here is an `if`, so the function always reaches its
+          # own `return`; the `|| ::warning::` at the call site below is what
+          # makes a failed detach non-fatal — do not remove it.
           detach_dmg() {
             if [[ -n "$dmg_dev" ]] && hdiutil detach "$dmg_dev" -quiet; then return 0; fi
             if hdiutil detach "$mount_dir" -quiet; then return 0; fi
@@ -788,7 +798,7 @@ jobs:
           #    whether a stapled ticket survives tar/untar is a property of the
           #    upstream updater format that predates this change, and the
           #    updater's own minisign signature is what gates an update.
-          tarball=$(compgen -G "$base/macos/*.app.tar.gz" | head -n 1)
+          tarball=$(compgen -G "$base/macos/*.app.tar.gz" | head -n 1 || true)
           [[ -n "$tarball" ]] || { echo "::error::No updater tarball to inspect"; exit 1; }
           extract=$(mktemp -d)
           tar -xzf "$tarball" -C "$extract"
@@ -846,13 +856,36 @@ jobs:
             # during bundling. Tauri skips that script when CI=true unless
             # TAURI_BUNDLER_DMG_IGNORE_CI=true, so assert it actually landed to
             # keep the unstyled-DMG regression from ever shipping again (PRO-110).
-            dmg=$(compgen -G "$base/dmg/*.dmg" | head -n 1)
+            dmg=$(compgen -G "$base/dmg/*.dmg" | head -n 1 || true)
             mount_dir=$(mktemp -d)
-            hdiutil attach "$dmg" -readonly -nobrowse -noautoopen -mountpoint "$mount_dir"
+            attach_out=$(hdiutil attach "$dmg" -readonly -nobrowse -noautoopen -mountpoint "$mount_dir")
+            echo "$attach_out"
+            # Detaching by device node is more reliable than by mount point:
+            # the mount point is a $TMPDIR path under /var, and hdiutil
+            # resolves it against /private/var, which intermittently comes
+            # back as "No such file or directory" even while the volume is up
+            # (seen in release run 32457679562). Duplicated verbatim from the
+            # "Verify macOS notarization and stapling" step's detach_dmg —
+            # each `run:` block is its own shell, so functions/vars cannot be
+            # shared between steps.
+            dmg_dev=$(printf '%s\n' "$attach_out" | awk '$1 ~ /^\/dev\// { print $1; exit }')
             styling_ok=true
             [[ -f "$mount_dir/.DS_Store" ]] || styling_ok=false
-            # Retry the detach once: Spotlight can hold the fresh volume busy.
-            hdiutil detach "$mount_dir" -quiet || { sleep 2; hdiutil detach "$mount_dir" -force; }
+            # Cleanup only. The styling assertion above has already been made,
+            # so a stuck volume must never turn a passing gate into a red
+            # release: try the device, then the mount point, then force, then
+            # warn. Every branch here is an `if`, so the function always
+            # reaches its own `return`; the `|| ::warning::` at the call site
+            # below is what makes a failed detach non-fatal — do not remove it.
+            detach_dmg() {
+              if [[ -n "$dmg_dev" ]] && hdiutil detach "$dmg_dev" -quiet; then return 0; fi
+              if hdiutil detach "$mount_dir" -quiet; then return 0; fi
+              sleep 2
+              if [[ -n "$dmg_dev" ]] && hdiutil detach "$dmg_dev" -force; then return 0; fi
+              if hdiutil detach "$mount_dir" -force; then return 0; fi
+              return 1
+            }
+            detach_dmg || echo "::warning::Could not detach $dmg (dev ${dmg_dev:-unknown}); leaving it mounted. The styling assertion above already ran."
             $styling_ok || { echo "::error::DMG has no .DS_Store — Finder styling was skipped (see PRO-110)"; exit 1; }
           else
             compgen -G "$base/nsis/*-setup.exe" > /dev/null || { echo "::error::Missing Windows NSIS installer"; exit 1; }
