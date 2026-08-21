@@ -6,6 +6,7 @@ use super::paths::artifact_root;
 use crate::domains::agents::installer::seed;
 use crate::domains::agents::model::*;
 use crate::integrations::agent_cli::executable::find_in_path;
+use crate::integrations::agent_cli::launcher::managed_launcher_file_name;
 
 pub(super) fn detect_runtime_compatibility_issue(
     descriptor: &AgentDescriptor,
@@ -78,7 +79,7 @@ pub(super) fn detect_runtime_compatibility_issue(
         .map(|spec| spec.program.display().to_string())
         .unwrap_or_else(|| {
             artifact_root(runtime_home, &descriptor.kind, &ArtifactRole::AgentProcess)
-                .join("claude-launcher")
+                .join(managed_launcher_file_name(descriptor.kind.as_str()))
                 .display()
                 .to_string()
         });

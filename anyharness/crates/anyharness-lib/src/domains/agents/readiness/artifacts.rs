@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use super::paths::{artifact_root, has_managed_registry_binary_for_names};
+use super::paths::{
+    artifact_root, has_managed_registry_binary_for_names, managed_pinned_binary_path,
+};
 use crate::domains::agents::installer::managed_npm::{
     managed_npm_install_issue, source_build_install_issue,
 };
@@ -8,17 +10,17 @@ use crate::domains::agents::model::*;
 use crate::integrations::agent_cli::executable::{
     find_in_path, find_real_binary_in_path, is_valid_executable,
 };
+use crate::integrations::agent_cli::launcher::managed_launcher_file_name;
 
 pub(super) fn resolve_native_artifact(
     spec: &NativeArtifactSpec,
     kind: &AgentKind,
     runtime_home: &Path,
 ) -> ResolvedArtifact {
-    let managed_dir = artifact_root(runtime_home, kind, &ArtifactRole::NativeCli);
-
     match &spec.install {
         NativeInstallSpec::DirectBinary { .. } | NativeInstallSpec::TarballRelease { .. } => {
-            let managed_path = managed_dir.join(kind.as_str());
+            let managed_path =
+                managed_pinned_binary_path(runtime_home, kind, &ArtifactRole::NativeCli);
             if is_valid_executable(&managed_path) {
                 return found_artifact(ArtifactRole::NativeCli, managed_path, "managed");
             }
@@ -170,7 +172,7 @@ pub(super) fn managed_launcher_candidates(
     executable_relpath: Option<&Path>,
 ) -> Vec<PathBuf> {
     let mut paths = vec![];
-    paths.push(managed_dir.join(format!("{}-launcher", kind.as_str())));
+    paths.push(managed_dir.join(managed_launcher_file_name(kind.as_str())));
 
     if let Some(executable_relpath) = executable_relpath {
         paths.push(managed_dir.join(executable_relpath));
@@ -382,8 +384,70 @@ fn launcher_uses_binary_hint(launcher_path: &Path, candidate_binaries: &[String]
     let Ok(contents) = std::fs::read_to_string(launcher_path) else {
         return false;
     };
+    // NOTE (corrected after review): this whole match is already inert, on
+    // BOTH platforms, for any launcher this crate actually generates.
+    // Generated launchers always exec an ABSOLUTE path
+    // (`exec "/managed/dir/cursor-agent"` / `"C:\managed\dir\cursor-agent.exe"`),
+    // never the bare `candidate_binaries` name, so neither
+    // `exec "{binary}"` nor the windows-shaped `"{binary}" ` this PR added
+    // can ever match a substring that has a path prefix immediately before
+    // the opening quote. That was true of the pre-existing unix-only check
+    // before this PR too — it is a pre-existing latent gap, not something
+    // introduced or fixed here. The windows-shaped branch below is kept only
+    // for symmetry with the (equally inert) unix branches; it does NOT
+    // restore this diagnostic on `.cmd` launchers. Left as a known follow-up
+    // rather than fixed here, since fixing it for real means matching on the
+    // exec target's file name/stem rather than string-searching for the
+    // bare candidate name.
     candidate_binaries.iter().any(|binary| {
         contents.contains(&format!("exec \"{binary}\""))
             || contents.contains(&format!("exec {binary}"))
+            || contents.contains(&format!("\"{binary}\" "))
+            || contents.contains(&format!("\"{binary}\"\r\n"))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_resolution_finds_the_managed_binary_at_its_platform_name() {
+        // The read-side twin of the installer's
+        // `pinned_binary_install_lands_on_the_platform_executable_name`. The
+        // installer writes through `managed_pinned_binary_path`; native
+        // resolution must look there and nowhere else. A fix that renamed only
+        // the write site would turn a Windows launch failure into a Windows
+        // "not installed", which is just as broken and harder to read.
+        let runtime_home = std::env::temp_dir().join(format!(
+            "anyharness-native-platform-name-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let managed_path =
+            managed_pinned_binary_path(&runtime_home, &AgentKind::Claude, &ArtifactRole::NativeCli);
+        std::fs::create_dir_all(managed_path.parent().expect("native parent"))
+            .expect("create native dir");
+        std::fs::write(&managed_path, "#!/bin/sh\nexit 0\n").expect("write native binary");
+        crate::integrations::agent_cli::executable::make_executable(&managed_path)
+            .expect("make native binary executable");
+
+        let spec = NativeArtifactSpec {
+            install: NativeInstallSpec::DirectBinary {
+                latest_version_url: None,
+                binary_url_template: String::new(),
+                platform_map: Vec::new(),
+            },
+        };
+        let resolved = resolve_native_artifact(&spec, &AgentKind::Claude, &runtime_home);
+
+        assert!(
+            resolved.installed,
+            "resolution must find the managed native CLI: {:?}",
+            resolved.message
+        );
+        assert_eq!(resolved.source.as_deref(), Some("managed"));
+        assert_eq!(resolved.path.as_deref(), Some(managed_path.as_path()));
+
+        let _ = std::fs::remove_dir_all(&runtime_home);
+    }
 }

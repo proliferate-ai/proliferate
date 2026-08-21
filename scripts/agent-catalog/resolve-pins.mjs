@@ -8,8 +8,12 @@
 // sha-verified, with no latest-fetch at install time.
 //
 //   node scripts/agent-catalog/resolve-pins.mjs [--agent claude,codex]
-//       [--no-download]   resolve URLs only, leave sha256 empty (inspection)
-//       [--catalog PATH] [--registry PATH]
+//       [--no-download]    resolve URLs only, leave sha256 empty (inspection)
+//       [--keep-versions]  re-resolve the CURRENTLY pinned versions instead of
+//                          upstream latest, so adding a platform to an existing
+//                          lockfile cannot drift a pin away from the probe
+//                          evidence that validates it
+//       [--platforms a,b] [--catalog PATH] [--registry PATH]
 //
 // Real shas require downloading each platform artifact (binaries/archives);
 // npm pins capture `npm view dist.integrity`; git pins are anchored by commit.
@@ -25,9 +29,20 @@ const catalogPath = resolve(args.catalog ?? join(REPO_ROOT, "catalogs/agents/cat
 const registryPath = resolve(args.registry ?? join(REPO_ROOT, "catalogs/agents/registry.json"));
 const onlyAgents = args.agent ? new Set(args.agent.split(",")) : null;
 const noDownload = Boolean(args.noDownload);
-// Platforms we actually ship today: desktop (macOS arm64/x64) + cloud E2B
-// (linux x64). Override with --platforms to resolve the full matrix in CI.
-const DEFAULT_PLATFORMS = ["macos_arm64", "macos_x64", "linux_x64"];
+const keepVersions = Boolean(args.keepVersions);
+// Every platform `Platform::registry_key()` (anyharness domains/agents/model.rs)
+// can report. A platform missing from this list is a platform whose pin never
+// reaches catalog.json, and the runtime installer then fails it closed with
+// InstallError::NoPinForPlatform (HTTP 400 AGENT_NO_PIN_FOR_PLATFORM). Narrow
+// it with --platforms only for a deliberately partial, inspection-only run.
+const DEFAULT_PLATFORMS = [
+  "macos_arm64",
+  "macos_x64",
+  "linux_x64",
+  "linux_arm64",
+  "windows_x64",
+  "windows_arm64",
+];
 const platforms = new Set(args.platforms ? args.platforms.split(",") : DEFAULT_PLATFORMS);
 
 const ACP_REGISTRY_URL =
@@ -91,7 +106,11 @@ for (const agent of catalog.agents) {
   console.log(`\n── ${agent.kind}`);
 
   if (reg.native && agent.harness.native) {
-    const { version, source } = await resolveNative(agent.kind, reg.native.install);
+    const { version, source } = await resolveNative(
+      agent.kind,
+      reg.native.install,
+      agent.harness.native.version,
+    );
     agent.harness.native.version = version;
     agent.harness.native.source = source;
     console.log(`   native        ${version}  (${source.kind})`);
@@ -109,6 +128,7 @@ for (const agent of catalog.agents) {
     agent.kind,
     reg.agentProcess.install,
     agent.harness.agentProcess.version,
+    agent.harness.agentProcess.source,
   );
   if (ap.version) agent.harness.agentProcess.version = ap.version;
   agent.harness.agentProcess.source = ap.source;
@@ -120,15 +140,22 @@ console.log(`\nWrote ${catalogPath}`);
 
 // ── resolvers ────────────────────────────────────────────────────────────────
 
-async function resolveNative(kind, install) {
+async function resolveNative(kind, install, currentVersion) {
   if (install.kind === "direct_binary") {
-    const version = (await fetchText(install.latestVersionUrl)).trim();
+    const version = keepVersions && currentVersion
+      ? currentVersion
+      : (await fetchText(install.latestVersionUrl)).trim();
     const targets = {};
     for (const [platKey, vendor] of Object.entries(install.platformMap)) {
       if (!platforms.has(platKey)) continue;
+      // The artifact filename is per-platform: Windows publishes `claude.exe`
+      // where the POSIX targets publish `claude`, so a single hard-coded
+      // filename in the template 404s on Windows.
+      const binary = install.binaryNameMap?.[platKey] ?? kind;
       const url = install.binaryUrlTemplate
         .replaceAll("{version}", version)
-        .replaceAll("{platform}", vendor);
+        .replaceAll("{platform}", vendor)
+        .replaceAll("{binary}", binary);
       targets[platKey] = withDownloadSize(
         { url, sha256: await shaForDirectBinary(url, version, vendor) },
         url,
@@ -137,7 +164,9 @@ async function resolveNative(kind, install) {
     return { version, source: { kind: "binary", targets } };
   }
   if (install.kind === "tarball_release") {
-    const release = await githubLatestRelease(install.versionedUrlTemplate);
+    const release = keepVersions && currentVersion
+      ? await githubReleaseByTag(install.versionedUrlTemplate, currentVersion)
+      : await githubLatestRelease(install.versionedUrlTemplate);
     const version = release.tag_name;
     const targets = {};
     for (const [platKey, target] of Object.entries(install.platformMap)) {
@@ -161,7 +190,7 @@ async function resolveNative(kind, install) {
   throw new Error(`${kind}: native install kind '${install.kind}' is not resolvable`);
 }
 
-async function resolveAgentProcess(kind, install, currentVersion) {
+async function resolveAgentProcess(kind, install, currentVersion, currentSource) {
   if (install.kind === "managed_npm_package") {
     if (isGitSpec(install.package)) {
       const [repo, gitRef] = splitGitSpec(install.package);
@@ -185,6 +214,19 @@ async function resolveAgentProcess(kind, install, currentVersion) {
     const reg = await acpRegistry();
     const entry = reg.agents.find((a) => a.id === install.registryId);
     if (!entry) throw new Error(`${kind}: '${install.registryId}' not in ACP registry`);
+    // The ACP registry only ever serves `latest`. Under --keep-versions its
+    // URLs describe a DIFFERENT release than the one this catalog pins, so
+    // adopting them would silently upgrade the agent past the probe evidence
+    // that validates it. Keep the existing pin and say so; a version refresh
+    // belongs to a probe-backed `make catalog-update`.
+    if (keepVersions && currentVersion && entry.version && entry.version !== currentVersion
+      && currentSource) {
+      console.warn(
+        `   ! ${kind}: ACP registry advertises ${entry.version}, catalog pins `
+        + `${currentVersion} — keeping the existing pin (platform coverage unchanged)`,
+      );
+      return { version: currentVersion, source: currentSource };
+    }
     if (entry.distribution.npx) {
       const pkg = entry.distribution.npx.package; // already pinned `@scope/pkg@ver`
       return {
@@ -282,6 +324,18 @@ async function githubLatestRelease(versionedUrlTemplate) {
   });
 }
 
+async function githubReleaseByTag(versionedUrlTemplate, tag) {
+  const m = versionedUrlTemplate.match(/github\.com\/([^/]+)\/([^/]+)\/releases/);
+  if (!m) throw new Error(`cannot derive GitHub repo from ${versionedUrlTemplate}`);
+  const [, owner, repo] = m;
+  return fetchJson(
+    `https://api.github.com/repos/${owner}/${repo}/releases/tags/${encodeURIComponent(tag)}`,
+    {
+      headers: { "User-Agent": "proliferate-resolve-pins", Accept: "application/vnd.github+json" },
+    },
+  );
+}
+
 async function shaFor(url) {
   if (knownSha.has(url)) return knownSha.get(url);
   if (noDownload) return "";
@@ -365,6 +419,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--no-download") out.noDownload = true;
+    else if (a === "--keep-versions") out.keepVersions = true;
     else if (a === "--agent") out.agent = argv[++i];
     else if (a === "--platforms") out.platforms = argv[++i];
     else if (a === "--catalog") out.catalog = argv[++i];

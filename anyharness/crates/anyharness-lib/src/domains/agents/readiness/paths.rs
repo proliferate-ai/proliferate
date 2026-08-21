@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::domains::agents::model::{AgentKind, ArtifactRole};
-use crate::integrations::agent_cli::executable::is_valid_executable;
+use crate::integrations::agent_cli::executable::{is_valid_executable, platform_binary_filename};
 
 pub(crate) fn artifact_root(runtime_home: &Path, kind: &AgentKind, role: &ArtifactRole) -> PathBuf {
     runtime_home
@@ -11,6 +11,23 @@ pub(crate) fn artifact_root(runtime_home: &Path, kind: &AgentKind, role: &Artifa
             ArtifactRole::NativeCli => "native",
             ArtifactRole::AgentProcess => "agent_process",
         })
+}
+
+/// Where a pinned `Binary`/`Archive` artifact for `kind`/`role` lives once
+/// installed, correctly named for this platform (`claude` on unix,
+/// `claude.exe` on Windows).
+///
+/// The installer places the artifact here and every resolver looks for it
+/// here. Both go through this function on purpose: the previous split, where
+/// the write site and the read sites each spelled `join(kind.as_str())`
+/// themselves, is exactly what let the Windows `.exe` suffix go missing on one
+/// side without the other noticing.
+pub(crate) fn managed_pinned_binary_path(
+    runtime_home: &Path,
+    kind: &AgentKind,
+    role: &ArtifactRole,
+) -> PathBuf {
+    artifact_root(runtime_home, kind, role).join(platform_binary_filename(kind.as_str()))
 }
 
 pub(crate) fn managed_registry_binary_for_names(

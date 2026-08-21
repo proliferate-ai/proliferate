@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-08-17.1",
+  "registryVersion": "2026-08-20.1",
   "generatedAt": "2026-07-17T03:08:00Z",
   "agents": [
     {
@@ -12,7 +12,7 @@
         "install": {
           "kind": "direct_binary",
           "latestVersionUrl": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest",
-          "binaryUrlTemplate": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/{version}/{platform}/claude",
+          "binaryUrlTemplate": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/{version}/{platform}/{binary}",
           "platformMap": {
             "macos_arm64": "darwin-arm64",
             "macos_x64": "darwin-x64",
@@ -20,6 +20,14 @@
             "linux_arm64": "linux-arm64",
             "windows_x64": "win32-x64",
             "windows_arm64": "win32-arm64"
+          },
+          "binaryNameMap": {
+            "macos_arm64": "claude",
+            "macos_x64": "claude",
+            "linux_x64": "claude",
+            "linux_arm64": "claude",
+            "windows_x64": "claude.exe",
+            "windows_arm64": "claude.exe"
           }
         }
       },
@@ -167,8 +175,8 @@
             "macos_x64": "x86_64-apple-darwin",
             "linux_x64": "x86_64-unknown-linux-musl",
             "linux_arm64": "aarch64-unknown-linux-musl",
-            "windows_x64": "x86_64-pc-windows-msvc",
-            "windows_arm64": "aarch64-pc-windows-msvc"
+            "windows_x64": "x86_64-pc-windows-msvc.exe",
+            "windows_arm64": "aarch64-pc-windows-msvc.exe"
           }
         }
       },

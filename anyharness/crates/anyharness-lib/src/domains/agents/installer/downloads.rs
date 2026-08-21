@@ -223,6 +223,11 @@ pub(super) fn download_and_extract_archive_verified(
 
     let is_zip = url.ends_with(".zip");
     let extract = if is_zip {
+        // `unzip` is not bundled on Windows, unlike `tar.exe` (Windows 10
+        // 1803+). This branch is unreachable there today: the only `.zip`
+        // URLs in any `targets` map in catalogs/agents/catalog.json are the
+        // two darwin opencode entries, and darwin always has `unzip`. Revisit
+        // if a future pin ever targets a Windows platform with a `.zip` URL.
         Command::new("unzip")
             .arg("-q")
             .arg(&archive_path)
@@ -321,6 +326,11 @@ pub(super) fn download_and_extract_archive_tree_verified(
 
     let is_zip = url.ends_with(".zip");
     let extract = if is_zip {
+        // `unzip` is not bundled on Windows, unlike `tar.exe` (Windows 10
+        // 1803+). This branch is unreachable there today: the only `.zip`
+        // URLs in any `targets` map in catalogs/agents/catalog.json are the
+        // two darwin opencode entries, and darwin always has `unzip`. Revisit
+        // if a future pin ever targets a Windows platform with a `.zip` URL.
         Command::new("unzip")
             .arg("-q")
             .arg(&archive_path)
