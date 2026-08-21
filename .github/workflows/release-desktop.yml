@@ -210,11 +210,36 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Build AnyHarness runtime for target
+      # Cache the cargo registry/git checkouts and target/ artifacts, keyed per
+      # matrix target so the macOS arches (and any dormant windows entry) never
+      # share or collide on a cache key. Paired with the single combined cargo
+      # invocation below: one build graph, one cache, instead of four sequential
+      # `cargo build -p <pkg>` steps that each re-resolved the same workspace
+      # dependencies.
+      - name: Rust cache
+        if: steps.filter.outputs.skip != 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+          # Actions caches are ref-scoped. This workflow also triggers on
+          # `push: tags: desktop-v*`, and a save made under `refs/tags/...` can
+          # only ever be restored by that same tag, so it is a pure write into
+          # an already-tight repo cache pool. Only branch / dispatch runs save.
+          save-if: ${{ github.ref_type != 'tag' }}
+          # Notarization and publish are the late, occasionally-failing part of
+          # this job. A failure there should still bank the compile cache the
+          # preceding ~12 minutes produced.
+          cache-on-failure: true
+
+      - name: Build Rust binaries for target
         if: steps.filter.outputs.skip != 'true'
         shell: bash
         run: |
-          cargo build --release -p anyharness --target "${{ matrix.target }}"
+          cargo build --release --target "${{ matrix.target }}" \
+            -p anyharness \
+            -p proliferate-diagnostics-collector \
+            -p proliferate-debug \
+            -p proliferate-worker
           mkdir -p apps/desktop/src-tauri/binaries
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
             cp "target/${{ matrix.target }}/release/anyharness.exe" "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
@@ -253,11 +278,10 @@ jobs:
           codesign --verify --verbose "$EXTRACTED_NODE_BIN"
           spctl --assess --verbose=4 --type open --context context:primary-signature "$EXTRACTED_NODE_BIN"
 
-      - name: Build diagnostics collector for target
+      - name: Stage diagnostics collector for target
         if: steps.filter.outputs.skip != 'true'
         shell: bash
         run: |
-          cargo build --release -p proliferate-diagnostics-collector --target "${{ matrix.target }}"
           mkdir -p apps/desktop/src-tauri/binaries
           collector="target/${{ matrix.target }}/release/proliferate-diagnostics-collector"
           staged="apps/desktop/src-tauri/binaries/proliferate-diagnostics-collector-${{ matrix.target }}"
@@ -266,11 +290,10 @@ jobs:
           chmod +x "$staged"
           cmp "$collector" "$staged"
 
-      - name: Build Proliferate debug helper for target
+      - name: Stage Proliferate debug helper for target
         if: steps.filter.outputs.skip != 'true'
         shell: bash
         run: |
-          cargo build --release -p proliferate-debug --target "${{ matrix.target }}"
           mkdir -p apps/desktop/src-tauri/binaries
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
             cp "target/${{ matrix.target }}/release/proliferate-debug.exe" "apps/desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}.exe"
@@ -279,11 +302,10 @@ jobs:
             chmod +x "apps/desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}"
           fi
 
-      - name: Build Proliferate worker for target
+      - name: Stage Proliferate worker for target
         if: steps.filter.outputs.skip != 'true'
         shell: bash
         run: |
-          cargo build --release -p proliferate-worker --target "${{ matrix.target }}"
           mkdir -p apps/desktop/src-tauri/binaries
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
             cp "target/${{ matrix.target }}/release/proliferate-worker.exe" "apps/desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}.exe"
