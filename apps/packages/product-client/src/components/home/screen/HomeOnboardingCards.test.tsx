@@ -8,7 +8,10 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HomeOnboardingCards } from "#product/components/home/screen/HomeOnboardingCards";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
-import type { HomeOnboardingCardModel } from "#product/lib/domain/home/home-screen";
+import type {
+  HomeOnboardingCardModel,
+  HomeReadinessCardModel,
+} from "#product/lib/domain/home/home-screen";
 import type {
   AuthSetupEvidence,
   OnboardingAgentBadge,
@@ -63,6 +66,17 @@ afterEach(() => {
   cleanup();
 });
 
+function readinessCard(
+  overrides: Partial<HomeReadinessCardModel> = {},
+): HomeReadinessCardModel {
+  return {
+    agentKind: "grok",
+    title: "Grok is ready.",
+    description: "You can start now. Claude and 3 others are still installing.",
+    ...overrides,
+  };
+}
+
 describe("HomeOnboardingCards auth-setup step", () => {
   it("renders the setting-up card while the step is pending", () => {
     renderCards({ authSetup: "settingUp" });
@@ -71,6 +85,12 @@ describe("HomeOnboardingCards auth-setup step", () => {
     expect(
       screen.getByText(HOME_SCREEN_LABELS.authSetupDescription),
     ).toBeTruthy();
+  });
+
+  it("renders no spinner on the setting-up card (frame + ThinkingText title survive, the spinner does not)", () => {
+    const { container } = renderCards({ authSetup: "settingUp" });
+
+    expect(container.querySelector("[data-loading-spinner]")).toBeNull();
   });
 
   it.each(["hidden", "applied", "advanced"] as const)(
@@ -210,8 +230,15 @@ describe("HomeOnboardingCards evidence-bound card (rung 7)", () => {
     expect(line?.className).not.toContain("sr-only");
     expect(line?.textContent).toContain("Next attempt in");
     expect(line?.textContent).toContain("429 rate limited");
-    // A terminal backoff row shows no spinner.
-    expect(container.querySelector('[data-agent-onboarding-phase="backoff"] .animate-spin')).toBeNull();
+    // A terminal backoff row shows no spinner. Selected on the Spinner's own
+    // `data-loading-spinner` hook (D-R13): the old `.animate-spin` selector
+    // named a Tailwind class this app's Spinner never emits — it renders
+    // `proliferate-spinner` and rotates from a CSS rule — so the assertion
+    // matched nothing whether or not a spinner was there, and passed even
+    // with a real Spinner rendered in this subtree.
+    expect(
+      container.querySelector('[data-agent-onboarding-phase="backoff"] [data-loading-spinner]'),
+    ).toBeNull();
   });
 
   it("renders nothing when the evidence card has no badges", () => {
@@ -219,5 +246,62 @@ describe("HomeOnboardingCards evidence-bound card (rung 7)", () => {
       authSetupEvidence: { badges: [], done: false },
     });
     expect(container.innerHTML).toBe("");
+  });
+});
+
+describe("HomeOnboardingCards readiness card (replaces the deleted model-probe card)", () => {
+  it("renders nothing when there is no readiness model (probe card is gone, not hidden)", () => {
+    const { container } = renderCards();
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("renders the bound title and description plainly (no ThinkingText, no dismiss)", () => {
+    const { container } = renderCards({
+      readinessCard: readinessCard({
+        title: "Grok is ready.",
+        description: "You can start now. Claude and 3 others are still installing.",
+      }),
+    });
+
+    expect(screen.getByText("Grok is ready.")).toBeTruthy();
+    expect(
+      screen.getByText("You can start now. Claude and 3 others are still installing."),
+    ).toBeTruthy();
+    // No dismiss affordance — the readiness card is not dismissible.
+    expect(container.querySelector('[aria-label^="Dismiss"]')).toBeNull();
+  });
+
+  it("unmounts entirely (caller passes null/undefined) once the install job resolves — no 'done' card", () => {
+    const { container, rerender } = render(
+      <HomeOnboardingCards
+        cards={[]}
+        isAddingRepo={false}
+        onSelect={vi.fn()}
+        readinessCard={readinessCard()}
+      />,
+    );
+    expect(screen.getByText("Grok is ready.")).toBeTruthy();
+
+    rerender(
+      <HomeOnboardingCards
+        cards={[]}
+        isAddingRepo={false}
+        onSelect={vi.fn()}
+        readinessCard={null}
+      />,
+    );
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("takes the last of the 3 card slots, after setup cards", () => {
+    renderCards({
+      authSetup: "settingUp",
+      cards: [card("add-repository"), card("agent-defaults")],
+      readinessCard: readinessCard(),
+    });
+
+    expect(screen.getAllByText(HOME_SCREEN_LABELS.authSetupTitle).length).toBeGreaterThan(0);
+    expect(screen.getByText("title-add-repository")).toBeTruthy();
+    expect(screen.getByText("Grok is ready.")).toBeTruthy();
   });
 });

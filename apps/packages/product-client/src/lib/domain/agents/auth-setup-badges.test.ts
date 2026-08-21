@@ -248,10 +248,11 @@ describe("resolveAuthSetupEvidence — card completion is state-bound", () => {
     ]);
     const { badges, done } = resolveAuthSetupEvidence(["claude", "codex"], agents);
     expect(done).toBe(false);
-    // The stuck agent is still accounted for by a row, named by its kind.
+    // The stuck agent is still accounted for by a row, named from the
+    // registry rather than by its bare wire kind (D-R19).
     const missing = badges.find((badge) => badge.harnessKind === "codex");
     expect(missing).toBeDefined();
-    expect(missing?.displayName).toBe("codex");
+    expect(missing?.displayName).toBe("Codex");
     expect(missing?.pending).toBe(true);
     expect(missing?.terminal).toBe(false);
   });
@@ -271,5 +272,14 @@ describe("resolveAuthSetupEvidence — card completion is state-bound", () => {
   it("is not done for an empty adopted set", () => {
     const { done } = resolveAuthSetupEvidence([], new Map());
     expect(done).toBe(false);
+  });
+});
+
+// D-R19: this badge exists exactly when the agents projection cannot supply a
+// displayName, so a bare wire kind here reaches a Home card as lowercase text.
+describe("missing-agent badge naming", () => {
+  it("names an adopted-but-absent harness from the registry, not its wire kind", () => {
+    const { badges } = resolveAuthSetupEvidence(["grok"], new Map());
+    expect(badges.map((badge) => badge.displayName)).toEqual(["Grok"]);
   });
 });

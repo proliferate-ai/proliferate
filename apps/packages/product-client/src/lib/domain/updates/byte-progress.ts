@@ -14,6 +14,50 @@ export function formatByteProgress(
 }
 
 /**
+ * `formatMegabytes` rounds to one decimal, so a value under 50KB reads as a
+ * bare "0" — a progress line claiming zero while bytes are actively moving
+ * (D-R8). Below that floor, this shows "<0.1" instead of a number that reads
+ * as stalled. Scoped to `formatDownloadedMegabytesLine` only —
+ * `formatMegabytes`/`formatByteProgress` have their own established callers
+ * and are left as they were.
+ */
+function formatSubMegabyteSafe(bytes: number): string {
+  const megabytes = bytes / 1_000_000;
+  if (bytes > 0 && megabytes < 0.1) {
+    return "<0.1";
+  }
+  return formatMegabytes(bytes).replace(/ MB$/, "");
+}
+
+/**
+ * The install-progress toast's downloading-phase line: "«downloaded» of
+ * «total» MB downloaded", or "«downloaded» MB downloaded" when the total is
+ * unknown. Unlike `formatByteProgress`, the unit is stated once at the end of
+ * the sentence rather than after each number — the shape the design artifact
+ * (Toast - Install Progress Set) specifies verbatim.
+ *
+ * `downloaded` is clamped to `total` when a total is known (D-R8): a
+ * corrected-mid-transfer advertised size must never let the line claim more
+ * was downloaded than the total says exists.
+ */
+export function formatDownloadedMegabytesLine(
+  downloadedBytes: number,
+  totalBytes: number | null,
+): string {
+  if (totalBytes !== null && totalBytes > 0) {
+    // Clamp downloaded to total (never claim more downloaded than exists),
+    // and use the sub-MB-safe label on both numbers (never claim "0" while
+    // bytes are moving). Both fixes are scoped to the known-total form only.
+    const downloaded = Math.min(Math.max(0, downloadedBytes), totalBytes);
+    return `${formatSubMegabyteSafe(downloaded)} of ${formatSubMegabyteSafe(totalBytes)} MB downloaded`;
+  }
+  // Unknown-total form is unchanged (D-R8 scoped this fix to the known-total
+  // form only).
+  const downloaded = formatMegabytes(downloadedBytes).replace(/ MB$/, "");
+  return `${downloaded} MB downloaded`;
+}
+
+/**
  * Remaining download time from the average rate so far, as "10s left" /
  * "2m left".
  *

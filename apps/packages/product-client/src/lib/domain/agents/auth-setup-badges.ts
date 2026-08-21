@@ -1,5 +1,6 @@
 import type { AgentSummary } from "@anyharness/sdk";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
+import { getAgentDisplayLabel } from "#product/lib/domain/agents/provider-display";
 import {
   isEvidenceGreen,
   labelForDisplay,
@@ -226,11 +227,15 @@ export function deriveOnboardingAgentBadge(
  * The badge for an adopted kind not yet present in the agents projection. A
  * bound pending row (spinner, no affordance) named by its kind, keeping the
  * card honest about a harness it is still waiting on.
+ *
+ * Named through the registry, not the bare wire kind (D-R19): this row exists
+ * precisely when the agents projection has nothing to supply a displayName
+ * from, so before this it rendered a lowercase "grok" on a Home card.
  */
 function missingAgentBadge(kind: string): OnboardingAgentBadge {
   return {
     harnessKind: kind,
-    displayName: kind,
+    displayName: getAgentDisplayLabel(kind),
     phase: "waiting",
     label: HOME_SCREEN_LABELS.authSetupPreparing,
     tone: "warning",

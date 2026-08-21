@@ -28,7 +28,7 @@ reason = "Desktop diagnostics broker server: the accept loop, per-request admiss
 
 [[max_lines]]
 path = "apps/packages/product-client/src/components/home/screen/HomeNextScreen.test.tsx"
-max_lines = 744
+max_lines = 743
 reason = "home screen suite: unified-composer/target-persistence coverage joined by the PRO-165 home-attachment battery (+ button snapshot payload, whole-screen drop, dropped-path local_ref recovery, local/remote target-flip clearing, attachment-only launch, failure retention, chip removal)"
 
 [[max_lines]]

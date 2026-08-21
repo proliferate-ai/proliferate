@@ -3,14 +3,13 @@ import { Button } from "#product/primitives/Button";
 import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 import { GitHub } from "#product/primitives/icons/platform";
 import { Settings, SlidersHorizontal, X } from "#product/primitives/icons/core";
-import { Spinner } from "#product/primitives/Spinner";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
 import type {
-  HomeModelProbeCardState,
   HomeOnboardingCardModel,
   HomeOnboardingIcon,
+  HomeReadinessCardModel,
 } from "#product/lib/domain/home/home-screen";
 import type { AuthSetupStepState } from "#product/lib/domain/agents/auth-onboarding";
 import type { AuthSetupEvidence } from "#product/lib/domain/agents/auth-setup-badges";
@@ -126,82 +125,26 @@ function AuthSetupCard({ state }: { state: AuthSetupStepState }) {
         />
       )}
       description={HOME_SCREEN_LABELS.authSetupDescription}
-      trailing={<Spinner className="icon-paired text-muted-foreground" />}
       selectLabel={HOME_SCREEN_LABELS.authSetupTitle}
     />
   );
 }
 
-function ModelProbeCard({
-  state,
-  onOpenAgents,
-  onDismiss,
-}: {
-  state: HomeModelProbeCardState;
-  onOpenAgents: () => void;
-  onDismiss: () => void;
-}) {
-  if (state.kind === "hidden") {
-    return null;
-  }
-
-  if (state.kind === "probing") {
-    return (
-      <OnboardingCard
-        icon={
-          state.harnessKinds[0]
-            ? <ProviderIcon kind={state.harnessKinds[0]} className="icon-paired" />
-            : <Spinner className="icon-paired" />
-        }
-        title={(
-          <ThinkingText
-            text={HOME_SCREEN_LABELS.modelProbeProbingTitle}
-            className="text-ui font-medium"
-          />
-        )}
-        trailing={<Spinner className="icon-paired text-muted-foreground" />}
-        selectLabel={HOME_SCREEN_LABELS.modelProbeProbingTitle}
-      />
-    );
-  }
-
-  if (state.kind === "done") {
-    const title = state.modelCount === 1
-      ? "1 model available"
-      : `${state.modelCount} models available`;
-    return (
-      <OnboardingCard
-        icon={
-          state.harnessKinds[0]
-            ? <ProviderIcon kind={state.harnessKinds[0]} className="icon-paired" />
-            : <Settings className="icon-paired" />
-        }
-        title={title}
-        description={HOME_SCREEN_LABELS.modelProbeDoneDescription}
-        trailing={
-          state.harnessKinds.length > 1 ? (
-            <span className="flex items-center gap-1 text-muted-foreground">
-              {state.harnessKinds.slice(1, 4).map((kind) => (
-                <ProviderIcon key={kind} kind={kind} className="icon-paired" />
-              ))}
-            </span>
-          ) : null
-        }
-        onSelect={onOpenAgents}
-        onDismiss={onDismiss}
-        selectLabel={title}
-      />
-    );
-  }
-
+/**
+ * Readiness card (UX spec §10 revision, ruling 4): replaces the deleted
+ * "Processing your models…" probe card. Plain text throughout (no
+ * ThinkingText, no spinner) — something is already ready, so there is
+ * nothing left to imply is still "processing" for THIS card. Not
+ * dismissible and not a link: it states a fact about readiness and unmounts
+ * entirely (owned by the caller) once the install job resolves.
+ */
+function ReadinessCard({ model }: { model: HomeReadinessCardModel }) {
   return (
     <OnboardingCard
-      icon={<Settings className="icon-paired" />}
-      title={HOME_SCREEN_LABELS.modelProbeNoneTitle}
-      description={HOME_SCREEN_LABELS.modelProbeNoneDescription}
-      onSelect={onOpenAgents}
-      onDismiss={onDismiss}
-      selectLabel={HOME_SCREEN_LABELS.modelProbeNoneTitle}
+      icon={<ProviderIcon kind={model.agentKind} />}
+      title={model.title}
+      description={model.description}
+      selectLabel={model.title}
     />
   );
 }
@@ -212,33 +155,31 @@ export function HomeOnboardingCards({
   onSelect,
   authSetup,
   authSetupEvidence,
-  modelProbe,
+  readinessCard,
   onOpenAgents,
-  onDismissModelProbe,
 }: {
   cards: HomeOnboardingCardModel[];
   isAddingRepo: boolean;
   onSelect: (card: HomeOnboardingCardModel) => void;
   authSetup?: AuthSetupStepState;
   authSetupEvidence?: AuthSetupEvidence | null;
-  modelProbe?: HomeModelProbeCardState;
+  readinessCard?: HomeReadinessCardModel | null;
   onOpenAgents?: () => void;
-  onDismissModelProbe?: () => void;
 }) {
   // The timer card (flag off) and the evidence card (flag on) are mutually
   // exclusive: the dormant hook yields nothing, so only one is ever truthy.
   const hasAuthSetupCard = authSetup === "settingUp";
   const hasEvidenceCard =
     authSetupEvidence != null && authSetupEvidence.badges.length > 0;
-  const hasProbeCard = modelProbe !== undefined && modelProbe.kind !== "hidden";
-  if (cards.length === 0 && !hasProbeCard && !hasAuthSetupCard && !hasEvidenceCard) {
+  const hasReadinessCard = readinessCard != null;
+  if (cards.length === 0 && !hasReadinessCard && !hasAuthSetupCard && !hasEvidenceCard) {
     return null;
   }
 
   // Max 3 cards (spec §10): the transient auth-setup step leads, setup cards
-  // take priority over the probe card, which fills last.
+  // take priority over the readiness card, which fills last.
   const reservedSlots =
-    (hasAuthSetupCard || hasEvidenceCard ? 1 : 0) + (hasProbeCard ? 1 : 0);
+    (hasAuthSetupCard || hasEvidenceCard ? 1 : 0) + (hasReadinessCard ? 1 : 0);
   const visibleCards = cards.slice(0, 3 - reservedSlots);
 
   return (
@@ -261,12 +202,8 @@ export function HomeOnboardingCards({
           selectLabel={card.title}
         />
       ))}
-      {hasProbeCard && modelProbe && onOpenAgents && onDismissModelProbe ? (
-        <ModelProbeCard
-          state={modelProbe}
-          onOpenAgents={onOpenAgents}
-          onDismiss={onDismissModelProbe}
-        />
+      {hasReadinessCard && readinessCard ? (
+        <ReadinessCard model={readinessCard} />
       ) : null}
     </div>
   );

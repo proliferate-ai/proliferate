@@ -67,9 +67,7 @@ const screenMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("react-router-dom", () => ({
-  useNavigate: () => screenMocks.navigate,
-}));
+vi.mock("react-router-dom", () => ({ useNavigate: () => screenMocks.navigate }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => screenMocks.productHost,
@@ -104,6 +102,7 @@ vi.mock("#product/hooks/home/facade/use-home-screen", () => ({
   }),
 }));
 
+vi.mock("#product/hooks/home/derived/use-home-installation-readiness", () => ({ useHomeInstallationReadiness: () => null })); // own hook now (D-R1/D-R2); covered by use-home-installation-readiness.test.tsx
 vi.mock("#product/stores/home/home-draft-handoff-store", () => ({
   useHomeDraftHandoffStore: (selector: (state: {
     draftText: string | null;

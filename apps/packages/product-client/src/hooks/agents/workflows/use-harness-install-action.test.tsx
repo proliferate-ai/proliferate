@@ -41,7 +41,7 @@ beforeEach(() => {
   reconcileAgents.mockResolvedValue({});
 });
 
-it("force-installs a missing managed harness from its settings action", async () => {
+it("force-installs a missing managed harness from its settings action without raising its own start toast", async () => {
   const { result } = renderHook(() => useHarnessInstallAction(agent));
 
   await act(async () => {
@@ -54,19 +54,10 @@ it("force-installs a missing managed harness from its settings action", async ()
     agentKinds: ["codex"],
   });
   expect(result.current?.label).toBe("Install Codex");
-  expect(showToast).toHaveBeenCalledWith("Updating Codex on this machine.");
-});
-
-it("describes the shared Cloud runtime without a workspace target", async () => {
-  const { result } = renderHook(() => useHarnessInstallAction(agent, "cloud"));
-
-  await act(async () => {
-    result.current?.onInstall();
-    await vi.waitFor(() => expect(reconcileAgents).toHaveBeenCalledOnce());
-  });
-
-  expect(showToast).toHaveBeenCalledWith("Updating Codex in Proliferate Cloud.");
-  expect(showToast).not.toHaveBeenCalledWith(expect.stringMatching(/workspace/i));
+  // HarnessUpdateToastPresenter owns the start signal for a scoped reconcile
+  // job (it reacts to the same reconcile-status query); a second "started"
+  // toast from this call site would double up (spec-d item 4).
+  expect(showToast).not.toHaveBeenCalled();
 });
 
 it("uses the kind-scoped install endpoint for an older runtime", async () => {
