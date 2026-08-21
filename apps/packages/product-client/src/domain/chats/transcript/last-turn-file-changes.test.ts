@@ -44,6 +44,52 @@ describe("collectLatestCompletedTurnTouchedFiles", () => {
 
     expect(result.files.map((file) => file.path)).toEqual(["src/app.ts"]);
   });
+
+  it("projects recorded stats and ordered nonblank patches for every touched file", () => {
+    const transcript = transcriptWithTurns([{
+      turnId: "turn-1",
+      completedAt: "2026-04-04T00:00:30Z",
+      items: [
+        toolItem("first", "turn-1", "src/app.ts", null, null, {
+          additions: 2,
+          deletions: 1,
+          patch: "@@ -1 +1 @@\n-old\n+first",
+        }),
+        toolItem("blank", "turn-1", "src/app.ts", null, null, {
+          additions: 3,
+          deletions: 2,
+          patch: "  \n",
+        }),
+        toolItem("second", "turn-1", "src/app.ts", null, null, {
+          additions: 4,
+          deletions: 3,
+          patch: "@@ -4 +4 @@\n-before\n+second",
+        }),
+        toolItem("metadata", "turn-1", "src/metadata.ts", null, null, {
+          additions: 7,
+          deletions: 5,
+          patch: null,
+        }),
+      ],
+    }]);
+
+    const result = collectLatestCompletedTurnTouchedFiles(transcript);
+
+    expect(result.files).toMatchObject([
+      {
+        path: "src/app.ts",
+        recordedAdditions: 9,
+        recordedDeletions: 6,
+        recordedPatch: "@@ -1 +1 @@\n-old\n+first\n@@ -4 +4 @@\n-before\n+second",
+      },
+      {
+        path: "src/metadata.ts",
+        recordedAdditions: 7,
+        recordedDeletions: 5,
+        recordedPatch: null,
+      },
+    ]);
+  });
 });
 
 function transcriptWithTurns(input: Array<{
@@ -76,6 +122,11 @@ function toolItem(
   path: string,
   newPath: string | null = null,
   parentToolCallId: string | null = null,
+  evidence: {
+    additions?: number;
+    deletions?: number;
+    patch?: string | null;
+  } = {},
 ) {
   return {
     itemId,
@@ -105,6 +156,7 @@ function toolItem(
       workspacePath: path,
       newPath,
       newWorkspacePath: newPath,
+      ...evidence,
     }],
   };
 }
