@@ -381,6 +381,7 @@ function slackWorkspace({
   testConfigStatus = "ok",
   testResponseField = "configs",
   ruleNotificationUid = null,
+  missingRuleNotificationUid = null,
   mutateSnsAfterTargetWrite = false,
   mutateRouteAfterTargetWrite = false,
   targetContactUid,
@@ -408,11 +409,11 @@ function slackWorkspace({
       type: "slack",
       disableResolveMessage: false,
       settings: {
-        title: "{{ template \"slack.default.title\" . }}",
         text: "{{ template \"slack.default.text\" . }}",
+        title: "{{ template \"slack.default.title\" . }}",
+        token: "[REDACTED]",
+        url: "[REDACTED]",
       },
-      secureFields: { url: true },
-      provenance: "api",
     };
   }
   const state = {
@@ -422,8 +423,6 @@ function slackWorkspace({
       type: "sns",
       disableResolveMessage: false,
       settings: structuredClone(overlay.contactPoint.settings),
-      secureFields: {},
-      provenance: "api",
     }],
     calls: [],
     updatePayload: null,
@@ -583,14 +582,13 @@ function slackWorkspace({
     },
     getAlertRule: async (uid) => {
       state.calls.push(`getAlertRule:${uid}`);
-      return {
-        status: 200,
-        body: {
-          uid,
-          title: `rule-${uid}`,
-          ...(uid === ruleNotificationUid ? { notification_settings: { receiver: "drifted" } } : {}),
-        },
+      const body = {
+        uid,
+        title: `rule-${uid}`,
+        notification_settings: uid === ruleNotificationUid ? { receiver: "drifted" } : null,
       };
+      if (uid === missingRuleNotificationUid) delete body.notification_settings;
+      return { status: 200, body };
     },
     getAlertmanagerConfig: async () => {
       state.calls.push("getAlertmanagerConfig");
@@ -882,19 +880,31 @@ test("provisioning contact normalization drift blocks preflight with zero mutati
       contact.settings.text = "drifted";
     },
     (contact) => {
-      delete contact.secureFields;
+      contact.settings.token = "[redacted]";
     },
     (contact) => {
-      contact.secureFields.url = false;
+      contact.settings.url = "https://example.invalid/not-a-secret";
     },
     (contact) => {
-      contact.settings.url = "[REDACTED]";
+      contact.settings.token = "";
+    },
+    (contact) => {
+      delete contact.settings.url;
+    },
+    (contact) => {
+      delete contact.settings.token;
     },
     (contact) => {
       contact.settings.extra = "drifted";
     },
     (contact) => {
-      contact.provenance = "file";
+      contact.secureFields = { url: true };
+    },
+    (contact) => {
+      contact.provenance = "api";
+    },
+    (contact) => {
+      contact.extra = "drifted";
     },
   ];
 
@@ -916,10 +926,21 @@ test("both standalone provisioning contacts and the SNS contact must match their
     ({ overlay, state }) => {
       state.contacts.find((contact) => contact.uid === overlay.contactPoint.uid).settings.messageFormat = "drifted";
     },
+    ({ overlay, state }) => {
+      state.contacts.find((contact) => contact.uid === overlay.contactPoint.uid).secureFields = {};
+    },
+    ({ overlay, state }) => {
+      state.contacts.find((contact) => contact.uid === overlay.contactPoint.uid).provenance = "api";
+    },
+    ({ overlay, state }) => {
+      state.am.alertmanager_config.receivers
+        .find((receiver) => receiver.name === overlay.slackContactPoint.partialName)
+        .grafana_managed_receiver_configs[0].secureFields.url = false;
+    },
   ]) {
     const workspace = slackWorkspace({ withLegacy: true });
     mutate(workspace);
-    await assert.rejects(runSlackApply(slackRunArgs(workspace.client)), /provisioning contact/);
+    await assert.rejects(runSlackApply(slackRunArgs(workspace.client)), /provisioning contact|receiver config/);
     for (const call of ["updateContactPoint", "testReceiver", "deleteContactPoint", "postAlertmanagerConfig"]) {
       assert.equal(workspace.state.calls.includes(call), false);
     }
@@ -931,7 +952,7 @@ test("contact drift cannot pass combined-state resume or final verify/test", asy
   await assert.rejects(runSlackApply(slackRunArgs(combined.client)), /synthetic delete interruption/);
   combined.state.contacts.find(
     (contact) => contact.uid === combined.overlay.slackContactPoint.uid,
-  ).secureFields.url = false;
+  ).settings.url = "";
   combined.state.calls = [];
   await assert.rejects(runSlackApply(slackRunArgs(combined.client)), /provisioning contact/);
   for (const call of ["updateContactPoint", "testReceiver", "deleteContactPoint", "postAlertmanagerConfig"]) {
@@ -1014,6 +1035,22 @@ test("assertSlackCredentialModes requires both protected files to be mode 0600",
     );
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("all six rule readbacks require an own null notification_settings field", async () => {
+  for (const options of [
+    { missingRuleNotificationUid: "dfrmh7bc4yqrkf" },
+    { ruleNotificationUid: "ffvtx33lbo5c0e" },
+  ]) {
+    const { state, client } = slackWorkspace({ withLegacy: true, ...options });
+    await assert.rejects(
+      runSlackApply(slackRunArgs(client)),
+      /missing its normalized notification_settings field|non-null notification_settings/,
+    );
+    for (const call of ["updateContactPoint", "deleteContactPoint", "postAlertmanagerConfig", "testReceiver"]) {
+      assert.equal(state.calls.includes(call), false, `${call} must not run for rule-routing drift`);
+    }
   }
 });
 
