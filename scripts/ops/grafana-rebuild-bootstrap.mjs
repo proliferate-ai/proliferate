@@ -82,6 +82,7 @@ const SLACK_RULE_UIDS = Object.freeze([...KNOWN_UIDS, SIGN_IN_RULE_UID]);
 const DEFAULT_GROUP_BY = Object.freeze(["grafana_folder", "alertname"]);
 const SLACK_TITLE = "{{ template \"slack.default.title\" . }}";
 const SLACK_TEXT = "{{ template \"slack.default.text\" . }}";
+const REDACTED_SENTINEL = "[REDACTED]";
 
 function safeLog(...parts) {
   console.log(parts.map((p) => redact(String(p))).join(" "));
@@ -560,18 +561,6 @@ function assertSlackConfig(config, uid, name) {
   }
 }
 
-function contactWithoutStableProvenance(contact) {
-  if (!contact || typeof contact !== "object" || Array.isArray(contact)) return contact;
-  const normalized = structuredClone(contact);
-  if (Object.hasOwn(normalized, "provenance")) {
-    if (normalized.provenance !== "api" && normalized.provenance !== "") {
-      throw new Error("Provisioning contact has unexpected provenance");
-    }
-    delete normalized.provenance;
-  }
-  return normalized;
-}
-
 function assertSnsProvisioningContact(contact, overlay) {
   const expected = {
     uid: overlay.contactPoint.uid,
@@ -579,9 +568,8 @@ function assertSnsProvisioningContact(contact, overlay) {
     type: overlay.contactPoint.type,
     disableResolveMessage: overlay.contactPoint.disableResolveMessage,
     settings: overlay.contactPoint.settings,
-    secureFields: {},
   };
-  if (!isDeepStrictEqual(contactWithoutStableProvenance(contact), expected)) {
+  if (!isDeepStrictEqual(contact, expected)) {
     throw new Error("Default SNS provisioning contact is missing or drifted");
   }
 }
@@ -592,10 +580,14 @@ function assertProvisioningContact(contact, uid, name) {
     name,
     type: "slack",
     disableResolveMessage: false,
-    settings: { title: SLACK_TITLE, text: SLACK_TEXT },
-    secureFields: { url: true },
+    settings: {
+      text: SLACK_TEXT,
+      title: SLACK_TITLE,
+      token: REDACTED_SENTINEL,
+      url: REDACTED_SENTINEL,
+    },
   };
-  if (!isDeepStrictEqual(contactWithoutStableProvenance(contact), expected)) {
+  if (!isDeepStrictEqual(contact, expected)) {
     throw new Error(`Slack provisioning contact ${uid} is missing or drifted`);
   }
 }
@@ -630,8 +622,11 @@ function assertRulesUnrouted(ruleReadbacks) {
     if (readback.status === 404 || !readback.body) {
       throw new Error(`Grafana rule ${uid} is missing`);
     }
-    if (Object.hasOwn(readback.body, "notification_settings")) {
-      throw new Error(`Grafana rule ${uid} has notification_settings; default routing is no longer authoritative`);
+    if (!Object.hasOwn(readback.body, "notification_settings")) {
+      throw new Error(`Grafana rule ${uid} is missing its normalized notification_settings field`);
+    }
+    if (readback.body.notification_settings !== null) {
+      throw new Error(`Grafana rule ${uid} has non-null notification_settings; default routing is not authoritative`);
     }
   }
 }

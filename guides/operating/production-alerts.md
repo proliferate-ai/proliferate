@@ -308,8 +308,12 @@ Discovered live 2026-08-21 (Lane A3), not previously documented:
    `grafana-default-sns` with a provisioning `PUT`; the `name` field selects
    the outer receiver group. There is no contact-point `POST` and no policy
    write. Before that `PUT`, the tool requires the exact authored root policy,
-   SNS UID/config, both partial Slack UIDs, generated routes, six unrouted
-   rules, and `0600` credential files. After it, the tool requires the full
+   SNS UID/config, both partial Slack UIDs, generated routes, all six rules to
+   carry their provider-normalized `notification_settings: null`, and `0600`
+   credential files. On AMG, the own `notification_settings` key is always
+   present; `null` means the rule has no direct receiver and the root policy is
+   authoritative. A missing key or non-null value fails closed. After the PUT,
+   the tool requires the full
    provider readback to equal the prior state minus only the generated
    `sns receiver` child. It then runs one isolated Slack-only receiver test.
    Only after that structural and delivery proof does it delete the other
@@ -317,6 +321,25 @@ Discovered live 2026-08-21 (Lane A3), not previously documented:
    `dfvuf540l7ym8d`). A lost response resumes only from an exact readback; a
    verification or test failure moves `efvuhlsl31mo0e` back to `sns receiver`
    and verifies the original state without deleting `dfvuf540l7ym8d`.
+
+   Grafana 10.4.7 exposes two different safe readback shapes for the same Slack
+   integration. The provisioning contact contains exactly `uid`, `name`,
+   `type`, `disableResolveMessage`, and `settings`; `settings` contains the
+   exact title/text plus `token` and `url` set to the literal ten-byte sentinel
+   `[REDACTED]`. It contains no `secureFields` or `provenance`. The full
+   Alertmanager receiver config instead contains title/text only and proves the
+   stored webhook through `secureFields.url: true`. The SNS provisioning
+   contact likewise has no `secureFields` or `provenance` and contains only its
+   exact `authProvider`, `messageFormat`, and `topic` settings. The reconciler
+   pins each surface independently and rejects plaintext, empty or malformed
+   sentinels, extra settings, or cross-surface drift.
+
+   The first post-#2204 live attempt on 2026-08-21 stopped in preflight with
+   `Default SNS provisioning contact is missing or drifted`: the then-reviewed
+   validator expected a `secureFields` property that AMG does not return on the
+   provisioning surface. No PUT, receiver test, delete, policy write, or Slack
+   delivery occurred. This safe stop is why provider-normalized GET fixtures
+   are part of the deterministic suite before the next live attempt.
 
 ### Repository artifacts
 
