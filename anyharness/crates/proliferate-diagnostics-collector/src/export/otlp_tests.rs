@@ -1,6 +1,6 @@
 use proliferate_diagnostics_protocol::v1::types::{
     ArgumentValueV1, CollectorAcceptedRecordV1, ComponentV1, PrivacyClassificationV1,
-    TypedArgumentV1,
+    RecordClassV1, TypedArgumentV1,
 };
 use proliferate_diagnostics_protocol::v1::validation::parse_producer_record_value;
 use serde_json::Value;
@@ -36,6 +36,15 @@ fn attribute_of<'a>(log: &'a Value, key: &str) -> Option<&'a Value> {
         .map(|attribute| &attribute["value"])
 }
 
+/// The encoder's mechanics are the same under either policy, so the tests that
+/// prove them pin [`ExportPolicy::All`] and stay meaningful in a
+/// default-features CI run. The tests that prove the policy itself name the
+/// policy they are asserting about. Only the tests whose subject is "what does
+/// THIS build do" call [`encode_batch`] and pick up the compiled policy.
+fn encode_all(records: &[CollectorAcceptedRecordV1]) -> (Value, u64) {
+    encode_batch_with_policy(ExportPolicy::All, records)
+}
+
 fn all_log_records(payload: &Value) -> Vec<&Value> {
     payload["resourceLogs"]
         .as_array()
@@ -49,14 +58,14 @@ fn all_log_records(payload: &Value) -> Vec<&Value> {
 #[test]
 fn every_golden_record_becomes_exactly_one_log_record() {
     let records = fixture_records();
-    let (payload, refused) = encode_batch(&records);
+    let (payload, refused) = encode_all(&records);
     assert_eq!(refused, 0);
     assert_eq!(all_log_records(&payload).len(), records.len());
 }
 
 #[test]
 fn records_group_into_one_resource_per_producer_boot_and_one_scope_per_version() {
-    let (payload, _) = encode_batch(&fixture_records());
+    let (payload, _) = encode_all(&fixture_records());
     let resources = payload["resourceLogs"].as_array().expect("resource logs");
     let instances = resources
         .iter()
@@ -90,7 +99,7 @@ fn records_group_into_one_resource_per_producer_boot_and_one_scope_per_version()
 
 #[test]
 fn service_identity_comes_from_the_record_component_release_and_environment() {
-    let (payload, _) = encode_batch(&fixture_records());
+    let (payload, _) = encode_all(&fixture_records());
     let resource_value = |resource: &Value, key: &str| {
         resource["attributes"]
             .as_array()
@@ -129,6 +138,9 @@ fn service_identity_comes_from_the_record_component_release_and_environment() {
     );
 }
 
+/// What a DOGFOOD build does with a detailed record. A customer build never
+/// reaches this code for a detailed record at all, which is the subject of
+/// `the_customer_policy_refuses_every_detailed_record_in_the_fixture`.
 #[test]
 fn detailed_record_carries_its_message_as_the_body_and_typed_arguments_as_attributes() {
     let records = fixture_records();
@@ -137,7 +149,7 @@ fn detailed_record_carries_its_message_as_the_body_and_typed_arguments_as_attrib
         .find(|accepted| accepted.record.name == "renderer.console.error")
         .expect("detailed fixture record")
         .clone();
-    let (payload, _) = encode_batch(std::slice::from_ref(&detailed));
+    let (payload, _) = encode_all(std::slice::from_ref(&detailed));
     let log = all_log_records(&payload)[0];
     assert_eq!(
         log["body"]["stringValue"],
@@ -238,7 +250,7 @@ fn model_metadata_survives_as_bounded_scalar_attributes() {
 #[test]
 fn source_and_accepted_timestamps_become_distinct_nanosecond_strings() {
     let records = fixture_records();
-    let (payload, _) = encode_batch(std::slice::from_ref(&records[0]));
+    let (payload, _) = encode_all(std::slice::from_ref(&records[0]));
     let log = all_log_records(&payload)[0];
     assert_eq!(log["timeUnixNano"], "1786363200000000000");
     assert_eq!(log["observedTimeUnixNano"], "1786406400500000000");
@@ -248,7 +260,7 @@ fn source_and_accepted_timestamps_become_distinct_nanosecond_strings() {
 fn only_a_hex_trace_id_is_promoted_to_the_otlp_trace_field() {
     let mut record = fixture_records()[0].clone();
     assert_eq!(record.record.trace_id.as_deref(), Some("trace-01"));
-    let (payload, _) = encode_batch(std::slice::from_ref(&record));
+    let (payload, _) = encode_all(std::slice::from_ref(&record));
     let log = all_log_records(&payload)[0];
     assert!(log.get("traceId").is_none());
     assert_eq!(
@@ -257,7 +269,7 @@ fn only_a_hex_trace_id_is_promoted_to_the_otlp_trace_field() {
     );
 
     record.record.trace_id = Some("4BF92F3577B34DA6A3CE929D0E0E4736".to_owned());
-    let (payload, _) = encode_batch(std::slice::from_ref(&record));
+    let (payload, _) = encode_all(std::slice::from_ref(&record));
     let log = all_log_records(&payload)[0];
     assert_eq!(log["traceId"], "4bf92f3577b34da6a3ce929d0e0e4736");
 }
@@ -346,4 +358,105 @@ fn a_secret_classified_argument_is_dropped_from_an_otherwise_exportable_record()
     assert!(!serde_json::to_string(&payload)
         .expect("payload")
         .contains("never-exported"));
+}
+
+/// The encoder fence, stated against the golden fixture rather than a
+/// hand-built record. The fixture's one detailed record is also its only
+/// free-text carrier and its only non-operational record, so this is the whole
+/// customer-facing question in one assertion.
+///
+/// Negative control: change `LifecycleOnly` to `All` here, or delete the
+/// `policy.admits` guard in `encode_batch_with_policy`, and this fails with 13
+/// log records, a refusal count of 0, and the message text on the wire.
+#[test]
+fn the_customer_policy_refuses_every_detailed_record_in_the_fixture() {
+    let records = fixture_records();
+    let detailed = records
+        .iter()
+        .filter(|accepted| accepted.record.record_class == RecordClassV1::Detailed)
+        .count();
+    assert!(detailed > 0, "the fixture must exercise the refusal path");
+
+    let (payload, refused) = encode_batch_with_policy(ExportPolicy::LifecycleOnly, &records);
+    assert_eq!(refused as usize, detailed);
+    assert_eq!(all_log_records(&payload).len(), records.len() - detailed);
+    for log in all_log_records(&payload) {
+        assert_eq!(
+            attribute_of(log, "proliferate.record_class"),
+            Some(&serde_json::json!({ "stringValue": "lifecycle" }))
+        );
+    }
+
+    let wire = serde_json::to_string(&payload).expect("payload");
+    for accepted in &records {
+        let Some(message) = accepted
+            .record
+            .detailed
+            .as_ref()
+            .and_then(|detailed| detailed.message.as_deref())
+        else {
+            continue;
+        };
+        assert!(
+            !wire.contains(message),
+            "detailed free text reached the customer wire payload"
+        );
+    }
+}
+
+/// The privacy narrowing is per field as well as per record: a customer build
+/// exports only `operational` arguments, so a lifecycle record that somehow
+/// carries a `customer_content` argument still exports the record without it.
+#[test]
+fn the_customer_policy_drops_a_non_operational_argument_a_dogfood_build_keeps() {
+    let mut record = fixture_records()[1].clone();
+    record.record.arguments = vec![
+        TypedArgumentV1 {
+            name: "kept".to_owned(),
+            privacy: PrivacyClassificationV1::Operational,
+            value: ArgumentValueV1::String("visible".to_owned()),
+        },
+        TypedArgumentV1 {
+            name: "narrowed".to_owned(),
+            privacy: PrivacyClassificationV1::CustomerContent,
+            value: ArgumentValueV1::String("customer-only".to_owned()),
+        },
+    ];
+
+    let (customer, refused) =
+        encode_batch_with_policy(ExportPolicy::LifecycleOnly, std::slice::from_ref(&record));
+    assert_eq!(refused, 0, "the record itself is still exportable");
+    let log = all_log_records(&customer)[0];
+    assert!(attribute_of(log, "proliferate.argument.kept").is_some());
+    assert!(attribute_of(log, "proliferate.argument.narrowed").is_none());
+    assert!(!serde_json::to_string(&customer)
+        .expect("payload")
+        .contains("customer-only"));
+
+    let (dogfood, _) = encode_all(std::slice::from_ref(&record));
+    let log = all_log_records(&dogfood)[0];
+    assert!(attribute_of(log, "proliferate.argument.narrowed").is_some());
+}
+
+/// The tests above name their policy so both are covered in one CI run. This
+/// one asserts the thing that actually ships: `encode_batch` consults the
+/// compiled [`EXPORT_POLICY`] and nothing else.
+#[test]
+fn encode_batch_applies_the_compiled_policy() {
+    let records = fixture_records();
+    let (compiled, compiled_refused) = encode_batch(&records);
+    let (expected, expected_refused) = encode_batch_with_policy(EXPORT_POLICY, &records);
+    assert_eq!(compiled_refused, expected_refused);
+    assert_eq!(compiled, expected);
+
+    #[cfg(not(feature = "internal-dogfood-export"))]
+    assert!(
+        compiled_refused > 0,
+        "a customer build must refuse the fixture's detailed record"
+    );
+    #[cfg(feature = "internal-dogfood-export")]
+    assert_eq!(
+        compiled_refused, 0,
+        "a dogfood build exports every non-secret fixture record"
+    );
 }

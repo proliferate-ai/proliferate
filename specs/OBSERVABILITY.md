@@ -89,13 +89,21 @@ stdout/stderr into a bounded in-memory tail — while each producer keeps a fixe
 bounded per-component fallback file family. Standalone, external
 `ANYHARNESS_DEV_URL`, cloud/Supervisor, and unsupported-platform modes keep
 their existing sinks, and historical log bytes are never rewritten. Support-file
-migration is not part of this change. Internal/dogfood collector builds add one
+migration is not part of this change. Collector builds add one
 more route for the same accepted records: a provider-neutral OTLP/HTTP JSON
-adapter behind the collector's non-default `internal-dogfood-export` feature,
-whose destination URL and request headers are environment values rather than
-contract fields. Customer builds compile no export path, no destination read,
-and no credential handling at all, and the release job refuses a bundle whose
-binaries carry the endpoint variable name. The adapter is bounded best effort —
+adapter whose destination URL and request headers are environment values rather
+than contract fields. The adapter is compiled into every build, and what a build
+may export is a compile-time constant, `EXPORT_POLICY` in
+`proliferate-diagnostics-collector/src/export/policy.rs`, that no configuration
+value can relax. A customer build carries `LifecycleOnly`, so only
+`record_class == lifecycle` with every field `operational` can be exported and
+the detailed class, the only class that can carry free text, never leaves the
+machine; the `internal-dogfood-export` feature widens that to `All` and adds the
+per-developer `dev.user` tag. The release job refuses a bundle whose packaged
+collector does not report `lifecycle_only`, or whose binaries carry the
+dogfood-only marker or dev-tag literals. Independently of the policy, any build
+exports nothing until a destination is configured out of band, so customer
+export stays dark until that configuration is a deliberate decision. The adapter is bounded best effort —
 a fixed queue that drops rather than grows, a fixed batch, one attempt plus two
 retries, a cooldown, and no disk outbox or replay — so a failing destination
 changes only `exporter.state`, `exporter.dropped_records`, and a fixed-table

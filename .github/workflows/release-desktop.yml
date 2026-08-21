@@ -649,13 +649,50 @@ jobs:
             fi
             codesign --verify --verbose "$bin_dir/$binary"
           done
-          # The internal OTLP export path is compiled out of customer builds.
-          # Its destination variable name is a string literal that only exists
-          # inside that path, so finding it here means a customer release was
-          # built with internal-dogfood-export enabled.
+          # The OTLP export adapter now ships in customer builds, so the gate
+          # is no longer "the export path is absent". What a customer build
+          # must not be able to do is export the detailed record class, which
+          # is the only class that can carry free text. The compiled policy is
+          # a single constant (export/policy.rs) and it writes itself out two
+          # ways, so both are checked here.
+          #
+          # 1. The marker literal. Exactly one of the two is compiled in, so
+          #    this is a positive statement about the binary rather than an
+          #    absence proof about strings.
+          collector="$bin_dir/proliferate-diagnostics-collector"
+          if ! grep -a -q "PROLIFERATE_EXPORT_POLICY=lifecycle_only" "$collector"; then
+            echo "::error::Packaged collector does not carry the lifecycle-only export policy marker"
+            exit 1
+          fi
+          if grep -a -q "PROLIFERATE_EXPORT_POLICY=all" "$collector"; then
+            echo "::error::Packaged collector was built with internal-dogfood-export; it can export the detailed class"
+            exit 1
+          fi
+          # 2. The binary's own answer. Cheap, and it proves the constant the
+          #    running code reads is the one the grep found. Skipped rather
+          #    than failed if a future matrix entry cross-compiles, because
+          #    then the packaged binary cannot run on the runner.
+          runner_arch="$(uname -m)"
+          case "${{ matrix.target }}" in
+            aarch64-*) target_arch="arm64" ;;
+            x86_64-*) target_arch="x86_64" ;;
+            *) target_arch="" ;;
+          esac
+          if [[ "$runner_arch" == "$target_arch" ]]; then
+            policy="$("$collector" --print-export-policy)"
+            if [[ "$policy" != "lifecycle_only" ]]; then
+              echo "::error::Packaged collector reports export policy '$policy', expected lifecycle_only"
+              exit 1
+            fi
+          else
+            echo "Skipping the collector self-report: ${{ matrix.target }} does not run on $runner_arch."
+          fi
+          # The per-developer export tag is dogfood-only. Its variable name is
+          # a string literal that exists only inside that path, so finding it
+          # in any packaged binary means a customer release carries it.
           for binary in anyharness proliferate proliferate-worker proliferate-debug proliferate-diagnostics-collector; do
-            if grep -a -q "PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT" "$bin_dir/$binary"; then
-              echo "::error::Packaged $binary carries the internal OTLP export path"
+            if grep -a -q "PROLIFERATE_DIAGNOSTICS_DEV_TAG" "$bin_dir/$binary"; then
+              echo "::error::Packaged $binary carries the internal per-developer export tag"
               exit 1
             fi
           done

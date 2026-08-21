@@ -9,9 +9,17 @@ use proliferate_diagnostics_collector::{CollectorConfig, CollectorServer};
 #[derive(Debug, Parser)]
 #[command(name = "proliferate-diagnostics-collector")]
 struct Args {
+    /// Print the export policy this binary was compiled with and exit zero.
+    ///
+    /// The desktop release job runs the packaged collector with this flag and
+    /// requires `lifecycle_only`. It is a positive assertion about behaviour,
+    /// and it fails closed: a binary that cannot run, does not know the flag,
+    /// or answers anything else fails the bundle.
+    #[arg(long)]
+    print_export_policy: bool,
     /// Inherited descriptor containing one newline-terminated bearer capability.
     #[arg(long)]
-    capability_fd: i32,
+    capability_fd: Option<i32>,
     /// Optional inherited descriptor for bounded newline-delimited control commands.
     #[arg(long)]
     control_fd: Option<i32>,
@@ -24,15 +32,28 @@ struct Args {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    if args.control_fd == Some(args.capability_fd) {
+    if args.print_export_policy {
+        // Both literals are printed: the bare policy name is what the release
+        // job asserts on, and the marker is the same string the job greps the
+        // packaged binary for, which keeps the compiled constant reachable so
+        // the linker cannot drop it.
+        println!("{}", proliferate_diagnostics_collector::export_policy_name());
+        eprintln!("{}", proliferate_diagnostics_collector::export_policy_marker());
+        std::io::stdout().flush()?;
+        return Ok(());
+    }
+    let Some(capability_fd) = args.capability_fd else {
+        anyhow::bail!("--capability-fd is required");
+    };
+    if args.control_fd == Some(capability_fd) {
         anyhow::bail!("capability and control descriptors must be distinct");
     }
-    let mut capability = read_capability_from_fd(args.capability_fd)?;
+    let mut capability = read_capability_from_fd(capability_fd)?;
     let mut config = CollectorConfig::standalone(capability.clone());
     config.release = args.release;
     config.environment = args.environment;
     let server = CollectorServer::start(config).await?;
-    let descriptor = server.connection_descriptor(args.capability_fd as u32)?;
+    let descriptor = server.connection_descriptor(capability_fd as u32)?;
     let core = server.core();
     println!("{}", serde_json::to_string(&descriptor)?);
     std::io::stdout().flush()?;
