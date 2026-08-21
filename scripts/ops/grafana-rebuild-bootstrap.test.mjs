@@ -19,6 +19,9 @@ import {
   ensureDashboard,
   runApply,
   runVerify,
+  runSlackApply,
+  runSlackVerify,
+  runSlackTest,
 } from "./grafana-rebuild-bootstrap.mjs";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
@@ -330,4 +333,59 @@ test("this tool's fixed target is the new workspace, never the OLD workspace", (
   assert.equal(NEW_TARGET.grafanaWorkspaceId, "g-48655e6419");
   assert.equal(NEW_TARGET.grafanaWorkspaceName, "proliferate-ops-rebuild");
   assert.equal(WORKSPACE_BASE_URL, "https://g-48655e6419.grafana-workspace.us-east-1.amazonaws.com");
+});
+
+test("Slack receiver is additive, preserves the SNS root route, and proves a test delivery", async () => {
+  const overlay = baseOverlay();
+  const originalRoutes = [{ receiver: overlay.notificationPolicy.receiver, routes: [{ receiver: overlay.notificationPolicy.receiver }] }];
+  const state = {
+    contacts: [],
+    am: {
+      alertmanager_config: {
+        route: { receiver: overlay.notificationPolicy.receiver, routes: structuredClone(originalRoutes) },
+        receivers: [{ name: overlay.contactPoint.name, grafana_managed_receiver_configs: [{ type: "sns" }] }],
+      },
+    },
+  };
+  const client = {
+    listContactPoints: async () => ({ status: 200, body: structuredClone(state.contacts) }),
+    createContactPoint: async (body) => {
+      state.contacts.push({ name: body.name, type: body.type, uid: "slack-uid" });
+      state.am.alertmanager_config.receivers.push({
+        name: body.name,
+        grafana_managed_receiver_configs: [{ type: body.type, uid: "slack-uid" }],
+      });
+      return { status: 201, body: {} };
+    },
+    getAlertmanagerConfig: async () => ({ status: 200, body: structuredClone(state.am) }),
+    postAlertmanagerConfig: async (body) => {
+      state.am = structuredClone(body);
+      return { status: 202, body: {} };
+    },
+    testReceiver: async (body) => ({
+      status: 200,
+      body: { receivers: [{ configs: [{ uid: body.receivers[0].grafana_managed_receiver_configs[0].uid, status: "ok" }] }] },
+    }),
+  };
+  const env = { SLACK_ALERTS_WEBHOOK_URL: "https://hooks.slack.com/services/test/unit/webhook" };
+
+  const applied = await runSlackApply({ client, repoRoot: REPO_ROOT, env });
+  assert.deepEqual(applied, { contactPoint: "created", route: "created", uid: "slack-uid" });
+  assert.equal(state.am.alertmanager_config.route.receiver, overlay.notificationPolicy.receiver);
+  assert.deepEqual(state.am.alertmanager_config.route.routes.slice(1), originalRoutes);
+  assert.deepEqual(state.am.alertmanager_config.route.routes[0], { receiver: overlay.slackContactPoint.name, continue: true });
+
+  assert.deepEqual(await runSlackVerify({ client, repoRoot: REPO_ROOT }), {
+    defaultSnsRoutePreserved: true,
+    slackContactPresent: true,
+    additiveSlackRoutePresent: true,
+  });
+  assert.deepEqual(await runSlackTest({ client, repoRoot: REPO_ROOT, env }), { delivery: "ok" });
+});
+
+test("Slack apply refuses to operate without the protected webhook environment variable", async () => {
+  await assert.rejects(
+    runSlackApply({ client: {}, repoRoot: REPO_ROOT, env: {} }),
+    /SLACK_ALERTS_WEBHOOK_URL must be present/,
+  );
 });

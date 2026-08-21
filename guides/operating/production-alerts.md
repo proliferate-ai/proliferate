@@ -298,12 +298,14 @@ Discovered live 2026-08-21 (Lane A3), not previously documented:
    edit the route. `ensureContactRouting` in the bootstrap script does exactly
    this and is idempotent.
 
-   This is an intentionally different delivery design from the OLD
-   workspace's Slack routing (`slack-ops-alerts` / `slack-eng-triage`)
-   documented earlier in this runbook — that design predates the D2 revision.
-   If the new workspace should also route to Slack, that is a separate,
-   reviewed change to `production-alerts-rebuild.json`'s `notificationPolicy`
-   / `contactPoint` blocks.
+   Slack is an optional, separately gated additive path. Its webhook is read
+   only from `SLACK_ALERTS_WEBHOOK_URL` in the protected local observability
+   environment file; it is never checked in. The Slack operation creates a
+   new `grafana-rebuild-slack` receiver and prepends an all-alert child route
+   with `continue: true`. The root `grafana-default-sns` receiver and its
+   existing child route stay untouched, so SNS/email delivery continues beside
+   Slack. The operation refuses a changed root receiver or a drifted Slack
+   route instead of overwriting either.
 
 ### Repository artifacts
 
@@ -319,6 +321,9 @@ scripts/ops/grafana-rebuild-bootstrap.mjs                            # check / a
 node scripts/ops/grafana-rebuild-bootstrap.mjs check
 GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-rebuild-bootstrap.mjs apply
 GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-rebuild-bootstrap.mjs verify
+GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-rebuild-bootstrap.mjs slack-apply
+GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-rebuild-bootstrap.mjs slack-verify
+GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-rebuild-bootstrap.mjs slack-test
 ```
 
 - `check` is offline: validates the rule set still matches the shared
@@ -339,6 +344,9 @@ GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-rebuild-bootstrap.mjs verify
   checksum, confirms the root route receiver and the SNS topic wiring, and
   confirms the dashboard exists. Use this, not a clean `apply` exit code, as
   the proof that alerting actually works.
+- `slack-apply`, `slack-verify`, and `slack-test` are separately live-gated
+  and require `SLACK_ALERTS_WEBHOOK_URL`. The test sends a real Grafana Slack
+  notification; record only its success status and timestamp, never the URL.
 - Admin credential: a dedicated ADMIN-role service-account token for this
   workspace only, minted via `aws grafana create-workspace-service-account`
   (role `ADMIN`) + `create-workspace-service-account-token`, stored at

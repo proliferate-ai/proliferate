@@ -71,6 +71,8 @@ export const ADMIN_TOKEN_PATH = path.join(
   ".proliferate-local/ops/grafana-admin-rebuild.token",
 );
 
+const SLACK_WEBHOOK_ENV = "SLACK_ALERTS_WEBHOOK_URL";
+
 function safeLog(...parts) {
   console.log(parts.map((p) => redact(String(p))).join(" "));
 }
@@ -167,6 +169,12 @@ export function validateOverlayDocument(overlay) {
   if (!/^arn:aws:sns:/.test(overlay.contactPoint?.settings?.topic || "")) {
     throw new Error("Overlay contactPoint.settings.topic must be a real SNS topic ARN, not the AMG placeholder");
   }
+  if (overlay.slackContactPoint?.name !== "grafana-rebuild-slack" || overlay.slackContactPoint?.type !== "slack") {
+    throw new Error("Overlay must define the fixed Grafana rebuild Slack contact point");
+  }
+  if (overlay.slackContactPoint?.webhookEnvironmentVariable !== SLACK_WEBHOOK_ENV) {
+    throw new Error(`Overlay Slack webhook must be supplied only by ${SLACK_WEBHOOK_ENV}`);
+  }
   return true;
 }
 
@@ -251,6 +259,9 @@ export function createClient({ fetchImpl = fetch, tokenProvider } = {}) {
     createAlertRule: (body) => request("POST", "/api/v1/provisioning/alert-rules", body),
     getAlertmanagerConfig: () => request("GET", "/api/alertmanager/grafana/config/api/v1/alerts"),
     postAlertmanagerConfig: (body) => request("POST", "/api/alertmanager/grafana/config/api/v1/alerts", body),
+    listContactPoints: () => request("GET", "/api/v1/provisioning/contact-points"),
+    createContactPoint: (body) => request("POST", "/api/v1/provisioning/contact-points", body),
+    testReceiver: (body) => request("POST", "/api/alertmanager/grafana/config/api/v1/receivers/test", body),
     getDashboard: (uid) => request("GET", `/api/dashboards/uid/${encodeURIComponent(uid)}`),
     createDashboard: (body) => request("POST", "/api/dashboards/db", body),
   };
@@ -364,6 +375,136 @@ export async function ensureContactRouting(client, overlay) {
   return "repointed";
 }
 
+function slackWebhook(env = process.env) {
+  const webhook = env[SLACK_WEBHOOK_ENV];
+  if (!webhook) {
+    throw new Error(`${SLACK_WEBHOOK_ENV} must be present for a live Slack operation`);
+  }
+  let url;
+  try {
+    url = new URL(webhook);
+  } catch {
+    throw new Error(`${SLACK_WEBHOOK_ENV} must be a valid Slack incoming-webhook URL`);
+  }
+  if (url.protocol !== "https:" || url.hostname !== "hooks.slack.com" || !url.pathname.startsWith("/services/")) {
+    throw new Error(`${SLACK_WEBHOOK_ENV} must be an https://hooks.slack.com/services/... URL`);
+  }
+  return webhook;
+}
+
+function slackPayload(overlay, webhook, uid) {
+  return {
+    ...(uid ? { uid } : {}),
+    name: overlay.slackContactPoint.name,
+    type: "slack",
+    disableResolveMessage: false,
+    settings: {
+      title: "{{ template \"slack.default.title\" . }}",
+      text: "{{ template \"slack.default.text\" . }}",
+    },
+    secureSettings: { url: webhook },
+  };
+}
+
+function findSlackContact(points, overlay) {
+  const matches = (points || []).filter((point) => point.name === overlay.slackContactPoint.name);
+  if (matches.length > 1) {
+    throw new Error(`Found multiple contact points named ${overlay.slackContactPoint.name}`);
+  }
+  const contact = matches[0];
+  if (contact && contact.type !== "slack") {
+    throw new Error(`Slack contact point exists with unexpected type ${contact.type}`);
+  }
+  return contact || null;
+}
+
+// Add a child route only. The root receiver remains the existing SNS receiver;
+// continue=true lets its existing child branch notify SNS/email too.
+export async function ensureSlackContactAndRoute(client, overlay, { env = process.env } = {}) {
+  const webhook = slackWebhook(env);
+  let contact = findSlackContact((await client.listContactPoints()).body, overlay);
+  let contactPoint = "present";
+  if (!contact) {
+    await client.createContactPoint(slackPayload(overlay, webhook));
+    contact = findSlackContact((await client.listContactPoints()).body, overlay);
+    if (!contact?.uid) {
+      throw new Error("Post-write verification failed: Slack contact point is missing");
+    }
+    contactPoint = "created";
+  }
+  if (!contact.uid) {
+    throw new Error("Slack contact point is missing its Grafana uid");
+  }
+
+  const before = await client.getAlertmanagerConfig();
+  const am = before.body.alertmanager_config;
+  if (am.route?.receiver !== overlay.notificationPolicy.receiver) {
+    throw new Error("Root route receiver changed; refusing to alter the default SNS route");
+  }
+  const receiver = (am.receivers || []).find((entry) => entry.name === overlay.slackContactPoint.name);
+  if (!receiver?.grafana_managed_receiver_configs?.some((entry) => entry.type === "slack")) {
+    throw new Error("Slack contact point is absent from the live alertmanager receiver list");
+  }
+  const expected = { receiver: overlay.slackContactPoint.name, continue: true };
+  const matches = (am.route.routes || []).filter((route) => route.receiver === overlay.slackContactPoint.name);
+  if (matches.length > 1 || (matches.length === 1 && JSON.stringify(matches[0]) !== JSON.stringify(expected))) {
+    throw new Error("Live Slack route is ambiguous or drifted; refusing to overwrite it");
+  }
+  if (matches.length === 1) {
+    return { contactPoint, route: "present", uid: contact.uid };
+  }
+  const next = JSON.parse(JSON.stringify(before.body));
+  next.alertmanager_config.route.routes = [expected, ...(next.alertmanager_config.route.routes || [])];
+  await client.postAlertmanagerConfig(next);
+  const after = await client.getAlertmanagerConfig();
+  if (after.body.alertmanager_config.route?.receiver !== overlay.notificationPolicy.receiver) {
+    throw new Error("Post-write verification failed: default SNS root receiver changed");
+  }
+  if (JSON.stringify(after.body.alertmanager_config.route?.routes?.[0]) !== JSON.stringify(expected)) {
+    throw new Error("Post-write verification failed: additive Slack child route did not stick");
+  }
+  return { contactPoint, route: "created", uid: contact.uid };
+}
+
+export async function runSlackApply({ client, repoRoot = REPO_ROOT, env = process.env } = {}) {
+  const overlay = loadOverlay(repoRoot);
+  validateOverlayDocument(overlay);
+  return ensureSlackContactAndRoute(client, overlay, { env });
+}
+
+export async function runSlackVerify({ client, repoRoot = REPO_ROOT } = {}) {
+  const overlay = loadOverlay(repoRoot);
+  validateOverlayDocument(overlay);
+  const contact = findSlackContact((await client.listContactPoints()).body, overlay);
+  const config = await client.getAlertmanagerConfig();
+  const expected = { receiver: overlay.slackContactPoint.name, continue: true };
+  const route = (config.body.alertmanager_config.route?.routes || []).find(
+    (entry) => entry.receiver === overlay.slackContactPoint.name,
+  );
+  return {
+    defaultSnsRoutePreserved: config.body.alertmanager_config.route?.receiver === overlay.notificationPolicy.receiver,
+    slackContactPresent: Boolean(contact?.uid),
+    additiveSlackRoutePresent: JSON.stringify(route) === JSON.stringify(expected),
+  };
+}
+
+export async function runSlackTest({ client, repoRoot = REPO_ROOT, env = process.env } = {}) {
+  const overlay = loadOverlay(repoRoot);
+  validateOverlayDocument(overlay);
+  const contact = findSlackContact((await client.listContactPoints()).body, overlay);
+  if (!contact?.uid) {
+    throw new Error("Slack contact point is missing; run slack-apply first");
+  }
+  const result = await client.testReceiver({
+    receivers: [{ name: overlay.slackContactPoint.name, grafana_managed_receiver_configs: [slackPayload(overlay, slackWebhook(env), contact.uid)] }],
+  });
+  const configs = result.body?.receivers?.[0]?.grafana_managed_receiver_configs || result.body?.receivers?.[0]?.configs || [];
+  if (!configs.some((config) => config.uid === contact.uid && config.status === "ok")) {
+    throw new Error("Grafana Slack test delivery did not report status ok");
+  }
+  return { delivery: "ok" };
+}
+
 export async function ensureDashboard(client, overlay, dashboard) {
   const existing = await client.getDashboard(overlay.dashboard.uid);
   if (existing.status === 404) {
@@ -446,8 +587,24 @@ async function main() {
       printBoundedReadback(result);
       return;
     }
+    case "slack-apply": {
+      assertLiveAllowed();
+      const result = await runSlackApply({ client: buildLiveClient() });
+      safeLog("Slack apply:", JSON.stringify({ contactPoint: result.contactPoint, route: result.route }));
+      return;
+    }
+    case "slack-verify": {
+      assertLiveAllowed();
+      safeLog("Slack verify:", JSON.stringify(await runSlackVerify({ client: buildLiveClient() })));
+      return;
+    }
+    case "slack-test": {
+      assertLiveAllowed();
+      safeLog("Slack test:", JSON.stringify(await runSlackTest({ client: buildLiveClient() })));
+      return;
+    }
     default:
-      throw new Error("Usage: grafana-rebuild-bootstrap.mjs <check|apply|verify>");
+      throw new Error("Usage: grafana-rebuild-bootstrap.mjs <check|apply|verify|slack-apply|slack-verify|slack-test>");
   }
 }
 
