@@ -169,6 +169,16 @@ impl CollectorProcessLauncher {
                 "collector binary is missing",
             )
         })?;
+        Self::discover_with_binary(binary, release, environment, install_id, fallback)
+    }
+
+    fn discover_with_binary(
+        binary: PathBuf,
+        release: String,
+        environment: String,
+        install_id: Option<String>,
+        fallback: FallbackDiagnosticsWriter,
+    ) -> Result<Self, CollectorLaunchError> {
         validate_binary(&binary)?;
         validate_label(&release)?;
         validate_label(&environment)?;

@@ -283,17 +283,15 @@ async fn an_install_id_crosses_the_process_seam_to_the_real_collector() {
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 
-/// Discovery applies the collector's exact bounded-graphic-ASCII domain. A bad
-/// persisted identity costs only the attribute, never the collector launch.
-#[cfg(target_os = "macos")]
+/// The production discovery path applies the collector's exact
+/// bounded-graphic-ASCII domain. A bad persisted identity costs only the
+/// attribute, never the collector launch.
 #[test]
 fn discover_accepts_exactly_the_collectors_install_id_domain() {
     let root = std::env::temp_dir().join(format!("collector-bad-install-{}", uuid::Uuid::new_v4()));
     let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
         .expect("fallback");
     let binary = built_collector_binary();
-    let previous_binary = std::env::var_os("PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN");
-    std::env::set_var("PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN", &binary);
 
     let discovered = [
         ("install-desktop-test-4b71".to_owned(), true),
@@ -306,7 +304,8 @@ fn discover_accepts_exactly_the_collectors_install_id_domain() {
     ]
     .into_iter()
     .map(|(install_id, accepted)| {
-        let result = CollectorProcessLauncher::discover(
+        let result = CollectorProcessLauncher::discover_with_binary(
+            binary.clone(),
             "desktop-test".to_owned(),
             "test".to_owned(),
             Some(install_id.clone()),
@@ -315,11 +314,6 @@ fn discover_accepts_exactly_the_collectors_install_id_domain() {
         (install_id, accepted, result)
     })
     .collect::<Vec<_>>();
-
-    match previous_binary {
-        Some(value) => std::env::set_var("PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN", value),
-        None => std::env::remove_var("PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN"),
-    }
 
     for (install_id, accepted, result) in discovered {
         let launcher = result.expect("discover real collector");
