@@ -5,7 +5,7 @@
 //   allocate the controller-local ports the renderer/AnyHarness use
 //   -> build the candidate Server image for the BOX arch and docker-save it
 //   -> build the release-shaped proliferate-deploy.tar.gz + its SHA256SUMS
-//      EXACTLY the way server-ci.yml `self-hosted-release-assets` builds them
+//      EXACTLY the way `_build-server.yml`'s `self-hosted-release-assets` builds them
 //   -> for the arm64 CFN posture, build the exact aarch64 musl runtime archive
 //      and add it to that same SHA256SUMS (the shipped template consumes it
 //      through RuntimeBinaryUrl/RuntimeBinaryChecksumUrl overrides)
@@ -177,7 +177,7 @@ export function buildServerImageArchive({ outputPath, version, platform, exec = 
 
 /**
  * Builds `proliferate-deploy.tar.gz` + `self-hosted-assets.SHA256SUMS` EXACTLY
- * the way `server-ci.yml self-hosted-release-assets` builds the release bundle:
+ * the way `_build-server.yml self-hosted-release-assets` builds the release bundle:
  * `cp -R server/deploy/. proliferate-deploy/`, drop the CI-only trees and
  * host-local progress file, write `VERSION`, then a reproducible root-owned tar
  * and a bare-name checksum. This is never reconstructed ad-hoc from loose
@@ -200,17 +200,17 @@ export function buildSelfHostDeployBundle({
     log(`cp -R ${deployDir}/. ${stageDir}/`);
     exec("cp", ["-R", `${deployDir}/.`, `${stageDir}/`]);
     // smoke/ and tests/ are CI-only; the operator bundle ships just the scripts,
-    // compose, and config the running stack needs (server-ci parity).
+    // compose, and config the running stack needs (release-bundle parity).
     exec("rm", ["-rf", path.join(stageDir, "smoke")]);
     exec("rm", ["-rf", path.join(stageDir, "tests")]);
     exec("rm", ["-f", path.join(stageDir, ".bootstrap-progress.log")]);
     writeFileSync(path.join(stageDir, "VERSION"), `${version}\n`);
-    // Archive as root:root, numeric owner (server-ci parity) so a root
+    // Archive as root:root, numeric owner (release-bundle parity) so a root
     // extraction on the box does not hand ownership to the builder's uid.
     log(`tar czf ${bundleOutputPath} --owner=0 --group=0 --numeric-owner -C ${bundleRoot} proliferate-deploy`);
     // COPYFILE_DISABLE=1 stops macOS bsdtar from injecting `._*` AppleDouble
     // entries into the archive (harmless/ignored on Linux). Without it the
-    // qualification bundle diverges from the Linux server-ci release bundle and
+    // qualification bundle diverges from the Linux release bundle and
     // extracts junk `._Caddyfile`/`._bootstrap.sh` files onto the box.
     exec(
       "tar",

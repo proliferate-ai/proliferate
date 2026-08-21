@@ -101,7 +101,7 @@ test("buildServerImageArchive uses buildx --load for the box platform and docker
   }
 });
 
-test("buildSelfHostDeployBundle mirrors server-ci (drop CI/runtime files, VERSION, root-owned tar, sibling SHA256SUMS)", () => {
+test("buildSelfHostDeployBundle mirrors the release bundle (drop CI/runtime files, VERSION, root-owned tar, sibling SHA256SUMS)", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "selfhost-bundle-"));
   try {
     const { exec, calls } = fakeExecFactory();
@@ -124,7 +124,7 @@ test("buildSelfHostDeployBundle mirrors server-ci (drop CI/runtime files, VERSIO
     assert.ok(rmTargets.some((t) => t.endsWith("/smoke")));
     assert.ok(rmTargets.some((t) => t.endsWith("/tests")));
     assert.ok(rmTargets.some((t) => t.endsWith("/.bootstrap-progress.log")));
-    // Reproducible root-owned archive (server-ci parity).
+    // Reproducible root-owned archive (release-bundle parity).
     const tarCall = calls.find((c) => c.command === "tar");
     assert.ok(tarCall.args.includes("--owner=0"));
     assert.ok(tarCall.args.includes("--group=0"));
