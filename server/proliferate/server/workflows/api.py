@@ -195,7 +195,7 @@ async def put_workflow_invocation_endpoint(
         response_v2 = workflow_invocation_response_v2(result.value)
         return JSONResponse(
             status_code=status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,
-            content=response_v2.model_dump(by_alias=True, mode="json", exclude_none=True),
+            content=response_v2.frozen_json(),
         )
     result = await put_workflow_invocation(
         db,
@@ -244,9 +244,7 @@ async def get_workflow_invocation_endpoint(
 ) -> JSONResponse:
     if invocation.schema_version == 2:
         frozen = workflow_invocation_response_v2(invocation)
-        return JSONResponse(
-            content=frozen.model_dump(by_alias=True, mode="json", exclude_none=True)
-        )
+        return JSONResponse(content=frozen.frozen_json())
     value = await read_managed_workflow(db, invocation=invocation)
     response = managed_workflow_invocation_response(
         value.invocation,

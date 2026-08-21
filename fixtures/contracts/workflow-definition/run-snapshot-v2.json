@@ -23,7 +23,10 @@
         "id": "n_synthesize",
         "type": "agent",
         "title": "Synthesize a proposal",
-        "prompt": "Read @doc:research-findings and write a proposal into @doc:proposal covering @input:topic."
+        "prompt": "Read @doc:research-findings and write a proposal into @doc:proposal covering @input:topic.",
+        "model": {
+          "agentKind": "codex"
+        }
       },
       {
         "id": "n_review",
