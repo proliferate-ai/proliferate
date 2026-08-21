@@ -1,5 +1,9 @@
 import type { HarnessLaunchOptionsResponse } from "@anyharness/sdk";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import {
+  cloudAbsentPresentation,
+  localAbsentPresentation,
+} from "#product/lib/domain/settings/harness-models-absent-payload";
 
 /**
  * The Models section's single presentation decision, as a pure function.
@@ -34,12 +38,26 @@ export type HarnessRuntimeConnection = "connecting" | "healthy" | "failed";
 /** The v5 fetch-status axis, narrowed to the three values query-core reports. */
 export type HarnessModelsFetchStatus = "fetching" | "paused" | "idle";
 
-/** What one query knows about itself, with no react-query types leaking in. */
+/**
+ * What one query knows about itself, with no react-query types leaking in.
+ *
+ * There is deliberately no `isLoading` here (E-R32). v5 defines it as
+ * `isPending && isFetching`, so it is a DERIVED convenience over two facts
+ * this type already carries, and consulting it first is what let a spinner
+ * outrank the connection state. The two primitives decide; the proxy is gone.
+ */
 export interface HarnessModelsQueryFacts {
-  isLoading: boolean;
   isError: boolean;
   /** `ProliferateClientError.code` when the failure was structured, else null. */
   errorCode: string | null;
+  /**
+   * E-R30: whether the failure carries an HTTP status from the API, i.e. the
+   * server answered even when the body had no structured code. False when the
+   * fetch itself rejected and nothing came back. Without this, an unstructured
+   * 502 and a dead network are indistinguishable, and one honest line for both
+   * has to claim silence that was never established.
+   */
+  serverAnswered: boolean;
   isPending: boolean;
   fetchStatus: HarnessModelsFetchStatus;
 }
@@ -49,6 +67,13 @@ export interface AllModelsPresentationInput {
   displayName: string;
   /** Local only; cloud reads a copied snapshot and has no local runtime. */
   connectionState: HarnessRuntimeConnection;
+  /**
+   * E-R34: whether this host has a local runtime bridge at all. Web has none,
+   * so nothing ever writes `connectionState` there and it sits at its initial
+   * `"connecting"` forever. The capability is the fact; `connectionState`
+   * cannot report the difference between "coming up" and "will never come up".
+   */
+  hasLocalRuntimeHost: boolean;
   runtimeQuery: HarnessModelsQueryFacts;
   sandboxQuery: HarnessModelsQueryFacts;
   /** The FACT behind "no cloud workspace", not the disabled-query proxy. */
@@ -56,6 +81,12 @@ export interface AllModelsPresentationInput {
   cloudLaunchOptionsQuery: HarnessModelsQueryFacts;
   launchOptions: HarnessLaunchOptionsResponse | undefined;
   isRefreshMutationPending: boolean;
+  /**
+   * E-R28: query-core parks an `online`-mode mutation as `pending` with
+   * `isPaused: true` and no timeout. Pending alone cannot tell "in flight"
+   * from "parked", and only one of those may spin a control.
+   */
+  isRefreshMutationPaused: boolean;
   modelCount: number;
   /** `formatRelativeTime(observedAt)`, or null when nothing was ever observed. */
   freshnessAgo: string | null;
@@ -64,7 +95,9 @@ export interface AllModelsPresentationInput {
 export type AllModelsPresentationKind =
   | "runtime_connecting"
   | "runtime_failed"
+  | "local_runtime_unavailable"
   | "offline_paused"
+  | "refresh_offline_paused"
   | "loading"
   | "awaiting_first_read"
   | "cloud_no_workspace"
@@ -77,8 +110,17 @@ export type AllModelsPresentationKind =
   | "failed_without_observation";
 
 export type AllModelsRefreshAffordance = "enabled" | "disabled" | "spinning" | "absent";
-/** `refetch_read` re-issues the GET; `reprobe_harness` asks for a new probe. */
-export type AllModelsRetryAffordance = "refetch_read" | "reprobe_harness" | null;
+/**
+ * `refetch_read` re-issues the GET; `reprobe_harness` asks for a new probe;
+ * `restart_runtime` restarts the local runtime through the host bridge
+ * (E-R33), which is the only one of the three that can move a runtime the
+ * health poll already gave up on.
+ */
+export type AllModelsRetryAffordance =
+  | "refetch_read"
+  | "reprobe_harness"
+  | "restart_runtime"
+  | null;
 
 export interface AllModelsPresentation {
   kind: AllModelsPresentationKind;
@@ -104,8 +146,14 @@ const IDLE_REFRESH_BY_KIND: Record<AllModelsPresentationKind, "enabled" | "disab
   // not up, and an enabled button would be a lie pointed the other way.
   runtime_connecting: "disabled",
   runtime_failed: "disabled",
+  // No local runtime exists on this host, so there is nothing to refresh
+  // against and nothing that will ever appear (E-R34).
+  local_runtime_unavailable: "disabled",
   // The mutation is paused by the same offline gate that paused the read.
   offline_paused: "disabled",
+  // The mutation itself is parked. Nothing is in flight, so it must not spin,
+  // and a second click cannot start anything, so it must not be enabled.
+  refresh_offline_paused: "disabled",
   loading: "enabled",
   awaiting_first_read: "enabled",
   cloud_no_workspace: "enabled",
@@ -117,9 +165,6 @@ const IDLE_REFRESH_BY_KIND: Record<AllModelsPresentationKind, "enabled" | "disab
   settled_count: "enabled",
   failed_without_observation: "enabled",
 };
-
-/** A structured 404 from the cloud read: the target exists, nothing ingested. */
-const NOT_OBSERVED_CODE = "harness_launch_options_not_observed";
 
 function payloadPresentation(
   input: AllModelsPresentationInput,
@@ -192,131 +237,6 @@ function payloadPresentation(
   }
 }
 
-/** One query's non-error, non-settled fetch status. Exhaustive, no default. */
-function pendingReadPresentation(
-  fetchStatus: HarnessModelsFetchStatus,
-): Omit<AllModelsPresentation, "refresh"> {
-  switch (fetchStatus) {
-    case "fetching":
-      return { kind: "loading", title: null, detail: HARNESS_PANE_COPY.allModelsLoading, retry: null, emptyBody: null };
-    case "paused":
-      // E-R23: query-core's default `networkMode: "online"` parks the request
-      // while the browser reports offline. Nothing is in flight and nothing
-      // failed; it resumes by itself when the network returns.
-      return {
-        kind: "offline_paused",
-        title: HARNESS_PANE_COPY.allModelsOfflineTitle,
-        detail: HARNESS_PANE_COPY.allModelsOfflineSuffix,
-        retry: null,
-        emptyBody: null,
-      };
-    case "idle":
-      // Enabled, never run, not fetching: query-core marks a newly enabled
-      // query `fetching` on the same render, so this is unreachable today.
-      // Enumerated anyway with a cure that actually works rather than
-      // defaulted into someone else's copy.
-      return {
-        kind: "awaiting_first_read",
-        title: HARNESS_PANE_COPY.allModelsNotReadYetTitle,
-        detail: HARNESS_PANE_COPY.allModelsNotReadYetSuffix,
-        retry: "refetch_read",
-        emptyBody: null,
-      };
-  }
-}
-
-function localAbsentPresentation(
-  input: AllModelsPresentationInput,
-): Omit<AllModelsPresentation, "refresh"> {
-  // The FACT, read from the connection store rather than inferred from the
-  // query being disabled — `ProductProviderRoot` blanks the runtime URL for
-  // BOTH non-healthy states, so the query cannot tell them apart (E-R22).
-  switch (input.connectionState) {
-    case "connecting":
-      return {
-        kind: "runtime_connecting",
-        title: HARNESS_PANE_COPY.allModelsRuntimeConnectingTitle,
-        detail: HARNESS_PANE_COPY.allModelsRuntimeConnectingSuffix,
-        retry: null,
-        emptyBody: null,
-      };
-    case "failed":
-      // `pollUntilHealthy` gave up (120 x 500ms). This never self-corrects,
-      // so it must carry a cure instead of a promise the code cannot keep.
-      return {
-        kind: "runtime_failed",
-        title: HARNESS_PANE_COPY.allModelsRuntimeFailedTitle,
-        detail: HARNESS_PANE_COPY.allModelsRuntimeFailedSuffix,
-        retry: null,
-        emptyBody: null,
-      };
-    case "healthy":
-      if (input.runtimeQuery.isError) {
-        return {
-          kind: "transport_error",
-          title: HARNESS_PANE_COPY.allModelsTransportErrorTitle,
-          detail: HARNESS_PANE_COPY.allModelsTransportErrorReason,
-          retry: "refetch_read",
-          emptyBody: null,
-        };
-      }
-      return pendingReadPresentation(input.runtimeQuery.fetchStatus);
-  }
-}
-
-function cloudAbsentPresentation(
-  input: AllModelsPresentationInput,
-): Omit<AllModelsPresentation, "refresh"> {
-  const { sandboxQuery, cloudLaunchOptionsQuery, displayName } = input;
-  if (sandboxQuery.isError) {
-    return {
-      kind: "cloud_read_error",
-      title: HARNESS_PANE_COPY.allModelsTransportErrorTitle,
-      detail: HARNESS_PANE_COPY.allModelsCloudUnreachableReason,
-      retry: "refetch_read",
-      emptyBody: null,
-    };
-  }
-  if (sandboxQuery.fetchStatus !== "idle" || sandboxQuery.isPending) {
-    return pendingReadPresentation(sandboxQuery.fetchStatus);
-  }
-  // E-R25: assert the fact. The sandbox read has settled and answered with no
-  // workspace (`getCloudSandbox` returns 200/null), which is why the
-  // target-scoped read below is disabled — not the other way round.
-  if (!input.hasCloudSandboxId) {
-    return {
-      kind: "cloud_no_workspace",
-      title: HARNESS_PANE_COPY.allModelsCloudNoWorkspaceTitle,
-      detail: HARNESS_PANE_COPY.allModelsCloudNoWorkspaceSuffix(displayName),
-      retry: null,
-      emptyBody: null,
-    };
-  }
-  if (cloudLaunchOptionsQuery.isError) {
-    // E-R24: a structured 404 is not a transport failure. The server answered,
-    // and what it said is "this target has never had launch options ingested"
-    // — the ordinary state of a cloud workspace that has not run an agent yet.
-    // Retrying re-issues the same request and 404s forever, so no Retry.
-    if (cloudLaunchOptionsQuery.errorCode === NOT_OBSERVED_CODE) {
-      return {
-        kind: "not_observed_yet",
-        title: HARNESS_PANE_COPY.allModelsIdleUnobservedTitle,
-        detail: HARNESS_PANE_COPY.allModelsCloudNotObservedSuffix(displayName),
-        retry: null,
-        emptyBody: null,
-      };
-    }
-    return {
-      kind: "cloud_read_error",
-      title: HARNESS_PANE_COPY.allModelsTransportErrorTitle,
-      detail: HARNESS_PANE_COPY.allModelsCloudUnreachableReason,
-      retry: "refetch_read",
-      emptyBody: null,
-    };
-  }
-  return pendingReadPresentation(cloudLaunchOptionsQuery.fetchStatus);
-}
-
 export function resolveAllModelsPresentation(
   input: AllModelsPresentationInput,
 ): AllModelsPresentation {
@@ -324,18 +244,37 @@ export function resolveAllModelsPresentation(
   const { launchOptions, freshnessAgo: ago } = input;
   const freshnessLine = ago ? HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(ago) : null;
 
-  const readQuery = isLocal ? input.runtimeQuery : input.cloudLaunchOptionsQuery;
-  const isLoading = isLocal
-    ? input.runtimeQuery.isLoading
-    : input.sandboxQuery.isLoading || input.cloudLaunchOptionsQuery.isLoading;
+  // E-R32: no `isLoading` gate ahead of these. "Something is fetching" is a
+  // proxy shared by causes that need opposite renderings, and consulting it
+  // first let a spinner outrank `connectionState`. Each branch now reaches its
+  // own fetch-status arm AFTER the facts that outrank it, and the branch that
+  // used to sit here is subsumed: v5's `isLoading` is `isPending && isFetching`
+  // and `isFetching` is `fetchStatus === "fetching"`, which every arm below
+  // already renders as `loading`.
+  const base: Omit<AllModelsPresentation, "refresh"> = launchOptions
+    ? payloadPresentation(input, isLocal, launchOptions, freshnessLine)
+    : isLocal
+      ? localAbsentPresentation(input)
+      : cloudAbsentPresentation(input);
 
-  const decided: Omit<AllModelsPresentation, "refresh"> = isLoading
-    ? { kind: "loading", title: null, detail: HARNESS_PANE_COPY.allModelsLoading, retry: null, emptyBody: null }
-    : launchOptions
-      ? payloadPresentation(input, isLocal, launchOptions, freshnessLine)
-      : isLocal
-        ? localAbsentPresentation(input)
-        : cloudAbsentPresentation(input);
+  // E-R28: a parked refresh mutation is not a running one. query-core reports
+  // it as `pending` with no timeout, so `isPending` alone spins the control
+  // forever with nothing in flight and no way to cancel. Say what is actually
+  // parked — but only where the line would otherwise imply a working Refresh:
+  // an arm that already disables Refresh (still connecting, gave up, no local
+  // runtime, the READ parked by the same gate) is the more specific truth and
+  // stands. Retry goes with it, because every retry this pane offers on those
+  // arms is itself a request the same gate would park.
+  const decided: Omit<AllModelsPresentation, "refresh"> =
+    isLocal && input.isRefreshMutationPaused && IDLE_REFRESH_BY_KIND[base.kind] === "enabled"
+      ? {
+        kind: "refresh_offline_paused",
+        title: HARNESS_PANE_COPY.allModelsOfflineTitle,
+        detail: HARNESS_PANE_COPY.allModelsRefreshOfflineSuffix,
+        retry: null,
+        emptyBody: base.emptyBody,
+      }
+      : base;
 
   // Busy is tied to a live probe, never to the raw `probePhase`: a terminal
   // state carrying a stray live phase is not polled by
@@ -344,17 +283,27 @@ export function resolveAllModelsPresentation(
   // update it (E-R9/E-R10).
   const isRefreshing = isLocal
     && (input.isRefreshMutationPending || decided.kind === "checking");
+  // E-R29: the table is consulted FIRST. A kind set to "disabled" is set there
+  // because `refresh_now` cannot reach anything from that state, and a
+  // mutation still pending against a runtime that has since died must not
+  // repaint that dead control as busy.
+  const idleRefresh = IDLE_REFRESH_BY_KIND[decided.kind];
   const refresh: AllModelsRefreshAffordance = !isLocal
     ? "absent"
-    : isRefreshing
-      ? "spinning"
-      : IDLE_REFRESH_BY_KIND[decided.kind];
+    : idleRefresh === "disabled"
+      ? "disabled"
+      : isRefreshing
+        ? "spinning"
+        : "enabled";
 
-  // E-R14/E-R19: keyed on what drove the header. Whenever there is no payload
-  // the header already carries the reason the list is empty, and a transport
-  // failure says it too — a second "No models detected yet." would contradict
-  // both.
-  const emptyBody = !launchOptions || readQuery.isError ? null : decided.emptyBody;
-
-  return { ...decided, refresh, emptyBody };
+  // E-R14/E-R19 belong to the arms, and only to the arms. The override that
+  // used to sit here was half dead and half wrong (E-R31): `!launchOptions`
+  // could never fire, because every arm reachable without a payload already
+  // returns `emptyBody: null` — which is also why the four assertions guarding
+  // it could not fail. And `readQuery.isError` fires ONLY when a payload does
+  // exist, where it suppresses a body that agrees with its own header: a
+  // failed background refetch does not change "0 models", so blanking "No
+  // models detected yet." underneath it hides a true line on the strength of a
+  // fact the header never mentions. Each arm owns its own empty line.
+  return { ...decided, refresh };
 }

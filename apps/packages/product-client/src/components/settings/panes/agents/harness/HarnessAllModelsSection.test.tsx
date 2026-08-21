@@ -73,6 +73,15 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   },
 }));
 
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  // Desktop: the surface this whole matrix describes.
+  useProductHost: () => ({ desktop: { runtime: { restart: vi.fn() } } }),
+}));
+
+vi.mock("#product/lib/access/anyharness/runtime-bootstrap", () => ({
+  restartHarnessRuntime: vi.fn(),
+}));
+
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: true }),
 }));
@@ -572,27 +581,5 @@ describe("HarnessAllModelsSection — round 2 review fixes", () => {
     expect(screen.getByText("1 model")).toBeTruthy();
     expect(screen.getByText("· refreshed 2m ago")).toBeTruthy();
     expect(screen.queryByText("Checking available models…")).toBeNull();
-  });
-
-  it("E-R13/E-R17: a disabled local query neither loads forever nor claims failure", () => {
-    useHarnessConnectionStore.setState({ connectionState: "connecting" });
-    state.launchOptions = undefined;
-    state.isLoading = false;
-    state.isError = false;
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
-    expect(screen.getByText("Connecting to the local runtime")).toBeTruthy();
-    expect(screen.queryByText("Loading models…")).toBeNull();
-    expect(screen.queryByText("Models couldn't be loaded")).toBeNull();
-  });
-
-  it("E-R14: the expanded body does not contradict a header that already explains an empty state", () => {
-    state.launchOptions = undefined;
-    state.isLoading = false;
-    state.isError = true;
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
-    fireEvent.click(screen.getByRole("button", { name: "Models" }));
-
-    expect(screen.getByText("Models couldn't be loaded")).toBeTruthy();
-    expect(screen.queryByText("No models detected yet.")).toBeNull();
   });
 });

@@ -24,9 +24,11 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 import { normalizeRuntimeLaunchModels } from "#product/lib/domain/settings/harness-catalog";
 import {
   resolveAllModelsPresentation,
+  type AllModelsRetryAffordance,
   type HarnessModelsFetchStatus,
   type HarnessModelsQueryFacts,
 } from "#product/lib/domain/settings/harness-models-presentation";
+import { useLocalRuntimeRestart } from "#product/hooks/access/anyharness/runtime/use-local-runtime-restart";
 import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 
 interface HarnessAllModelsSectionProps {
@@ -42,7 +44,6 @@ interface HarnessAllModelsSectionProps {
  * flight by `isPending` alone.
  */
 function queryFacts(result: {
-  isLoading?: boolean;
   isError?: boolean;
   isPending?: boolean;
   fetchStatus?: string;
@@ -52,14 +53,43 @@ function queryFacts(result: {
     ? "fetching"
     : result.fetchStatus === "paused" ? "paused" : "idle";
   return {
-    isLoading: Boolean(result.isLoading),
     isError: Boolean(result.isError),
     // A structured server code (e.g. the cloud read's not-observed 404) is a
     // different fact from a transport failure, and only the error carries it.
     errorCode: result.error instanceof ProliferateClientError ? result.error.code : null,
+    // The error middleware mints a `ProliferateClientError` from a non-2xx
+    // RESPONSE, so its presence is proof the server answered. A rejected fetch
+    // throws something else entirely, and that is the only failure where
+    // "didn't respond" is established rather than assumed (E-R30).
+    serverAnswered: result.error instanceof ProliferateClientError,
     isPending: Boolean(result.isPending),
     fetchStatus,
   };
+}
+
+/**
+ * The one handler each retry affordance names. A `switch` with no `default:`
+ * so a new affordance is a typecheck failure here rather than silently
+ * inheriting whichever branch a ternary chain happened to end on.
+ */
+function retryHandler(
+  retry: AllModelsRetryAffordance,
+  handlers: {
+    refetchRead: () => void;
+    reprobeHarness: () => void;
+    restartRuntime: (() => void) | null;
+  },
+): (() => void) | null {
+  switch (retry) {
+    case null:
+      return null;
+    case "refetch_read":
+      return handlers.refetchRead;
+    case "reprobe_harness":
+      return handlers.reprobeHarness;
+    case "restart_runtime":
+      return handlers.restartRuntime;
+  }
 }
 
 /**
@@ -82,6 +112,11 @@ export function HarnessAllModelsSection({
   // runtime URL for every non-healthy state, so the query alone cannot tell
   // "still connecting" from "gave up" (E-R22).
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
+  // Null on any host without the desktop runtime bridge, which is both "there
+  // is no restart to offer" and "there is no local runtime to wait for"
+  // (E-R33/E-R34). Capability, not `host.surface`, per the ProductHost
+  // contract's own guidance.
+  const restartLocalRuntime = useLocalRuntimeRestart();
 
   const refreshLaunchOptions = useRefreshHarnessLaunchOptionsMutation();
   const cloudSandbox = useCloudSandbox(!isLocal && cloudActive);
@@ -161,19 +196,23 @@ export function HarnessAllModelsSection({
     surface: isLocal ? "local" : "cloud",
     displayName,
     connectionState,
+    hasLocalRuntimeHost: restartLocalRuntime !== null,
     runtimeQuery: queryFacts(runtimeLaunchOptionsQuery),
     sandboxQuery: queryFacts(cloudSandbox),
     hasCloudSandboxId: Boolean(cloudSandbox.data?.id),
     cloudLaunchOptionsQuery: queryFacts(cloudLaunchOptionsQuery),
     launchOptions,
     isRefreshMutationPending: Boolean(refreshLaunchOptions.isPending),
+    isRefreshMutationPaused: Boolean(refreshLaunchOptions.isPaused),
     modelCount: models.length,
     freshnessAgo: launchOptions?.observedAt ? formatRelativeTime(launchOptions.observedAt) : null,
   });
   const isRefreshing = presentation.refresh === "spinning";
-  const onRetry = presentation.retry === "reprobe_harness"
-    ? handleRefresh
-    : presentation.retry === "refetch_read" ? handleRetryLoad : null;
+  const onRetry = retryHandler(presentation.retry, {
+    refetchRead: handleRetryLoad,
+    reprobeHarness: handleRefresh,
+    restartRuntime: restartLocalRuntime,
+  });
 
   // Evidence is diagnostic only; executable membership remains the response.
   const diagnosticsLines: string[] = [];

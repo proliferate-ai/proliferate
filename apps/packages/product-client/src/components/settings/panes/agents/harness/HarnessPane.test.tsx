@@ -4,12 +4,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { makeTestProductHost } from "#product/test/product-host-test-utils";
+import { makeTestProductHost, type TestProductHostOptions } from "#product/test/product-host-test-utils";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
 
-// Anonymous host keeps the organizations query disabled, matching the prior
-// unset-auth-store default these tests ran under.
-const harnessTestHost = makeTestProductHost();
+// Anonymous host keeps the organizations query disabled, as before. Its
+// desktop runtime bridge is what makes the LOCAL surface real here (E-R34).
+const harnessTestHost = makeTestProductHost({ desktop: { runtime: { getConnection: vi.fn(), restart: vi.fn() } } as TestProductHostOptions["desktop"] });
 
 type CapabilitiesData = {
   gatewayEnabled: boolean;
