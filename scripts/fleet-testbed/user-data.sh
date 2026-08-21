@@ -5,9 +5,20 @@
 # without a Rust toolchain unless FLEET_WITH_RUST=1, since the testbed runs the
 # prebuilt musl release binaries. Ends at a booted, buildable profile, so the
 # whole path from nothing to a running product is one unattended command.
+#
+# No secret is ever a variable in this script. The GitHub token stays in SSM and
+# is fetched on demand by a git askPass helper, so it reaches neither xtrace,
+# nor argv, nor .git/config. See "repo clone" below.
 
-set -euxo pipefail
+set -euo pipefail
+
+# Logs first, mode-restricted before a single line is written to them. xtrace is
+# on for everything after this, and cloud-init's own log captures the same
+# stream, so both files are treated as sensitive by default.
+install -m 600 /dev/null /var/log/fleet-testbed-setup.log
+chmod 600 /var/log/cloud-init-output.log 2>/dev/null || true
 exec > >(tee -a /var/log/fleet-testbed-setup.log) 2>&1
+set -x
 
 DEADMAN_HOURS="__DEADMAN_HOURS__"
 WITH_RUST="__WITH_RUST__"
@@ -19,8 +30,88 @@ RELEASE_TAG="__RELEASE_TAG__"
 FIX_BRANCH="__FIX_BRANCH__"
 AWS_REGION="__AWS_REGION__"
 
-# Deadman first, before anything can fail, so a broken setup still terminates.
-systemd-run --on-active="${DEADMAN_HOURS}h" --unit=fleet-deadman /sbin/shutdown -h now
+# --- deadman -----------------------------------------------------------------
+#
+# First, before anything can fail, so a broken setup still terminates. The
+# deadline is a timestamp on disk and the check is a persistent systemd timer
+# plus a cron.d entry, because the original transient `systemd-run` unit lived
+# in /run and a reboot silently disarmed it on a 16 vCPU instance.
+#
+# Arming is wrapped so that its own failure degrades rather than aborting the
+# setup at the exact line meant to be the safety net.
+
+DEADLINE_EPOCH="$(( $(date +%s) + DEADMAN_HOURS * 3600 ))"
+install -m 644 /dev/null /etc/fleet-testbed-deadline
+echo "$DEADLINE_EPOCH" > /etc/fleet-testbed-deadline
+
+cat > /usr/local/bin/fleet-deadman <<'DEADMAN_EOF'
+#!/bin/sh
+# Shuts the testbed down once its deadline passes. run-instances set
+# instance-initiated-shutdown-behavior=terminate, so a shutdown is a terminate.
+#
+# Fails closed: a missing or unparseable deadline file means the deadman cannot
+# prove the box is still within its budget, so it shuts down.
+set -u
+DEADLINE_FILE=/etc/fleet-testbed-deadline
+deadline=""
+[ -r "$DEADLINE_FILE" ] && deadline="$(cat "$DEADLINE_FILE" 2>/dev/null || true)"
+case "$deadline" in
+  ''|*[!0-9]*)
+    logger -t fleet-deadman "deadline file missing or unreadable; shutting down"
+    exec /sbin/shutdown -h now
+    ;;
+esac
+now="$(date +%s)"
+[ "$now" -ge "$deadline" ] || exit 0
+logger -t fleet-deadman "deadline reached; shutting down (shutdown behavior = terminate)"
+exec /sbin/shutdown -h now
+DEADMAN_EOF
+chmod 700 /usr/local/bin/fleet-deadman
+
+arm_deadman() {
+  # cron.d first: it is the simplest of the two and needs no daemon-reload, so
+  # it is armed even if the systemd path below fails.
+  cat > /etc/cron.d/fleet-deadman <<'CRON_EOF'
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+*/2 * * * * root /usr/local/bin/fleet-deadman
+CRON_EOF
+  chmod 644 /etc/cron.d/fleet-deadman
+
+  cat > /etc/systemd/system/fleet-deadman.service <<'SVC_EOF'
+[Unit]
+Description=Fleet testbed deadman shutdown
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fleet-deadman
+SVC_EOF
+
+  cat > /etc/systemd/system/fleet-deadman.timer <<'TIMER_EOF'
+[Unit]
+Description=Fleet testbed deadman check
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
+TIMER_EOF
+
+  systemctl daemon-reload
+  systemctl enable --now fleet-deadman.timer
+}
+
+if arm_deadman; then
+  echo "deadman armed: shutdown at $(date -u -d "@${DEADLINE_EPOCH}" 2>/dev/null || echo "$DEADLINE_EPOCH")"
+else
+  echo "WARNING: could not arm the persistent deadman; falling back to a one-shot shutdown"
+  # Last resort. Does not survive a reboot, which is exactly why it is not the
+  # primary mechanism, but it is better than an unbounded 16 vCPU instance.
+  shutdown -h "+$((DEADMAN_HOURS * 60))" || echo "WARNING: fallback shutdown could not be scheduled either"
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -43,8 +134,19 @@ apt_install_retry() {
   return 1
 }
 
+# A C toolchain is only needed for --with-rust, and it is the slow half of
+# provisioning. The default path compiles nothing: pnpm's onlyBuiltDependencies
+# allowlist in pnpm-workspace.yaml is closed and none of its five entries build
+# from source on linux (they ship prebuilt platform packages), and every
+# platform-specific wheel in server/uv.lock has a manylinux build for both
+# x86_64 and aarch64, so uv never falls back to an sdist.
+BUILD_PKGS=()
+if [ "$WITH_RUST" = "1" ]; then
+  BUILD_PKGS=(build-essential pkg-config libssl-dev)
+fi
+
 apt_install_retry \
-  git curl jq build-essential pkg-config libssl-dev \
+  git curl jq "${BUILD_PKGS[@]}" \
   postgresql-16 postgresql-client-16 redis-server \
   python3 python3-venv unzip ca-certificates
 
@@ -97,11 +199,48 @@ cp /etc/environment /tmp/fleet-env
 sed -i 's/^/export /' /tmp/fleet-env
 install -m 644 /tmp/fleet-env /etc/profile.d/fleet-testbed.sh
 
-# Repo clone. The token lives in SSM SecureString and is read with the instance
-# role, so it never appears in user-data (which is readable via IMDS).
-GH_TOKEN=$(aws ssm get-parameter --with-decryption --region "$AWS_REGION" \
-  --name "${SSM_PREFIX}/github-token" --query 'Parameter.Value' --output text)
-su - ubuntu -c "git clone https://x-access-token:${GH_TOKEN}@github.com/proliferate-ai/proliferate.git ~/proliferate"
+# --- repo clone --------------------------------------------------------------
+#
+# The token never enters this script. A mode-700 askPass helper owned by ubuntu
+# reads the SSM SecureString with the instance role each time git needs a
+# credential, which keeps it out of three places a URL-embedded token lands in:
+#
+#   - xtrace and the setup/cloud-init logs, which are not secret stores
+#   - argv, since /proc/<pid>/cmdline is world readable on Ubuntu
+#   - .git/config, where `git clone https://user:token@...` persists it at 0644
+#     forever, and where later fetches would then depend on it
+#
+# xtrace is off across the whole credential region regardless, so that a future
+# edit that does touch the token cannot quietly start logging it.
+
+set +x
+
+install -m 700 -o ubuntu -g ubuntu /dev/null /usr/local/bin/fleet-gh-askpass
+cat > /usr/local/bin/fleet-gh-askpass <<ASKPASS_EOF
+#!/bin/sh
+# git core.askPass helper for the testbed. Prints a GitHub credential on stdout
+# and nothing anywhere else. Invoked by git with the prompt text as \$1.
+set -u
+case "\${1:-}" in
+  Username*) printf '%s\n' 'x-access-token' ;;
+  *) exec aws ssm get-parameter --with-decryption --region '${AWS_REGION}' \\
+       --name '${SSM_PREFIX}/github-token' --query 'Parameter.Value' --output text ;;
+esac
+ASKPASS_EOF
+
+su - ubuntu -c "git config --global core.askPass /usr/local/bin/fleet-gh-askpass"
+
+# Tokenless remote URL. git prompts for a username and a password, the helper
+# supplies both, and nothing is written to .git/config.
+su - ubuntu -c "git clone https://github.com/proliferate-ai/proliferate.git ~/proliferate"
+
+set -x
+
+# Fail loudly if a credential ever ends up persisted anyway.
+if grep -qE '://[^/@[:space:]]*:[^/@[:space:]]+@' /home/ubuntu/proliferate/.git/config; then
+  echo "FATAL: a credential was persisted into .git/config" >&2
+  exit 1
+fi
 
 # Pin to the release's own commit so the prebuilt runtime and the source tree
 # cannot disagree, then cherry-pick only the dev-loop fixes on top.
@@ -110,7 +249,6 @@ su - ubuntu -c "cd ~/proliferate && \
   git fetch origin ${FIX_BRANCH} main && \
   git -c user.name=fleet -c user.email=fleet@local cherry-pick -x \
     \$(git rev-list --reverse origin/${FIX_BRANCH} --not origin/main)"
-unset GH_TOKEN
 
 # Prebuilt runtime binaries: no cargo required for the product itself.
 su - ubuntu -c "mkdir -p ~/bin && cd ~/bin && \
