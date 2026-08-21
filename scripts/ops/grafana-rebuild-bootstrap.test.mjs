@@ -116,6 +116,19 @@ test("rejects any legacy standalone Slack UID other than the pinned live partial
   );
 });
 
+test("rejects a checked-in notification policy that is not the exact final AMG topology", () => {
+  const overlay = baseOverlay();
+  overlay.notificationPolicy.routes[0].routes.push({
+    receiver: "unexpected",
+    group_by: ["grafana_folder", "alertname"],
+    object_matchers: [["__grafana_receiver__", "=", "unexpected"]],
+  });
+  assert.throws(
+    () => validateOverlayDocument(overlay),
+    /exact canonical final AMG route tree/,
+  );
+});
+
 // --- fake-client unit tests for the idempotent ensure* operations ---------
 
 function fakeClient(overrides = {}) {
@@ -388,12 +401,29 @@ function slackWorkspace({
     secureFields: {},
     settings: structuredClone(overlay.contactPoint.settings),
   };
+  function normalizedSlackContact(uid, name) {
+    return {
+      uid,
+      name,
+      type: "slack",
+      disableResolveMessage: false,
+      settings: {
+        title: "{{ template \"slack.default.title\" . }}",
+        text: "{{ template \"slack.default.text\" . }}",
+      },
+      secureFields: { url: true },
+      provenance: "api",
+    };
+  }
   const state = {
     contacts: [{
+      uid: overlay.contactPoint.uid,
       name: overlay.contactPoint.integrationName,
       type: "sns",
-      uid: overlay.contactPoint.uid,
       disableResolveMessage: false,
+      settings: structuredClone(overlay.contactPoint.settings),
+      secureFields: {},
+      provenance: "api",
     }],
     calls: [],
     updatePayload: null,
@@ -424,18 +454,8 @@ function slackWorkspace({
     object_matchers: [["__grafana_receiver__", "=", overlay.slackContactPoint.partialName]],
   };
   if (withLegacy) {
-    state.contacts.push({
-      name: overlay.slackContactPoint.partialName,
-      type: "slack",
-      uid: targetProvisioningUid,
-      disableResolveMessage: false,
-    });
-    state.contacts.push({
-      name: overlay.slackContactPoint.legacyName,
-      type: "slack",
-      uid: contactUid,
-      disableResolveMessage: false,
-    });
+    state.contacts.push(normalizedSlackContact(targetProvisioningUid, overlay.slackContactPoint.partialName));
+    state.contacts.push(normalizedSlackContact(contactUid, overlay.slackContactPoint.legacyName));
     state.am.alertmanager_config.receivers.push({
       name: overlay.slackContactPoint.partialName,
       grafana_managed_receiver_configs: [{
@@ -759,9 +779,76 @@ test("Slack migration refuses drifted standalone normalization before creating t
       env: TEST_SLACK_ENV,
       credentialModeCheck: () => true,
     }),
-    /Generated route state for sns receiver/,
+    /exact canonical original route tree/,
   );
   assert.equal(state.calls.includes("updateContactPoint"), false);
+});
+
+test("Slack preflight requires the exact canonical AMG wrapper and direct-child topology", async () => {
+  const scenarios = [
+    (state) => {
+      state.am.alertmanager_config.route.routes = [];
+    },
+    (state) => {
+      state.am.alertmanager_config.route.routes.push(
+        structuredClone(state.am.alertmanager_config.route.routes[0]),
+      );
+    },
+    (state) => {
+      state.am.alertmanager_config.route.routes[0].routes.pop();
+    },
+    (state) => {
+      state.am.alertmanager_config.route.routes[0].routes.at(-1).group_by = ["drifted"];
+    },
+    (state) => {
+      state.am.alertmanager_config.route.routes[0].routes.push({
+        receiver: "unexpected",
+        group_by: ["grafana_folder", "alertname"],
+        object_matchers: [["__grafana_receiver__", "=", "unexpected"]],
+      });
+    },
+    (state) => {
+      const wrapper = state.am.alertmanager_config.route.routes[0];
+      const partial = wrapper.routes.shift();
+      state.am.alertmanager_config.route.routes.push(partial);
+    },
+    (state) => {
+      const wrapper = state.am.alertmanager_config.route.routes[0];
+      const partial = wrapper.routes.shift();
+      wrapper.routes[0].routes = [partial];
+    },
+  ];
+
+  for (const mutate of scenarios) {
+    const { state, client } = slackWorkspace({ withLegacy: true });
+    mutate(state);
+    await assert.rejects(runSlackApply(slackRunArgs(client)), /exact canonical original route tree/);
+    for (const call of ["updateContactPoint", "testReceiver", "deleteContactPoint", "postAlertmanagerConfig"]) {
+      assert.equal(state.calls.includes(call), false, `${call} must not run for route-topology drift`);
+    }
+  }
+});
+
+test("drifted combined and final route phases cannot pass resume or verify", async () => {
+  const combined = slackWorkspace({ withLegacy: true, failDeleteOnce: true });
+  await assert.rejects(runSlackApply(slackRunArgs(combined.client)), /synthetic delete interruption/);
+  combined.state.am.alertmanager_config.route.routes[0].routes.push({
+    receiver: "unexpected",
+    group_by: ["grafana_folder", "alertname"],
+    object_matchers: [["__grafana_receiver__", "=", "unexpected"]],
+  });
+  combined.state.calls = [];
+  await assert.rejects(runSlackApply(slackRunArgs(combined.client)), /exact canonical combined route tree/);
+  for (const call of ["updateContactPoint", "testReceiver", "deleteContactPoint", "postAlertmanagerConfig"]) {
+    assert.equal(combined.state.calls.includes(call), false, `${call} must not run during a drifted resume`);
+  }
+
+  const final = slackWorkspace({ withLegacy: true });
+  await runSlackApply(slackRunArgs(final.client));
+  final.state.am.alertmanager_config.route.routes[0].routes = [];
+  final.state.calls = [];
+  await assert.rejects(runSlackVerify(slackRunArgs(final.client)), /exact canonical final route tree/);
+  assert.equal(final.state.calls.includes("testReceiver"), false);
 });
 
 test("Slack migration pins both partial UIDs and makes no mutation for any other UID", async () => {
@@ -784,6 +871,82 @@ test("Slack migration pins both partial UIDs and makes no mutation for any other
       assert.equal(state.calls.includes(call), false, `${call} must not run for an unexpected pinned UID`);
     }
   }
+});
+
+test("provisioning contact normalization drift blocks preflight with zero mutations", async () => {
+  const scenarios = [
+    (contact) => {
+      contact.settings.title = "drifted";
+    },
+    (contact) => {
+      contact.settings.text = "drifted";
+    },
+    (contact) => {
+      delete contact.secureFields;
+    },
+    (contact) => {
+      contact.secureFields.url = false;
+    },
+    (contact) => {
+      contact.settings.url = "[REDACTED]";
+    },
+    (contact) => {
+      contact.settings.extra = "drifted";
+    },
+    (contact) => {
+      contact.provenance = "file";
+    },
+  ];
+
+  for (const mutate of scenarios) {
+    const { overlay, state, client } = slackWorkspace({ withLegacy: true });
+    mutate(state.contacts.find((contact) => contact.uid === overlay.slackContactPoint.uid));
+    await assert.rejects(runSlackApply(slackRunArgs(client)), /[Pp]rovisioning contact/);
+    for (const call of ["updateContactPoint", "testReceiver", "deleteContactPoint", "postAlertmanagerConfig"]) {
+      assert.equal(state.calls.includes(call), false, `${call} must not run for contact normalization drift`);
+    }
+  }
+});
+
+test("both standalone provisioning contacts and the SNS contact must match their receiver surfaces", async () => {
+  for (const mutate of [
+    ({ overlay, state }) => {
+      state.contacts.find((contact) => contact.uid === overlay.slackContactPoint.legacyUid).settings.text = "drifted";
+    },
+    ({ overlay, state }) => {
+      state.contacts.find((contact) => contact.uid === overlay.contactPoint.uid).settings.messageFormat = "drifted";
+    },
+  ]) {
+    const workspace = slackWorkspace({ withLegacy: true });
+    mutate(workspace);
+    await assert.rejects(runSlackApply(slackRunArgs(workspace.client)), /provisioning contact/);
+    for (const call of ["updateContactPoint", "testReceiver", "deleteContactPoint", "postAlertmanagerConfig"]) {
+      assert.equal(workspace.state.calls.includes(call), false);
+    }
+  }
+});
+
+test("contact drift cannot pass combined-state resume or final verify/test", async () => {
+  const combined = slackWorkspace({ withLegacy: true, failDeleteOnce: true });
+  await assert.rejects(runSlackApply(slackRunArgs(combined.client)), /synthetic delete interruption/);
+  combined.state.contacts.find(
+    (contact) => contact.uid === combined.overlay.slackContactPoint.uid,
+  ).secureFields.url = false;
+  combined.state.calls = [];
+  await assert.rejects(runSlackApply(slackRunArgs(combined.client)), /provisioning contact/);
+  for (const call of ["updateContactPoint", "testReceiver", "deleteContactPoint", "postAlertmanagerConfig"]) {
+    assert.equal(combined.state.calls.includes(call), false);
+  }
+
+  const final = slackWorkspace({ withLegacy: true });
+  await runSlackApply(slackRunArgs(final.client));
+  final.state.contacts.find(
+    (contact) => contact.uid === final.overlay.slackContactPoint.uid,
+  ).settings.title = "drifted";
+  final.state.calls = [];
+  await assert.rejects(runSlackVerify(slackRunArgs(final.client)), /provisioning contact/);
+  await assert.rejects(runSlackTest(slackRunArgs(final.client)), /provisioning contact/);
+  assert.equal(final.state.calls.includes("testReceiver"), false);
 });
 
 test("an unexpected legacy UID blocks interrupted-migration update and delete calls", async () => {
@@ -975,7 +1138,7 @@ test("Slack verify throws on missing, duplicate, or drifted combined-contact sta
   driftedRoute.state.am.alertmanager_config.route.group_by = ["drifted"];
   await assert.rejects(
     runSlackVerify(slackRunArgs(driftedRoute.client)),
-    /Authored root notification policy is missing or drifted/,
+    /exact canonical final route tree/,
   );
 
   const duplicateConfig = slackWorkspace({ withLegacy: true });
