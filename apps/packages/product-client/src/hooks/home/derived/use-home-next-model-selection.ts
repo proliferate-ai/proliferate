@@ -255,6 +255,12 @@ export function useHomeNextModelSelection({
    * re-asking the sandbox and its launch options genuinely IS the cure.
    */
   const retryModelObservation = useCallback(() => {
+    // The door on overlapping batches. Disabling the control was tried and was
+    // worse: it removes the only affordance on a state with no guaranteed
+    // exit, so a refresh that never settles leaves nothing to press.
+    if (isRefreshInFlight(refreshAttempt)) {
+      return;
+    }
     let repaired = false;
     const awaitsFirstProbe = !isCloudTarget && homeModelGateNeedsNewProbe(modelGate);
     if (awaitsFirstProbe && observations.length === 0) {
@@ -316,6 +322,7 @@ export function useHomeNextModelSelection({
     refetchAgents,
     refetchLaunchOptionsKind,
     refetchTargetLaunchOptions,
+    refreshAttempt,
     refreshMutateAsync,
     requestedHarnessKind,
   ]);
@@ -347,10 +354,14 @@ export function useHomeNextModelSelection({
     /** A probe this notice started is still running. Serialized, up to 45s per
      * kind, and the launch-options query does not poll a settled row — so
      * without this the settled sentence is rendered over live work. */
-    /** The harness the terminal `agents_unsupported` notice should open. The
-     * gate knows the readiness list, so navigation lands on an agent that IS
-     * unsupported instead of a hardcoded pane that may report nothing. */
-    unsupportedHarnessKind: agents.find((agent) => agent.readiness === "unsupported")?.kind ?? null,
+    /** The harness the terminal `agents_unsupported` notice should open, and
+     * `null` for every other gate — including `agent_setup_required`, which
+     * shares the `agent_settings` action but means a DIFFERENT agent: the one
+     * needing login, never the unsupported one. Bound to the gate here so the
+     * wrong pairing cannot be expressed by a caller at all. */
+    unsupportedHarnessKind: modelGate.kind === "blocked" && modelGate.reason === "agents_unsupported"
+      ? agents.find((agent) => agent.readiness === "unsupported")?.kind ?? null
+      : null,
     retryPending: !isCloudTarget && isRefreshInFlight(refreshAttempt),
     /** EVERY kind attempted was refused. A rejection writes no durable state,
      * so nothing else on screen would ever change. Scoped to local: cloud

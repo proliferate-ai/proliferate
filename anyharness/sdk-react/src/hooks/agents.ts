@@ -194,6 +194,12 @@ export function useRefreshHarnessLaunchOptionsMutation() {
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
   const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
   return useMutation({
+    // The probe targets the LOCAL runtime, so react-query's default "online"
+    // gate is simply wrong for it: offline, the mutation is parked without
+    // ever invoking `mutationFn`, so `mutateAsync` never settles and any
+    // caller awaiting it waits forever — on a machine where the refresh would
+    // have succeeded.
+    networkMode: "always",
     mutationFn: async (harnessKind: string) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.agents.refreshLaunchOptions(harnessKind);

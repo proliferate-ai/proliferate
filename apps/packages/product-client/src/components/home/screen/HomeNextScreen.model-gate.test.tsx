@@ -341,7 +341,7 @@ describe("HomeNextScreen model gate", () => {
     expect(cure.disabled).toBe(false);
     fireEvent.click(cure);
     expect(screenMocks.retryModelObservation).toHaveBeenCalled();
-    expect(screenMocks.handleHomeAction).not.toHaveBeenCalledWith("agent-settings");
+    expect(screenMocks.handleHomeAction).not.toHaveBeenCalledWith("agent-settings", expect.anything());
   });
 
   it("labels the disabled Send with the reason while a model is unchosen", () => {
@@ -524,15 +524,28 @@ describe("HomeNextScreen model gate", () => {
     expect(screenMocks.retryModelObservation).not.toHaveBeenCalled();
   });
 
-  it("keeps the notice action inert while its own probe is still running", () => {
-    // Pressing again mid-flight starts an overlapping batch, and two batches
-    // settling out of order report the wrong outcome for the wrong press.
+  it("never hands the unsupported harness to the setup notice", () => {
+    // Both gates share the `agent_settings` action but mean different agents:
+    // one Cursor that can never run, one Claude that needs a login. Routing
+    // setup to the unsupported pane opens something that cannot be set up.
+    screenMocks.homeNext.modelGate = { kind: "blocked", reason: "agent_setup_required" };
+    screenMocks.homeNext.unsupportedHarnessKind = null;
+    render(<HomeNextScreen />);
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    expect(screenMocks.handleHomeAction)
+      .toHaveBeenCalledWith("agent-settings", { harnessKind: null });
+  });
+
+  it("keeps the notice action pressable while its own probe is running", () => {
+    // A refresh has no guaranteed exit, so disabling the control here removes
+    // the only affordance the state has and the user is stranded. Overlap is
+    // refused inside the hook instead, which cannot strand anyone.
     screenMocks.homeNext.modelGate = { kind: "blocked", reason: "observation_idle" };
     screenMocks.homeNext.retryPending = true;
     render(<HomeNextScreen />);
     const action = screen.getByRole("button", { name: "Refresh" });
-    expect(action.hasAttribute("disabled")).toBe(true);
+    expect(action.hasAttribute("disabled")).toBe(false);
     fireEvent.click(action);
-    expect(screenMocks.retryModelObservation).not.toHaveBeenCalled();
+    expect(screenMocks.retryModelObservation).toHaveBeenCalled();
   });
 });
