@@ -49,6 +49,14 @@ const DESKTOP_POSTHOG_EVENT_ALLOWLIST = new Set<keyof DesktopProductEventMap>([
   // Low-volume reliability event (deduped per operation per app run); needed
   // in PostHog to measure how many installs cannot read keychain sessions.
   "desktop_keychain_access_failed",
+  // Signup anchor for the launch signup/activation funnel. Desktop has no
+  // distinct "account created" event (accounts are created server-side via
+  // OAuth), so the first successful sign-in is the funnel's top-of-funnel
+  // step; workspace_created / cloud_workspace_created / chat_session_created
+  // / chat_prompt_submitted (already allowlisted above) are the activation
+  // steps. auth_sign_in_failed stays out of PostHog on purpose: it is a
+  // diagnostic/failure signal, not a funnel step, and belongs to Sentry.
+  "auth_signed_in",
 ]);
 
 export function isVendorPostHogEventAllowed(
