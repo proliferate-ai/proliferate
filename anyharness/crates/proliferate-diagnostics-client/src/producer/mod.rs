@@ -27,6 +27,8 @@ pub(crate) mod status;
 pub(crate) mod transport;
 mod worker;
 
+#[cfg(test)]
+mod tests_collector_fixture;
 #[cfg(all(test, unix))]
 mod tests_delivery_end;
 #[cfg(all(test, unix))]
