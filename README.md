@@ -43,8 +43,6 @@ Each task gets an isolated git worktree for its branch, terminal, conversation, 
 
 - 🤖 **[Native harnesses](https://proliferate.com/docs/product/agents)** - Claude Code, Codex, OpenCode, Cursor, Grok, and more
 - 🌳 **[Worktree workspaces](https://proliferate.com/docs/product/workspaces)** - an isolated branch and working directory for every task
-- 🔍 **[Git & diff review](https://proliferate.com/docs/product/workspaces/review-and-publish)** - inspect and edit agent changes without leaving the app
-- 🛡️ **[Plan & code review agents](https://proliferate.com/docs/product/workspaces/review-and-publish)** - reviewer agents check plans, diffs, risks, and branch readiness before you do
 - 🔀 **[Parallel agents](https://proliferate.com/docs/product/workspaces/parallel-agents)** - run agents side by side in the same workspace, each on its own task
 - 🪆 **[Subagents](https://proliferate.com/docs/product/workspaces/parallel-agents)** - agents delegate scoped work to child agents and pick the results back up when they finish
 - 🧩 **[Integrations](https://proliferate.com/docs/product/integrations)** - MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
