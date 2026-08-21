@@ -30,7 +30,7 @@ use crate::live::sessions::model::{
     ActorCapabilities, LaunchObservationInvalidator, PermissionAdvisor, SessionEventObserver,
 };
 use crate::live::sessions::product_context::AgentProductContextResolver;
-use crate::live::sessions::LiveSessionManager;
+use crate::live::sessions::{IdleReapPolicy, LiveSessionManager};
 use crate::persistence::Db;
 
 pub(super) struct LiveSessionsWiringDeps {
@@ -109,6 +109,7 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
         queue: Arc::new(store.clone()),
         background: Arc::new(store.clone()),
         state: Arc::new(store.clone()),
+        idle_reap: Arc::new(store.clone()),
         fork_dispatch: Arc::new(store.clone()),
         attachments: Arc::new(SessionAttachmentSource::new(store, attachment_storage)),
         product_context: deps.product_context.clone(),
@@ -119,7 +120,11 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
             .clone()
             .map(spawn_launch_observation_probe_queue),
     };
-    LiveSessionManager::new(caps)
+    let manager = LiveSessionManager::new(caps);
+    // Runs on the application runtime, like the launch-observation probe
+    // queue above: the sweep task must outlive any single session.
+    manager.spawn_idle_reaper(IdleReapPolicy::from_env());
+    manager
 }
 
 pub(super) struct CompletionDeliveryWiring {

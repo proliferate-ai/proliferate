@@ -2,7 +2,8 @@ use serde_json::{json, Value};
 
 use super::calls_helpers::{
     coding_session_workspace_id, cowork_agent_search_response_json,
-    cowork_agent_turns_response_json, launch_options_to_json, prompt_outcome_label,
+    cowork_agent_turns_response_json, default_launch_selection, launch_options_to_json,
+    prompt_outcome_label,
 };
 use super::context::CoworkMcpContext;
 use super::tools::{
@@ -293,12 +294,7 @@ fn get_coding_session_launch_options(
         .iter()
         .find(|response| response.harness_kind == default_agent_kind)
         .and_then(|response| response.options.as_ref())
-        .map(|options| {
-            (
-                options.defaults.model_id.clone(),
-                options.defaults.control_values.clone(),
-            )
-        })
+        .map(default_launch_selection)
         .unwrap_or_default();
     Ok(json!({
         "parentSessionId": parent_session_id,

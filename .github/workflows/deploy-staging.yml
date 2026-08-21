@@ -1,10 +1,9 @@
+# Manual-only staging. Merging to main deploys nothing: the one automated
+# transition is `release.yml` (main to production). Staging is an optional
+# proving ground an operator dispatches on purpose.
 name: Deploy Staging
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
@@ -31,18 +30,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: >-
-    deploy-staging-${{
-      github.event_name == 'workflow_dispatch'
-      && format('push-success-{0}-main', github.repository)
-      || format(
-        '{0}-{1}-{2}-{3}',
-        github.event.workflow_run.event,
-        github.event.workflow_run.conclusion,
-        github.event.workflow_run.head_repository.full_name,
-        github.event.workflow_run.head_branch
-      )
-    }}
+  # One staging deploy at a time, and never cancel one mid-roll.
+  group: deploy-staging-${{ github.repository }}
   cancel-in-progress: false
 
 env:
@@ -50,16 +39,6 @@ env:
 
 jobs:
   plan:
-    if: >-
-      ${{
-        github.event_name == 'workflow_dispatch'
-        || (
-          github.event.workflow_run.conclusion == 'success'
-          && github.event.workflow_run.event == 'push'
-          && github.event.workflow_run.head_branch == 'main'
-          && github.event.workflow_run.head_repository.full_name == github.repository
-        )
-      }}
     runs-on: ubuntu-latest
     outputs:
       base_sha: ${{ steps.detect.outputs.base_sha }}
@@ -81,7 +60,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha || github.event.inputs.ref || github.sha }}
+          ref: ${{ github.event.inputs.ref || github.sha }}
 
       - name: Resolve deploy metadata
         id: meta
@@ -194,36 +173,14 @@ jobs:
             echo "| runtime | \`${{ steps.detect.outputs.runtime }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  deploy-e2b:
-    needs: [plan]
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
-    uses: ./.github/workflows/_deploy-e2b.yml
-    with:
-      environment: staging
-      git_sha: ${{ needs.plan.outputs.head_sha }}
-      enabled: ${{ needs.plan.outputs.e2b == 'true' }}
-      rolling_tag: staging
-      mode: build_and_promote
-    secrets: inherit
-
   deploy-server:
-    needs: [plan, deploy-e2b]
+    needs: [plan]
     if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
     uses: ./.github/workflows/_deploy-server.yml
     with:
       environment: staging
       git_sha: ${{ needs.plan.outputs.head_sha }}
       enabled: ${{ needs.plan.outputs.server == 'true' }}
-    secrets: inherit
-
-  deploy-workers:
-    needs: [plan, deploy-server]
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
-    uses: ./.github/workflows/_deploy-workers.yml
-    with:
-      environment: staging
-      git_sha: ${{ needs.plan.outputs.head_sha }}
-      enabled: ${{ needs.plan.outputs.workers == 'true' }}
     secrets: inherit
 
   deploy-litellm:
@@ -246,16 +203,6 @@ jobs:
       enabled: ${{ needs.plan.outputs.web == 'true' }}
     secrets: inherit
 
-  deploy-mobile:
-    needs: [plan]
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
-    uses: ./.github/workflows/_deploy-mobile.yml
-    with:
-      environment: staging
-      git_sha: ${{ needs.plan.outputs.head_sha }}
-      enabled: ${{ needs.plan.outputs.mobile == 'true' }}
-    secrets: inherit
-
   deploy-desktop:
     needs: [plan]
     if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
@@ -274,12 +221,9 @@ jobs:
   summary:
     needs:
       - plan
-      - deploy-e2b
       - deploy-server
-      - deploy-workers
       - deploy-litellm
       - deploy-web
-      - deploy-mobile
       - deploy-desktop
     if: ${{ always() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
@@ -294,12 +238,9 @@ jobs:
           {
             echo "### Staging deploy result"
             echo "- Head: \`${{ needs.plan.outputs.head_sha }}\`"
-            echo "- E2B: \`${{ needs.deploy-e2b.result }}\`"
             echo "- Server: \`${{ needs.deploy-server.result }}\`"
-            echo "- Workers: \`${{ needs.deploy-workers.result }}\`"
             echo "- LiteLLM: \`${{ needs.deploy-litellm.result }}\`"
             echo "- Web: \`${{ needs.deploy-web.result }}\`"
-            echo "- Mobile: \`${{ needs.deploy-mobile.result }}\`"
             echo "- Desktop: \`${{ needs.deploy-desktop.result }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 

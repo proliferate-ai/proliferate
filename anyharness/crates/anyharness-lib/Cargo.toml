@@ -45,9 +45,23 @@ fs2.workspace = true
 libc.workspace = true
 reqwest = { workspace = true, features = ["blocking", "json"] }
 minisign-verify.workspace = true
+proliferate-diagnostics-client.workspace = true
+proliferate-diagnostics-protocol.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
+
+# Toolhelp process enumeration plus OpenProcess/TerminateProcess for
+# `process_kill_windows.rs`. Target-gated so no other platform pays for it,
+# and pinned to the 0.61 line the workspace already resolves (mio, async-io,
+# polling and others pull windows-sys 0.61.2 today) so this adds no new
+# package to the lock.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Threading",
+] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

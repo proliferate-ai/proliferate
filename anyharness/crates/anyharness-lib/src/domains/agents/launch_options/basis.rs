@@ -18,7 +18,10 @@ use crate::domains::agents::route_auth::state::load_state_file;
 /// and override-backed harnesses, which have no installer manifest at all.
 pub fn compute_harness_basis_revision(runtime_home: &Path, harness_kind: &str) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(b"harness-launch-options-v2\0");
+    // v3 adds model-scoped control observations. Folding the observation
+    // schema into the basis prevents a runtime upgrade from continuing to
+    // serve a persisted flat v2 row under the new admission rules.
+    hasher.update(b"harness-launch-options-v3\0");
     hasher.update(harness_kind.as_bytes());
     hasher.update(b"\0");
 
@@ -329,18 +332,10 @@ mod tests {
     #[test]
     fn unresolved_native_includes_ambient_executable_selector() {
         let mut first = Sha256::new();
-        hash_effective_native_artifact(
-            &mut first,
-            None,
-            Some(Path::new("/tmp/claude-native-a")),
-        );
+        hash_effective_native_artifact(&mut first, None, Some(Path::new("/tmp/claude-native-a")));
 
         let mut second = Sha256::new();
-        hash_effective_native_artifact(
-            &mut second,
-            None,
-            Some(Path::new("/tmp/claude-native-b")),
-        );
+        hash_effective_native_artifact(&mut second, None, Some(Path::new("/tmp/claude-native-b")));
 
         assert_ne!(first.finalize().as_slice(), second.finalize().as_slice());
     }

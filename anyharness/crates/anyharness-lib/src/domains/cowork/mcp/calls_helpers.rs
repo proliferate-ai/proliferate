@@ -1,6 +1,8 @@
 use serde_json::{json, Value};
 
-use crate::domains::agents::launch_options::HarnessLaunchOptionsResponse;
+use std::collections::BTreeMap;
+
+use crate::domains::agents::launch_options::{HarnessLaunchOptions, HarnessLaunchOptionsResponse};
 use crate::domains::cowork::runtime::CoworkRuntime;
 use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::runtime::SendPromptOutcome;
@@ -12,6 +14,23 @@ pub(super) fn launch_options_to_json(
         .into_iter()
         .map(|response| json!(response))
         .collect()
+}
+
+pub(super) fn default_launch_selection(
+    options: &HarnessLaunchOptions,
+) -> (Option<String>, BTreeMap<String, String>) {
+    let model_id = options.defaults.model_id.clone();
+    let control_values = model_id
+        .as_deref()
+        .and_then(|id| {
+            options
+                .model_controls
+                .iter()
+                .find(|scope| scope.model_id == id)
+        })
+        .map(|scope| scope.default_control_values.clone())
+        .unwrap_or_else(|| options.defaults.control_values.clone());
+    (model_id, control_values)
 }
 
 pub(super) fn prompt_outcome_label(outcome: &SendPromptOutcome) -> &'static str {

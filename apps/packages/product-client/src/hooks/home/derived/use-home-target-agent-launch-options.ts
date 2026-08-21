@@ -2,6 +2,7 @@ import type { HarnessLaunchOptionsResponse } from "@anyharness/sdk";
 import {
   useAgentLaunchOptionsListQuery,
   useAgentLaunchOptionsQuery,
+  type AgentLaunchOptionsListEntry,
 } from "@anyharness/sdk-react";
 import type { CloudHarnessLaunchOptionsResponse } from "@proliferate/cloud-sdk";
 import {
@@ -34,6 +35,9 @@ export function useHomeTargetAgentLaunchOptions({
   isError: boolean;
   isLoading: boolean;
   isTargetUnobserved: boolean;
+  /** Re-asks the target. The cure behind the blocked notices' Retry / Check
+   * again — a state that offers an action must be able to perform it. */
+  refetch: () => void;
 } {
   const isCloudTarget = launchTarget?.kind === "cloud";
   const isLocalRuntimeTarget = launchTarget !== null && !isCloudTarget;
@@ -65,6 +69,13 @@ export function useHomeTargetAgentLaunchOptions({
         && (cloudSandbox.isError || cloudLaunchOptions.isError),
       isLoading: cloudSandbox.isLoading || cloudLaunchOptions.isLoading,
       isTargetUnobserved,
+      refetch: () => {
+        // The sandbox read comes first: a missing sandbox is one of the two
+        // ways a cloud target reads unobserved, and re-asking only for launch
+        // options could never cure it.
+        void cloudSandbox.refetch();
+        void cloudLaunchOptions.refetch();
+      },
     };
   }
 
@@ -75,6 +86,7 @@ export function useHomeTargetAgentLaunchOptions({
       isError: false,
       isLoading: false,
       isTargetUnobserved: false,
+      refetch: () => {},
     };
   }
 
@@ -84,15 +96,24 @@ export function useHomeTargetAgentLaunchOptions({
     isError: localLaunchOptions.isError,
     isLoading: localLaunchOptions.isLoading,
     isTargetUnobserved: false,
+    refetch: () => {
+      void localLaunchOptions.refetch();
+    },
   };
 }
 
 /**
  * Additive fan-out companion: launch options for the OTHER ready harnesses on
- * the same execution target, one response (or `null` while unresolved) per
- * kind. Local-runtime targets only — a cloud launch reads its sandbox's copied
- * observation per kind and keeps today's single-kind behavior (the cloud copy
- * store has no list read yet; recorded follow-up).
+ * the same execution target, one entry per kind. Local-runtime targets only —
+ * a cloud launch reads its sandbox's copied observation per kind and keeps
+ * today's single-kind behavior (the cloud copy store has no list read yet;
+ * recorded follow-up).
+ *
+ * The entries carry the list query's per-kind pending/error flags, not just
+ * `data`: `data === null` alone cannot tell a kind still being asked apart
+ * from a kind whose read failed, and the Home gate reports those as different
+ * states (`querying` vs `transport_error`). `useQueries` structurally shares
+ * `combine`'s result, so unchanged entries keep their reference.
  */
 export function useHomeTargetOtherAgentsLaunchOptions({
   harnessKinds,
@@ -100,18 +121,18 @@ export function useHomeTargetOtherAgentsLaunchOptions({
 }: {
   harnessKinds: readonly string[];
   launchTarget: HomeLaunchTarget | null;
-}): Array<HarnessLaunchOptionsResponse | null> {
+}): AgentLaunchOptionsListEntry[] {
   const isLocalRuntimeTarget = launchTarget !== null && launchTarget.kind !== "cloud";
-  const responses = useAgentLaunchOptionsListQuery({
+  const entries = useAgentLaunchOptionsListQuery({
     harnessKinds,
     enabled: isLocalRuntimeTarget,
   });
   // Stable empty reference: a fresh [] here would recompute the whole
   // downstream memo chain on every cloud/no-target render.
-  return isLocalRuntimeTarget ? responses : EMPTY_RESPONSES;
+  return isLocalRuntimeTarget ? entries : EMPTY_ENTRIES;
 }
 
-const EMPTY_RESPONSES: Array<HarnessLaunchOptionsResponse | null> = [];
+const EMPTY_ENTRIES: AgentLaunchOptionsListEntry[] = [];
 
 function isNotFound(error: unknown): boolean {
   return Boolean(

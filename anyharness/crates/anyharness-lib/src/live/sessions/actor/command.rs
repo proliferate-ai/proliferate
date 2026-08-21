@@ -32,6 +32,54 @@ pub enum ConditionalCancelOutcome {
     NotActive,
 }
 
+/// Result of the conditional non-terminal unload. The actor evaluates the
+/// condition serially on its own loop, where "is anything happening" is
+/// authoritative, so a retirement decided from a stale outside observation
+/// can never cancel newer work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConditionalUnloadOutcome {
+    /// The actor accepted the unload and is leaving its loop.
+    Unloading,
+    /// Work arrived (or was already present) since the caller observed the
+    /// session. The actor stays live and keeps running it.
+    Retained(UnloadRetainedReason),
+}
+
+/// Why a conditional unload was refused. Bounded classes only; these are log
+/// values (`specs/OBSERVABILITY.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnloadRetainedReason {
+    /// A turn is running: the command was read by the active-turn dispatch,
+    /// not the idle loop.
+    ActiveTurn,
+    /// The handle's prompt-concurrency flag is set.
+    Busy,
+    /// A human is parked on a permission or input request.
+    PendingInteraction,
+    /// The durable queue holds a prompt this session must still drain.
+    QueuedPrompt,
+    /// Another command was already waiting in the mailbox behind the unload.
+    /// FIFO delivery means it arrived after the caller's observation.
+    MailboxNotEmpty,
+    /// A replay session. It owns no agent process, so there is nothing to
+    /// reclaim, and its `Unload` disposition is a dismissal rather than a
+    /// resumable retirement.
+    ReplaySession,
+}
+
+impl UnloadRetainedReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ActiveTurn => "active_turn",
+            Self::Busy => "busy",
+            Self::PendingInteraction => "pending_interaction",
+            Self::QueuedPrompt => "queued_prompt",
+            Self::MailboxNotEmpty => "mailbox_not_empty",
+            Self::ReplaySession => "replay_session",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum PromptAcceptance {
     Started { turn_id: String },
@@ -264,6 +312,17 @@ pub(in crate::live::sessions) enum SessionCommand {
     /// terminal session event and does not make the durable session terminal.
     Unload {
         respond_to: oneshot::Sender<anyhow::Result<()>>,
+    },
+    /// Retire the live actor exactly like [`SessionCommand::Unload`], but only
+    /// if the actor is still idle when the command reaches the front of its
+    /// mailbox. The idle reaper decides from an outside observation that is
+    /// already stale by the time the command is delivered; this makes the
+    /// actor itself the judge, on the loop where the durable queue, the busy
+    /// flag, the pending interactions and the rest of the mailbox are all
+    /// authoritative. Anything that arrived in between wins, and the reply
+    /// says which condition retained the session.
+    UnloadIfIdle {
+        respond_to: oneshot::Sender<ConditionalUnloadOutcome>,
     },
     /// Workspace-wide stop (`stop_and_await`): unlike `Dismiss`, whose reply
     /// fires before the actor loop even finishes, this responder is stored

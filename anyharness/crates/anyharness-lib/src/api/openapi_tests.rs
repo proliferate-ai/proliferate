@@ -269,6 +269,7 @@ fn openapi_registers_workspace_session_and_event_schemas() {
         "HarnessLaunchControlValue",
         "HarnessLaunchControl",
         "HarnessLaunchDefaults",
+        "HarnessLaunchModelControls",
         "HarnessLaunchOptions",
         "HarnessLaunchOptionsState",
         "HarnessLaunchOptionsResponse",
@@ -299,9 +300,9 @@ fn openapi_registers_workspace_session_and_event_schemas() {
     assert!(relationship_union
         .iter()
         .any(|branch| branch["type"] == "null"));
-    assert!(relationship_union.iter().any(|branch| {
-        branch["$ref"] == "#/components/schemas/SubagentRelationship"
-    }));
+    assert!(relationship_union
+        .iter()
+        .any(|branch| { branch["$ref"] == "#/components/schemas/SubagentRelationship" }));
     for removed in [
         "ScheduleSubagentWakeRequest",
         "ScheduleSubagentWakeResponse",
@@ -361,6 +362,7 @@ fn launch_option_schema_exposes_exact_models_controls_and_defaults() {
     assert!(schema["properties"].get("models").is_some());
     assert!(schema["properties"].get("controls").is_some());
     assert!(schema["properties"].get("defaults").is_some());
+    assert!(schema["properties"].get("modelControls").is_some());
 
     let create = &spec["components"]["schemas"]["CreateSessionRequest"];
     assert!(
@@ -370,12 +372,15 @@ fn launch_option_schema_exposes_exact_models_controls_and_defaults() {
 
     let handoff = &spec["components"]["schemas"]["HandoffPlanRequest"];
     assert_eq!(
-        handoff["properties"]["controlValues"]["additionalProperties"]["type"],
-        "string",
+        handoff["properties"]["controlValues"]["additionalProperties"]["type"], "string",
         "plan handoff must expose the generic launch control map"
     );
 
-    for schema_name in ["NodeModel", "ReviewPersonaRequest", "ReviewAssignmentDetail"] {
+    for schema_name in [
+        "NodeModel",
+        "ReviewPersonaRequest",
+        "ReviewAssignmentDetail",
+    ] {
         assert_eq!(
             spec["components"]["schemas"][schema_name]["properties"]["controlValues"]
                 ["additionalProperties"]["type"],

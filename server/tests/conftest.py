@@ -52,18 +52,36 @@ def migrated_test_database():  # type: ignore[no-untyped-def]
 
 @pytest_asyncio.fixture
 async def test_engine(migrated_test_database):  # type: ignore[no-untyped-def]
+    """The one door to the test database -- and therefore the reset boundary.
+
+    The truncate used to live in an autouse ``reset_test_database`` fixture, so
+    all 2,900+ tests paid a 78-table TRUNCATE (twice) plus the session-scoped
+    alembic migration, including the large majority that never touch Postgres.
+    Hanging it off ``test_engine`` scopes the reset to exactly the tests that
+    reach the database, because every database path in the suite -- ``client``,
+    ``db_session``, ``cloud_client``, and every per-module session factory --
+    resolves through this fixture.
+
+    Fixture ordering is unchanged: the pre-test truncate still runs before any
+    fixture that depends on ``test_engine`` can seed rows.
+
+    The truncate runs before each test only, not after: every test already
+    starts from a clean slate via this same call, so an after-test truncate
+    only ever cleaned the database at process exit -- which the CI job never
+    reads back. The Postgres service container is torn down with the runner,
+    and the session-scoped ``migrated_test_database`` fixture drops the whole
+    database unconditionally regardless of its contents.
+
+    Tests that build their own throwaway database (``temporary_database``) are
+    self-isolating and correctly opt out of the shared-database reset.
+    """
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-    yield engine
-    await engine.dispose()
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def reset_test_database(test_engine) -> AsyncGenerator[None, None]:  # type: ignore[no-untyped-def]
     await _cancel_test_background_tasks()
-    await truncate_all_tables(test_engine)
-    yield
-    await _cancel_test_background_tasks()
-    await truncate_all_tables(test_engine)
+    await truncate_all_tables(engine)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture

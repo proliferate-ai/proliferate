@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "phase": "e1-phase1",
-  "description": "Safe, normalized definitions for the six existing production Grafana alert rules: immutable identity (UID, title, severity), the approved label/annotation overlay (log annotations only on bfrmh7e7x2k8wd), and the complete query/expression model captured 2026-07-14 via a read-only (GET-only) ruler read with the dedicated Viewer credential. queryChecksum is sha256 of the canonical JSON serialization of queryModel; scripts/ops/grafana-alerting.mjs check verifies checksum consistency offline and detects drift against a live export. This file never contains a token, webhook credential, dashboard cookie, or unrelated exported workspace object.",
+  "description": "Safe, normalized definitions for the six existing production Grafana alert rules: immutable identity (UID, title, severity), the approved label/annotation overlay (log annotations only on bfrmh7e7x2k8wd), and the complete query/expression model captured 2026-07-14 via a read-only (GET-only) ruler read with the dedicated Viewer credential. queryChecksum is sha256 of the canonical JSON serialization of queryModel; scripts/ops/grafana-alerting.mjs check verifies checksum consistency offline and detects drift against a live export. This file never contains a token, webhook credential, dashboard cookie, or unrelated exported workspace object. ECS CPU > 90% for 15m (cfrmh7d7od8g0c) was retired 2026-08-21 as an infra symptom, not a product promise, and removed from this allowlist; it remains queryable on the Production Overview dashboard.",
   "target": {
     "awsAccount": "157466816238",
     "awsRegion": "us-east-1",
@@ -218,110 +218,6 @@
         "isPaused": false
       },
       "queryChecksum": "0e1aca32091a82c24e1d6210f41fe03ae1448de612a3e783b7ad67c0df025fba"
-    },
-    {
-      "uid": "cfrmh7d7od8g0c",
-      "title": "ECS CPU > 90% for 15m",
-      "severity": "critical",
-      "labels": {
-        "proliferate_rule_uid": "cfrmh7d7od8g0c",
-        "proliferate_component": "proliferate-server",
-        "severity": "critical"
-      },
-      "annotations": {
-        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/guides/operating/production-alerts.md#ecs-cpu-saturation-cfrmh7d7od8g0c"
-      },
-      "queryModel": {
-        "title": "ECS CPU > 90% for 15m",
-        "condition": "threshold",
-        "data": [
-          {
-            "refId": "A",
-            "queryType": "",
-            "relativeTimeRange": {
-              "from": 600,
-              "to": 0
-            },
-            "datasourceUid": "cfrbuwtvlfsowb",
-            "model": {
-              "dimensions": {
-                "ClusterName": "proliferate-prod",
-                "ServiceName": "proliferate-prod-server"
-              },
-              "intervalMs": 1000,
-              "maxDataPoints": 43200,
-              "metricName": "CPUUtilization",
-              "namespace": "AWS/ECS",
-              "period": "300",
-              "queryMode": "Metrics",
-              "refId": "A",
-              "region": "us-east-1",
-              "statistics": [
-                "Average"
-              ]
-            }
-          },
-          {
-            "refId": "B",
-            "queryType": "",
-            "relativeTimeRange": {
-              "from": 600,
-              "to": 0
-            },
-            "datasourceUid": "__expr__",
-            "model": {
-              "expression": "A",
-              "intervalMs": 1000,
-              "maxDataPoints": 43200,
-              "reducer": "last",
-              "refId": "B",
-              "settings": {
-                "mode": "dropNN"
-              },
-              "type": "reduce"
-            }
-          },
-          {
-            "refId": "threshold",
-            "queryType": "",
-            "relativeTimeRange": {
-              "from": 600,
-              "to": 0
-            },
-            "datasourceUid": "__expr__",
-            "model": {
-              "conditions": [
-                {
-                  "evaluator": {
-                    "params": [
-                      90
-                    ],
-                    "type": "gt"
-                  },
-                  "operator": {
-                    "type": "and"
-                  },
-                  "reducer": {
-                    "type": "last"
-                  }
-                }
-              ],
-              "expression": "B",
-              "intervalMs": 1000,
-              "maxDataPoints": 43200,
-              "refId": "threshold",
-              "type": "threshold"
-            }
-          }
-        ],
-        "noDataState": "OK",
-        "execErrState": "Alerting",
-        "for": "15m",
-        "ruleGroup": "production-alerts",
-        "folderUID": "ops-folder",
-        "isPaused": false
-      },
-      "queryChecksum": "11a10654f11f98d917e6b9a2ee84b57eaccf966ddcb4008d61b20a48146e80bd"
     },
     {
       "uid": "bfrmh7e7x2k8wd",

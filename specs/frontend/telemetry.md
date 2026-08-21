@@ -105,16 +105,33 @@ session replay, and telemetry-related provider and hook ownership.
 
 ## Replay and Privacy
 
-- Client session replay is source-disabled on every surface: Desktop/Web/Mobile
-  PostHog recording and Desktop renderer Sentry replay carry no enabling flag,
-  options object, or start call, and Web/Mobile Sentry replay rates are zero.
-  No build value, environment value, optional native package, or provider-side
-  setting turns recording on.
-- Re-enabling replay anywhere requires a new reviewed source change that first
-  proves, with synthetic sensitive content, the route/screen block-and-mask
-  policy, metadata policy, log/network policy, provider arrival, and the
-  absence of prompts, transcripts, terminal text, file contents, repo/path
-  data, tokens, credentials, identity beyond the permitted opaque ID, and
+- Web and Mobile PostHog recording and Desktop renderer Sentry replay stay
+  source-disabled: no enabling flag, options object, or start call, and
+  Web/Mobile Sentry replay rates are zero. No build value, environment value,
+  optional native package, or provider-side setting turns any of them on.
+- Desktop PostHog recording is start-gated, not source-disabled.
+  `disable_session_recording` is a literal `true` at init and there is no
+  `loaded` callback, so nothing auto-starts. Recording begins only when the
+  signed-in address matches the closed internal audience in
+  `product-client/src/domain/telemetry/replay-audience.ts`, and only if the
+  PostHog project also has replay enabled server-side. Customer recording is
+  off.
+- Route identifiers never reach a replay payload. Masking hides page content
+  and does nothing about URLs, so URL reduction is a separate mechanism:
+  `product-client/src/domain/telemetry/route-id-redaction.ts` reduces every URL
+  to a bounded route template from a closed table. The load-bearing boundary is
+  `before_send`, which covers every `$current_url`-style property, the rrweb
+  Meta event `href`, and every URL-valued DOM attribute inside
+  `$snapshot_data`. The same reducer is also wired as the recorder-boundary
+  `maskAttributeFn`, but the pinned `posthog-js@1.386.8` never invokes it, so
+  that boundary is dormant forward-compatibility and must not be counted as
+  coverage. A pathname matching no template becomes `/unknown`.
+- Widening Desktop recording to customers, or re-enabling replay on any other
+  surface, requires a new reviewed source change that first proves, with
+  synthetic sensitive content, the route/screen block-and-mask policy,
+  metadata policy, log/network policy, provider arrival, and the absence of
+  prompts, transcripts, terminal text, file contents, repo/path data, tokens,
+  credentials, identity beyond the permitted opaque ID, and
   workspace/session/workflow identifiers. The rules below are its contract.
 - Shared client payload scrubbing bounds container traversal by depth, array
   positions, and object properties. It replaces cyclic back-edges with
@@ -122,8 +139,22 @@ session replay, and telemetry-related provider and hook ownership.
   scrubbed value for repeated references, and redacts enumerable accessors
   without evaluating them. These are structural bounds; strings retain their
   existing redaction behavior and are not truncated by length.
-- If replay is ever re-enabled, workspace and settings surfaces are blocked by
-  default.
+- Recorder capabilities that resolve against the provider's remote flags are
+  pinned in source, not left unset. Canvas recording
+  (`captureCanvas: { recordCanvas: false }`) and console capture
+  (`enable_recording_console_log: false`) both resolve local-first, so an unset
+  value would let the PostHog project turn them on by itself. Canvas frames are
+  pixels and console arguments are arbitrary strings; neither is reached by
+  text masking or by route-id redaction.
+- Recorded content control is masking plus blocking, and the two have
+  different coverage. Desktop recording masks all text (`maskTextSelector="*"`)
+  and all inputs, so rendered prompts, transcripts, terminal text, and paths
+  are masked wherever they appear. `[data-telemetry-block]` removes a subtree
+  entirely and is currently applied by `ProductPageShell` (when
+  `telemetryBlocked` is set, as the workflows surfaces do), `SettingsScreen`,
+  `ModalShell`, and `CommandPalette`. The main workspace/chat surface is masked
+  but not blocked; widening replay beyond the internal audience should settle
+  whether it must also be blocked.
 - Continue using explicit masking for input areas that may contain sensitive
   text.
 - If a new surface can display prompts, files, paths, repo metadata, tokens,

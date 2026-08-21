@@ -6,8 +6,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::{
-    ConditionalCancelOutcome, ForkSessionCommandError, PromptAcceptError, PromptAcceptance,
-    Resolution, SessionCommand,
+    ConditionalCancelOutcome, ConditionalUnloadOutcome, ForkSessionCommandError, PromptAcceptError,
+    PromptAcceptance, Resolution, SessionCommand, UnloadRetainedReason,
 };
 use crate::live::sessions::actor::fork::handle::reject_busy_close_native_child_session;
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
@@ -284,6 +284,17 @@ impl SessionActor {
                                 unload_requested = true;
                                 unload_deadline.as_mut().reset(tokio::time::Instant::now() + UNLOAD_CANCEL_GRACE);
                                 exit_after_prompt = Some(ActorExitDisposition::Unload);
+                            }
+                            Some(SessionCommand::UnloadIfIdle { respond_to }) => {
+                                // A turn is running, so the reaper's
+                                // observation is stale by definition. Refuse:
+                                // the unconditional `Unload` above would
+                                // cancel this turn and discard its work, and
+                                // the price of a reap is a cold start, never
+                                // a turn.
+                                let _ = respond_to.send(ConditionalUnloadOutcome::Retained(
+                                    UnloadRetainedReason::ActiveTurn,
+                                ));
                             }
                             Some(SessionCommand::Stop { respond_to }) => {
                                 self.resolve_pending_interactions(Resolution::Dismissed).await;

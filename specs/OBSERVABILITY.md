@@ -89,13 +89,27 @@ stdout/stderr into a bounded in-memory tail — while each producer keeps a fixe
 bounded per-component fallback file family. Standalone, external
 `ANYHARNESS_DEV_URL`, cloud/Supervisor, and unsupported-platform modes keep
 their existing sinks, and historical log bytes are never rewritten. Support-file
-migration is not part of this change. Internal/dogfood collector builds add one
+migration is not part of this change. Collector builds add one
 more route for the same accepted records: a provider-neutral OTLP/HTTP JSON
-adapter behind the collector's non-default `internal-dogfood-export` feature,
-whose destination URL and request headers are environment values rather than
-contract fields. Customer builds compile no export path, no destination read,
-and no credential handling at all, and the release job refuses a bundle whose
-binaries carry the endpoint variable name. The adapter is bounded best effort —
+adapter whose destination URL and request headers are environment values rather
+than contract fields. The adapter is compiled into every build, and what a build
+may export is a compile-time constant, `EXPORT_POLICY` in
+`proliferate-diagnostics-collector/src/export/policy.rs`, that no configuration
+value can relax. A customer build carries `LifecycleOnly`, so only
+`record_class == lifecycle` with every field `operational` can be exported and
+the detailed class, the only class that can carry free text, never leaves the
+machine; the `internal-dogfood-export` feature widens that to `All` and adds the
+per-developer `dev.user` tag. The release job refuses a bundle whose packaged
+collector does not report `lifecycle_only`, or whose binaries carry the
+dogfood-only marker or dev-tag literals. Independently of the policy, any build
+exports nothing until a destination is configured out of band, so customer
+export stays dark until that configuration is a deliberate decision. Exported
+records carry `proliferate.install_id`, a resource attribute the collector
+stamps from a value its host passes on the process seam as `--install-id`; the
+desktop passes the `desktop_install_id` it already owns. It is not a
+wire-protocol field, so no producer can set or spoof it, and it is what
+distinguishes one install failing forty times from forty installs failing once.
+It is absent rather than invented when the host has no identity to give. The adapter is bounded best effort —
 a fixed queue that drops rather than grows, a fixed batch, one attempt plus two
 retries, a cooldown, and no disk outbox or replay — so a failing destination
 changes only `exporter.state`, `exporter.dropped_records`, and a fixed-table
@@ -176,13 +190,18 @@ change sits on:
 - **Structural, not length, bounds:** client payload scrubbing bounds depth,
   array positions, and object properties (`[circular]`, `[truncated]`) but
   does not truncate strings by length — what you put in a string field ships.
-- **Replay is off everywhere, in source:** Web/Mobile Sentry replay rates are
-  zero; Desktop renderer Sentry replay and Desktop/Web/Mobile PostHog session
-  recording are source-disabled and absent. No build value, environment value,
-  optional native package, or provider-side setting can start a recording, so
-  the recorded page-URL route-id gap is closed because nothing records.
-  Re-enablement anywhere requires the reviewed synthetic privacy proof in
-  [`frontend/telemetry.md`](frontend/telemetry.md); a new surface that can
+- **Replay is off for customers, and internal-only on Desktop:** Web/Mobile
+  Sentry replay rates are zero; Desktop renderer Sentry replay and Web/Mobile
+  PostHog session recording are source-disabled and absent. Desktop PostHog
+  recording never auto-starts and begins only for the closed internal audience
+  in `product-client/src/domain/telemetry/replay-audience.ts`, and only when
+  the PostHog project also enables replay server-side. The recorded page-URL
+  route-id gap is closed by
+  `product-client/src/domain/telemetry/route-id-redaction.ts`, which reduces
+  every URL and every rrweb `href`/`src` to a bounded route template from a
+  closed table and fails closed to `/unknown`. Widening to customers, or
+  re-enabling any other surface, requires the reviewed synthetic privacy proof
+  in [`frontend/telemetry.md`](frontend/telemetry.md); a new surface that can
   display prompts, files, paths, or credentials gets `[data-telemetry-block]` /
   `[data-telemetry-mask]` unless there is a reviewed reason not to.
 - **Child-agent stderr never reaches Sentry:** AnyHarness marks it with a

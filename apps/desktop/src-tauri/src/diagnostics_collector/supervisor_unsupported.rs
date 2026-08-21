@@ -107,6 +107,11 @@ impl DiagnosticsCollectorSupervisor {
         fallback: FallbackDiagnosticsWriter,
         _release: String,
         _environment: String,
+        // Targets that reach this file ship a placeholder collector, so there
+        // is no process to stamp the install id onto and nothing to export it
+        // on. The parameter exists so both supervisors present one signature
+        // to `lib.rs`, which cannot know which one it compiled against.
+        _install_id: Option<String>,
     ) -> Arc<Self> {
         let (startup_tx, _) = watch::channel(StartupBarrierResult::Pending);
         let (generation_tx, _) = watch::channel(0);

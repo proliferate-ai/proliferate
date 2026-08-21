@@ -4,8 +4,8 @@ use tokio::sync::mpsc;
 
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::integrations::acp::provider_errors::{
-    classify_network_connection_error, classify_provider_rate_limit_error, NETWORK_CONNECTION_CODE,
-    PROVIDER_RATE_LIMIT_CODE,
+    classify_network_connection_error, classify_provider_model_error,
+    classify_provider_rate_limit_error, NETWORK_CONNECTION_CODE, PROVIDER_RATE_LIMIT_CODE,
 };
 use crate::live::sessions::actor::config::queue::apply_pending_config_changes_if_idle;
 use crate::live::sessions::actor::state::SessionActor;
@@ -280,22 +280,22 @@ impl SessionActor {
                     let sink = self.event_sink.lock().await;
                     sink.debug_snapshot()
                 };
-                // Classify before logging: the turn-failure record is the one
-                // place the provider/network class is visible, and the sink
-                // path below consumes the classification by value.
+                // Inspect the structured ACP error before flattening it for
+                // diagnostics. The sink path below consumes the bounded
+                // classification by value and preserves the raw cause.
+                let provider_model_code = classify_provider_model_error(&self.agent_kind, &e);
                 let error_message = e.to_string();
-                let (error_details, error_code) =
-                    match classify_provider_rate_limit_error(&error_message) {
-                        Some(details) => {
-                            (Some(details), Some(PROVIDER_RATE_LIMIT_CODE.to_string()))
-                        }
-                        None => match classify_network_connection_error(&error_message) {
-                            Some(details) => {
-                                (Some(details), Some(NETWORK_CONNECTION_CODE.to_string()))
-                            }
-                            None => (None, None),
-                        },
-                    };
+                let (error_details, error_code) = if let Some(details) =
+                    classify_provider_rate_limit_error(&error_message)
+                {
+                    (Some(details), Some(PROVIDER_RATE_LIMIT_CODE.to_string()))
+                } else if let Some(code) = provider_model_code {
+                    (None, Some(code.to_string()))
+                } else if let Some(details) = classify_network_connection_error(&error_message) {
+                    (Some(details), Some(NETWORK_CONNECTION_CODE.to_string()))
+                } else {
+                    (None, None)
+                };
                 tracing::warn!(
                     target: "anyharness.turn.failed",
                     session_id = %self.session_id,

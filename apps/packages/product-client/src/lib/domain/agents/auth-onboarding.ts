@@ -1,15 +1,21 @@
 import type { AgentSummary } from "@anyharness/sdk";
+import { isGatewayCapableHarness } from "#product/lib/domain/agents/bundled-agent-registry";
 import { agentNeedsInstall } from "#product/lib/domain/agents/status";
 
 /**
  * First-run auth adoption (spec §9, PR 12).
  *
  * When the user has NO selection rows yet, the desktop adopts what the local
- * AnyHarness credential scan already detected:
- * - each harness with detected native auth → nothing to write (native is the
- *   implicit empty state; the CLI's own login is used)
- * - nothing detected → preselect the managed gateway for installed harnesses
- *   (only when the gateway is enabled for the account)
+ * AnyHarness credential scan already detected, independently per harness:
+ * - a harness with detected native auth → nothing to write for that harness
+ *   (native is the implicit empty state; the CLI's own login is used)
+ * - a harness without detected native auth → preselect the managed gateway
+ *   for it, as long as it is installed and the gateway is enabled for the
+ *   account
+ *
+ * One harness's native login must not suppress adoption for any other
+ * harness (AGENT_AUTH.md, "First-run adoption settles once": Desktop "adopts
+ * the gateway for harnesses without native logins").
  *
  * The plan is only produced when zero selections exist, which keeps the whole
  * flow idempotent: after the first gateway write (or any manual choice in
@@ -165,20 +171,25 @@ export function planFirstRunAuthAdoption(
     return [];
   }
 
-  // Detected native creds need no wiring — native is the implicit empty state,
-  // so a harness the scan already trusts is left alone (and blocks a gateway
-  // preselection for the rest, matching the pre-rebuild adoption).
-  const detected = input.agents.filter(hasDetectedNativeAuth);
-  if (detected.length > 0) {
-    return [];
-  }
-
   if (!input.gatewayEnabled) {
     return [];
   }
 
+  // Each harness adopts independently: detected native creds need no wiring
+  // for THAT harness — native is the implicit empty state — but a harness
+  // the scan already trusts must not suppress gateway preselection for any
+  // other harness on the machine. Existing gateway-support filtering still
+  // applies per-harness: a harness with no gateway recipe (cursor — single-
+  // source, its only slot is "cursor") can never be handed a gateway action,
+  // matching the settings write path's isGatewayCapableHarness guard and the
+  // server's selection_rules.py fail-closed ("no gateway recipe").
   return input.agents
-    .filter((agent) => agent.installState === "installed")
+    .filter(
+      (agent) =>
+        agent.installState === "installed"
+        && !hasDetectedNativeAuth(agent)
+        && isGatewayCapableHarness(agent.kind),
+    )
     .map((agent) => ({
       harnessKind: agent.kind,
       surface: "local",

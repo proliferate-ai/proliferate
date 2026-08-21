@@ -3233,18 +3233,39 @@ export interface components {
             observedDescription?: string | null;
             observedName?: string | null;
         };
+        HarnessLaunchModelControls: {
+            controls: components["schemas"]["HarnessLaunchControl"][];
+            defaultControlValues: {
+                [key: string]: string;
+            };
+            modelId: string;
+        };
         HarnessLaunchOptions: {
             controls: components["schemas"]["HarnessLaunchControl"][];
             defaults: components["schemas"]["HarnessLaunchDefaults"];
+            modelControls?: components["schemas"]["HarnessLaunchModelControls"][];
             models: components["schemas"]["HarnessLaunchModel"][];
         };
         HarnessLaunchOptionsResponse: {
             basisRevision: string;
+            /**
+             * @description Does the runtime serving this response own the probe engine for its runtime
+             *     home, and so can a manual refresh dispatched here run at all?
+             *
+             *     A runtime that does not answers the refresh route with 409
+             *     `PROBE_ENGINE_NOT_OWNER`, and ownership appears nowhere else on any wire —
+             *     so a surface inferring it from "is this runtime local?" renders a Refresh
+             *     control whose only possible outcome is an error toast. Install state is a
+             *     separate precondition and is already reported by `readiness`; a surface
+             *     gating a Refresh control must respect both.
+             */
+            canManuallyRefresh: boolean;
             harnessKind: string;
             observedAt?: string | null;
             options?: null | components["schemas"]["HarnessLaunchOptions"];
             probeAttemptedAt: string;
             probeFailureCode?: string | null;
+            probePhase?: null | components["schemas"]["AgentAuthProbePhase"];
             readiness: components["schemas"]["AgentReadinessState"];
             /** Format: int64 */
             revision: number;

@@ -267,9 +267,16 @@ function isExecutable(path) {
   return (statSync(path).mode & 0o111) !== 0;
 }
 
+// Compression level 12, not zstd's maximum. At -19 this single pipe was 207s of
+// the 296s macOS release seed step (70%); -12 is the knee of zstd's
+// ratio/throughput curve and costs a few percent of archive size for roughly an
+// order of magnitude less CPU. Nothing downstream depends on the level: the
+// archive is sha256'd into agent-seed-<target>.sha256, and the release workflow
+// re-extracts it and re-runs `codesign --verify` / `spctl --assess` on the
+// extracted Node binary, so a bad archive still fails the build.
 function createArchive(payloadDir, archivePath) {
   mkdirSync(dirname(archivePath), { recursive: true });
-  const result = spawnSync("bash", ["-o", "pipefail", "-c", "tar -cf - . | zstd -q -19 -T0 -o \"$ARCHIVE_PATH\""], {
+  const result = spawnSync("bash", ["-o", "pipefail", "-c", "tar -cf - . | zstd -q -12 -T0 -o \"$ARCHIVE_PATH\""], {
     cwd: payloadDir,
     env: { ...process.env, ARCHIVE_PATH: archivePath },
     stdio: "inherit",

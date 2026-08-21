@@ -30,7 +30,9 @@ not keyed by workspace, user, auth surface, or route. Each row contains:
 - `basis_revision`: a hash of harness kind, installed harness identity, and the
   product-owned auth/route revision;
 - a monotonic runtime-local `revision`;
-- exact ordered models, controls, allowed values, and no-override defaults;
+- exact ordered models, a flat no-override control statement, and, when the
+  harness can be switched without prompting or inference, exact control
+  statements and defaults for each observed model;
 - successful-observation and latest-attempt timestamps; and
 - bounded probe evidence and failure code.
 
@@ -47,13 +49,23 @@ may request a probe. The probe:
 2. materializes product-owned auth/route state without any workspace or session
    environment;
 3. starts a headless, override-free harness session;
-4. records exact model and flat launch-control statements plus no-override
-   defaults; and
-5. atomically replaces the one harness row.
+4. records the exact model list and flat no-override launch-control statement;
+5. for bounded harnesses whose model config can be switched and read back
+   without prompting, records the exact control statement and defaults after
+   selecting every model; and
+6. atomically replaces the one harness row.
 
 Probe output is data, not a schema allow-list. Sparse and unknown identifiers
 are persisted. A successful empty statement is `observed_empty`, not a reason
 to consult static data.
+
+`modelControls` is an optional compatibility extension of the one target
+observation, not another authority. A row for the selected model is exact: a
+present empty `controls` list means that model offers no launch controls. When
+no row was observed, consumers use the flat no-override statement. A harness
+whose model-control enumeration is required must publish a complete matrix or
+fail the refresh and retain matching last-good state; it may not publish a
+partial matrix and silently fall back for the missing models.
 
 Workspace and per-session environment may not affect target observation.
 Session creation rejects an environment key that would override an auth input
@@ -79,6 +91,80 @@ the matching last-good statement. Read also recomputes the basis, preventing an
 auth/install event from exposing stale options before its invalidation task
 runs.
 
+`state` alone cannot say whether a `detecting` row is still converging. A
+harness excluded from unattended probes stays `detecting` until somebody presses
+Refresh, which reads identically to a probe that is about to answer. The
+response therefore also carries `probePhase` for that harness (`idle`, `queued`,
+`running`, `backoff`), the same lifecycle the agent-auth summary reports.
+
+`probePhase` and `state` come out of one read of one durable row, returned
+together so no caller can derive them apart and let them disagree. A row whose
+`probe_state` is `probing` reports at least `queued`, whatever basis that row
+carries: an auth change moves every harness's basis and can land under a probe
+that is genuinely running, and that probe is the one whose result the client is
+waiting for. A settled row at a moved basis reports `idle` instead, even though it
+too is served as `detecting`, so a harness no unattended poke may refresh is not
+polled forever.
+
+The scheduler's in-memory slot refines the row rather than replacing it, in two
+directions. An owner admits an attempt to its slot BEFORE writing `probing`
+durably and before every await after it, so for an owner the slot leads the row:
+it sharpens `queued` to `running`, and — the case that matters — a `probing` row
+whose owner slot is `idle` is an ORPHAN, a durable start whose attempt is gone.
+That happens without any crash, since dropping the refresh future releases the
+guard and nothing releases the row, so the owner's slot is what stops a client
+polling forever against an attempt that no longer exists. A read-only runtime has
+no slot to refine anything with, because it never admits an attempt; the row is
+its only source, and reporting it is what keeps a runtime that shares the document
+converging with the owner probing it.
+
+The row's claim is therefore believed on trust by a read-only runtime, so it is
+believed only for a bounded time. An attempt older than one whole-machine pass —
+the per-probe timeout times every registered harness plus one, since the engine
+runs one probe at a time — is abandoned: no attempt can legitimately still be
+queued behind that much work, and past it the slot (or, read-only, nothing) is the
+answer. The bound has to clear a real queue, not just one timeout, or a probe
+waiting its turn behind a full pass is called abandoned while it is about to run.
+
+The slot and the row cannot be read atomically, so the ORDER is part of the rule:
+the slot is read FIRST and the row second, always. Row-first admits the one pair
+that cannot be told apart from an orphan — an attempt that commits between the two
+reads leaves a `probing` row beside an already-`idle` slot — and would retire the
+observation the client is waiting for. Slot-first can only produce a slot livelier
+than the row, which costs one extra poll. The ordering is enforced, not merely
+documented: a phase reading carries when it was taken, a read carries when it was
+taken, and deriving from the wrong order is refused.
+
+One more source can look idle without being settled: an owner that has not yet
+dispatched its startup probe pass. It serves HTTP while seed hydration and the
+reconcile run ahead of that pass, so its slot map is empty because nothing has run
+YET. Until the pass dispatches — or a whole-machine-pass worth of wall clock goes
+by, so a stalled boot cannot wait forever either — a row claiming an attempt is
+reported as queued rather than settled.
+
+When a claim is withdrawn this way, the STATE withdraws it too, not only the
+phase. `refreshing` is waited on without consulting `probePhase` at all, so a row
+vetoed as an orphan is projected as though it were settled: its last observation
+if it has one, `detecting` if it never had one. Otherwise the response would
+contradict itself — a `refreshing` state next to an `idle` phase — and the client
+that reads the state would keep polling an attempt the phase already denied.
+
+The field is omitted only when nothing is in flight in the row AND the serving
+runtime does not own the probe engine for its runtime home, the one case where no
+source can answer.
+
+Ownership itself is on the response as `canManuallyRefresh`. The refresh route
+answers a non-owner with 409 `PROBE_ENGINE_NOT_OWNER`, and nothing else on any
+wire carries that fact, so a surface that inferred it from "is this runtime local?"
+rendered a Refresh control whose only outcome was an error toast. It reports
+ownership alone; install state is a separate precondition already carried by
+`readiness`, and a surface gating a Refresh control respects both.
+
+Clients wait on a launch-option read only while `probePhase` is `queued` or
+`running`, or while the state is `refreshing`. Every terminal state, and a
+`detecting` row whose phase is `idle`, `backoff`, or absent, is an answer rather
+than a wait.
+
 ## Pre-launch reads
 
 Runtime API:
@@ -88,14 +174,18 @@ Runtime API:
 
 Cloud API:
 
-- `GET /v1/cloud/sandboxes/{cloudSandboxId}/harness-launch-options/{harnessKind}`
-- Worker-authenticated target-state upload through the runtime-worker heartbeat
-  surface
+- `GET /v1/cloud/harness-launch-options/sandboxes/{cloudSandboxId}/{harnessKind}`
+- `POST /v1/cloud/harness-launch-options/{harnessKind}` from the authenticated
+  target Worker
 
 Home, new chat, Settings, Cowork and reviews, workflows, automations, Web,
 Desktop, and Mobile consume the same response for their selected target and
 harness. View mappers may label, order, group, search, or lay out exact keys.
 They may not union or intersect executable membership with catalog data.
+When the observation contains a `modelControls` row for the selected model,
+that row replaces the flat control statement for rendering and selection.
+Changing models therefore also replaces the rendered controls and drops stale
+control selections that the new model did not observe.
 
 Settings presents the observed list read-only. Model visibility overrides and
 server-side add/remove patches do not exist.
@@ -150,15 +240,17 @@ identifiers:
 }
 ```
 
-Every rendered control with a selected/default value is represented. Omission
-means no value was promised; it never means “look up a catalog default later.”
-Independent controls remain independent.
+Every rendered control with a selected/default value is represented. Defaults
+come from the selected model's exact row when present and otherwise from the
+flat statement. Omission means no value was promised; it never means “look up
+a catalog default later.” Independent controls remain independent.
 
 Session create reloads successful current-basis launch options even when the
-selection is empty. It validates exact model, control, and value membership.
-An unsupported value returns `SESSION_LAUNCH_VALUE_UNSUPPORTED` before a
-session is committed. Accepted create inserts the session and complete
-`ResolvedLaunchIntent` in one transaction.
+selection is empty. It validates exact model, control, and value membership
+against the selected model's row when present, otherwise against the flat
+statement. An unsupported value returns `SESSION_LAUNCH_VALUE_UNSUPPORTED`
+before a session is committed. Accepted create inserts the session and
+complete `ResolvedLaunchIntent` in one transaction.
 
 `modeId` is accepted only as a stateless N-1 HTTP decoder input and is converted
 to `controlValues.mode` before entering the session domain. First-party callers
@@ -185,13 +277,13 @@ then:
 The explicit model stays fail-closed: an absent or unconfirmed model fails
 startup and cleans up the incomplete native session.
 
-Controls carry exactly one carve-out, for per-model value narrowing on quality
-controls. Some harnesses shrink a control's allowed values under the applied
-model (codex `reasoning_effort` loses `max` under some models), which the
-harness-level observation cannot see at create time. A control that the live
-statement still surfaces, whose requested value that statement no longer
-offers, and that is not a posture control, is therefore dropped to the live
-session default with a `membership_dropped` result and a
+Controls carry exactly one carve-out, for value narrowing on quality controls
+when the target could not publish a model-specific row or the harness changed
+after observation. Some harnesses shrink a control's allowed values under the
+applied model (codex `reasoning_effort` loses `max` under some models). A
+control that the live statement still surfaces, whose requested value that
+statement no longer offers, and that is not a posture control, is therefore
+dropped to the live session default with a `membership_dropped` result and a
 `session.initial_config.dropped` event; the final aggregate check then runs
 against the intent minus the dropped controls.
 
@@ -246,7 +338,15 @@ Events include safe identifiers, basis/revision or source sequence, state,
 counts, duration, and result/error codes. See
 [Observability](../OBSERVABILITY.md) for the repository-wide scrubber contract.
 
-Release coverage includes sparse/unknown Claude identifiers, current Grok
+Prompt-time provider rejection is not executable-membership authority. Known
+model-unavailable and model-configuration failures receive bounded error codes
+for actionable client presentation, while the original diagnostic stays behind
+the error's technical-details disclosure. Clients may offer the model picker;
+they do not remove an observed model, rewrite the saved selection, or retry the
+same non-retryable request automatically.
+
+Release coverage includes sparse/unknown Claude identifiers, model-scoped
+Claude controls (including the absence of `fast` under Fable), current Grok
 identifiers, both Codex controls, empty/failure/basis-change states, exact
 create rejection, startup contradiction, active-session isolation, and cloud
 target isolation. The deterministic gates and real-profile verifier are in

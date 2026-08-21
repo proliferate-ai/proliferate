@@ -19,8 +19,4 @@ export const HOME_SCREEN_LABELS = {
   authSetupNeedsInstall: "Not installed",
   authSetupWaitingStatus: "Waiting for status",
   authSetupOpenAgents: "Open agent settings",
-  modelProbeProbingTitle: "Processing your models…",
-  modelProbeDoneDescription: "Check out which models you already have access to.",
-  modelProbeNoneTitle: "Connect a provider to get started",
-  modelProbeNoneDescription: "Add an agent provider to see your available models.",
 } as const;

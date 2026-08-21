@@ -123,6 +123,10 @@ fn clear_cloexec(fd: i32) {
 
 /// Starts the packaged collector binary with the destination supplied exactly
 /// the way an internal build receives it: out of band, never in the contract.
+/// The install id the suite passes through the real `--install-id` process
+/// seam, the same way the desktop host passes the one it owns.
+const INSTALL_ID: &str = "install-dogfood-4b71";
+
 fn spawn_collector(destination: Option<(&str, &str)>) -> CollectorChild {
     let (mut capability_writer, capability_reader) = UnixStream::pair().expect("capability pair");
     let (control_writer, control_reader) = UnixStream::pair().expect("control pair");
@@ -134,6 +138,8 @@ fn spawn_collector(destination: Option<(&str, &str)>) -> CollectorChild {
         .arg(capability_reader.as_raw_fd().to_string())
         .arg("--control-fd")
         .arg(control_reader.as_raw_fd().to_string())
+        .arg("--install-id")
+        .arg(INSTALL_ID)
         .env_remove("PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT")
         .env_remove("PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS")
         .stdin(Stdio::null())
@@ -309,6 +315,25 @@ async fn accepted_records_reach_the_destination_as_conformant_otlp_with_its_head
         state.header_values(DATASET_HEADER).first().map(String::as_str),
         Some("proliferate")
     );
+
+    // The install id is stamped by the collector from the value the host
+    // passed on the process seam, so it rides every resource stream regardless
+    // of which producer boot each record came from. No producer sent it, and
+    // no producer could have.
+    let resource_sets = state.resource_attribute_sets();
+    assert!(
+        resource_sets.len() > 1,
+        "the fixture must span several resource streams"
+    );
+    for attributes in &resource_sets {
+        let stamped = attributes
+            .as_array()
+            .expect("resource attributes")
+            .iter()
+            .find(|attribute| attribute["key"] == "proliferate.install_id")
+            .expect("proliferate.install_id resource attribute");
+        assert_eq!(stamped["value"]["stringValue"], Value::from(INSTALL_ID));
+    }
 
     let health = health(&collector).await;
     assert_eq!(health.status, HealthStatusV1::Ready);

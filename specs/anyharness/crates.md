@@ -150,7 +150,9 @@ This crate owns the standalone, memory-only Desktop diagnostics collector:
 - bounded ingest, lifecycle validation, query, tail, export, and health state
 - inherited capability and control file-descriptor process seams
 - deterministic resource profiling for the standalone process
-- the internal/dogfood OTLP export adapter behind the non-default
+- the provider-neutral OTLP export adapter, compiled into every build, with a
+  compile-time export policy that limits a customer build to the lifecycle
+  record class and widens to every non-secret class under the non-default
   `internal-dogfood-export` feature
 
 It consumes `proliferate-diagnostics-protocol` as its only wire-contract

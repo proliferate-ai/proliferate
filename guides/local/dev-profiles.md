@@ -9,11 +9,33 @@ home, Desktop state, and generated Tauri identity used by that run.
 ## Commands
 
 ```bash
-make setup PROFILE=<name>
-make build # first clean worktree or after generated/Rust/frontend artifacts change
-make run PROFILE=<name>
+make dev PROFILE=<name>   # setup, build whatever is stale, run
 make dev-list
 ```
+
+`make dev` is the whole launch. It builds only what changed, which on an
+unchanged tree is a fraction of a second, so there is no reason to force a
+rebuild before starting a profile.
+
+The steps are still available separately when you want one of them on its own:
+
+```bash
+make setup PROFILE=<name>
+make dev-build            # only what a running profile consumes
+make build                # that, plus production bundles for both apps
+make run PROFILE=<name>
+```
+
+| Variable | Effect |
+|---|---|
+| `HEADLESS=1` | Run without the Desktop app: runtime, API, and hosted Web only. Required with no display, and the shape to use when running several profiles at once. |
+| `SKIP_BUILD=1` | `make dev` launches without consulting the build at all. |
+| `SKIP_RUST=1` | No cargo in this worktree; set `ANYHARNESS_DEV_RUNTIME_BIN` to a prebuilt runtime. |
+| `DEV_BUILD_ARGS=--force` | Rebuild every package regardless of whether its sources changed. |
+
+`make dev-build` holds a single-instance lock covering the Rust build too, so
+launching several profiles at once will not start several cargo builds. A second
+launch waits and says so.
 
 Optional modes are explicit:
 
@@ -29,7 +51,6 @@ letters, numbers, hyphens, or underscores, starting with a letter or number. A
 name is bound to the first worktree that uses it. Give every worktree its own
 name; do not reuse another branch's profile.
 
-`make dev PROFILE=<name>` remains a compatibility alias for `setup` plus `run`.
 The default-port `make dev-runtime`, `make dev-server`, and `make dev-desktop`
 targets are not substitutes for an isolated full-stack profile.
 

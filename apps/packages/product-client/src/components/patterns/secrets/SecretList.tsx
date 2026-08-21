@@ -30,6 +30,13 @@ export function SecretList({
   onEdit,
   onDelete,
 }: SecretListProps) {
+  const addAction = canManage && onAdd ? (
+    <Button type="button" variant="secondary" size="sm" onClick={onAdd}>
+      <Plus className="icon-paired" />
+      {addLabel}
+    </Button>
+  ) : null;
+
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border-light px-4 py-6 text-center text-body">
@@ -40,28 +47,26 @@ export function SecretList({
             <div className="text-ui-sm text-muted-foreground">{emptyDescription}</div>
           ) : null}
         </div>
-        {canManage && onAdd ? (
-          <Button type="button" variant="secondary" size="sm" onClick={onAdd}>
-            <Plus className="icon-paired" />
-            {addLabel}
-          </Button>
-        ) : null}
+        {addAction}
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-md border border-border-light">
-      {items.map((item) => (
-        <SecretRow
-          key={item.id}
-          label={item.label}
-          detail={item.detail}
-          canManage={canManage}
-          onEdit={() => onEdit(item)}
-          onDelete={() => onDelete(item)}
-        />
-      ))}
+    <div className="space-y-2">
+      <div className="overflow-hidden rounded-md border border-border-light">
+        {items.map((item) => (
+          <SecretRow
+            key={item.id}
+            label={item.label}
+            detail={item.detail}
+            canManage={canManage}
+            onEdit={() => onEdit(item)}
+            onDelete={() => onDelete(item)}
+          />
+        ))}
+      </div>
+      {addAction ? <div className="flex justify-end">{addAction}</div> : null}
     </div>
   );
 }

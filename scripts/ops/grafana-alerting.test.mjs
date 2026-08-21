@@ -276,7 +276,7 @@ test("listAlertRules issues a GET to the workspace provisioning path with a Bear
   const state = newState();
   const client = realClient(state, "sekrit-token");
   const rules = await client.listAlertRules();
-  assert.equal(rules.length, 6);
+  assert.equal(rules.length, 5);
   const req = state.requests[0];
   assert.equal(req.method, "GET");
   assert.equal(req.url, `${WORKSPACE_BASE_URL}${API}/alert-rules`);
@@ -730,7 +730,7 @@ test("listAlertRulesViaRuler flattens namespaces and maps entries", async () => 
   const rules = await client.listAlertRulesViaRuler();
   assert.equal(requests[0].method, "GET");
   assert.equal(requests[0].url, `${WORKSPACE_BASE_URL}/api/ruler/grafana/api/v1/rules`);
-  assert.equal(rules.length, 6);
+  assert.equal(rules.length, 5);
   for (let i = 0; i < rules.length; i += 1) {
     assert.equal(queryChecksum(rules[i]), queryChecksum(provisioning[i]));
   }
@@ -813,9 +813,9 @@ test("normalization is stable across ordering and timestamp noise", () => {
   assert.equal(n.title, a.title);
 });
 
-// --- Exactly six known UIDs ---------------------------------------------------
+// --- Exactly five known UIDs ---------------------------------------------------
 
-test("accepts exactly the six known UIDs", () => {
+test("accepts exactly the five known UIDs", () => {
   assert.doesNotThrow(() => verifyUidAllowlist(KNOWN_UIDS));
 });
 
@@ -865,7 +865,7 @@ test("apply refuses when live matches the receipt but drifted from the checked-i
   const pristine = liveRulesFixture();
   const repoRoot = fixtureRepo(pristine);
   const drifted = liveRulesFixture();
-  drifted.find((r) => r.uid === "cfrmh7d7od8g0c").data = [{ refId: "A", model: { expr: "PRE-DRIFTED" } }];
+  drifted.find((r) => r.uid === "cfrmh7f2sbe2od").data = [{ refId: "A", model: { expr: "PRE-DRIFTED" } }];
   const state = newState(drifted);
   const client = realClient(state);
   // Craft a receipt that matches the drifted live state (as a same-session
@@ -885,7 +885,7 @@ test("apply refuses when live matches the receipt but drifted from the checked-i
   );
   await assert.rejects(
     runApply({ client, secretResolver: async () => "s", receiptPath, repoRoot }),
-    /drifted from the checked-in definition.*cfrmh7d7od8g0c/,
+    /drifted from the checked-in definition.*cfrmh7f2sbe2od/,
   );
   assert.equal(state.requests.filter((r) => r.method !== "GET").length, 0);
 });

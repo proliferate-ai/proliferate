@@ -2,10 +2,13 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  HOME_MODEL_GATE_BLOCKED_REASONS,
+  type HomeModelGate,
+} from "#product/lib/domain/home/home-model-gate";
 import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
-  ModelAvailabilityState,
 } from "#product/lib/domain/home/home-next-launch";
 import { useHomeNextState } from "#product/hooks/home/derived/use-home-next-state";
 
@@ -15,9 +18,11 @@ const stateMocks = vi.hoisted(() => {
     modelRegistries: [],
     effectiveModelSelection: { kind: "codex", modelId: "gpt-5.4" },
     selectedModel: null,
-    isLoading: false,
+    isCatalogLoading: false,
+    hasKnownAgents: true,
     error: null,
-    modelAvailabilityState: "launchable",
+    modelGate: { kind: "launchable" },
+    retryModelObservation: () => {},
   } as any;
   const repository = {
     repositories: [],
@@ -85,7 +90,7 @@ vi.mock("#product/hooks/compute/derived/use-compute-target-options", () => ({
 }));
 
 function resetMocks() {
-  stateMocks.model.modelAvailabilityState = "launchable";
+  stateMocks.model.modelGate = { kind: "launchable" };
   stateMocks.model.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
   stateMocks.repository.selectedRepository = {
     sourceRoot: "/repo",
@@ -148,20 +153,21 @@ describe("useHomeNextState", () => {
   });
 
   it("does not surface model availability as target disabled copy", () => {
-    for (const modelAvailabilityState of [
-      "loading",
-      "load_error",
-      "target_unobserved",
-      "no_launchable_model",
-      "launchable",
-    ] satisfies ModelAvailabilityState[]) {
-      stateMocks.model.modelAvailabilityState = modelAvailabilityState;
+    const gates: HomeModelGate[] = [
+      { kind: "launchable" },
+      { kind: "selection_required" },
+      ...HOME_MODEL_GATE_BLOCKED_REASONS.map((reason) => (
+        { kind: "blocked", reason } as const
+      )),
+    ];
+    for (const modelGate of gates) {
+      stateMocks.model.modelGate = modelGate;
       const { result, unmount } = renderHomeNextState();
 
+      // `toBeNull()` is the whole assertion: it dominates any not.toBe on the
+      // same value, and the three literals that used to follow it appear
+      // nowhere in the repo, so no render could ever have failed them.
       expect(result.current.targetDisabledReason).toBeNull();
-      expect(result.current.targetDisabledReason).not.toBe("Loading models");
-      expect(result.current.targetDisabledReason).not.toBe("Couldn't load models");
-      expect(result.current.targetDisabledReason).not.toBe("No ready models");
 
       unmount();
     }

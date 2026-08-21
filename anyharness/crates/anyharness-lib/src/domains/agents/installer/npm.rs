@@ -1,14 +1,16 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use super::downloads::activate_local_tree;
 use super::managed_npm::{
     apply_npm_version_override, installed_npm_package_version, managed_npm_install_issue,
     npm_package_version, source_build_install_issue, write_managed_npm_source_marker,
 };
-use super::downloads::activate_local_tree;
+use super::npm_platform::npm_program_name;
+pub(super) use super::npm_platform::platform_npm_bin_relpath;
 use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::model::ArtifactRole;
-use crate::integrations::agent_cli::executable::make_executable;
+use crate::integrations::agent_cli::executable::{make_executable, platform_binary_filename};
 use crate::integrations::agent_cli::launcher::{
     generate_launcher_script, generate_launcher_script_atomic,
 };
@@ -36,7 +38,10 @@ pub(super) fn install_managed_npm_package(
     let exec_relpath: PathBuf = if let Some(binary_name) = source_build_binary_name {
         platform_binary_filename(binary_name)
     } else {
-        executable_relpath.to_path_buf()
+        // `executable_relpath` names npm's unix `.bin` shim; on windows the
+        // launcher must exec the `.cmd` sibling npm's cmd-shim also writes
+        // (see `platform_npm_bin_relpath`), not the bare unix shim.
+        platform_npm_bin_relpath(executable_relpath)
     };
     let active_exec = managed_dir.join(&exec_relpath);
 
@@ -147,7 +152,11 @@ fn stage_and_swap_managed_npm_tree(
         if let Some(binary_name) = source_build_binary_name {
             install_managed_source_build_binary(versioned_package, &staging_dir, binary_name)?;
         } else if let Some(package_subdir) = package_subdir {
-            install_managed_npm_package_from_subdir(versioned_package, package_subdir, &staging_dir)?;
+            install_managed_npm_package_from_subdir(
+                versioned_package,
+                package_subdir,
+                &staging_dir,
+            )?;
         } else {
             install_npm_package_into_prefix(versioned_package, &staging_dir)?;
         }
@@ -385,7 +394,7 @@ fn resolve_npm_package_subdir(
 fn pack_npm_package_dir(package_dir: &Path, staging_root: &Path) -> Result<PathBuf, InstallError> {
     let output = run_command_capture(
         "npm",
-        Command::new("npm")
+        Command::new(npm_program_name())
             .arg("pack")
             .arg("--pack-destination")
             .arg(staging_root)
@@ -471,7 +480,7 @@ fn build_cargo_binary_from_source(
 fn install_npm_package_into_prefix(package: &str, managed_dir: &Path) -> Result<(), InstallError> {
     run_command_capture(
         "npm",
-        Command::new("npm")
+        Command::new(npm_program_name())
             .args(["install", "--no-audit", "--no-fund", "--prefix"])
             .arg(managed_dir)
             .arg(package)
@@ -479,14 +488,6 @@ fn install_npm_package_into_prefix(package: &str, managed_dir: &Path) -> Result<
             .stderr(Stdio::piped()),
     )
     .map(|_| ())
-}
-
-pub(super) fn platform_binary_filename(binary_name: &str) -> PathBuf {
-    if cfg!(windows) {
-        PathBuf::from(format!("{binary_name}.exe"))
-    } else {
-        PathBuf::from(binary_name)
-    }
 }
 
 pub(super) fn run_command_capture(

@@ -25,10 +25,6 @@ function findFiles(dir, matcher) {
   return files;
 }
 
-function pathIncludes(relPath, segment) {
-  return relPath.split("/").includes(segment);
-}
-
 const args = parseArgs();
 const version = args.version;
 const artifactsDir = args["artifacts-dir"];
@@ -40,18 +36,40 @@ if (!version || !artifactsDir || !baseUrl || !output) {
   process.exit(1);
 }
 
+// Matchers test filenames only, never directory layout: download-artifact@v8
+// extracts a single matching artifact flat (no per-artifact directory), so a
+// path-segment requirement fails exactly when only the ARM artifact exists.
 const downloads = [
   {
     key: "darwin-aarch64",
     matcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-aarch64-apple-darwin") &&
       /(aarch64|arm64).*\.dmg$/i.test(name),
   },
   {
     key: "darwin-x86_64",
+    // Intel desktop builds are paused 2026-08-20 (release-desktop.yml
+    // build-desktop matrix), so this download is expected to be absent from
+    // every run until they resume. Optional: a missing Intel installer is not
+    // a manifest-generation failure.
+    optional: true,
     matcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.dmg$/i.test(name),
+  },
+  {
+    key: "windows-x86_64",
+    // The NSIS setup.exe is the canonical Windows download, not the MSI:
+    // release-desktop.yml's publish-updater job only copies "*-setup.exe"
+    // (not "*.msi") to the downloads bucket this manifest's --base-url
+    // points at, and it is the artifact the Tauri updater expects for a
+    // "windows-x86_64" platform entry. The "-setup.exe" suffix is what
+    // separates this download from darwin-x86_64 under the filename-only
+    // matching above; no directory segment is required, so a flat extraction
+    // resolves it just as well as a nested one.
+    // Optional: the Windows leg is an opt-in beta gated behind release.yml's
+    // enable_windows_beta input (defaulted false), so a missing or failed
+    // Windows build must never fail a mac-only release.
+    optional: true,
+    matcher: (relPath, name) => /(x64|x86_64).*-setup\.exe$/i.test(name),
   },
 ];
 
@@ -67,6 +85,10 @@ for (const download of downloads) {
   const files = findFiles(artifactsDir, download.matcher);
 
   if (files.length === 0) {
+    if (download.optional) {
+      console.warn(`Skipping ${download.key}: no installer found (optional platform).`);
+      continue;
+    }
     errors.push(`Missing installer file for ${download.key}`);
     continue;
   }

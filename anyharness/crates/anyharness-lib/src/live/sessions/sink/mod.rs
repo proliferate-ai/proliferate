@@ -81,6 +81,14 @@ pub struct SessionEventSink {
     transcript_phase_debug: TranscriptPhaseDebugState,
     on_interaction_requested: Option<Arc<dyn Fn(SessionInteractionRequestedContext) + Send + Sync>>,
     on_interaction_resolved: Option<Arc<dyn Fn(SessionInteractionResolvedContext) + Send + Sync>>,
+    /// The open turn's `anyharness.turn.execute` guard.
+    ///
+    /// Replacing it (a new turn opens before the old one closed) or dropping
+    /// the sink emits an `abandoned` terminal, so a turn that vanishes is
+    /// counted rather than silently missing from the success rate. The guard
+    /// is inert in a process with no diagnostics producer, which is every
+    /// test.
+    turn_lifecycle: Option<crate::observability::lifecycle::RuntimeLifecycleOperation>,
 }
 
 impl SessionEventSink {
@@ -114,6 +122,7 @@ impl SessionEventSink {
             transcript_phase_debug: TranscriptPhaseDebugState::default(),
             on_interaction_requested: None,
             on_interaction_resolved: None,
+            turn_lifecycle: None,
         }
     }
 
@@ -148,6 +157,7 @@ impl SessionEventSink {
             transcript_phase_debug: TranscriptPhaseDebugState::default(),
             on_interaction_requested: None,
             on_interaction_resolved: None,
+            turn_lifecycle: None,
         }
     }
 

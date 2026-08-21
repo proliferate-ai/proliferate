@@ -62,6 +62,20 @@ pub fn home_dir() -> Result<PathBuf, String> {
         .map_err(|_| "Home directory not available".to_string())
 }
 
+/// `HOME`, then `USERPROFILE`, kept as raw OS strings.
+///
+/// Deliberately `var_os` rather than `var`. A non-UTF-8 home path is a
+/// perfectly valid path on unix, and `std::env::var` rejects it with
+/// `VarError::NotUnicode`, which would turn a working `~/...` expansion into a
+/// spurious "HOME is not set". `home_dir` above keeps its `String` behaviour
+/// because its callers build the app directory and already accept that
+/// constraint; this is the variant for expanding user-supplied paths.
+pub fn home_dir_os() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
 pub fn app_dir_path() -> Result<PathBuf, String> {
     if let Some(path) = dev_home_override_path() {
         return Ok(path);
@@ -291,6 +305,10 @@ fn set_app_config_api_base_url_at(
         native_dev_profile(),
     ))
 }
+
+#[cfg(all(test, unix))]
+#[path = "app_config_home_env_tests.rs"]
+mod home_env_tests;
 
 #[cfg(test)]
 mod tests {

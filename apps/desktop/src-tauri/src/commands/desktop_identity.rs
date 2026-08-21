@@ -2,7 +2,12 @@ use uuid::Uuid;
 
 use crate::app_config::{desktop_install_id_path, write_string_file_atomic};
 
-fn load_or_create_desktop_install_id() -> Result<String, String> {
+/// The stable identity of this desktop installation, created on first use.
+///
+/// One value serves both the renderer command and the diagnostics collector,
+/// so a record exported by the collector and an event reported by the app
+/// describe the same install rather than two unrelated identities.
+pub(crate) fn load_or_create_desktop_install_id() -> Result<String, String> {
     let path = desktop_install_id_path()?;
     let existing = match std::fs::read_to_string(&path) {
         Ok(value) => value.trim().to_string(),

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
@@ -13,6 +13,7 @@ import {
   buildHomeOnboardingCards,
   findHomeUnconfiguredGitHubRepository,
 } from "#product/lib/domain/home/home-screen";
+import { getSettingsSectionForHarnessKind } from "#product/lib/domain/settings/navigation-presentation";
 import { buildSettingsRepositoryEntries } from "#product/lib/domain/settings/repositories";
 import {
   buildCloudRepoSettingsHref,
@@ -20,51 +21,20 @@ import {
 } from "#product/lib/domain/settings/navigation";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
-import {
-  readPersistedString,
-  writePersistedString,
-} from "#product/lib/infra/persistence/product-storage";
-
-const HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY =
-  "proliferate.home.modelProbeCardDismissed";
-type HomeModelProbeDismissalState = "loading" | "visible" | "dismissed";
 
 // Owns the Home screen facade consumed by the component. Does not own Home Next launch flow.
 export function useHomeScreen() {
   const navigate = useNavigate();
-  const storage = useProductStorageContext();
   const { isAddingRepo } = useAddRepo();
   const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
+  // readyAgentCount below is used only for the "configure default
+  // harnesses" onboarding card; the readiness card lives in its own hook
+  // (useHomeInstallationReadiness), sourced from the live reconcile job
+  // snapshot rather than this catalog (D-R1/D-R2).
   const {
     readyAgents,
     isLoading: agentsLoading,
-    isReconciling,
   } = useAgentCatalog();
-  const [modelProbeDismissalState, setModelProbeDismissalState] =
-    useState<HomeModelProbeDismissalState>("loading");
-  useEffect(() => {
-    let cancelled = false;
-    // Bare "1" sentinel string (never JSON): read raw to preserve the existing
-    // dismissal with zero migration. A late read after unmount is discarded.
-    void readPersistedString(storage, HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY, {
-      isStale: () => cancelled,
-    }).then((result) => {
-      if (result.status === "settled") {
-        const hydratedState = result.value === "1" ? "dismissed" : "visible";
-        setModelProbeDismissalState((current) =>
-          current === "loading" ? hydratedState : current
-        );
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [storage]);
-  const dismissModelProbeCard = useCallback(() => {
-    setModelProbeDismissalState("dismissed");
-    void writePersistedString(storage, HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY, "1");
-  }, [storage]);
   const { cloudActive } = useCloudAvailabilityState();
   const {
     data: repoConfigs,
@@ -118,7 +88,7 @@ export function useHomeScreen() {
     }),
     [repoConfigs?.repositories, repositories],
   );
-  function handleHomeAction(actionId: HomeActionId) {
+  function handleHomeAction(actionId: HomeActionId, options?: { harnessKind?: string | null }) {
     switch (actionId) {
       case "add-repository":
         openAddRepoFlow();
@@ -126,9 +96,16 @@ export function useHomeScreen() {
       case "agent-defaults":
         navigate(buildSettingsHref({ section: "agent-claude" }));
         return;
-      case "agent-settings":
-        navigate(buildSettingsHref({ section: "agent-claude" }));
+      case "agent-settings": {
+        // Land on an agent the caller actually means. The terminal
+        // "no agents are supported" notice is only honest if the pane it
+        // opens shows an unsupported agent, not whatever Claude reports.
+        const section = options?.harnessKind
+          ? getSettingsSectionForHarnessKind(options.harnessKind)
+          : null;
+        navigate(buildSettingsHref({ section: section ?? "agent-claude" }));
         return;
+      }
       case "repository-settings": {
         const firstRepository = repositoryToConfigure ?? repositories[0];
         if (firstRepository?.gitOwner && firstRepository.gitRepoName) {
@@ -147,11 +124,6 @@ export function useHomeScreen() {
     }
   }
 
-  const readyHarnessKinds = useMemo(
-    () => readyAgents.map((agent) => agent.kind),
-    [readyAgents],
-  );
-
   // Ack-gated onboarding "setting up" step (agent-auth.md, Proof C7). The timer
   // step and the evidence-bound card are mutually exclusive on the
   // agentAuthEvidencePanes flag: exactly one is ever live, the other dormant.
@@ -164,17 +136,5 @@ export function useHomeScreen() {
     authSetupEvidence,
     isAddingRepo,
     handleHomeAction,
-    // Model-probe card inputs (UX spec §10). The model count itself lives with
-    // the home model-selection state, so the screen combines these with its
-    // model groups via resolveHomeModelProbeCardState.
-    modelProbeInputs: modelProbeDismissalState === "loading"
-      ? undefined
-      : {
-        dismissed: modelProbeDismissalState === "dismissed",
-        agentsLoading,
-        isReconciling,
-        harnessKinds: readyHarnessKinds,
-      },
-    dismissModelProbeCard,
   };
 }

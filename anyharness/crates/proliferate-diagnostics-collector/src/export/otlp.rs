@@ -16,6 +16,8 @@ use proliferate_diagnostics_protocol::v1::types::{
 };
 use serde_json::{json, Map, Value};
 
+use super::policy::{ExportPolicy, EXPORT_POLICY};
+
 const SCOPE_NAME: &str = "proliferate.diagnostics";
 const TRACE_ID_HEX_LENGTH: usize = 32;
 
@@ -30,15 +32,34 @@ struct ResourceKey {
 
 /// Encodes accepted records into one OTLP logs request body.
 ///
-/// Records classified `secret` are dropped rather than encoded. Ingest already
-/// rejects them, so this is a second fence rather than a new privacy path; the
-/// count of what it dropped is returned so exporter health can report it.
-pub(super) fn encode_batch(records: &[CollectorAcceptedRecordV1]) -> (Value, u64) {
+/// This is the second policy fence. A record the build's [`ExportPolicy`] does
+/// not admit is dropped rather than encoded: `secret` under every policy,
+/// plus `detailed` and anything not `operational` in a customer build. The
+/// queue filter in `handle.rs` already refused those, so nothing normally
+/// reaches this check; it exists so a future call site that finds another way
+/// into the encoder still cannot smuggle one past. The count of what it
+/// refused is returned so exporter health can report it.
+pub(super) fn encode_batch(
+    install_id: Option<&str>,
+    records: &[CollectorAcceptedRecordV1],
+) -> (Value, u64) {
+    encode_batch_with_policy(EXPORT_POLICY, install_id, records)
+}
+
+/// The policy-parameterised encoder. Production always passes the compiled
+/// [`EXPORT_POLICY`]; tests pass both so a default-features CI run still
+/// covers the detailed encoding a dogfood build performs and still proves the
+/// customer build refuses it.
+pub(super) fn encode_batch_with_policy(
+    policy: ExportPolicy,
+    install_id: Option<&str>,
+    records: &[CollectorAcceptedRecordV1],
+) -> (Value, u64) {
     let dev_tag = super::dev_tag();
     let mut grouped: BTreeMap<ResourceKey, BTreeMap<SchemaVersionV1, Vec<Value>>> = BTreeMap::new();
     let mut refused = 0_u64;
     for accepted in records {
-        if accepted.record.privacy == PrivacyClassificationV1::Secret {
+        if !policy.admits(&accepted.record) {
             refused += 1;
             continue;
         }
@@ -53,14 +74,14 @@ pub(super) fn encode_batch(records: &[CollectorAcceptedRecordV1]) -> (Value, u64
             .or_default()
             .entry(accepted.record.schema_version)
             .or_default()
-            .push(log_record(accepted));
+            .push(log_record(policy, accepted));
     }
 
     let resource_logs = grouped
         .into_iter()
         .map(|(key, scopes)| {
             json!({
-                "resource": { "attributes": resource_attributes(&key, dev_tag) },
+                "resource": { "attributes": resource_attributes(&key, dev_tag, install_id) },
                 "scopeLogs": scopes
                     .into_iter()
                     .map(|(version, log_records)| json!({
@@ -77,7 +98,11 @@ pub(super) fn encode_batch(records: &[CollectorAcceptedRecordV1]) -> (Value, u64
     (json!({ "resourceLogs": resource_logs }), refused)
 }
 
-fn resource_attributes(key: &ResourceKey, dev_tag: Option<&str>) -> Vec<Value> {
+fn resource_attributes(
+    key: &ResourceKey,
+    dev_tag: Option<&str>,
+    install_id: Option<&str>,
+) -> Vec<Value> {
     let mut attributes = vec![
         attribute("service.name", string_value(component_name(key.component))),
         attribute("service.version", string_value(&key.release)),
@@ -88,6 +113,18 @@ fn resource_attributes(key: &ResourceKey, dev_tag: Option<&str>) -> Vec<Value> {
         ),
         attribute("telemetry.sdk.name", string_value(SCOPE_NAME)),
     ];
+    if let Some(install) = install_id {
+        // The stable identity of the installation, stamped by the collector
+        // from a value its host passed in. It is not a wire-protocol field, so
+        // no producer can set, spoof, or omit it, and every record from one
+        // install carries the same value whatever the producer boot. It is
+        // what turns per-record counts into "how many installs saw this".
+        //
+        // Pseudonymous by construction: a locally generated UUID with no
+        // account, machine, or user identity in it, and absent entirely when
+        // the host has none to give.
+        attributes.push(attribute("proliferate.install_id", string_value(install)));
+    }
     if let Some(tag) = dev_tag {
         // Identifies whose desktop produced the record when teammates share
         // one dogfood environment. Absent unless configured.
@@ -96,7 +133,7 @@ fn resource_attributes(key: &ResourceKey, dev_tag: Option<&str>) -> Vec<Value> {
     attributes
 }
 
-fn log_record(accepted: &CollectorAcceptedRecordV1) -> Value {
+fn log_record(policy: ExportPolicy, accepted: &CollectorAcceptedRecordV1) -> Value {
     let record = &accepted.record;
     let observed = nanos(&accepted.accepted_timestamp);
     let mut log = Map::new();
@@ -117,7 +154,7 @@ fn log_record(accepted: &CollectorAcceptedRecordV1) -> Value {
     if let Some(trace_id) = record.trace_id.as_deref().filter(|value| is_trace_id(value)) {
         log.insert("traceId".to_owned(), json!(trace_id.to_ascii_lowercase()));
     }
-    log.insert("attributes".to_owned(), json!(attributes(accepted)));
+    log.insert("attributes".to_owned(), json!(attributes(policy, accepted)));
     Value::Object(log)
 }
 
@@ -131,7 +168,7 @@ fn body_text(record: &ProducerRecordV1) -> &str {
         .unwrap_or(record.name.as_str())
 }
 
-fn attributes(accepted: &CollectorAcceptedRecordV1) -> Vec<Value> {
+fn attributes(policy: ExportPolicy, accepted: &CollectorAcceptedRecordV1) -> Vec<Value> {
     let record = &accepted.record;
     let mut attributes = vec![
         attribute("proliferate.name", string_value(&record.name)),
@@ -193,8 +230,9 @@ fn attributes(accepted: &CollectorAcceptedRecordV1) -> Vec<Value> {
     push_detailed_attributes(&mut attributes, record);
     for argument in &record.arguments {
         // Ingest rejects secret-classified arguments; refuse them again rather
-        // than trust the retained encoding.
-        if argument.privacy == PrivacyClassificationV1::Secret {
+        // than trust the retained encoding, and in a customer build hold every
+        // argument to the same `operational` bar the record itself passed.
+        if !policy.admits_privacy(argument.privacy) {
             continue;
         }
         attributes.push(attribute(

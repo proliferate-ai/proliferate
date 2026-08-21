@@ -201,8 +201,9 @@ async function runSessionCreationMaterialization({
   // Run-time refresh of the target's observed launch options: the runtime
   // exact-validates control keys against raw observed ids, so the merged
   // selection (which may carry pre-cutover normalized keys from persisted
-  // preferences) is filtered to the current observation. Omission remains
-  // omission; on fetch failure nothing validatable exists, so send none.
+  // preferences) is completed from the selected model's defaults and filtered
+  // to that exact scope. On fetch failure nothing validatable exists, so send
+  // none.
   const launchOptionsObservation = await getAgentLaunchOptions(
     targetConnection,
     options.agentKind,
@@ -212,7 +213,7 @@ async function runSessionCreationMaterialization({
     ...(frozenDefaultLiveSessionControlValuesByAgentKind[options.agentKind] ?? {}),
     ...(options.launchControlValues ?? {}),
     ...rawConfigValuesFromIntentSnapshot(configIntentSnapshot),
-  }, launchOptionsObservation);
+  }, launchOptionsObservation, options.modelId);
   // The options fetch widened the window since the last supersession check;
   // re-check before committing a runtime session.
   if (await discardIfSuperseded(pendingSessionId, lifecycle)) {

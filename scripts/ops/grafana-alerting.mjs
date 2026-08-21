@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-// Operator tooling for the six production Grafana alert rules and the dark
+// Operator tooling for the five production Grafana alert rules (ECS CPU
+// retired 2026-08-21, see guides/operating/production-alerts.md) and the dark
 // issue-tracker webhook contact point (support-system slice E1).
 // Contract: guides/operating/production-alerts.md
 // check is offline; export/apply/restore are live and refuse the network
@@ -35,11 +36,13 @@ const CONTACT_REL = "server/infra/observability/grafana/issue-tracker-contact.js
 export { CONTACT_POINT_NAME, TARGET };
 export const WEBHOOK_SECRET_REF = "issue-tracker/app.grafanaWebhookSecret";
 
-// The six immutable rule identities. The one log-backed rule is flagged.
+// The five immutable rule identities. The one log-backed rule is flagged.
+// ECS CPU > 90% for 15m (cfrmh7d7od8g0c) was retired 2026-08-21: infra
+// symptom, not a product promise. It remains on the dashboard for visibility
+// but is no longer a page. See guides/operating/production-alerts.md.
 export const KNOWN_RULES = Object.freeze([
   { uid: "dfrmh7bc4yqrkf", title: "ALB 5xx > 10 in 5m", severity: "critical", log: false },
   { uid: "bfrmh7c7ecbnkb", title: "API p95 Latency > 5s for 10m", severity: "critical", log: false },
-  { uid: "cfrmh7d7od8g0c", title: "ECS CPU > 90% for 15m", severity: "critical", log: false },
   { uid: "bfrmh7e7x2k8wd", title: "CRITICAL_FAILURE in prod logs", severity: "critical", log: true },
   { uid: "cfrmh7f2sbe2od", title: "Analytics ingest errors", severity: "critical", log: false },
   { uid: "cfrmh7fttw4jke", title: "Server error rate > 10 in 10m", severity: "warning", log: false },
@@ -153,7 +156,7 @@ export function verifyUidAllowlist(uids) {
   }
   const missing = KNOWN_UIDS.filter((uid) => !seen.has(uid));
   if (missing.length > 0) {
-    throw new Error(`Expected exactly the six known UIDs; missing: ${missing.join(", ")}`);
+    throw new Error(`Expected exactly the five known UIDs; missing: ${missing.join(", ")}`);
   }
   if (seen.size !== KNOWN_UIDS.length) {
     throw new Error(`Expected exactly ${KNOWN_UIDS.length} UIDs, got ${seen.size}`);
@@ -163,7 +166,7 @@ export function verifyUidAllowlist(uids) {
 export function assertApprovedMetadata(rule) {
   const known = KNOWN_RULES.find((r) => r.uid === rule.uid);
   if (!known) {
-    throw new Error(`Rule ${rule.uid} is not in the six-rule allowlist`);
+    throw new Error(`Rule ${rule.uid} is not in the five-rule allowlist`);
   }
   if (rule.title !== known.title) {
     throw new Error(`Rule ${rule.uid} title mismatch: expected "${known.title}", got "${rule.title}"`);
@@ -548,7 +551,7 @@ async function main() {
   switch (parsed.command) {
     case "check": {
       runCheck({ snapshotPath: parsed.snapshot || null });
-      safeLog("check passed: six-rule overlay + dark contact template are consistent and safe.");
+      safeLog("check passed: five-rule overlay + dark contact template are consistent and safe.");
       return;
     }
     case "export": {

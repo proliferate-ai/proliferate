@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-08-19.1",
+  "catalogVersion": "2026-08-20.1",
   "probedAgainst": {
-    "registryVersion": "2026-08-17.1"
+    "registryVersion": "2026-08-20.1"
   },
   "generatedAt": "2026-08-17T20:49:16.584Z",
   "agents": [
@@ -38,6 +38,21 @@
                 "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.234/linux-x64/claude",
                 "sha256": "3473601ea695d5bf769c5b202844d4cb4fbf723ae995450fcb6973204775c84a",
                 "downloadSizeBytes": 328358192
+              },
+              "linux_arm64": {
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.234/linux-arm64/claude",
+                "sha256": "24adda673591cd8345b03ec8245915bb151a259a1ebc3ef23649b57ba944aaa2",
+                "downloadSizeBytes": 325507304
+              },
+              "windows_x64": {
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.234/win32-x64/claude.exe",
+                "sha256": "3f877e78543e2cb4daad61d18f06cc11028f9dffc1afd41ccf1f8f84cf02eb1b",
+                "downloadSizeBytes": 324028576
+              },
+              "windows_arm64": {
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.234/win32-arm64/claude.exe",
+                "sha256": "ed6cc3d0218e4b27f3691e3832837d814a5274b02755c34aedeb74e3db65e8d4",
+                "downloadSizeBytes": 311927456
               }
             }
           }
@@ -286,6 +301,24 @@
                 "sha256": "0246e2e773834e07f0fb5249ed6ebad12e4591e608f8c7bb97dd6a9690544c36",
                 "expectedBinary": "codex-x86_64-unknown-linux-musl",
                 "downloadSizeBytes": 98970270
+              },
+              "linux_arm64": {
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.147.0/codex-aarch64-unknown-linux-musl.tar.gz",
+                "sha256": "eb677c80f666b1ab8b4b1d083b66e8d614b1281d960bb6f9fd8ca98f58b38b90",
+                "expectedBinary": "codex-aarch64-unknown-linux-musl",
+                "downloadSizeBytes": 91607658
+              },
+              "windows_x64": {
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.147.0/codex-x86_64-pc-windows-msvc.exe.tar.gz",
+                "sha256": "7c47d4dc9202569d85ef2cbe9203dd2e75c326f5085e3854487a740339a8bdcd",
+                "expectedBinary": "codex-x86_64-pc-windows-msvc.exe",
+                "downloadSizeBytes": 99655443
+              },
+              "windows_arm64": {
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.147.0/codex-aarch64-pc-windows-msvc.exe.tar.gz",
+                "sha256": "c3a7da6cd2ed2a4e3c85a0b4f0b254cde81b51a9e3600530978fce689807ed07",
+                "expectedBinary": "codex-aarch64-pc-windows-msvc.exe",
+                "downloadSizeBytes": 91259737
               }
             },
             "args": []

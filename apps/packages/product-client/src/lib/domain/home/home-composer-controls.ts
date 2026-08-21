@@ -8,7 +8,10 @@ import type {
   ModelSelectorSelection,
 } from "#product/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
-import type { ModelAvailabilityState } from "#product/lib/domain/home/home-next-launch";
+import {
+  resolveHomeModelSelectorAvailability,
+  type HomeModelGate,
+} from "#product/lib/domain/home/home-model-gate";
 
 /**
  * Adapters that let the home screen drive the SAME composer controls the chat
@@ -33,12 +36,18 @@ export const HOME_COMPOSER_PROMPT_CAPABILITIES: PromptCapabilities = {
 export function buildHomeModelSelectorProps({
   groups,
   selectedModel,
-  availabilityState,
+  gate,
+  isCatalogLoading,
+  hasKnownAgents,
   onSelect,
 }: {
   groups: AgentModelGroup[];
   selectedModel: AgentModelInfo | null;
-  availabilityState: ModelAvailabilityState;
+  gate: HomeModelGate;
+  /** The agent catalog's own HTTP read — NOT an install and NOT a probe. */
+  isCatalogLoading: boolean;
+  /** The catalog knows of at least one agent, observed models or not. */
+  hasKnownAgents: boolean;
   onSelect: (selection: ModelSelectorSelection) => void;
 }): ModelSelectorProps {
   return {
@@ -67,8 +76,12 @@ export function buildHomeModelSelectorProps({
         isUnsupported: false,
       })),
     })),
-    hasAgents: groups.length > 0,
-    isLoading: availabilityState === "loading",
+    // Deliberately NOT `groups.length > 0`: an agent that has not reported
+    // models yet still exists, and deriving "No agents" from an empty group
+    // list is what made a first-run machine claim it had none.
+    hasAgents: hasKnownAgents,
+    isLoading: isCatalogLoading,
+    availability: resolveHomeModelSelectorAvailability(gate),
     onSelect,
   };
 }

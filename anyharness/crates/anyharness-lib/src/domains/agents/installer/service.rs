@@ -7,7 +7,7 @@ use super::pinned;
 use super::progress::{InstallProgressPhase, InstallProgressReporter};
 use crate::domains::agents::installer::seed;
 use crate::domains::agents::model::*;
-use crate::domains::agents::readiness::paths::artifact_root;
+use crate::domains::agents::readiness::paths::managed_pinned_binary_path;
 use crate::integrations::agent_cli::executable::is_valid_executable;
 use crate::integrations::agent_cli::launcher::LauncherError;
 
@@ -129,6 +129,9 @@ impl From<LauncherError> for InstallError {
                 program: "launcher".into(),
                 message: error.to_string(),
             },
+            LauncherError::UnsupportedBatchValue(value) => Self::InvalidInstallSpec(format!(
+                "windows batch launcher cannot embed a literal '\"' in value: {value:?}"
+            )),
         }
     }
 }
@@ -377,7 +380,7 @@ fn install_pinned_role(
     runtime_home: &Path,
     reporter: Option<&InstallProgressReporter>,
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
-    let target_path = artifact_root(runtime_home, kind, role).join(kind.as_str());
+    let target_path = managed_pinned_binary_path(runtime_home, kind, role);
     if is_valid_executable(&target_path) && !options.reinstall {
         reporter.map(|reporter| reporter.report(role, InstallProgressPhase::Skipped, 0, None));
         return Ok(None);

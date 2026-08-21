@@ -25,6 +25,12 @@ export interface CloudHarnessLaunchControl {
   values: CloudHarnessLaunchControlValue[];
 }
 
+export interface CloudHarnessLaunchModelControls {
+  modelId: string;
+  controls: CloudHarnessLaunchControl[];
+  defaultControlValues: Record<string, string>;
+}
+
 export interface CloudHarnessLaunchOptionsResponse {
   harnessKind: string;
   basisRevision: string;
@@ -37,6 +43,7 @@ export interface CloudHarnessLaunchOptionsResponse {
       modelId: string | null;
       controlValues: Record<string, string>;
     };
+    modelControls?: CloudHarnessLaunchModelControls[];
   } | null;
   observedAt: string | null;
   probeAttemptedAt: string;

@@ -8,6 +8,7 @@ import { useSessionModelFallbackAction } from "#product/hooks/sessions/workflows
 import { presentSessionError } from "#product/domain/chats/transcript/session-error-presentation";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useModelSupportStore } from "#product/stores/chat/model-support-store";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useConnectivityStore } from "#product/stores/infra/connectivity-store";
 
@@ -23,6 +24,7 @@ export function SessionErrorItem({
   const setFallbackModel = useSessionModelFallbackAction();
   const showToast = useToastStore((state) => state.show);
   const showErrorToast = useToastStore((state) => state.showError);
+  const requestModelPicker = useModelSupportStore((state) => state.requestPicker);
   const [isApplyingFallback, setIsApplyingFallback] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
 
@@ -109,7 +111,10 @@ export function SessionErrorItem({
           <div className="mt-0.5 text-muted-foreground">{presentation.description}</div>
         </div>
       </div>
-      {(fallback && sessionId) || isNetworkError || presentation.technicalDetail ? (
+      {(fallback && sessionId)
+        || isNetworkError
+        || presentation.recoveryAction
+        || presentation.technicalDetail ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 pl-6">
           {isNetworkError && sessionId && (
             <Button
@@ -136,6 +141,17 @@ export function SessionErrorItem({
             >
               <RefreshCw className="icon-paired" />
               Switch to {presentation.fallbackModelLabel ?? "fallback model"}
+            </Button>
+          )}
+          {presentation.recoveryAction === "choose_model" && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={requestModelPicker}
+              className="px-2.5 text-chat"
+            >
+              Choose model
             </Button>
           )}
           {presentation.technicalDetail && (

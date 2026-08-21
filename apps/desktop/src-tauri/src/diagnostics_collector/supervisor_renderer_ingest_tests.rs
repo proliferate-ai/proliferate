@@ -15,6 +15,7 @@ async fn renderer_ingest_forced_write_failure_preserves_the_stopped_error() {
         fallback.clone(),
         "test".to_string(),
         "test".to_string(),
+        None,
     );
 
     assert_eq!(
@@ -50,6 +51,7 @@ async fn renderer_ingest_post_dispatch_unavailable_never_writes_fallback() {
         fallback.clone(),
         "test".to_string(),
         "test".to_string(),
+        None,
     );
     let generation = 7;
     let collector_boot_id = uuid::Uuid::new_v4().to_string();
@@ -96,6 +98,7 @@ async fn renderer_ingest_ready_coherent_success_writes_no_fallback() {
         fallback.clone(),
         "test".to_string(),
         "test".to_string(),
+        None,
     );
     let collector_boot_id = uuid::Uuid::new_v4().to_string();
     let generation = 9;
@@ -151,6 +154,7 @@ async fn renderer_ingest_post_dispatch_rejected_protocol_boot_and_replaced_write
         fallback.clone(),
         "test".to_string(),
         "test".to_string(),
+        None,
     );
 
     let collector_boot_id = uuid::Uuid::new_v4().to_string();
@@ -267,6 +271,7 @@ async fn renderer_ingest_post_dispatch_deadline_writes_no_fallback() {
         fallback.clone(),
         "test".to_string(),
         "test".to_string(),
+        None,
     );
     let collector_boot_id = uuid::Uuid::new_v4().to_string();
     let generation = 13;

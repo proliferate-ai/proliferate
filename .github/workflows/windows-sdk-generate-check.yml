@@ -1,0 +1,168 @@
+name: Windows SDK generate check
+
+# `anyharness/sdk`'s `generate:openapi` script used to be a POSIX shell one
+# liner (`mkdir -p generated src/generated && cd ../.. && cargo run ... > file`).
+# npm runs package scripts through cmd.exe on Windows, where that command fails,
+# and that is the stated reason desktop Windows releases were disabled in
+# 3d3c0504b8 ("until the SDK generation step is Windows-safe").
+#
+# This is the regression guard, and it builds nothing.
+#
+# The guard runs the real `npm run generate:openapi`, not the node script
+# directly, because the regression being guarded lives in package.json. Reverting
+# package.json to the shell form must turn this red, and running the script
+# directly would leave it green.
+#
+# The discriminator is the DIRECTORIES, not the exit code. The runtime is
+# deliberately absent in the windows job, so the script fails either way; what
+# separates a working package script from a broken one is whether the two
+# directories exist afterwards. Under the shell form, cmd fails at mkdir and the
+# && chain never runs, so they do not.
+#
+# The windows job cannot exercise the cargo invocation: Node refuses to spawn
+# .cmd stubs without a shell (CVE-2024-27980) and a real cargo run would mean a
+# full Windows runtime build. The linux job covers invoke, validate and write
+# with shell stubs. The two together cover the whole script.
+
+on:
+  pull_request:
+    paths:
+      - "scripts/generate-anyharness-openapi.mjs"
+      - "anyharness/sdk/package.json"
+      - "Makefile"
+      - ".github/workflows/windows-sdk-generate-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-sdk-generate-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: package script on windows
+    runs-on: windows-latest
+    # If cmd's `md` ever starts accepting the POSIX form, a reverted script would
+    # reach `cargo run`, and cargo is on this image. That turns a 20 second guard
+    # into a full Windows runtime build. Cap it.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      # Informational and falsifiable. Driven from bash so the assertion is
+      # ours rather than cmd's errorlevel semantics, and so the real error text
+      # reaches the log.
+      - name: Negative control, the POSIX form does not work under cmd.exe
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/oldform"
+          cd "$RUNNER_TEMP/oldform"
+          echo "cmd.exe says:"
+          cmd //c "mkdir -p generated src/generated" 2>&1 || true
+          echo "what exists afterwards:"
+          ls -la
+          if [ -d generated ] && [ -d "src/generated" ]; then
+            echo "UNEXPECTED: cmd.exe created both directories, this guard is no longer meaningful"
+            exit 1
+          fi
+          echo "confirmed: cmd.exe did not create the directories the POSIX form asks for"
+
+      # Both directories are checked in, so they have to go before the run or
+      # the assertion below would pass without the package script doing anything.
+      - name: Remove the generated directories
+        shell: bash
+        run: rm -rf anyharness/sdk/generated anyharness/sdk/src/generated
+
+      - name: Run the real package script
+        shell: cmd
+        working-directory: anyharness/sdk
+        env:
+          CARGO: this-runtime-does-not-exist
+        # `call` matters: npm is a .cmd shim, and without it the batch file
+        # terminates at npm and never reaches the exit. Exit 0 unconditionally,
+        # because the runtime is deliberately absent so the script must fail.
+        # The next step is the judge.
+        run: |
+          call npm run generate:openapi
+          exit /b 0
+
+      - name: Assert the package script recreated both directories
+        shell: bash
+        run: |
+          fail=0
+          test -d anyharness/sdk/generated || { echo "generated/ was not created"; fail=1; }
+          test -d anyharness/sdk/src/generated || { echo "src/generated/ was not created"; fail=1; }
+          test ! -e anyharness/sdk/generated/openapi.json || { echo "a schema was written despite the runtime being absent"; fail=1; }
+          test ! -e "anyharness/sdk/-p" || { echo "the POSIX flag leaked into a directory name"; fail=1; }
+          if [ "$fail" -ne 0 ]; then
+            echo "the package script is not windows-safe"
+            ls -la anyharness/sdk
+            exit 1
+          fi
+          echo "ok: npm run generate:openapi created both directories on windows"
+
+  linux:
+    name: invoke and write path with a stubbed runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      # Written with a quoted heredoc rather than printf, so the JSON's double
+      # quotes reach the stub intact.
+      - name: Stub the runtime
+        run: |
+          mkdir -p "$RUNNER_TEMP/stub"
+          cat > "$RUNNER_TEMP/stub/cargo" <<'STUB'
+          #!/bin/sh
+          echo '{"openapi":"3.0.0","info":{"title":"stub","version":"1"},"paths":{}}'
+          STUB
+          printf '#!/bin/sh\nexit 101\n' > "$RUNNER_TEMP/stub/cargo-fail"
+          printf '#!/bin/sh\necho not json\n' > "$RUNNER_TEMP/stub/cargo-garbage"
+          chmod +x "$RUNNER_TEMP/stub/cargo" "$RUNNER_TEMP/stub/cargo-fail" "$RUNNER_TEMP/stub/cargo-garbage"
+          "$RUNNER_TEMP/stub/cargo" | node -e "let b='';process.stdin.on('data',d=>b+=d).on('end',()=>JSON.parse(b))"
+          echo "ok: the stub itself emits valid JSON"
+
+      - name: Happy path writes a parseable schema
+        working-directory: anyharness/sdk
+        run: |
+          # Remove the tracked schema first. Without this a script that did
+          # nothing at all would still find a parseable file and pass.
+          rm -f generated/openapi.json
+          CARGO="$RUNNER_TEMP/stub/cargo" npm run generate:openapi
+          node -e "JSON.parse(require('fs').readFileSync('generated/openapi.json','utf8'))"
+          grep -q '"title":"stub"' generated/openapi.json \
+            || { echo "the file on disk is not what the stub emitted"; exit 1; }
+          echo "ok: the stub's schema was written and parses"
+
+      - name: A failing runtime must not truncate an existing schema
+        working-directory: anyharness/sdk
+        run: |
+          before="$(sha256sum generated/openapi.json | cut -d' ' -f1)"
+          if CARGO="$RUNNER_TEMP/stub/cargo-fail" npm run generate:openapi; then
+            echo "a failing runtime should have failed the script"
+            exit 1
+          fi
+          after="$(sha256sum generated/openapi.json | cut -d' ' -f1)"
+          [ "$before" = "$after" ] || { echo "the existing schema was clobbered by a failed run"; exit 1; }
+          echo "ok: existing schema survived a failed runtime, sha $after"
+
+      - name: Invalid output must be rejected before it is written
+        working-directory: anyharness/sdk
+        run: |
+          before="$(sha256sum generated/openapi.json | cut -d' ' -f1)"
+          if CARGO="$RUNNER_TEMP/stub/cargo-garbage" npm run generate:openapi; then
+            echo "non-JSON output should have failed the script"
+            exit 1
+          fi
+          after="$(sha256sum generated/openapi.json | cut -d' ' -f1)"
+          [ "$before" = "$after" ] || { echo "invalid output reached disk"; exit 1; }
+          echo "ok: invalid output rejected, sha unchanged"

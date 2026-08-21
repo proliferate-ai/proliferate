@@ -204,10 +204,7 @@ async def put_workflow_invocation_v2(
                 updated_at=created_at,
             )
         )
-        normalized_invocation_json = cast(
-            dict[str, object],
-            response.model_dump(by_alias=True, mode="json", exclude_none=True),
-        )
+        normalized_invocation_json = response.frozen_json()
         canonical_json(normalized_invocation_json)
     except ValueError as error:
         raise InvalidWorkflowInvocation("Workflow invocation could not be normalized.") from error

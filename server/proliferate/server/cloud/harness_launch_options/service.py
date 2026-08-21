@@ -75,7 +75,7 @@ async def get_launch_options(
     *,
     sandbox: CloudSandboxValue,
     harness_kind: str,
-) -> CopiedLaunchOptionsResponse:
+) -> dict[str, object]:
     record = await launch_options_store.get(
         db,
         cloud_sandbox_id=sandbox.id,
@@ -88,6 +88,6 @@ async def get_launch_options(
             status_code=404,
         )
     payload = TypeAdapter(dict[str, object]).validate_json(record.payload_json)
-    return TypeAdapter(CopiedLaunchOptionsResponse).validate_python(
-        {**payload, "readiness": _target_readiness(sandbox.status)}
-    )
+    response = {**payload, "readiness": _target_readiness(sandbox.status)}
+    TypeAdapter(CopiedLaunchOptionsResponse).validate_python(response)
+    return response

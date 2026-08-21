@@ -322,16 +322,24 @@ and ownership; it does not use the distribution catalog to authorize executable
 models, controls, defaults, aliases, or per-model tuning combinations.
 
 When the editor has an execution target, it renders that target's copied
-`HarnessLaunchOptionsResponse` directly. It may warn that a saved value is no
-longer present, but it never rewrites the saved intent or selects the first row.
-Omitted model/control values stay omitted.
+`HarnessLaunchOptionsResponse` directly, using the selected model's exact
+`modelControls` row when present and the flat statement otherwise. It may warn
+that a saved value is no longer present, but it never rewrites the saved intent
+or selects the first row. Omitted model/control values stay omitted.
+
+An empty `controlValues` map is the same as an omitted one: the stored and
+frozen document omit the key on every plane, matching the runtime serializer.
+Invocation-freeze normalization also strips it from definitions stored before
+this rule, so a saved workflow never delivers a model field its author left
+empty to a runtime whose strict definition parser predates that field.
 
 At execution, each node's complete selection goes through the runtime's normal
 session-create validator against the execution target's current matching-basis
-launch options. Exact current membership succeeds; missing options fail with the
-same typed launch-value error as an interactive create. The runtime persists the
-resolved launch intent atomically with the node session and confirms all explicit
-values before reporting it ready.
+launch options, including the selected model's exact control row when present.
+Exact current membership succeeds; missing options fail with the same typed
+launch-value error as an interactive create. The runtime persists the resolved
+launch intent atomically with the node session and confirms all explicit values
+before reporting it ready.
 
 The legacy `validatedCatalogVersion` response field is diagnostic compatibility
 only and contains `target-observed`; it is not a catalog pin or an authorization

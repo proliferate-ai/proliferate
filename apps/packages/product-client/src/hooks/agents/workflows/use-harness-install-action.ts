@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from "react";
 import type { AgentSummary } from "@anyharness/sdk";
-import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { useAgentInstallationActions } from "#product/hooks/agents/workflows/use-agent-installation-actions";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -14,7 +13,6 @@ export interface HarnessInstallAction {
 
 export function useHarnessInstallAction(
   agent: AgentSummary | null,
-  surface: AgentAuthSurface = "local",
 ): HarnessInstallAction | null {
   const showToast = useToastStore((state) => state.show);
   const {
@@ -36,14 +34,15 @@ export function useHarnessInstallAction(
 
     try {
       if (supportsScopedReconcile) {
+        // The scoped reconcile job is tracked by the same reconcile-status
+        // query HarnessUpdateToastPresenter polls; that presenter raises the
+        // in-progress toast for this job once its status flips to
+        // queued/running, so raising a second "started" toast here would
+        // double up. Let the presenter own the start signal.
         await reconcileAgents({
           reinstall: true,
           agentKinds: [agent.kind],
         });
-        showToast(HARNESS_PANE_COPY.updateStartedToast(
-          agent.displayName,
-          surface,
-        ));
       } else {
         // Older runtimes ignore unknown reconcile fields and would turn a
         // scoped update into a full forced reinstall. Keep their established,
@@ -64,7 +63,6 @@ export function useHarnessInstallAction(
     reconcileAgents,
     showToast,
     supportsScopedReconcile,
-    surface,
   ]);
 
   const reconcileActive = Boolean(

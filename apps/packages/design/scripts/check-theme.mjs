@@ -126,6 +126,25 @@ ${["hover", "enter", "exit", "disclosure", "panel", "pop", "emphasized"]
 }`,
 ].join("\n\n");
 
+/**
+ * Read a CHECKED-OUT source file with line endings normalised to LF.
+ *
+ * Several assertions below compare against literals joined with `\n`. A working
+ * tree carrying CRLF (a Windows editor, or a checkout predating
+ * `.gitattributes`) would fail those with a message that names the CSS rather
+ * than the line endings, so normalise at the read instead.
+ *
+ * Only for files that come out of git. Generated output is read raw, so its
+ * byte-identity check stays exact.
+ */
+async function readText(path) {
+  return (await readFile(path, "utf8")).replace(/\r\n/g, "\n");
+}
+
+// Deliberately NOT readText: dist/theme.css is untracked, gitignored, and
+// written fresh by generate-theme.mjs from an in-memory string moments earlier,
+// so a git checkout can never give it CRLF. Normalising here would only loosen
+// the byte-identity check this script exists to make.
 const generated = await readFile(resolve(root, "dist/theme.css"), "utf8");
 assert(
   generated === `${expectedCss}\n`,
@@ -523,7 +542,7 @@ assert(
   "the generated theme must contain exactly one flattened light root",
 );
 
-const productCss = await readFile(resolve(root, "src/css/product.css"), "utf8");
+const productCss = await readText(resolve(root, "src/css/product.css"));
 for (const { selector, body } of topLevelBlocks(productCss)) {
   const ownsGlobalScope =
     selector.startsWith("@theme") ||
@@ -627,7 +646,7 @@ checkRawMotionAuthority(generated, "dist/theme.css");
  * 7. One authority entry per token name in the source manifest
  * ------------------------------------------------------------------ */
 
-const tokenSource = await readFile(resolve(root, "src/tokens.ts"), "utf8");
+const tokenSource = await readText(resolve(root, "src/tokens.ts"));
 const manifest =
   tokenSource
     .split("export const themeTokens = {")[1]

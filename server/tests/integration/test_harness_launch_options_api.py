@@ -39,23 +39,32 @@ async def _sandbox(
     return row
 
 
-def _payload(harness: str, revision: int, model: str) -> dict[str, object]:
+def _payload(
+    harness: str,
+    revision: int,
+    model: str,
+    *,
+    model_controls: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    options: dict[str, object] = {
+        "models": [
+            {
+                "id": model,
+                "observedName": None,
+                "observedDescription": None,
+            }
+        ],
+        "controls": [],
+        "defaults": {"modelId": model, "controlValues": {}},
+    }
+    if model_controls is not None:
+        options["modelControls"] = model_controls
     return {
         "harnessKind": harness,
         "basisRevision": f"basis-{revision}",
         "revision": revision,
         "state": "observed",
-        "options": {
-            "models": [
-                {
-                    "id": model,
-                    "observedName": None,
-                    "observedDescription": None,
-                }
-            ],
-            "controls": [],
-            "defaults": {"modelId": model, "controlValues": {}},
-        },
+        "options": options,
         "observedAt": "2026-08-19T00:00:00Z",
         "probeAttemptedAt": "2026-08-19T00:00:00Z",
         "probeFailureCode": None,
@@ -93,7 +102,34 @@ async def test_copy_is_verbatim_monotonic_and_target_scoped(
     first_token = await enroll_sandbox_worker(client, db_session, sandbox=first)
     second_token = await enroll_sandbox_worker(client, db_session, sandbox=second)
 
-    first_payload = json.dumps(_payload("claude", 7, "fable"), separators=(", ", ": "))
+    first_payload = json.dumps(
+        _payload(
+            "claude",
+            7,
+            "fable",
+            model_controls=[
+                {
+                    "modelId": "fable",
+                    "controls": [
+                        {
+                            "id": "mode",
+                            "observedLabel": "Mode",
+                            "observedDescription": None,
+                            "values": [
+                                {
+                                    "value": "default",
+                                    "observedLabel": "Default",
+                                    "observedDescription": None,
+                                }
+                            ],
+                        }
+                    ],
+                    "defaultControlValues": {"mode": "default"},
+                }
+            ],
+        ),
+        separators=(", ", ": "),
+    )
     second_payload = json.dumps(_payload("claude", 3, "opus[1m]"), separators=(",", ":"))
     await _upload(client, first_token, "claude", first_payload, 7)
     await _upload(client, second_token, "claude", second_payload, 3)
@@ -120,7 +156,28 @@ async def test_copy_is_verbatim_monotonic_and_target_scoped(
     assert first_read.status_code == 200, first_read.text
     assert second_read.status_code == 200, second_read.text
     assert first_read.json()["options"]["models"][0]["id"] == "fable"
+    assert first_read.json()["options"]["modelControls"] == [
+        {
+            "modelId": "fable",
+            "controls": [
+                {
+                    "id": "mode",
+                    "observedLabel": "Mode",
+                    "observedDescription": None,
+                    "values": [
+                        {
+                            "value": "default",
+                            "observedLabel": "Default",
+                            "observedDescription": None,
+                        }
+                    ],
+                }
+            ],
+            "defaultControlValues": {"mode": "default"},
+        }
+    ]
     assert second_read.json()["options"]["models"][0]["id"] == "opus[1m]"
+    assert "modelControls" not in second_read.json()["options"]
     assert first_read.json()["readiness"] == "ready"
 
 
@@ -250,6 +307,27 @@ async def test_copy_rejects_malformed_state_and_nested_options_then_recovers(
     )
     assert nested_response.status_code == 400
     assert nested_response.json()["detail"]["code"] == "invalid_launch_options_envelope"
+
+    invalid_model_controls = _payload(
+        "codex",
+        4,
+        "gpt-5.6-codex",
+        model_controls=[
+            {
+                "modelId": "gpt-5.6-codex",
+                "controls": [],
+                "defaultControlValues": {},
+                "unexpected": True,
+            }
+        ],
+    )
+    model_controls_response = await client.post(
+        "/v1/cloud/harness-launch-options/codex",
+        headers={"Authorization": f"Bearer {worker_token}"},
+        json={"sourceRevision": 4, "payloadJson": json.dumps(invalid_model_controls)},
+    )
+    assert model_controls_response.status_code == 400
+    assert model_controls_response.json()["detail"]["code"] == "invalid_launch_options_envelope"
 
     absent = await db_session.scalar(
         select(HarnessLaunchOptionState).where(

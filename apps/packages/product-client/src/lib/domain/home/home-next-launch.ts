@@ -53,13 +53,6 @@ export type HomeNextModelSelection = AgentModelSelection;
 export type HomeNextModelOption = AgentModelOption;
 export type HomeNextModelGroup = AgentModelGroup;
 export type HomeNextModelInfo = AgentModelInfo;
-export type ModelAvailabilityState =
-  | "loading"
-  | "load_error"
-  | "target_unobserved"
-  | "no_launchable_model"
-  | "launchable";
-
 export interface HomeNextLaunchPreferences {
   defaultChatAgentKind: string;
   defaultChatModelIdByAgentKind: Record<string, string>;
@@ -102,26 +95,6 @@ export type HomeNextLaunchOutcome =
   | "duplicate"
   /** Never attempted: no launch slot, no such target on this host, no prompt. */
   | "refused";
-
-export function resolveHomeModelAvailabilityState(input: {
-  isLoading: boolean;
-  hasLoadError: boolean;
-  hasLaunchableModel: boolean;
-}): ModelAvailabilityState {
-  if (input.hasLaunchableModel) {
-    return "launchable";
-  }
-  if (input.isLoading) {
-    return "loading";
-  }
-  if (input.hasLoadError) {
-    return "load_error";
-  }
-  if (input.hasLaunchableModel) {
-    return "launchable";
-  }
-  return "no_launchable_model";
-}
 
 export function buildHomeNextAgentOptions(
   agents: AgentCatalogSummary[],

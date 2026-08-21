@@ -346,6 +346,40 @@ async def test_v2_invocation_freezes_the_definition_at_trigger_time(
 
 
 @pytest.mark.asyncio
+async def test_v2_invocation_freeze_drops_a_stored_empty_control_values_map(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Definitions saved before empty maps were omitted carry
+    `controlValues: {}` in their stored rows. The freeze normalization strips
+    it, so those saved workflows still produce a snapshot every runtime's
+    strict definition parser accepts."""
+
+    owner = await register_and_login(client, "wf2-inv-legacy@example.com")
+    repo = await _seed_repo(db_session, user_id=owner["user_id"], name="legacy-repo")
+    definition = await _create_v2_definition(client, owner)
+    definition_id = str(definition["id"])
+
+    row = (
+        await db_session.execute(
+            select(WorkflowDefinition).where(WorkflowDefinition.id == UUID(definition_id))
+        )
+    ).scalar_one()
+    legacy = deepcopy(row.definition_json)
+    legacy["nodes"][1]["model"] = {"agentKind": "codex", "controlValues": {}}
+    row.definition_json = legacy
+    await db_session.commit()
+
+    created = await client.put(
+        f"/v1/workflow-invocations/{uuid4()}",
+        headers=_headers(owner),
+        json=_invocation_body(definition_id, str(repo.id)),
+    )
+    assert created.status_code == 201
+    assert created.json()["definition"]["nodes"][1]["model"] == {"agentKind": "codex"}
+
+
+@pytest.mark.asyncio
 async def test_v2_referenced_optional_input_needs_an_argument(
     client: AsyncClient,
     db_session: AsyncSession,

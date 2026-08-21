@@ -116,7 +116,9 @@ pub struct CollectorCore {
     pub(crate) tail_tx: broadcast::Sender<Arc<[u8]>>,
     pub(crate) tail_slots: Arc<Semaphore>,
     pub(crate) export_slots: Arc<Semaphore>,
-    /// Internal/dogfood OTLP fan-out. Absent from customer builds.
+    /// OTLP fan-out. Present in every build; what it may export is the
+    /// compile-time `EXPORT_POLICY` (`export/policy.rs`), which limits a
+    /// customer build to the lifecycle record class.
     pub(crate) exporter: ExporterHandle,
 }
 
@@ -134,6 +136,20 @@ impl CollectorCore {
             return Err(CoreError::InvalidConfig(
                 "release and environment must be 1-128 bytes",
             ));
+        }
+        // An install id is optional, but a present one must be a bounded
+        // printable label. It is stamped on every exported record, so an
+        // unbounded or control-character value would be an unbounded,
+        // unescaped field on the wire.
+        if let Some(install_id) = config.install_id.as_deref() {
+            if install_id.is_empty()
+                || install_id.len() > 128
+                || !install_id.bytes().all(|byte| byte.is_ascii_graphic())
+            {
+                return Err(CoreError::InvalidConfig(
+                    "install id must be 1-128 printable ASCII bytes",
+                ));
+            }
         }
         let boot_id = format!("collector-{}", uuid::Uuid::new_v4());
         let boot_operation_id = format!("collector-boot-{}", uuid::Uuid::new_v4());
@@ -163,7 +179,7 @@ impl CollectorCore {
             tail_tx,
             tail_slots: Arc::new(Semaphore::new(config.runtime_limits.tail_readers)),
             export_slots: Arc::new(Semaphore::new(config.runtime_limits.concurrent_exports)),
-            exporter: ExporterHandle::from_environment(),
+            exporter: ExporterHandle::from_environment(config.install_id.clone()),
         });
         {
             let mut inner = core.lock();
@@ -183,14 +199,14 @@ impl CollectorCore {
         &self.boot_id
     }
 
-    /// Starts the internal export task inside the collector runtime. It is a
-    /// no-op in a customer build and in an internal build with no destination.
+    /// Starts the export task inside the collector runtime. It is a no-op in
+    /// any build with no destination configured.
     pub fn spawn_exporter(&self) {
         self.exporter.spawn();
     }
 
-    /// Gives the internal exporter one bounded final flush. Never a shutdown
-    /// gate, and a no-op in a customer build.
+    /// Gives the exporter one bounded final flush. Never a shutdown gate, and
+    /// a no-op in any build with no destination configured.
     pub async fn shutdown_exporter(&self) {
         self.exporter.shutdown().await;
     }
@@ -253,5 +269,47 @@ impl CollectorCore {
             inner.gaps.pop_front();
         }
         inner.gaps.push_back(gap);
+    }
+}
+
+#[cfg(test)]
+mod install_id_tests {
+    use super::*;
+
+    fn config(install_id: Option<&str>) -> CollectorConfig {
+        let mut config = CollectorConfig::standalone("install-id-test-capability");
+        config.install_id = install_id.map(str::to_owned);
+        config
+    }
+
+    #[test]
+    fn an_absent_install_id_is_accepted_because_a_host_may_have_none() {
+        assert!(CollectorCore::new(&config(None)).is_ok());
+    }
+
+    #[test]
+    fn a_bounded_printable_install_id_is_accepted() {
+        assert!(CollectorCore::new(&config(Some("2f6b1c8e-install"))).is_ok());
+        assert!(CollectorCore::new(&config(Some(&"x".repeat(128)))).is_ok());
+    }
+
+    /// The install id is stamped on every exported record, so an empty,
+    /// oversized, or control-character value would put an unbounded or
+    /// unescaped field on the wire. Startup refuses it rather than sanitizing
+    /// it, because a silently rewritten identity is worse than no identity.
+    #[test]
+    fn an_empty_oversized_or_unprintable_install_id_is_refused() {
+        for rejected in [
+            "",
+            &"x".repeat(129),
+            "has space",
+            "has\nnewline",
+            "non-ascii-é",
+        ] {
+            assert!(
+                CollectorCore::new(&config(Some(rejected))).is_err(),
+                "install id {rejected:?} must be refused"
+            );
+        }
     }
 }

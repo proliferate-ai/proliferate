@@ -366,10 +366,7 @@ fn stop_runtime_script(binary_path: &str) -> String {
 
 fn stop_runtime(binary_path: &Path) -> Result<(), WorkerError> {
     let script = stop_runtime_script(&binary_path.to_string_lossy());
-    let status = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&script)
-        .status()
+    let status = crate::posix_shell::run_script(crate::posix_shell::ScriptShell::Sh, &script, None)
         .map_err(|error| WorkerError::AnyharnessUpdateStop {
             detail: format!("failed to spawn stop shell: {error}"),
         })?;
@@ -436,15 +433,12 @@ fn relaunch(launcher_path: &Path, workdir: &Path) -> Result<(), WorkerError> {
         shell_single_quote(&launcher),
         shell_single_quote(&log.to_string_lossy()),
     );
-    let status = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&script)
-        .current_dir(workdir)
-        .status()
-        .map_err(|error| WorkerError::AnyharnessUpdateRelaunch {
-            path: launcher_path.to_path_buf(),
-            detail: format!("failed to spawn launcher shell: {error}"),
-        })?;
+    let status =
+        crate::posix_shell::run_script(crate::posix_shell::ScriptShell::Sh, &script, Some(workdir))
+            .map_err(|error| WorkerError::AnyharnessUpdateRelaunch {
+                path: launcher_path.to_path_buf(),
+                detail: format!("failed to spawn launcher shell: {error}"),
+            })?;
     if !status.success() {
         return Err(WorkerError::AnyharnessUpdateRelaunch {
             path: launcher_path.to_path_buf(),

@@ -5,6 +5,9 @@ import {
   scrubTelemetryEvent as scrubSharedTelemetryEvent,
   scrubTelemetryText,
 } from "@proliferate/product-client/internal/domain/telemetry/scrub";
+import {
+  redactRouteIdentifiersInCapture,
+} from "@proliferate/product-client/internal/domain/telemetry/route-id-redaction";
 import type { CaptureResult } from "posthog-js/lib/src/types";
 
 export function scrubTelemetryData<T>(value: T): T {
@@ -152,9 +155,41 @@ function scrubPostHogProperties<T>(value: T): T {
   return scrubSharedTelemetryData(value, { preservePostHogInternalKeys: true });
 }
 
+/**
+ * The single `before_send` for Desktop PostHog. Two passes, in order:
+ *
+ * 1. the shared scrubber, which removes sensitive keys and secret-shaped text;
+ * 2. route-identifier redaction, which reduces every URL and every rrweb
+ *    `href`/`src` to a bounded route template.
+ *
+ * Pass 2 is not redundant. The shared scrubber exempts `$`-prefixed PostHog
+ * keys from key redaction and `scrubTelemetryUrl` deliberately keeps the URL
+ * path, so `$current_url` and the rrweb Meta event `href` reach the provider
+ * with `/workflows/<id>` intact without it. See
+ * `product-client/src/domain/telemetry/route-id-redaction.ts`.
+ *
+ * The replay stream is deliberately held out of pass 1. The shared scrubber
+ * bounds container depth, array positions, and object properties, so a real
+ * rrweb DOM snapshot would come back as `[truncated]` markers rather than a
+ * playable recording. Pass 2 owns that stream instead: it walks it without a
+ * depth cap and rewrites only URL-bearing and content-bearing fields. rrweb
+ * text and input content is controlled by the recorder's masking
+ * configuration, not by this scrubber.
+ */
 export function scrubPostHogPayload(
   event: CaptureResult | null,
 ): CaptureResult | null {
   if (!event) return event;
-  return scrubPostHogProperties(event);
+
+  const snapshotData = event.properties?.$snapshot_data;
+  if (snapshotData === undefined) {
+    return redactRouteIdentifiersInCapture(scrubPostHogProperties(event));
+  }
+
+  const { $snapshot_data: heldStream, ...restProperties } = event.properties;
+  const scrubbed = scrubPostHogProperties({ ...event, properties: restProperties });
+  return redactRouteIdentifiersInCapture({
+    ...scrubbed,
+    properties: { ...scrubbed.properties, $snapshot_data: heldStream },
+  });
 }

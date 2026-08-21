@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import field
 from typing import Literal
 
 from pydantic import ConfigDict, StrictInt, StrictStr
@@ -65,10 +66,18 @@ class LaunchDefaults:
 
 
 @dataclass(config=STRICT_CAMEL_CONFIG)
+class LaunchModelControls:
+    model_id: StrictStr
+    controls: list[LaunchControl]
+    default_control_values: dict[StrictStr, StrictStr]
+
+
+@dataclass(config=STRICT_CAMEL_CONFIG)
 class LaunchOptions:
     models: list[LaunchModel]
     controls: list[LaunchControl]
     defaults: LaunchDefaults
+    model_controls: list[LaunchModelControls] = field(default_factory=list)
 
 
 @dataclass(config=STRICT_CAMEL_CONFIG)

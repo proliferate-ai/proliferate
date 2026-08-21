@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  getRegistryAgentDisplayName,
   getRegistryHarnessKinds,
   isGatewayCapableHarness,
   isMultiSourceHarness,
@@ -14,6 +15,7 @@ import {
 // registry.json, or a derivation rule diverges, this fails.
 interface RegistryAgent {
   kind: string;
+  displayName?: string;
   authCardinality?: string;
   auth?: { slots?: { id: string }[] } | null;
 }
@@ -47,5 +49,18 @@ describe("bundled agent registry mirror", () => {
     // opencode is the only multi-source harness today.
     expect(isMultiSourceHarness("opencode")).toBe(true);
     expect(isMultiSourceHarness("claude")).toBe(false);
+  });
+
+  it("display names match registry.json agents[].displayName for every agent", () => {
+    for (const agent of agents) {
+      expect(getRegistryAgentDisplayName(agent.kind)).toBe(agent.displayName);
+    }
+    // Every catalog row carries one, so no agent can reach a naming surface
+    // without a name (D-R9).
+    expect(agents.every((agent) => typeof agent.displayName === "string")).toBe(true);
+  });
+
+  it("returns null for a kind the catalog does not contain", () => {
+    expect(getRegistryAgentDisplayName("not-a-real-harness")).toBeNull();
   });
 });

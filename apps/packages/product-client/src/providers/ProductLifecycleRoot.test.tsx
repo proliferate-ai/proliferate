@@ -83,6 +83,12 @@ vi.mock("#product/providers/AuthenticatedBackgroundLifecycles", () => ({
   ),
 }));
 
+vi.mock("#product/providers/SessionIntentDispatcherLifecycle", () => ({
+  SessionIntentDispatcherLifecycle: () => (
+    <div data-testid="session-intent-dispatcher-lifecycle" />
+  ),
+}));
+
 // Not mocked as a component (unlike AuthenticatedBackgroundLifecycles above):
 // the real AuthenticatedWorkspaceSwitchShortcuts renders, but its underlying
 // hook is mocked below, matching the stronger AuthenticatedLaunchLifecycles /
@@ -111,6 +117,7 @@ vi.mock("#product/providers/DesktopProductLifecycleRoot", () => ({
 }));
 
 import { ProductLifecycleRoot } from "#product/providers/ProductLifecycleRoot";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { useAppCommandActionsContext } from "#product/providers/AppCommandActionsProvider";
 import { useHomeDeferredLaunchRunner } from "#product/hooks/home/lifecycle/use-home-deferred-launch-runner";
 import { useWorkspaceSwitchShortcuts } from "#product/hooks/app/lifecycle/use-workspace-switch-shortcuts";
@@ -132,6 +139,7 @@ afterEach(() => {
   retentionSweepCount.value = 0;
   lifecycleThrow.value = false;
   authStatus.value = "loading";
+  useSessionIntentStore.setState({ entriesById: {}, intentIdsByClientSessionId: {} });
   resetRendererDiagnosticsSinkForTest();
   vi.clearAllMocks();
 });
@@ -355,5 +363,78 @@ describe("ProductLifecycleRoot", () => {
     // One live Desktop lifecycle root in the DOM despite StrictMode double-render.
     expect(screen.getAllByTestId("desktop-lifecycle-root")).toHaveLength(1);
     expect(screen.getByTestId("app-tree")).toBeTruthy();
+  });
+});
+
+describe("ProductLifecycleRoot session intent dispatcher", () => {
+  // Draining the prompt outbox is local runtime work. Gating it on the product
+  // session left anonymous and local-only clients able to create a session but
+  // never able to send: the prompt stayed queued and the composer sat on
+  // "Thinking" with no error. The dispatcher must mount on queued work.
+  function renderRoot() {
+    return render(
+      <ProductHostProvider host={makeTestProductHost({
+        auth: { restoreSession: vi.fn().mockResolvedValue(undefined) },
+      })}>
+        <ProductLifecycleRoot><div>product</div></ProductLifecycleRoot>
+      </ProductHostProvider>,
+    );
+  }
+
+  function queueIntent() {
+    useSessionIntentStore.setState({
+      entriesById: {
+        "intent-1": {
+          intentId: "intent-1",
+          kind: "send_prompt",
+          clientSessionId: "client-session-1",
+        },
+      },
+      intentIdsByClientSessionId: { "client-session-1": ["intent-1"] },
+    });
+  }
+
+  it("dispatches a queued prompt while the client is anonymous", async () => {
+    authStatus.value = "anonymous";
+    queueIntent();
+
+    renderRoot();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("session-intent-dispatcher-lifecycle")).toBeTruthy();
+    });
+  });
+
+  it("still mounts the dispatcher for an authenticated client with no queue yet", async () => {
+    authStatus.value = "authenticated";
+
+    renderRoot();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("session-intent-dispatcher-lifecycle")).toBeTruthy();
+    });
+  });
+
+  it("keeps the dispatcher chunk off a signed-out first load with no queued work", async () => {
+    authStatus.value = "anonymous";
+
+    renderRoot();
+
+    await waitFor(() => {
+      expect(screen.getByText("product")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("session-intent-dispatcher-lifecycle")).toBeNull();
+  });
+
+  it("leaves the authenticated-only background lifecycles gated on auth", async () => {
+    authStatus.value = "anonymous";
+    queueIntent();
+
+    renderRoot();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("session-intent-dispatcher-lifecycle")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("authenticated-background-lifecycles")).toBeNull();
   });
 });

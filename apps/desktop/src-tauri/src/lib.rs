@@ -216,6 +216,11 @@ pub fn run() {
             } else {
                 "production".to_string()
             },
+            // The same identity the renderer reads through
+            // `get_desktop_install_id`, so an exported record and an app event
+            // describe one install. A failure to read or create it degrades
+            // the attribute, never the launch.
+            desktop_identity::load_or_create_desktop_install_id().ok(),
         );
     let support_snapshot_coordinator =
         diagnostics::support_snapshot::coordinator::SupportSnapshotCoordinator::new(

@@ -122,8 +122,8 @@ Runtime/desktop/mobile versions may differ from it; the release ID always uses
 the emitting artifact's version and build SHA.
 
 Every production build path receives those tracked values explicitly. In
-particular, `release-runtime.yml`, `_deploy-e2b.yml`/`build-template.mjs`,
-`release-cloud-template.yml`, `release-desktop.yml`, and `server-ci.yml`'s
+particular, `release-runtime.yml`, `build-template.mjs`,
+`release-cloud-template.yml`, `release-desktop.yml`, and `_build-server.yml`'s
 `self-hosted-release-assets` path all use the tracked runtime version and
 current build SHA for AnyHarness, worker, or supervisor. A no-version E2B hotfix
 keeps the tracked semver and changes the SHA, but it is lane-scoped operational

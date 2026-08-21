@@ -120,6 +120,10 @@ export function classifyFile(path) {
     matches(path, ["server", "catalogs"]) ||
     path === ".dockerignore" ||
     path === ".github/workflows/server-ci.yml" ||
+    // The release-time image/asset build for this surface. Split out of
+    // server-ci.yml so a release does not re-run the suite the SHA already
+    // passed to reach main; it classifies the same way its parent did.
+    path === ".github/workflows/_build-server.yml" ||
     path === "scripts/validate-agent-catalog.mjs"
   ) {
     touched.add("server");

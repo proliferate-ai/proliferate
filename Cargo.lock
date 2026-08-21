@@ -397,6 +397,8 @@ dependencies = [
  "minisign-verify",
  "nucleo-matcher",
  "portable-pty",
+ "proliferate-diagnostics-client",
+ "proliferate-diagnostics-protocol",
  "reqwest 0.12.28",
  "ring",
  "rusqlite",
@@ -418,6 +420,7 @@ dependencies = [
  "utoipa",
  "utoipa-axum",
  "uuid",
+ "windows-sys 0.61.2",
  "zip 8.6.0",
  "zstd",
 ]
@@ -4240,7 +4243,7 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.4.20"
+version = "0.4.22"
 dependencies = [
  "base64 0.22.1",
  "chrono",

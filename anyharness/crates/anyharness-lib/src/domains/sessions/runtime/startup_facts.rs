@@ -64,3 +64,29 @@ pub(super) fn choose_session_startup_strategy(
         fork_target_was_targeted,
     })
 }
+
+/// Would a cold start of this session resolve to a launch strategy right now?
+///
+/// The idle reaper asks this before retiring an actor: retirement is only
+/// non-terminal if the session can actually be started again, and the startup
+/// matrix refuses some durable shapes outright. The load-bearing one is a
+/// process-local (Claude) zero-turn fork child, which is inserted with
+/// `last_prompt_at: None` and finalizes to `Idle`, so it is fully quiescent
+/// and would otherwise be reaped into a state no prompt can leave
+/// (`choose_fork_child_strategy` bails with "process-local zero-turn fork
+/// recovery requires an exact-prefix recovery proof").
+///
+/// This is the same decision the next prompt will make, evaluated against the
+/// same durable rows, so it cannot drift from the launch policy. A missing
+/// session row answers `false`: no strategy exists for a row that is not
+/// there, and holding an unrecognised actor costs memory while retiring it
+/// could cost the session.
+pub(crate) fn session_can_relaunch_from_cold(
+    session_store: &SessionStore,
+    session_id: &str,
+) -> anyhow::Result<bool> {
+    let Some(record) = session_store.find_by_id(session_id)? else {
+        return Ok(false);
+    };
+    Ok(choose_session_startup_strategy(&record, session_store).is_ok())
+}

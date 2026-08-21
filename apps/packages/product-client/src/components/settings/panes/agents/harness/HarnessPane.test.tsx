@@ -4,12 +4,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { makeTestProductHost } from "#product/test/product-host-test-utils";
+import { makeTestProductHost, type TestProductHostOptions } from "#product/test/product-host-test-utils";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
 
-// Anonymous host keeps the organizations query disabled, matching the prior
-// unset-auth-store default these tests ran under.
-const harnessTestHost = makeTestProductHost();
+// Anonymous host keeps the organizations query disabled, as before. Its
+// desktop runtime bridge is what makes the LOCAL surface real here (E-R34).
+const harnessTestHost = makeTestProductHost({ desktop: { runtime: { getConnection: vi.fn(), restart: vi.fn() } } as TestProductHostOptions["desktop"] });
 
 type CapabilitiesData = {
   gatewayEnabled: boolean;
@@ -154,6 +154,9 @@ vi.mock("@anyharness/sdk-react", () => ({
         probeAttemptedAt: "2026-08-19T00:00:00Z",
         probeFailureCode: null,
         readiness: "ready",
+        // The LOCAL runtime owns its probe engine in this fixture; the cloud
+        // hook above carries no such field, because the wire has none.
+        canManuallyRefresh: true,
       } : undefined,
       isLoading: false,
     };
@@ -291,8 +294,8 @@ vi.mock("#product/hooks/agents/workflows/use-harness-install-action", () => ({
 }));
 vi.mock("#product/providers/CloudAnyHarnessRuntimeProvider", () => ({ CloudAnyHarnessRuntimeProvider: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock("#product/stores/sessions/harness-connection-store", () => ({
-  useHarnessConnectionStore: (selector: (s: { runtimeUrl: string }) => unknown) =>
-    selector({ runtimeUrl: "http://127.0.0.1:8457" }),
+  useHarnessConnectionStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ runtimeUrl: "http://127.0.0.1:8457", connectionState: "healthy" }),
 }));
 
 vi.mock("#product/hooks/access/anyharness/agents/use-agent-resources-cache", () => ({
@@ -1162,23 +1165,18 @@ describe("HarnessPane all models", () => {
 });
 
 describe("HarnessPane all models (local composed observation)", () => {
+  const oneModelObservation = () => ({
+    agent: "claude", schemaVersion: 2, probeEngine: "owner", state: "idle",
+    probedAt: "2026-07-02T20:00:00Z", snapshotAgeSeconds: 90, modelCount: 1, modeCount: 0,
+    models: [{ id: "claude-sonnet-4-5", name: "Sonnet 4.6", provider: "anthropic" }],
+    modes: [],
+  });
   it("reads the runtime launch-option observation", () => {
-    state.modelSnapshotStatus.data = {
-      agent: "claude",
-      schemaVersion: 2,
-      probeEngine: "owner",
-      state: "idle",
-      probedAt: "2026-07-02T20:00:00Z",
-      snapshotAgeSeconds: 90,
-      modelCount: 1,
-      modeCount: 0,
-      models: [{ id: "claude-sonnet-4-5", name: "Sonnet 4.6", provider: "anthropic" }],
-      modes: [],
-    };
+    state.modelSnapshotStatus.data = oneModelObservation();
     renderPane("claude");
 
     expect(screen.queryByText("1 model")).not.toBeNull();
-    expect(screen.queryByText(/Last refreshed/)).not.toBeNull();
+    expect(screen.queryByText(/refreshed/)).not.toBeNull(); // E-R1: "Last refreshed" copy is gone
     expandModelList();
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     expect(screen.queryByRole("switch")).toBeNull();
@@ -1188,12 +1186,14 @@ describe("HarnessPane all models (local composed observation)", () => {
     state.modelSnapshotStatus.data = undefined;
     renderPane("claude");
 
-    expect(screen.queryByText("0 models")).not.toBeNull();
+    expect(screen.queryByText(/\d+ models?/)).toBeNull(); // E-R1: no count before a settled observation
     expandModelList();
     expect(screen.queryByText("Sonnet 4.6")).toBeNull();
   });
 
   it("hits the param-less runtime refresh endpoint for the local surface", () => {
+    // Round 5: Refresh needs a payload (ownership is a field on it).
+    state.modelSnapshotStatus.data = oneModelObservation();
     renderPane("claude");
 
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));

@@ -19,8 +19,11 @@ browser adapters, and both mount the connected product owned by ProductClient.
 Every pre-launch surface reads the selected target's
 `HarnessLaunchOptionsResponse` and may only decorate exact keys. It must not
 import static executable membership, seed missing values, filter unknown IDs,
-or apply a first-model fallback. Pickers submit the raw `modelId` plus one
-`controlValues` entry for each selected rendered control.
+or apply a first-model fallback. When the response carries a `modelControls`
+row for the selected model, that exact row replaces the flat control statement;
+a present empty row means no controls. Pickers submit the raw `modelId` plus
+one `controlValues` entry for each selected rendered control and discard stale
+control selections when the model changes.
 
 Once a session exists, all model/control rendering and mutation reads that
 session's `SessionLiveConfigSnapshot` only. Target launch options and catalog

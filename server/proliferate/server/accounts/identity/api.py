@@ -57,6 +57,7 @@ from proliferate.auth.identity.web_beta import (
     WebBetaAccessDenied,
     ensure_web_beta_email_allowed,
 )
+from proliferate.auth.sign_in_observability import log_sign_in_failure, log_sign_in_success
 from proliferate.config import settings
 from proliferate.constants.auth import (
     DESKTOP_DEEP_LINK_LAUNCH_ENABLED,
@@ -64,6 +65,7 @@ from proliferate.constants.auth import (
 )
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.errors import ProliferateError
 from proliferate.server.accounts.identity.service import (
     authenticate_password_login,
     complete_apple_mobile_login,
@@ -396,9 +398,14 @@ async def web_token(
     response: Response,
     db: AsyncSession = Depends(get_async_session),
 ) -> AuthSessionResponse:
-    session = await exchange_auth_code(db, code=body.code, code_verifier=body.code_verifier)
-    ensure_web_beta_email_allowed(session.email)
+    try:
+        session = await exchange_auth_code(db, code=body.code, code_verifier=body.code_verifier)
+        ensure_web_beta_email_allowed(session.email)
+    except ProliferateError as exc:
+        log_sign_in_failure("web", failure_code=exc.code)
+        raise
     await db.commit()
+    log_sign_in_success("web")
     _set_web_session_cookies(response, session.refresh_token)
     return auth_session_response(session, include_refresh_token=False)
 
@@ -408,8 +415,13 @@ async def mobile_token(
     body: AuthTokenRequest,
     db: AsyncSession = Depends(get_async_session),
 ) -> AuthSessionResponse:
-    session = await exchange_auth_code(db, code=body.code, code_verifier=body.code_verifier)
+    try:
+        session = await exchange_auth_code(db, code=body.code, code_verifier=body.code_verifier)
+    except ProliferateError as exc:
+        log_sign_in_failure("mobile", failure_code=exc.code)
+        raise
     await db.commit()
+    log_sign_in_success("mobile")
     return auth_session_response(session, include_refresh_token=True)
 
 

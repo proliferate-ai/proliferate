@@ -25,6 +25,11 @@ export interface HarnessLaunchControl {
   observedDescription: string | null;
   values: HarnessLaunchControlValue[];
 }
+export interface HarnessLaunchModelControls {
+  modelId: string;
+  controls: HarnessLaunchControl[];
+  defaultControlValues: Record<string, string>;
+}
 export interface HarnessLaunchDefaults {
   modelId: string | null;
   controlValues: Record<string, string>;
@@ -33,6 +38,7 @@ export interface HarnessLaunchOptions {
   models: HarnessLaunchModel[];
   controls: HarnessLaunchControl[];
   defaults: HarnessLaunchDefaults;
+  modelControls?: HarnessLaunchModelControls[];
 }
 export type HarnessLaunchOptionsState =
   | "detecting"
@@ -41,6 +47,11 @@ export type HarnessLaunchOptionsState =
   | "observed_empty"
   | "last_good_after_failure"
   | "failed_without_observation";
+/**
+ * The launch-probe scheduler's live phase for a harness — the same lifecycle
+ * the agent-auth summary reports.
+ */
+export type AgentAuthProbePhase = components["schemas"]["AgentAuthProbePhase"];
 export interface HarnessLaunchOptionsResponse {
   harnessKind: string;
   basisRevision: string;
@@ -51,6 +62,21 @@ export interface HarnessLaunchOptionsResponse {
   probeAttemptedAt: string;
   probeFailureCode: string | null;
   readiness: AgentReadinessState;
+  /**
+   * Whether a manual refresh dispatched at this runtime can run at all: it owns
+   * the probe engine for its runtime home. A runtime that does not answers the
+   * refresh route with 409 `PROBE_ENGINE_NOT_OWNER`, and ownership appears
+   * nowhere else on any wire. Install state is the other precondition and is
+   * reported separately by `readiness`; a surface gating a Refresh control must
+   * respect both.
+   */
+  canManuallyRefresh: boolean;
+  /**
+   * Absent when the runtime that served this response cannot know the phase.
+   * `detecting` on its own cannot tell a probe that is running apart from one
+   * that will never run.
+   */
+  probePhase?: AgentAuthProbePhase;
 }
 export type InstallAgentRequest = components["schemas"]["InstallAgentRequest"];
 export type InstallAgentResponse = components["schemas"]["InstallAgentResponse"];
@@ -70,3 +96,74 @@ export type AgentInstallProgress = components["schemas"]["AgentInstallProgress"]
 export type ReconcileAgentsRequest = components["schemas"]["ReconcileAgentsRequest"];
 export type ReconcileAgentResult = components["schemas"]["ReconcileAgentResult"];
 export type ReconcileAgentsResponse = components["schemas"]["ReconcileAgentsResponse"];
+
+// ---------------------------------------------------------------------------
+// Drift guard for `HarnessLaunchOptionsResponse`.
+//
+// Every neighbouring type above is a generated alias, so it cannot drift. This
+// one is hand-written — the wire shape predates the Rust OpenAPI export being
+// regeneratable by the owning build — and it is the interface that `../index.ts`,
+// `@anyharness/sdk-react` and both product-client hooks actually import. The
+// generated schema is NOT what they see, so the two can disagree with nothing to
+// notice: `canManuallyRefresh` was added to the Rust contract, reached
+// `generated/openapi.ts` as a REQUIRED field, and was still invisible to every
+// consumer three slices downstream because nobody re-typed it here.
+//
+// These assertions make that class of omission a BUILD failure in this package
+// (`tsc`, run by `sdk-build` in CI) rather than a runtime surprise in a UI.
+// ---------------------------------------------------------------------------
+
+type GeneratedHarnessLaunchOptionsResponse =
+  components["schemas"]["HarnessLaunchOptionsResponse"];
+
+/** Fails to compile unless `T` is exactly `true`. */
+type Expect<T extends true> = T;
+
+type ExactlyEqual<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+
+/**
+ * Schema fields the hand-written interface has not caught up with yet.
+ *
+ * A NAMED, one-key carve-out rather than a blanket skip, and it may only shrink:
+ * `canManuallyRefresh` is owned by the slice landing the consumer-side change, so
+ * adding it here too would be a competing edit to the same interface. The guard
+ * below still fails on any OTHER omission, and it keeps passing unchanged once
+ * that slice lands and this set becomes empty — so retiring the carve-out is a
+ * deletion, never a broken build for whoever lands the field.
+ */
+type KnownMissingFromHandWritten = "canManuallyRefresh";
+
+type MissingFromHandWritten = Exclude<
+  keyof GeneratedHarnessLaunchOptionsResponse,
+  keyof HarnessLaunchOptionsResponse
+>;
+type AbsentFromTheSchema = Exclude<
+  keyof HarnessLaunchOptionsResponse,
+  keyof GeneratedHarnessLaunchOptionsResponse
+>;
+
+/** A schema field no consumer can see, because this interface never declared it. */
+export type _NoUndeclaredSchemaField = Expect<
+  MissingFromHandWritten extends KnownMissingFromHandWritten ? true : false
+>;
+
+/** The other direction: a field consumers rely on that the wire no longer carries. */
+export type _NoFieldTheWireDoesNotCarry = Expect<ExactlyEqual<AbsentFromTheSchema, never>>;
+
+/**
+ * Shape, not just names: every field the two DO share must still agree on its
+ * type, so a `string` that becomes an enum, or a nullability change, is caught
+ * here too rather than at the first `undefined` in a component.
+ */
+export type _SharedFieldsAgree = Expect<
+  Pick<HarnessLaunchOptionsResponse, keyof HarnessLaunchOptionsResponse> extends Pick<
+    GeneratedHarnessLaunchOptionsResponse,
+    Exclude<
+      keyof GeneratedHarnessLaunchOptionsResponse,
+      KnownMissingFromHandWritten
+    >
+  >
+    ? true
+    : false
+>;

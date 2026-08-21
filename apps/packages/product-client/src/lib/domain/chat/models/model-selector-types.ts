@@ -51,6 +51,48 @@ export interface ModelSelectorCurrentModel {
   pendingState: PendingSessionConfigChangeStatus | null;
 }
 
+/**
+ * Why the offered rows look the way they do.
+ *
+ * `groups.length === 0` cannot say it: no observation yet, an observation that
+ * found nothing, and a failed observation are three different facts, and the
+ * trigger label, the enabled state and the picker's empty body each differ
+ * between them. Chat has a live session and omits this (defaulting to
+ * `ready`); Home derives it from its model gate.
+ */
+export type ModelSelectorAvailability =
+  | "ready"
+  | "observation_pending"
+  | "observed_empty"
+  | "unavailable";
+
+/**
+ * Whether the trigger may be opened, as ONE expression both the component and
+ * the coexistence tests read.
+ *
+ * It lives here rather than inside the component so no test can re-implement
+ * it and then quietly agree with itself while the real control diverges.
+ *
+ * `observed_empty` deliberately stays enabled (owner revision r3): the picker
+ * is that state's cure path, and greying out the one control that explains
+ * what happened turns a recoverable state into a dead end. Only a missing or
+ * failed observation disables the trigger — those have nothing to show.
+ */
+export function resolveModelSelectorEnabled(input: {
+  disabled: boolean;
+  connectionState: string;
+  isLoading: boolean;
+  hasAgents: boolean;
+  availability: ModelSelectorAvailability;
+}): boolean {
+  return !input.disabled
+    && input.connectionState === "healthy"
+    && !input.isLoading
+    && input.hasAgents
+    && input.availability !== "observation_pending"
+    && input.availability !== "unavailable";
+}
+
 export interface ModelSelectorProps {
   connectionState: string;
   currentModel: ModelSelectorCurrentModel | null;
@@ -58,6 +100,8 @@ export interface ModelSelectorProps {
   hasAgents: boolean;
   isLoading: boolean;
   onSelect: (selection: ModelSelectorSelection) => void;
+  /** Defaults to `ready`, which is exactly today's behavior. */
+  availability?: ModelSelectorAvailability;
   /**
    * Set when the model the composer is currently on is one the target refused.
    * Pinned under the control as an inline error — the condition belongs to this

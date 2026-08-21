@@ -14,10 +14,20 @@ use proliferate_diagnostics_protocol::v1::{
 };
 use regex::Regex;
 
+mod lifecycle;
+
 use crate::{
     DetailedDiagnosticInput, DiagnosticArgument, DiagnosticCorrelation, DiagnosticPrivacy,
-    DiagnosticsComponent,
+    DiagnosticsComponent, LifecycleDiagnosticInput,
 };
+
+/// The two record classes this producer can build. The class is chosen by the
+/// caller's input type, never by a field, so no call site can turn a detailed
+/// payload into a lifecycle record or the reverse.
+pub(crate) enum DiagnosticInput {
+    Detailed(DetailedDiagnosticInput),
+    Lifecycle(LifecycleDiagnosticInput),
+}
 
 pub(crate) struct RecordFactory {
     component: DiagnosticsComponent,
@@ -27,7 +37,7 @@ pub(crate) struct RecordFactory {
 }
 
 pub(crate) struct PreparedRecord {
-    input: DetailedDiagnosticInput,
+    input: DiagnosticInput,
     operation_id: String,
 }
 
@@ -50,7 +60,14 @@ impl RecordFactory {
         })
     }
 
-    pub(crate) fn prepare(&self, mut input: DetailedDiagnosticInput) -> Result<PreparedRecord, ()> {
+    pub(crate) fn prepare(&self, input: DiagnosticInput) -> Result<PreparedRecord, ()> {
+        match input {
+            DiagnosticInput::Detailed(input) => self.prepare_detailed(input),
+            DiagnosticInput::Lifecycle(input) => self.prepare_lifecycle(input),
+        }
+    }
+
+    fn prepare_detailed(&self, mut input: DetailedDiagnosticInput) -> Result<PreparedRecord, ()> {
         if input.name.is_empty()
             || input.name.len() > MAX_NAME_BYTES
             || input.arguments.len() > MAX_ARGUMENTS
@@ -90,7 +107,7 @@ impl RecordFactory {
             }
         }
         let prepared = PreparedRecord {
-            input,
+            input: DiagnosticInput::Detailed(input),
             operation_id,
         };
         let probe = self.build(&prepared, 1)?;
@@ -108,12 +125,27 @@ impl RecordFactory {
         if producer_sequence == 0 || producer_sequence > MAX_SAFE_INTEGER {
             return Err(());
         }
-        let correlation = &prepared.input.correlation;
-        let privacy = prepared
-            .input
+        match &prepared.input {
+            DiagnosticInput::Detailed(input) => {
+                self.build_detailed(input, &prepared.operation_id, producer_sequence)
+            }
+            DiagnosticInput::Lifecycle(input) => {
+                self.build_lifecycle(input, &prepared.operation_id, producer_sequence)
+            }
+        }
+    }
+
+    fn build_detailed(
+        &self,
+        input: &DetailedDiagnosticInput,
+        operation_id: &str,
+        producer_sequence: u64,
+    ) -> Result<ProducerRecordV1, ()> {
+        let correlation = &input.correlation;
+        let privacy = input
             .arguments
             .iter()
-            .fold(prepared.input.privacy, |current, argument| {
+            .fold(input.privacy, |current, argument| {
                 current.max(argument.privacy)
             });
         let record = ProducerRecordV1 {
@@ -126,7 +158,7 @@ impl RecordFactory {
             source: self.component.protocol_source(),
             release: self.release.clone(),
             environment: self.environment.clone(),
-            operation_id: prepared.operation_id.clone(),
+            operation_id: operation_id.to_owned(),
             parent_operation_id: correlation.parent_operation_id.clone(),
             trace_id: correlation.trace_id.clone(),
             workspace_id: correlation.workspace_id.clone(),
@@ -137,10 +169,9 @@ impl RecordFactory {
             target_id: correlation.target_id.clone(),
             prompt_id: correlation.prompt_id.clone(),
             workflow_id: correlation.workflow_id.clone(),
-            name: prepared.input.name.to_string(),
-            severity: prepared.input.severity,
-            arguments: prepared
-                .input
+            name: input.name.to_string(),
+            severity: input.severity,
+            arguments: input
                 .arguments
                 .iter()
                 .map(|argument| TypedArgumentV1 {
@@ -149,20 +180,16 @@ impl RecordFactory {
                     value: argument.value.clone(),
                 })
                 .collect(),
-            error_classification: prepared
-                .input
-                .error_classification
-                .as_ref()
-                .map(ToString::to_string),
+            error_classification: input.error_classification.as_ref().map(ToString::to_string),
             record_class: RecordClassV1::Detailed,
             privacy: map_privacy(privacy),
             redaction: RedactionClassificationV1::Structural,
             detailed: Some(DetailedDiagnosticV1 {
-                kind: prepared.input.kind,
-                message: prepared.input.message.clone(),
-                stream: prepared.input.stream,
-                dropped_count: prepared.input.dropped_count,
-                milestone: prepared.input.milestone.as_ref().map(ToString::to_string),
+                kind: input.kind,
+                message: input.message.clone(),
+                stream: input.stream,
+                dropped_count: input.dropped_count,
+                milestone: input.milestone.as_ref().map(ToString::to_string),
             }),
             lifecycle: None,
         };

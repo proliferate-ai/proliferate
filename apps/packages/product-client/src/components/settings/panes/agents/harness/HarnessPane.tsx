@@ -143,7 +143,7 @@ function HarnessRuntimeSurface({
   const runtimeAgent = agentsByKind.get(harnessKind);
   const displayName = runtimeAgent?.displayName ?? getProviderDisplayName(harnessKind);
   const issueAgent = agentsNeedingSetup.find((agent) => agent.kind === harnessKind);
-  const installAction = useHarnessInstallAction(issueAgent ?? null, surface);
+  const installAction = useHarnessInstallAction(issueAgent ?? null);
   const updateComponents = isReconciling
     ? reconcileSnapshot?.progress?.components.filter(
       (component) => component.agent === harnessKind,

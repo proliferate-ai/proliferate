@@ -6,6 +6,7 @@ import {
   useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueries, useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { getAgentLaunchOptions } from "#product/lib/access/anyharness/agents";
 import type { CloudConnectionInfo } from "@proliferate/cloud-sdk/types";
 import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
@@ -68,10 +69,17 @@ export function useWorkspaceAgentsLaunchOptionsListQuery({
   cloudConnectionInfo?: CloudConnectionInfo | null;
 }): Array<HarnessLaunchOptionsResponse | null> {
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
-  const localResponses = useAgentLaunchOptionsListQuery({
+  const localEntries = useAgentLaunchOptionsListQuery({
     harnessKinds,
     enabled: !cloudConnectionInfo,
   });
+  // The per-kind pending/error flags belong to a later slice; this hook still
+  // answers in responses, and the entries are reference-stable, so the mapped
+  // array is too.
+  const localResponses = useMemo(
+    () => localEntries.map((entry) => entry.data),
+    [localEntries],
+  );
   const gatewayRuntimeUrl = cloudConnectionInfo?.runtimeUrl ?? "";
   const gatewayWorkspaceId = cloudConnectionInfo?.anyharnessWorkspaceId ?? null;
   const gatewayResponses = useQueries({

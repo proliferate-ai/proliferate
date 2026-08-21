@@ -262,17 +262,18 @@ pub fn save_diagnostic_json_to_absolute_path(
 }
 
 fn expand_home_path(path: &str) -> Result<PathBuf, String> {
+    // `app_config::home_dir_os` reads `HOME` first, verbatim and as an
+    // `OsString`, and only then `USERPROFILE`. Unix resolution is unchanged
+    // for every `HOME` value including non-UTF-8 ones, error string included,
+    // while windows, which has no `HOME`, stops failing outright.
+    let home = || crate::app_config::home_dir_os().ok_or_else(|| "HOME is not set".to_string());
+
     if path == "~" {
-        return std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| "HOME is not set".to_string());
+        return home();
     }
 
     if let Some(rest) = path.strip_prefix("~/") {
-        let home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| "HOME is not set".to_string())?;
-        return Ok(home.join(rest));
+        return Ok(home()?.join(rest));
     }
 
     Ok(PathBuf::from(path))

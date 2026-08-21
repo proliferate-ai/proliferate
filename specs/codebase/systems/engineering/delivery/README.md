@@ -17,7 +17,7 @@ These coordinates are related, but none substitutes for another:
 | `runtime-v<version>` | AnyHarness runtime archive and `@anyharness/sdk` release coordinate. |
 | `server-v<version>` | Server/self-host release coordinate. Its GHCR images use the version and rolling `stable` tags. |
 | E2B `sha-<12>` | Immutable cloud-template identity. Rolling `staging` and `production` tags select an immutable build from the same template family. |
-| `release-YYYY-MM-DD` / `hotfix-*` | Release-train checkpoint or no-version hotfix ledger identity, not an artifact version. |
+| `release-YYYY-MM-DD` | Release checkpoint marker, not an artifact version. No checked-in workflow mints a `hotfix-*` ledger identity any more; `publish-product-release.mjs` keeps an uncalled `hotfix` mode. |
 
 The self-host CloudFormation template is one of the assets attached to a
 `server-v*` release; it is not a separate release coordinate. A public product
@@ -39,24 +39,15 @@ remaining budget headroom while it is in flight.
 
 ### Hosted spine
 
-A successful CI run on `main` starts staging. The staging coordinator resolves
-the exact CI SHA, detects or explicitly selects surfaces, waits for matching
-Server CI when such a run exists, invokes reusable staging lanes, and writes a
-summary artifact. The Desktop staging lane validates and builds only; it does
-not publish the updater.
+Delivery has three states. Main is a commit that passed CI. Staging is a deployed environment that no automated end-to-end proof gates. Production is what customers run. The transitions are thin workflow files; the deploy logic itself lives in the reusable `_deploy-*.yml` lanes.
 
-Production promotion is manual. Its normal path requires a successful,
-non-dry-run staging summary for the exact SHA, verifies that the ref belongs to
-`main`, invokes selected production lanes, and writes its own summary artifact.
-The workflow has an explicit staging-bypass input; using it changes the gate,
-not the identity being deployed. Surface selection and dry-run behavior are
-workflow inputs, so operators inspect the generated plan and exact SHA instead
-of relying on a remembered surface list.
+Merging to `main` deploys nothing. Continuous staging is retired: `deploy-staging.yml` keeps only its manual dispatch, so a staging deploy is an operator's deliberate act. Its internals are unchanged. It resolves the exact SHA, detects or explicitly selects surfaces, waits for matching Server CI when such a run exists, invokes the reusable staging lanes, and writes a summary artifact. The Desktop staging lane validates and builds only; it does not publish the updater.
 
-The live E2B webhook workflow is manual-only and is not part of ordinary CI,
-staging, the nightly train, or production promotion. The Worker reusable lane
-is a configured no-op while `WORKERS_DEPLOY_ENABLED` is false and deliberately
-fails if enabled before a canonical worker service and command exist.
+`release.yml` is the single transition from `main` to production, and production deploys from its prepare job rather than from a staging result. A manual dispatch takes four inputs: `surfaces` (default `all`), `skip_build`, `ref` (default `main`), and `dry_run`. A hotfix is an exact `ref` plus an exact `surfaces` set. A promotion of an already-built ref is `skip_build`. Neither is a separate workflow file. An explicit `ref` must be an ancestor of `main`, so production only ever ships commits that reached `main`. A scheduled run supplies no inputs, so every default applies and `dry_run` is false.
+
+Nothing in the pipeline asks for approval. Dispatching a run is the authorization, and the 09:00 UTC cron needs none.
+
+The live E2B webhook workflow is manual-only and is not part of ordinary CI, staging, or the release pipeline. The E2B, mobile, and standalone Worker reusable lanes were deleted with the coordinators that were their only callers; the Celery worker and Beat services still deploy inside `_deploy-server.yml`, which is a different thing from the retired `_deploy-workers.yml` no-op.
 
 Hosted Playwright and Cargo Tauri dependency steps normalize the known Ubuntu
 runner mirror indirection to the canonical archive immediately before
@@ -175,39 +166,38 @@ alarms query `RunningTaskCount` in `ECS/ContainerInsights` (Container Insights i
 enabled on the cluster), and the task-outcome metric filters carry `task_name`
 (and, for retries/failures, safe `error_code`) dimensions.
 
-### Release coordinators
+### Release coordinator
 
-The scheduled or manually dispatched nightly train detects changes since the
-previous train, prepares product and artifact versions, may commit version
-bumps to `main`, creates the applicable tags, releases selected artifacts,
-deploys selected hosted surfaces to staging, and then runs corresponding
-production jobs after staging succeeds. Those production jobs are unattended
-workflow jobs; they can remain zero-touch only while the `Production` GitHub
-Environment has no required-reviewer gate.
+`release.yml` is the only release coordinator. It runs unattended on a 09:00 UTC cron and on manual dispatch. Its prepare job resolves the release checkpoint and the public product and artifact versions, may commit version bumps to `main`, and creates the selected checkpoint, product, and artifact tags. The run then releases the selected Runtime/SDK, Server/self-host, and Desktop artifacts and deploys the selected hosted surfaces to production.
 
-Desktop updater publication is a separate reusable release call made directly
-from the train's prepare result. It has no staging dependency and is not bound
-to a GitHub Environment. Nightly raw product-release publication depends on
-selected artifact-release and staging jobs, not on nightly production jobs, so
-it can publish before production finishes or when production later fails.
+The nightly run covers every surface: Server, Web, and LiteLLM deploys plus a Desktop release that publishes the updater manifest. `surfaces` defaults to `all`, which makes every surface eligible and leaves the choice to change detection against the previous checkpoint, so an unchanged surface is neither re-released nor redeployed and a night with no changes at all does nothing. An explicit `surfaces` list skips detection and is exact.
 
-The manual hotfix coordinator starts from an exact ref on `main`, prepares the
-selected versions and tags, runs selected artifact and production jobs, and
-publishes its raw product release only after every selected artifact-release
-and production job succeeds. A Runtime-only hotfix therefore waits for the
-Runtime release even though it has no production deploy job. Neither
-coordinator includes a LiteLLM job. Exact LiteLLM deployment uses the manual
-production-promotion path.
+`dry_run` is the standing way to prove a change to this pipeline before it can ship anything. A dry run walks the whole graph and suppresses every externally visible effect: prepare computes the version plan but commits nothing to `main` and creates no tags, the artifact release builds are skipped, each deploy lane is still called but with `enabled: false` so the inner job that reaches AWS or Vercel never starts, and the product release body is rendered without creating or updating a GitHub Release. Both step summaries say the run was a dry run. It composes with the other inputs: `surfaces` narrows what the plan covers, and `skip_build` walks the deploy-only shape, which still requires an explicit `surfaces` list because that guard is part of what a wiring proof needs to exercise.
+
+The build lanes are skipped rather than called with their own `dry_run`, because their dry-run input still compiles everything; the deploy lanes have a real no-op switch, so calling them costs seconds and proves the call wiring. That asymmetry is deliberate.
+
+A `skip_build` run is deploy-only. It creates no version bump, no tags, no artifact releases, and no product release page, so it deploys the exact ref without minting new artifact identities. It does not reuse the artifacts a previous run produced: each hosted lane still rebuilds its image from that same source SHA, so a promotion is a deterministic rebuild of the promoted commit rather than a retag of existing bytes. Artifact handoff would make it a true retag and is not built.
+
+Production jobs are unattended workflow jobs, and the pipeline has no approval step of its own. The `Production` GitHub Environment's required-reviewer rule is a repository setting rather than anything these files express, and while it is set it does more than delay a run.
+
+A cron run under that rule pushes its version-bump commit to `main` and creates the release tags in prepare, which is not bound to any environment, and then parks `deploy-server-prod` in Waiting. The parked run holds the `nightly-release-train` concurrency group with `cancel-in-progress: false`, and no separate hotfix workflow exists to route around it, so every later dispatch queues behind the parked run instead of preempting it and a third dispatch cancels the queued one rather than the stuck one. Every manual production deploy is blocked for as long as the run sits there. The operator escape hatch is `gh run cancel <run-id>` on the parked run, which releases the group. The rule must be removed for this pipeline to operate as described.
+
+Server and LiteLLM deploy in parallel, and Web waits for the Server deploy because a rolled web surface can call API endpoints that only the new server revision serves. Web still deploys when Server is not a selected surface, and does not deploy when a selected Server deploy failed.
+
+Desktop updater publication is a reusable release call made directly from the prepare result. It has no deploy dependency and is not bound to a GitHub Environment. Raw product-release publication gates on the artifact release jobs alone, so it can publish before the production deploys finish or when they later fail.
+
+Every `_deploy-*.yml` lane builds its own exact-SHA image, so the artifact release jobs hand nothing to the deploy jobs. A run that releases and deploys the same surface therefore builds that source twice.
 
 See the [Release procedure](../../../../../guides/deploying/releases.md).
 
 ### Artifact lanes
 
 Desktop, Runtime/SDK, Server/self-host, and E2B template outputs have distinct
-coordinates. The reusable E2B deploy lane and the two standalone cloud-template
-workflows all operate on the same immutable `sha-<12>` plus rolling
-`staging`/`production` family; they are separate entrypoints, not separate
-artifact identities.
+coordinates. The two standalone cloud-template workflows operate on the same
+immutable `sha-<12>` plus rolling `staging`/`production` family;
+`release-cloud-template.yml` builds an immutable tag and moves `staging`, and
+`promote-cloud-template.yml` smokes an immutable tag and moves `production`.
+They are separate entrypoints, not separate artifact identities.
 
 Server releases publish server and LiteLLM GHCR images with version and rolling
 `stable` tags, never commit-SHA image tags. A `server-v<version>` GitHub Release
@@ -225,17 +215,15 @@ Each checked-in workflow appears exactly once below. Trigger posture describes
 how the file can run; it does not imply that the workflow is a merge or release
 gate.
 
-### Reusable deploy lanes
+### Reusable build and deploy lanes
 
 | Workflow | Trigger and posture | Role |
 | --- | --- | --- |
+| `_build-server.yml` | Reusable only | Build and publish the server and LiteLLM GHCR images and the self-hosted release assets for one already-gated commit, and mint its `server-v` tag. Carries no lint or test job: tests gate the PR to `main` transition, and this lane only ever runs on a commit that already reached `main`. |
 | `_deploy-desktop.yml` | Reusable only | Validate/build Desktop for staging or call the Desktop publisher for production. |
-| `_deploy-e2b.yml` | Reusable only | Build and/or promote one immutable E2B template into a rolling environment tag; the smoke proves the three runtime binaries report the canonical version and carry the stamped source SHA before the rolling tag moves. |
 | `_deploy-litellm.yml` | Reusable only | Build and roll the LiteLLM ECS service when its environment switch is enabled. |
-| `_deploy-mobile.yml` | Reusable only | Run the selected EAS build and optional submit lane when enabled. |
 | `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, conditionally roll the Celery worker and Beat before the API, roll the API, and verify health. API, worker, and Beat are all pinned to the one candidate image by its **immutable `repo@sha256:` digest** (resolved from the build/push output), never a mutable tag, so all three planes run the byte-identical image and a later tag move cannot change what a rolled service runs. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, preserves the support-feed secret, and explicitly authors the API's checked-in environment-bound Redis and E2B-key field references after account, region, secret-identity, DNS-safe Redis, and nonempty-key preflights. The conditional background re-image authors the same exact key projection plus the reviewed template, and asserts the full contract before and after registration. |
 | `_deploy-web.yml` | Reusable only | Deploy and verify the selected Vercel web surface. |
-| `_deploy-workers.yml` | Reusable only | Report the disabled Worker lane, or fail if enabled before a canonical deploy exists. |
 
 ### CI, security, compatibility, probes, and qualification
 
@@ -252,22 +240,18 @@ gate.
 | `release-e2e-selfhost.yml` | Scheduled, manual, or reusable | Run self-host artifact-chain and optional provisioning qualification. Tier 4 and self-host provisioning use separate non-cancelling job groups; no current release coordinator calls it. |
 | `release-e2e.yml` | Scheduled or manual | Run live Tier 3 release qualification; it is not a per-PR merge gate. Local, staging, Tier 2, managed-cloud, and self-host use independent non-cancelling job groups, so unrelated worlds may overlap while same-world runs do not. These groups do not promise FIFO ordering. |
 | `self-host-smoke.yml` | Pull request, push to `main`, or manual | Smoke the production Compose path when relevant paths change. Branch-protection status is not encoded here. |
-| `server-ci.yml` | Relevant push/PR, `server-v*` tag, manual, or reusable | Validate/package the server and publish self-host images/assets when invoked as a release. |
+| `server-ci.yml` | Relevant push/PR, manual, or reusable | Validate the server. It is a gate, not a publisher: the release image and asset build lives in `_build-server.yml`. |
 
 Server CI's shrink-only mypy census compares a pull request with its base SHA
 and a push with the event's pre-push SHA. Manual and reusable invocations must
-supply an explicit comparison SHA; the nightly and hotfix coordinators pass the
-base selected by their prepare job. A new release tag uses its source commit's
-parent because that source commit already passed the `main` push gate.
+supply an explicit comparison SHA.
 
-### Hosted deployment and promotion coordinators
+### Hosted deployment and release coordinators
 
 | Workflow | Trigger and posture | Role |
 | --- | --- | --- |
-| `deploy-staging.yml` | Successful CI workflow run on `main`, or manual | Plan, deploy selected staging surfaces, and retain the exact-SHA summary. |
-| `hotfix-production.yml` | Manual | Prepare and run an exact-surface production hotfix from `main`. |
-| `nightly-release-train.yml` | Scheduled daily or manual | Coordinate product/artifact releases and staged-then-automatic hosted deployment. |
-| `promote-production.yml` | Manual | Promote an exact staged SHA, or use its explicit staging bypass, into selected production lanes. |
+| `deploy-staging.yml` | Manual | Plan, deploy selected staging surfaces, and retain the exact-SHA summary. Nothing triggers it automatically. |
+| `release.yml` | Scheduled daily at 09:00 UTC, or manual | Release selected artifacts and deploy selected hosted surfaces straight to production. `skip_build` makes the run a deploy-only promotion; `ref` plus `surfaces` expresses a hotfix; `dry_run` walks the graph with every externally visible effect suppressed. |
 
 ### Artifact and template releases
 
@@ -304,12 +288,16 @@ manifest publisher exists.
 
 ## Current Gaps
 
-- Nightly and hotfix coordinators do not include LiteLLM; use manual production
-  promotion for that surface.
-- Self-host release E2E exposes a reusable trigger but is not called by a
+- No automated end-to-end proof gates the Staging state, and no transition consumes one. Staging is deployed, not proven.
+- The release builds and the production deploys share no artifact. Each deploy lane rebuilds its own exact-SHA image from source.
+- `_deploy-*.yml` lanes still take an `environment` string plus an `enabled` boolean rather than a single environment parameter, so each caller repeats the surface-selection wiring.
+- The operator procedures in [Deploying](../../../../../guides/deploying/README.md) still describe the retired nightly, hotfix, and promotion workflows.
+- Self-host release E2E exposes a reusable trigger but is not called by the
   release coordinator, even though Testing's target requires an every-release
   gate.
-- Hosted Worker deployment has no enabled canonical service or command.
+- E2B has no automated production path. `release.yml` has no E2B job, and the rolling `production` template tag moves only through the manual `Promote Cloud Template` workflow, even though change detection still classifies an `e2b` surface.
+- Mobile has no deploy path in any workflow. Its EAS lane was deleted with the coordinators that called it.
+- Hosted Worker deployment has no enabled canonical service or command, and no standalone Worker workflow exists any more. The Celery worker and Beat rollout inside `_deploy-server.yml` is unaffected.
 - The AWS Graviton self-host template downloads the aarch64 runtime bundle,
   while provider-sandbox runtime discovery currently expects x86 Linux
   binaries. The default AWS cloud-workspace path is therefore not proven.
@@ -319,3 +307,62 @@ manifest publisher exists.
   helpers have no active call site.
 - Raw product release publication and the Issue Lifecycle manifest/finalizer
   remain separate, and landing publication is not automated.
+
+## Merge Gate
+
+Branch protection on `main` cannot distinguish "no red X" from "actually
+verified". A required status check is satisfied when it reports `success`, and
+also when it reports `skipped`, and also when the name stops resolving because
+the job behind it was renamed, deleted, or gated off. A required-checks list
+made of per-lane names therefore degrades silently to green at exactly the
+moment the lanes stop running.
+
+Two rollup jobs invert that. `ci-ok` in `.github/workflows/ci.yml` and
+`server-ci-ok` in `.github/workflows/server-ci.yml` each depend on every lane in
+their own workflow, run under `if: always()`, and fail unless every dependency
+concluded `success` -- `failure`, `skipped`, and `cancelled` are all fatal, and
+the failing lanes are named in the output. Each carries a drift guard that
+parses its own workflow file and fails if a job exists there but not in the
+rollup's `needs:` list, so a lane cannot leave the gate unnoticed. `needs:`
+cannot cross workflows, which is why there is one rollup per workflow rather
+than one overall.
+
+The required status checks for `main` are:
+
+| Check | Workflow |
+| --- | --- |
+| `ci-ok` | CI |
+| `server-ci-ok` | Server CI |
+| `Analyze (javascript-typescript)` | CodeQL |
+| `Analyze (python)` | CodeQL |
+| `Analyze (rust)` | CodeQL |
+| `Validate PR title and labels` | PR Metadata |
+| `Detect smoke-relevant changes` | Self-Host Smoke |
+| `Production compose smoke` | Self-Host Smoke |
+
+Names are check-run display names, as `gh pr checks` prints them. No individual
+lane name from `ci.yml` or `server-ci.yml` belongs on the list: the rollups are
+strictly stronger, and a per-lane name is a name that can rot. Because a
+`needs:` entry on a matrix job covers all of its shards, sharding or renaming a
+lane never requires a branch-protection edit.
+
+Excluded on purpose: `intent-tests (provisional)` and `intent-billing
+(provisional)` are `continue-on-error` while the harness earns trust; the Vercel
+checks are third-party. `docker` and `self-hosted-release-assets` used to be
+excluded as release-only jobs inside Server CI; they now live in
+`_build-server.yml` and are outside the rollup's file entirely. Server CI's
+drift guard still derives a release-only exemption from a job's `server-v` tag
+gate rather than by name, so a future release-gated job cannot silently join or
+leave the rollup, but the exempt set is empty today and every job in the file is
+covered.
+
+Server CI carries no `on.pull_request.paths` filter, because a path-skipped
+workflow never reports a conclusion at all and a required check pointing into it
+would strand every unrelated pull request on a pending check. It runs on every
+pull request instead, and a `changes` job publishes one relevance flag that each
+lane's steps consume. A lane with nothing to verify reports a real `success`
+rather than `skipped`, and an unset flag -- what a failed `changes` job produces
+-- runs the real suite.
+
+Any change to the set of required checks belongs here and in the comment block
+above `ci-ok` in `.github/workflows/ci.yml`, in the same commit.

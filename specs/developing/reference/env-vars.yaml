@@ -1289,6 +1289,12 @@
   description: Absolute path override for the AnyHarness-managed worktree root used by inventory, orphan pruning, and automatic checkout retention
   tags: [local-dev, self-hosted]
 
+- name: ANYHARNESS_IDLE_SESSION_REAP_SECONDS
+  secret: false
+  default: "120"
+  description: "Seconds of continuous idleness after which the AnyHarness runtime retires a live session's agent processes; 0 disables the reaper"
+  tags: [local-dev, self-hosted, production]
+
 # ═══════════════════════════════════════════════════════════════════════
 # Desktop: Diagnostics (internal builds only)
 # ═══════════════════════════════════════════════════════════════════════
@@ -1296,13 +1302,13 @@
 - name: PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN
   secret: false
   default: ""
-  description: Absolute path to a diagnostics collector binary the desktop host should spawn instead of the bundled one; required for local diagnostics because a default build cannot export
+  description: Absolute path to a diagnostics collector binary the desktop host should spawn instead of the bundled one; required for dogfood diagnostics because a default build exports the lifecycle record class only
   tags: [local-dev, desktop]
 
 - name: PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT
   secret: false
   default: ""
-  description: OTLP/HTTP base URL the collector exports records to; the exporter appends /v1/logs itself. Honored only by collectors built with the internal-dogfood-export feature
+  description: OTLP/HTTP base URL the collector exports records to; the exporter appends /v1/logs itself. Honored by every collector build, but a default build exports the lifecycle record class only; internal-dogfood-export widens that to every non-secret class
   tags: [local-dev, desktop]
 
 - name: PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS
@@ -1314,7 +1320,7 @@
 - name: PROLIFERATE_DIAGNOSTICS_DEV_TAG
   secret: false
   default: "$USER"
-  description: Developer identity attached to exported records as the dev.user resource attribute, so teammates sharing one environment are distinguishable
+  description: Developer identity attached to exported records as the dev.user resource attribute, so teammates sharing one environment are distinguishable. Read only by collectors built with the internal-dogfood-export feature; a customer build reads neither this variable nor $USER
   tags: [local-dev, desktop]
 
 - name: PROLIFERATE_DIAGNOSTICS_BRIDGE_ENDPOINT

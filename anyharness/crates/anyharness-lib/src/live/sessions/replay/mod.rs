@@ -11,8 +11,9 @@ use tokio::sync::{broadcast, mpsc};
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::runtime_event::RuntimeEventInjectionError;
 use crate::live::sessions::actor::command::{
-    ForkSessionCommandError, PromptAcceptError, QueueMutationError, ResolveInteractionCommandError,
-    SessionCommand, SetConfigOptionCommandError,
+    ConditionalUnloadOutcome, ForkSessionCommandError, PromptAcceptError, QueueMutationError,
+    ResolveInteractionCommandError, SessionCommand, SetConfigOptionCommandError,
+    UnloadRetainedReason,
 };
 use crate::live::sessions::actor::spawn::ActorReadyResult;
 use crate::live::sessions::handle::LiveSessionHandle;
@@ -433,6 +434,15 @@ async fn handle_non_replay_command(
         SessionCommand::Unload { respond_to } => {
             let _ = respond_to.send(Ok(()));
             Some(ReplayExitDisposition::Dismiss)
+        }
+        SessionCommand::UnloadIfIdle { respond_to } => {
+            // The idle reaper's conditional retirement. A replay session holds
+            // no agent process, so retiring it reclaims nothing, and the only
+            // exit it has is a dismissal. Keep it.
+            let _ = respond_to.send(ConditionalUnloadOutcome::Retained(
+                UnloadRetainedReason::ReplaySession,
+            ));
+            None
         }
         SessionCommand::Stop { respond_to } => {
             // A replay session has no live agent process to kill; nothing

@@ -30,6 +30,7 @@ provider configuration part of repository law.
 | Metabase | [metabase.md](metabase.md) | Hosted analytics and deployments that operate a compatible analytics database. |
 | PostHog | [posthog.md](posthog.md) | Hosted capture/replay and deployments that explicitly configure their own project. |
 | Sentry | [sentry.md](sentry.md) | Hosted observability and deployments that explicitly configure their own projects. |
+| Honeycomb | [honeycomb.md](honeycomb.md) | Hosted product SLIs computed from AnyHarness lifecycle records; dogfood and internal builds only until the customer export pipe ships. |
 
 ## Shared Safety Contract
 

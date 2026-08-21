@@ -50,5 +50,10 @@ export const CHAT_PRE_MESSAGE_LABELS = {
 export const CHAT_MODEL_SELECTOR_LABELS = {
   empty: "Select model",
   unknownModel: "Unknown model",
+  // Genuinely no harnesses: there is nothing to have reported anything.
   noProviders: "No harnesses yet. Add one to get started.",
+  // Harnesses exist and answered — with nothing. A different fact, so a
+  // different sentence: telling a user with five agents installed that they
+  // have none sends them to fix the wrong thing.
+  observedEmpty: "Your agents reported no models yet.",
 } as const;

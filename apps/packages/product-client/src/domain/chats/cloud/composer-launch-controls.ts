@@ -35,12 +35,14 @@ export function buildCloudLaunchComposerControls(input: {
     selectedModelId: resolved.modelId,
     onSelect: input.onAgentModelSelect,
   });
-  const configControls = launchComposerControls(response).map((control) => buildLaunchConfigControl({
-    agentKind: response.harnessKind,
-    control,
-    selection: resolved,
-    onSelect: input.onControlSelect,
-  }));
+  const configControls = launchComposerControls(response, resolved.modelId).map((control) =>
+    buildLaunchConfigControl({
+      agentKind: response.harnessKind,
+      control,
+      selection: resolved,
+      onSelect: input.onControlSelect,
+    })
+  );
   return modelControl ? [...configControls, modelControl] : configControls;
 }
 
@@ -49,7 +51,8 @@ export function resolveCloudLaunchSelection(input: {
   selection: CloudLaunchComposerSelection;
 }): CloudLaunchComposerSelection {
   const response = input.launchOptions;
-  const controls = launchComposerControls(response);
+  const selectedModel = selectLaunchModel(response, input.selection.modelId);
+  const controls = launchComposerControls(response, selectedModel?.id);
   const controlValues: Record<string, string> = {};
   for (const control of controls) {
     const value = selectedLaunchControlValue(control, input.selection);
@@ -59,7 +62,7 @@ export function resolveCloudLaunchSelection(input: {
   }
   return {
     agentKind: response?.harnessKind ?? input.selection.agentKind ?? DEFAULT_DIRECT_PROMPT_AGENT_KIND,
-    modelId: selectLaunchModel(response, input.selection.modelId)?.id ?? null,
+    modelId: selectedModel?.id ?? null,
     controlValues,
   };
 }

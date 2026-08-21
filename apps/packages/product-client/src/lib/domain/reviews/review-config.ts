@@ -4,7 +4,10 @@ import type {
   StartCodeReviewRequest,
   StartPlanReviewRequest,
 } from "@anyharness/sdk";
-import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
+import {
+  resolveLaunchControlValuesForModel,
+  type DesktopAgentLaunchAgent,
+} from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
   findReviewPersonaTemplateForReviewer,
   isBuiltInReviewPersonaId,
@@ -88,6 +91,7 @@ export function createReviewSetupReviewerDraft(args: {
     controlValues: resolveReviewerControlValues(
       args.sessionDefaults,
       args.sessionDefaults.agentKind,
+      args.sessionDefaults.modelId,
       {},
     ),
   };
@@ -155,6 +159,7 @@ export function createReviewSetupDraft(args: {
           controlValues: resolveReviewerControlValues(
             args.sessionDefaults,
             reviewerAgentKind,
+            reviewerModelId,
             {
               ...inheritedControlValues,
               ...reviewer.controlValues,
@@ -248,18 +253,14 @@ function resolveStoredReviewers(
 function resolveReviewerControlValues(
   sessionDefaults: ReviewSessionDefaults,
   agentKind: string,
+  modelId: string | null,
   explicit: Record<string, string>,
 ): Record<string, string> {
   const normalizedAgentKind = agentKind.trim();
   const agent = sessionDefaults.launchAgents.find(
     (candidate) => candidate.kind === normalizedAgentKind,
   );
-  return {
-    ...Object.fromEntries((agent?.launchControls ?? [])
-      .filter((control) => control.defaultValue !== null)
-      .map((control) => [control.key, control.defaultValue as string])),
-    ...explicit,
-  };
+  return resolveLaunchControlValuesForModel(agent, modelId, explicit);
 }
 
 export function buildReviewRequest(

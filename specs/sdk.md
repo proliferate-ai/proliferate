@@ -16,8 +16,10 @@ policy.
 
 The AnyHarness SDK owns the local target contract and client methods for
 `HarnessLaunchOptionsResponse`, refresh, `LaunchSelection.controlValues`, and
-the full `SessionLiveConfigSnapshot`. SDK React exposes query/mutation hooks
-and keys scoped by runtime, cache scope, and harness.
+the full `SessionLiveConfigSnapshot`. `HarnessLaunchOptionsResponse` preserves
+the optional exact `modelControls` rows alongside its flat compatibility
+statement; it does not synthesize missing model rows. SDK React exposes
+query/mutation hooks and keys scoped by runtime, cache scope, and harness.
 
 The Cloud SDK owns the copied target response and reads it by cloud sandbox ID
 plus harness kind. Cloud React keys include both values. Neither SDK composes,

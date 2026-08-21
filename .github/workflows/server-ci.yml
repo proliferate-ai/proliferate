@@ -1,9 +1,22 @@
 name: Server CI
 
 on:
+  # No `tags: ["server-v*"]` here any more. This is a deliberate retirement,
+  # not a no-op cleanup -- the tag trigger DID fire historically: three
+  # human-pushed tags (server-v0.1.1/0.1.2/0.1.3, 2026-05-29, runs
+  # 26621290094/26621446218/26622403422) ran this workflow, including the two
+  # jobs that reacted to a server release tag (`docker`,
+  # `self-hosted-release-assets`), which have since moved to
+  # `_build-server.yml`. (GitHub does not evaluate `paths:` filters for tag
+  # pushes at all, so the `paths:` list below never suppressed those runs.)
+  # server-v0.4.x tags produced no runs for an unrelated reason: those tags
+  # are minted by a workflow using the default `GITHUB_TOKEN`
+  # (`_build-server.yml`'s tag-creation step), and `GITHUB_TOKEN` pushes do
+  # not trigger new workflow runs. The trigger is being retired now because
+  # releases flow exclusively through `release.yml` -> `_build-server.yml`;
+  # a human-pushed `server-v*` tag no longer runs anything in this repo.
   push:
     branches: [main]
-    tags: ["server-v*"]
     paths:
       - ".dockerignore"
       - ".github/workflows/server-ci.yml"
@@ -12,43 +25,40 @@ on:
       - "pnpm-workspace.yaml"
       - "scripts/validate-agent-catalog.mjs"
       - "server/**"
+  # Deliberately no on.pull_request.paths filter. A path-skipped workflow never
+  # reports a conclusion at all, so a required check naming these jobs would sit
+  # Pending forever on every non-server PR and make it unmergeable -- and the
+  # only way to avoid that today is to leave the server lanes off the required
+  # list entirely, which is exactly the absence hole ci-ok exists to close.
+  #
+  # So the workflow runs on EVERY pull request, and the cheap `changes` job
+  # below diffs the merge base against the same path list that used to sit on
+  # this trigger. On a non-server diff the heavy lanes short-circuit and report
+  # SUCCESS in well under a minute rather than being job-level `if:`-skipped.
+  # That distinction is the whole point: `skipped` is a conclusion branch
+  # protection silently accepts, so an absence-is-fatal required check must
+  # never be satisfied by one. Every server lane now always reports a real
+  # green/red, on every PR, with no path-filter trust anywhere in the chain.
   pull_request:
-    paths:
-      - ".dockerignore"
-      - ".github/workflows/server-ci.yml"
-      - "catalogs/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "scripts/validate-agent-catalog.mjs"
-      - "server/**"
   workflow_dispatch:
     inputs:
       comparison_sha:
         description: "Trusted base SHA for the shrink-only mypy baseline comparison."
         required: true
         type: string
+  # Validation only. Release packaging inputs (`version`, `dry_run`, `publish`)
+  # live on `_build-server.yml`, which is what release.yml calls; this workflow
+  # no longer publishes anything and takes no publishing inputs.
   workflow_call:
     inputs:
       git_sha:
-        description: "Commit SHA to validate and package. Defaults to the caller ref."
+        description: "Commit SHA to validate. Defaults to the caller ref."
         required: false
         type: string
       comparison_sha:
         description: "Trusted base SHA for the shrink-only mypy baseline comparison."
         required: true
         type: string
-      version:
-        description: "Server/self-hosted version to release. Required for reusable release calls."
-        required: false
-        type: string
-      dry_run:
-        description: "Run validation and packaging without publishing release artifacts."
-        type: boolean
-        default: false
-      publish:
-        description: "Publish GHCR image and GitHub Release assets."
-        type: boolean
-        default: true
 
 defaults:
   run:
@@ -58,47 +68,179 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  lint:
+  # Cheap relevance probe that replaces the removed on.pull_request.paths
+  # filter. Checkout + one git diff, no toolchains. The path list below is the
+  # filter that used to live on the trigger, kept verbatim so the set of PRs
+  # whose server lanes actually execute is unchanged; only the reporting
+  # behaviour on the other PRs changes (a real green instead of no conclusion).
+  #
+  # Every non-pull_request caller -- main pushes, workflow_dispatch, and any
+  # workflow_call entrypoint -- is unconditionally relevant.
+  #
+  # This job is lane-agnostic on purpose: it publishes ONE `relevant` flag and
+  # any number of downstream lanes consume it. A new lane needs exactly three
+  # things and nothing more: `needs: changes`, the green no-op step, and
+  # `if: needs.changes.outputs.relevant == 'true'` on every one of its other
+  # steps. Do not reintroduce a paths filter, and do not gate a lane at the job
+  # level -- that produces `skipped`, the conclusion this whole arrangement
+  # exists to avoid.
+  changes:
+    name: Detect server-relevant changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.detect.outputs.relevant }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.git_sha || github.ref }}
+          fetch-depth: 0
+
+      - name: Diff against merge base
+        id: detect
+        working-directory: .
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+          GIT_SHA_INPUT: ${{ inputs.git_sha || '' }}
+        run: |
+          set -euo pipefail
+
+          # A reusable-workflow call inherits the CALLER's event name and never
+          # reports "workflow_call" (the same quirk `_build-server.yml` documents
+          # on its job gates), so the event name alone cannot identify a
+          # reusable invocation. There is no checked-in caller today -- release.yml
+          # calls `_build-server.yml`, not this file -- but a future PR-triggered
+          # caller would otherwise compute relevance from
+          # the PR's diff and could ship with the server lanes no-opped. A
+          # non-empty inputs.git_sha only ever comes from a workflow_call, so
+          # treat it as unconditionally relevant regardless of event name.
+          if [[ -n "$GIT_SHA_INPUT" ]]; then
+            echo "Reusable call for ${GIT_SHA_INPUT}; always runs the server lanes."
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "Event $GITHUB_EVENT_NAME always runs the server lanes."
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base="$(git merge-base "origin/${BASE_REF}" HEAD)"
+
+          # Captured into a variable rather than read through `done < <(...)`.
+          # A process substitution is not a pipeline, so neither `set -e` nor
+          # `set -o pipefail` can observe a failing `git diff`: the loop would
+          # read zero lines, `relevant` would keep its `false` initializer, and
+          # both server lanes would report a real green on a real server PR --
+          # strictly worse than the path-skip this replaces, because it looks
+          # verified. Command substitution IS covered by `set -e`, so a failing
+          # `git diff` now aborts the step, which (per the != 'false' gating on
+          # the lanes below) makes the real suites run.
+          changed="$(git diff --name-only "$base" HEAD)"
+
+          # Floor guard, same standard #2137 applies to its shard partition: a
+          # pull request always changes at least one file, so an empty list
+          # means the diff did not describe this PR. Fail loudly instead of
+          # silently concluding "nothing server-relevant here".
+          if [[ -z "$changed" ]]; then
+            echo "Refusing to classify: git diff ${base}..HEAD listed no changed files." >&2
+            echo "A pull request always changes at least one path; the base resolution is wrong." >&2
+            exit 1
+          fi
+
+          relevant=false
+          while IFS= read -r file; do
+            case "$file" in
+              .dockerignore|.github/workflows/server-ci.yml)
+                relevant=true
+                ;;
+              pnpm-lock.yaml|pnpm-workspace.yaml|scripts/validate-agent-catalog.mjs)
+                relevant=true
+                ;;
+              catalogs/*|server/*)
+                relevant=true
+                ;;
+            esac
+          done <<<"$changed"
+          echo "Changed paths since ${base}: $(wc -l <<<"$changed")"
+          echo "Server-relevant changes since ${base}: ${relevant}"
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
+  lint:
+    needs: changes
+    # `always()` so a failed or cancelled `changes` job can never turn this
+    # lane into a `skipped` conclusion. See the no-op step's polarity note.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # Reports SUCCESS, not `skipped`, when the diff cannot change this lane's
+      # result. `skipped` is the conclusion branch protection silently accepts,
+      # so it is exactly what an absence-is-fatal required check must never be
+      # satisfied by; every other step in this job is individually gated
+      # instead, and the job ends green in well under a minute.
+      #
+      # Note the polarity. This step fires only on an explicit `false`, while
+      # every real step fires on `!= 'false'`. An unset or empty output -- which
+      # is precisely what a FAILED or CANCELLED `changes` job produces -- runs
+      # the real suite rather than going green. The gate is fail-closed by
+      # construction, not by `Detect server-relevant changes` happening to be on
+      # the required-checks list.
+      - name: No server-relevant changes
+        if: needs.changes.outputs.relevant == 'false'
+        working-directory: .
+        run: |
+          echo "No server-relevant paths in this diff; nothing for this lane to verify."
+          echo "Reporting success (not skipped) so this check always reports a conclusion."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.relevant != 'false'
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
           fetch-depth: 2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.changes.outputs.relevant != 'false'
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
+        if: needs.changes.outputs.relevant != 'false'
         with:
           version: 10
       - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.relevant != 'false'
       - uses: actions/setup-python@v7
+        if: needs.changes.outputs.relevant != 'false'
         with:
           python-version: "3.12"
 
       - name: Validate catalogs
+        if: needs.changes.outputs.relevant != 'false'
         run: |
           node scripts/validate-agent-catalog.mjs
         working-directory: .
 
       - name: Install workspace dependencies
+        if: needs.changes.outputs.relevant != 'false'
         run: pnpm install --frozen-lockfile
         working-directory: .
 
       - name: Build artifact runtime
+        if: needs.changes.outputs.relevant != 'false'
         run: pnpm -C server/artifact-runtime build
         working-directory: .
 
       - name: Install dependencies
+        if: needs.changes.outputs.relevant != 'false'
         run: uv sync --python 3.12 --frozen --extra dev
 
       - name: Ruff check
+        if: needs.changes.outputs.relevant != 'false'
         run: uv run --python 3.12 --frozen --extra dev ruff check proliferate/ tests/
 
       - name: Ruff format check
+        if: needs.changes.outputs.relevant != 'false'
         run: uv run --python 3.12 --frozen --extra dev ruff format --check proliferate/ tests/
 
       - name: Mypy diagnostic ratchet
+        if: needs.changes.outputs.relevant != 'false'
         env:
           MYPY_COMPARISON_SHA: ${{ inputs.comparison_sha || '' }}
           MYPY_EVENT_NAME: ${{ github.event_name }}
@@ -109,9 +251,34 @@ jobs:
           uv run --python 3.12 --frozen --extra dev python scripts/check_mypy_baseline.py
           --github-event-base
 
-  test:
+  # tests/unit is not actually free of live-infra dependencies: 113 test
+  # functions across 20 files resolve the test_engine/db_session/client/
+  # single_org_client fixtures (tests/conftest.py, tests/unit/test_first_run_claim.py:64,
+  # tests/unit/test_registration_page.py:54, tests/unit/test_self_registration.py:53, etc.)
+  # which open a real Postgres connection, and
+  # tests/unit/test_redis_lock.py:108 and :138 exercise a live Redis over
+  # settings.redbeat_redis_url. Moving those ~115 tests out of tests/unit or
+  # reworking the fixtures to fake the backends would be well past a minimal
+  # conftest change, so this lane keeps the service containers as the
+  # documented fallback (see PR body) -- only the xdist fan-out and the
+  # lock-table bump are dropped, since a serial, single-connection run never
+  # needs them.
+  # Known, accepted cost of always reporting a real conclusion: Actions has no
+  # conditional `services:` block, so Postgres and Redis boot even on a no-op
+  # run, and a service-container health-check flake can red a lane that had
+  # nothing to verify. The reviewed alternative -- job-level `if:`-skip the lane
+  # and let `server-ci-ok` launder it into one green -- was rejected because it
+  # reinstates `skipped` as a load-bearing conclusion in the exact workflow this
+  # PR is de-skipping. If the boot proves flaky in practice, the honest fix is
+  # to move these suites onto a self-provisioned Postgres/Redis started by a
+  # gated step, not to reintroduce the skip.
+  test-unit:
+    needs: changes
+    # `always()` so a failed or cancelled `changes` job can never turn this
+    # lane into a `skipped` conclusion. See the no-op step's polarity note.
+    if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 30
     env:
       DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
       JWT_SECRET: test-jwt-secret
@@ -140,261 +307,357 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
+      # Reports SUCCESS, not `skipped`, when the diff cannot change this lane's
+      # result. `skipped` is the conclusion branch protection silently accepts,
+      # so it is exactly what an absence-is-fatal required check must never be
+      # satisfied by; every other step in this job is individually gated
+      # instead, and the job ends green in well under a minute.
+      #
+      # Note the polarity. This step fires only on an explicit `false`, while
+      # every real step fires on `!= 'false'`. An unset or empty output -- which
+      # is precisely what a FAILED or CANCELLED `changes` job produces -- runs
+      # the real suite rather than going green. The gate is fail-closed by
+      # construction, not by `Detect server-relevant changes` happening to be on
+      # the required-checks list.
+      - name: No server-relevant changes
+        if: needs.changes.outputs.relevant == 'false'
+        working-directory: .
+        run: |
+          echo "No server-relevant paths in this diff; nothing for this lane to verify."
+          echo "Reporting success (not skipped) so this check always reports a conclusion."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.relevant != 'false'
         with:
           ref: ${{ inputs.git_sha || github.ref }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.changes.outputs.relevant != 'false'
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
+        if: needs.changes.outputs.relevant != 'false'
         with:
           version: 10
       - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.relevant != 'false'
       - uses: actions/setup-python@v7
+        if: needs.changes.outputs.relevant != 'false'
         with:
           python-version: "3.12"
 
       - name: Install workspace dependencies
+        if: needs.changes.outputs.relevant != 'false'
         run: pnpm install --frozen-lockfile
         working-directory: .
 
       - name: Build artifact runtime
+        if: needs.changes.outputs.relevant != 'false'
         run: pnpm -C server/artifact-runtime build
         working-directory: .
 
       - name: Install dependencies
+        if: needs.changes.outputs.relevant != 'false'
         run: uv pip install --system -e ".[dev]"
 
-      - name: Run tests
-        run: pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py -q --durations=20
+      - name: Run unit tests
+        if: needs.changes.outputs.relevant != 'false'
+        run: pytest tests/unit -q --durations=20
 
-  docker:
+  # Known, accepted cost of always reporting a real conclusion: Actions has no
+  # conditional `services:` block, so Postgres and Redis boot even on a no-op
+  # run, and a service-container health-check flake can red a lane that had
+  # nothing to verify. The reviewed alternative -- job-level `if:`-skip the lane
+  # and let `server-ci-ok` launder it into one green -- was rejected because it
+  # reinstates `skipped` as a load-bearing conclusion in the exact workflow this
+  # PR is de-skipping. If the boot proves flaky in practice, the honest fix is
+  # to move these suites onto a self-provisioned Postgres/Redis started by a
+  # gated step, not to reintroduce the skip.
+  test-integration:
+    needs: changes
+    # `always()` so a failed or cancelled `changes` job can never turn this
+    # lane into a `skipped` conclusion. See the no-op step's polarity note.
+    if: always()
     runs-on: ubuntu-latest
-    needs: [lint, test]
-    # Reusable-workflow calls inherit the caller's event name (never
-    # "workflow_call"), so this leg is driven by inputs.publish/dry_run instead.
-    # inputs.* are empty on plain push/PR events, so the comparisons stay false
-    # there and true only on a server-v tag push or an explicit publish call.
-    if: (startsWith(github.ref, 'refs/tags/server-v')) || (inputs.publish == true && inputs.dry_run != true)
-    permissions:
-      contents: read
-      packages: write
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
+      JWT_SECRET: test-jwt-secret
+      CLOUD_SECRET_KEY: test-cloud-secret
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proliferate
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proliferate -d proliferate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
+      # Reports SUCCESS, not `skipped`, when the diff cannot change this lane's
+      # result. `skipped` is the conclusion branch protection silently accepts,
+      # so it is exactly what an absence-is-fatal required check must never be
+      # satisfied by; every other step in this job is individually gated
+      # instead, and the job ends green in well under a minute.
+      #
+      # Note the polarity. This step fires only on an explicit `false`, while
+      # every real step fires on `!= 'false'`. An unset or empty output -- which
+      # is precisely what a FAILED or CANCELLED `changes` job produces -- runs
+      # the real suite rather than going green. The gate is fail-closed by
+      # construction, not by `Detect server-relevant changes` happening to be on
+      # the required-checks list.
+      - name: No server-relevant changes
+        if: needs.changes.outputs.relevant == 'false'
+        working-directory: .
+        run: |
+          echo "No server-relevant paths in this diff; nothing for this lane to verify."
+          echo "Reporting success (not skipped) so this check always reports a conclusion."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.relevant != 'false'
         with:
           ref: ${{ inputs.git_sha || github.ref }}
-
-      - name: Login to GHCR
-        uses: docker/login-action@v4.6.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.changes.outputs.relevant != 'false'
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        if: needs.changes.outputs.relevant != 'false'
+        with:
+          version: 10
+      - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.relevant != 'false'
+      - uses: actions/setup-python@v7
+        if: needs.changes.outputs.relevant != 'false'
+        with:
+          python-version: "3.12"
 
-      - name: Compute image tags
-        id: tags
+      - name: Install workspace dependencies
+        if: needs.changes.outputs.relevant != 'false'
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Build artifact runtime
+        if: needs.changes.outputs.relevant != 'false'
+        run: pnpm -C server/artifact-runtime build
+        working-directory: .
+
+      - name: Install dependencies
+        if: needs.changes.outputs.relevant != 'false'
+        run: uv pip install --system -e ".[dev]"
+
+      # Four workers means four concurrent 78-table TRUNCATEs and four
+      # concurrent full alembic upgrades, each holding an AccessExclusiveLock on
+      # every table, index, and sequence it touches. Postgres sizes its shared
+      # lock table at max_locks_per_transaction * max_connections, and the
+      # 64 * 100 default overflows with "out of shared memory". This GUC is
+      # postmaster-level, and service containers take no command line, so it has
+      # to be written to postgresql.auto.conf and the container bounced.
+      - name: Raise the Postgres lock table for parallel workers
+        if: needs.changes.outputs.relevant != 'false'
+        run: |
+          set -euo pipefail
+          container="$(docker ps --filter 'ancestor=postgres:16-alpine' --format '{{.ID}}' | head -1)"
+          test -n "$container"
+          docker exec "$container" psql -U proliferate -d proliferate \
+            -c 'ALTER SYSTEM SET max_locks_per_transaction = 1024;'
+          docker restart "$container"
+          for _ in $(seq 1 60); do
+            if docker exec "$container" pg_isready -U proliferate -d proliferate >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec "$container" psql -U proliferate -d proliferate \
+            -c 'SHOW max_locks_per_transaction;'
+
+      # Deterministic file-level partition: list every integration test file
+      # plus the one e2e file this lane also carries, sort them (independent
+      # of filesystem traversal order), and take every third file starting at
+      # this shard's offset. Whole files stay together -- xdist distributes
+      # within a shard -- so no test can land in two shards or in none, and
+      # the partition is identical across workers, runs, and reruns because
+      # it depends only on the file list sorted under LC_ALL=C, never on
+      # collection or runtime order. Collation is pinned explicitly: the
+      # shard a file lands in is a function of its index in the sorted list,
+      # so a locale that ordered punctuation or case differently would move
+      # files between shards. The three shards would still union to the whole
+      # suite, so such a drift is invisible in the pass/fail signal -- pinning
+      # LC_ALL=C is what makes reruns comparable rather than merely green.
+      #
+      # `mapfile < <(...)` reads from a process substitution, which is not a
+      # pipeline, so `set -o pipefail` cannot observe a failing `find` and the
+      # step would happily continue with a short or empty list. The floor
+      # checks below are the actual guard: a rename or move under
+      # tests/integration that collapses the list fails the shard loudly
+      # instead of silently testing almost nothing.
+      - name: Partition integration test files (shard ${{ matrix.shard }} of 3)
+        if: needs.changes.outputs.relevant != 'false'
+        id: partition
         env:
-          INPUT_VERSION: ${{ inputs.version || '' }}
+          SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
-          GHCR_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/proliferate-server"
-          LITELLM_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/proliferate-litellm"
-          TAGS=()
-          LITELLM_TAGS=()
-
-          if [[ "${GITHUB_REF:-}" == refs/tags/server-v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/server-v}"
-          else
-            VERSION="${INPUT_VERSION:?A server version input is required for reusable releases.}"
-          fi
-          # Push both the immutable version tag and the rolling :stable tag that the
-          # self-host compose bundle (server/deploy/) defaults to.
-          TAGS+=("${GHCR_IMAGE}:${VERSION}" "${GHCR_IMAGE}:stable")
-          LITELLM_TAGS+=("${LITELLM_IMAGE}:${VERSION}" "${LITELLM_IMAGE}:stable")
-
-          {
-            echo "tags<<EOF"
-            printf '%s\n' "${TAGS[@]}"
-            echo "EOF"
-            echo "litellm_tags<<EOF"
-            printf '%s\n' "${LITELLM_TAGS[@]}"
-            echo "EOF"
-            echo "version=${VERSION}"
-          } >> "$GITHUB_OUTPUT"
-
-      # Version pins stamped into the image and reported by /health and /meta.
-      # serverVersion is the release version (server-v tag / input). The desktop,
-      # runtime, and worker pins are read from their tracked package manifests
-      # at this commit; minDesktopVersion defaults to the pinned desktop version.
-      - name: Resolve version pins
-        id: pins
-        run: |
-          set -euo pipefail
-          desktop_version="$(jq -r '.version' apps/desktop/package.json)"
-          runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
-          worker_version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' anyharness/crates/proliferate-worker/Cargo.toml | head -n 1)"
-          : "${worker_version:?Failed to read the proliferate-worker crate version.}"
-          {
-            echo "desktop_version=${desktop_version}"
-            echo "runtime_version=${runtime_version}"
-            echo "worker_version=${worker_version}"
-            echo "min_desktop_version=${desktop_version}"
-          } >> "$GITHUB_OUTPUT"
-        working-directory: .
-
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: server/Dockerfile
-          push: true
-          tags: ${{ steps.tags.outputs.tags }}
-          build-args: |
-            SERVER_VERSION=${{ steps.tags.outputs.version }}
-            DESKTOP_VERSION=${{ steps.pins.outputs.desktop_version }}
-            RUNTIME_VERSION=${{ steps.pins.outputs.runtime_version }}
-            WORKER_VERSION=${{ steps.pins.outputs.worker_version }}
-            MIN_DESKTOP_VERSION=${{ steps.pins.outputs.min_desktop_version }}
-
-      # The self-host compose bundle also defaults the LiteLLM gateway to
-      # ghcr.io/OWNER/proliferate-litellm:stable, which no workflow built before.
-      # Build it here symmetrically with the server image (same GHCR login, same
-      # version/:stable tags) so self-host operators can pull it.
-      - name: Build and push LiteLLM gateway
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: server/litellm/Dockerfile
-          push: true
-          tags: ${{ steps.tags.outputs.litellm_tags }}
-
-  self-hosted-release-assets:
-    runs-on: ubuntu-latest
-    needs: [lint, test, docker]
-    # Same input-driven gate as the docker job (see note above): a server-v tag
-    # push, or an explicit publish call from a release train / hotfix workflow.
-    if: (startsWith(github.ref, 'refs/tags/server-v')) || (inputs.publish == true && inputs.dry_run != true)
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.git_sha || github.ref }}
-
-      - name: Setup Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: |
-            x86_64-unknown-linux-musl
-            aarch64-unknown-linux-musl
-
-      - name: Install musl-tools
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
-        working-directory: .
-
-      - name: Install cross for aarch64
-        run: cargo install cross --git https://github.com/cross-rs/cross
-        working-directory: .
-
-      - name: Build self-hosted Linux runtime (x86_64)
-        run: cargo build --release --target x86_64-unknown-linux-musl -p anyharness -p proliferate-worker -p proliferate-supervisor
-        working-directory: .
-
-      - name: Build self-hosted Linux runtime (aarch64)
-        run: cross build --release --target aarch64-unknown-linux-musl -p anyharness -p proliferate-worker -p proliferate-supervisor
-        working-directory: .
-
-      - name: Prepare release assets
-        env:
-          INPUT_VERSION: ${{ inputs.version || '' }}
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts
-          if [[ "${GITHUB_REF:-}" == refs/tags/server-v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/server-v}"
-          else
-            VERSION="${INPUT_VERSION:?A server version input is required for reusable releases.}"
-          fi
-          # Archive as root:root so a root extraction on the operator host does
-          # not hand ownership of executables to the runner's unprivileged uid.
-          tar czf artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz \
-            --owner=0 --group=0 --numeric-owner \
-            -C target/x86_64-unknown-linux-musl/release \
-            anyharness \
-            proliferate-worker \
-            proliferate-supervisor
-          tar czf artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz \
-            --owner=0 --group=0 --numeric-owner \
-            -C target/aarch64-unknown-linux-musl/release \
-            anyharness \
-            proliferate-worker \
-            proliferate-supervisor
-          cp server/infra/self-hosted-aws/template.yaml \
-            artifacts/proliferate-self-hosted-aws-template.yaml
-          # Standalone entrypoints operators fetch before they have the bundle:
-          # the guided installer and the AWS launch action. Published (and
-          # checksummed) so they can be pinned to a release and verified.
-          cp server/deploy/install.sh artifacts/proliferate-selfhost-install.sh
-          cp server/infra/self-hosted-aws/launch-stack.sh \
-            artifacts/proliferate-selfhost-aws-launch.sh
-          bundle_root="$(mktemp -d)"
-          mkdir -p "$bundle_root/proliferate-deploy"
-          cp -R server/deploy/. "$bundle_root/proliferate-deploy/"
-          # smoke/ and tests/ are CI-only; the operator bundle ships just the
-          # scripts, compose, and config the running stack needs.
-          rm -rf "$bundle_root/proliferate-deploy/smoke"
-          rm -rf "$bundle_root/proliferate-deploy/tests"
-          rm -f "$bundle_root/proliferate-deploy/.bootstrap-progress.log"
-          printf '%s\n' "$VERSION" > "$bundle_root/proliferate-deploy/VERSION"
-          tar czf artifacts/proliferate-deploy.tar.gz \
-            --owner=0 --group=0 --numeric-owner \
-            -C "$bundle_root" proliferate-deploy
-          rm -rf "$bundle_root"
-          (
-            cd artifacts
-            sha256sum \
-              anyharness-x86_64-unknown-linux-musl.tar.gz \
-              anyharness-aarch64-unknown-linux-musl.tar.gz \
-              proliferate-self-hosted-aws-template.yaml \
-              proliferate-selfhost-install.sh \
-              proliferate-selfhost-aws-launch.sh \
-              proliferate-deploy.tar.gz \
-              > self-hosted-assets.SHA256SUMS
+          mapfile -t files < <(
+            { find tests/integration -type f \( -name 'test_*.py' -o -name '*_test.py' \); \
+              echo tests/e2e/cloud/test_e2b_webhooks.py; } | LC_ALL=C sort -u
           )
-        working-directory: .
-
-      - name: Ensure server release tag exists
-        # Only publish calls need to create the tag; on a real server-v tag push
-        # the tag already exists. Input-driven, not event-name-driven.
-        if: inputs.publish == true && inputs.dry_run != true
-        env:
-          RELEASE_TAG: ${{ format('server-v{0}', inputs.version) }}
-          RELEASE_TARGET: ${{ inputs.git_sha }}
-        run: |
-          set -euo pipefail
-          : "${RELEASE_TAG:?Missing server release tag.}"
-          : "${RELEASE_TARGET:?Missing server release target.}"
-          existing_target="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" | awk '{ print $1 }' | head -n 1)"
-          if [[ -n "$existing_target" && "$existing_target" != "$RELEASE_TARGET" ]]; then
-            echo "::error::Server tag $RELEASE_TAG already exists at $existing_target, not $RELEASE_TARGET."
+          echo "Total integration test files: ${#files[@]}"
+          if (( ${#files[@]} < 100 )); then
+            echo "Refusing to shard: discovered only ${#files[@]} integration test files (expected >= 100)." >&2
+            echo "The find over tests/integration collapsed -- check for a moved or renamed test tree." >&2
             exit 1
           fi
-          if [[ -z "$existing_target" ]]; then
-            git tag "$RELEASE_TAG" "$RELEASE_TARGET"
-            git push origin "refs/tags/$RELEASE_TAG"
+          shard_files=()
+          for i in "${!files[@]}"; do
+            if (( i % 3 == SHARD - 1 )); then
+              shard_files+=("${files[$i]}")
+            fi
+          done
+          if (( ${#shard_files[@]} == 0 )); then
+            echo "Refusing to run: shard ${SHARD} of 3 was assigned no files out of ${#files[@]}." >&2
+            exit 1
           fi
-        working-directory: .
+          echo "Shard ${SHARD} owns ${#shard_files[@]} files:"
+          printf '  %s\n' "${shard_files[@]}"
+          printf '%s\n' "${shard_files[@]}" > shard_files.txt
 
-      - name: Publish self-hosted release assets
-        uses: softprops/action-gh-release@v3
+      # -r so that an empty shard_files.txt runs nothing and fails, rather
+      # than invoking a bare `pytest` that would collect the entire suite.
+      - name: Run integration tests (shard ${{ matrix.shard }} of 3)
+        if: needs.changes.outputs.relevant != 'false'
+        run: xargs -r -a shard_files.txt pytest -n 4 -q --durations=20
+
+  # ---------------------------------------------------------------------------
+  # Absence gate for this workflow, mirroring `ci-ok` in ci.yml. `needs:` cannot
+  # cross workflows, so each workflow that carries required checks needs its own
+  # rollup; this is Server CI's.
+  #
+  # Making THIS the single required name (instead of the individual lanes) is
+  # what makes the required-checks list split-proof: #2137 turned `test` into
+  # `test-unit` plus a 3-way-sharded `test-integration`, which under per-lane
+  # required checks would have been a coordinated branch-protection edit in the
+  # same window as the merge. Under this rollup it is a diff to one file that
+  # the drift guard below verifies.
+  #
+  # Fails when any dependency concluded anything other than `success` --
+  # failure, skipped, and cancelled are all fatal and the offending lanes are
+  # named. `if: always()` is load-bearing for the same reason as in ci.yml:
+  # without it the job inherits the implicit `success()` gate and would itself
+  # report `skipped` whenever a dependency failed.
+  #
+  # A `needs:` entry on a matrix job (`test-integration`) covers every shard;
+  # the aggregate result is `success` only when all three succeeded.
+  server-ci-ok:
+    name: server-ci-ok
+    needs:
+      - changes
+      - lint
+      - test-unit
+      - test-integration
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          target_commitish: ${{ inputs.git_sha || github.sha }}
-          tag_name: ${{ github.event_name == 'push' && github.ref_name || format('server-v{0}', inputs.version) }}
-          files: |
-            artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz
-            artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz
-            artifacts/proliferate-self-hosted-aws-template.yaml
-            artifacts/proliferate-selfhost-install.sh
-            artifacts/proliferate-selfhost-aws-launch.sh
-            artifacts/proliferate-deploy.tar.gz
-            artifacts/self-hosted-assets.SHA256SUMS
+          sparse-checkout: .github/workflows/server-ci.yml
+          sparse-checkout-cone-mode: false
+
+      # Guards the guard, as ci-ok does for ci.yml -- a lane added to this file
+      # but not to `needs:` above would sit outside the rollup, which is the
+      # same absence hole one level up.
+      #
+      # The exemption for release-only jobs is DERIVED rather than hardcoded so
+      # it cannot rot: any job carrying a job-level `if:` gated on the
+      # `server-v` tag publishes release artifacts, is `skipped` on every pull
+      # request by design, and would make this check permanently red if rolled
+      # up. Identifying such a job by that gate -- rather than by name -- means
+      # that if anyone ever removes the release gate from one, it stops being
+      # exempt and the drift guard demands it join `needs:`. The exempt set is
+      # printed on every run so the exemption is visible rather than implied.
+      #
+      # That set is EMPTY today, and the guard's arithmetic is what proves it:
+      # `docker` and `self-hosted-release-assets` moved to `_build-server.yml`,
+      # which release.yml calls directly, so every job left in this file is a
+      # validation lane and every one of them is in `needs:` below. The
+      # derivation stays because a future release-gated job must not silently
+      # join the rollup, not because anything is exempt right now.
+      #
+      # `working-directory: .` on both run steps: this file sets
+      # `defaults.run.working-directory: server`, and the sparse checkout above
+      # deliberately materializes only the workflow file, so `server/` does not
+      # exist in this job and bash cannot start there.
+      - name: Assert the rollup covers every non-release job in server-ci.yml
+        working-directory: .
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          # unsafe_load_file feature-detect: see the matching note on ci-ok.
+          declared="$(ruby -ryaml -rjson -e '
+            path = ".github/workflows/server-ci.yml"
+            doc = YAML.respond_to?(:unsafe_load_file) ? YAML.unsafe_load_file(path) : YAML.load_file(path)
+            release, gated = doc["jobs"].partition { |_, spec| spec["if"].to_s.include?("refs/tags/server-v") }
+            warn "Release-only jobs exempt from the rollup: #{release.map(&:first).sort.join(", ")}"
+            puts JSON.generate((gated.map(&:first) - ["server-ci-ok"]).sort)
+          ')"
+          covered="$(jq -c 'keys' <<<"$NEEDS_JSON")"
+          missing="$(jq -rn --argjson a "$declared" --argjson b "$covered" '($a - $b) | join(", ")')"
+          extra="$(jq -rn --argjson a "$declared" --argjson b "$covered" '($b - $a) | join(", ")')"
+          if [[ -n "$missing" ]]; then
+            echo "::error::server-ci.yml job(s) missing from the server-ci-ok needs list: ${missing}. Add them, or the rollup certifies a commit those lanes never verified."
+          fi
+          if [[ -n "$extra" ]]; then
+            echo "::error::server-ci-ok needs entries that are not non-release jobs in server-ci.yml: ${extra}."
+          fi
+          [[ -z "$missing" && -z "$extra" ]]
+          echo "server-ci-ok covers all $(jq -r 'length' <<<"$declared") non-release job(s) in server-ci.yml."
+
+      # skipped and cancelled are failures here, on purpose. Note that the
+      # lanes cannot legitimately be skipped any more: every one carries
+      # `if: always()`, and a diff with nothing server-relevant produces a real
+      # green from the no-op step rather than an absent one. So a `skipped`
+      # arriving here means something structural changed, and it should be red.
+      - name: Assert every Server CI lane concluded success
+        working-directory: .
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          bad=()
+          count=0
+          while IFS=$'\t' read -r lane result; do
+            count=$((count + 1))
+            printf '%-24s %s\n' "$lane" "$result"
+            if [[ "$result" != "success" ]]; then
+              bad+=("${lane} (${result})")
+            fi
+          done < <(jq -r 'to_entries[] | [.key, .value.result] | @tsv' <<<"$NEEDS_JSON")
+
+          # Belt-and-braces, like ci-ok's equivalent: the drift guard above
+          # would already have failed on `missing` before this could be hit.
+          if [[ "$count" -eq 0 ]]; then
+            echo "::error::server-ci-ok resolved zero dependencies. Server CI verified nothing."
+            exit 1
+          fi
+          if [[ "${#bad[@]}" -gt 0 ]]; then
+            echo "::error::Server CI did not verify this commit. Not green: ${bad[*]}"
+            exit 1
+          fi
+          echo "All ${count} Server CI lanes concluded success."

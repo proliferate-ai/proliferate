@@ -18,14 +18,15 @@ import { useHomeComposerAttachments } from "#product/hooks/home/ui/use-home-comp
 import { useHomeNextLaunchControls } from "#product/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeCloudRepoSettingsNavigation } from "#product/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
 import { useHomeNextTargetSelectionState } from "#product/hooks/home/ui/use-home-next-target-selection-state";
+import { useHomeInstallationReadiness } from "#product/hooks/home/derived/use-home-installation-readiness";
 import { useHomeNextState } from "#product/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "#product/hooks/home/facade/use-home-screen";
 import {
   buildHomeModelSelectorProps,
   buildHomeSessionConfigControls,
 } from "#product/lib/domain/home/home-composer-controls";
+import { resolveHomeModelGateNotice } from "#product/lib/domain/home/home-model-gate";
 import { type HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
-import { resolveHomeModelProbeCardState } from "#product/lib/domain/home/home-screen";
 import { resolveHomeTargetLaunchKindForRepository } from "#product/lib/domain/home/home-target-picker";
 
 export function HomeNextScreen() {
@@ -47,8 +48,6 @@ export function HomeNextScreen() {
     handleHomeAction,
     authSetupStep,
     authSetupEvidence,
-    modelProbeInputs,
-    dismissModelProbeCard,
   } = useHomeScreen();
   const homeNext = useHomeNextState({
     desktopTargetsAvailable,
@@ -93,7 +92,9 @@ export function HomeNextScreen() {
   const homeModelSelectorProps = buildHomeModelSelectorProps({
     groups: homeNext.modelGroups,
     selectedModel: homeNext.selectedModel,
-    availabilityState: homeNext.modelAvailabilityState,
+    gate: homeNext.modelGate,
+    isCatalogLoading: homeNext.isCatalogLoading,
+    hasKnownAgents: homeNext.hasKnownAgents,
     onSelect: (selection) => {
       setModelSelectionOverride(selection);
       setLaunchControlOverrides({});
@@ -111,39 +112,36 @@ export function HomeNextScreen() {
   const promptTarget = destination === "repository"
     ? homeNext.selectedRepository?.name?.trim()
     : null;
-  // Model-probe onboarding card (spec §10). Inputs may be absent when the
-  // facade is mocked; hide the card in that case.
-  const modelProbeState = modelProbeInputs
-    ? resolveHomeModelProbeCardState({
-      ...modelProbeInputs,
-      modelCount: homeNext.modelGroups.reduce(
-        (count, group) => count + group.models.length,
-        0,
-      ),
-      agentSetupCardVisible: onboardingCards.some((card) => card.id === "agent-defaults"),
-    })
-    : undefined;
+  // Readiness card (UX spec §10 revision, ruling 4): bound to per-agent
+  // readiness and the two gate values it may consume (selection_required,
+  // launchable), sourced from the live reconcile job snapshot rather than
+  // the agents list (D-R1/D-R2). Unmounts entirely once the install job
+  // resolves — there is no "done" state, so a null result just omits the
+  // card.
+  const readinessCard = useHomeInstallationReadiness(homeNext.modelGate.kind);
   const homeOnboardingVisible = onboardingCards.length > 0
     || authSetupStep === "settingUp"
     || (authSetupEvidence !== undefined && authSetupEvidence !== null)
-    || (modelProbeState !== undefined && modelProbeState.kind !== "hidden");
-  const modelAvailabilityNotice =
-    homeNext.modelAvailabilityState === "target_unobserved"
-      ? {
-        text: "This cloud target hasn't reported launch options yet.",
-        actionLabel: null,
-      }
-      : homeNext.modelAvailabilityState === "no_launchable_model"
-        ? {
-          text: "Finish agent setup to start a chat.",
-          actionLabel: "Agents",
-        }
-        : homeNext.modelAvailabilityState === "load_error"
-          ? {
-            text: "Models are unavailable right now. Try again in a moment.",
-            actionLabel: null,
-          }
-          : null;
+    || readinessCard !== null;
+  // One mapping, keyed on the gate. Every silent arm is silent on purpose:
+  // selection_required and observed_empty are cured by the enabled picker
+  // itself (owner revisions r2/r3), and the in-flight arms belong to the
+  // install toast. "Finish agent setup to start a chat." can only be reached
+  // through blocked(agent_setup_required), which requires real
+  // install_required/login_required readiness.
+  // A refused probe writes no durable state, so the gate cannot move and the
+  // same sentence would render again unchanged. The notice says so instead.
+  const modelAvailabilityNotice = resolveHomeModelGateNotice(homeNext.modelGate, {
+    refreshPending: homeNext.retryPending,
+    refreshRejected: homeNext.retryRejected,
+  });
+  const runModelGateNoticeAction = () => {
+    if (modelAvailabilityNotice?.action === "agent_settings") {
+      handleHomeAction("agent-settings", { harnessKind: homeNext.unsupportedHarnessKind });
+      return;
+    }
+    homeNext.retryModelObservation();
+  };
   return (
     <div
       className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground"
@@ -232,9 +230,8 @@ export function HomeNextScreen() {
                     onSelect={(card) => handleHomeAction(card.id)}
                     authSetup={authSetupStep}
                     authSetupEvidence={authSetupEvidence}
-                    modelProbe={modelProbeState}
+                    readinessCard={readinessCard}
                     onOpenAgents={() => handleHomeAction("agent-settings")}
-                    onDismissModelProbe={dismissModelProbeCard}
                   />
                 </DebugProfiler>
               </div>
@@ -251,7 +248,7 @@ export function HomeNextScreen() {
           <div className="mx-auto w-full max-w-transcript-thread">
             <HomeComposerForm
               targetDisabledReason={homeNext.targetDisabledReason}
-              modelAvailabilityState={homeNext.modelAvailabilityState}
+              modelGate={homeNext.modelGate}
               canLaunchTarget={homeNext.canLaunchTarget}
               modelSelection={homeNext.effectiveModelSelection}
               launchControlValues={homeLaunchControls.launchControlValues}
@@ -318,16 +315,21 @@ export function HomeNextScreen() {
               modelAvailabilityNoticeSlot={modelAvailabilityNotice ? (
                 <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-ui-sm text-muted-foreground">
                   <span>{modelAvailabilityNotice.text}</span>
-                  {modelAvailabilityNotice.actionLabel ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleHomeAction("agent-settings")}
-                      className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
-                    >
-                      {modelAvailabilityNotice.actionLabel}
-                    </Button>
-                  ) : null}
+                  {/* Ruling 5: a notice that names a cure carries an ENABLED
+                      action for it. The single terminal state names none —
+                      a button that cannot change anything is the dead end
+                      this gate removes, not a cure. */}
+                  {/* Never disabled: this is the only affordance on states
+                      with no guaranteed exit, and the hook already ignores a
+                      press while its own batch is in flight. */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={runModelGateNoticeAction}
+                    className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                  >
+                    {modelAvailabilityNotice.actionLabel}
+                  </Button>
                 </div>
               ) : null}
               submitDisabledReasonCtaSlot={

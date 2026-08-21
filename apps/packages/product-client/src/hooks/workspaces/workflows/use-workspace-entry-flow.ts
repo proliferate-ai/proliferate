@@ -21,6 +21,7 @@ import {
 import {
   usePendingWorkspaceSessionMaterialization,
 } from "#product/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
+import { resolveLaunchControlValuesForModel } from "#product/lib/domain/agents/cloud-launch-catalog";
 import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 import {
   ensurePendingWorkspaceSessionShell,
@@ -83,22 +84,39 @@ export function useWorkspaceEntryFlow() {
       : null;
     const activeSessionId = useSessionSelectionStore.getState().activeSessionId;
     const activeRecord = activeSessionId ? getSessionRecord(activeSessionId) : null;
+    const launchControlValuesForSelection = (
+      agentKind: string | null | undefined,
+      modelId: string | null | undefined,
+    ): Record<string, string> => {
+      if (!agentKind) {
+        return {};
+      }
+      const selectedValues = preferences.defaultLiveSessionControlValuesByAgentKind[
+        agentKind
+      ] ?? {};
+      const agent = configuredLaunch.launchCatalog?.launchAgents.find(
+        (candidate) => candidate.kind === agentKind,
+      );
+      return agent
+        ? resolveLaunchControlValuesForModel(agent, modelId, selectedValues)
+        : selectedValues;
+    };
     const initialSession = options?.initialSession === undefined
       ? buildPendingInitialSession({
         agentKind: configuredLaunch.selection?.kind,
         modelId: configuredLaunch.selection?.modelId,
-        launchControlValues: configuredLaunch.selection?.kind
-          ? preferences.defaultLiveSessionControlValuesByAgentKind[
-            configuredLaunch.selection.kind
-          ] ?? {}
-          : {},
+        launchControlValues: launchControlValuesForSelection(
+          configuredLaunch.selection?.kind,
+          configuredLaunch.selection?.modelId,
+        ),
         displayTitle: configuredLaunch.displayName,
       }) ?? buildPendingInitialSession({
         agentKind: preferredAgentKind,
         modelId: preferredModelId,
-        launchControlValues: preferredAgentKind
-          ? preferences.defaultLiveSessionControlValuesByAgentKind[preferredAgentKind] ?? {}
-          : {},
+        launchControlValues: launchControlValuesForSelection(
+          preferredAgentKind,
+          preferredModelId,
+        ),
       }) ?? buildPendingInitialSession({
         agentKind: activeRecord?.agentKind ?? null,
         modelId: activeRecord?.modelId ?? null,
@@ -150,6 +168,7 @@ export function useWorkspaceEntryFlow() {
     return projectedSessionId;
   }, [
     configuredLaunch.displayName,
+    configuredLaunch.launchCatalog?.launchAgents,
     configuredLaunch.selection,
     enterPendingWorkspaceShell,
   ]);
