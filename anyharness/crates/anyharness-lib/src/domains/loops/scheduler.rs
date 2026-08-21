@@ -69,6 +69,13 @@ const BUSY_RETRY: Duration = Duration::from_secs(3);
 /// clock drift on long-interval loops).
 const MAX_SLEEP: Duration = Duration::from_secs(30);
 
+/// How many consecutive failed fires a loop may accumulate before its
+/// in-memory arm is dropped (the sqlite row survives and re-arms on the next
+/// attach). Bounds duplicate prompt turns when delivery succeeded but the
+/// accounting keeps failing — without a cap, a persistently failing fire would
+/// re-deliver its prompt on every idle pass, ignoring cadence and `max_fires`.
+const MAX_CONSECUTIVE_FIRE_FAILURES: u32 = 3;
+
 type ArmKey = (String, String);
 
 /// What one due loop did in a pass (surfaced for tests + tracing).
@@ -79,12 +86,14 @@ pub enum FireOutcome {
     FailedTransient,
     DisarmedDead,
     DisarmedRetired,
+    DisarmedFailing,
     Gone,
 }
 
 pub struct LoopScheduler {
     executor: Arc<dyn LoopFireExecutor>,
     armed: Mutex<HashMap<ArmKey, i64>>,
+    fire_failures: Mutex<HashMap<ArmKey, u32>>,
     wake: Notify,
 }
 
@@ -93,25 +102,25 @@ impl LoopScheduler {
         Self {
             executor,
             armed: Mutex::new(HashMap::new()),
+            fire_failures: Mutex::new(HashMap::new()),
             wake: Notify::new(),
         }
     }
 
-    /// Arm (or re-arm) one emulated loop at its next fire instant.
+    /// Arm (or re-arm) one emulated loop at its next fire instant. A fresh arm
+    /// starts with a fresh consecutive-failure budget.
     pub async fn arm(&self, session_id: &str, loop_id: &str, next_fire_at_ms: i64) {
-        self.armed.lock().await.insert(
-            (session_id.to_string(), loop_id.to_string()),
-            next_fire_at_ms,
-        );
+        let key = (session_id.to_string(), loop_id.to_string());
+        self.fire_failures.lock().await.remove(&key);
+        self.armed.lock().await.insert(key, next_fire_at_ms);
         self.wake.notify_one();
     }
 
     /// Drop one loop from the in-memory schedule (clear / cap / non-recurring).
     pub async fn disarm(&self, session_id: &str, loop_id: &str) {
-        self.armed
-            .lock()
-            .await
-            .remove(&(session_id.to_string(), loop_id.to_string()));
+        let key = (session_id.to_string(), loop_id.to_string());
+        self.fire_failures.lock().await.remove(&key);
+        self.armed.lock().await.remove(&key);
         self.wake.notify_one();
     }
 
@@ -124,6 +133,10 @@ impl LoopScheduler {
     /// Drop every loop for a session (called when a session detaches — the
     /// timers are mortal; the sqlite rows re-arm on the next attach).
     pub async fn disarm_session(&self, session_id: &str) {
+        self.fire_failures
+            .lock()
+            .await
+            .retain(|(sid, _), _| sid != session_id);
         self.armed
             .lock()
             .await
@@ -162,6 +175,7 @@ impl LoopScheduler {
             let (session_id, loop_id) = (&key.0, &key.1);
             let outcome = match self.executor.liveness(session_id).await {
                 LoopSessionLiveness::Dead => {
+                    self.fire_failures.lock().await.remove(&key);
                     self.armed.lock().await.remove(&key);
                     FireOutcome::DisarmedDead
                 }
@@ -170,23 +184,41 @@ impl LoopScheduler {
                 LoopSessionLiveness::Busy => FireOutcome::SkippedBusy,
                 LoopSessionLiveness::Idle => match self.executor.fire(session_id, loop_id).await {
                     Err(error) => {
-                        tracing::warn!(session_id, loop_id, error = %error, "emulated loop fire failed transiently; keeping the arm for retry");
-                        FireOutcome::FailedTransient
-                    }
-                    Ok(None) => {
-                        self.armed.lock().await.remove(&key);
-                        FireOutcome::Gone
-                    }
-                    Ok(Some(report)) => match (report.still_armed, report.next_fire_at_ms) {
-                        (true, Some(next)) => {
-                            self.armed.lock().await.insert(key.clone(), next);
-                            FireOutcome::Fired
-                        }
-                        _ => {
+                        let failures = {
+                            let mut fire_failures = self.fire_failures.lock().await;
+                            let count = fire_failures.entry(key.clone()).or_insert(0);
+                            *count += 1;
+                            *count
+                        };
+                        if failures >= MAX_CONSECUTIVE_FIRE_FAILURES {
+                            self.fire_failures.lock().await.remove(&key);
                             self.armed.lock().await.remove(&key);
-                            FireOutcome::DisarmedRetired
+                            tracing::warn!(session_id, loop_id, error = %error, failures, "emulated loop fire failed repeatedly; dropping the in-memory arm (the persisted loop re-arms on the next attach)");
+                            FireOutcome::DisarmedFailing
+                        } else {
+                            tracing::warn!(session_id, loop_id, error = %error, failures, "emulated loop fire failed transiently; keeping the arm for retry");
+                            FireOutcome::FailedTransient
                         }
-                    },
+                    }
+                    Ok(result) => {
+                        self.fire_failures.lock().await.remove(&key);
+                        match result {
+                            None => {
+                                self.armed.lock().await.remove(&key);
+                                FireOutcome::Gone
+                            }
+                            Some(report) => match (report.still_armed, report.next_fire_at_ms) {
+                                (true, Some(next)) => {
+                                    self.armed.lock().await.insert(key.clone(), next);
+                                    FireOutcome::Fired
+                                }
+                                _ => {
+                                    self.armed.lock().await.remove(&key);
+                                    FireOutcome::DisarmedRetired
+                                }
+                            },
+                        }
+                    }
                 },
             };
             outcomes.push((key, outcome));
@@ -437,6 +469,50 @@ mod tests {
             5_000
         );
         assert_eq!(flaky.fires.load(Ordering::SeqCst), 2);
+        assert!(
+            scheduler.fire_failures.lock().await.is_empty(),
+            "a successful fire resets the consecutive-failure budget"
+        );
+    }
+
+    #[tokio::test]
+    async fn repeated_fire_failures_drop_the_arm_at_the_cap() {
+        struct AlwaysFailingExecutor {
+            fires: AtomicUsize,
+        }
+        #[async_trait]
+        impl LoopFireExecutor for AlwaysFailingExecutor {
+            async fn liveness(&self, _session_id: &str) -> LoopSessionLiveness {
+                LoopSessionLiveness::Idle
+            }
+            async fn fire(
+                &self,
+                _session_id: &str,
+                _loop_id: &str,
+            ) -> anyhow::Result<Option<LoopFireReport>> {
+                self.fires.fetch_add(1, Ordering::SeqCst);
+                Err(anyhow::anyhow!("persistent sqlite failure"))
+            }
+        }
+
+        let failing = Arc::new(AlwaysFailingExecutor {
+            fires: AtomicUsize::new(0),
+        });
+        let scheduler = LoopScheduler::new(failing.clone());
+        scheduler.arm("s1", "l1", 1_000).await;
+
+        // The arm survives up to the cap, then drops so a persistently failing
+        // fire cannot re-deliver its prompt on every idle pass.
+        for now in [1_500, 1_600] {
+            let outcomes = scheduler.run_due_pass(now).await;
+            assert_eq!(outcomes[0].1, FireOutcome::FailedTransient);
+            assert!(scheduler.is_armed("s1", "l1").await);
+        }
+        let outcomes = scheduler.run_due_pass(1_700).await;
+        assert_eq!(outcomes[0].1, FireOutcome::DisarmedFailing);
+        assert!(!scheduler.is_armed("s1", "l1").await);
+        assert_eq!(failing.fires.load(Ordering::SeqCst), 3);
+        assert!(scheduler.fire_failures.lock().await.is_empty());
     }
 
     #[tokio::test]

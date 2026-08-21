@@ -101,9 +101,10 @@ impl LoopFireExecutor for SessionLoopFireExecutor {
             .await
             .map_err(|error| anyhow::anyhow!("loop prompt delivery failed: {error:?}"))?;
         // When the prompt was delivered but accounting fails, we return Err so
-        // the arm is kept — a retry may duplicate one prompt turn, which is
-        // preferred over silently disarming a live loop (and over leaving a
-        // stale next_fire that re-fires past max_fires on the next attach).
+        // the arm is kept — a retry may duplicate a prompt turn (bounded by the
+        // scheduler's consecutive-failure cap), which is preferred over
+        // silently disarming a live loop (and over leaving a stale next_fire
+        // that re-fires past max_fires on the next attach).
         let op = Box::new(LoopFireRecordOp {
             loop_service: self.loop_service.clone(),
             loop_id: loop_id.to_string(),
