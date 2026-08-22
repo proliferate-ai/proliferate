@@ -217,6 +217,12 @@ dev-artifacts-ready:
 # Cleanup gives TERM-respecting processes five seconds before escalating only
 # the still-owned snapshot to KILL; each grace pass re-scans tracked roots for
 # launcher children created during shutdown.
+# Each retained root/descendant also retains a process identity. Linux uses
+# /proc start ticks; the POSIX fallback uses `ps lstart` at its one-second
+# granularity, so same-second reuse remains a documented fallback limitation.
+# Missing or changed identities are never signaled or traversed.
+# The check is repeated immediately before each numeric-PID signal; portable
+# shell cannot make that check-and-signal operation atomic.
 run: dev-artifacts-ready
 	@set -e; \
 	if [ -z "$(PROFILE)" ]; then \
@@ -238,53 +244,107 @@ run: dev-artifacts-ready
 	); \
 	database_url_override_set="$${DATABASE_URL+x}"; \
 	database_url_override_value="$${DATABASE_URL:-}"; \
+	process_identity() { \
+		pid="$$1"; \
+		case "$$pid" in \
+			''|*[!0-9]*) return 1 ;; \
+		esac; \
+		if [ "$$(uname -s 2>/dev/null || true)" = "Linux" ] && [ -r "/proc/$$pid/stat" ]; then \
+			stat=$$(cat "/proc/$$pid/stat" 2>/dev/null || true); \
+			rest="$${stat##*) }"; \
+			start_time=$$(printf '%s\n' "$$rest" | awk '{ print $$20 }'); \
+			if [ -n "$$start_time" ]; then \
+				printf 'linux-starttime:%s\n' "$$start_time"; \
+				return 0; \
+			fi; \
+			return 1; \
+		fi; \
+		start_time=$$(LC_ALL=C ps -o lstart= -p "$$pid" 2>/dev/null | awk 'NF { $$1=$$1; print; exit }'); \
+		if [ -z "$$start_time" ]; then return 1; fi; \
+		start_time=$$(printf '%s' "$$start_time" | tr ' ' '_'); \
+		printf 'posix-lstart:%s\n' "$$start_time"; \
+	}; \
 	owned_pids=""; \
+	owned_processes=""; \
 	last_owned_pid=""; \
 	run_lock_path="$$(dirname "$$launch_env")/run.lock"; \
 	start_owned_process() { \
 		"$$@" & \
 		last_owned_pid=$$!; \
+		pid_identity=$$(process_identity "$$last_owned_pid" 2>/dev/null || true); \
+		if [ -z "$$pid_identity" ]; then \
+			echo "Could not establish process identity for owned PID $$last_owned_pid; refusing to continue." >&2; \
+			return 1; \
+		fi; \
 		owned_pids="$$owned_pids $$last_owned_pid"; \
+		owned_processes="$$owned_processes $$last_owned_pid|$$pid_identity"; \
 	}; \
 	collect_owned_tree() { \
 		pid="$$1"; \
+		expected_identity="$$2"; \
 		case "$$pid" in \
-			''|*[!0-9]*) return ;; \
+			''|*[!0-9]*) return 1 ;; \
 		esac; \
-		case " $$owned_tree_pids " in \
-			*" $$pid "*) ;; \
-			*) owned_tree_pids="$$owned_tree_pids $$pid" ;; \
-		esac; \
+		current_identity=$$(process_identity "$$pid" 2>/dev/null || true); \
+		if [ -z "$$current_identity" ] || [ "$$current_identity" != "$$expected_identity" ]; then return 0; fi; \
+		retained_identity=""; \
+		for record in $$owned_tree_records; do \
+			record_pid="$${record%%|*}"; \
+			if [ "$$record_pid" = "$$pid" ]; then \
+				retained_identity="$${record#*|}"; \
+				break; \
+			fi; \
+		done; \
+		if [ -n "$$retained_identity" ]; then \
+			if [ "$$retained_identity" != "$$expected_identity" ] || [ "$$retained_identity" != "$$current_identity" ]; then return 0; fi; \
+		else \
+			owned_tree_records="$$owned_tree_records $$pid|$$expected_identity"; \
+		fi; \
 		children=$$(ps -eo pid=,ppid= 2>/dev/null | awk -v parent="$$pid" '$$2 == parent { print $$1 }' || true); \
 		for child_pid in $$children; do \
-			collect_owned_tree "$$child_pid"; \
+			child_identity=$$(process_identity "$$child_pid" 2>/dev/null || true); \
+			if [ -n "$$child_identity" ]; then \
+				collect_owned_tree "$$child_pid" "$$child_identity"; \
+			fi; \
 		done; \
 	}; \
 	signal_owned_processes() { \
 		signal="$$1"; \
-		for pid in $$owned_tree_pids; do \
-			kill "-$$signal" "$$pid" >/dev/null 2>&1 || true; \
+		for record in $$owned_tree_records; do \
+			pid="$${record%%|*}"; \
+			expected_identity="$${record#*|}"; \
+			current_identity=$$(process_identity "$$pid" 2>/dev/null || true); \
+			if [ -n "$$current_identity" ] && [ "$$current_identity" = "$$expected_identity" ]; then \
+				kill "-$$signal" "$$pid" >/dev/null 2>&1 || true; \
+			fi; \
 		done; \
 	}; \
 	cleanup() { \
 		status=$$?; \
 		trap - EXIT; \
 		trap ':' INT TERM; \
-		owned_tree_pids=""; \
-		for pid in $$owned_pids; do \
-			collect_owned_tree "$$pid"; \
+		owned_tree_records=""; \
+		for record in $$owned_processes; do \
+			pid="$${record%%|*}"; \
+			expected_identity="$${record#*|}"; \
+			collect_owned_tree "$$pid" "$$expected_identity"; \
 		done; \
 		signal_owned_processes TERM; \
 		attempt=0; \
 		pending=1; \
 		while [ "$$pending" = "1" ] && [ "$$attempt" -lt 50 ]; do \
-			for pid in $$owned_pids; do \
-				collect_owned_tree "$$pid"; \
+			for record in $$owned_processes; do \
+				pid="$${record%%|*}"; \
+				expected_identity="$${record#*|}"; \
+				collect_owned_tree "$$pid" "$$expected_identity"; \
 			done; \
 			signal_owned_processes TERM; \
 			pending=0; \
-			for pid in $$owned_tree_pids; do \
-				if kill -0 "$$pid" >/dev/null 2>&1; then \
+			for record in $$owned_tree_records; do \
+				pid="$${record%%|*}"; \
+				expected_identity="$${record#*|}"; \
+				current_identity=$$(process_identity "$$pid" 2>/dev/null || true); \
+				if [ -n "$$current_identity" ] && [ "$$current_identity" = "$$expected_identity" ] && kill -0 "$$pid" >/dev/null 2>&1; then \
 					state=$$(ps -o stat= -p "$$pid" 2>/dev/null || true); \
 					case "$$state" in Z*) ;; *) pending=1 ;; esac; \
 				fi; \

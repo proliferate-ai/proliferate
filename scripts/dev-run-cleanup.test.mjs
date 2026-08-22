@@ -32,7 +32,7 @@ function extractRunRecipe() {
 
 function extractOwnedLifecycle() {
   const recipe = extractRunRecipe();
-  const start = recipe.indexOf('owned_pids="";');
+  const start = recipe.indexOf("process_identity()");
   const end = recipe.indexOf("$(SERVER_ENV_SOURCE)", start);
   assert.ok(start >= 0, "run recipe must initialize owned process tracking");
   assert.ok(end > start, "run recipe must place cleanup before environment startup");
@@ -55,7 +55,9 @@ test("run cleanup owns process trees without owning the caller's process group",
   const ownedRootPid = path.join(tempRoot, "owned-root.pid");
   const bystanderStart = path.join(tempRoot, "bystander-start");
   const bystanderTerm = path.join(tempRoot, "bystander-term");
+  const bystanderChildTerm = path.join(tempRoot, "bystander-child-term");
   const bystanderPid = path.join(tempRoot, "bystander.pid");
+  const bystanderChildPid = path.join(tempRoot, "bystander-child.pid");
   const callerPgid = path.join(tempRoot, "caller.pgid");
   const harnessPgid = path.join(tempRoot, "harness.pgid");
   const bystanderPgid = path.join(tempRoot, "bystander.pgid");
@@ -78,6 +80,10 @@ wait "$grandchild_pid"
   const lifecycle = extractOwnedLifecycle();
   assert.doesNotMatch(lifecycle, /kill 0/, "cleanup must not signal the shared process group");
   assert.match(lifecycle, /collect_owned_tree/, "cleanup must account for owned descendants");
+  assert.match(lifecycle, /process_identity/, "cleanup must validate retained process identities");
+  assert.match(lifecycle, /\/proc\/\$pid\/stat/, "Linux cleanup must use process start ticks");
+  assert.match(lifecycle, /ps -o lstart=/, "POSIX cleanup must use a start-time token");
+  assert.match(lifecycle, /retained_identity/, "cleanup must retain identities for rescanned PIDs");
 
   writeFileSync(
     harness,
@@ -86,6 +92,11 @@ set -eu
 printf '%s\\n' "$(ps -o pgid= -p "$$" | tr -d ' ')" > ${shellQuote(harnessPgid)}
 launch_env=${shellQuote(path.join(tempRoot, "profile", "launch.env"))}
 ${lifecycle}
+bystander_identity=$(process_identity "$bystander_pid")
+owned_tree_records="$bystander_pid|stale-identity"
+collect_owned_tree "$bystander_pid" "$bystander_identity"
+signal_owned_processes TERM
+owned_tree_records=""
 mkdir -p ${shellQuote(path.dirname(runLock))}
 touch ${shellQuote(runLock)}
 start_owned_process sh ${shellQuote(ownedFixture)} \
@@ -102,34 +113,51 @@ exit 37
     `#!/bin/sh
 set +e
 bystander_term=${shellQuote(bystanderTerm)}
+bystander_child_term=${shellQuote(bystanderChildTerm)}
 export bystander_term
+export bystander_child_term
 (
   trap 'printf TERM > "$bystander_term"; exit 143' TERM
   touch ${shellQuote(bystanderStart)}
-  while :; do :; done
+  (
+    trap 'printf TERM > "$bystander_child_term"; exit 143' TERM
+    while :; do :; done
+  ) &
+  bystander_child_pid=$!
+  printf '%s\\n' "$bystander_child_pid" > ${shellQuote(bystanderChildPid)}
+  wait "$bystander_child_pid"
 ) &
 bystander_pid=$!
 printf '%s\\n' "$bystander_pid" > ${shellQuote(bystanderPid)}
+export bystander_pid
 printf '%s\\n' "$(ps -o pgid= -p "$$" | tr -d ' ')" > ${shellQuote(callerPgid)}
 printf '%s\\n' "$(ps -o pgid= -p "$bystander_pid" | tr -d ' ')" > ${shellQuote(bystanderPgid)}
 while [ ! -f ${shellQuote(bystanderStart)} ]; do sleep 0.01; done
+while [ ! -f ${shellQuote(bystanderChildPid)} ]; do sleep 0.01; done
 cleanup_bystander() {
+  kill -TERM "$(cat ${shellQuote(bystanderChildPid)})" 2>/dev/null || true
+  wait "$(cat ${shellQuote(bystanderChildPid)})" 2>/dev/null || true
   kill -TERM "$(cat ${shellQuote(bystanderPid)})" 2>/dev/null || true
   wait "$(cat ${shellQuote(bystanderPid)})" 2>/dev/null || true
 }
 trap cleanup_bystander EXIT
 sh ${shellQuote(harness)}
 status="$?"
+printf 'STATUS=%s\\n' "$status" > ${shellQuote(resultFile)}
 if [ "$status" -ne 37 ]; then
-  printf 'STATUS=%s\\n' "$status" > ${shellQuote(resultFile)}
   exit 1
 fi
 if [ "$(cat ${shellQuote(callerPgid)})" != "$(cat ${shellQuote(harnessPgid)})" ] || \
    [ "$(cat ${shellQuote(callerPgid)})" != "$(cat ${shellQuote(bystanderPgid)})" ]; then
-  printf 'SAME_PROCESS_GROUP=0\\n' > ${shellQuote(resultFile)}
+  printf 'SAME_PROCESS_GROUP=0\\n' >> ${shellQuote(resultFile)}
   exit 1
 fi
-printf 'SAME_PROCESS_GROUP=1\\n' > ${shellQuote(resultFile)}
+printf 'SAME_PROCESS_GROUP=1\\n' >> ${shellQuote(resultFile)}
+if [ -f ${shellQuote(bystanderChildTerm)} ] || ! kill -0 "$(cat ${shellQuote(bystanderChildPid)})" 2>/dev/null; then
+  printf 'STALE_IDENTITY_SAFE=0\\n' >> ${shellQuote(resultFile)}
+  exit 1
+fi
+printf 'STALE_IDENTITY_SAFE=1\\n' >> ${shellQuote(resultFile)}
 if [ -f ${shellQuote(bystanderTerm)} ]; then
   printf 'BYSTANDER_TERM=1\\n' >> ${shellQuote(resultFile)}
 else
@@ -172,6 +200,7 @@ exit 0
     assert.match(result, /BYSTANDER_ALIVE=1/);
     assert.match(result, /CALLER_SURVIVED=1/);
     assert.match(result, /STATUS=37/);
+    assert.match(result, /STALE_IDENTITY_SAFE=1/);
     assert.match(result, /OWNED_ROOT_ALIVE=0/);
     assert.match(result, /OWNED_GRANDCHILD_ALIVE=0/);
     assert.equal(existsSync(runLock), false);
