@@ -24,6 +24,7 @@ import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-bat
 import { activityFromTranscript } from "#product/lib/domain/sessions/directory/directory-activity";
 import { buildSessionStreamBatchPatch } from "#product/lib/domain/sessions/stream-patch";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
@@ -220,6 +221,14 @@ export function applyHistoryStateToStores(
         executionSummary,
       }),
     });
+    // Without this write, a gap refill applied through the history path leaves
+    // the ingest store stale/gapped forever (markCurrentIfContiguous no-ops
+    // while gapAfterSeq is set), forcing a redundant full refetch on every
+    // reopen.
+    useSessionIngestStore.getState().applyHistoryHydration(
+      sessionId,
+      nextState.transcript.lastSeq,
+    );
   });
 }
 

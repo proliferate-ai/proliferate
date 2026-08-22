@@ -210,10 +210,15 @@ export function applySessionStreamFlushBatch(
       slotState.transcript,
     );
     input.reconcileWorkspacePinIntents(result.duplicateEnvelopes);
+    // A duplicate-only flush repaired nothing, so it must not clear a gap
+    // recorded earlier — clearing it would let the reopen flow skip the history
+    // refill that repairs the hole.
+    const recordedGapAfterSeq = useSessionIngestStore.getState()
+      .freshnessByClientSessionId[input.sessionId]?.gapAfterSeq ?? null;
     useSessionIngestStore.getState().applyStreamProgress(input.sessionId, {
       lastAppliedSeq: slotState.transcript.lastSeq,
       lastObservedSeq,
-      gapAfterSeq: null,
+      gapAfterSeq: recordedGapAfterSeq,
     });
     finishOrCancelMeasurementOperation(streamEventBatchOperationId, "completed");
     return {
