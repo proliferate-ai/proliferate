@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -148,25 +148,35 @@ def _finish(
 async def claim_revocation_job(
     db: AsyncSession,
     job_id: UUID,
-) -> IntegrationRevocationJobRecord | None:
+    *,
+    lease_seconds: int,
+) -> tuple[IntegrationRevocationJobRecord | None, bool]:
     row = await db.scalar(
         select(CloudIntegrationRevocationJob)
         .where(CloudIntegrationRevocationJob.id == job_id)
         .with_for_update()
     )
     if row is None or row.status in TERMINAL_REVOCATION_STATUSES:
-        return _record(row) if row is not None else None
+        return _record(row) if row is not None else None, False
     now = utcnow()
     if row.deadline_at <= now:
         _finish(row, status="exhausted", error_code="deadline_exceeded", now=now)
-    else:
-        row.status = "running"
-        row.attempt_count += 1
-        row.last_attempt_at = now
-        row.updated_at = now
+        await db.flush()
+        await db.refresh(row)
+        return _record(row), False
+    if (
+        row.status == "running"
+        and row.last_attempt_at is not None
+        and row.last_attempt_at + timedelta(seconds=lease_seconds) > now
+    ):
+        return _record(row), False
+    row.status = "running"
+    row.attempt_count += 1
+    row.last_attempt_at = now
+    row.updated_at = now
     await db.flush()
     await db.refresh(row)
-    return _record(row)
+    return _record(row), True
 
 
 async def complete_revocation_job(
@@ -175,6 +185,7 @@ async def complete_revocation_job(
     job_id: UUID,
     status: str,
     error_code: str | None,
+    expected_attempt: int,
 ) -> IntegrationRevocationJobRecord | None:
     if status not in TERMINAL_REVOCATION_STATUSES:
         raise ValueError(f"unsupported terminal revocation status: {status}")
@@ -185,7 +196,7 @@ async def complete_revocation_job(
     )
     if row is None:
         return None
-    if row.status not in TERMINAL_REVOCATION_STATUSES:
+    if row.status not in TERMINAL_REVOCATION_STATUSES and row.attempt_count == expected_attempt:
         _finish(row, status=status, error_code=error_code, now=utcnow())
         await db.flush()
         await db.refresh(row)
@@ -197,6 +208,7 @@ async def release_revocation_job_for_retry(
     *,
     job_id: UUID,
     error_code: str,
+    expected_attempt: int,
 ) -> IntegrationRevocationJobRecord | None:
     row = await db.scalar(
         select(CloudIntegrationRevocationJob)
@@ -208,7 +220,7 @@ async def release_revocation_job_for_retry(
     now = utcnow()
     if row.deadline_at <= now:
         _finish(row, status="exhausted", error_code="deadline_exceeded", now=now)
-    else:
+    elif row.attempt_count == expected_attempt:
         row.status = "pending"
         row.last_error_code = error_code[:64]
         row.updated_at = now

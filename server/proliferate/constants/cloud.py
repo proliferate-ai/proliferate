@@ -331,6 +331,10 @@ CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS: Final = 86_400
 # revocation, and the deadline sweeper destroys it after one day regardless of
 # provider availability.
 CLOUD_INTEGRATION_REVOCATION_DEADLINE_SECONDS: Final = 86_400
+# A claimed revocation job releases its lease after this long, so a redelivered
+# task can reclaim a job whose holder crashed mid-revoke (the revoke HTTP call
+# itself has a 20s timeout; 300s comfortably exceeds one full attempt).
+CLOUD_INTEGRATION_REVOCATION_LEASE_SECONDS: Final = 300
 
 
 # ---------------------------------------------------------------------------
