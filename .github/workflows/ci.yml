@@ -204,6 +204,9 @@ jobs:
       - name: Test background launcher config
         run: node --test scripts/dev-background-launch.test.mjs
 
+      - name: Test dev-run process ownership
+        run: node --test scripts/dev-run-cleanup.test.mjs
+
       - name: Validate agent catalog generation discipline
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
