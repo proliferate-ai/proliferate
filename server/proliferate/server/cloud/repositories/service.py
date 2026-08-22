@@ -10,6 +10,7 @@ from proliferate.db.store import automation_environment_references as automation
 from proliferate.db.store import cloud_repo_environment_materializations as repo_mat_store
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store import cloud_workspaces as cloud_workspaces_store
+from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_repo_environment_materializations import (
     CloudRepoEnvironmentMaterializationValue,
 )
@@ -132,6 +133,17 @@ async def save_local_environment(
             "desktop_install_id_required",
             "A desktop install id is required for local environments.",
             status_code=400,
+        )
+    worker = await runtime_workers_store.get_active_desktop_worker_for_user(
+        db,
+        owner_user_id=user_id,
+        desktop_install_id=desktop_install_id,
+    )
+    if worker is None:
+        raise CloudApiError(
+            "desktop_install_not_owned",
+            "This desktop installation is not registered to your account.",
+            status_code=403,
         )
     return await upsert_local_repo_environment(
         db,

@@ -16,6 +16,7 @@ from proliferate.server.cloud.repos import service as repos_service
 from tests.integration.cloud_api_helpers import (
     link_github_account,
     register_and_login,
+    seed_desktop_worker,
     seed_github_app_repo_authority,
 )
 
@@ -313,6 +314,40 @@ class TestCloudRepoCatalog:
         ]
 
 
+class TestLocalEnvironmentInstallOwnership:
+    """PUT of a local environment must reject a desktop install the caller does not own."""
+
+    @pytest.mark.asyncio
+    async def test_put_local_environment_rejects_other_users_install(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        victim = await register_and_login(client, "install-ownership-victim@example.com")
+        await seed_desktop_worker(
+            db_session, user_id=victim["user_id"], desktop_install_id="install-victim"
+        )
+        attacker = await register_and_login(client, "install-ownership-attacker@example.com")
+        headers = {"Authorization": f"Bearer {attacker['access_token']}"}
+
+        response = await client.put(
+            "/v1/cloud/repositories/acme/rocket/environment",
+            headers=headers,
+            json={
+                "kind": "local",
+                "gitProvider": "github",
+                "desktopInstallId": "install-victim",
+                "localPath": "/Users/tester/rocket",
+                "defaultBranch": None,
+                "setupScript": "",
+                "runCommand": "",
+            },
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "desktop_install_not_owned"
+
+
 class TestRepoEnvironmentArchivingKnobs:
     """PUT/GET round-trip for archive_script + rerun_setup_on_unarchive (R6)."""
 
@@ -323,6 +358,9 @@ class TestRepoEnvironmentArchivingKnobs:
         db_session: AsyncSession,
     ) -> None:
         session = await register_and_login(client, "archiving-knobs-local@example.com")
+        await seed_desktop_worker(
+            db_session, user_id=session["user_id"], desktop_install_id="install-1"
+        )
         headers = {"Authorization": f"Bearer {session['access_token']}"}
 
         response = await client.put(
@@ -395,6 +433,9 @@ class TestRepoEnvironmentArchivingKnobs:
         db_session: AsyncSession,
     ) -> None:
         session = await register_and_login(client, "archiving-knobs-defaults@example.com")
+        await seed_desktop_worker(
+            db_session, user_id=session["user_id"], desktop_install_id="install-1"
+        )
         headers = {"Authorization": f"Bearer {session['access_token']}"}
 
         response = await client.put(
@@ -423,6 +464,9 @@ class TestRepoEnvironmentArchivingKnobs:
         db_session: AsyncSession,
     ) -> None:
         session = await register_and_login(client, "archiving-knobs-explicit-false@example.com")
+        await seed_desktop_worker(
+            db_session, user_id=session["user_id"], desktop_install_id="install-1"
+        )
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         body = {
             "kind": "local",
@@ -459,6 +503,9 @@ class TestRepoEnvironmentArchivingKnobs:
         """Negative control: revert the None-guard in _upsert_environment and this fails."""
 
         session = await register_and_login(client, "archiving-knobs-preserve@example.com")
+        await seed_desktop_worker(
+            db_session, user_id=session["user_id"], desktop_install_id="install-1"
+        )
         headers = {"Authorization": f"Bearer {session['access_token']}"}
 
         first = await client.put(

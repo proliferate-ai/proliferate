@@ -15,6 +15,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_STATUS_ACTIVE,
 )
 from proliferate.db.models.auth import OAuthAccount
+from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import github_app as github_app_store
 from proliferate.integrations.github import GitHubAppInstallationInfo
@@ -186,6 +187,28 @@ async def create_organization_for_user(db_session: AsyncSession, user_id: str) -
     )
     await db_session.commit()
     return str(organization.id)
+
+
+async def seed_desktop_worker(
+    db_session: AsyncSession,
+    *,
+    user_id: str,
+    desktop_install_id: str,
+) -> None:
+    """Register a non-revoked desktop worker so local-environment saves pass ownership."""
+    now = datetime.now(UTC)
+    db_session.add(
+        CloudRuntimeWorker(
+            owner_user_id=uuid.UUID(user_id),
+            runtime_kind="desktop",
+            desktop_install_id=desktop_install_id,
+            token_hash=uuid.uuid4().hex,
+            status="online",
+            enrolled_at=now,
+            last_seen_at=now,
+        )
+    )
+    await db_session.commit()
 
 
 async def add_organization_member(

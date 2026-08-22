@@ -340,6 +340,24 @@ async function convergedAdminLogin(): Promise<{ access_token: string }> {
  * definition's own (always-null) `defaultRepoConfigId`.
  */
 async function seedRepositoryThroughProductApi(): Promise<string> {
+  // Saving a local environment requires the desktop install to be enrolled to
+  // the caller (403 desktop_install_not_owned otherwise), so enroll it through
+  // the same worker-enrollment surface the desktop app drives.
+  const installId = `t2-wf-trigger-install-${RUN_ID}`;
+  const enrollment = await apiRequest<{ enrollmentToken?: string }>(
+    "/v1/cloud/workers/desktop/enrollment",
+    { method: "POST", token: ownerToken, body: { desktopInstallId: installId } },
+  );
+  if (enrollment.status !== 200 || !enrollment.body.enrollmentToken) {
+    throw new Error(`Desktop enrollment ticket failed (${enrollment.status}): ${JSON.stringify(enrollment.body)}`);
+  }
+  const enrolled = await apiRequest("/v1/cloud/worker/enroll", {
+    method: "POST",
+    body: { enrollmentToken: enrollment.body.enrollmentToken },
+  });
+  if (enrolled.status !== 200) {
+    throw new Error(`Worker enrollment failed (${enrolled.status}): ${JSON.stringify(enrolled.body)}`);
+  }
   const saved = await apiRequest<{ repoConfigId?: string }>(
     `/v1/cloud/repositories/${REPO_OWNER}/${REPO_NAME}/environment`,
     {
@@ -347,7 +365,7 @@ async function seedRepositoryThroughProductApi(): Promise<string> {
       token: ownerToken,
       body: {
         kind: "local",
-        desktopInstallId: `t2-wf-trigger-install-${RUN_ID}`,
+        desktopInstallId: installId,
         localPath: `/tmp/t2-wf-trigger-${RUN_ID}`,
       },
     },
