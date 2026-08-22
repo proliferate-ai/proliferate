@@ -210,6 +210,19 @@ dev-artifacts-ready:
 		exit 1; \
 	fi
 
+# Each tracked PID is a root started by this recipe. Cleanup walks only those
+# parent trees so profiles sharing the recipe shell's process group stay safe.
+# Desktop still blocks on Tauri via `wait`; the background launch only captures
+# its root PID so its launcher tree can be cleaned up without shared-group kills.
+# Cleanup gives TERM-respecting processes five seconds before escalating only
+# the still-owned snapshot to KILL; each grace pass re-scans tracked roots for
+# launcher children created during shutdown.
+# Each retained root/descendant also retains a process identity. Linux uses
+# /proc start ticks; the POSIX fallback uses `ps lstart` at its one-second
+# granularity, so same-second reuse remains a documented fallback limitation.
+# Missing or changed identities are never signaled or traversed.
+# The check is repeated immediately before each numeric-PID signal; portable
+# shell cannot make that check-and-signal operation atomic.
 run: dev-artifacts-ready
 	@set -e; \
 	if [ -z "$(PROFILE)" ]; then \
@@ -231,16 +244,126 @@ run: dev-artifacts-ready
 	); \
 	database_url_override_set="$${DATABASE_URL+x}"; \
 	database_url_override_value="$${DATABASE_URL:-}"; \
+	process_identity() { \
+		pid="$$1"; \
+		case "$$pid" in \
+			''|*[!0-9]*) return 1 ;; \
+		esac; \
+		if [ "$$(uname -s 2>/dev/null || true)" = "Linux" ] && [ -r "/proc/$$pid/stat" ]; then \
+			stat=$$(cat "/proc/$$pid/stat" 2>/dev/null || true); \
+			rest="$${stat##*) }"; \
+			start_time=$$(printf '%s\n' "$$rest" | awk '{ print $$20 }'); \
+			if [ -n "$$start_time" ]; then \
+				printf 'linux-starttime:%s\n' "$$start_time"; \
+				return 0; \
+			fi; \
+			return 1; \
+		fi; \
+		start_time=$$(LC_ALL=C ps -o lstart= -p "$$pid" 2>/dev/null | awk 'NF { $$1=$$1; print; exit }'); \
+		if [ -z "$$start_time" ]; then return 1; fi; \
+		start_time=$$(printf '%s' "$$start_time" | tr ' ' '_'); \
+		printf 'posix-lstart:%s\n' "$$start_time"; \
+	}; \
+	owned_pids=""; \
+	owned_processes=""; \
+	last_owned_pid=""; \
+	run_lock_path="$$(dirname "$$launch_env")/run.lock"; \
+	start_owned_process() { \
+		"$$@" & \
+		last_owned_pid=$$!; \
+		pid_identity=$$(process_identity "$$last_owned_pid" 2>/dev/null || true); \
+		if [ -z "$$pid_identity" ]; then \
+			echo "Could not establish process identity for owned PID $$last_owned_pid; refusing to continue." >&2; \
+			return 1; \
+		fi; \
+		owned_pids="$$owned_pids $$last_owned_pid"; \
+		owned_processes="$$owned_processes $$last_owned_pid|$$pid_identity"; \
+	}; \
+	collect_owned_tree() { \
+		pid="$$1"; \
+		expected_identity="$$2"; \
+		case "$$pid" in \
+			''|*[!0-9]*) return 1 ;; \
+		esac; \
+		current_identity=$$(process_identity "$$pid" 2>/dev/null || true); \
+		if [ -z "$$current_identity" ] || [ "$$current_identity" != "$$expected_identity" ]; then return 0; fi; \
+		retained_identity=""; \
+		for record in $$owned_tree_records; do \
+			record_pid="$${record%%|*}"; \
+			if [ "$$record_pid" = "$$pid" ]; then \
+				retained_identity="$${record#*|}"; \
+				break; \
+			fi; \
+		done; \
+		if [ -n "$$retained_identity" ]; then \
+			if [ "$$retained_identity" != "$$expected_identity" ] || [ "$$retained_identity" != "$$current_identity" ]; then return 0; fi; \
+		else \
+			owned_tree_records="$$owned_tree_records $$pid|$$expected_identity"; \
+		fi; \
+		children=$$(ps -eo pid=,ppid= 2>/dev/null | awk -v parent="$$pid" '$$2 == parent { print $$1 }' || true); \
+		for child_pid in $$children; do \
+			child_identity=$$(process_identity "$$child_pid" 2>/dev/null || true); \
+			if [ -n "$$child_identity" ]; then \
+				collect_owned_tree "$$child_pid" "$$child_identity"; \
+			fi; \
+		done; \
+	}; \
+	signal_owned_processes() { \
+		signal="$$1"; \
+		for record in $$owned_tree_records; do \
+			pid="$${record%%|*}"; \
+			expected_identity="$${record#*|}"; \
+			current_identity=$$(process_identity "$$pid" 2>/dev/null || true); \
+			if [ -n "$$current_identity" ] && [ "$$current_identity" = "$$expected_identity" ]; then \
+				kill "-$$signal" "$$pid" >/dev/null 2>&1 || true; \
+			fi; \
+		done; \
+	}; \
 	cleanup() { \
 		status=$$?; \
-		trap - EXIT INT TERM; \
-		if [ -n "$${PROLIFERATE_DEV_HOME:-}" ]; then \
-			rm -f "$$(dirname "$$PROLIFERATE_DEV_HOME")/run.lock"; \
+		trap - EXIT; \
+		trap ':' INT TERM; \
+		owned_tree_records=""; \
+		for record in $$owned_processes; do \
+			pid="$${record%%|*}"; \
+			expected_identity="$${record#*|}"; \
+			collect_owned_tree "$$pid" "$$expected_identity"; \
+		done; \
+		signal_owned_processes TERM; \
+		attempt=0; \
+		pending=1; \
+		while [ "$$pending" = "1" ] && [ "$$attempt" -lt 50 ]; do \
+			for record in $$owned_processes; do \
+				pid="$${record%%|*}"; \
+				expected_identity="$${record#*|}"; \
+				collect_owned_tree "$$pid" "$$expected_identity"; \
+			done; \
+			signal_owned_processes TERM; \
+			pending=0; \
+			for record in $$owned_tree_records; do \
+				pid="$${record%%|*}"; \
+				expected_identity="$${record#*|}"; \
+				current_identity=$$(process_identity "$$pid" 2>/dev/null || true); \
+				if [ -n "$$current_identity" ] && [ "$$current_identity" = "$$expected_identity" ] && kill -0 "$$pid" >/dev/null 2>&1; then \
+					state=$$(ps -o stat= -p "$$pid" 2>/dev/null || true); \
+					case "$$state" in Z*) ;; *) pending=1 ;; esac; \
+				fi; \
+			done; \
+			if [ "$$pending" = "1" ]; then sleep 0.1; fi; \
+			attempt=$$((attempt + 1)); \
+		done; \
+		if [ "$$pending" = "1" ]; then \
+			signal_owned_processes KILL; \
 		fi; \
-		kill 0 >/dev/null 2>&1 || true; \
+		for pid in $$owned_pids; do \
+			wait "$$pid" 2>/dev/null || true; \
+		done; \
+		rm -f "$$run_lock_path"; \
 		exit $$status; \
 	}; \
-	trap cleanup EXIT INT TERM; \
+	trap cleanup EXIT; \
+	trap 'exit 130' INT; \
+	trap 'exit 143' TERM; \
 	$(SERVER_ENV_SOURCE) \
 	. "$$launch_env"; \
 	$(AUTH_PROFILE_ENV_SOURCE) \
@@ -281,7 +404,7 @@ run: dev-artifacts-ready
 		cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$PROLIFERATE_API_PORT" 2>/dev/null || true); \
 		if [ -z "$$cloud_worker_ngrok_url" ]; then \
 			echo "Starting ngrok tunnel for Cloud worker callbacks :$$PROLIFERATE_API_PORT"; \
-			ngrok http "$$PROLIFERATE_API_PORT" --log=stdout --log-format=json > "/tmp/proliferate-cloud-worker-$$PROLIFERATE_DEV_PROFILE-ngrok.log" 2>&1 & \
+			start_owned_process ngrok http "$$PROLIFERATE_API_PORT" --log=stdout --log-format=json > "/tmp/proliferate-cloud-worker-$$PROLIFERATE_DEV_PROFILE-ngrok.log" 2>&1; \
 			cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$PROLIFERATE_API_PORT" --wait-ms 45000); \
 		else \
 			echo "Using existing ngrok tunnel for Cloud worker callbacks: $$cloud_worker_ngrok_url"; \
@@ -358,20 +481,24 @@ run: dev-artifacts-ready
 		if [ -n "$$stripe_webhook_secret" ]; then \
 			export STRIPE_WEBHOOK_SECRET="$$stripe_webhook_secret"; \
 		fi; \
-		stripe listen --events "$(STRIPE_SNAPSHOT_EVENTS)" --forward-to "$$STRIPE_FORWARD_TO" & \
+		start_owned_process stripe listen --events "$(STRIPE_SNAPSHOT_EVENTS)" --forward-to "$$STRIPE_FORWARD_TO"; \
 	fi; \
 	runtime_bin="$${ANYHARNESS_DEV_RUNTIME_BIN:-$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness}"; \
 	echo "Starting profile $$PROLIFERATE_DEV_PROFILE: runtime :$$ANYHARNESS_PORT, backend :$$PROLIFERATE_API_PORT, desktop :$$PROLIFERATE_WEB_PORT, web :$$PROLIFERATE_HOSTED_WEB_PORT, mobile web :$$PROLIFERATE_MOBILE_WEB_PORT"; \
-	RUST_LOG=info ANYHARNESS_DEV_CORS=1 "$$runtime_bin" serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
-	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
+	start_owned_process env RUST_LOG=info ANYHARNESS_DEV_CORS=1 "$$runtime_bin" serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME"; \
+	start_owned_process sh -c 'cd server && exec .venv/bin/uvicorn "$$@"' sh proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT"; \
 	echo "Starting hosted web app..."; \
-	(cd apps/web && VITE_PROLIFERATE_API_BASE_URL="$$API_BASE_URL" VITE_PROLIFERATE_DEV_TOKEN_LOGIN="$${VITE_PROLIFERATE_DEV_TOKEN_LOGIN:-true}" exec ./node_modules/.bin/vite --host 127.0.0.1 --port "$$PROLIFERATE_HOSTED_WEB_PORT" --strictPort) & \
+	start_owned_process env VITE_PROLIFERATE_API_BASE_URL="$$API_BASE_URL" VITE_PROLIFERATE_DEV_TOKEN_LOGIN="$${VITE_PROLIFERATE_DEV_TOKEN_LOGIN:-true}" sh -c 'cd apps/web && exec ./node_modules/.bin/vite "$$@"' sh --host 127.0.0.1 --port "$$PROLIFERATE_HOSTED_WEB_PORT" --strictPort; \
 	if [ "$(HEADLESS)" = "1" ]; then \
 		echo "HEADLESS=1: Desktop app not started. Runtime, API, and hosted Web are running; Ctrl-C stops them."; \
 		wait; \
 	else \
 		sleep 2; \
-		(cd apps/desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json"); \
+		start_owned_process sh -c 'cd apps/desktop && exec pnpm tauri dev --runner "$$1" --config "$$2"' sh \
+			"$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" \
+			"$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json"; \
+		tauri_pid="$$last_owned_pid"; \
+		wait "$$tauri_pid"; \
 	fi
 
 setup: git-hooks
