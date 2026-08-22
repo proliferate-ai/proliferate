@@ -31,12 +31,28 @@ export function replaySessionHistory(
   sessionId: string,
   events: SessionEventEnvelope[],
 ): SessionStreamState {
+  const sortedEvents = [...events].sort((a, b) => a.seq - b.seq);
+  const contiguousPrefix: SessionEventEnvelope[] = [];
+  let previousSeq: number | null = null;
+
+  for (const envelope of sortedEvents) {
+    // Break the run at the first hole so lastSeq never lands past missing events.
+    if (previousSeq != null && envelope.seq > previousSeq + 1) {
+      break;
+    }
+    if (previousSeq != null && envelope.seq <= previousSeq) {
+      continue;
+    }
+    contiguousPrefix.push(envelope);
+    previousSeq = envelope.seq;
+  }
+
   const transcript =
-    events.length > 0
-      ? reduceEvents(events, sessionId, { replayMode: true })
+    contiguousPrefix.length > 0
+      ? reduceEvents(contiguousPrefix, sessionId, { replayMode: true })
       : createTranscriptState(sessionId);
   return {
-    events: [...events],
+    events: contiguousPrefix,
     transcript,
   };
 }
