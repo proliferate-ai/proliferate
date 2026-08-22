@@ -53,7 +53,11 @@ impl LoopFireExecutor for SessionLoopFireExecutor {
         }
     }
 
-    async fn fire(&self, session_id: &str, loop_id: &str) -> Option<LoopFireReport> {
+    async fn fire(
+        &self,
+        session_id: &str,
+        loop_id: &str,
+    ) -> anyhow::Result<Option<LoopFireReport>> {
         // Reversible Close either wins first and rejects this fire, or waits
         // until this accepted prompt and its accounting have completed.
         let _permit = self
@@ -64,20 +68,27 @@ impl LoopFireExecutor for SessionLoopFireExecutor {
                 &SessionMutationSource::external(),
             )
             .await
-            .ok()?;
+            .map_err(|conflict| {
+                anyhow::anyhow!("loop fire rejected by session admission: {conflict:?}")
+            })?;
         // Preserve the original live-only contract: an emulated fire never
-        // cold-starts a dead actor merely to deliver its scheduled prompt.
-        let handle = self.acp_manager.get_handle(session_id).await?;
-        let record = self
-            .loop_service
-            .store()
-            .find_one(session_id, loop_id)
-            .ok()
-            .flatten()?;
+        // cold-starts a dead actor merely to deliver its scheduled prompt. The
+        // next pass observes Dead and disarms; fire itself must not disarm.
+        let Some(handle) = self.acp_manager.get_handle(session_id).await else {
+            return Err(anyhow::anyhow!("session is not live"));
+        };
+        let Some(record) = self.loop_service.store().find_one(session_id, loop_id)? else {
+            return Ok(None);
+        };
         if !record.is_active() || record.native {
-            return None;
+            return Ok(None);
         }
-        let runtime = self.session_runtime.get()?.upgrade()?;
+        let runtime = self
+            .session_runtime
+            .get()
+            .ok_or_else(|| anyhow::anyhow!("session runtime unavailable"))?
+            .upgrade()
+            .ok_or_else(|| anyhow::anyhow!("session runtime unavailable"))?;
         runtime
             .send_text_prompt_with_provenance_on_existing_handle(
                 session_id,
@@ -88,14 +99,25 @@ impl LoopFireExecutor for SessionLoopFireExecutor {
                 handle.clone(),
             )
             .await
-            .ok()?;
+            .map_err(|error| anyhow::anyhow!("loop prompt delivery failed: {error:?}"))?;
+        // When the prompt was delivered but accounting fails, we return Err so
+        // the arm is kept — a retry may duplicate a prompt turn (bounded by the
+        // scheduler's consecutive-failure cap), which is preferred over
+        // silently disarming a live loop (and over leaving a stale next_fire
+        // that re-fires past max_fires on the next attach).
         let op = Box::new(LoopFireRecordOp {
             loop_service: self.loop_service.clone(),
             loop_id: loop_id.to_string(),
             fired_at_ms: chrono::Utc::now().timestamp_millis(),
         });
-        let reply = handle.run_domain_op(op).await.ok()?;
-        reply.downcast::<LoopFireRecordOutput>().ok()?.report
+        let reply = handle
+            .run_domain_op(op)
+            .await
+            .map_err(|error| anyhow::anyhow!("loop fire accounting op failed: {error:?}"))?;
+        let output = reply
+            .downcast::<LoopFireRecordOutput>()
+            .map_err(|_| anyhow::anyhow!("loop fire record op returned unexpected reply"))?;
+        output.result
     }
 }
 
@@ -217,7 +239,7 @@ mod tests {
         assert!(state.acp_manager.get_handle("target").await.is_none());
         assert!(read_requests(&scripted_agent.request_log).is_empty());
 
-        let report = executor.fire("target", "dead-loop").await;
+        let result = executor.fire("target", "dead-loop").await;
         let cold_started = state.acp_manager.get_handle("target").await.is_some();
         let requests = read_requests(&scripted_agent.request_log);
         let record = state
@@ -232,7 +254,10 @@ mod tests {
         drop(state);
         std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
 
-        assert!(report.is_none(), "a dead session cannot accept a loop fire");
+        assert!(
+            result.is_err(),
+            "a dead session cannot accept a loop fire and the failure must not read as loop-cleared"
+        );
         assert!(!cold_started, "a loop fire must not cold-start its session");
         assert!(
             requests.is_empty(),

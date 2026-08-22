@@ -589,7 +589,7 @@ struct LoopFireRecordOp {
     fired_at_ms: i64,
 }
 struct LoopFireRecordOutput {
-    report: Option<LoopFireReport>,
+    result: anyhow::Result<Option<LoopFireReport>>,
 }
 impl SessionDomainOp for LoopFireRecordOp {
     fn begin(self: Box<Self>, emitter: &mut SessionOpEmitter<'_>) -> SessionOpStep {
@@ -599,21 +599,18 @@ impl SessionDomainOp for LoopFireRecordOp {
             fired_at_ms,
         } = *self;
         let context = loop_event_context(&emitter.event_ctx());
-        let report = match loop_service.record_emulated_fire(context, loop_id, fired_at_ms) {
+        let result = match loop_service.record_emulated_fire(context, loop_id, fired_at_ms) {
             Ok(Some(outcome)) => {
                 emitter.publish(outcome.batch.envelopes);
-                Some(LoopFireReport {
+                Ok(Some(LoopFireReport {
                     still_armed: outcome.still_armed,
                     next_fire_at_ms: outcome.next_fire_at_ms,
-                })
+                }))
             }
-            Ok(None) => None,
-            Err(error) => {
-                tracing::warn!(error = %error, "failed to record emulated loop fire");
-                None
-            }
+            Ok(None) => Ok(None),
+            Err(error) => Err(anyhow::anyhow!(error.to_string())),
         };
-        SessionOpStep::Done(Box::new(LoopFireRecordOutput { report }) as Box<dyn Any + Send>)
+        SessionOpStep::Done(Box::new(LoopFireRecordOutput { result }) as Box<dyn Any + Send>)
     }
 }
 
