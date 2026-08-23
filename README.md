@@ -87,11 +87,11 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 
 ## Features
 
-- 🤖 **[Native harnesses](https://proliferate.com/docs/product/agents)** - Claude Code, Codex, OpenCode, Cursor, Grok, and more
+- 🤖 **[Native harnesses](https://proliferate.com/docs/product/agents)** - Claude Code, Codex, OpenCode, Cursor, and Grok
 - 🌳 **[Worktree workspaces](https://proliferate.com/docs/product/workspaces)** - an isolated branch and working directory for every task
 - 🔍 **[Git & diff review](https://proliferate.com/docs/product/workspaces/review-and-publish)** - inspect and edit agent changes without leaving the app
 - 🛡️ **[Plan & code review agents](https://proliferate.com/docs/product/workspaces/review-and-publish)** - reviewer agents check plans, diffs, risks, and branch readiness before you do
-- 🪆 **[Parallel agents & subagents](https://proliferate.com/docs/product/workspaces/parallel-agents)** - run agents side by side, or let them delegate scoped work to other agents
+- 🪆 **[Parallel agents](https://proliferate.com/docs/product/workspaces/parallel-agents) & [subagents](https://proliferate.com/docs/features/subagents)** - run agents side by side, or let them delegate scoped work to other agents
 - 🧩 **[Integrations](https://proliferate.com/docs/product/integrations)** - MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
 - ⏰ **[Workflows](https://proliferate.com/docs/product/workflows)** - recurring and event-driven agent runs: nightly review passes, triage on alerts, dependency bumps
 - 🖼️ **[Artifacts](https://proliferate.com/docs/product/learn/cowork-and-artifacts)** - docs, UI, demos, and components rendered inline as agents produce them
@@ -158,7 +158,7 @@ generated Tauri config, and app labels.
 
 ### Self-hosting
 
-The full Proliferate control plane is self-hostable. Start with the
+Proliferate is 100% open source and self hostable. Start with the
 [deployment docs](https://proliferate.com/docs/deployment) — Docker, AWS, GCP,
 Azure, Kubernetes, and air-gapped operation.
 
