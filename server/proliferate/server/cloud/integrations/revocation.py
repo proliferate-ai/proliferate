@@ -10,7 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.background.config import DEFAULT_QUEUE, INTEGRATION_REVOCATION_PROCESS_TASK
 from proliferate.config import settings
-from proliferate.constants.cloud import CLOUD_INTEGRATION_REVOCATION_DEADLINE_SECONDS
+from proliferate.constants.cloud import (
+    CLOUD_INTEGRATION_REVOCATION_DEADLINE_SECONDS,
+    CLOUD_INTEGRATION_REVOCATION_LEASE_SECONDS,
+)
 from proliferate.db.store.background_outbox import enqueue_outbox_task
 from proliferate.db.store.integrations import oauth_clients as oauth_clients_store
 from proliferate.db.store.integrations import revocation_jobs as revocation_jobs_store
@@ -174,7 +177,11 @@ async def run_revocation_job(
     except ValueError:
         return None
     async with session_factory() as db:
-        job = await revocation_jobs_store.claim_revocation_job(db, parsed_job_id)
+        job, claimed = await revocation_jobs_store.claim_revocation_job(
+            db,
+            parsed_job_id,
+            lease_seconds=CLOUD_INTEGRATION_REVOCATION_LEASE_SECONDS,
+        )
         await db.commit()
     if (
         job is None
@@ -182,6 +189,17 @@ async def run_revocation_job(
         or job.credential_ciphertext is None
     ):
         return None
+    if not claimed:
+        remaining = (
+            (
+                job.last_attempt_at
+                + timedelta(seconds=CLOUD_INTEGRATION_REVOCATION_LEASE_SECONDS)
+                - utcnow()
+            ).total_seconds()
+            if job.last_attempt_at is not None
+            else 0
+        )
+        return max(remaining, 1.0)
 
     try:
         material = decrypt_json(
@@ -215,6 +233,7 @@ async def run_revocation_job(
                 job_id=job.id,
                 status="exhausted",
                 error_code="credential_unreadable",
+                expected_attempt=job.attempt_count,
             )
             await db.commit()
         return None
@@ -241,6 +260,7 @@ async def run_revocation_job(
                     job_id=job.id,
                     status="exhausted",
                     error_code="provider_client_mismatch",
+                    expected_attempt=job.attempt_count,
                 )
                 await db.commit()
             return None
@@ -258,6 +278,7 @@ async def run_revocation_job(
                         job_id=job.id,
                         status="exhausted",
                         error_code="provider_client_unreadable",
+                        expected_attempt=job.attempt_count,
                     )
                     await db.commit()
                 return None
@@ -282,6 +303,7 @@ async def run_revocation_job(
                     job_id=job.id,
                     status="exhausted",
                     error_code=exc.code,
+                    expected_attempt=job.attempt_count,
                 )
                 await db.commit()
             return None
@@ -290,6 +312,7 @@ async def run_revocation_job(
                 db,
                 job_id=job.id,
                 error_code=exc.code,
+                expected_attempt=job.attempt_count,
             )
             await db.commit()
         if pending is None or pending.status != "pending":
@@ -302,6 +325,7 @@ async def run_revocation_job(
             job_id=job.id,
             status="succeeded",
             error_code=None,
+            expected_attempt=job.attempt_count,
         )
         await db.commit()
     return None
