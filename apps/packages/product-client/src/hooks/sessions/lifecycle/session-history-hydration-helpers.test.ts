@@ -11,6 +11,7 @@ import {
   putSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
@@ -18,12 +19,14 @@ describe("applyHistoryStateToStores", () => {
   beforeEach(() => {
     useSessionDirectoryStore.getState().clearEntries();
     useSessionIntentStore.getState().clear();
+    useSessionIngestStore.getState().clear();
     useSessionTranscriptStore.getState().clearEntries();
   });
 
   afterEach(() => {
     useSessionDirectoryStore.getState().clearEntries();
     useSessionIntentStore.getState().clear();
+    useSessionIngestStore.getState().clear();
     useSessionTranscriptStore.getState().clearEntries();
   });
 
@@ -86,6 +89,45 @@ describe("applyHistoryStateToStores", () => {
     expect(updated.status).toBe(expectedStatus);
     expect(updated.executionSummary?.phase).toBe(expectedPhase);
     expect(resolveSessionViewState(updated)).toBe(expectedViewState);
+  });
+
+  it("marks the ingest store current when a history refill repairs a recorded gap", () => {
+    const currentState = replaySessionHistory("session-1", [turnStarted(1)]);
+    const currentRecord = {
+      ...createEmptySessionRecord("session-1", "codex", {
+        workspaceId: "workspace-1",
+      }),
+      events: currentState.events,
+      transcript: currentState.transcript,
+      status: "running" as const,
+      executionSummary: {
+        phase: "running" as const,
+        hasLiveHandle: true,
+        pendingInteractions: [],
+        updatedAt: "2026-04-04T00:00:01Z",
+      },
+      streamConnectionState: "disconnected" as const,
+      transcriptHydrated: true,
+    };
+    putSessionRecord(currentRecord);
+    useSessionIngestStore.getState().markStale("session-1", {
+      lastAppliedSeq: 1,
+      lastObservedSeq: 3,
+      gapAfterSeq: 1,
+    });
+    const nextState = replaySessionHistory("session-1", [turnStarted(1), turnEnded(2)]);
+
+    applyHistoryStateToStores("session-1", currentRecord, {
+      events: nextState.events,
+      transcript: nextState.transcript,
+      reconcileEnvelopes: [turnEnded(2)],
+    });
+
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-1"])
+      .toMatchObject({
+        freshness: "current",
+        gapAfterSeq: null,
+      });
   });
 
   it("does not let prepended older history overwrite newer running activity", () => {

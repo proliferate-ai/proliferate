@@ -3,6 +3,17 @@ import type { HotSessionTarget } from "#product/lib/domain/sessions/hot-session-
 
 export type SessionIngestFreshness = "current" | "warming" | "stale" | "cold";
 
+/**
+ * Freshness contract: `gapAfterSeq` records the applied watermark at the
+ * moment a stream gap was detected — events after it were missed. Only a
+ * repair that advances `lastAppliedSeq` past the recorded gap may clear it:
+ * an authoritative history refill (`applyHistoryHydration`) or a stream batch
+ * that reduced past it (`applyStreamProgress`). Writes that repaired nothing
+ * (duplicate-only flushes, reconnects, error marks) must preserve it, or the
+ * reopen flow skips the history refill that repairs the hole. A session is
+ * `current` only while no gap is recorded, and the `lastAppliedSeq` /
+ * `lastObservedSeq` watermarks never move backwards.
+ */
 export interface SessionIngestFreshnessState {
   freshness: SessionIngestFreshness;
   lastAppliedSeq: number;
@@ -25,6 +36,7 @@ interface SessionIngestStoreState {
     >>,
   ) => void;
   markCold: (clientSessionId: string) => void;
+  applyHistoryHydration: (clientSessionId: string, lastAppliedSeq: number) => void;
   applyStreamProgress: (
     clientSessionId: string,
     progress: {
@@ -130,6 +142,8 @@ export const useSessionIngestStore = create<SessionIngestStoreState>((set) => ({
         [clientSessionId]: {
           ...existing,
           ...patch,
+          lastAppliedSeq: Math.max(existing.lastAppliedSeq, patch?.lastAppliedSeq ?? 0),
+          lastObservedSeq: Math.max(existing.lastObservedSeq, patch?.lastObservedSeq ?? 0),
           freshness: "stale",
           lastErrorAt: patch?.lastErrorAt ?? existing.lastErrorAt ?? new Date().toISOString(),
         },
@@ -145,6 +159,30 @@ export const useSessionIngestStore = create<SessionIngestStoreState>((set) => ({
         [clientSessionId]: {
           ...existing,
           freshness: "cold",
+        },
+      },
+    };
+  }),
+
+  // History replay is authoritative and contiguous, so a refill that advances
+  // the applied watermark past a recorded gap has repaired that hole; a refill
+  // that does not reach past the gap must leave it recorded.
+  applyHistoryHydration: (clientSessionId, lastAppliedSeq) => set((state) => {
+    const existing = state.freshnessByClientSessionId[clientSessionId] ?? COLD_FRESHNESS;
+    const gapAfterSeq = existing.gapAfterSeq !== null && lastAppliedSeq > existing.gapAfterSeq
+      ? null
+      : existing.gapAfterSeq;
+    const freshness: SessionIngestFreshness = gapAfterSeq === null ? "current" : "stale";
+    return {
+      freshnessByClientSessionId: {
+        ...state.freshnessByClientSessionId,
+        [clientSessionId]: {
+          ...existing,
+          freshness,
+          lastAppliedSeq: Math.max(existing.lastAppliedSeq, lastAppliedSeq),
+          lastObservedSeq: Math.max(existing.lastObservedSeq, lastAppliedSeq),
+          gapAfterSeq,
+          lastErrorAt: freshness === "current" ? null : existing.lastErrorAt,
         },
       },
     };
