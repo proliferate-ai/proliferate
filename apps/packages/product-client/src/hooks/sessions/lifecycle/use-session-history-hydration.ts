@@ -252,7 +252,7 @@ export function useSessionHistoryHydration() {
 
         const storeStartedAt = performance.now();
         applyHistoryStateToStores(sessionId, currentSlot, {
-          events: replacementEvents,
+          events: nextState.events,
           transcript: nextState.transcript,
           reconcileEnvelopes: events,
         });
@@ -265,7 +265,7 @@ export function useSessionHistoryHydration() {
           recordHistoryStateCounts(
             operationId,
             "after",
-            replacementEvents,
+            nextState.events,
             nextState.transcript,
           );
         }
@@ -291,7 +291,7 @@ export function useSessionHistoryHydration() {
           sessionId,
           eventCount: events.length,
           prepended: true,
-          totalEventCount: replacementEvents.length,
+          totalEventCount: nextState.events.length,
           elapsedMs: Math.round(performance.now() - startedAt),
         });
         return events.length > 0;
