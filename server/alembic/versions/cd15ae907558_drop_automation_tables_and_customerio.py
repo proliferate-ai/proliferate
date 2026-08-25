@@ -31,7 +31,7 @@ that replaces automations:
 Downgrade is intentionally unsupported, matching the cull precedent
 (f8b9c0d1e2f4): these tables are gone for good.
 
-Revision ID: d7e8f9a0b1c2
+Revision ID: cd15ae907558
 Revises: e7a9c2d41f56
 Create Date: 2026-08-25 00:00:00.000000
 
@@ -41,7 +41,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "d7e8f9a0b1c2"
+revision: str = "cd15ae907558"
 down_revision: str | None = "e7a9c2d41f56"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

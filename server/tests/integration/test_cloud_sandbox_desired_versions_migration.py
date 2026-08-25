@@ -8,7 +8,7 @@ fixture (proving upgrade-to-head), so this test isolates the migration itself:
 upgrading the disposable database to the revision under test, downgrading one
 step to remove the columns, and re-upgrading to restore them. The downgrade
 test pins ``_REVISION`` rather than head because the chain above it contains
-irreversible cull migrations (e.g. ``d7e8f9a0b1c2``) that a head-first
+irreversible cull migrations (e.g. ``cd15ae907558``) that a head-first
 downgrade cannot cross — the same pattern as the other migration up/down
 proofs.
 """
