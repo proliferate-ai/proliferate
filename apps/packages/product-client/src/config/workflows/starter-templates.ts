@@ -1,4 +1,5 @@
 import type { WorkflowDefinitionV2 } from "@proliferate/cloud-sdk";
+import { PR_REVIEW_AND_MERGE_TEMPLATE } from "#product/config/workflows/templates/pr-review-and-merge/template";
 
 /**
  * Starter templates for the gen-2 builder: the main page's empty state and
@@ -229,6 +230,7 @@ const ON_CALL_RESPONSE: WorkflowStarterTemplateV2 = {
 
 export const WORKFLOW_STARTER_TEMPLATES_V2: readonly WorkflowStarterTemplateV2[] = [
   AGENT_ENGINEERING_PROCESS,
+  PR_REVIEW_AND_MERGE_TEMPLATE,
   SUPPORT_TRIAGE,
   ON_CALL_RESPONSE,
   BUG_INVESTIGATION,
