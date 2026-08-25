@@ -27,7 +27,6 @@ export interface DesktopBridge {
   nativeUi: DesktopNativeUiBridge;
   updater: DesktopUpdaterBridge;
   worker: DesktopWorkerBridge;
-  ssh: DesktopSshBridge;
   scratch: DesktopScratchBridge;
   diagnostics: DesktopDiagnosticsBridge;
   connect: DesktopConnectBridge;
@@ -35,10 +34,10 @@ export interface DesktopBridge {
 
 /**
  * A connection to an AnyHarness runtime at the runtime level — base URL plus an
- * optional auth token, with no workspace identity. Runtime discovery and SSH
- * tunnels resolve before any workspace is selected, so this reuses the SDK's
- * client-connection type (what `getAnyHarnessClient` consumes) rather than the
- * workspace-scoped resolved-connection type.
+ * optional auth token, with no workspace identity. Runtime discovery resolves
+ * before any workspace is selected, so this reuses the SDK's client-connection
+ * type (what `getAnyHarnessClient` consumes) rather than the workspace-scoped
+ * resolved-connection type.
  */
 export type LocalRuntimeConnection = AnyHarnessClientConnection;
 
@@ -285,32 +284,6 @@ export interface DesktopWorkerBridge {
   getInstallId(): Promise<string>;
   ensure(input: WorkerConfiguration): Promise<WorkerStatus>;
   stop(): Promise<void>;
-}
-
-// --- SSH --------------------------------------------------------------------
-
-/** A persisted SSH direct-target profile. Mirrors Desktop's stored profile. */
-export interface SshProfile {
-  targetId: string;
-  sshHost: string;
-  sshUser: string;
-  sshPort: number;
-  identityFile?: string | null;
-  remoteAnyHarnessPort: number;
-  workspaceRoot?: string | null;
-}
-
-/**
- * Desktop owns the SSH process and tunnel; once ProductClient receives the
- * local tunnel connection it uses the normal AnyHarness SDK. Only currently
- * needed operations are exposed.
- */
-export interface DesktopSshBridge {
-  getProfile(targetId: string): Promise<SshProfile | null>;
-  saveProfile(profile: SshProfile): Promise<void>;
-  removeProfile(targetId: string): Promise<void>;
-
-  ensureTunnel(profile: SshProfile): Promise<LocalRuntimeConnection>;
 }
 
 // --- Workspace scratch ------------------------------------------------------

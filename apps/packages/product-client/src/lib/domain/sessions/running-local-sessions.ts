@@ -1,5 +1,4 @@
 import { resolveSessionViewState } from "#product/domain/sessions/activity";
-import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { isCloudWorkspaceId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 
 type SessionActivitySnapshot = NonNullable<Parameters<typeof resolveSessionViewState>[0]>;
@@ -14,8 +13,7 @@ export function isLocalWorkspaceId(workspaceId: string | null | undefined): bool
   if (!workspaceId) {
     return false;
   }
-  return !isCloudWorkspaceId(workspaceId)
-    && parseTargetWorkspaceSyntheticId(workspaceId) === null;
+  return !isCloudWorkspaceId(workspaceId);
 }
 
 // Sessions an organization switch must close before the desktop worker is

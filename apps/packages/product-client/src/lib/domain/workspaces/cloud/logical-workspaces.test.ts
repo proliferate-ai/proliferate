@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { targetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import type { CloudMobilityWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import {
@@ -558,40 +557,6 @@ describe("logical workspaces", () => {
     expect(expanded.has(localWorkspace.id)).toBe(true);
     expect(expanded.has("remote:github:proliferate-ai:proliferate:main")).toBe(true);
     expect(expanded.has("cloud:cloud-main")).toBe(true);
-  });
-
-  it("uses direct target materialization for cloud workspaces backed by SSH targets", () => {
-    const cloudWorkspace = makeCloudWorkspace({
-      id: "cloud-1",
-      branch: "automation/ssh-run",
-      directTargetContext: {
-        targetId: "target-1",
-        targetKind: "ssh",
-        anyharnessWorkspaceId: "workspace-1",
-      },
-    });
-    const targetMaterializationId = targetWorkspaceSyntheticId("target-1", "workspace-1");
-
-    const logicalWorkspace = buildLogicalWorkspaces({
-      localWorkspaces: [],
-      repoRoots: [],
-      cloudWorkspaces: [cloudWorkspace],
-      currentSelectionId: null,
-    })[0]!;
-
-    expect(logicalWorkspace.preferredMaterializationId).toBe(targetMaterializationId);
-    expect(resolveLogicalWorkspaceMaterializationId(logicalWorkspace)).toBe(targetMaterializationId);
-    expect(
-      resolveLogicalWorkspaceMaterializationId(
-        logicalWorkspace,
-        cloudWorkspaceSyntheticId(cloudWorkspace.id),
-      ),
-    ).toBe(targetMaterializationId);
-    expect(logicalWorkspaceRelatedIds(logicalWorkspace)).toEqual([
-      "remote:github:proliferate-ai:proliferate:automation%2Fssh-run",
-      "cloud:cloud-1",
-      targetMaterializationId,
-    ]);
   });
 
   it("keeps cloud-synced local workspaces on the local materialization", () => {

@@ -1,0 +1,24 @@
+# System manifest (Organization Standard rule 2) — validated by
+# scripts/check_manifests.py; rules PROD-MANIFEST-001/002 in
+# lints/product/manifests.toml. allowed_importers is measured reality, not
+# permission-by-intention: the checker fails on drift in either direction.
+
+name = "billing"
+spec = "specs/FEATURE_DOCS/BILLING.md"
+owns = "Plans, credits, usage segments, and Stripe integration for organization billing."
+
+public_surface = [
+    "proliferate.server.billing.api",
+    "proliferate.server.billing.models",
+]
+
+allowed_importers = [
+    "cloud/agent_gateway",
+    "cloud/cloud_sandboxes",
+    "cloud/gateway",
+    "cloud/materialization",
+    "cloud/webhooks",
+    "main.py",
+    "organizations",
+    "permissions.py",
+]

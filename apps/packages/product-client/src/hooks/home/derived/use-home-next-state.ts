@@ -7,7 +7,6 @@ import {
 } from "#product/lib/domain/home/home-next-launch";
 import { useHomeNextModelSelection } from "#product/hooks/home/derived/use-home-next-model-selection";
 import { useHomeNextRepositorySelection } from "#product/hooks/home/derived/use-home-next-repository-selection";
-import { useComputeTargetOptions } from "#product/hooks/compute/derived/use-compute-target-options";
 
 interface UseHomeNextStateArgs {
   desktopTargetsAvailable: boolean;
@@ -16,7 +15,6 @@ interface UseHomeNextStateArgs {
   repoLaunchKind: HomeNextRepoLaunchKind;
   modelSelectionOverride: HomeNextModelSelection | null;
   baseBranchOverride: string | null;
-  selectedSshTargetId?: string | null;
 }
 
 // Owns read-only Home Next launch state composition. Does not own launch actions.
@@ -27,7 +25,6 @@ export function useHomeNextState({
   repoLaunchKind,
   modelSelectionOverride,
   baseBranchOverride,
-  selectedSshTargetId = null,
 }: UseHomeNextStateArgs) {
   const effectiveDestination = desktopTargetsAvailable ? destination : "repository";
   const effectiveRepoLaunchKind = desktopTargetsAvailable ? repoLaunchKind : "cloud";
@@ -37,13 +34,6 @@ export function useHomeNextState({
     repoLaunchKind: effectiveRepoLaunchKind,
     baseBranchOverride,
   });
-  const computeTargets = useComputeTargetOptions({
-    enabled: desktopTargetsAvailable && effectiveDestination === "repository",
-  });
-  const sshTargetOptions = desktopTargetsAvailable ? computeTargets.sshTargetOptions : [];
-  const selectedSshTarget = sshTargetOptions.find((target) =>
-    target.id === selectedSshTargetId
-  ) ?? null;
   const launchTarget =
     desktopTargetsAvailable || repository.launchTarget?.kind === "cloud"
       ? repository.launchTarget
@@ -97,26 +87,8 @@ export function useHomeNextState({
       }
     }
 
-    if (effectiveRepoLaunchKind === "ssh") {
-      if (computeTargets.isLoading) {
-        return "Loading SSH targets";
-      }
-      if (computeTargets.sshTargetOptions.length === 0) {
-        return "Add an SSH target before launching there";
-      }
-      if (!selectedSshTarget) {
-        return "Choose an SSH target";
-      }
-      if (selectedSshTarget.disabledReason) {
-        return selectedSshTarget.disabledReason;
-      }
-      return "SSH target launches are not wired yet";
-    }
-
     return launchTarget ? null : "Choose where to launch";
   }, [
-    computeTargets.isLoading,
-    computeTargets.sshTargetOptions.length,
     effectiveDestination,
     effectiveRepoLaunchKind,
     launchTarget,
@@ -129,15 +101,11 @@ export function useHomeNextState({
     repository.launchTarget,
     repository.selectedBranchName,
     repository.selectedRepository,
-    selectedSshTarget,
   ]);
 
   return {
     ...repository,
     launchTarget,
-    sshTargetOptions,
-    sshTargetsLoading: desktopTargetsAvailable && computeTargets.isLoading,
-    selectedSshTarget,
     ...model,
     targetDisabledReason,
     canLaunchTarget:

@@ -1,0 +1,18 @@
+# System manifest (Organization Standard rule 2) — validated by
+# scripts/check_manifests.py; rules PROD-MANIFEST-001/002 in
+# lints/product/manifests.toml. allowed_importers is measured reality, not
+# permission-by-intention: the checker fails on drift in either direction.
+
+name = "support"
+spec = "specs/codebase/systems/product/support/README.md"
+owns = "In-product support requests and their delivery to the support loop."
+
+public_surface = [
+    "proliferate.server.support.api",
+    "proliferate.server.support.service",
+    "proliferate.server.support.models",
+]
+
+allowed_importers = [
+    "main.py",
+]

@@ -13,8 +13,6 @@ export function homeRepoLaunchKindLabel(kind: HomeNextRepoLaunchKind): string {
       return "Work locally";
     case "cloud":
       return "Cloud";
-    case "ssh":
-      return "SSH target";
   }
 }
 

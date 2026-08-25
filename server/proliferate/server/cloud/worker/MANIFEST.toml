@@ -1,0 +1,16 @@
+# System manifest (Organization Standard rule 2) — validated by
+# scripts/check_manifests.py; rules PROD-MANIFEST-001/002 in
+# lints/product/manifests.toml. allowed_importers is measured reality, not
+# permission-by-intention: the checker fails on drift in either direction.
+
+name = "seam"
+spec = "specs/FEATURE_DOCS/MANAGED_RUNTIME.md"
+owns = "Background reconciliation for sandbox workers (orphan sandbox reaping): part of the CP↔runtime seam."
+
+public_surface = [
+    "proliferate.server.cloud.worker.service",
+]
+
+allowed_importers = [
+    "background",
+]

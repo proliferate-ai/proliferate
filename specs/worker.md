@@ -423,13 +423,6 @@ previous section is the only convergence path any Worker config can express;
 on-disk configs still carrying the deleted legacy keys parse unchanged
 (serde ignores unknown fields).
 
-SSH-installed targets are a separate story: `install/proliferate-target-install.sh`
-does not set `supervisor_update_request_dir` in the Worker config it writes,
-so the mailbox dir stays absent and Worker binary convergence is off there
-today. Proliferate Supervisor still owns process supervision for SSH targets
-(the installer's systemd unit runs `proliferate-supervisor`, not the Worker
-directly).
-
 ## Hard Rules
 
 - Treat every convergence action as non-fatal to the heartbeat loop.

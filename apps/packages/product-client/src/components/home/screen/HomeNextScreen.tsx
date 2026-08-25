@@ -35,7 +35,6 @@ export function HomeNextScreen() {
     destination,
     repositorySelection,
     repoLaunchKind,
-    selectedSshTargetId,
     baseBranchOverride,
     patchTargetSelection,
   } = useHomeNextTargetSelectionState();
@@ -56,7 +55,6 @@ export function HomeNextScreen() {
     repoLaunchKind,
     modelSelectionOverride,
     baseBranchOverride,
-    selectedSshTargetId,
   });
   const homeLaunchControls = useHomeNextLaunchControls({
     modelSelection: homeNext.effectiveModelSelection,
@@ -286,9 +284,6 @@ export function HomeNextScreen() {
                   branchOptions={homeNext.branchOptions}
                   branchLoading={homeNext.branchQuery.isLoading}
                   cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
-                  sshTargetOptions={homeNext.sshTargetOptions}
-                  selectedSshTargetId={selectedSshTargetId}
-                  sshTargetsLoading={homeNext.sshTargetsLoading}
                   onSelectCowork={() => {
                     patchTargetSelection({ destination: "cowork" });
                   }}
@@ -299,11 +294,10 @@ export function HomeNextScreen() {
                       repoLaunchKind: launchKindForRepository(sourceRoot),
                     });
                   }}
-                  onSelectRuntime={(launchKind, targetId = null) => {
+                  onSelectRuntime={(launchKind) => {
                     if (!desktopTargetsAvailable && launchKind !== "cloud") return;
                     patchTargetSelection({
                       repoLaunchKind: launchKind,
-                      selectedSshTargetId: launchKind === "ssh" ? targetId : selectedSshTargetId,
                     });
                   }}
                   onSelectBranch={(branchName) => {

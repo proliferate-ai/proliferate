@@ -68,7 +68,7 @@ export interface WorkspacesCommandItemView {
   sessionCount?: number | null;
   /**
    * Where the workspace runs, when that is not the local default: a quiet
-   * neutral badge ("Cloud", "SSH"). Local/worktree entries omit it rather
+   * neutral badge ("Cloud"). Local/worktree entries omit it rather
    * than label the common case.
    */
   placementLabel?: string | null;

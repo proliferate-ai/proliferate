@@ -14,7 +14,6 @@ import {
   findLogicalWorkspace,
   logicalWorkspaceRelatedIds,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
-import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { resolveLogicalWorkspaceMaterializationId } from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   markWorkspaceViewed,
@@ -76,92 +75,6 @@ export async function runWorkspaceSelection(
 
   const logicalWorkspace = findLogicalWorkspace(deps.logicalWorkspaces, request.workspaceId);
   if (!logicalWorkspace) {
-    const targetWorkspace = parseTargetWorkspaceSyntheticId(request.workspaceId);
-    if (targetWorkspace) {
-      const selectionStartedAt = startLatencyTimer();
-      const previousSelection = useSessionSelectionStore.getState();
-      const currentId = previousSelection.selectedWorkspaceId;
-      if (currentId === request.workspaceId && !request.options?.force) {
-        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_already_selected");
-        return;
-      }
-
-      logLatency("workspace.select.start", {
-        workspaceId: request.workspaceId,
-        logicalWorkspaceId: request.workspaceId,
-        force: !!request.options?.force,
-        preservePending: !!request.options?.preservePending,
-        targetId: targetWorkspace.targetId,
-      });
-
-      const workspaceUiState = useWorkspaceUiStore.getState();
-      const initialActiveSessionId = resolveInitialActiveSessionId({
-        workspaceId: request.workspaceId,
-        workspaceUiKey: request.workspaceId,
-        workspaceUiKeys: [request.workspaceId],
-        options: request.options,
-        workspaceUiState,
-      }, INITIAL_SESSION_DEPS);
-      deps.cache.cancelPreviousWorkspaceDisplayQueries({
-        runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
-        previousWorkspaceIds: [
-          previousSelection.selectedLogicalWorkspaceId,
-          previousSelection.selectedWorkspaceId,
-        ],
-        nextWorkspaceIds: [request.workspaceId],
-      });
-      deps.setSelectedLogicalWorkspaceId(request.workspaceId);
-      deps.setSelectedWorkspace(request.workspaceId, { initialActiveSessionId });
-      prepareOptimisticWorkspaceSessionShell({
-        sessionId: initialActiveSessionId,
-        workspaceId: request.workspaceId,
-        workspaceUiKey: request.workspaceId,
-      }, INITIAL_SESSION_DEPS);
-
-      const context: WorkspaceSelectionContext = {
-        workspaceId: request.workspaceId,
-        logicalWorkspaceId: request.workspaceId,
-        selectionNonce: useSessionSelectionStore.getState().workspaceSelectionNonce,
-        selectionStartedAt,
-        cloudWorkspaceId: null,
-        abortSignal: currentWorkspaceSelectionSignal(),
-      };
-      if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
-        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
-        return;
-      }
-
-      const connectionResult = await resolveSelectionConnection(deps, context, { kind: "local" });
-      if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
-        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
-        return;
-      }
-
-      const bootstrapResult = await deps.bootstrapWorkspace({
-        workspaceId: connectionResult.materializedWorkspaceId ?? context.workspaceId,
-        logicalWorkspaceId: context.logicalWorkspaceId,
-        workspaceConnection: connectionResult.workspaceConnection,
-        startedAt: context.selectionStartedAt,
-        latencyFlowId: request.options?.latencyFlowId,
-        forceSessionDirectoryRefresh: request.options?.forceSessionDirectoryRefresh,
-        isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
-        signal: context.abortSignal,
-      });
-      if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
-        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
-        return;
-      }
-
-      const latestSessionTimestamp = getLatestWorkspaceInteractionTimestamp(bootstrapResult.sessions);
-      if (latestSessionTimestamp) {
-        trackWorkspaceInteraction(context.logicalWorkspaceId, latestSessionTimestamp);
-        markWorkspaceViewedAt(context.logicalWorkspaceId, latestSessionTimestamp);
-      } else {
-        markWorkspaceViewed(context.logicalWorkspaceId);
-      }
-      return;
-    }
-
     // A just-created workspace can be selected before the workspace-collections cache has projected it into
     // `logicalWorkspaces`/`rawWorkspaces` — the pending-composer flow selects it the instant AnyHarness returns it,
     // and on a fresh actor the collections query may not be populated yet. The creator threads the resolved workspace

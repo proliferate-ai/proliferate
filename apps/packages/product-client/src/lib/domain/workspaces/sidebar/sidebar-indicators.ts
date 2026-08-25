@@ -10,7 +10,7 @@ import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/
 import { prStatusViewFromGitStatus } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
-export type SidebarWorkspaceVariant = "local" | "worktree" | "cloud" | "ssh";
+export type SidebarWorkspaceVariant = "local" | "worktree" | "cloud";
 
 export type SidebarIndicatorAction =
   | { kind: "open_workspace"; workspaceId: string }
@@ -68,26 +68,11 @@ export type SidebarStatusIndicator =
 export function sidebarWorkspaceVariantForLogicalWorkspace(
   workspace: LogicalWorkspace,
 ): SidebarWorkspaceVariant {
-  if (logicalWorkspaceUsesSshTarget(workspace)) {
-    return "ssh";
-  }
   return workspace.effectiveOwner === "cloud"
     ? "cloud"
     : workspace.localWorkspace?.kind === "worktree"
       ? "worktree"
       : "local";
-}
-
-export function logicalWorkspaceUsesSshTarget(workspace: LogicalWorkspace): boolean {
-  return workspace.lifecycle === "ssh_active"
-    || workspace.cloudWorkspace?.sandboxType === "ssh"
-    || workspace.cloudWorkspace?.directTargetContext?.targetKind === "ssh";
-}
-
-export function logicalWorkspaceSshTargetId(workspace: LogicalWorkspace): string | null {
-  return workspace.cloudWorkspace?.directTargetContext?.targetId
-    ?? workspace.cloudWorkspace?.targetId
-    ?? null;
 }
 
 // A missing local checkout is a persistent workspace condition that outranks

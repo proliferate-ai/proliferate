@@ -9,12 +9,11 @@ These standards apply to the target-side Supervisor binary:
 - `anyharness/crates/proliferate-supervisor/**`
 
 This document defines Supervisor source structure and ownership rules. It does
-not own server-side managed-cloud bootstrap, SSH installer behavior, Worker
-command delivery, or AnyHarness runtime internals. Read the owning docs for
+not own server-side managed-cloud bootstrap, Worker command delivery, or
+AnyHarness runtime internals. Read the owning docs for
 those areas when changing those boundaries:
 
 - `specs/server/standards.md` for managed-cloud bootstrap code under `server/**`
-- `install/README.md` for SSH target installer behavior
 - `specs/worker.md` for target Worker behavior
 - `specs/anyharness/README.md` for AnyHarness runtime behavior
 
@@ -112,7 +111,7 @@ Use the lowest layer that can own the logic cleanly.
 | Child spawning | `src/process/child.rs` | Focused child process spawn wrapper and env injection. | Restart loops or command-specific process behavior. |
 | Restart policy | `src/process/restart.rs` | Boring restart delay/backoff helpers. | Product policy or target availability decisions. |
 | Process health hooks | `src/process/health.rs` | Bounded polling of AnyHarness `/health` (matching the candidate version when known) and Worker liveness after a restart — the real activation health gate. | Cloud target state, update admission policy, artifact mechanics. |
-| Install helpers | `src/install/**` | Supervisor-owned install layout helpers and systemd unit rendering. | Full SSH installer flow, binary download, enrollment token handling, Cloud API calls. |
+| Install helpers | `src/install/**` | Supervisor-owned install layout helpers and systemd unit rendering. | Binary download, enrollment token handling, Cloud API calls. |
 | Mailbox consumer | `src/update/request.rs` | Consuming the shared `proliferate-runtime-update-protocol` crate: scanning the mailbox for the next pending request, deduping against an already-written result, and recording results/invalid outcomes. | Defining the wire shapes (owned by the shared protocol crate), download, staging, or activation mechanics. |
 | Update manifest | `src/update/manifest.rs` | Manifest parsing, supported component validation, artifact lookup, size checks, and checksum verification. | Rollout policy, desired-version reconciliation, binary replacement. |
 | Update download | `src/update/download.rs` | Bounded `reqwest` GET of only the `artifact_url` named in a verified request, into the private staging dir, with timeout and max-size guards. | Following redirects beyond the single named URL, Cloud API calls, checksum policy (that stays a re-verify step against the manifest). |
@@ -178,7 +177,7 @@ legible.
 ## Boundary Model
 
 ```text
-Server / SSH installer
+Server (managed-cloud bootstrap)
   writes worker config
   writes supervisor config
   launches supervisor
@@ -278,10 +277,9 @@ args, env, or manifest data in through config or CLI arguments.
 
 - Preserve the simple process model unless the task explicitly changes target
   lifecycle behavior.
-- When changing runtime bundle layout, check server bootstrap, SSH installer,
+- When changing runtime bundle layout, check server bootstrap,
   release/template scripts, and smoke tests together.
-- When changing config schema, update both managed-cloud config generation and
-  SSH installer config generation.
+- When changing config schema, update managed-cloud config generation.
 - When changing update staging or manifest validation, add focused Rust tests
   for path safety, checksum/size rejection, and permission behavior.
 - When splitting files, split by responsibility first and preserve behavior.
@@ -299,5 +297,5 @@ args, env, or manifest data in through config or CLI arguments.
 - Are update artifact identifiers and staged paths path-safe?
 - Are staged update permissions private?
 - Did config schema changes update every config writer?
-- Did runtime bundle changes check SSH, managed cloud, release, and smoke
+- Did runtime bundle changes check managed cloud, release, and smoke
   paths together?

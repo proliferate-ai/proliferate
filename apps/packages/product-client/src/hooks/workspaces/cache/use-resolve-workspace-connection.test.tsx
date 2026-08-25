@@ -34,7 +34,6 @@ function wrapper(queryClient: QueryClient) {
 }
 
 const input = {
-  ssh: null,
   cloudClient: null,
   runtimeUrl: "http://local.runtime.test",
   authStatus: "anonymous",
@@ -73,7 +72,6 @@ describe("useResolveWorkspaceConnection", () => {
     expect(mocks.resolveWorkspaceConnection).toHaveBeenCalledWith(
       "http://local.runtime.test",
       "workspace-local",
-      null,
       null,
     );
   });

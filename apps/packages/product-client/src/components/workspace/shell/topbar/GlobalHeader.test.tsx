@@ -165,7 +165,6 @@ describe("GlobalHeader", () => {
 
   it.each([
     ["remote", { status: "settled", origin: "remote" }, { status: "settled", path: "/repo" }, "directory", true],
-    ["SSH target", { status: "settled", origin: "remote" }, { status: "settled", path: "/repo" }, "directory", true],
     ["origin pending", { status: "pending", origin: null }, { status: "settled", path: "/repo" }, "directory", true],
     ["origin rejected", { status: "rejected", origin: null }, { status: "settled", path: "/repo" }, "directory", true],
     ["root pending", { status: "settled", origin: "desktop-local" }, { status: "pending", path: null }, "directory", true],

@@ -27,7 +27,6 @@ export type CloudWorkspaceExposureState =
 
 export type CloudWorkspaceSandboxType =
   | "local"
-  | "ssh"
   | "managed_personal"
   | "managed_shared"
   | "self_hosted";
@@ -43,7 +42,6 @@ export type CloudWorkspaceProductLifecycle = "active" | "archived" | "deleted";
 export type CloudWorkspaceExecutionTargetKind =
   | "local_desktop"
   | "managed_cloud"
-  | "ssh"
   | "self_hosted";
 export type CloudWorkspaceCloudAccessState =
   | "disabled"
@@ -253,7 +251,7 @@ export type CloudWorkspaceSummary = Required<
   // ``provisioning``), the same normalized-status overlay as ``status``.
   runtime?: CloudWorkspaceRuntimeSummary;
   // executionTarget.kind is the full target-kind union the product consumes
-  // (local_desktop | managed_cloud | ssh | self_hosted); this one server only
+  // (local_desktop | managed_cloud | self_hosted); this one server only
   // ever emits the managed_cloud constant, so keep the richer SDK shape.
   executionTarget?: CloudWorkspaceExecutionTargetSummary;
 } & CloudWorkspaceSummaryAppExtras;

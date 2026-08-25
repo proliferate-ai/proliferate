@@ -69,7 +69,6 @@ export function useWorkspaceSidebarActions() {
     patchTargetSelection({
       destination: "repository",
       repoLaunchKind: "worktree",
-      selectedSshTargetId: null,
     });
     goToTopLevelRoute(APP_ROUTES.home);
     focusNewChatComposer();

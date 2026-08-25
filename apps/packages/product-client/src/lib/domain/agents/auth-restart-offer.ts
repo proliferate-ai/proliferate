@@ -1,7 +1,6 @@
 import type { AgentAuthSelection, AgentAuthSurface } from "@proliferate/cloud-sdk";
 import type { SessionDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 
 /**
  * Restart-offer domain (agent-auth.md "Applied means acknowledged", Proof C6):
@@ -83,17 +82,12 @@ export function authAppliedTransitions(
 /**
  * Which auth surface a session's workspace resolves to. Mirrors
  * `resolveRuntimeTargetForWorkspace`: `cloud:*` synthetic ids run in the
- * user's cloud sandbox (cloud surface), `target:*` ids run on an SSH target
- * (neither auth surface — excluded from the offer), everything else is the
- * local runtime.
+ * user's cloud sandbox (cloud surface), everything else is the local runtime.
  */
 export function sessionAuthSurface(
   workspaceId: string | null,
 ): AgentAuthSurface | null {
   if (workspaceId === null || workspaceId.length === 0) {
-    return null;
-  }
-  if (parseTargetWorkspaceSyntheticId(workspaceId) !== null) {
     return null;
   }
   if (parseCloudWorkspaceSyntheticId(workspaceId) !== null) {
@@ -119,7 +113,7 @@ export function isRunningSessionEntry(entry: SessionDirectoryEntry): boolean {
 /**
  * Proof C6 scoping: exactly the running sessions of the switched harness on
  * the switched surface. Nothing else — not the sibling harness, not the other
- * surface, not idle sessions, not SSH-target sessions.
+ * surface, not idle sessions.
  */
 export function matchRunningSessions(
   entries: readonly SessionDirectoryEntry[],

@@ -34,7 +34,6 @@ export function ProductProviderRoot({ children }: { children: ReactNode }) {
 
 function WorkspaceProviders({ children }: { children: ReactNode }) {
   const host = useProductHost();
-  const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const apiBaseUrl = host.deployment.apiBaseUrl;
   const authState = host.auth.state;
@@ -63,7 +62,6 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
     selectedWorkspaceId,
   });
   const resolveProductConnection = useResolveWorkspaceConnection({
-    ssh,
     cloudClient,
     runtimeUrl,
     authStatus,

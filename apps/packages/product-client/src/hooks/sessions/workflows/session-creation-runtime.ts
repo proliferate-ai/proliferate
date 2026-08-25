@@ -1,6 +1,5 @@
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
-import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
   findClientSessionIdByMaterializedSessionId,
@@ -66,7 +65,7 @@ export async function resolveDesktopRuntimeUrlForWorkspace(
   workspaceId: string,
   runtime: DesktopRuntimeBridge | null,
 ): Promise<string> {
-  if (parseTargetWorkspaceSyntheticId(workspaceId) || parseCloudWorkspaceSyntheticId(workspaceId)) {
+  if (parseCloudWorkspaceSyntheticId(workspaceId)) {
     return useHarnessConnectionStore.getState().runtimeUrl.trim();
   }
   return ensureRuntimeReadyForSessions(runtime);

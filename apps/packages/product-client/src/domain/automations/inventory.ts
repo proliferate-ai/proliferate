@@ -59,7 +59,7 @@ export interface AutomationInventoryItemView {
    * Cloud culling (PRO-10, FR-2 / FM5): cloud-target automations are the one
    * honest-inactive exception — the user authored them, so they stay listed
    * (never filtered) and carry this "target no longer available" badge instead
-   * of silently disappearing. Null for local/ssh targets, which remain active.
+   * of silently disappearing. Null for local targets, which remain active.
    */
   targetInactiveBadge: string | null;
   statusKind: AutomationInventoryStatusKind;

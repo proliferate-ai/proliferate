@@ -18,7 +18,6 @@ export function automationTargetId(target: AutomationTargetSelection): string {
   return [
     repoKey(target.gitOwner, target.gitRepoName),
     target.executionTarget,
-    target.cloudTargetId ?? null,
   ].filter(Boolean).join(":");
 }
 
@@ -30,7 +29,6 @@ export function isSameAutomationTarget(
     left
     && right
     && left.executionTarget === right.executionTarget
-    && (left.executionTarget !== "ssh" || left.cloudTargetId === right.cloudTargetId)
     && isSameAutomationRepo(left, right),
   );
 }

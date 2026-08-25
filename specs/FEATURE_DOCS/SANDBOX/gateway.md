@@ -228,7 +228,6 @@ side it is on:
 | Materialization scripts | server → sandbox | **E2B exec channel** (provider SDK, API key) | Control plane; server-only credentials ([lifecycle.md](lifecycle.md)) |
 | Lifecycle events + compute usage | E2B → server | **Signed webhooks** (HMAC) | Provider truth arrives pushed and verified |
 | LLM spend | server → LiteLLM control plane | **Server-side pull** (`/spend/logs`, master key) | Nothing inside the sandbox reports usage |
-| SSH targets | desktop → user's own host | **Direct by design** (local SSH tunnel to the AnyHarness port) | A different compute-target class: user-owned machine, user-owned transport; not the managed-cloud wire |
 
 The asymmetry has one rule under it: **credentials stay where they are
 revocable.** The runtime bearer stays on the server, provider OAuth tokens

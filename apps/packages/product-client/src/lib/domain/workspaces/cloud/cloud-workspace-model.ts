@@ -23,7 +23,6 @@ export type CloudWorkspaceExposureState =
 
 export type CloudWorkspaceSandboxType =
   | "local"
-  | "ssh"
   | "managed_personal"
   | "managed_shared"
   | "self_hosted";
@@ -32,7 +31,6 @@ export type CloudWorkspaceProductLifecycle = "active" | "archived" | "deleted";
 export type CloudWorkspaceExecutionTargetKind =
   | "local_desktop"
   | "managed_cloud"
-  | "ssh"
   | "self_hosted";
 // Mirrors the wire contract emitted by the server's
 // ``WorkspaceMaterializationSummary`` (see the cloud SDK's generated OpenAPI

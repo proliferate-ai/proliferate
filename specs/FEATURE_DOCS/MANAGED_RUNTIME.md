@@ -200,7 +200,6 @@ Source: [Agent distribution](../codebase/platforms/product/agent-distribution.md
 | --- | --- | --- | --- | --- |
 | Desktop | No (bundled sidecars) | Disabled | Disabled | App update replaces both binaries; neither ever self-swaps |
 | Managed cloud (E2B) | Yes (always) | Mailbox (`supervisor_update_request_dir` set) | Mailbox | Server's `build_worker_config` only ever emits `supervisor_update_request_dir`; calling it with `supervisor_owned=False` raises `ValueError` |
-| SSH-installed | Yes (supervisor runs) | Disabled | Disabled | Supervisor owns process supervision; Worker binary convergence is off |
 
 Source: [Worker lifecycle guide](../worker.md) "Launch Policy", `server/proliferate/server/cloud/runtime/bootstrap.py`
 
