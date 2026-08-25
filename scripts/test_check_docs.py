@@ -56,7 +56,6 @@ class DocumentationIntegrityTest(unittest.TestCase):
             "specs/codebase/systems/product/settings/README.md",
             "specs/codebase/systems/product/workflows/README.md",
             "specs/codebase/systems/product/workspaces/README.md",
-            "specs/codebase/systems/product/clients/web-desktop-unification/migration/README.md",
             "specs/codebase/systems/product/engagement/README.md",
             "specs/codebase/systems/engineering/README.md",
             "specs/codebase/systems/engineering/analytics/README.md",
