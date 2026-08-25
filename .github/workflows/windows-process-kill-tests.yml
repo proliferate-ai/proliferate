@@ -15,17 +15,14 @@ name: Windows process-kill tests
 #
 # Kept separate from `windows-compile-check.yml` on purpose: other branches
 # stack on that file and it must not be destabilised.
+#
+# Demoted from pull_request to a nightly probe (cull sweep, Track F): Windows
+# is not a launch-week surface, so this runs on schedule/dispatch only.
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "anyharness/crates/anyharness-lib/src/process_kill.rs"
-      - "anyharness/crates/anyharness-lib/src/process_kill_tree.rs"
-      - "anyharness/crates/anyharness-lib/src/process_kill_tree_tests.rs"
-      - "anyharness/crates/anyharness-lib/src/process_kill_windows.rs"
-      - "anyharness/crates/anyharness-lib/tests/windows_process_tree.rs"
-      - ".github/workflows/windows-process-kill-tests.yml"
+  schedule:
+    - cron: "29 9 * * *"
 
 permissions:
   contents: read

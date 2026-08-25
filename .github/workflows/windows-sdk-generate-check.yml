@@ -24,13 +24,12 @@ name: Windows SDK generate check
 # full Windows runtime build. The linux job covers invoke, validate and write
 # with shell stubs. The two together cover the whole script.
 
+# Demoted from pull_request to a nightly probe (cull sweep, Track F): Windows
+# is not a launch-week surface, so this runs on schedule/dispatch only.
+
 on:
-  pull_request:
-    paths:
-      - "scripts/generate-anyharness-openapi.mjs"
-      - "anyharness/sdk/package.json"
-      - "Makefile"
-      - ".github/workflows/windows-sdk-generate-check.yml"
+  schedule:
+    - cron: "35 9 * * *"
   workflow_dispatch:
 
 permissions:
