@@ -333,7 +333,7 @@ breached limit, and pauses the provider sandbox
 lock the live path uses. A `created`/`resumed` provider webhook landing on
 an enforced spend hold is re-paused and closed by the webhook handler's own
 billing check
-([`webhooks/service.py`](../../server/proliferate/server/cloud/webhooks/service.py))
+(`webhooks/service.py` (deleted with the E2B webhook lane, cull part 1))
 — a separate, narrower gate than the resume-path one. In the target state
 it resolves the payer the same way segment attribution does and evaluates
 budget caps as well as the hold, so an over-limit wake cannot stand until
@@ -570,7 +570,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       ruling 3, 2026-07-28) and stays a documented deferral here, not a
       silent fix.
 - [ ] **N2 webhook gate.** The `created`/`resumed` webhook re-pause check
-      ([`webhooks/service.py`](../../server/proliferate/server/cloud/webhooks/service.py))
+      (`webhooks/service.py` (deleted with the E2B webhook lane, cull part 1))
       resolves `ensure_personal_billing_subject` (never the org payer the
       way `resolve_billing_subject_id_for_user` does) and tests only
       `active_spend_hold` — it does not evaluate compute budget caps, so

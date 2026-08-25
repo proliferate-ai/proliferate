@@ -1,5 +1,12 @@
 # Sandbox Lifecycle
 
+Status: superseded (staged deletion in progress). The cull sweep is
+dissolving the legacy cloud sandbox stack: the E2B webhook lane, orphan
+reaper, worktree policy, and agent run configs are
+already deleted (delivery/cull-sweep/delivery-spec-delete-dark-cloud.md,
+part 1); the remaining provisioning/workspace machinery follows in part 2.
+The environments system spec replaces this document.
+
 Status: target. This document describes the accepted destination for the
 cloud sandbox container. The body is written in the ideal state. Every
 difference from `main` today is listed in [Current gaps](#current-gaps); the
@@ -450,7 +457,7 @@ Pause is the steady state of an idle sandbox, not an exception:
   survive; nothing inside the sandbox observes the pause.
 - The `paused`/`timeout` webhook (HMAC-verified, deduplicated, correlated
   against the exact persisted binding in
-  [webhooks/service.py](../../../server/proliferate/server/cloud/webhooks/service.py))
+  `webhooks/service.py` (deleted, cull part 1))
   moves the row to `paused` and closes the open usage segment. Row truth
   converges on provider truth; we never poll.
 - Waking is caused by traffic or by a materialization operation, per the
@@ -491,7 +498,7 @@ Pause is the steady state of an idle sandbox, not an exception:
   measurement; [content.md](content.md) owns what consumes
   the disk number.
 - The E2B webhook is the passive health channel; the orphan reaper
-  ([orphan_sandboxes.py](../../../server/proliferate/server/cloud/worker/orphan_sandboxes.py))
+  (`orphan_sandboxes.py` (deleted, cull part 1))
   is the active one, listing provider sandboxes every 5 minutes and
   destroying only exact-attributed orphans past the grace window.
 
@@ -572,7 +579,7 @@ server/proliferate/
 
 - Recovery and invariant suites:
   [test_cloud_sandbox_recovery.py](../../../server/tests/integration/test_cloud_sandbox_recovery.py),
-  [test_cloud_sandbox_recovery_invariants.py](../../../server/tests/integration/test_cloud_sandbox_recovery_invariants.py),
+  `test_cloud_sandbox_recovery_invariants.py` (deleted, cull part 1),
   [test_cloud_sandbox_reconnect_self_heal.py](../../../server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py),
   [test_cloud_sandbox_orphan_reaper_lock.py](../../../server/tests/integration/test_cloud_sandbox_orphan_reaper_lock.py).
 - Usage fencing and connection state machine (absorbed with the fencing
@@ -580,10 +587,10 @@ server/proliferate/
   [test_sandbox_materialization.py](../../../server/tests/unit/test_sandbox_materialization.py),
   [test_cloud_connect_race.py](../../../server/tests/unit/test_cloud_connect_race.py),
   [test_cloud_materialization_failures.py](../../../server/tests/unit/test_cloud_materialization_failures.py),
-  [test_cloud_webhook_service.py](../../../server/tests/unit/test_cloud_webhook_service.py),
-  [test_cloud_webhook_recovery_races.py](../../../server/tests/unit/test_cloud_webhook_recovery_races.py),
-  [test_cloud_orphan_reaper.py](../../../server/tests/unit/test_cloud_orphan_reaper.py),
-  [test_cloud_sandbox_reaper_task.py](../../../server/tests/unit/test_cloud_sandbox_reaper_task.py),
+  `test_cloud_webhook_service.py` (deleted, cull part 1),
+  `test_cloud_webhook_recovery_races.py` (deleted, cull part 1),
+  `test_cloud_orphan_reaper.py` (deleted, cull part 1),
+  `test_cloud_sandbox_reaper_task.py` (deleted, cull part 1),
   [test_cloud_sandbox_reconciler_recovery.py](../../../server/tests/integration/test_cloud_sandbox_reconciler_recovery.py),
   [test_cloud_sandbox_last_error_migration.py](../../../server/tests/integration/test_cloud_sandbox_last_error_migration.py),
   [test_cloud_sandbox_ensure_billing_gate.py](../../../server/tests/integration/test_cloud_sandbox_ensure_billing_gate.py).

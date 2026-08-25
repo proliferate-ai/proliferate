@@ -306,7 +306,6 @@ class Settings(BaseSettings):
     agent_gateway_qualification_shard_id: str = ""
     agent_gateway_default_org_budget_usd: str = "0"
     agent_gateway_backfill_interval_seconds: float = 300.0
-    cloud_sandbox_reaper_grace_seconds: float = Field(default=900.0, gt=0)
     # One-time lifetime managed-LLM grant for a GitHub-backed free identity.
     agent_gateway_free_credit_usd: str = "2"
     # Margin on imported spend: ledger debits cost x (1 + margin_pct/100), so a

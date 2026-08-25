@@ -341,10 +341,6 @@ export function githubRepoAuthorityKey(
   return [...githubAppRootKey(apiBaseUrl), "repo-authority", gitOwner, gitRepoName] as const;
 }
 
-export function cloudWorktreeRetentionPolicyKey(userId: string | null) {
-  return [...cloudRootKey(), "worktree-retention-policy", userId] as const;
-}
-
 export function cloudMobilityRootKey() {
   return [...cloudRootKey(), "mobility"] as const;
 }
@@ -398,52 +394,6 @@ export function isCloudWorkspaceConnectionQueryKey(
     && queryKey[1] === "workspaces"
     && typeof queryKey[2] === "string"
     && queryKey[3] === "connection";
-}
-
-export function agentRunConfigsRootKey() {
-  return [...cloudRootKey(), "agent-run-configs"] as const;
-}
-
-export interface AgentRunConfigsListKeyOptions {
-  ownerScope?: CloudOwnerScope | "system" | null;
-  organizationId?: string | null;
-  agentKind?: string | null;
-  usableIn?: "personal_sandboxes" | "shared_sandboxes" | null;
-  status?: "active" | "archived" | null;
-}
-
-export function agentRunConfigsListKey(
-  options: AgentRunConfigsListKeyOptions = {},
-) {
-  return [
-    ...agentRunConfigsRootKey(),
-    "list",
-    options.ownerScope ?? null,
-    options.organizationId ?? null,
-    options.agentKind ?? null,
-    options.usableIn ?? null,
-    options.status ?? null,
-  ] as const;
-}
-
-export function agentRunConfigKey(configId: string | null) {
-  return [...agentRunConfigsRootKey(), "detail", configId] as const;
-}
-
-export interface AgentRunConfigDefaultsKeyOptions {
-  ownerScope?: CloudOwnerScope | null;
-  organizationId?: string | null;
-}
-
-export function agentRunConfigDefaultsKey(
-  options: AgentRunConfigDefaultsKeyOptions = {},
-) {
-  return [
-    ...agentRunConfigsRootKey(),
-    "defaults",
-    options.ownerScope ?? "personal",
-    options.organizationId ?? null,
-  ] as const;
 }
 
 export function organizationsRootKey() {

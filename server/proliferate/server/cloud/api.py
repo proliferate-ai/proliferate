@@ -9,20 +9,18 @@ from proliferate.server.agent_auth.api import (
     organization_router as agent_auth_organization_router,
 )
 from proliferate.server.agent_auth.api import router as agent_auth_router
-from proliferate.server.cloud.agent_run_config.api import router as agent_run_config_router
 from proliferate.server.cloud.cloud_sandboxes.api import router as cloud_sandboxes_router
 from proliferate.server.cloud.harness_launch_options.api import (
     router as harness_launch_options_router,
 )
 from proliferate.server.cloud.repositories.api import router as repositories_router
 from proliferate.server.cloud.secrets.api import router as secrets_router
-from proliferate.server.cloud.webhooks.api import router as webhooks_router
 from proliferate.server.cloud.workspaces.api import router as workspaces_router
-from proliferate.server.cloud.worktree_policy.api import router as worktree_policy_router
 from proliferate.server.github.api import (
     organization_router as github_app_organization_router,
 )
 from proliferate.server.github.api import router as github_app_router
+from proliferate.server.github.api import webhook_router as github_webhook_router
 from proliferate.server.github.repos.api import router as repos_router
 from proliferate.server.integration_gateway.connections.action_approvals.api import (
     router as integration_action_approvals_router,
@@ -54,11 +52,9 @@ router.include_router(github_app_organization_router)
 router.include_router(secrets_router)
 router.include_router(cloud_sandboxes_router)
 router.include_router(workspaces_router)
-router.include_router(worktree_policy_router)
 router.include_router(agent_auth_router)
 router.include_router(agent_auth_organization_router)
 router.include_router(agent_gateway_router)
-router.include_router(agent_run_config_router)
 router.include_router(harness_launch_options_router)
 router.include_router(runtime_workers_router)
 router.include_router(runtime_worker_router)
@@ -67,4 +63,4 @@ router.include_router(integration_gateway_router)
 router.include_router(integration_action_approvals_router)
 router.include_router(integrations_router)
 router.include_router(integrations_admin_router)
-router.include_router(webhooks_router)
+router.include_router(github_webhook_router)

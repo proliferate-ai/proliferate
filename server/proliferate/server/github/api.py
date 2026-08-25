@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +39,7 @@ from proliferate.server.github.service import (
 from proliferate.server.github.transactions import (
     commit_github_app_reauthorization_on_error,
 )
+from proliferate.server.github.webhooks import handle_github_app_webhook
 
 _REAUTH_TRANSACTION_DEPENDENCIES = [Depends(commit_github_app_reauthorization_on_error)]
 
@@ -49,6 +50,25 @@ organization_router = APIRouter(
 )
 callback_router = APIRouter(prefix="/github-app", tags=["github-app"])
 setup_callback_router = APIRouter(prefix="/integrations/github", tags=["github-app"])
+# GitHub posts app events to /v1/cloud/webhooks/github-app; the path is part of
+# the installed GitHub App configuration and must keep serving verbatim.
+webhook_router = APIRouter(prefix="/webhooks", tags=["cloud_webhooks"])
+
+
+@webhook_router.post("/github-app", status_code=204)
+async def github_app_webhook_endpoint(
+    request: Request,
+    x_github_event: str | None = Header(default=None, alias="x-github-event"),
+    x_hub_signature_256: str | None = Header(default=None, alias="x-hub-signature-256"),
+    db: AsyncSession = Depends(get_async_session),
+) -> Response:
+    await handle_github_app_webhook(
+        db,
+        payload=await request.body(),
+        event=x_github_event,
+        signature=x_hub_signature_256,
+    )
+    return Response(status_code=204)
 
 
 @router.get(

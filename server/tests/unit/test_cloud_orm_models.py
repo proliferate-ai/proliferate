@@ -10,7 +10,6 @@ def test_cloud_orm_package_registers_all_cloud_tables() -> None:
         "cloud_sandbox",
         "cloud_sandbox_secret_materialization",
         "cloud_repo_environment_materialization",
-        "cloud_worktree_retention_policy",
         "cloud_runtime_worker",
         "cloud_runtime_worker_enrollment",
         "cloud_integration_gateway_token",

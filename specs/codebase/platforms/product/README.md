@@ -26,7 +26,6 @@ expectations, but it is not the owner of a full user workflow.
 | Billing | Credit authorization, Stripe subscription/refill behavior, budget reconciliation, billing state in product responses, and billing QA. | [BILLING.md](../../../FEATURE_DOCS/BILLING.md) |
 | Harness launch options | Target-observed executable models and generic controls before launch, exact launch intent, copied cloud target state, and session-local live configuration after launch. | [MODELS.md](../../../FEATURE_DOCS/MODELS.md) (Status: current) |
 | Agent distribution | Registry/catalog document contract, pinned auto-install and seed topology, binary-carried catalog convergence, supervisor-owned runtime binary convergence, the probe pipeline, and readiness projection. | [agent-distribution.md](agent-distribution.md) (Status: target) |
-| Agent run config | Centralized cloud agent intent: opaque exact model/control values, target-observed validation at execution, per-owner defaults and system starter presets, and the run-time snapshot pattern. | [agent-run-config.md](agent-run-config.md) |
 | Agent systems overview | No contract — the narrative map of how agent distribution, agent auth, the model gateway, and target-observed launch options compose; read first when orienting. | [../../systems/product/agents/README.md](../../systems/product/agents/README.md) |
 
 ## Naming Notes

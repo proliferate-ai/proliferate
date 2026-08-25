@@ -69,9 +69,15 @@ Ruling: merge order becomes E/G anytime · A-a → B → **A-b-part-2** → C �
 **Part-1 — ships with PR-Aa (stacked on the A-a moves).** The delete-set
 members with zero surviving importers, verified by import graph:
 
-- `agent_run_config/`, `harness_launch_options/`, `worktree_policy/`
-  (each referenced only by the cloud router shell), with their stores,
-  models, and tests.
+- `agent_run_config/` and `worktree_policy/` (each referenced only by the
+  cloud router shell), with their stores, models, and tests.
+- `harness_launch_options/` was drafted into this slice but defers to
+  part-2 (amendment recorded at implementation): its SDK types and
+  `useCloudHarnessLaunchOptions` hook are compiled into live dual-lane
+  surfaces — the agent-auth settings pane, the home-target hook, the cloud
+  composer domain, and the gen-2 workflow builder — all gated at runtime
+  but requiring the same golden-path client surgery as the workspaces
+  sweep, so it lands there instead of being touched twice.
 - `repositories/` package (api/service wrapper; referenced only by the
   router shell). Its store and models stay — live consumers exist
   (`ai_magic`, `github/repos`). The Track A-a amendment moves `repos/` to
@@ -92,7 +98,8 @@ members with zero surviving importers, verified by import graph:
 
 **Part-2 — its own PR (PR-Ab), rebased after Track B merges.** Everything
 else: `materialization/`, `workspaces/`, `cloud_sandboxes/`, `secrets/`,
-`runtime/`, `gateway/`, integration `action_approvals/` (imported by live
+`runtime/`, `gateway/`, `harness_launch_options/` (per the amendment
+above), `repositories/` disposition, integration `action_approvals/` (imported by live
 `integration_gateway` service — severing surgery there is part of this
 slice), `provisioning_observability.py`, the cloud router shell, the
 second drop migration, `billing/reconciler.py` + wiring (with

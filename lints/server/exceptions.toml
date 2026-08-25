@@ -154,12 +154,6 @@ reason = "inherited Auth transaction and error-persistence semantics retained du
 
 # ── SRV-DOMAIN-1 ──────────────────────────────────────────────────────
 
-[[exception]]
-rule = "SRV-DOMAIN-1"
-path = "server/proliferate/server/cloud/agent_run_config/domain/resolve.py"
-site = "<module>::import:proliferate.db.store.cloud_agent_run_config:CloudAgentRunConfigRecord"
-reason = "transitional agent run config resolver imports product constants"
-
 # ── SRV-INTEG-4 ───────────────────────────────────────────────────────
 
 [[exception]]

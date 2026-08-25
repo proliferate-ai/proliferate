@@ -336,9 +336,7 @@ not a softer version of the rule.
   examples include Organization role gates in
   [organizations/service.py](../../server/proliferate/server/organizations/service.py),
   Cloud integration admin checks in
-  [integration_gateway/connections/service.py](../../server/proliferate/server/integration_gateway/connections/service.py),
-  and Agent Run Config visibility checks in
-  [agent_run_config/service.py](../../server/proliferate/server/cloud/agent_run_config/service.py).
+  [integration_gateway/connections/service.py](../../server/proliferate/server/integration_gateway/connections/service.py).
   In addition, `permissions.py` currently composes actor deps, stores, billing
   services, and request/RLS context; only `auth/authorization.py` is the
   dependency-free authorization leaf.
