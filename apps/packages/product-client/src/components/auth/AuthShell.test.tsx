@@ -8,8 +8,6 @@ const mocks = vi.hoisted(() => ({
   githubCatch: vi.fn(),
   githubSignIn: vi.fn(),
   githubError: vi.fn<() => string | null>(),
-  ssoCatch: vi.fn(),
-  ssoSignIn: vi.fn(),
   authState: vi.fn(),
 }));
 
@@ -29,19 +27,6 @@ vi.mock("#product/hooks/auth/workflows/use-github-sign-in", () => ({
   }),
 }));
 
-vi.mock("#product/hooks/auth/workflows/use-sso-sign-in", () => ({
-  useSsoSignIn: () => ({
-    signIn: mocks.ssoSignIn,
-    submitting: false,
-    error: null,
-    signInAvailable: true,
-    signInChecking: false,
-    signInUnavailableDescription: "",
-    displayName: "Acme",
-    cancelSignIn: vi.fn(async () => {}),
-  }),
-}));
-
 vi.mock("#product/hooks/auth/workflows/use-password-sign-in", () => ({
   usePasswordSignIn: () => ({
     signIn: vi.fn(async () => {}),
@@ -54,12 +39,10 @@ vi.mock("#product/hooks/auth/workflows/use-password-sign-in", () => ({
 vi.mock("#product/components/auth/AuthScreenLayout", () => ({
   AuthScreenLayout: (props: {
     onGitHubSignIn: () => void;
-    onSsoSignIn: () => void;
     error?: string | null;
   }) => (
     <>
       <button onClick={props.onGitHubSignIn}>GitHub</button>
-      <button onClick={props.onSsoSignIn}>SSO</button>
       {props.error ? <p>{props.error}</p> : null}
     </>
   ),
@@ -74,9 +57,6 @@ beforeEach(() => {
   mocks.githubSignIn.mockReturnValue({
     catch: mocks.githubCatch,
   } as unknown as Promise<void>);
-  mocks.ssoSignIn.mockReturnValue({
-    catch: mocks.ssoCatch,
-  } as unknown as Promise<void>);
   mocks.authState.mockReturnValue({
     status: "anonymous",
     methods: [],
@@ -85,14 +65,12 @@ beforeEach(() => {
 });
 
 describe("AuthShell", () => {
-  it("consumes GitHub and SSO rejections after their hooks surface the error", () => {
+  it("consumes GitHub rejections after the hook surfaces the error", () => {
     render(<AuthShell mode="auth" markComplete />);
 
     fireEvent.click(screen.getByRole("button", { name: "GitHub" }));
-    fireEvent.click(screen.getByRole("button", { name: "SSO" }));
 
     expect(mocks.githubCatch).toHaveBeenCalledOnce();
-    expect(mocks.ssoCatch).toHaveBeenCalledOnce();
   });
 
   it("renders nothing extra when the anonymous state has no issue", () => {

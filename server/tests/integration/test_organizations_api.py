@@ -168,47 +168,27 @@ async def test_organization_member_list_and_last_owner_protection(
     assert members[0]["email"] == "owner@acme.dev"
     assert members[0]["displayName"] == "Owner User"
     assert members[0]["avatarUrl"] == "https://example.com/avatar.png"
-    assert members[0]["authMethods"] == [
-        {"provider": "github", "label": "GitHub", "brandLabel": None}
-    ]
+    assert members[0]["authMethods"] == [{"provider": "github", "label": "GitHub"}]
 
     removed_user = await _create_user_and_get_tokens(client, email="removed@acme.dev")
     from proliferate.db import engine as engine_module
-    from proliferate.db.models.auth import SsoIdentity
 
     async with engine_module.async_session_factory() as session:
         now = datetime.now(UTC)
-        sso_user = User(
-            email="sso@acme.dev",
-            hashed_password="unused-sso-only",
+        second_user = User(
+            email="member@acme.dev",
+            hashed_password="unused-direct-row",
             is_active=True,
             is_superuser=False,
             is_verified=True,
-            display_name="SSO User",
+            display_name="Member User",
         )
-        session.add(sso_user)
+        session.add(second_user)
         await session.flush()
-        session.add(
-            SsoIdentity(
-                user_id=sso_user.id,
-                organization_id=uuid.UUID(organization_id),
-                connection_id=None,
-                connection_key="deployment",
-                protocol="oidc",
-                provider_subject="105348973383490238728",
-                email="sso@acme.dev",
-                email_verified=True,
-                display_name="SSO User",
-                linked_at=now,
-                last_login_at=now,
-                created_at=now,
-                updated_at=now,
-            )
-        )
         session.add(
             OrganizationMembership(
                 organization_id=uuid.UUID(organization_id),
-                user_id=sso_user.id,
+                user_id=second_user.id,
                 role=ORGANIZATION_ROLE_MEMBER,
                 status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
                 joined_at=now,
@@ -237,11 +217,7 @@ async def test_organization_member_list_and_last_owner_protection(
     )
     assert response.status_code == 200
     active_members = response.json()["members"]
-    assert {member["email"] for member in active_members} == {"owner@acme.dev", "sso@acme.dev"}
-    sso_member = next(member for member in active_members if member["email"] == "sso@acme.dev")
-    assert sso_member["authMethods"] == [
-        {"provider": "sso", "label": "SSO", "brandLabel": "Google SSO"}
-    ]
+    assert {member["email"] for member in active_members} == {"owner@acme.dev", "member@acme.dev"}
 
     response = await client.patch(
         f"/v1/organizations/{organization_id}/members/{membership_id}",

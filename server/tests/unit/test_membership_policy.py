@@ -24,7 +24,6 @@ from proliferate.server.organizations.errors import (
 from proliferate.server.organizations.membership_policy import (
     HostedPolicy,
     SingleOrgPolicy,
-    ensure_instance_membership_not_removed,
     place_new_identity,
     select_membership_policy,
 )
@@ -312,61 +311,6 @@ async def test_single_org_mode_reinstates_removed_admin_listed_email(
     assert membership is not None
     assert membership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
     assert membership.role == ORGANIZATION_ROLE_ADMIN
-
-
-@pytest.mark.asyncio
-async def test_ensure_instance_membership_not_removed_guard(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "single_org_mode_override", True)
-
-    owner = await create_auth_user(
-        db_session, email="owner@acme.test", display_name="Owner", avatar_url=None
-    )
-    instance_org = await _seed_instance_org(db_session, owner_id=owner.id)
-    removed = await create_auth_user(
-        db_session, email="kicked@acme.test", display_name=None, avatar_url=None
-    )
-    db_session.add(
-        OrganizationMembership(
-            organization_id=instance_org.id,
-            user_id=removed.id,
-            role=ORGANIZATION_ROLE_MEMBER,
-            status=ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
-        )
-    )
-    await db_session.flush()
-
-    with pytest.raises(InstanceOrganizationAccessRemoved):
-        await ensure_instance_membership_not_removed(
-            db_session,
-            organization_id=instance_org.id,
-            user_id=removed.id,
-            email=removed.email,
-        )
-
-    # Active member and never-joined users pass through.
-    await ensure_instance_membership_not_removed(
-        db_session,
-        organization_id=instance_org.id,
-        user_id=owner.id,
-        email=owner.email,
-    )
-
-    # Hosted mode: inert even with the same data.
-    monkeypatch.setattr(settings, "single_org_mode_override", False)
-    await ensure_instance_membership_not_removed(
-        db_session,
-        organization_id=instance_org.id,
-        user_id=removed.id,
-        email=removed.email,
-    )
-
-
-# ---------------------------------------------------------------------------
-# GET /organizations service path: no personal-org minting in single-org mode
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

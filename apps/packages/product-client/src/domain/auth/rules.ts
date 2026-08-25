@@ -17,7 +17,7 @@ export function providerRequiresGitHubGate(provider: AuthProvider): boolean {
 }
 
 export function authMethodRequiresGitHubGate(method: AuthMethod): boolean {
-  if (method === "password" || method === "sso") {
+  if (method === "password") {
     return true;
   }
   return providerRequiresGitHubGate(method);

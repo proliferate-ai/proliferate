@@ -32,7 +32,7 @@ Downgrade is intentionally unsupported, matching the cull precedent
 (f8b9c0d1e2f4): these tables are gone for good.
 
 Revision ID: cd15ae907558
-Revises: b7d3f1e9a2c4
+Revises: d7e8f9a0b1c2
 Create Date: 2026-08-25 00:00:00.000000
 
 """
@@ -42,7 +42,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "cd15ae907558"
-down_revision: str | None = "b7d3f1e9a2c4"
+down_revision: str | None = "d7e8f9a0b1c2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

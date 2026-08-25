@@ -91,8 +91,8 @@ session replay, and telemetry-related provider and hook ownership.
   responses in React Query as expected file state. A 5xx carrying any of those
   codes remains reportable, as does `PATH_OUTSIDE_WORKSPACE` unless an existing
   status rule suppresses it. Mutation disposition remains unchanged.
-- Auth workflows treat only `AbortError`, the explicitly branded local
-  interactive poll timeout, and an explicitly coded unavailable SSO slug as
+- Auth workflows treat only `AbortError` and the explicitly branded local
+  interactive poll timeout as
   typed, rendered control states. Generic HTTP 4xx responses (including an
   unbranded 408), network failures, security failures, and unknown errors remain
   reportable.

@@ -11,7 +11,6 @@ import {
 import { isDevAuthBypassed } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
 import type { AuthSignInSource, AuthTelemetryProvider } from "@proliferate/product-client/internal/lib/domain/telemetry/events";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
-import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
 import {
   abortError,
   AuthRequestError,
@@ -22,13 +21,9 @@ import {
   pollGitHubDesktopSession,
   type DesktopIdentityProvider,
 } from "@/lib/integrations/auth/proliferate-auth";
-import { beginDesktopSsoSignIn } from "@/lib/integrations/auth/proliferate-sso-auth";
 // Public server-capability probes are product-owned; the base URL that used to
 // default host-side is now supplied explicitly from the host deployment config.
-import {
-  discoverDesktopSso,
-  getGitHubDesktopAuthAvailability,
-} from "@proliferate/product-client/internal/lib/access/cloud/auth-probes";
+import { getGitHubDesktopAuthAvailability } from "@proliferate/product-client/internal/lib/access/cloud/auth-probes";
 import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { checkControlPlaneReachable } from "@proliferate/product-client/internal/lib/access/cloud/health";
 import { revokeDesktopWorkerServerSide } from "@/lib/integrations/auth/desktop-worker-revocation";
@@ -243,116 +238,6 @@ export async function linkDesktopProvider(
       toError(error, "Provider linking failed"),
     );
     throw toError(error, "Provider linking failed");
-  }
-}
-
-export async function signInWithSso(
-  options: DesktopSsoSignInOptions | undefined,
-  deps: AuthOrchestrationDeps,
-): Promise<{
-  provider: AuthTelemetryProvider;
-  source: AuthSignInSource;
-}> {
-  // Same retry-hygiene as signInWithGitHub: don't let a prior attempt's
-  // published issue linger into this one.
-  clearPublishedAuthIssue(deps);
-
-  if (isDevAuthBypassed()) {
-    applyDevBypassState(deps);
-    return {
-      provider: "dev_bypass",
-      source: "dev_bypass",
-    };
-  }
-
-  const controlPlaneReachable = await checkControlPlaneReachable(getProliferateApiBaseUrl());
-  if (!controlPlaneReachable) {
-    throw new AuthRequestError(
-      "SSO sign-in requires a reachable control plane.",
-      503,
-    );
-  }
-
-  const discovery = await discoverDesktopSso({
-    apiBaseUrl: getProliferateApiBaseUrl(),
-    email: options?.email,
-    organizationId: options?.organizationId,
-    connectionId: options?.connectionId,
-  });
-  if (!discovery.enabled) {
-    throw new AuthRequestError(
-      discovery.reason === "not_configured"
-        ? "SSO is not configured for this environment."
-        : "SSO is not available for this environment.",
-      503,
-    );
-  }
-
-  const existingPending = await getStoredPendingAuthSession();
-  if (existingPending) {
-    if (isPendingDesktopAuthExpired(existingPending)) {
-      await clearPendingGitHubAuth(existingPending.state);
-    } else if (getActiveGitHubSignIn() && !getActiveGitHubSignIn()?.settled) {
-      throw new Error("Another auth flow is already in progress.");
-    } else {
-      await clearPendingGitHubAuth(existingPending.state);
-    }
-  }
-
-  const pending = createPendingGitHubDesktopAuth();
-  await setStoredPendingAuthSession(pending);
-  const controller = startGitHubSignIn(pending.state);
-
-  try {
-    await beginDesktopSsoSignIn(
-      pending.state,
-      pending.code_verifier,
-      pending.redirect_uri,
-      {
-        ...options,
-        organizationId: options?.organizationId ?? discovery.organizationId,
-        connectionId: options?.connectionId ?? discovery.connectionId,
-        prompt: options?.prompt ?? "select_account",
-      },
-    );
-
-    const recoverySession = pollGitHubDesktopSession(
-      pending.state,
-      pending.code_verifier,
-      {
-        signal: controller.abortController.signal,
-        transientFailureMessage: "SSO sign-in failed",
-        timeoutMessage: "SSO sign-in timed out. Finish the browser flow and try again.",
-      },
-    );
-
-    const { session, source } = await Promise.race([
-      controller.promise.then((session) => ({
-        session,
-        source: "desktop_callback" as const,
-      })),
-      recoverySession.then((session) => ({
-        session,
-        source: "interactive_poll" as const,
-      })),
-    ]);
-    const activeSignIn = getActiveGitHubSignIn();
-    if (activeSignIn?.state === pending.state && !activeSignIn.settled) {
-      resolveGitHubSignIn(pending.state, session);
-    }
-
-    await clearStoredPendingAuthSession();
-    await applyAuthenticatedState(deps, session);
-    return {
-      provider: "sso",
-      source,
-    };
-  } catch (error) {
-    await clearPendingGitHubAuth(
-      pending.state,
-      toError(error, "SSO sign-in failed"),
-    );
-    throw toError(error, "SSO sign-in failed");
   }
 }
 

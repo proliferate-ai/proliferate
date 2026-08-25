@@ -6,7 +6,7 @@ is still cancelling, a support-created sub). Before the fix, the
 subscription lookup in billing_seats.maybe_create_org_seat_adjustment had no
 .limit(1), so a second active row made scalar_one_or_none() raise
 MultipleResultsFound -- and every membership change on that org (invite,
-remove, role change, SSO resolution) 500'd until the extra row was cleaned
+remove, role change) 500'd until the extra row was cleaned
 up by hand.
 """
 

@@ -98,9 +98,6 @@ export function AccountPane() {
   const googleAccounts = linkedProviders.filter((provider) => (
     provider.provider === "google" && provider.connected
   ));
-  const ssoAccounts = linkedProviders.filter((provider) => (
-    provider.provider === "sso" && provider.connected
-  ));
   const googleAvailability = authViewer.data?.providerAvailability.find((provider) => (
     provider.provider === "google"
   ));
@@ -284,7 +281,6 @@ export function AccountPane() {
           githubAccountLabel,
           githubConnected,
           googleAccounts,
-          ssoAccounts,
           googleAvailable: googleAvailability?.enabled !== false,
           showProviders: isAuthenticated && !devAuthBypassed,
         })}

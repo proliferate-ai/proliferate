@@ -2,7 +2,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useGitHubSignIn } from "#product/hooks/auth/workflows/use-github-sign-in";
 import { usePasswordSignIn } from "#product/hooks/auth/workflows/use-password-sign-in";
-import { useSsoSignIn } from "#product/hooks/auth/workflows/use-sso-sign-in";
 import { getRedirectTarget } from "#product/lib/domain/auth/login-redirect";
 
 // Owns the login page view model by composing auth state and sign-in actions.
@@ -21,16 +20,6 @@ export function useLoginPage() {
     cancelSignIn: cancelGitHubSignIn,
   } = useGitHubSignIn();
   const {
-    signIn: signInWithSso,
-    submitting: ssoSubmitting,
-    error: ssoError,
-    signInAvailable: ssoSignInAvailable,
-    signInChecking: ssoSignInChecking,
-    signInUnavailableDescription: ssoSignInUnavailableDescription,
-    displayName: ssoDisplayName,
-    cancelSignIn: cancelSsoSignIn,
-  } = useSsoSignIn();
-  const {
     signIn: signInWithPassword,
     submitting: passwordSubmitting,
     error: passwordError,
@@ -39,20 +28,11 @@ export function useLoginPage() {
   const canContinueLocally = !auth.authRequired;
 
   const redirectTarget = getRedirectTarget(location.state);
-  const busy = submitting || ssoSubmitting || passwordSubmitting || status === "loading";
+  const busy = submitting || passwordSubmitting || status === "loading";
 
   async function handleGitHubSignIn() {
     try {
       await signIn();
-      navigate(redirectTarget, { replace: true });
-    } catch {
-      // error is already surfaced via the hook's `error` state
-    }
-  }
-
-  async function handleSsoSignIn() {
-    try {
-      await signInWithSso();
       navigate(redirectTarget, { replace: true });
     } catch {
       // error is already surfaced via the hook's `error` state
@@ -73,10 +53,6 @@ export function useLoginPage() {
   }
 
   function handleCancelSignIn() {
-    if (ssoSubmitting) {
-      void cancelSsoSignIn();
-      return;
-    }
     if (submitting) {
       void cancelGitHubSignIn();
     }
@@ -84,20 +60,14 @@ export function useLoginPage() {
 
   return {
     submitting,
-    error: error ?? ssoError ?? passwordError,
+    error: error ?? passwordError,
     busy,
     githubSignInAvailable,
     githubSignInChecking,
     githubSignInUnavailableDescription,
-    ssoSubmitting,
-    ssoSignInAvailable,
-    ssoSignInChecking,
-    ssoSignInUnavailableDescription,
-    ssoDisplayName,
     passwordSignInAvailable,
     passwordSubmitting,
     handleGitHubSignIn,
-    handleSsoSignIn,
     handlePasswordSignIn,
     handleCancelSignIn,
     handleContinueLocally,

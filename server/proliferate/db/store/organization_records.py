@@ -42,7 +42,6 @@ class MembershipRecord:
 class MemberAuthMethodRecord:
     provider: str
     label: str
-    brand_label: str | None = None
 
 
 @dataclass(frozen=True)

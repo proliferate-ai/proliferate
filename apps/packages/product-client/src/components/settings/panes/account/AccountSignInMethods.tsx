@@ -152,7 +152,6 @@ export function SignInMethodRow({
         <span className={ROW_LEADING_COLUMN_CLASS}>
           <ProviderBrandIcon
             provider={provider.provider}
-            label={provider.brandLabel ?? provider.label}
             className="icon-control shrink-0"
           />
         </span>

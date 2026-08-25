@@ -1,6 +1,5 @@
 import { twMerge } from "#product/primitives/utils/tw-merge";
 import { ProliferateLivingMark } from "#product/components/brand/ProliferateLivingMark";
-import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
 import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
 import { PasswordSignInForm } from "#product/components/auth/PasswordSignInForm";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
@@ -31,12 +30,6 @@ export interface AuthScreenLayoutProps {
   githubSignInChecking?: boolean;
   githubSignInUnavailableDescription?: string;
   onGitHubSignIn?: () => void;
-  ssoSubmitting?: boolean;
-  ssoSignInAvailable?: boolean;
-  ssoSignInChecking?: boolean;
-  ssoSignInUnavailableDescription?: string;
-  ssoDisplayName?: string | null;
-  onSsoSignIn?: () => void;
   // Email/password sign-in: the default surface when the server reports
   // GitHub OAuth is not configured (self-hosted posture).
   passwordSignInAvailable?: boolean;
@@ -59,12 +52,6 @@ export function AuthScreenLayout({
   githubSignInChecking = false,
   githubSignInUnavailableDescription = "",
   onGitHubSignIn,
-  ssoSubmitting = false,
-  ssoSignInAvailable = false,
-  ssoSignInChecking = false,
-  ssoSignInUnavailableDescription = "",
-  ssoDisplayName = null,
-  onSsoSignIn,
   passwordSignInAvailable = false,
   passwordSubmitting = false,
   onPasswordSignIn,
@@ -73,7 +60,6 @@ export function AuthScreenLayout({
   onContinueLocally,
 }: AuthScreenLayoutProps) {
   const showAuth = mode === "auth";
-  const showSso = showAuth && ssoSignInAvailable;
   // Password form is the DEFAULT when GitHub OAuth is not configured; the
   // GitHub button keeps its place whenever GitHub is (or may still be) enabled.
   const showPasswordForm = showAuth
@@ -82,11 +68,9 @@ export function AuthScreenLayout({
     && !githubSignInAvailable;
   const showCancelSignIn = showAuth
     && Boolean(onCancelSignIn)
-    && (submitting || ssoSubmitting);
+    && submitting;
   const showUnavailableMessage = showAuth
     && !showPasswordForm
-    && !ssoSignInChecking
-    && !ssoSignInAvailable
     && !githubSignInChecking
     && !githubSignInAvailable;
 
@@ -124,11 +108,7 @@ export function AuthScreenLayout({
         <div
           className={twMerge(
             "relative",
-            showPasswordForm
-              ? (showSso ? "h-[11.5rem]" : "h-[8.25rem]")
-              : ssoSignInAvailable
-                ? "h-[5.875rem]"
-                : "h-11",
+            showPasswordForm ? "h-[8.25rem]" : "h-11",
           )}
         >
           {/* Loading layer: a skeleton sitting where the button will land.
@@ -187,31 +167,6 @@ export function AuthScreenLayout({
                   {!submitting && <ArrowRight className="icon-paired" />}
                 </Button>
               )}
-
-              {showSso ? (
-                <Button
-                  type="button"
-                  size="md"
-                  variant="secondary"
-                  loading={ssoSubmitting}
-                  onClick={onSsoSignIn}
-                  disabled={!showAuth || busy}
-                  tabIndex={showAuth ? 0 : -1}
-                  className="h-11 w-full"
-                >
-                  {!ssoSubmitting && (
-                    <ProviderBrandIcon
-                      provider="sso"
-                      label={ssoDisplayName}
-                      className="icon-control shrink-0"
-                    />
-                  )}
-                  {ssoSubmitting
-                    ? AUTH_LOGIN_LABELS.ssoWaiting
-                    : AUTH_LOGIN_LABELS.ssoSignIn(ssoDisplayName)}
-                  {!ssoSubmitting && <ArrowRight className="icon-paired" />}
-                </Button>
-              ) : null}
             </div>
           </div>
 
@@ -236,7 +191,7 @@ export function AuthScreenLayout({
               : showUnavailableMessage
                 ? (
                   <p className="text-body text-muted-foreground">
-                    {githubSignInUnavailableDescription || ssoSignInUnavailableDescription}
+                    {githubSignInUnavailableDescription}
                   </p>
                 )
                 : showAuth && canContinueLocally

@@ -152,42 +152,6 @@ path = "server/proliferate/server/accounts/identity/api.py"
 site = "web_session_logout::db.commit"
 reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
 
-[[exception]]
-rule = "SRV-API-5"
-path = "server/proliferate/server/accounts/sso/api.py"
-site = "start_sso_endpoint::db.commit"
-reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
-
-[[exception]]
-rule = "SRV-API-5"
-path = "server/proliferate/server/accounts/sso/api.py"
-site = "oidc_sso_callback/if/if/try::db.commit"
-reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
-
-[[exception]]
-rule = "SRV-API-5"
-path = "server/proliferate/server/accounts/sso/api.py"
-site = "oidc_sso_callback/if/if/except:AuthFlowError::db.rollback"
-reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
-
-[[exception]]
-rule = "SRV-API-5"
-path = "server/proliferate/server/accounts/sso/api.py"
-site = "oidc_sso_callback/except:WebBetaAccessDenied::db.rollback"
-reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
-
-[[exception]]
-rule = "SRV-API-5"
-path = "server/proliferate/server/accounts/sso/api.py"
-site = "oidc_sso_callback/except:AuthFlowError::db.rollback"
-reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
-
-[[exception]]
-rule = "SRV-API-5"
-path = "server/proliferate/server/accounts/sso/api.py"
-site = "oidc_sso_callback::db.commit"
-reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
-
 # ── SRV-DOMAIN-1 ──────────────────────────────────────────────────────
 
 [[exception]]

@@ -64,18 +64,6 @@
     },
     {
       "path": "proliferate/auth/identity/sessions.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"sso_brand_label_for_connection\" has incompatible type \"SsoConnectionRecord\"; expected \"SsoBrandConnection\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/auth/identity/sessions.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"SsoConnectionSnapshot | None\", variable has type \"SsoConnectionRecord | None\")",
-      "count": 1
-    },
-    {
-      "path": "proliferate/auth/identity/sessions.py",
       "code": "unused-ignore",
       "message": "Unused \"type: ignore\" comment",
       "count": 2
@@ -133,12 +121,6 @@
       "code": "arg-type",
       "message": "Argument 2 to \"first_account_for_provider\" has incompatible type \"AuthProvider\"; expected \"Literal['github', 'google', 'apple']\"",
       "count": 1
-    },
-    {
-      "path": "proliferate/auth/sso/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 4
     },
     {
       "path": "proliferate/background/beat_schedule.py",
@@ -1063,30 +1045,6 @@
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
       "count": 2
-    },
-    {
-      "path": "proliferate/server/organizations/sso/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 6
-    },
-    {
-      "path": "proliferate/server/organizations/sso/models.py",
-      "code": "unused-ignore",
-      "message": "Unused \"type: ignore\" comment",
-      "count": 6
-    },
-    {
-      "path": "proliferate/server/organizations/sso/service.py",
-      "code": "name-defined",
-      "message": "Name \"sso_store.SsoConnectionRecord\" is not defined",
-      "count": 7
-    },
-    {
-      "path": "proliferate/server/organizations/sso/transactions.py",
-      "code": "name-defined",
-      "message": "Name \"sso_store.SsoConnectionRecord\" is not defined",
-      "count": 6
     },
     {
       "path": "proliferate/server/organizations/usage/models.py",

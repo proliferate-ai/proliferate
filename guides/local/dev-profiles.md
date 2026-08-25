@@ -163,31 +163,6 @@ This publishes the selected profile's API as `CLOUD_WORKER_BASE_URL` and
 while an external callback is required, do not publish secrets in the tunnel
 log, and stop it after the test.
 
-## Local SSO
-
-Deployment-style OIDC QA may load ignored provider credentials from
-`.auth-env/.env.<auth-profile>`:
-
-```bash
-make run PROFILE=sso-google AUTH_PROFILE=google
-```
-
-The launcher prints the callback URL to register with the dedicated test
-provider app. Use the same `PROLIFERATE_SSO_*` variables as deployment. When a
-provider requires `localhost` rather than `127.0.0.1`, set
-`PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL` in the ignored auth profile.
-
-For org-scoped SSO, seed only the selected profile database:
-
-```bash
-make setup PROFILE=sso-org
-make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>
-make run PROFILE=sso-org AUTH_PROFILE=google
-```
-
-Never use a production/shared OAuth app for local callback experiments, and do
-not commit `.auth-env` credentials.
-
 ## Concurrency And Focused Paths
 
 Independent profiles may run concurrently. OAuth and Desktop deep-link tests

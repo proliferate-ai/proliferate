@@ -16,51 +16,6 @@ class OrganizationServiceError(ProliferateError):
         self.extra_detail = dict(extra_detail or {})
 
 
-class OrganizationSsoConnectionEnableProtocolUnsupported(OrganizationServiceError):
-    def __init__(self) -> None:
-        super().__init__(
-            code="sso_connection_enable_protocol_unsupported",
-            message="Only OIDC SSO can be enabled right now.",
-            status_code=400,
-        )
-
-
-class OrganizationSsoDisplayNameRequired(OrganizationServiceError):
-    def __init__(self) -> None:
-        super().__init__(
-            code="sso_display_name_required",
-            message="SSO display name is required.",
-            status_code=400,
-        )
-
-
-class OrganizationSsoDisplayNameTooLong(OrganizationServiceError):
-    def __init__(self) -> None:
-        super().__init__(
-            code="sso_display_name_too_long",
-            message="SSO display name is too long.",
-            status_code=400,
-        )
-
-
-class OrganizationSsoJitDefaultRoleNotAllowed(OrganizationServiceError):
-    def __init__(self) -> None:
-        super().__init__(
-            code="sso_jit_default_role_not_allowed",
-            message="SSO JIT default role cannot be owner.",
-            status_code=400,
-        )
-
-
-class OrganizationSsoRequiredLoginPolicyUnsupported(OrganizationServiceError):
-    def __init__(self) -> None:
-        super().__init__(
-            code="sso_required_login_policy_unsupported",
-            message="Required SSO login policy is not supported yet.",
-            status_code=400,
-        )
-
-
 class InstanceOrganizationAlreadyClaimed(OrganizationServiceError):
     """Raised when the first-run claim path finds an instance org already exists."""
 

@@ -1,15 +1,13 @@
 export type AuthProvider = "github" | "google" | "apple";
-export type AuthLinkedProviderKind = AuthProvider | "sso";
+export type AuthLinkedProviderKind = AuthProvider;
 
-export type AuthMethod = "password" | "sso" | AuthProvider;
+export type AuthMethod = "password" | AuthProvider;
 
 export type OnboardingState = "needs_github" | "active";
 
 export interface LinkedAuthProvider {
   provider: AuthLinkedProviderKind;
   email?: string | null;
-  displayName?: string | null;
-  brandLabel?: string | null;
   connected: boolean;
 }
 

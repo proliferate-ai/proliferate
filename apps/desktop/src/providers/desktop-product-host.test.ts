@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   copyText: vi.fn(),
   openExternal: vi.fn(),
   subscribeDeepLinkUrls: vi.fn(),
-  discoverDesktopSso: vi.fn(),
   handleDesktopCallbackUrl: vi.fn(),
   trackProductEvent: vi.fn(),
   captureTelemetryException: vi.fn(),
@@ -41,9 +40,6 @@ vi.mock("@/lib/access/tauri/shell", () => ({
 vi.mock("@/lib/access/tauri/deep-link", () => ({
   subscribeDeepLinkUrls: mocks.subscribeDeepLinkUrls,
 }));
-vi.mock("@proliferate/product-client/internal/lib/access/cloud/auth-probes", () => ({
-  discoverDesktopSso: mocks.discoverDesktopSso,
-}));
 vi.mock("@/lib/integrations/auth/orchestration-callback", () => ({
   handleDesktopCallbackUrl: mocks.handleDesktopCallbackUrl,
 }));
@@ -70,9 +66,6 @@ import {
   mapProductAuthUser,
 } from "./desktop-product-host";
 
-const SSO_UNAVAILABLE =
-  "We could not find single sign-on for that workspace. Check the sign-in link your admin shared.";
-
 function makeActions() {
   const loginOutcome = { provider: "github", source: "desktop_callback" };
   return {
@@ -80,10 +73,6 @@ function makeActions() {
     signInWithPassword: vi.fn().mockResolvedValue({
       provider: "password",
       source: "password_form",
-    }),
-    signInWithSso: vi.fn().mockResolvedValue({
-      provider: "sso",
-      source: "desktop_callback",
     }),
     signOut: vi.fn().mockResolvedValue({ provider: "github" }),
     cancelAuthFlow: vi.fn().mockResolvedValue(undefined),
@@ -188,9 +177,8 @@ describe("buildAnonymousMethods", () => {
       buildAnonymousMethods({
         passwordAvailable: true,
         githubAvailable: true,
-        ssoAvailable: true,
       }),
-    ).toEqual(["password", "github", "sso"]);
+    ).toEqual(["password", "github"]);
   });
 
   it("omits unavailable methods and never lists google or apple", () => {
@@ -198,14 +186,12 @@ describe("buildAnonymousMethods", () => {
       buildAnonymousMethods({
         passwordAvailable: false,
         githubAvailable: true,
-        ssoAvailable: false,
       }),
     ).toEqual(["github"]);
     expect(
       buildAnonymousMethods({
         passwordAvailable: false,
         githubAvailable: false,
-        ssoAvailable: false,
       }),
     ).toEqual([]);
   });
@@ -285,72 +271,6 @@ describe("createDesktopAuthOperations - startLogin disposition", () => {
     await expect(
       ops.startLogin({ kind: "apple", purpose: "login" }),
     ).rejects.toThrow();
-  });
-
-  it("sso without slug forwards the supplied fields to signInWithSso", async () => {
-    const actions = makeActions();
-    const ops = createDesktopAuthOperations(actions, () => deps);
-    await ops.startLogin({
-      kind: "sso",
-      email: "a@example.test",
-      organizationId: "org-1",
-      connectionId: "conn-1",
-    });
-    expect(actions.signInWithSso).toHaveBeenCalledWith({
-      email: "a@example.test",
-      organizationId: "org-1",
-      connectionId: "conn-1",
-    });
-    expect(mocks.discoverDesktopSso).not.toHaveBeenCalled();
-  });
-
-  it("sso with slug discovers then signs in with the resolved org/connection", async () => {
-    mocks.discoverDesktopSso.mockResolvedValue({
-      enabled: true,
-      organizationId: "org-resolved",
-      connectionId: "conn-resolved",
-    });
-    const actions = makeActions();
-    const ops = createDesktopAuthOperations(actions, () => deps);
-    await ops.startLogin({
-      kind: "sso",
-      slug: "acme",
-      email: "a@example.test",
-      organizationId: "org-hint",
-      connectionId: "conn-hint",
-    });
-    expect(mocks.discoverDesktopSso).toHaveBeenCalledWith({
-      slug: "acme",
-      email: "a@example.test",
-      organizationId: "org-hint",
-      connectionId: "conn-hint",
-      apiBaseUrl: "https://api.example.test",
-    });
-    expect(actions.signInWithSso).toHaveBeenCalledWith({
-      organizationId: "org-resolved",
-      connectionId: "conn-resolved",
-      prompt: "select_account",
-    });
-  });
-
-  it("sso with slug rejects with the generic message when discovery is disabled or unresolved", async () => {
-    const actions = makeActions();
-    const ops = createDesktopAuthOperations(actions, () => deps);
-
-    mocks.discoverDesktopSso.mockResolvedValueOnce({ enabled: false });
-    await expect(
-      ops.startLogin({ kind: "sso", slug: "acme" }),
-    ).rejects.toThrow(SSO_UNAVAILABLE);
-
-    mocks.discoverDesktopSso.mockResolvedValueOnce({
-      enabled: true,
-      organizationId: null,
-    });
-    await expect(
-      ops.startLogin({ kind: "sso", slug: "acme" }),
-    ).rejects.toThrow(SSO_UNAVAILABLE);
-
-    expect(actions.signInWithSso).not.toHaveBeenCalled();
   });
 });
 

@@ -69,7 +69,7 @@ export const BILLING_PLAN_COLUMNS: BillingPlanColumn[] = [
     highlightsLabel: "Everything in Core, plus",
     highlights: [
       "Custom Proliferate Credits",
-      "SSO, org-wide secrets, and audit trails",
+      "Org-wide secrets and audit trails",
       "Bring your own model credentials",
       "Custom instance types or VPC deployment",
       "Dedicated account manager, FDE, and premium support",
@@ -110,7 +110,6 @@ export const BILLING_PLAN_SECTIONS: BillingPlanSection[] = [
       { label: "Cloud auth options", values: { free: "Gateway only", core: "Gateway only", enterprise: "Gateway + BYOK" } },
       { label: "Local auth options", values: { free: "Any local", core: "Any local", enterprise: "Any local" } },
       { label: "Role-based access management", values: { free: false, core: true, enterprise: true } },
-      { label: "SSO / SAML", values: { free: false, core: false, enterprise: true } },
       { label: "Org-wide secrets", values: { free: false, core: false, enterprise: true } },
       { label: "Audit trails", values: { free: false, core: false, enterprise: true } },
       { label: "Private VPC deployment", values: { free: false, core: false, enterprise: true } },

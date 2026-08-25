@@ -41,6 +41,3 @@ def test_auth_leaf_has_no_product_domain_imports() -> None:
     assert not (auth_root / "desktop" / "api.py").exists()
     assert not (auth_root / "desktop" / "service.py").exists()
     assert not (auth_root / "identity" / "api.py").exists()
-    assert not (auth_root / "sso" / "api.py").exists()
-    assert not (auth_root / "sso" / "service.py").exists()
-    assert not (auth_root / "sso" / "user_resolution.py").exists()

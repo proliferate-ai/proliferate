@@ -13,7 +13,6 @@ const h = vi.hoisted(() => ({
   actions: {
     signInWithGitHub: vi.fn(),
     signInWithPassword: vi.fn(),
-    signInWithSso: vi.fn(),
     signOut: vi.fn(),
     cancelAuthFlow: vi.fn(),
     linkGoogle: vi.fn(),
@@ -22,7 +21,6 @@ const h = vi.hoisted(() => ({
   controlPlaneReachable: true,
   authMethods: { passwordLogin: true, github: true } as unknown,
   github: { enabled: true, clientId: null } as unknown,
-  sso: { enabled: true } as unknown,
   getProliferateClient: vi.fn(),
   desktopBridge: { nativeUi: { setRunningAgentCount: vi.fn() } },
 }));
@@ -48,9 +46,6 @@ vi.mock("@proliferate/product-client/internal/hooks/access/cloud/auth/use-auth-m
 }));
 vi.mock("@proliferate/product-client/internal/hooks/access/cloud/auth/use-github-auth-availability", () => ({
   useGitHubDesktopAuthAvailabilityFor: () => ({ data: h.github }),
-}));
-vi.mock("@proliferate/product-client/internal/hooks/access/cloud/auth/use-sso-discovery", () => ({
-  useSsoDiscoveryFor: () => ({ data: h.sso }),
 }));
 vi.mock("@proliferate/product-client/internal/lib/domain/auth/auth-mode", () => ({
   isProductAuthRequired: () => true,
@@ -84,9 +79,6 @@ vi.mock("@/lib/integrations/auth/orchestration-callback", () => ({
 vi.mock("@/lib/integrations/auth/proliferate-auth", () => ({
   DESKTOP_AUTH_REDIRECT_URI: "proliferate://auth/callback",
 }));
-vi.mock("@/lib/integrations/auth/proliferate-sso-auth", () => ({
-  discoverDesktopSso: vi.fn(),
-}));
 vi.mock("@/lib/integrations/telemetry/client", () => ({
   trackProductEvent: vi.fn(),
   captureTelemetryException: vi.fn(),
@@ -119,7 +111,6 @@ beforeEach(() => {
   h.controlPlaneReachable = true;
   h.authMethods = { passwordLogin: true, github: true };
   h.github = { enabled: true, clientId: null };
-  h.sso = { enabled: true };
   h.getProliferateClient.mockClear();
   cloudClient = { id: "cloud-1" };
   useAuthStore.setState({
@@ -153,7 +144,7 @@ describe("DesktopProductHostProvider", () => {
     const anonymousHost = result.current;
     expect(anonymousHost.auth.state).toEqual({
       status: "anonymous",
-      methods: ["password", "github", "sso"],
+      methods: ["password", "github"],
     });
 
     act(() => {
@@ -296,7 +287,7 @@ describe("DesktopProductHostProvider", () => {
     const before = result.current;
     expect(before.auth.state).toEqual({
       status: "anonymous",
-      methods: ["password", "github", "sso"],
+      methods: ["password", "github"],
     });
 
     h.github = { enabled: false };
@@ -307,7 +298,7 @@ describe("DesktopProductHostProvider", () => {
     expect(result.current).not.toBe(before);
     expect(result.current.auth.state).toEqual({
       status: "anonymous",
-      methods: ["password", "sso"],
+      methods: ["password"],
     });
   });
 
@@ -356,7 +347,7 @@ describe("DesktopProductHostProvider", () => {
     const before = result.current;
     expect(before.auth.state).toEqual({
       status: "anonymous",
-      methods: ["password", "github", "sso"],
+      methods: ["password", "github"],
     });
 
     act(() => {
@@ -369,7 +360,7 @@ describe("DesktopProductHostProvider", () => {
     expect(result.current).not.toBe(before);
     expect(result.current.auth.state).toEqual({
       status: "anonymous",
-      methods: ["password", "github", "sso"],
+      methods: ["password", "github"],
       issue: { kind: "deployment_unreachable" },
     });
   });
@@ -389,7 +380,7 @@ describe("DesktopProductHostProvider", () => {
 
     expect(result.current.auth.state).toEqual({
       status: "anonymous",
-      methods: ["password", "github", "sso"],
+      methods: ["password", "github"],
       issue: {
         kind: "callback_failed",
         reason: "provider_error",

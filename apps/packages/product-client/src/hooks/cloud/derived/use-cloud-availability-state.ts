@@ -8,7 +8,7 @@ import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-aut
  * GitHub OAuth (PR2-AUTH-02).
  *
  * Sign-in availability is a property of the reachable product control plane:
- * ANY product session (Google / password / SSO / GitHub) unlocks the product,
+ * ANY product session (Google / password / GitHub) unlocks the product,
  * so `cloudSignInAvailable` no longer depends on GitHub Desktop OAuth being
  * configured. GitHub App authority gates repository operations only, and is
  * resolved per-repo by the readiness resolver (`resolveRepositoryReadiness`) —

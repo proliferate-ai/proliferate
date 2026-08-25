@@ -1,7 +1,5 @@
 import {
-  discoverSso,
   exchangeWebAuthCode,
-  startSsoAuth,
   startAuthProvider,
   type AuthProviderName,
   type AuthPurpose,
@@ -13,7 +11,7 @@ import { createOAuthState, createPkcePair, hashOAuthSecret } from "../../../infr
 import { createWebCloudClient } from "../client";
 
 const PENDING_WEB_AUTH_KEY = "proliferate.web.pendingAuth";
-// The browser OAuth/SSO redirect target host route (see WebHostApp). Kept as a
+// The browser OAuth redirect target host route (see WebHostApp). Kept as a
 // local constant so the auth flow no longer depends on the deleted legacy route
 // table.
 const AUTH_CALLBACK_PATH = "/auth/callback";
@@ -29,7 +27,7 @@ export class WebAuthFlowError extends Error {
 }
 
 interface PendingWebAuth {
-  provider: AuthProviderName | "sso";
+  provider: AuthProviderName;
   purpose: AuthPurpose;
   stateHash: string;
   codeVerifier: string;
@@ -71,88 +69,6 @@ export async function startWebAuthFlow(input: {
     createdAt: Date.now(),
   });
   window.location.assign(response.authorizationUrl);
-}
-
-export async function startWebSsoFlow(input: {
-  email?: string | null;
-  organizationId?: string | null;
-  connectionId?: string | null;
-} = {}): Promise<void> {
-  const email = input.email?.trim() ?? "";
-  const organizationId = input.organizationId ?? null;
-  const connectionId = input.connectionId ?? null;
-  const hasConnectionHint = Boolean(organizationId || connectionId);
-  const client = createWebCloudClient(webEnv.apiBaseUrl, null);
-  const discovery = await discoverSso(
-    {
-      email: email || undefined,
-      organizationId,
-      connectionId,
-    },
-    client,
-  );
-  if (!discovery.enabled) {
-    throw new Error(
-      email
-        ? "SSO is not configured for this email domain."
-        : "SSO is not configured for this deployment.",
-    );
-  }
-  if (!email && discovery.scope !== "deployment" && !hasConnectionHint) {
-    throw new Error("Enter your work email to continue with SSO.");
-  }
-  const pkce = await createPkcePair();
-  const clientState = createOAuthState();
-  const redirectUri = new URL(AUTH_CALLBACK_PATH, window.location.origin).toString();
-  const response = await startSsoAuth(
-    "web",
-    {
-      clientState,
-      codeChallenge: pkce.challenge,
-      codeChallengeMethod: "S256",
-      redirectUri,
-      email: email || undefined,
-      organizationId: organizationId ?? discovery.organizationId ?? undefined,
-      connectionId: connectionId ?? discovery.connectionId ?? undefined,
-      prompt: "select_account",
-    },
-    client,
-  );
-  writePendingWebAuth({
-    provider: "sso",
-    purpose: "login",
-    stateHash: await hashOAuthSecret(clientState),
-    codeVerifier: pkce.verifier,
-    createdAt: Date.now(),
-  });
-  window.location.assign(response.authorizationUrl);
-}
-
-// The org-slug login page and per-org /login/<slug> links resolve a slug to an
-// organization's SSO connection, then hand off to the existing start flow. A
-// slug that does not resolve (missing org, no SSO, disabled) returns the same
-// generic answer, so we surface one generic message either way.
-const SSO_SLUG_UNAVAILABLE_MESSAGE =
-  "We could not find single sign-on for that workspace. Check the sign-in link your admin shared.";
-export const SSO_SLUG_UNAVAILABLE_CODE = "sso_slug_unavailable";
-
-export async function startWebSsoFlowForSlug(slug: string): Promise<void> {
-  const trimmed = slug.trim();
-  if (!trimmed) {
-    throw new Error("Enter your organization's workspace name to continue.");
-  }
-  const client = createWebCloudClient(webEnv.apiBaseUrl, null);
-  const discovery = await discoverSso({ slug: trimmed }, client);
-  if (!discovery.enabled || !discovery.organizationId) {
-    throw new WebAuthFlowError(
-      SSO_SLUG_UNAVAILABLE_MESSAGE,
-      SSO_SLUG_UNAVAILABLE_CODE,
-    );
-  }
-  await startWebSsoFlow({
-    organizationId: discovery.organizationId,
-    connectionId: discovery.connectionId,
-  });
 }
 
 export async function completeWebAuthFlow(
@@ -203,9 +119,6 @@ function authCallbackErrorMessage(code: string): string {
     case "web_beta_email_missing":
     case "web_beta_email_not_allowed":
       return "Hosted web access is currently limited to beta users.";
-    case "sso_connection_not_found":
-    case "not_configured":
-      return "SSO is not configured for this account.";
     default:
       return code;
   }

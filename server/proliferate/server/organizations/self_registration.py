@@ -29,8 +29,6 @@ Boundaries:
 - Hosted mode: the route is never mounted, so hosted behavior is unchanged.
 - The ``password_auth_enabled`` kill switch applies here exactly as it does to
   password login: no password account may be created while it is off.
-- SSO just-in-time provisioning bypasses this allowlist entirely; SSO arrivals
-  are governed by the SSO JIT policy (``auth/sso``), not by invitations.
 """
 
 from __future__ import annotations

@@ -10,18 +10,12 @@ vi.mock("./web-product-links", async (importOriginal) => {
   return { ...actual, emitWebInboundEntry: vi.fn() };
 });
 
-vi.mock("../../lib/access/cloud/auth/web-auth-flow", () => ({
-  startWebSsoFlow: vi.fn(),
-}));
-
-import { startWebSsoFlow } from "../../lib/access/cloud/auth/web-auth-flow";
 import { BillingReturnRoute } from "./BillingReturnRoute";
 import { IntegrationConnectCompleteRoute } from "./IntegrationConnectCompleteRoute";
 import { OrganizationJoinRoute } from "./OrganizationJoinRoute";
 import { emitWebInboundEntry } from "./web-product-links";
 
 const emitMock = vi.mocked(emitWebInboundEntry);
-const ssoMock = vi.mocked(startWebSsoFlow);
 
 let originalLocation: Location;
 
@@ -148,22 +142,7 @@ describe("IntegrationConnectCompleteRoute", () => {
 });
 
 describe("OrganizationJoinRoute", () => {
-  it("starts Web SSO for the organization when SSO is usable", async () => {
-    ssoMock.mockResolvedValueOnce(undefined);
-    render(
-      <MemoryRouter initialEntries={["/join/org_1"]}>
-        <Routes>
-          <Route path="/join/:orgId" element={<OrganizationJoinRoute />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-    stubLocation("https://app.proliferate.com/join/org_1");
-    await flush();
-    expect(ssoMock).toHaveBeenCalledWith({ organizationId: "org_1" });
-  });
-
-  it("falls back to the Desktop join deep link when SSO is unavailable", async () => {
-    ssoMock.mockRejectedValueOnce(new Error("sso disabled"));
+  it("hands the join off to the Desktop join deep link", async () => {
     stubLocation("https://app.proliferate.com/join/org_1");
     render(
       <MemoryRouter initialEntries={["/join/org_1"]}>

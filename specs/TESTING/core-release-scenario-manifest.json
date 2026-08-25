@@ -37,23 +37,7 @@
       }
     },
     {
-      "id": "T2-AUTH-3",
-      "tier": 2,
-      "implementation": {
-        "status": "deferred",
-        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
-      }
-    },
-    {
       "id": "T2-AUTH-4",
-      "tier": 2,
-      "implementation": {
-        "status": "deferred",
-        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
-      }
-    },
-    {
-      "id": "T2-AUTH-5",
       "tier": 2,
       "implementation": {
         "status": "deferred",
@@ -541,14 +525,6 @@
       "tier": 3,
       "implementation": {
         "status": "planned"
-      }
-    },
-    {
-      "id": "T3-AUTH-2",
-      "tier": 3,
-      "implementation": {
-        "status": "deferred",
-        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {

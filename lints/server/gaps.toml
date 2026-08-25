@@ -87,8 +87,7 @@ return that; do the mutation through a store function."""
 why = """The type pipeline is ORM -> frozen dataclass -> Pydantic, so an ORM row
 above the store carries a live session and lazy loads into layers that have no
 transaction. Stores such as db/store/users.py and db/store/billing_subjects.py
-still return ORM types, and Accounts SSO still mutates a User and calls
-db.flush() in accounts/sso/user_resolution.py. No checker detects a leaked ORM
+still return ORM types. No checker detects a leaked ORM
 return type."""
 
 [rule.example]

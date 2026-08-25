@@ -48,7 +48,7 @@ describe("useOrganizationJoinAuthLaunch", () => {
   beforeEach(() => {
     clearTestStorage();
     hostMocks.startLogin.mockReset();
-    hostMocks.startLogin.mockResolvedValue({ provider: "sso", source: "desktop_callback" });
+    hostMocks.startLogin.mockResolvedValue({ provider: "github", source: "desktop_callback" });
     useAuthStore.setState({
       status: "anonymous",
       session: null,
@@ -68,28 +68,13 @@ describe("useOrganizationJoinAuthLaunch", () => {
     });
   });
 
-  it("starts organization SSO for anonymous invite routes before Settings mounts", async () => {
-    renderJoinAuthLaunch();
-
-    await waitFor(() => {
-      expect(hostMocks.startLogin).toHaveBeenCalledWith({
-        kind: "sso",
-        organizationId: "org-1",
-      });
-    });
-    expect(hostMocks.startLogin).not.toHaveBeenCalledWith({ kind: "github" });
-  });
-
-  it("falls back to standard sign-in when the invited organization has no SSO", async () => {
-    hostMocks.startLogin.mockRejectedValueOnce(
-      new Error("SSO is not configured for this environment."),
-    );
-
+  it("starts GitHub sign-in for anonymous invite routes before Settings mounts", async () => {
     renderJoinAuthLaunch();
 
     await waitFor(() => {
       expect(hostMocks.startLogin).toHaveBeenCalledWith({ kind: "github" });
     });
+    expect(hostMocks.startLogin).toHaveBeenCalledTimes(1);
   });
 
   it("does not launch auth for already authenticated users", async () => {

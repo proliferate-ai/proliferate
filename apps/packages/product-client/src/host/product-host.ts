@@ -135,9 +135,8 @@ export type AuthState =
 
 /**
  * A shared login intent. Password completes in `startLogin`; provider flows
- * complete out of band and resume through `finishLogin`. SSO carries the
- * organization/connection/slug inputs the login screen collects; every method
- * exposed by {@link AuthMethod} (including Apple) can be started.
+ * complete out of band and resume through `finishLogin`. Every method exposed
+ * by {@link AuthMethod} (including Apple) can be started.
  */
 export type LoginRequest =
   | { kind: "password"; email: string; password: string }
@@ -155,13 +154,6 @@ export type LoginRequest =
       kind: "apple";
       purpose?: ProductProviderAuthPurpose;
       prompt?: "select_account";
-    }
-  | {
-      kind: "sso";
-      email?: string;
-      organizationId?: string;
-      connectionId?: string;
-      slug?: string;
     };
 
 /** Why an external identity-provider flow is being started. */

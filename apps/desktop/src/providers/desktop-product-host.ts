@@ -17,7 +17,6 @@ import type { ProductEntry } from "@proliferate/product-client/host/product-host
 import type { AuthUser } from "@proliferate/product-client/internal/lib/domain/auth/auth-user";
 import type { AuthOrchestrationDeps } from "@/lib/integrations/auth/orchestration-effects";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
-import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
 import type { PasswordSignInCredentials } from "@/lib/integrations/auth/orchestration-password-flow";
 
 import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
@@ -42,14 +41,7 @@ import {
 import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
 import { markLoginNotAttempted } from "@proliferate/product-client/internal/lib/domain/telemetry/errors";
 import { handleDesktopCallbackUrl } from "@/lib/integrations/auth/orchestration-callback";
-import { discoverDesktopSso } from "@proliferate/product-client/internal/lib/access/cloud/auth-probes";
 import { DESKTOP_AUTH_REDIRECT_URI } from "@/lib/integrations/auth/proliferate-auth";
-
-// Same generic string surfaced by the existing slug SSO flow: a missing org,
-// no SSO, or disabled SSO all resolve to one answer so we never confirm which
-// workspaces exist.
-const SSO_UNAVAILABLE =
-  "We could not find single sign-on for that workspace. Check the sign-in link your admin shared.";
 
 // --- Deployment -------------------------------------------------------------
 
@@ -93,7 +85,6 @@ export function mapProductAuthUser(user: AuthUser): ProductAuthUser {
 export interface DesktopAuthMethodAvailability {
   passwordAvailable: boolean;
   githubAvailable: boolean;
-  ssoAvailable: boolean;
 }
 
 /**
@@ -103,7 +94,6 @@ export interface DesktopAuthMethodAvailability {
 export function buildAnonymousMethods({
   passwordAvailable,
   githubAvailable,
-  ssoAvailable,
 }: DesktopAuthMethodAvailability): AuthMethod[] {
   const methods: AuthMethod[] = [];
   if (passwordAvailable) {
@@ -111,9 +101,6 @@ export function buildAnonymousMethods({
   }
   if (githubAvailable) {
     methods.push("github");
-  }
-  if (ssoAvailable) {
-    methods.push("sso");
   }
   return methods;
 }
@@ -130,9 +117,6 @@ export interface DesktopAuthActions {
   ) => Promise<ProductLoginOutcome>;
   signInWithPassword: (
     credentials: PasswordSignInCredentials,
-  ) => Promise<ProductLoginOutcome>;
-  signInWithSso: (
-    options?: DesktopSsoSignInOptions,
   ) => Promise<ProductLoginOutcome>;
   signOut: () => Promise<ProductLogoutOutcome>;
   cancelAuthFlow: (message?: string) => Promise<void>;
@@ -196,31 +180,6 @@ export function createDesktopAuthOperations(
         throw markLoginNotAttempted(
           new Error("Apple sign-in is not available on Desktop."),
         );
-
-      case "sso": {
-        if (!request.slug) {
-          return actions.signInWithSso({
-            email: request.email,
-            organizationId: request.organizationId,
-            connectionId: request.connectionId,
-          });
-        }
-        const discovery = await discoverDesktopSso({
-          apiBaseUrl: getProliferateApiBaseUrl(),
-          slug: request.slug,
-          email: request.email,
-          organizationId: request.organizationId,
-          connectionId: request.connectionId,
-        });
-        if (!discovery.enabled || !discovery.organizationId) {
-          throw markLoginNotAttempted(new Error(SSO_UNAVAILABLE));
-        }
-        return actions.signInWithSso({
-          organizationId: discovery.organizationId,
-          connectionId: discovery.connectionId,
-          prompt: "select_account",
-        });
-      }
     }
   }
 

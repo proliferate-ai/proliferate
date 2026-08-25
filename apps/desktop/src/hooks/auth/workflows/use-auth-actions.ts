@@ -3,7 +3,6 @@ import {
   cancelActiveAuthFlow,
   linkDesktopProvider,
   signInWithGitHub,
-  signInWithSso,
   signOut,
 } from "@/lib/integrations/auth/orchestration-provider-flow";
 import {
@@ -11,7 +10,6 @@ import {
   type PasswordSignInCredentials,
 } from "@/lib/integrations/auth/orchestration-password-flow";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
-import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
 
 // Transport-only auth actions beneath the Desktop ProductHost. Each callback
@@ -32,10 +30,6 @@ export function useAuthActions() {
     signInWithPassword: useCallback(
       (credentials: PasswordSignInCredentials) =>
         signInWithPassword(credentials, authEffects),
-      [authEffects],
-    ),
-    signInWithSso: useCallback(
-      (options?: DesktopSsoSignInOptions) => signInWithSso(options, authEffects),
       [authEffects],
     ),
     signOut: useCallback(() => signOut(authEffects), [authEffects]),

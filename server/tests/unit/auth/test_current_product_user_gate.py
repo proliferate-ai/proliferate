@@ -1,4 +1,4 @@
-"""Unit tests for the org-SSO carve-out in the product-readiness gate."""
+"""Unit tests for the product-readiness gate."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def _user() -> User:
     return User(
         id=uuid4(),
         email="person@example.com",
-        hashed_password="unused-sso-only",
+        hashed_password="unused-direct-row",
         is_active=True,
         is_superuser=False,
         is_verified=True,
@@ -40,41 +40,10 @@ async def test_single_org_mode_bypasses_gate(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.asyncio
-async def test_org_sso_identity_passes_gate_without_github(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "single_org_mode_override", False)
-
-    async def fake_org_sso_membership(_db: AsyncSession, *, user_id: object) -> bool:
-        return True
-
-    async def fail_readiness(*_args: object, **_kwargs: object) -> AccountReadiness:
-        raise AssertionError("GitHub readiness must not be consulted for org-SSO users.")
-
-    monkeypatch.setattr(
-        dependencies,
-        "user_has_active_organization_sso_membership",
-        fake_org_sso_membership,
-    )
-    monkeypatch.setattr(dependencies, "get_account_readiness", fail_readiness)
-
-    user = _user()
-    resolved = await dependencies.current_product_user(
-        user=user,
-        db=cast(AsyncSession, object()),
-    )
-
-    assert resolved is user
-
-
-@pytest.mark.asyncio
 async def test_plain_hosted_user_without_github_is_gated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "single_org_mode_override", False)
-
-    async def fake_org_sso_membership(_db: AsyncSession, *, user_id: object) -> bool:
-        return False
 
     async def fake_readiness(*_args: object, **_kwargs: object) -> AccountReadiness:
         return AccountReadiness(
@@ -84,11 +53,6 @@ async def test_plain_hosted_user_without_github_is_gated(
             github_grant_status=None,
         )
 
-    monkeypatch.setattr(
-        dependencies,
-        "user_has_active_organization_sso_membership",
-        fake_org_sso_membership,
-    )
     monkeypatch.setattr(dependencies, "get_account_readiness", fake_readiness)
 
     with pytest.raises(PermissionDenied) as exc_info:

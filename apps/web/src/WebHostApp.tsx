@@ -5,7 +5,6 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AuthCallbackRoute } from "./browser/auth/AuthCallbackRoute";
 import { AuthErrorRoute } from "./browser/auth/AuthErrorRoute";
-import { SsoLoginEntryRoute } from "./browser/auth/SsoLoginEntryRoute";
 import { WebCloudRoot } from "./browser/cloud/WebCloudRoot";
 import { BillingReturnRoute } from "./browser/links/BillingReturnRoute";
 import { IntegrationConnectCompleteRoute } from "./browser/links/IntegrationConnectCompleteRoute";
@@ -42,7 +41,6 @@ export function WebHostApp() {
           <Routes>
             <Route path="/auth/callback" element={<AuthCallbackRoute />} />
             <Route path="/auth/error" element={<AuthErrorRoute />} />
-            <Route path="/login/:slug" element={<SsoLoginEntryRoute />} />
             <Route path="/join/:orgId" element={<OrganizationJoinRoute />} />
             <Route path="/settings/cloud" element={<BillingReturnRoute />} />
             <Route

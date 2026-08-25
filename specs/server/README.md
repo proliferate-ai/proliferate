@@ -324,13 +324,11 @@ not a softer version of the rule.
 - [ ] **The ORM → dataclass boundary is incomplete.** Current stores such as
   [users.py](../../server/proliferate/db/store/users.py) and
   [billing_subjects.py](../../server/proliferate/db/store/billing_subjects.py)
-  return ORM types. Accounts SSO also mutates a `User` and calls `db.flush()` in
-  [user_resolution.py](../../server/proliferate/server/accounts/sso/user_resolution.py).
+  return ORM types.
 - [ ] **Request transaction ownership is incomplete.** The exception ledger
-  records 30 route-owned session calls across the Accounts
-  [Desktop](../../server/proliferate/server/accounts/desktop/api.py),
-  [Identity](../../server/proliferate/server/accounts/identity/api.py),
-  and [SSO](../../server/proliferate/server/accounts/sso/api.py) APIs.
+  records route-owned session calls across the Accounts
+  [Desktop](../../server/proliferate/server/accounts/desktop/api.py) and
+  [Identity](../../server/proliferate/server/accounts/identity/api.py) APIs.
   Each site is a `SRV-API-5` entry in
   [exceptions.toml](../../lints/server/exceptions.toml).
 - [ ] **Authorization dependency adoption is partial.** The current
@@ -344,7 +342,7 @@ not a softer version of the rule.
   In addition, `permissions.py` currently composes actor deps, stores, billing
   services, and request/RLS context; only `auth/authorization.py` is the
   dependency-free authorization leaf.
-- [ ] **Error enforcement is incomplete.** Organization SSO orchestration now
+- [ ] **Error enforcement is incomplete.** Organization orchestration now
   raises transport-neutral Organization errors, and current direct
   `HTTPException` uses are confined to HTTP boundary modules. The checker still
   does not classify every service/internal module or enforce globally unique

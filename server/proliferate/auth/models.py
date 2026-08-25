@@ -19,7 +19,7 @@ class UserRead(schemas.BaseUser[uuid.UUID]):
     # proliferate.server.setup.accounts.normalize_account_email), but this is
     # the *read* model: it must still serialize any email already stored,
     # including rows written before that write-side validation existed or via
-    # a path (OAuth/SSO, direct fixtures) that does not go through it. #1012
+    # a path (OAuth, direct fixtures) that does not go through it. #1012
     # was exactly this — EmailStr rejects reserved TLDs like ``.test`` at
     # serialization time, 500ing GET /users/me for an account the product
     # itself created.
@@ -36,7 +36,7 @@ class UserCreate(schemas.BaseUserCreate):
 
 
 AuthProviderName = Literal["github", "google", "apple"]
-AuthLinkedProviderName = Literal["github", "google", "apple", "sso"]
+AuthLinkedProviderName = Literal["github", "google", "apple"]
 AuthOnboardingState = Literal["needs_github", "active"]
 
 
@@ -47,8 +47,6 @@ class AuthLinkedProvider(BaseModel):
     connected: bool
     account_email: str | None = Field(default=None, serialization_alias="accountEmail")
     account_id: str | None = Field(default=None, serialization_alias="accountId")
-    display_name: str | None = Field(default=None, serialization_alias="displayName")
-    brand_label: str | None = Field(default=None, serialization_alias="brandLabel")
 
 
 class AuthProviderAvailability(BaseModel):

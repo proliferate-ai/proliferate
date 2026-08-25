@@ -4,7 +4,6 @@ import { AuthScreenLayout } from "#product/components/auth/AuthScreenLayout";
 import { describeAuthIssue } from "#product/lib/domain/auth/describe-auth-issue";
 import { useGitHubSignIn } from "#product/hooks/auth/workflows/use-github-sign-in";
 import { usePasswordSignIn } from "#product/hooks/auth/workflows/use-password-sign-in";
-import { useSsoSignIn } from "#product/hooks/auth/workflows/use-sso-sign-in";
 
 // Persistent owner of the pre-app experience. BootstrappedRoute keeps a single
 // <AuthShell> mounted across the bootstrapping -> anonymous transition, so the
@@ -28,23 +27,12 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
     cancelSignIn,
   } = useGitHubSignIn();
   const {
-    signIn: signInWithSso,
-    submitting: ssoSubmitting,
-    error: ssoError,
-    signInAvailable: ssoSignInAvailable,
-    signInChecking: ssoSignInChecking,
-    signInUnavailableDescription: ssoSignInUnavailableDescription,
-    displayName: ssoDisplayName,
-    cancelSignIn: cancelSsoSignIn,
-  } = useSsoSignIn();
-  const {
     signIn: signInWithPassword,
     submitting: passwordSubmitting,
     error: passwordError,
     signInAvailable: passwordSignInAvailable,
   } = usePasswordSignIn();
-  const busy = submitting || ssoSubmitting || passwordSubmitting;
-  const handleCancelSignIn = ssoSubmitting ? cancelSsoSignIn : cancelSignIn;
+  const busy = submitting || passwordSubmitting;
 
   const { auth } = useProductHost();
   const issue = auth.state.status === "anonymous" ? auth.state.issue : undefined;
@@ -56,24 +44,14 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
       onMarkResolved={onMarkResolved}
       submitting={submitting}
       busy={busy}
-      error={error ?? ssoError ?? passwordError ?? (issue ? describeAuthIssue(issue) : null)}
+      error={error ?? passwordError ?? (issue ? describeAuthIssue(issue) : null)}
       githubSignInAvailable={signInAvailable}
       githubSignInChecking={signInChecking}
       githubSignInUnavailableDescription={signInUnavailableDescription}
-      ssoSubmitting={ssoSubmitting}
-      ssoSignInAvailable={ssoSignInAvailable}
-      ssoSignInChecking={ssoSignInChecking}
-      ssoSignInUnavailableDescription={ssoSignInUnavailableDescription}
-      ssoDisplayName={ssoDisplayName}
       passwordSignInAvailable={passwordSignInAvailable}
       passwordSubmitting={passwordSubmitting}
       onGitHubSignIn={() => {
         void signIn().catch(() => {
-          // error is already surfaced via the hook's `error` state
-        });
-      }}
-      onSsoSignIn={() => {
-        void signInWithSso().catch(() => {
           // error is already surfaced via the hook's `error` state
         });
       }}
@@ -83,7 +61,7 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
         });
       }}
       onCancelSignIn={() => {
-        void handleCancelSignIn();
+        void cancelSignIn();
       }}
     />
   );

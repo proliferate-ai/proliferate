@@ -20,9 +20,6 @@ vi.mock("#product/components/settings/panes/OrganizationSecretsPane", () => ({
 vi.mock("#product/components/settings/panes/OrganizationIntegrationsPane", () => ({
   OrganizationIntegrationsPane: () => <div>pane:organization-integrations</div>,
 }));
-vi.mock("#product/components/settings/panes/OrganizationSsoPane", () => ({
-  OrganizationSsoPane: () => <div>pane:organization-sso</div>,
-}));
 vi.mock("#product/components/settings/panes/OrganizationModelPolicyPane", () => ({
   OrganizationModelPolicyPane: () => <div>pane:organization-model-policy</div>,
 }));
@@ -73,7 +70,6 @@ const CONTROL_PLANE_SECTIONS: { section: SettingsSection; marker: string }[] = [
   { section: "personal-secrets", marker: "pane:personal-secrets" },
   { section: "organization-secrets", marker: "pane:organization-secrets" },
   { section: "organization-integrations", marker: "pane:organization-integrations" },
-  { section: "organization-sso", marker: "pane:organization-sso" },
   { section: "organization-model-policy", marker: "pane:organization-model-policy" },
 ];
 

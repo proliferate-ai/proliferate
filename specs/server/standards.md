@@ -66,7 +66,6 @@ server/proliferate/
     profile_api.py
     desktop/                 # leaf models and callback pages
     identity/                # credential, session, provider-protocol, and persistence leaf
-    sso/
 
   db/
     engine.py
@@ -92,7 +91,6 @@ server/proliferate/
     accounts/
       desktop/               # Desktop account-entry API and orchestration
       identity/              # web/mobile account-entry API and orchestration
-      sso/                   # SSO account-entry API and orchestration
     <domain>/
       api.py
       service.py
@@ -124,7 +122,7 @@ Use this as a routing map. The focused guides own the detailed rules.
 | Settings and constants | `config.py`, `constants/<area>.py` | Env-derived runtime settings and shared hardcoded product/protocol values. | [config.md](config.md) |
 | Reusable cross-domain logic | `lib/infra/**`, `lib/product/**`, `lib/capabilities/**` | Generic machinery, cross-domain pure product logic, and reusable orchestration over integrations — owned by no single domain. | [lib.md](lib.md) |
 | Auth | `auth/**`, `permissions.py`, `server/<domain>/access.py`, `server/<domain>/domain/policy.py` | Actor authentication primitives, dependency-free authorization vocabulary, request-time owner/org resolution, resource-access deps, and pure product-policy verdicts. | [auth.md](auth.md) |
-| Accounts | `server/accounts/**` | Product account-entry routes and orchestration: user resolution/creation, identity placement, admin-email enforcement, SSO coordination, and product side effects. | [auth.md](auth.md) |
+| Accounts | `server/accounts/**` | Product account-entry routes and orchestration: user resolution/creation, identity placement, admin-email enforcement, and product side effects. | [auth.md](auth.md) |
 | Database | `db/models/**`, `db/store/**` | ORM schema, query execution, transactions, row locks, ORM -> dataclass type boundary. | [database.md](database.md) |
 | Domain transport | `server/<domain>/api.py`, `server/<domain>/models.py` | HTTP route handling and Pydantic request/response schemas. | [domains.md](domains.md) |
 | Domain logic | `server/<domain>/service.py`, `server/<domain>/domain/**`, `server/<domain>/<subdomain>/` | Business orchestration, pure product rules, and promoted product concepts. | [domains.md](domains.md) |

@@ -25,39 +25,12 @@ describe("web auth errors", () => {
     expect(webBetaAuthErrorCode(new Error("failed"))).toBeNull();
   });
 
-  it("presents SSO domain denials as actionable setup errors", () => {
-    const presentation = webAuthErrorPresentation("sso_email_domain_not_allowed");
+  it("presents unknown codes with the generic attention presentation", () => {
+    const presentation = webAuthErrorPresentation("identity_state_invalid");
 
-    expect(presentation.title).toBe("Account not allowed");
-    expect(presentation.statusLabel).toBe("SSO access denied");
-    expect(presentation.description).toContain("approved email domains");
-    expect(presentation.primaryAction.kind).toBe("try_again");
-  });
-
-  it("presents OIDC token exchange failures without exposing raw details", () => {
-    const presentation = webAuthErrorPresentation("sso_oidc_token_exchange_failed");
-
-    expect(presentation.title).toBe("SSO setup issue");
-    expect(presentation.statusLabel).toBe("Token exchange failed");
-    expect(presentation.description).toContain("client secret");
-  });
-
-  it("presents org SSO membership denials as invite-required errors", () => {
-    const presentation = webAuthErrorPresentation("sso_user_not_team_member");
-
-    expect(presentation.title).toBe("Invite required");
-    expect(presentation.statusLabel).toBe("SSO access denied");
-    expect(presentation.description).toContain("existing organization members");
-  });
-
-  it("presents JIT-disabled rejections with an actionable admin fix", () => {
-    // A first-time SSO user under the default SSO_JIT_POLICY=disabled reaches
-    // this screen (code sso_jit_disabled) instead of a generic dead-end.
-    const presentation = webAuthErrorPresentation("sso_jit_disabled");
-
-    expect(presentation.title).toBe("Account not provisioned");
-    expect(presentation.statusLabel).toBe("SSO access denied");
-    expect(presentation.description).toContain("just-in-time provisioning");
+    expect(presentation.title).toBe("Sign in needs attention");
+    expect(presentation.statusLabel).toBe("Auth error");
+    expect(presentation.description).toContain("identity_state_invalid");
     expect(presentation.primaryAction.kind).toBe("try_again");
   });
 });
