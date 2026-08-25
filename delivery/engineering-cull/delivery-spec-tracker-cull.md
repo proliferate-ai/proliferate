@@ -52,3 +52,38 @@ Delete the issue-tracker loop end to end: the client tooling, the Grafana→trac
 ## Revert
 
 Plain revert restores code and docs. Live Grafana contact point and the external service are runbook items either way — revert does not resurrect them, which is acceptable: alerts deliver via SNS/Slack regardless.
+
+
+---
+
+## Implementation notes (recorded at implementation, 2026-08-25)
+
+1. **Deploy/terraform plumbing (scope extension, raised not silent):** the
+   spec's deleted list did not name `.github/workflows/_deploy-server.yml` or
+   `server/infra/main.tf`, but the `SUPPORT_FEED_*` secret plumbing and the
+   entire `SUPPORT_TRACKER_*`/`SUPPORT_GITHUB_*`/`SUPPORT_LINEAR_*` env,
+   secret, variable, and IAM surface feed nothing in server code (no config
+   keys read them; the reconciler they were built for never shipped). Under
+   the deletion-completeness law — and because the spec's own `support_feed`
+   grep-gate cannot reach 0 otherwise — that plumbing was deleted with the
+   loop. The task-definition render now actively STRIPS inherited retired
+   entries and its fail-closed assert REJECTS them, so old task revisions
+   cannot resurrect them by inheritance.
+2. **`tracker_intent.py`:** deleted as a module; its three pure functions
+   (`parse_client_release_id`, `normalize_telemetry_refs`,
+   `build_tracker_summary`) are capture-owned (stored on the report row,
+   enforced at completion, asserted by the surviving capture integration
+   tests) and moved verbatim to `domain/report_intent.py`. The
+   `tracker_summary` column keeps being written — columns stay, and the
+   surviving capture test pins its redaction guarantee.
+3. **Grafana restore path:** with the contact-point tooling deleted, the
+   script can no longer remove a live tracker receiver; ops follow-up 3 is
+   manual (Grafana UI / Alertmanager config API), as the runbook's
+   "Retired" section now states.
+4. **Fourth ops follow-up:** `terraform apply` for `server/infra/main.tf`
+   (removes the tracker variables and the `support-tracker-secret-parameters`
+   IAM policy from live state).
+5. **Checker edit (founder review):** `scripts/check_docs.py`
+   `REQUIRED_READMES` row for the deleted `issue-lifecycle/README.md` removed
+   in the same PR; `lints/server/ratchets.toml` config.py ratchet shrunk
+   627→623 (the checker itself flags stale entries).
