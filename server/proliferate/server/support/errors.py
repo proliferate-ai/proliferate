@@ -54,4 +54,3 @@ class SupportReportAlreadyCompleted(SupportReportUploadInvalid):
     client treats it as success (idempotent cleanup), not a failure."""
 
     code = "support_report_already_completed"
-
