@@ -376,7 +376,7 @@ pub(crate) fn status_json_for(agent: &str, probed_at: &str) -> String {
 
 // ── Shared Worker config fixtures ──────────────────────────────────────────
 
-/// A Worker config with every self-managed convergence behaviour off.
+/// A Worker config with no mailbox dir: heartbeat + sync only, no convergence.
 pub(crate) fn minimal_config() -> WorkerConfig {
     WorkerConfig {
         cloud_base_url: "https://cloud.test".to_string(),
@@ -384,18 +384,9 @@ pub(crate) fn minimal_config() -> WorkerConfig {
         worker_db_path: "/tmp/worker.sqlite3".into(),
         integration_gateway_home: None,
         heartbeat_interval_seconds: 30,
-        self_update_enabled: false,
-        anyharness_update_enabled: false,
-        anyharness_binary_path: None,
-        anyharness_launcher_path: None,
-        anyharness_workdir: None,
         runtime_base_url: "http://127.0.0.1:8457".to_string(),
         runtime_bearer_token: None,
         supervisor_update_request_dir: None,
-        supervisor_binary_path: None,
-        supervisor_config_path: None,
-        supervisor_config_toml: None,
-        supervisor_bridge_marker_dir: None,
         config_path: None,
     }
 }

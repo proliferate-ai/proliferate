@@ -31,7 +31,7 @@ class TestHeartbeatModelSnapshotUploadEligibility:
     """REL-10: the cloud-sandbox half of the advertised snapshot-upload verdict.
 
     The verdict rides the same authenticated 200 as the version overlay but is
-    not desired state: it never alters ``desiredVersions`` or ``desiredTopology``.
+    not desired state: it never alters ``desiredVersions``.
     """
 
     @pytest.mark.asyncio
@@ -96,4 +96,3 @@ class TestHeartbeatModelSnapshotUploadEligibility:
         assert ineligible["launchOptionsUploadAllowed"] is False
         assert eligible["desiredVersions"] == ineligible["desiredVersions"]
         assert ineligible["desiredVersions"]["anyharness"] == "4.4.4"
-        assert eligible["desiredTopology"] == ineligible["desiredTopology"]

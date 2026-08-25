@@ -4,11 +4,10 @@ Only one launch topology exists: Supervisor-owned (Supervisor spawns and
 supervises AnyHarness and the Worker itself). The legacy direct-nohup'd
 AnyHarness plus a separately launched Worker sidecar was deleted once the
 live E2B N-1->N update proof (2026-07-26) and the D5 BRIDGE proof
-(2026-07-26, sandbox iwwvadhffzxoora56f437) both passed; see
-``settings.supervisor_owned_runtime``'s docstring in config.py for the
-asymmetry this leaves: the flag no longer gates which topology a launch
-takes (always supervisor-owned), it only gates the D5 bridge signal on the
-heartbeat for already-running legacy workers.
+(2026-07-26, sandbox iwwvadhffzxoora56f437) both passed. The
+``supervisor_owned_runtime`` flag and the D5 bridge signal it gated died
+later, with the cull sweep's delete-worker-legacy track — there is no
+launch-topology lever of any kind anymore.
 """
 
 from __future__ import annotations

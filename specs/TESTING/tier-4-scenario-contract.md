@@ -521,9 +521,8 @@ The agreed contract is not implemented today:
   scoped~~ — **implemented**: nullable per-target
   `desired_anyharness_version`/`desired_worker_version` columns on
   `cloud_sandboxes` overlay the global pin in `record_heartbeat` (null
-  inherits the pin, unit-isolated per target). Not flag-gated; this closes
-  regardless of `supervisor_owned_runtime`. Deterministic server tests only —
-  no live E2B proof yet, so this row is not re-qualified;
+  inherits the pin, unit-isolated per target). Not flag-gated. Deterministic
+  server tests only — no live E2B proof yet, so this row is not re-qualified;
 - cloud artifact routes can fall back to rolling `stable` rather than failing
   closed on a missing candidate artifact — **still open**, disclosed non-goal
   of the supervisor-ownership change (PR 10/12 territory); the new Supervisor
@@ -538,20 +537,18 @@ The agreed contract is not implemented today:
   server-side legacy direct-nohup'd-AnyHarness-plus-Worker-sidecar launch
   path was deleted (S5-B); `connect.py`'s `runtime_launch.py` now
   unconditionally launches Supervisor detached — there is no launch-time
-  flag branch left. `settings.supervisor_owned_runtime` survives only to gate
-  the `desiredTopology` heartbeat signal for already-running legacy workers.
+  flag branch left, and `settings.supervisor_owned_runtime` itself (which
+  survived only to gate the `desiredTopology` bridge signal) was deleted with
+  the D5 bridge by the cull sweep's delete-worker-legacy track.
   Exercised deterministically in server tests plus both live proofs above;
-- Worker directly downloads/swaps/restarts itself and AnyHarness instead of
-  writing a durable Supervisor request — **implemented and wired**:
-  `supervisor_bridge.rs` (mailbox request write, D5 bridge, crash-safety
-  markers) and the `WorkerConfig`/`HeartbeatResponse` fields it needs all exist
-  with passing inline tests, and the legacy in-place swap logs a one-time
-  deprecation warning. `runtime.rs::heartbeat_and_converge` runs
-  `maybe_run_bridge` (D5 bridge on the `supervisor_owned` signal, from both
-  branches) then branches on `supervisor_bridge::is_supervisor_owned` and routes
-  supervisor-owned targets to `converge_via_mailbox` (the mailbox write) instead
-  of the legacy swap; the legacy path is byte-for-byte unchanged for
-  non-supervisor targets;
+- ~~Worker directly downloads/swaps/restarts itself and AnyHarness instead of
+  writing a durable Supervisor request~~ — **closed by deletion**: the
+  legacy Worker-owned swaps and self-`exec` update were deleted by the cull
+  sweep's delete-worker-legacy track. `supervisor_bridge/mailbox.rs` (the
+  durable mailbox request write) is the Worker's only convergence surface;
+  `runtime.rs::heartbeat_and_converge` routes supervisor-owned targets to
+  `converge_via_mailbox`, and a Worker with no mailbox dir converges
+  nothing;
 - ~~Supervisor can verify/stage artifacts but does not consume requests,
   activate, health-gate, or orchestrate rollback~~ — **implemented and
   unit-tested**: `RollbackPlan::apply` (restore `.prev` over the active path),
@@ -571,17 +568,13 @@ The agreed contract is not implemented today:
 - seed/reconcile work is asynchronous and best-effort, while top-level health
   can remain `ok`; qualification must inspect its terminal per-agent results;
   and
-- the first direct-Worker to Supervisor-ownership bridge is not designed —
-  **designed, implemented, and wired**:
-  `supervisor_bridge::maybe_bridge_to_supervisor` (config write, detached spawn,
-  ownership confirmation, `bridge.started`/`bridge.done` markers,
-  no-double-Supervisor liveness gate) is implemented with deterministic tests
-  for idempotency, marker-file crash recovery, and the no-double-Supervisor
-  invariant, and is called from `runtime.rs::maybe_run_bridge` (reachable from
-  both the supervisor-owned and the legacy branch). The live D5 BRIDGE run
-  against a real target PASSED 2026-07-26 (sandbox `iwwvadhffzxoora56f437`: a
-  running legacy sandbox migrated onto the Supervisor-owned topology in
-  place, ~2.5s, no destroy/recreate).
+- ~~the first direct-Worker to Supervisor-ownership bridge is not designed~~ —
+  **completed and retired**: the one-time D5 bridge was designed, implemented,
+  and proven live (2026-07-26, sandbox `iwwvadhffzxoora56f437`: a running
+  legacy sandbox migrated onto the Supervisor-owned topology in place, ~2.5s,
+  no destroy/recreate), and then deleted by the cull sweep's
+  delete-worker-legacy track once the fleet was fully supervisor-owned —
+  there is no legacy topology left to bridge from.
 
 None of the above closes a manifest row or this document's own scenario
 contract: `T4-RUNTIME-1`'s baseline/upgrade/assertions and the Cloud evidence

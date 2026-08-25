@@ -6,7 +6,5 @@
     "worker": "0.4.13",
     "anyharness": "0.66.0"
   },
-  "desiredTopology": null,
-  "supervisorBridge": null,
   "launchOptionsUploadAllowed": true
 }

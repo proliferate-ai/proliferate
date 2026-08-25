@@ -22,42 +22,17 @@ denial after advertised eligibility is a bounded contract contradiction and
 does not advance the local last-pushed revision.
 
 On a **supervisor-owned target** (`supervisor_update_request_dir` set in
-config — every managed-cloud target, unconditionally; no longer gated behind
-`supervisor_owned_runtime`, which only gates the D5 bridge heartbeat signal
-for already-running legacy workers), the Worker never downloads, replaces,
-kills, or rolls back AnyHarness or itself.
+config — every managed-cloud target, unconditionally), the Worker never
+downloads, replaces, kills, or rolls back AnyHarness or itself.
 It only observes heartbeat divergence and writes one durable request into
 `.proliferate/supervisor/updates` for Proliferate Supervisor to act on; see
 the [Lifecycle](#worker-lifecycle-and-convergence) section below and [specs/supervisor.md](supervisor.md) for
-the consumer side. On a **legacy (non-supervisor-owned) target** the Worker
-still performs the in-place AnyHarness/Worker binary swap described below;
-that path is deprecated and scheduled for deletion after the one-time
-bridge window (see decision 7 in the frozen delivery spec for this change).
-
-## Implementation Status (this PR)
-
-The mailbox-write module described below (`supervisor_bridge.rs`, its
-`WorkerConfig` fields, and the `HeartbeatResponse.desired_topology` field) is
-implemented, unit-tested, and wired into the heartbeat loop.
-`runtime.rs::heartbeat_and_converge` first runs `maybe_run_bridge` (the D5 bridge
-on the `supervisor_owned` topology signal, reachable from BOTH branches so an
-already-provisioned legacy Worker migrates too), then branches on
-`supervisor_bridge::is_supervisor_owned(config)` (mailbox dir set): supervisor-owned
-targets route to `converge_via_mailbox` (the mailbox write) instead
-of the legacy `converge_anyharness_runtime` + `self_update` swap, which stays
-byte-for-byte unchanged for non-supervisor targets. The "Current Process"
-outline below describes running behavior. Two distinct live proofs exist
-here, both PASSED on real E2B sandboxes 2026-07-26: the UPDATE proof (a fresh
-supervisor-owned sandbox converging pins 0.3.47→0.3.48 end to end, zero
-rollbacks) and the D5 BRIDGE proof (in-place migration of an already-running
-legacy Worker onto Proliferate Supervisor via `supervisor_bridge`, not a
-fresh provision — sandbox `iwwvadhffzxoora56f437`, ~2.5s, no
-destroy/recreate). Both proofs together cleared the gate for the server side
-to delete its legacy launch path (every new cloud-sandbox launch is now
-unconditionally supervisor-owned); the Rust-side legacy branches described
-below remain reachable only by an already-provisioned target that has not
-yet bridged. See the Lifecycle section below for
-detail, including the expected bridge log signature.
+the consumer side. A target with no mailbox dir (desktop, whose app bundle
+owns both binaries) converges nothing: it heartbeats and syncs only. The
+legacy Worker-owned in-place swaps, the Worker self-`exec` update, and the
+one-time D5 bridge that migrated already-provisioned legacy sandboxes were
+deleted by the cull sweep's delete-worker-legacy track, after the live E2B
+UPDATE and D5 BRIDGE proofs (both 2026-07-26) and full fleet convergence.
 
 ## Current Process
 
@@ -68,18 +43,11 @@ config + single-process lock + local SQLite
   -> heartbeat Cloud
   -> after each successful heartbeat, repair that fresh gateway credential if
      a revoked predecessor overwrote the shared file
-  -> use desiredVersions to converge, in order:
+  -> on a supervisor-owned target, use desiredVersions to converge:
        AnyHarness binary (which IS the agent-catalog update: the catalog
          ships inside the runtime binary — binary-only transport, see
-         agent-distribution.md "Convergence"):
-         supervisor-owned target -> write a mailbox update request
-         legacy target (when enabled) -> in-place swap (deprecated)
-       Worker binary:
-         supervisor-owned target -> write a mailbox update request
-         legacy target (when enabled) -> in-place swap + exec (deprecated)
-  -> on a heartbeat ack requesting supervisor-owned topology, an
-     already-provisioned legacy Worker performs the one-time bridge to
-     Proliferate Supervisor (idempotent, crash-safe) and exits
+         agent-distribution.md "Convergence") -> write a mailbox update request
+       Worker binary -> write a mailbox update request
   -> sleep and repeat
 ```
 
@@ -99,10 +67,10 @@ src/
 ├── process_lock.rs
 ├── versions.rs
 ├── integration_gateway.rs
-├── self_update.rs
-├── anyharness_update.rs
 ├── launch_options_sync.rs
-├── supervisor_bridge.rs
+├── supervisor_bridge/
+│   ├── mod.rs
+│   └── mailbox.rs
 ├── cloud_client/
 │   ├── mod.rs
 │   ├── auth.rs
@@ -133,9 +101,7 @@ inventory, or materialization subsystems.
 | `main.rs`, `runtime.rs` | CLI entry, dependency construction, one heartbeat-and-convergence loop | Product workflows or background task supervision | [Runtime](#worker-runtime) |
 | `identity/**` | Enrollment request, durable Worker credential, fingerprint | Sandbox identity, command identity, re-enrollment policy | [Identity](#worker-identity) |
 | `lifecycle/heartbeat.rs` | Heartbeat cadence, request, and acknowledgement | Update execution or server-side liveness policy | [Lifecycle](#worker-lifecycle-and-convergence) |
-| `self_update.rs` | Verify, preflight, swap, and exec the Worker binary on a **legacy** (non-supervisor-owned) target; deprecated, scheduled for deletion after the bridge window | AnyHarness or Supervisor updates, any behavior on a supervisor-owned target | [Lifecycle](#worker-lifecycle-and-convergence) |
-| `anyharness_update.rs` | Verify, stop, swap, relaunch, health-gate, and roll back AnyHarness on a **legacy** target; deprecated, scheduled for deletion after the bridge window | General runtime lifecycle, any behavior on a supervisor-owned target | [Lifecycle](#worker-lifecycle-and-convergence) |
-| `supervisor_bridge.rs` | Write one durable mailbox update request per diverging heartbeat on a supervisor-owned target; the one-time D5 bridge that hands an already-provisioned legacy target to Proliferate Supervisor | Update download, verification, activation, health-gating, or rollback (Supervisor owns all of that) | [Lifecycle](#worker-lifecycle-and-convergence) |
+| `supervisor_bridge/**` | Write one durable mailbox update request per diverging heartbeat on a supervisor-owned target; reconcile the Supervisor's activation results back into the store | Update download, verification, activation, health-gating, or rollback (Supervisor owns all of that) | [Lifecycle](#worker-lifecycle-and-convergence) |
 | `launch_options_sync.rs` | Consume the server's `launchOptionsUploadAllowed` verdict; when allowed, read each runtime harness's exact launch-option state and upload only a higher source revision | Deciding eligibility, interpreting options/defaults/evidence, or rebuilding the copied statement | [Lifecycle](#worker-lifecycle-and-convergence) |
 | `integration_gateway.rs` | Write the private gateway credential file returned by enrollment and repair it after an authenticated heartbeat when a predecessor overwrote it | Credential issuance or re-enrollment | [Identity](#worker-identity) |
 | `cloud_client/**` | Raw Cloud HTTP and wire shapes | Convergence decisions or local persistence | [Clients](#worker-http-clients) |
@@ -170,29 +136,19 @@ main
 runtime
   -> process_lock + store + cloud_client + identity
   -> lifecycle/heartbeat
-  -> anyharness_update
-  -> self_update
+  -> supervisor_bridge (mailbox convergence)
 
 identity
   -> cloud_client (enroll) + store (durable identity) + config sanitation
 
-self_update / anyharness_update
-  -> heartbeat response + cloud_client artifact downloads
-  -> legacy (non-supervisor-owned) targets only
-anyharness_update
-  -> store (converged version and failed pin) + narrow AnyHarness health probe
-
 supervisor_bridge
   -> heartbeat response + cloud_client artifact-coordinate resolution
      (writes the mailbox request; never acts on it)
-  -> config (bridge paths) for the one-time D5 hand-off
+  -> store (records the converged version from an activation result)
 
 store and cloud_client
   -> root support only
 ```
-
-`anyharness_update.rs` owns its narrow AnyHarness health probe directly. There
-is no general `anyharness_client` boundary in this crate.
 
 ## Hard Rules
 
@@ -204,19 +160,16 @@ is no general `anyharness_client` boundary in this crate.
   that Worker's heartbeat authenticates successfully; after heartbeat rejects
   that Worker it must not rewrite shared gateway authority again.
 - Never follow redirects on authenticated Cloud requests; public artifact
-  downloads use a separate redirect-following client.
-- Keep update gates disabled unless the launcher owns this binary lifecycle.
-  Desktop leaves both gates disabled; the cloud-sandbox sidecar enables both.
+  fetches use a separate redirect-following client.
 - Keep Worker-local SQLite private and limited to restart-critical Worker
   state. It is not Cloud or AnyHarness product truth.
 - Do not add command polls, event tails, target/profile state, or workspace
   materialization to this crate.
-- On a supervisor-owned target, the Worker never downloads, replaces, kills,
-  or rolls back AnyHarness or itself — it only writes a durable mailbox
-  request (`supervisor_bridge.rs`) and lets Proliferate Supervisor act.
-  `self_update.rs`/`anyharness_update.rs` stay compilable only for the
-  legacy-target/bridge-window path and must keep logging a deprecation
-  warning when they run; do not extend them with new capability.
+- The Worker never downloads, replaces, kills, or rolls back AnyHarness or
+  itself — on a supervisor-owned target it only writes a durable mailbox
+  request (`supervisor_bridge/`) and lets Proliferate Supervisor act; with no
+  mailbox dir it converges nothing at all. Do not reintroduce a Worker-owned
+  swap of any kind.
 - A missing or invalid durable credential has no automatic re-enrollment path.
   Do not invent destructive recovery in this crate.
 
@@ -235,14 +188,15 @@ cloud_client/
 
 - `POST /v1/cloud/worker/enroll`
 - `POST /v1/cloud/worker/heartbeat`
-- `GET /v1/cloud/worker/download/{target}/{asset}`
-- `GET /v1/cloud/runtime/download/{target}/{asset}`
+- version-pinned artifact-coordinate resolution against the
+  `GET /v1/cloud/{worker,runtime}/download/{target}/{version}/{asset}`
+  redirect endpoints (`Location` + `HEAD` for size — never the binary body)
 - `GET /v1/catalogs/agents` (deletion-pending: heartbeat catalog transport)
 - a direct unauthenticated fetch from an already resolved CDN URL for the
   sibling checksum
 
 It has two `reqwest` clients. Authenticated requests never follow redirects,
-preventing a bearer token from crossing origins. Public artifact downloads
+preventing a bearer token from crossing origins. Public artifact fetches
 use a redirect-following client and a longer request timeout.
 
 The client owns endpoint paths, headers, serialization, status checking, and
@@ -251,20 +205,19 @@ update should happen, and it does not write the local store.
 
 ## AnyHarness Access
 
-There is no general `anyharness_client` module in the current Worker.
-
-- `anyharness_update.rs` directly owns the post-relaunch `/health` probe
-  (legacy-target path only).
-
-These calls do not make the Worker the general execution client for
-AnyHarness. Cloud performs current workspace and session operations directly.
+There is no general `anyharness_client` module in the current Worker; the
+narrow local calls that exist (catalog-version poll, launch-option reads)
+live with `launch_options_sync.rs`. These calls do not make the Worker the
+general execution client for AnyHarness. Cloud performs current workspace and
+session operations directly.
 
 ## Artifact Identity
 
-The Cloud download endpoint redirects to a public artifact. After the Worker
-follows that redirect, it derives the checksum URL from the resolved binary
-URL so the binary and checksum come from the same published directory. It does
-not resolve the two artifacts through separate Cloud redirects.
+The Cloud download endpoint redirects to a public artifact. The Worker reads
+the redirect's `Location` (never the body) and derives the checksum URL from
+that resolved binary URL, so the coordinates it writes into a mailbox request
+name a binary and checksum from the same published directory. It does not
+resolve the two artifacts through separate Cloud redirects.
 
 ## Hard Rules
 
@@ -391,8 +344,7 @@ on its next successful heartbeat.
 ## Harness Launch-Option Sync (server-gated, no convergence)
 
 Launch-option sync is copied observation, not desired-state convergence. It
-runs on the same tick before bridge and binary-swap work because Worker
-self-update ends by `exec` and never returns.
+runs on the same tick before the mailbox convergence write.
 
 The successful heartbeat acknowledgement carries
 `launchOptionsUploadAllowed`. Absent decodes to `false`; on `false`,
@@ -426,20 +378,15 @@ immutable for the lifetime of the runtime process.
 
 `heartbeat_and_converge` in `runtime.rs` branches on
 `supervisor_bridge::is_supervisor_owned(config)` (whether
-`supervisor_update_request_dir` is set). The D5 bridge (`maybe_run_bridge`) runs
-first on the `supervisor_owned` topology signal from either branch; then
-supervisor-owned targets route to `converge_via_mailbox` (the mailbox write)
-instead of `converge_anyharness_runtime` + the legacy `self_update` swap;
-non-supervisor targets keep the legacy path unchanged. The module, its config
-fields, and its inline tests are in place and the wiring is live.
+`supervisor_update_request_dir` is set): supervisor-owned targets route to
+`converge_via_mailbox` (the mailbox write); a target with no mailbox dir
+converges nothing.
 
 When `WorkerConfig.supervisor_update_request_dir` is set (a supervisor-owned
-target — the server sets this instead of the legacy update-enabled flags),
-AnyHarness and Worker binary divergence is **not** actioned in this crate.
-Instead `supervisor_bridge::write_update_request` resolves the same artifact
-coordinates the legacy path would (public artifact redirect, sibling
-`.sha256`, size) and atomically writes one request into
-`.proliferate/supervisor/updates`:
+target), AnyHarness and Worker binary divergence is **not** actioned in this
+crate. Instead `supervisor_bridge::write_update_request` resolves the
+artifact coordinates (public artifact redirect, sibling `.sha256`, size) and
+atomically writes one request into `.proliferate/supervisor/updates`:
 
 ```text
 desiredVersions diverges from the running AnyHarness/Worker version
@@ -451,122 +398,48 @@ desiredVersions diverges from the running AnyHarness/Worker version
 `request_id` is derived deterministically from `(component, version)`, so a
 replayed heartbeat for the same divergence overwrites the same file rather
 than enqueuing a duplicate; Proliferate Supervisor's own idempotency check
-(`result_exists`) guarantees exactly one activation. The Worker never reads
-the result file to drive behavior — convergence is observed the ordinary way,
-through the next heartbeat reporting the version AnyHarness/`--version`
-actually serves after Supervisor restarts it.
+(`result_exists`) guarantees exactly one activation. The Worker reads the
+Supervisor's terminal result only to reconcile: a successful AnyHarness
+activation records the observed version into the store so the next heartbeat
+reports convergence (R9-006), then GCs the request+result pair so a later
+re-pin to the same version re-applies (R9-003); a terminal failure is left
+latched so a lagging artifact is not retried until the pin changes.
 
 See [specs/supervisor.md](supervisor.md)
 for the consumer side (verify, download, stage, activate, health-gate,
 rollback).
 
-## One-time bridge to Supervisor ownership
-
-When a heartbeat ack carries `desired_topology == "supervisor_owned"`, a
-legacy Worker on an already-provisioned target performs a one-time hand-off:
-write Supervisor config, start Supervisor detached, confirm it took ownership
-(adopted/started AnyHarness, spawned its own Worker child), then exit cleanly.
-This is idempotent and crash-safe: a `bridge.started`/`bridge.done` marker
-pair plus a Supervisor-liveness check prevent starting a second Supervisor
-after a crash mid-bridge. The live D5 BRIDGE proof against a real target
-PASSED 2026-07-26 (sandbox `iwwvadhffzxoora56f437`: a running legacy sandbox
-migrated onto the Supervisor-owned topology in place, ~2.5s, no
-destroy/recreate); this crate's tests separately cover idempotency,
-marker-file crash recovery, and the no-double-Supervisor invariant
-deterministically.
-
-**Expected log signature of a real bridge.** The Supervisor's first spawned
-Worker child cannot immediately acquire the exclusive, non-blocking `flock`
-on `worker.sqlite3` (`WorkerProcessLock::acquire` in `process_lock.rs`)
-because the bridging legacy Worker still holds it while it confirms
-Supervisor ownership and exits. That first child therefore exits once with a
-lock-contention error (`WorkerError::AlreadyRunning`); the Supervisor's
-restart loop (`restart_delay_seconds`, default 5s) relaunches it, and the
-second attempt acquires the now-released lock cleanly. One early exit
-followed by a clean restart ~5s later, exactly once per bridge, is the
-expected successful signature — not a crash loop. A signature that repeats
-past that single generation indicates the bridge itself failed to hand off
-ownership (the bridging Worker never exited).
-
-## Worker Binary Convergence (legacy, non-supervisor-owned targets)
-
-`self_update_enabled` defaults to false. When enabled and the desired Worker
-version differs:
-
-```text
-download public Worker artifact through Cloud redirect
-  -> download sibling .sha256 from the resolved artifact directory
-  -> verify checksum
-  -> stage beside current executable
-  -> preflight --version against the desired version
-  -> atomically rename over the current executable
-  -> exec the new binary with the current arguments
-```
-
-The Worker update does not keep a `.prev` health rollback. Failures before the
-rename leave the current binary in place. A version marker carried across
-`exec` prevents repeated swaps for the same pin if the replacement still does
-not report that version.
-
-This path is deprecated: it stays compilable only for legacy
-(non-supervisor-owned) targets during the bridge window and logs a
-deprecation warning when it runs. Its deletion is a named follow-up after
-that window closes.
-
-## AnyHarness Binary Convergence (legacy, non-supervisor-owned targets)
-
-`anyharness_update_enabled` also defaults to false and has independent config
-for the fixed binary, launcher, and working-directory paths. When enabled and
-the desired AnyHarness version differs:
-
-```text
-download + checksum + preflight candidate
-  -> stop only the AnyHarness process identified by the fixed binary path
-  -> move current binary to .prev and candidate to the fixed path
-  -> relaunch through the existing launcher
-  -> require /health to report the desired version
-  -> on failure, restore .prev and relaunch
-```
-
-The store records the last health-verified version. After a relaunch or health
-gate failure it also records the failed pin; that recorded pin is not retried
-until a different desired version supersedes it. Earlier staging, preflight,
-stop, or swap failures are retried on a later heartbeat. This path is
-deprecated: it stays compilable only for legacy targets during the bridge
-window and logs a deprecation warning when it runs.
-
 ## Launch Policy
 
-Both legacy update gates (`self_update_enabled`, `anyharness_update_enabled`)
-default to disabled. Desktop owns its bundled binaries and leaves them
-disabled. Every managed-cloud (E2B) target is now always supervisor-owned:
-the server's `build_worker_config` (`server/proliferate/server/cloud/runtime/bootstrap.py`)
-only ever emits `supervisor_update_request_dir`, never
-`anyharness_update_enabled=true` — calling it with `supervisor_owned=False`
-raises `ValueError` because the legacy independent-launch config shape was
-deleted. So the mailbox path in the previous section is the only convergence
-path a cloud-sandbox target's Worker config can express.
+Convergence is opt-in by mailbox dir alone. Desktop owns its bundled binaries
+and never sets `supervisor_update_request_dir` (its config still writes the
+retired `self_update_enabled = false` key, now an ignored no-op). Every
+managed-cloud (E2B) target is always supervisor-owned: the server's
+`build_worker_config` (`server/proliferate/server/cloud/runtime/bootstrap.py`)
+emits `supervisor_update_request_dir` — calling it with
+`supervisor_owned=False` raises `ValueError` because the legacy
+independent-launch config shape was deleted. So the mailbox path in the
+previous section is the only convergence path any Worker config can express;
+on-disk configs still carrying the deleted legacy keys parse unchanged
+(serde ignores unknown fields).
 
 ## Hard Rules
 
 - Treat every convergence action as non-fatal to the heartbeat loop.
-- Verify the artifact and exact desired version before replacing a binary or
-  before writing it into a mailbox request.
-- Keep Worker and AnyHarness update gates independent.
-- Preserve `.prev` rollback for AnyHarness; do not claim equivalent rollback
-  for the Worker's own legacy `exec` update. On a supervisor-owned target,
-  rollback for both AnyHarness and Worker is Proliferate Supervisor's
+- Resolve the exact desired version's artifact coordinates before writing
+  them into a mailbox request; never a rolling label.
+- Rollback for both AnyHarness and Worker is Proliferate Supervisor's
   responsibility, not this crate's.
 - Do not add Supervisor lifecycle behavior (download, stage, activate,
-  health-gate, or rollback) to this crate; the mailbox write is the only new
-  surface here.
+  health-gate, or rollback) to this crate; the mailbox write is the only
+  convergence surface here.
 
 # Worker Root Support Files
 
 Root support modules are small process-wide dependencies. The focused root
-workflow modules—`integration_gateway.rs`, `self_update.rs`, and
-`anyharness_update.rs`—are covered by the identity, lifecycle, and client
-guides rather than treated as generic utilities.
+workflow modules—`integration_gateway.rs` and `launch_options_sync.rs`—are
+covered by the identity and lifecycle guides rather than treated as generic
+utilities.
 
 ## Ownership
 
@@ -577,7 +450,7 @@ guides rather than treated as generic utilities.
 | `logging.rs` | Pre-config bundled diagnostics activation, tracing and Sentry initialization, release identity, privacy scrubbing | Per-flow decisions |
 | `observability.rs` | Heartbeat acknowledgement event | A generic telemetry service |
 | `process_lock.rs` | One Worker process per canonical database path | Process supervision |
-| `versions.rs` | Stamped Worker version and boot-time AnyHarness version hint | Desired-version policy |
+| `versions.rs` | Stamped Worker version; the running AnyHarness version (store-converged record, else the boot-time env hint) | Desired-version policy |
 
 ## Configuration Boundary
 
@@ -586,14 +459,14 @@ Current configuration includes:
 - Cloud base URL, optional enrollment token, and Worker database path;
 - heartbeat interval;
 - integration-gateway output home;
-- independent Worker and AnyHarness update gates;
-- fixed AnyHarness binary, launcher, and working-directory paths used when its
-  update gate is enabled;
+- the Supervisor mailbox directory (`supervisor_update_request_dir`), whose
+  presence is what makes a target supervisor-owned;
 - runtime base URL and optional runtime bearer token for narrow local calls.
 
-Update gates default to false. Runtime URL defaults to
-`http://127.0.0.1:8457`. Runtime bearer auth can be loaded from config or the
-`ANYHARNESS_BEARER_TOKEN` environment variable by the focused caller.
+Runtime URL defaults to `http://127.0.0.1:8457`. Runtime bearer auth can be
+loaded from config or the `ANYHARNESS_BEARER_TOKEN` environment variable by
+the focused caller. Keys from the deleted legacy convergence paths that still
+appear in deployed configs are ignored as unknown fields.
 
 ## Telemetry And Privacy
 
@@ -657,16 +530,12 @@ POST heartbeat
   -> if this process freshly enrolled and the shared gateway file differs,
      restore its credential now that heartbeat authenticated it
   -> copy changed harness launch-option state when this heartbeat permits it
-  -> AnyHarness binary convergence (non-fatal; optional)
-  -> Worker binary convergence (non-fatal; optional)
+  -> on a supervisor-owned target, mailbox convergence (non-fatal): reconcile
+     activation results, then write update requests for any divergence
 ```
 
-The order matters. A successful Worker self-update ends by replacing the
-current process image with `exec`, so launch-option copy and AnyHarness
-convergence run first.
-
 `--once` sends one heartbeat and may copy changed launch-option state, but it
-reports pending binary updates without applying either binary swap.
+only reports pending convergence without writing mailbox requests.
 
 ## Failure Boundary
 
@@ -717,14 +586,14 @@ anyharness_update (single row, id = 1)
 ```
 
 `identity` lets a restart reuse the opaque Worker credential without another
-enrollment. `anyharness_update` records the runtime version last swapped and
-health-verified plus a pin explicitly marked after a relaunch or health-gate
-failure, preventing that recorded pin from being retried every heartbeat.
-The `anyharness_update` table serves only the legacy (non-supervisor-owned)
-swap path; on supervisor-owned targets the swap journal and failed-pin
-record live with Proliferate Supervisor
-([specs/supervisor.md](supervisor.md)),
-and this table goes away with the legacy path.
+enrollment. `anyharness_update` keeps its historical name and shape; its
+`converged_version` records the runtime version of the last Supervisor
+activation the Worker reconciled from the mailbox, which is what the next
+heartbeat reports (R9-006). The `failed_pin` column is a leftover of the
+deleted Worker-owned swap: unread, kept only because the schema is applied
+on real boxes and is not worth migrating for a dead column. The swap journal
+and failure latch live with Proliferate Supervisor
+([specs/supervisor.md](supervisor.md)).
 
 ## Source Ownership
 
@@ -734,7 +603,7 @@ and this table goes away with the legacy path.
 | `connection.rs` | Database creation, private permissions, connection pragmas, and busy timeout |
 | `migrations.rs` | Current table creation |
 | `identity.rs` | Single-row identity load and upsert |
-| `anyharness_update.rs` | Converged-version and failed-pin reads/writes |
+| `anyharness_update.rs` | Converged-version reads/writes |
 
 The connection enables foreign keys and WAL and uses a five-second busy
 timeout. The containing directory and database file are permission-restricted

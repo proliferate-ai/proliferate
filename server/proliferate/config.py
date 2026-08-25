@@ -448,23 +448,6 @@ class Settings(BaseSettings):
     # the overage rate read this derivation (see ``billing/pricing.py``).
     e2b_list_price_usd_per_hour: str = "2.00"
     pro_compute_margin_multiplier: float = 1.5
-    # Make Managed Runtime Updates Supervisor-Owned (frozen 2026-07-15, decision
-    # 5): the E2B N-1->N proof + D5 BRIDGE proof (in-place migration, sandbox
-    # iwwvadhffzxoora56f437) both passed 2026-07-26, so the legacy direct-nohup
-    # AnyHarness + Worker-sidecar launch path was deleted (S5-B). ASYMMETRY:
-    # this flag no longer gates which topology a launch takes -- every
-    # (re)launch is unconditionally Supervisor-owned regardless of this value.
-    # It now only gates the D5 `desiredTopology` heartbeat signal (decision 6,
-    # `record_heartbeat` in runtime_workers/service.py) telling an
-    # already-running LEGACY worker to bridge onto a Supervisor; not a
-    # launch-time rollback lever anymore. Kept while that signal still matters
-    # to pre-cutover legacy workers; removing it is a later call.
-    supervisor_owned_runtime: bool = Field(
-        default=True,
-        validation_alias=AliasChoices(
-            "PROLIFERATE_SUPERVISOR_OWNED_RUNTIME", "SUPERVISOR_OWNED_RUNTIME"
-        ),
-    )
 
     @property
     def cloud_provisioning_configured(self) -> bool:

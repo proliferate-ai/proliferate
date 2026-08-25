@@ -47,7 +47,6 @@ const RETAINED_SOURCE = {
   RELEASE_E2E_SERVER_URL: "https://qualification.example/api",
   // The committed bootstrap receipt: the real repo data path, end to end.
   RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38",
-  RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME: "1",
 } as const;
 
 // T4-RUNTIME-1 is a leaf scenario; narrow once so tests can call plan()/run().
@@ -78,13 +77,6 @@ function fakeEnv(vars: Record<string, string> = {}): EnvResolution {
   };
 }
 
-// The supervisor-owned confirmation now reads ctx.env (a requiredEnv var, the
-// runner's single authority), so a fake env with the flag set is how these
-// direct tests drive past that gate — no process.env mutation.
-function envWithFlag(vars: Record<string, string> = {}): EnvResolution {
-  return fakeEnv({ RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME: "1", ...vars });
-}
-
 function fakeCtx(overrides: Partial<ScenarioRunContext> = {}): ScenarioRunContext {
   return {
     targetLane: "cloud",
@@ -112,16 +104,15 @@ test("T4-RUNTIME-1 is a leaf sandbox scenario with the contract as its flow ref"
 
 test("declares its gating inputs in requiredEnv so the runner surfaces them in ctx.env", () => {
   // Regression for T4R-CONTROL-001: a gating var the scenario reads via ctx.env
-  // but omits from requiredEnv is invisible to the real runner. All three gates
-  // (server URL, the retained baseline inputs, the supervisor flag) must be
-  // declared. The optional reported-version override must NOT be, so a stamped
-  // binary that needs no override is not spuriously blocked as missing.
+  // but omits from requiredEnv is invisible to the real runner. Both gates
+  // (server URL, the retained baseline inputs) must be declared. The optional
+  // reported-version override must NOT be, so a stamped binary that needs no
+  // override is not spuriously blocked as missing.
   assert.deepEqual(
     [...t4Runtime1.requiredEnv].sort(),
     [
       "RELEASE_E2E_RETAINED_RELEASE_ID",
       "RELEASE_E2E_SERVER_URL",
-      "RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME",
     ],
   );
   assert.equal(
@@ -134,7 +125,6 @@ test("plan() names the baseline + upgrade + continuity beats verbatim under dry-
   const steps = leaf().plan({ runtimeLane: "sandbox", desktop: "web", agents: ["claude"] });
   const text = steps.map((step) => step.description).join("\n");
   assert.match(text, /retained-production N-1 template/);
-  assert.match(text, /supervisor_owned_runtime/);
   assert.match(text, /one durable mailbox request/);
   assert.match(text, /rollback on unhealthy/i);
   assert.match(text, /immutable N-1 E2B image/);
@@ -146,14 +136,14 @@ test("dry-run performs no work and never throws", async () => {
 
 test("--lane local blocks: no managed-cloud world / E2B sandbox there", async () => {
   await assert.rejects(
-    () => leaf().run(fakeCtx({ targetLane: "local", env: envWithFlag() })),
+    () => leaf().run(fakeCtx({ targetLane: "local", env: fakeEnv() })),
     (error: unknown) => error instanceof ScenarioBlockedError && /--lane local/.test((error as Error).message),
   );
 });
 
 test("absent retained N-1 inputs block rather than fabricate an N-1", async () => {
   await assert.rejects(
-    () => leaf().run(fakeCtx({ env: envWithFlag() })),
+    () => leaf().run(fakeCtx({ env: fakeEnv() })),
     (error: unknown) =>
       error instanceof ScenarioBlockedError &&
       /no retained-production N-1 baseline selected/.test((error as Error).message) &&
@@ -161,19 +151,8 @@ test("absent retained N-1 inputs block rather than fabricate an N-1", async () =
   );
 });
 
-test("supervisor-owned runtime not confirmed blocks even with a retained receipt", async () => {
-  // Flag absent from ctx.env (not declared "1"): the confirmation gate fires.
+test("retained receipt selected: live body not yet wired, blocks honestly (never a false green)", async () => {
   const env = fakeEnv({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" });
-  await assert.rejects(
-    () => leaf().run(fakeCtx({ env, runIdentity: EXEC_IDENTITY })),
-    (error: unknown) =>
-      error instanceof ScenarioBlockedError &&
-      /supervisor-owned runtime topology must be active/.test((error as Error).message),
-  );
-});
-
-test("retained receipt + flag on: live body not yet wired, blocks honestly (never a false green)", async () => {
-  const env = envWithFlag({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" });
   await assert.rejects(
     () => leaf().run(fakeCtx({ env, runIdentity: EXEC_IDENTITY })),
     (error: unknown) =>
@@ -182,7 +161,7 @@ test("retained receipt + flag on: live body not yet wired, blocks honestly (neve
 });
 
 test("RR-CONTROL-003: a retained receipt without a run identity blocks (N-1 != N unenforceable)", async () => {
-  const env = envWithFlag({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" });
+  const env = fakeEnv({ RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38" });
   await assert.rejects(
     () => leaf().run(fakeCtx({ env, runIdentity: null })),
     (error: unknown) =>
@@ -252,27 +231,14 @@ test("REGRESSION T4R-CONTROL-001: supplied retained inputs reach the scenario an
 });
 
 test("REGRESSION T4R-CONTROL-001: absent retained inputs are surfaced as a missing requirement (still blocked, never green)", async () => {
-  // Flag + server URL present, retained inputs absent: because the retained vars
-  // are declared in requiredEnv, the runner's own preflight blocks the cell as a
+  // Server URL present, retained inputs absent: because the retained vars are
+  // declared in requiredEnv, the runner's own preflight blocks the cell as a
   // missing requirement — an honest block, not a false green, and not a silent
   // "reached the scenario and read undefined".
   const result = await runViaRunner({
     RELEASE_E2E_SERVER_URL: "https://qualification.example/api",
-    RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME: "1",
   });
   assert.equal(result.status, "blocked");
   assert.equal(result.reason?.code, "missing_requirement");
   assert.match(result.reason!.message, /RELEASE_E2E_RETAINED_RELEASE_ID/);
-});
-
-test("REGRESSION T4R-CONTROL-001: retained receipt selected but flag unset blocks as a missing requirement", async () => {
-  // The supervisor flag is now a declared requiredEnv gate too, so an absent flag
-  // blocks at preflight rather than through a divergent process.env read.
-  const result = await runViaRunner({
-    RELEASE_E2E_SERVER_URL: "https://qualification.example/api",
-    RELEASE_E2E_RETAINED_RELEASE_ID: "v0.3.38",
-  });
-  assert.equal(result.status, "blocked");
-  assert.equal(result.reason?.code, "missing_requirement");
-  assert.match(result.reason!.message, /RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME/);
 });

@@ -100,30 +100,28 @@ fn heartbeat_response_ignores_a_legacy_servers_catalog_version() {
 }
 
 #[test]
-fn heartbeat_response_tolerates_absent_desired_topology() {
-    // Servers that predate supervisor-owned topology omit the field.
-    let payload = br#"{
-        "workerId": "worker",
-        "desiredVersions": {"worker": "0.2.16", "anyharness": "0.2.16"}
-    }"#;
-    let response = serde_json::from_slice::<HeartbeatResponse>(payload)
-        .expect("heartbeat ack without desiredTopology");
-    assert_eq!(response.desired_topology, None);
-}
-
-#[test]
-fn heartbeat_response_parses_supervisor_owned_topology() {
+fn heartbeat_response_tolerates_deleted_bridge_fields_from_deployed_servers() {
+    // Deployed servers that predate the D5-bridge deletion still emit
+    // `desiredTopology` (and, for provisioned targets, `supervisorBridge`).
+    // The Worker no longer models either; both must decode as tolerated
+    // unknown fields, never a parse failure.
     let payload = br#"{
         "workerId": "worker",
         "desiredVersions": {"worker": "0.2.16", "anyharness": "0.2.16"},
-        "desiredTopology": "supervisor_owned"
+        "desiredTopology": "supervisor_owned",
+        "supervisorBridge": {
+            "supervisorBinaryPath": "/home/user/.proliferate/bin/proliferate-supervisor",
+            "supervisorConfigPath": "/home/user/.proliferate/supervisor/config.toml",
+            "supervisorConfigToml": "x = 1\n",
+            "workerConfigPath": "/home/user/.proliferate/worker/config.toml",
+            "workerConfigToml": "y = 2\n",
+            "markerDir": "/home/user/.proliferate/worker/bridge"
+        }
     }"#;
     let response = serde_json::from_slice::<HeartbeatResponse>(payload)
-        .expect("heartbeat ack with desiredTopology");
-    assert_eq!(
-        response.desired_topology.as_deref(),
-        Some("supervisor_owned")
-    );
+        .expect("heartbeat ack carrying the deleted bridge fields");
+    let desired = response.desired_versions.expect("desiredVersions present");
+    assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
 }
 
 // ── REL-10: the shared Python-producer / Rust-consumer heartbeat contract ──
@@ -162,8 +160,6 @@ fn heartbeat_response_parses_the_shared_v1_fixture_as_allowed() {
     let desired = response.desired_versions.expect("desiredVersions present");
     assert_eq!(desired.worker.as_deref(), Some("0.4.13"));
     assert_eq!(desired.anyharness.as_deref(), Some("0.66.0"));
-    assert_eq!(response.desired_topology, None);
-    assert!(response.supervisor_bridge.is_none());
 }
 
 #[test]

@@ -608,10 +608,10 @@ server/proliferate/
   in place, in ~2.5s, via the `desiredTopology` heartbeat signal — no
   destroy/recreate. This, together with the update proof above, gated
   deleting the legacy launch path entirely: every (re)launch is now
-  unconditionally Supervisor-owned. `supervisor_owned_runtime`
-  ([config.py](../../../server/proliferate/config.py)) survives only to
-  gate that same `desiredTopology` heartbeat signal for any already-running
-  legacy worker still bridging — see its docstring for the asymmetry.
+  unconditionally Supervisor-owned. The `supervisor_owned_runtime` flag and
+  the `desiredTopology` signal it gated were deleted with the Worker-side
+  bridge by the cull sweep's delete-worker-legacy track, once the fleet was
+  fully supervisor-owned.
 
 Corridor E — provisioning triggers and the org account model. Named,
 binary assertions; the corridor is done when they are green. IDs are

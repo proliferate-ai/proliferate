@@ -23,7 +23,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tracing::Level;
 
-use super::{heartbeat_and_converge, TickControl};
+use super::heartbeat_and_converge;
 use crate::test_support::{
     capture, events, is_request_containing, position, timeline, CapturedEvent, FieldValue,
     InstrumentedServer, Route, Step, Timeline,
@@ -63,9 +63,9 @@ fn temp_dir() -> TempDir {
 const PROBED_AT: &str = "2026-07-27T00:00:00Z";
 const WORKER_BEARER: &str = "worker-secret-token";
 
-/// A Worker config with every self-managed convergence behavior off, so the tick
-/// exercises exactly the heartbeat + launch-options gate join and nothing else. This
-/// mirrors a supervisor-free legacy target with updates disabled.
+/// A Worker config with no mailbox dir, so the tick exercises exactly the
+/// heartbeat + launch-options gate join and nothing else. This mirrors a
+/// non-supervisor-owned target (desktop shape), which converges nothing.
 fn test_config(dir: &TempDir, runtime: SocketAddr, cloud: SocketAddr) -> WorkerConfig {
     WorkerConfig {
         cloud_base_url: format!("http://{cloud}"),
@@ -73,23 +73,17 @@ fn test_config(dir: &TempDir, runtime: SocketAddr, cloud: SocketAddr) -> WorkerC
         worker_db_path: dir.0.join("worker.sqlite3"),
         integration_gateway_home: None,
         heartbeat_interval_seconds: 30,
-        self_update_enabled: false,
-        anyharness_update_enabled: false,
-        anyharness_binary_path: None,
-        anyharness_launcher_path: None,
-        anyharness_workdir: None,
         runtime_base_url: format!("http://{runtime}"),
         runtime_bearer_token: None,
         supervisor_update_request_dir: None,
-        supervisor_binary_path: None,
-        supervisor_config_path: None,
-        supervisor_config_toml: None,
-        supervisor_bridge_marker_dir: None,
         config_path: None,
     }
 }
 
 fn heartbeat_body(capability: Option<bool>) -> String {
+    // `desiredTopology`/`supervisorBridge` stay in the fake ack deliberately:
+    // deployed servers that predate the D5-bridge deletion still emit them,
+    // and the Worker must tolerate them as unknown fields.
     let mut body = serde_json::json!({
         "workerId": "worker-1",
         "serverTime": "2026-08-18T00:00:00Z",
@@ -183,7 +177,6 @@ fn snapshot_requests(hits: &[String]) -> Vec<String> {
 
 /// One real `heartbeat_and_converge` tick against fresh everything.
 struct TickOutcome {
-    control: TickControl,
     runtime_hits: Vec<String>,
     cloud_hits: Vec<String>,
     watermark_before: std::collections::HashMap<String, i64>,
@@ -205,7 +198,7 @@ async fn run_one_tick(capability: Option<bool>, trace: &Timeline) -> TickOutcome
     let state = LaunchOptionsSyncState::new();
     let watermark_before = state.pushed_revisions();
 
-    let control = heartbeat_and_converge(
+    heartbeat_and_converge(
         &config, &cloud, &store, &identity, None, &state, false,
     )
     .await;
@@ -228,7 +221,6 @@ async fn run_one_tick(capability: Option<bool>, trace: &Timeline) -> TickOutcome
     );
 
     TickOutcome {
-        control,
         runtime_hits: runtime.shutdown(),
         cloud_hits: cloud_server.shutdown(),
         watermark_before,
@@ -268,11 +260,6 @@ fn snapshot_owner_events(trace: &Timeline) -> Vec<CapturedEvent> {
 /// eligibility/skip event anywhere, no snapshot-owner WARN/ERROR at all, zero
 /// snapshot requests, and zero snapshot state change.
 fn assert_denied_tick(outcome: &TickOutcome, trace: &Timeline) {
-    assert_eq!(
-        outcome.control,
-        TickControl::Continue,
-        "an ineligible tick is an ordinary tick, not an exit"
-    );
     // Ordinary work still happened.
     assert!(
         outcome
@@ -371,8 +358,6 @@ async fn a_true_verdict_acknowledges_before_listing_reading_and_uploading() {
     let trace = timeline();
     let _guard = capture(&trace);
     let outcome = run_one_tick(Some(true), &trace).await;
-
-    assert_eq!(outcome.control, TickControl::Continue);
 
     // The full eligible choreography really ran.
     assert!(

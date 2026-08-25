@@ -1,15 +1,13 @@
 """S5-B: collect_runtime_debug_report must find the supervisor log regardless
 of which of the two locations it landed in.
 
-The Rust D5 bridge (``detached_supervisor_launch_script`` in
-anyharness/crates/proliferate-worker/src/supervisor_bridge/bridge/mod.rs)
-always writes ``proliferate-supervisor.log`` next to ``config.toml`` --
-``.proliferate/supervisor/proliferate-supervisor.log``. Python's fresh-launch
-command now writes there too (standardized in this change), but a Supervisor
-launched before the standardization may still be writing to the old bare
-home-dir path. The debug report command must probe both and surface
-whichever is present; no real sandbox is involved, so this asserts on the
-generated shell command shape.
+The standardized location is ``proliferate-supervisor.log`` next to
+``config.toml`` -- ``.proliferate/supervisor/proliferate-supervisor.log``
+(Python's fresh-launch command writes there; so did the since-deleted Rust D5
+bridge). A Supervisor launched before the standardization may still be
+writing to the old bare home-dir path. The debug report command must probe
+both and surface whichever is present; no real sandbox is involved, so this
+asserts on the generated shell command shape.
 """
 
 from __future__ import annotations

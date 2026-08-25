@@ -1,46 +1,29 @@
-//! Worker-side Supervisor bridge: the mailbox write side + the D5 one-time
-//! bridge to Supervisor ownership.
+//! Worker-side Supervisor bridge: the mailbox write side.
 //!
 //! On a **supervisor-owned** target (`WorkerConfig.supervisor_update_request_dir`
 //! is set) the Worker is only an *observer + writer*. When a heartbeat ack
 //! diverges from what the sandbox runs, the Worker writes ONE durable
 //! `UpdateRequestV1` into the mailbox for the Supervisor to act on — it never
-//! downloads, replaces, kills, or rolls back AnyHarness or itself in this path.
+//! downloads, replaces, kills, or rolls back AnyHarness or itself.
 //! The request is idempotent: the `request_id` is derived deterministically from
 //! `(component, version)`, so a replayed heartbeat overwrites the same file and
 //! the Supervisor activates exactly once.
 //!
-//! The **D5 bridge** migrates an already-provisioned sandbox (independently
-//! `nohup`'d AnyHarness + Worker) to Supervisor ownership exactly once: it writes
-//! the Supervisor config, starts the Supervisor detached, confirms it took
-//! ownership, and then the bridging Worker exits cleanly so the Supervisor's own
-//! Worker child takes over. It is idempotent and crash-safe via marker files
-//! (`bridge.started`/`bridge.done`) plus a Supervisor-liveness check that gates
-//! the spawn so a second Supervisor is never started. Newly provisioned
-//! supervisor-owned targets launch Supervisor-first (server-side) and never
-//! reach the spawn branch here — their Worker child sees a live Supervisor and
-//! simply continues as a mailbox writer.
-//!
 //! All request/result shapes, validation, and atomic IO come from the shared
-//! crate `proliferate_runtime_update_protocol`; this module builds requests and
-//! drives the bridge, but owns no wire schema of its own.
+//! crate `proliferate_runtime_update_protocol`; this module builds requests,
+//! but owns no wire schema of its own.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::config::WorkerConfig;
 
-mod bridge;
 mod mailbox;
 
-pub use bridge::{maybe_bridge_to_supervisor, BridgeOutcome};
 pub use mailbox::converge_via_mailbox;
 
-/// The single `desired_topology` value the server emits for flag-enabled
-/// cloud-sandbox targets. Any other value (or absence) means today's behavior.
-pub const SUPERVISOR_OWNED_TOPOLOGY: &str = "supervisor_owned";
-
 /// Whether this Worker is on a supervisor-owned target (routes divergence
-/// through the mailbox instead of the legacy in-place swap / self-exec).
+/// through the mailbox). A config with no mailbox dir (desktop, whose app
+/// bundle owns both binaries) never converges anything.
 pub fn is_supervisor_owned(config: &WorkerConfig) -> bool {
     config.supervisor_update_request_dir.is_some()
 }

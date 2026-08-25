@@ -29,22 +29,8 @@ from proliferate.integrations.desktop_downloads import (
     downloads_base_url,
     versioned_manifest_exists,
 )
-from proliferate.integrations.sandbox import (
-    SandboxRuntimeContext,
-    get_sandbox_provider,
-)
-from proliferate.lib.infra.encryption.fernet import decrypt_text
 from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.runtime.bootstrap import (
-    build_runtime_env,
-    build_supervisor_config,
-    build_worker_config,
-    supervisor_binary_path,
-    supervisor_bridge_marker_dir,
-    supervisor_config_path,
-    worker_config_path,
-)
 from proliferate.server.cloud.runtime_workers.models import (
     DesktopWorkerEnrollmentResponse,
     DesktopWorkerRevokeResponse,
@@ -54,7 +40,6 @@ from proliferate.server.cloud.runtime_workers.models import (
     WorkerEnrollRequest,
     WorkerEnrollResponse,
     WorkerHeartbeatResponse,
-    WorkerSupervisorBridge,
 )
 from proliferate.server.organizations.domain.policy import organization_admin_roles
 from proliferate.server.version import runtime_version_pin as pinned_runtime_version
@@ -330,8 +315,6 @@ async def record_heartbeat(
     # cloud_sandbox_id) always gets pins only, unchanged from before this PR.
     anyharness_pin = pinned_runtime_version()
     worker_pin = pinned_worker_version()
-    desired_topology: str | None = None
-    supervisor_bridge: WorkerSupervisorBridge | None = None
     sandbox: CloudSandboxValue | None = None
     if worker.cloud_sandbox_id is not None:
         sandbox = await cloud_sandbox_store.load_cloud_sandbox_by_id(db, worker.cloud_sandbox_id)
@@ -340,15 +323,6 @@ async def record_heartbeat(
                 anyharness_pin = sandbox.desired_anyharness_version
             if sandbox.desired_worker_version is not None:
                 worker_pin = sandbox.desired_worker_version
-            # D5 bridge (decision 6): only signalled for cloud-sandbox targets,
-            # and only once the flag is on. A legacy worker with no field
-            # decodes this heartbeat exactly like the pre-PR shape.
-            if settings.supervisor_owned_runtime:
-                desired_topology = "supervisor_owned"
-                # R9R-002: materialize + deliver the bridge inputs so an
-                # already-provisioned LEGACY target (whose persisted worker
-                # config has none of the bridge fields) can actually bridge.
-                supervisor_bridge = _build_supervisor_bridge_inputs(sandbox)
     # REL-10: the advertised snapshot-upload verdict comes from the SAME pure
     # Agent Models rule the ingest route enforces, evaluated against the rows
     # just loaded. Nothing about the decision is restated here, so the ack can
@@ -361,8 +335,6 @@ async def record_heartbeat(
             worker=worker_pin,
             anyharness=anyharness_pin,
         ),
-        desired_topology=desired_topology,
-        supervisor_bridge=supervisor_bridge,
         launch_options_upload_allowed=(
             worker.runtime_kind == "cloud_sandbox"
             and worker.cloud_sandbox_id is not None
@@ -370,81 +342,6 @@ async def record_heartbeat(
             and sandbox.destroyed_at is None
         ),
     )
-
-
-def _build_supervisor_bridge_inputs(
-    sandbox: CloudSandboxValue,
-) -> WorkerSupervisorBridge | None:
-    """Materialize the D5 bridge inputs for an already-provisioned legacy target
-    (R9R-002).
-
-    A legacy Worker's on-disk config predates the supervisor-owned shape, so it
-    can only bridge if the server hands it the Supervisor + supervisor-owned
-    Worker config TOML and the paths to write them. The paths are deterministic
-    from the provider's runtime context (E2B ``resolve_runtime_context`` ignores
-    the live sandbox), so they can be computed at heartbeat time without resuming
-    the box. Returns ``None`` — no bridge delivered — unless the target is
-    genuinely provisioned with runtime credentials; the delivery is best-effort
-    and never breaks a heartbeat.
-    """
-    if (
-        not sandbox.e2b_sandbox_id
-        or not sandbox.anyharness_bearer_token_ciphertext
-        or not sandbox.anyharness_data_key_ciphertext
-    ):
-        return None
-    try:
-        provider = get_sandbox_provider(sandbox.e2b_template_ref)
-        runtime_context = SandboxRuntimeContext(
-            home_dir=provider.user_home,
-            runtime_workdir=provider.runtime_workdir,
-            runtime_binary_path=provider.runtime_binary_path,
-            base_env={"HOME": provider.user_home},
-        )
-        runtime_token = decrypt_text(
-            sandbox.anyharness_bearer_token_ciphertext, secret=settings.cloud_secret_key
-        )
-        anyharness_data_key = decrypt_text(
-            sandbox.anyharness_data_key_ciphertext, secret=settings.cloud_secret_key
-        )
-        anyharness_env = build_runtime_env(
-            runtime_token,
-            anyharness_data_key=anyharness_data_key,
-            target_id=sandbox.id,
-            organization_id=sandbox.organization_id,
-            sandbox_id=sandbox.e2b_sandbox_id,
-            user_id=sandbox.owner_user_id,
-        )
-        supervisor_config_toml = build_supervisor_config(
-            provider,
-            runtime_context,
-            anyharness_env,
-            organization_id=sandbox.organization_id,
-            sandbox_id=sandbox.e2b_sandbox_id,
-            user_id=sandbox.owner_user_id,
-        )
-        # The Supervisor's spawned Worker child reuses the already-enrolled
-        # identity persisted in worker.sqlite3, so no enrollment token is needed
-        # here (empty is unused: `ensure_enrolled` loads the stored identity
-        # first). Minting one per heartbeat would leak single-use tokens.
-        worker_config_toml = build_worker_config(
-            cloud_base_url=worker_cloud_base_url(),
-            enrollment_token="",
-            runtime_context=runtime_context,
-            runtime_bearer_token=runtime_token,
-            supervisor_owned=True,
-            supervisor_config_toml=supervisor_config_toml,
-        )
-        return WorkerSupervisorBridge(
-            supervisor_binary_path=supervisor_binary_path(runtime_context),
-            supervisor_config_path=supervisor_config_path(runtime_context),
-            supervisor_config_toml=supervisor_config_toml,
-            worker_config_path=worker_config_path(runtime_context),
-            worker_config_toml=worker_config_toml,
-            marker_dir=supervisor_bridge_marker_dir(runtime_context),
-        )
-    except Exception:  # noqa: BLE001 - bridge delivery must never break a heartbeat.
-        return None
 
 
 async def _require_instance_admin(db: AsyncSession, *, user_id: UUID) -> None:
