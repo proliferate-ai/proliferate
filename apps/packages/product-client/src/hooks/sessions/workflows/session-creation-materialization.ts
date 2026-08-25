@@ -1,7 +1,6 @@
 import type { Session } from "@anyharness/sdk";
 import type {
   DesktopRuntimeBridge,
-  DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { resolveRuntimeTargetForWorkspace } from "#product/lib/access/anyharness/runtime-target";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
@@ -72,7 +71,6 @@ interface MaterializeSessionCreationInput {
   existingProjectedRecord: SessionRuntimeRecord | null;
   frozenDefaultLiveSessionControlValuesByAgentKind: Record<string, Record<string, string>>;
   localRuntime: DesktopRuntimeBridge | null;
-  ssh?: DesktopSshBridge | null;
   cloudClient: CloudSandboxGatewayUrlSource | null;
   options: CreateSessionWithResolvedConfigOptions;
   pendingSessionId: string;
@@ -110,7 +108,6 @@ async function runSessionCreationMaterialization({
   existingProjectedRecord,
   frozenDefaultLiveSessionControlValuesByAgentKind,
   localRuntime,
-  ssh,
   cloudClient,
   options,
   pendingSessionId,
@@ -134,7 +131,7 @@ async function runSessionCreationMaterialization({
   });
 
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
-  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, ssh ?? null, cloudClient);
+  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, cloudClient);
   logLatency("session.create.materialize.target_resolved", {
     clientSessionId: pendingSessionId,
     workspaceId,

@@ -36,7 +36,7 @@ export function mobileIconForRuntimeLocation(runtimeLocation: RecentWorkRuntimeL
       return "monitor";
     case "cloud_sandbox":
       return "cloud";
-    case "ssh_remote":
+    case "self_hosted_remote":
       return "external";
     case "offline":
       return "lock";

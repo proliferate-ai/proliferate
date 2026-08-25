@@ -1,19 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 
 import {
   resolveRuntimeTargetForWorkspace,
 } from "#product/lib/access/anyharness/runtime-target";
 import { supportsCallerSelectedSessionCreate } from "#product/lib/access/anyharness/caller-selected-session-create";
-
-function makeSshBridge(): DesktopSshBridge {
-  return {
-    getProfile: vi.fn(),
-    saveProfile: vi.fn(),
-    removeProfile: vi.fn(),
-    ensureTunnel: vi.fn(),
-  };
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -23,60 +13,12 @@ describe("resolveRuntimeTargetForWorkspace", () => {
   it("scopes caller-selected create ids to the bundled local runtime", () => {
     expect(supportsCallerSelectedSessionCreate("workspace-local")).toBe(true);
     expect(supportsCallerSelectedSessionCreate("cloud:workspace-cloud")).toBe(false);
-    expect(supportsCallerSelectedSessionCreate("target:target-1:workspace-7")).toBe(false);
   });
 
-  it("resolves a target through the supplied Desktop SSH bridge", async () => {
-    const ssh = makeSshBridge();
-    const profile = {
-      targetId: "target-1",
-      sshHost: "host.test",
-      sshUser: "dev",
-      sshPort: 22,
-      identityFile: null,
-      remoteAnyHarnessPort: 8457,
-      workspaceRoot: "/workspaces",
-    };
-    vi.mocked(ssh.getProfile).mockResolvedValue(profile);
-    vi.mocked(ssh.ensureTunnel).mockResolvedValue({
-      runtimeUrl: "http://127.0.0.1:43210",
-    });
-
-    const target = await resolveRuntimeTargetForWorkspace(
-      "",
-      "target:target-1:workspace-7",
-      ssh,
-      null,
-    );
-
-    expect(ssh.getProfile).toHaveBeenCalledWith("target-1");
-    expect(ssh.ensureTunnel).toHaveBeenCalledWith(profile);
-    expect(target).toMatchObject({
-      location: "target",
-      baseUrl: "http://127.0.0.1:43210",
-      anyharnessWorkspaceId: "workspace-7",
-      runtimeGeneration: 0,
-      targetId: "target-1",
-    });
-    expect(target).not.toHaveProperty("runtimeAccessKind");
-  });
-
-  it("fails closed for a target without a Desktop SSH bridge", async () => {
-    await expect(resolveRuntimeTargetForWorkspace(
-      "",
-      "target:target-1:workspace-7",
-      null,
-      null,
-    )).rejects.toThrow("SSH direct access is only available in Desktop.");
-  });
-
-  it("does not use SSH when resolving a local workspace", async () => {
-    const ssh = makeSshBridge();
-
+  it("resolves a local workspace against the bundled runtime", async () => {
     const target = await resolveRuntimeTargetForWorkspace(
       "http://runtime.test",
       "workspace-local",
-      ssh,
       null,
     );
     expect(target).toMatchObject({
@@ -86,7 +28,5 @@ describe("resolveRuntimeTargetForWorkspace", () => {
       runtimeGeneration: 0,
     });
     expect(target).not.toHaveProperty("runtimeAccessKind");
-    expect(ssh.getProfile).not.toHaveBeenCalled();
-    expect(ssh.ensureTunnel).not.toHaveBeenCalled();
   });
 });

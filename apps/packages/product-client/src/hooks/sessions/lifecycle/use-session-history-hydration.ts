@@ -55,7 +55,6 @@ import { dispatchWorkspacePinIntentEnvelopes } from "#product/hooks/sessions/lif
  */
 export function useSessionHistoryHydration() {
   const host = useProductHost();
-  const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const reconcileHydratedSubagents = useSessionHistorySubagentAuthority();
 
@@ -117,7 +116,6 @@ export function useSessionHistoryHydration() {
           requestHeaders: options?.requestHeaders,
           measurementOperationId: requestMeasurementOperationId,
           timeoutMs: options?.timeoutMs,
-          ssh,
           cloudClient,
         }),
       );
@@ -375,7 +373,7 @@ export function useSessionHistoryHydration() {
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "error_sanitized");
       return false;
     }
-  }, [cloudClient, reconcileHydratedSubagents, ssh]);
+  }, [cloudClient, reconcileHydratedSubagents]);
 
   // UX-latency R14: full session-open hydrations dedupe by session id so the
   // bootstrap kickoff and the transcript pane share one fetch + apply.

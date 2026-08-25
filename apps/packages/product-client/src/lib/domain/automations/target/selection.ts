@@ -32,7 +32,6 @@ export {
 export function buildAutomationTargetState({
   repoConfigs,
   cloudWorkspaces,
-  sshTargets,
   repositories,
   selectedTarget,
   savedTarget = null,
@@ -64,12 +63,9 @@ export function buildAutomationTargetState({
     repoDrafts,
     effectiveTarget,
     cloudAvailable,
-    sshTargets ?? [],
   );
   const selectedRow = findSelectedTargetRow(groups, effectiveTarget);
-  const unsupportedReason = effectiveTarget?.executionTarget === "ssh"
-    ? "SSH automation dispatch is not wired yet."
-    : null;
+  const unsupportedReason = null;
   const disabledReason = effectiveTarget
     ? selectedRow?.disabledReason ?? unsupportedReason
     : "Select a local worktree or configured cloud workspace.";

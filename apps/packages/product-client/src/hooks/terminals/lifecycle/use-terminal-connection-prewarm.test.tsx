@@ -4,9 +4,9 @@ import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTerminalConnectionPrewarm } from "#product/hooks/terminals/lifecycle/use-terminal-connection-prewarm";
 
-// Q16: the gateway token refresh + SSH tunnel warm-up hoisted to workspace
+// Q16: the gateway token refresh hoisted to workspace
 // selection. resolveTerminalWorkspaceConnection is the shared warm path (it
-// mints the fresh token and, on desktop, opens the SSH tunnel).
+// mints the fresh token).
 
 const selection = vi.hoisted(() => ({ selectedWorkspaceId: null as string | null }));
 

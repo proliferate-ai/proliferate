@@ -338,7 +338,7 @@ function FullSidebarPane() {
           <SidebarRepositoriesHeader
             repositoriesCollapsed={repositoriesCollapsed}
             filtersActive={false}
-            workspaceTypes={["local", "worktree", "cloud", "ssh"]}
+            workspaceTypes={["local", "worktree", "cloud"]}
             onToggleRepositoriesCollapsed={() => setRepositoriesCollapsed((value) => !value)}
             onToggleWorkspaceType={() => {}}
             onAddRepo={() => {}}

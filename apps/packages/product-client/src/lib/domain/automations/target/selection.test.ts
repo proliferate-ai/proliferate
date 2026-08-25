@@ -70,7 +70,7 @@ function target(
 
 describe("buildAutomationTargetState", () => {
   // Cloud is culled (PRO-10): a fresh automation is only ever offered local
-  // (and SSH) targets, never a cloud target or a "Configure cloud" action row.
+  // targets, never a cloud target or a "Configure cloud" action row.
   it("offers only the local target for a configured-cloud + local repo", () => {
     const state = buildAutomationTargetState({
       repoConfigs: [repoConfig({ gitOwner: "Proliferate-AI", gitRepoName: "Proliferate" })],

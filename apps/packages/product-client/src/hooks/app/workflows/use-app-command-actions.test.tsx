@@ -23,7 +23,6 @@ const hookMocks = vi.hoisted(() => ({
     destination: "repository",
     repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
     repoLaunchKind: "worktree",
-    selectedSshTargetId: null,
     baseBranchOverride: "stale/from-other-repo",
   },
   homeRepositorySelection: {

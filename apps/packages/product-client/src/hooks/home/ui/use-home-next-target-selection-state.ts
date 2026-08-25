@@ -17,7 +17,6 @@ export interface HomeNextTargetSelectionState {
   destination: HomeNextDestination;
   repositorySelection: HomeNextRepositorySelection;
   repoLaunchKind: HomeNextRepoLaunchKind;
-  selectedSshTargetId: string | null;
   baseBranchOverride: string | null;
 }
 
@@ -27,7 +26,6 @@ const DEFAULT_HOME_NEXT_TARGET_SELECTION: HomeNextTargetSelectionState = {
   destination: "cowork",
   repositorySelection: { kind: "auto" },
   repoLaunchKind: "worktree",
-  selectedSshTargetId: null,
   baseBranchOverride: null,
 };
 const homeNextTargetSelectionListeners = new Set<() => void>();
@@ -56,7 +54,7 @@ function normalizeDestination(value: unknown): HomeNextDestination {
 }
 
 function normalizeRepoLaunchKind(value: unknown): HomeNextRepoLaunchKind {
-  return value === "worktree" || value === "local" || value === "cloud" || value === "ssh"
+  return value === "worktree" || value === "local" || value === "cloud"
     ? value
     : DEFAULT_HOME_NEXT_TARGET_SELECTION.repoLaunchKind;
 }
@@ -94,7 +92,6 @@ export function normalizeHomeNextTargetSelectionState(
     destination: normalizeDestination(value.destination),
     repositorySelection: normalizeRepositorySelection(value.repositorySelection),
     repoLaunchKind: normalizeRepoLaunchKind(value.repoLaunchKind),
-    selectedSshTargetId: normalizeNullableString(value.selectedSshTargetId),
     baseBranchOverride: normalizeNullableString(value.baseBranchOverride),
   };
 }
@@ -117,7 +114,6 @@ function normalizeDesktopTargetAvailability(
   if (
     selection.destination === "repository"
     && selection.repoLaunchKind === "cloud"
-    && selection.selectedSshTargetId === null
   ) {
     return selection;
   }
@@ -125,7 +121,6 @@ function normalizeDesktopTargetAvailability(
     ...selection,
     destination: "repository",
     repoLaunchKind: "cloud",
-    selectedSshTargetId: null,
   };
 }
 
@@ -259,10 +254,6 @@ export function useHomeNextTargetSelectionState() {
     ),
     setRepoLaunchKind: useCallback(
       (repoLaunchKind: HomeNextRepoLaunchKind) => patchTargetSelection({ repoLaunchKind }),
-      [patchTargetSelection],
-    ),
-    setSelectedSshTargetId: useCallback(
-      (selectedSshTargetId: string | null) => patchTargetSelection({ selectedSshTargetId }),
       [patchTargetSelection],
     ),
     setBaseBranchOverride: useCallback(

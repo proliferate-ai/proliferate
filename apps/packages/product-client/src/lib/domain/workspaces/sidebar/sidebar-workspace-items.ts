@@ -206,18 +206,15 @@ function buildSidebarWorkspaceItem(
   // Workspace-copy availability commands (PR 5). A logical workspace that has
   // both a local and a Cloud side without an explicit materialization for this
   // install is a plausible Link candidate (same repo/branch heuristic already
-  // grouped them). SSH direct-target workspaces are out of PR 5 scope.
+  // grouped them).
   const gitStatus = args.gitStatusesByLogicalId?.[entry.id] ?? null;
   const desktopInstallId = args.desktopInstallId ?? null;
   const cloudSummary = entry.cloudWorkspace;
   const linkCandidate = Boolean(
-    variant !== "ssh"
-    && cloudSummary
+    cloudSummary
     && args.linkCandidateCloudWorkspaceIds.has(cloudSummary.id),
   );
-  const availabilityCommands = variant === "ssh"
-    ? []
-    : resolveWorkspaceAvailabilityCommands(
+  const availabilityCommands = resolveWorkspaceAvailabilityCommands(
       deriveWorkspaceAvailabilityInput({
         localWorkspace: preferredLocalWorkspace ?? null,
         cloudWorkspace: cloudSummary ?? null,

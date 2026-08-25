@@ -46,7 +46,7 @@ export const MOBILE_WORK_RUNTIME_OPTIONS: readonly {
   { id: "all", label: "All runtimes", icon: "workspaces" },
   { id: "cloud_sandbox", label: "Cloud runtime", icon: "cloud" },
   { id: "local_desktop", label: "Desktop Mac", icon: "monitor" },
-  { id: "ssh_remote", label: "SSH", icon: "external" },
+  { id: "self_hosted_remote", label: "Self-hosted", icon: "external" },
   { id: "offline", label: "Offline", icon: "lock" },
 ];
 

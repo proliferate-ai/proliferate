@@ -450,11 +450,6 @@ class Settings(BaseSettings):
     # the overage rate read this derivation (see ``billing/pricing.py``).
     e2b_list_price_usd_per_hour: str = "2.00"
     pro_compute_margin_multiplier: float = 1.5
-    proliferate_target_installer_url: str = (
-        "https://raw.githubusercontent.com/proliferate-ai/proliferate/main/"
-        "install/proliferate-target-install.sh"
-    )
-    proliferate_target_artifact_base_url: str = ""
     # Make Managed Runtime Updates Supervisor-Owned (frozen 2026-07-15, decision
     # 5): the E2B N-1->N proof + D5 BRIDGE proof (in-place migration, sandbox
     # iwwvadhffzxoora56f437) both passed 2026-07-26, so the legacy direct-nohup

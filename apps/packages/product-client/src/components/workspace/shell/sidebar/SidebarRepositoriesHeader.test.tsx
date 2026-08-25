@@ -17,7 +17,7 @@ function renderHeader(onAddRepo = vi.fn()) {
     <SidebarRepositoriesHeader
       repositoriesCollapsed={false}
       filtersActive={false}
-      workspaceTypes={["local", "worktree", "cloud", "ssh"]}
+      workspaceTypes={["local", "worktree", "cloud"]}
       onToggleRepositoriesCollapsed={vi.fn()}
       onToggleWorkspaceType={vi.fn()}
       onAddRepo={onAddRepo}

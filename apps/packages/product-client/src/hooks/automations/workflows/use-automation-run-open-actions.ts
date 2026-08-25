@@ -4,7 +4,6 @@ import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-clo
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
-import { targetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import type { AutomationRunRecord } from "#product/lib/domain/automations/run/ui-records";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -51,11 +50,7 @@ export function useAutomationRunOpenActions(runById: Map<string, AutomationRunRe
     if (!run.anyharnessWorkspaceId) {
       return;
     }
-    const targetKind = run.targetKindSnapshot ?? run.cloudTargetKindSnapshot;
-    const targetId = run.targetIdSnapshot ?? run.cloudTargetIdSnapshot;
-    const workspaceId = targetKind === "ssh" && targetId
-      ? targetWorkspaceSyntheticId(targetId, run.anyharnessWorkspaceId)
-      : run.anyharnessWorkspaceId;
+    const workspaceId = run.anyharnessWorkspaceId;
     try {
       await refetchWorkspaces();
       navigate("/");
@@ -79,12 +74,6 @@ export function useAutomationRunOpenActions(runById: Map<string, AutomationRunRe
   const openRun = useCallback((runId: string) => {
     const run = runById.get(runId);
     if (!run) {
-      return;
-    }
-    const targetKind = run.targetKindSnapshot ?? run.cloudTargetKindSnapshot;
-    const targetId = run.targetIdSnapshot ?? run.cloudTargetIdSnapshot;
-    if (targetKind === "ssh" && targetId && run.anyharnessWorkspaceId) {
-      void openLocalWorkspace(run);
       return;
     }
     if (run.cloudWorkspaceId) {

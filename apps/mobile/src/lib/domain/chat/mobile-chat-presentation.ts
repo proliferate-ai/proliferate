@@ -225,8 +225,6 @@ function fallbackRuntimeLabel(
       return "Cloud runtime";
     case "local_desktop":
       return "Desktop dispatch";
-    case "ssh":
-      return "SSH remote";
     case "self_hosted":
       return "Self-hosted runner";
     default:
@@ -297,7 +295,6 @@ function runtimeIcon(
       return "cloud";
     case "local_desktop":
       return "monitor";
-    case "ssh":
     case "self_hosted":
       return "terminal";
     case undefined:
@@ -308,7 +305,7 @@ function runtimeIcon(
       return "monitor";
     case "cloud_sandbox":
       return "cloud";
-    case "ssh_remote":
+    case "self_hosted_remote":
       return "terminal";
     case "offline":
       return workspace.sandboxType === "local" ? "monitor" : "cloud";

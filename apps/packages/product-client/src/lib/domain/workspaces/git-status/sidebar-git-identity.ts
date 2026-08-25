@@ -30,7 +30,7 @@ export const SIDEBAR_GIT_IDENTITY_CLOUD_LABEL = "Cloud workspace · no pull requ
  *
  * A PR wins whenever the branch has one, because it is the strongest thing
  * true about the row; without a PR the cell falls back to the workspace's own
- * topology (worktree / cloud). Local and SSH rows resolve to null: a local
+ * topology (worktree / cloud). Local rows resolve to null: a local
  * checkout with no PR has no git identity worth a permanent glyph, and the
  * dim always-on placeholder that used to fill this cell is what made the
  * column read as noise.
@@ -60,7 +60,6 @@ export function resolveSidebarWorkspaceGitIdentity(
     case "cloud":
       return { kind: "cloud" };
     case "local":
-    case "ssh":
       return null;
   }
 }

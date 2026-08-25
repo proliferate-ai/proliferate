@@ -82,7 +82,7 @@ export function useSupportSnapshotBinding(): SupportSnapshotBinding {
 }
 
 /**
- * Only a bundled-local workspace can back a snapshot. Cloud, standalone, SSH,
+ * Only a bundled-local workspace can back a snapshot. Cloud, standalone,
  * Supervisor-owned, and remote runtimes are never substituted, so a synthetic
  * cloud ID classifies as `cloud` and stays ineligible. A local workspace ID is
  * the bundled AnyHarness workspace ID.

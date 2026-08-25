@@ -55,9 +55,6 @@ function renderPicker(overrides: Partial<Parameters<typeof HomeTargetPicker>[0]>
         [keystoneRepository.sourceRoot]: { kind: "create", label: "New cloud workspace" },
         [productRepository.sourceRoot]: { kind: "create", label: "New cloud workspace" },
       }}
-      sshTargetOptions={[]}
-      selectedSshTargetId={null}
-      sshTargetsLoading={false}
       onSelectCowork={onSelectCowork}
       onSelectRepository={onSelectRepository}
       onSelectRuntime={onSelectRuntime}
@@ -182,12 +179,6 @@ describe("HomeTargetPicker", () => {
     const callbacks = renderPicker({
       desktopTargetsAvailable: false,
       repoLaunchKind: "worktree",
-      sshTargetsLoading: true,
-      sshTargetOptions: [{
-        id: "ssh-target-1",
-        label: "SSH server",
-        disabledReason: null,
-      } as never],
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Runtime: Cloud" }));
@@ -196,7 +187,6 @@ describe("HomeTargetPicker", () => {
     expect(screen.queryByRole("button", { name: /Work locally/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /New worktree/i })).toBeNull();
     expect(screen.queryByText("Loading targets")).toBeNull();
-    expect(screen.queryByRole("button", { name: "SSH server" })).toBeNull();
     expect(callbacks.onSelectRuntime).not.toHaveBeenCalled();
   });
 
@@ -246,7 +236,7 @@ describe("HomeTargetPicker", () => {
   });
 
   // FM8 (PRO-10): cloud is culled from Desktop. The Desktop runtime picker must
-  // always offer local / worktree (+ SSH), never a cloud choice and never empty.
+  // always offer local / worktree, never a cloud choice and never empty.
   it("offers local and worktree on Desktop and never a cloud runtime choice", () => {
     const callbacks = renderPicker({
       cloudActionBySourceRoot: {

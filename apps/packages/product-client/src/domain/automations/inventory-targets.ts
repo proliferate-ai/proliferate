@@ -13,9 +13,6 @@ export function automationTargetAvailability(
   if (executionTarget === "local" || targetMode === "local") {
     return "desktop_required";
   }
-  if (executionTarget === "ssh") {
-    return "desktop_required";
-  }
   if (targetKind && !isManagedCloudTargetKind(targetKind)) {
     return "desktop_required";
   }
@@ -31,11 +28,8 @@ export function automationTargetAvailability(
 export function automationTargetLabel(
   targetMode?: AutomationTargetMode | null,
   executionTarget?: string | null,
-  targetKind?: string | null,
+  _targetKind?: string | null,
 ): string {
-  if (executionTarget === "ssh" || targetKind === "ssh") {
-    return "SSH target";
-  }
   if (targetMode === "local" || executionTarget === "local") {
     return "Local";
   }

@@ -1,5 +1,4 @@
 import type { Session } from "@anyharness/sdk";
-import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import type { usePromptSessionMutation } from "@anyharness/sdk-react";
 import {
@@ -40,7 +39,6 @@ const ACCEPTED_RUNNING_RECONCILE_TIMEOUT_MS = 3_000;
 type PromptSessionMutation = ReturnType<typeof usePromptSessionMutation>;
 
 export interface PromptIntentDispatchDeps {
-  ssh?: DesktopSshBridge | null;
   cloudClient: CloudSandboxGatewayUrlSource | null;
   applySessionSummary: (clientSessionId: string, session: Session, workspaceId: string) => void;
   maybeGenerateSessionTitle: (input: {
@@ -126,7 +124,7 @@ export async function dispatchPromptIntent(
     const {
       workspaceId,
       materializedSessionId: resolvedSessionId,
-    } = await getSessionClientAndWorkspace(entry.clientSessionId, deps.ssh ?? null, deps.cloudClient);
+    } = await getSessionClientAndWorkspace(entry.clientSessionId, deps.cloudClient);
     requestHeaders = getLatencyFlowRequestHeaders(entry.latencyFlowId) ?? null;
     const requestOptions = requestHeaders ? { headers: requestHeaders } : undefined;
 

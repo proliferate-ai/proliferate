@@ -1,4 +1,3 @@
-import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/target-options";
 import type {
   AutomationTargetGroup,
   AutomationTargetRow,
@@ -15,10 +14,9 @@ export function buildTargetGroups(
   repoDrafts: TargetRepoDraft[],
   selectedTarget: AutomationTargetSelection | null,
   cloudAvailable: boolean,
-  sshTargets: readonly ComputeLaunchTargetOption[],
 ): AutomationTargetGroup[] {
   return repoDrafts.map((draft) =>
-    buildTargetGroup(draft, selectedTarget, cloudAvailable, sshTargets)
+    buildTargetGroup(draft, selectedTarget, cloudAvailable)
   );
 }
 
@@ -61,10 +59,6 @@ export function constrainTargetToRows(
       : firstDefaultTarget([draft], cloudAvailable);
   }
 
-  if (target.executionTarget === "ssh") {
-    return target.cloudTargetId ? target : firstDefaultTarget([draft], cloudAvailable);
-  }
-
   return draft.hasLocalRepository || draft.hasSavedLocalTarget
     ? target
     : firstDefaultTarget([draft], cloudAvailable);
@@ -93,7 +87,6 @@ function buildTargetGroup(
   draft: TargetRepoDraft,
   selectedTarget: AutomationTargetSelection | null,
   cloudAvailable: boolean,
-  sshTargets: readonly ComputeLaunchTargetOption[],
 ): AutomationTargetGroup {
   const rows: AutomationTargetRow[] = [];
   // Cloud is culled (PRO-10): the picker no longer offers a cloud target for a
@@ -140,27 +133,6 @@ function buildTargetGroup(
       description: "Run on this device in a local AnyHarness worktree.",
       target,
       disabledReason: draft.hasLocalRepository ? null : "Local repository is unavailable.",
-      selected: isSameAutomationTarget(selectedTarget, target),
-    });
-  }
-
-  for (const sshTarget of sshTargets) {
-    const target = {
-      executionTarget: "ssh",
-      gitOwner: draft.gitOwner,
-      gitRepoName: draft.gitRepoName,
-      cloudTargetId: sshTarget.id,
-    } satisfies AutomationTargetSelection;
-    rows.push({
-      kind: "target",
-      id: automationTargetId(target),
-      repoKey: draft.repoKey,
-      repoLabel: draft.label,
-      label: sshTarget.label,
-      description: sshTarget.detail,
-      target,
-      computeTargetOption: sshTarget,
-      disabledReason: sshTarget.disabledReason,
       selected: isSameAutomationTarget(selectedTarget, target),
     });
   }

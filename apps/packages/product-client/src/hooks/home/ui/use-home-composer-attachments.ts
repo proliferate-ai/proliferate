@@ -14,7 +14,7 @@ import type { HomeLaunchTarget } from "#product/lib/domain/home/home-next-launch
  * Dropped-path recovery mirrors ChatView: local path references are only
  * meaningful when the launched agent will share this machine's filesystem.
  * cowork/local/worktree run here; cloud does not, and an unresolved target
- * (including ssh) gets no local refs either. The attachment scope keys off
+ * gets no local refs either. The attachment scope keys off
  * the same split so flipping the target across the local/remote boundary
  * clears drafts instead of letting a stale local path ride into a runtime
  * that cannot read it.

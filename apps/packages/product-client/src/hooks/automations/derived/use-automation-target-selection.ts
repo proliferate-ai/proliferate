@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
-import { useComputeTargetOptions } from "#product/hooks/compute/derived/use-compute-target-options";
 import { useSettingsRepositories } from "#product/hooks/settings/derived/use-settings-repositories";
 import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
 import {
@@ -40,10 +39,6 @@ export function useAutomationTargetSelection({
   const { repositories } = useSettingsRepositories();
   const { cloudWorkspaces, isLoading: repoProjectionLoading } =
     useStandardRepoProjection();
-  const computeTargets = useComputeTargetOptions({
-    enabled,
-    ownerScope,
-  });
   const repoConfigs = useMemo(
     () => (repoConfigsData?.repositories ?? []).map((repo) => ({
       gitOwner: repo.gitOwner,
@@ -67,7 +62,6 @@ export function useAutomationTargetSelection({
   const targetState = useMemo(() => buildAutomationTargetState({
     repoConfigs: effectiveRepoConfigs,
     cloudWorkspaces: repositoryCloudWorkspaces,
-    sshTargets: computeTargets.sshTargetOptions,
     repositories,
     selectedTarget,
     savedTarget: automation
@@ -95,12 +89,11 @@ export function useAutomationTargetSelection({
     effectiveRepoConfigs,
     repositories,
     repositoryCloudWorkspaces,
-    computeTargets.sshTargetOptions,
     selectedTarget,
   ]);
 
   return {
     ...targetState,
-    isLoading: (!isOrganization && repoConfigsLoading) || repoProjectionLoading || computeTargets.isLoading,
+    isLoading: (!isOrganization && repoConfigsLoading) || repoProjectionLoading,
   };
 }

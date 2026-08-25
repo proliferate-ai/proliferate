@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   DesktopRuntimeBridge,
-  DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
@@ -36,11 +35,9 @@ const context = (workspaceId: string): WorkspaceSelectionContext => ({
 function deps(
   localRuntime: DesktopRuntimeBridge | null,
   refreshCloudWorkspaceConnection = vi.fn(),
-  ssh: DesktopSshBridge | null = null,
 ): WorkspaceSelectionDeps {
   return {
     localRuntime,
-    ssh,
     cloudClient: null,
     logicalWorkspaces: [],
     rawWorkspaces: [],
@@ -95,7 +92,6 @@ describe("resolveSelectionConnection", () => {
       "http://runtime.test",
       "workspace-runtime",
       null,
-      null,
     );
     expect(result.runtimeUrl).toBe("http://runtime.test");
     expect(result.workspaceConnection).toEqual({
@@ -103,42 +99,6 @@ describe("resolveSelectionConnection", () => {
       anyharnessWorkspaceId: "workspace-runtime",
       runtimeGeneration: 0,
       runtimeAccessKind: "direct",
-    });
-  });
-
-  it("does not discover a local runtime for an SSH target workspace", async () => {
-    const ssh = {
-      getProfile: vi.fn(),
-      saveProfile: vi.fn(),
-      removeProfile: vi.fn(),
-      ensureTunnel: vi.fn(),
-    } satisfies DesktopSshBridge;
-    mocks.resolveWorkspaceConnection.mockResolvedValue({
-      connection: {
-        runtimeUrl: "https://target.test",
-        anyharnessWorkspaceId: "workspace-runtime",
-        runtimeGeneration: 0,
-      },
-      filesystemOrigin: "remote",
-    });
-
-    const result = await resolveSelectionConnection(
-      deps(null, vi.fn(), ssh),
-      context("target:target-1:workspace-runtime"),
-      { kind: "local" },
-    );
-
-    expect(mocks.ensureRuntimeReady).not.toHaveBeenCalled();
-    expect(mocks.resolveWorkspaceConnection).toHaveBeenCalledWith(
-      "",
-      "target:target-1:workspace-runtime",
-      ssh,
-      null,
-    );
-    expect(result.workspaceConnection).toEqual({
-      runtimeUrl: "https://target.test",
-      anyharnessWorkspaceId: "workspace-runtime",
-      runtimeGeneration: 0,
     });
   });
 

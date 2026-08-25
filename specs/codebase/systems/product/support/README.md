@@ -87,7 +87,7 @@ The scope control appears only after consent:
   collects native collector, fallback, and status evidence only and records
   that the session ledger was omitted.
 
-There is no arbitrary date or workspace picker. Cloud, standalone, SSH,
+There is no arbitrary date or workspace picker. Cloud, standalone,
 Supervisor-owned, remote, and merely most-recent alternate runtimes are never
 substituted. A binding or scope change supersedes the consent epoch and cancels
 in-flight preparation. Consent becomes durable only after the exact staged

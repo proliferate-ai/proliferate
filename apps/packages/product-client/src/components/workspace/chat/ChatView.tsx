@@ -46,7 +46,6 @@ import {
   isFileDrag,
   readFileDragInput,
 } from "#product/lib/domain/chat/composer/prompt-attachment-drag";
-import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { isCloudWorkspaceId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
@@ -203,12 +202,11 @@ export const ChatView = memo(function ChatView({
   const pendingDropChangeCountRef = useRef<Promise<number> | null>(null);
   // Dropped-path recovery only makes sense when the agent shares this
   // machine's filesystem. Mirrors resolveRuntimeTargetForWorkspace: `cloud:*`
-  // runs in a cloud sandbox and `target:*` on an SSH target — neither can
-  // read this machine's paths — while everything else is the local runtime.
+  // runs in a cloud sandbox that cannot read this machine's paths, while
+  // everything else is the local runtime.
   const resolveDroppedPaths = useMemo(() => {
     const isLocalRuntimeWorkspace = !!selectedWorkspaceId
-      && !isCloudWorkspaceId(selectedWorkspaceId)
-      && parseTargetWorkspaceSyntheticId(selectedWorkspaceId) === null;
+      && !isCloudWorkspaceId(selectedWorkspaceId);
     if (!desktopFiles || !isLocalRuntimeWorkspace) {
       return null;
     }
@@ -249,7 +247,7 @@ export const ChatView = memo(function ChatView({
   } = useChatDockInset();
 
   useSelectedCloudRuntimeRehydration(selectedCloudRuntime);
-  // Q16: warm the gateway token + SSH tunnel at workspace selection so pane
+  // Q16: warm the gateway token at workspace selection so pane
   // activation consumes a pre-warmed connection (silent, lazy-path fallback).
   useTerminalConnectionPrewarm();
   useSessionErrorAcknowledgement();

@@ -1,5 +1,4 @@
 import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
-import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/target-options";
 import type {
   AutomationExecutionTarget,
   AutomationTargetCloudWorkspaceRecord,
@@ -12,7 +11,6 @@ export interface AutomationTargetSelection {
   executionTarget: AutomationExecutionTarget;
   gitOwner: string;
   gitRepoName: string;
-  cloudTargetId?: string | null;
 }
 
 export interface AutomationTargetRepoIdentity {
@@ -29,7 +27,6 @@ export type AutomationTargetRow =
     label: string;
     description: string | null;
     target: AutomationTargetSelection;
-    computeTargetOption?: ComputeLaunchTargetOption | null;
     disabledReason: string | null;
     selected: boolean;
   }
@@ -63,7 +60,6 @@ export interface AutomationTargetState {
 export interface BuildAutomationTargetStateInput {
   repoConfigs: readonly AutomationTargetRepoConfigRecord[] | null | undefined;
   cloudWorkspaces?: readonly AutomationTargetCloudWorkspaceRecord[] | null | undefined;
-  sshTargets?: readonly ComputeLaunchTargetOption[] | null | undefined;
   repositories: readonly SettingsRepositoryEntry[] | null | undefined;
   selectedTarget: AutomationTargetSelection | null;
   savedTarget?: AutomationTargetSelection | null;

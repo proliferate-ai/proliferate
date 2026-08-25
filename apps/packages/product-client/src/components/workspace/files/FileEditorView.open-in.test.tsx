@@ -169,7 +169,7 @@ describe("FileEditorView open-in wiring", () => {
     expect(screen.getByRole("button", { name: "Open in VS Code" })).toBeTruthy();
   });
 
-  it("renders no control and makes zero open-in calls when 01D has no resolved native capability (remote/SSH/Web)", () => {
+  it("renders no control and makes zero open-in calls when 01D has no resolved native capability (remote/Web)", () => {
     fileActionsState.canOpenExternal = false;
     fileActionsState.nativePathKind = null;
     fileActionsState.openTargets = [];

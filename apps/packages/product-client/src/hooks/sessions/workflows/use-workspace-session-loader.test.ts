@@ -10,7 +10,6 @@ import { useWorkspaceSessionLoader } from "#product/hooks/sessions/workflows/use
 
 const mocks = vi.hoisted(() => ({
   localRuntime: {},
-  ssh: {},
   ensureRuntimeReadyForSessions: vi.fn(async () => "http://runtime.test"),
   fetchWorkspaceSessions: vi.fn(),
   getWorkspaceRuntimeBlockReason: vi.fn(() => null),
@@ -20,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
-    desktop: { runtime: mocks.localRuntime, ssh: mocks.ssh },
+    desktop: { runtime: mocks.localRuntime },
     cloud: { client: null },
   }),
 }));
@@ -91,29 +90,5 @@ describe("useWorkspaceSessionLoader replacement filtering", () => {
     expect(updater?.(undefined)).toEqual([
       { id: "runtime-new", workspaceId: "workspace-1" },
     ]);
-  });
-
-  it("passes the Desktop SSH bridge when target listing has no metadata", async () => {
-    mocks.getWorkspaceSessionCacheSnapshot.mockReturnValue({
-      sessions: undefined,
-      dataUpdatedAt: 0,
-      isInvalidated: false,
-    });
-    mocks.fetchWorkspaceSessions.mockResolvedValue([]);
-    const { result } = renderHook(() => useWorkspaceSessionLoader());
-
-    await result.current.ensureWorkspaceSessions("target:target-1:workspace-1");
-
-    expect(mocks.ensureRuntimeReadyForSessions).not.toHaveBeenCalled();
-    expect(mocks.fetchWorkspaceSessions).toHaveBeenCalledWith(
-      expect.any(String),
-      "target:target-1:workspace-1",
-      {
-        requestHeaders: undefined,
-        measurementOperationId: undefined,
-        ssh: mocks.ssh,
-        cloudClient: null,
-      },
-    );
   });
 });
