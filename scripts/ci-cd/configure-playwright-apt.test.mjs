@@ -240,7 +240,9 @@ test("rejects unknown two-stanza shapes without modifying the file", async (cont
 test("guards every hosted Playwright dependency install in its own run block", async () => {
   const expectedCommandsByWorkflow = new Map([
     [
-      ".github/workflows/ci.yml",
+      // The three browser-installing lanes moved from ci.yml to the
+      // dispatch-only ci-heavy-lanes.yml in the 2026-08 engineering cull.
+      ".github/workflows/ci-heavy-lanes.yml",
       [
         "pnpm exec playwright install --with-deps chromium",
         "pnpm --filter @proliferate/product-client exec playwright install --with-deps chromium webkit",

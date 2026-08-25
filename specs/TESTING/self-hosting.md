@@ -39,7 +39,9 @@ Invariants: every self-hosted server is single-org
 telemetry mode); `/setup` is claimed exactly once and 404s forever after;
 invitees register in a browser via the invitation's registration token.
 
-What already exists: `self-host-smoke.yml` (required merge check) boots the
+What already exists: `self-host-smoke.yml` (push-to-`main` + dispatch; off the
+PR path and no longer a required merge check since the 2026-08 engineering
+cull) boots the
 real compose stack http-only and walks health → `/meta` → claim → password
 login → invite → register → membership at the **API** level, then proves
 self-hosted Web served from the exact production image: `/` and `/login` return

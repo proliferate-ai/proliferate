@@ -5,9 +5,11 @@ name: Release E2E (tier 3)
 # provision/pause/resume/connect, chat per cataloged agent, config apply,
 # secrets materialization, billing metering, repo settings.
 #
-# Cadence: release-train, NOT per-PR. It burns real money/time (E2B sandboxes,
-# gateway LLM calls) so it runs on a schedule and on demand, never on
-# `pull_request`. Tier 3 never gates ordinary merges. The scheduled legacy
+# Cadence: on demand only (workflow_dispatch), never on `pull_request`. It
+# burns real money/time (E2B sandboxes, gateway LLM calls); the daily cron was
+# removed in the 2026-08 engineering cull — re-establishing a cadence is a
+# step-3 CI/CD-spec decision (delivery/engineering-cull/delivery-spec-ci-diet.md).
+# Tier 3 never gates ordinary merges. The legacy
 # local/staging jobs remain provisional and `continue-on-error`; the manual
 # protected-Qualification jobs are strict, preserve red exits, and upload V4
 # evidence for their selected exact-head scope. Production promotion does not
@@ -103,11 +105,6 @@ on:
         default: ""
         required: false
         type: string
-  schedule:
-    # Nightly, offset after the release train (which runs at 09:00 UTC) so it
-    # exercises the freshly cut artifacts. README: "Nightly — Tier 3 lanes
-    # against whatever is on staging; failures file issues, never block merges."
-    - cron: "0 11 * * *"
 
 permissions:
   contents: read
@@ -118,6 +115,9 @@ env:
 jobs:
   release-e2e-local:
     name: tier-3 local lane (provisional)
+    # NOTE: with the daily cron removed (2026-08 cull) this schedule-only job is
+    # currently unreachable. Kept pending the step-3 CI/CD spec's ruling on the
+    # tier-3 cadence; delete or re-trigger it there, not here.
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -332,6 +332,10 @@ jobs:
   # it never runs Tier-2, controller-local, self-host, or Tier-4 bodies here.
   release-e2e-staging:
     name: tier-3 staging lane (provisional)
+    # NOTE: the 'schedule' clause below is dead since the 2026-08 cull removed
+    # the cron (this lane stays reachable via dispatch). Kept because the
+    # qualification-runner workflow test asserts this exact expression; clean it
+    # up with the step-3 cadence ruling.
     if: >-
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' &&

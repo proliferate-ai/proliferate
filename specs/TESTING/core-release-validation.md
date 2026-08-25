@@ -658,7 +658,10 @@ The runner and the manual qualification worlds now enforce these foundations:
   jobs are not `continue-on-error`, run through the protected `Qualification`
   environment, preserve the runner's exit code, and upload their V4 evidence;
   and
-- the scheduled legacy local and staging lanes remain explicitly provisional,
+- the legacy local and staging lanes (dispatch-only since the 2026-08
+  engineering cull removed the nightly cron; the schedule-only local lane is
+  currently unreachable pending the step-3 cadence ruling) remain explicitly
+  provisional,
   `continue-on-error`, and capable of skipping their whole lane when a
   preflight dependency is absent. Their output is diagnostic signal, never
   qualification.
@@ -666,10 +669,13 @@ The runner and the manual qualification worlds now enforce these foundations:
 The remaining enforcement exceptions are:
 
 - the two broad Tier 2 jobs in `intent-tests.yml` remain
-  `continue-on-error`, and the broad billing job skips when
+  `continue-on-error` and are dispatch-only since the 2026-08 engineering
+  cull, and the broad billing job skips when
   `STRIPE_TEST_SECRET_KEY` is absent. The manual strict Tier 2 qualification
-  job fails closed on that missing key, while only the focused workflow
-  definition lifecycle cell currently gates ordinary CI;
+  job fails closed on that missing key. The focused workflow definition
+  lifecycle cell no longer gates ordinary CI: it runs strictly in the
+  dispatch-only `ci-heavy-lanes.yml`, with re-gating a step-3 CI/CD-spec
+  decision;
 - production promotion validates staging deployment evidence but does not
   invoke or verify a trusted Tier 3/4 qualification aggregate for the same
   source SHA and artifact digests;
