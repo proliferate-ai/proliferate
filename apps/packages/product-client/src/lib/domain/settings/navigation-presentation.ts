@@ -108,12 +108,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "organization-model-policy", label: "Model policy", iconId: "organization-model-policy", adminOnly: true },
         ],
       },
-      {
-        id: "org_auth",
-        heading: "Authentication",
-        items: [
-        ],
-      },
     ],
   },
   {

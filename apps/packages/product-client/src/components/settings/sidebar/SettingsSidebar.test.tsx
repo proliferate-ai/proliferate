@@ -170,7 +170,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(screen.queryByRole("button", { name: /Members/ })).not.toBeNull();
     expect(screen.queryByRole("button", { name: /Billing/ })).not.toBeNull();
     expect(screen.getByText("Policies")).toBeTruthy();
-    expect(screen.getByText("Authentication")).toBeTruthy();
   });
 
   it("gives every harness its own entry in the Agents scope, in order", () => {
