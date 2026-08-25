@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  recordAutomationClaimPollFailure,
   recordHotWorkspaceReconcileFailure,
   recordSessionHistoryRehydrateFailure,
   recordSessionMetadataRefreshFailure,
@@ -23,7 +22,6 @@ describe("fixed ProductClient renderer diagnostic migrations", () => {
     const emit = vi.fn();
     setRendererDiagnosticsSink({ emit });
 
-    recordAutomationClaimPollFailure("TypeError");
     recordTranscriptVirtualizerBlank({
       sessionId: "session-1",
       workspaceId: "workspace-1",
@@ -53,7 +51,6 @@ describe("fixed ProductClient renderer diagnostic migrations", () => {
     });
 
     expect(emit.mock.calls.map(([input]) => input.name)).toEqual([
-      "renderer.automation.claim_poll_failed",
       "renderer.transcript.virtualizer_blank",
       "renderer.workspace.hot_reconcile_failed",
       "renderer.session.metadata_refresh_failed",
