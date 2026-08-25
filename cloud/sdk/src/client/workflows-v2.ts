@@ -11,10 +11,11 @@ export interface WorkflowV2RequestOptions {
 }
 
 /**
- * Type guard for a schema_version-2 definition payload. The shared list/get
- * routes can return gen-1 (schema_version 1) and gen-2 (schema_version 2)
- * rows side by side; narrow with this before reading gen-2-only fields
- * (nodes/edges/inputs/docTemplates).
+ * Type guard for a schema_version-2 definition payload. The list row's
+ * `definition` is typed loosely (`unknown`), so narrow with this before
+ * reading the document fields (nodes/edges/inputs/docTemplates). Since the
+ * gen-1 lane was deleted the server only emits schema_version-2 rows; the
+ * guard remains the honest way to cross the loose type.
  */
 export function isWorkflowDefinitionV2(
   definitionJson: unknown,
@@ -27,11 +28,11 @@ export function isWorkflowDefinitionV2(
 }
 
 /**
- * A definition row from the shared list route. The list mixes gen-1
- * (schema_version 1) and gen-2 rows, so `definition` is typed loosely and
+ * A definition row from the list route (all rows are schema_version 2 since
+ * the gen-1 lane was deleted). `definition` is typed loosely and
  * `schemaVersion` sits on the row itself (per the server's
  * WorkflowDefinitionResponseV2); narrow `definition` with
- * `isWorkflowDefinitionV2` before treating it as gen-2.
+ * `isWorkflowDefinitionV2` before reading document fields.
  */
 export interface WorkflowDefinitionListRowV2 {
   id: string;
@@ -50,14 +51,11 @@ export interface WorkflowDefinitionListResponseV2 {
 }
 
 /**
- * Hand-authored request envelopes rather than derived from the generated
- * `WorkflowDefinitionCreateRequest`/`WorkflowDefinitionUpdateRequest` schemas:
- * those generated shapes are gen-1-shaped (flat `stages`/`inputs`) and predate
- * the gen-2 ladder's PR2 server change that lands the `definition` document
- * envelope on the wire (verified against PR2's regenerated openapi.ts:
- * WorkflowDefinitionCreateRequestV2/UpdateRequestV2). Once PR2 is in this
- * chain's base and the OpenAPI client is regenerated, replace these with the
- * generated shapes (see the header comment in types/workflows-v2.ts).
+ * Hand-authored request envelopes, reconciled field-for-field against the
+ * generated `WorkflowDefinitionCreateRequestV2`/`UpdateRequestV2` schemas in
+ * `generated/openapi.ts` (which are v2-only since the gen-1 lane was
+ * deleted). Swapping these for the generated shapes is a deliberate
+ * follow-up refactor of the gen-2 SDK, kept out of the deletion PR.
  */
 export interface WorkflowDefinitionCreateRequestV2 {
   title: string;

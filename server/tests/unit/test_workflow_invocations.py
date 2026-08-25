@@ -1,3 +1,11 @@
+"""Unit coverage for gen-2 invocation identity and argument redaction.
+
+RFC 8785 canonicalization is the invocation replay identity and the
+argument-portability gate (``service_v2`` canonicalizes the request and the
+arguments before accepting them), and ``main.py``'s validation-error handler
+redacts argument values on exactly the invocation PUT route.
+"""
+
 from __future__ import annotations
 
 import json
@@ -7,406 +15,61 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from starlette.requests import Request
 
-from proliferate.main import _validation_error_handler, create_app
-from proliferate.server.workflows.domain.invocation import (
-    build_portable_definition,
-    canonical_json,
-    collect_run_eligibility_blockers,
-    validate_invocation_arguments,
-)
-from proliferate.server.workflows.models import WorkflowInvocationCreateRequest
+from proliferate.main import _validation_error_handler
+from proliferate.server.workflows.domain.invocation import canonical_json
+from proliferate.server.workflows.models_v2 import WorkflowInvocationCreateRequestV2
 
-# Inlined from the retired fixtures/contracts/workflow-portable-execution/v1.json
-# (the gen-1 portable-execution contract is superseded; the canonical-number rules
-# still govern v1 invocation arguments).
+# Canonical-number rules governing invocation replay identity: JSON number
+# spellings that mean the same value must canonicalize identically, and
+# integers outside the I-JSON safe range are rejected by canonicalization
+# (the v2 argument-portability gate).
 CANONICAL_NUMBER_CASES = [
-    {"source": "1", "canonical": "1", "portable": True},
-    {"source": "1.0", "canonical": "1", "portable": True},
-    {"source": "1e0", "canonical": "1", "portable": True},
-    {"source": "-0", "canonical": "0", "portable": True},
-    {"source": "0.0", "canonical": "0", "portable": True},
-    {"source": "1.5", "canonical": "1.5", "portable": True},
-    {"source": "9007199254740991", "canonical": "9007199254740991", "portable": True},
-    {"source": "-9007199254740991", "canonical": "-9007199254740991", "portable": True},
-    {"source": "9007199254740992", "canonical": "9007199254740992", "portable": False},
-    {"source": "9007199254740992.0", "canonical": "9007199254740992", "portable": False},
-    {"source": "9.007199254740992e15", "canonical": "9007199254740992", "portable": False},
+    {"source": "1", "canonical": "1"},
+    {"source": "1.0", "canonical": "1"},
+    {"source": "1e0", "canonical": "1"},
+    {"source": "-0", "canonical": "0"},
+    {"source": "0.0", "canonical": "0"},
+    {"source": "1.5", "canonical": "1.5"},
+    {"source": "9007199254740991", "canonical": "9007199254740991"},
+    {"source": "-9007199254740991", "canonical": "-9007199254740991"},
 ]
+NON_PORTABLE_INTEGER_SOURCES = ["9007199254740992", "-9007199254740992"]
 
 
-def _number_definition() -> dict[str, object]:
-    return {
-        "inputs": [{"name": "value", "type": "number", "required": True}],
-        "stages": [
-            {
-                "harnessConfig": {
-                    "agentKind": "claude",
-                    "modelSelection": {"kind": "targetDefault"},
-                    "permissionPolicy": "workflowDefault",
-                },
-                "steps": [{"kind": "agent.prompt", "prompt": "Use {{inputs.value}}"}],
-            }
-        ],
-    }
-
-
-def test_shared_number_fixture_is_canonical_and_portable() -> None:
+def test_number_spellings_canonicalize_to_replay_identity() -> None:
     for case in CANONICAL_NUMBER_CASES:
-        value = json.loads(case["source"])
-        if case["portable"]:
-            assert canonical_json(value) == case["canonical"]
-            validate_invocation_arguments(_number_definition(), {"value": value})
-        else:
-            with pytest.raises(ValueError):
-                validate_invocation_arguments(_number_definition(), {"value": value})
+        assert canonical_json(json.loads(case["source"])) == case["canonical"]
 
 
-def test_invocation_wire_requires_arguments_but_leaves_portability_to_domain() -> None:
-    body = {
-        "schemaVersion": 1,
-        "workflowDefinitionId": "10000000-0000-4000-8000-000000000001",
-        "expectedRevision": 1,
-        "arguments": {"value": 9_007_199_254_740_992},
-        "target": {"kind": "managedCloud"},
-    }
-    parsed = WorkflowInvocationCreateRequest.model_validate(body)
-    assert parsed.arguments["value"] == 9_007_199_254_740_992
-    body.pop("arguments")
-    with pytest.raises(ValidationError):
-        WorkflowInvocationCreateRequest.model_validate(body)
+def test_integers_outside_safe_range_are_rejected_by_canonicalization() -> None:
+    for source in NON_PORTABLE_INTEGER_SOURCES:
+        with pytest.raises(ValueError):
+            canonical_json(json.loads(source))
 
 
-@pytest.mark.parametrize("value", [True, 1.0, "1"])
+@pytest.mark.parametrize("value", ["2", 2.0, True, None])
 def test_invocation_schema_version_requires_exact_integer(value: object) -> None:
     with pytest.raises(ValidationError):
-        WorkflowInvocationCreateRequest.model_validate(
+        WorkflowInvocationCreateRequestV2.model_validate(
             {
                 "schemaVersion": value,
                 "workflowDefinitionId": "10000000-0000-4000-8000-000000000001",
-                "expectedRevision": 1,
                 "arguments": {},
-                "target": {"kind": "managedCloud"},
+                "placement": {"repoConfigId": "root-1", "mode": "worktree"},
             }
         )
-
-
-def test_eligibility_collects_every_closed_blocker_in_stable_order() -> None:
-    stages = (
-        {
-            "harnessConfig": {
-                "agentKind": "claude",
-                "modelId": "missing",
-                "effort": "impossible",
-            },
-            "steps": [
-                {"kind": "agent.prompt", "prompt": "one", "goal": {"objective": "g"}},
-                {"kind": "agent.prompt", "prompt": "two"},
-            ],
-        },
-        {
-            "harnessConfig": {"agentKind": "unknown"},
-            "steps": [],
-        },
-    )
-    blockers = collect_run_eligibility_blockers(
-        stages=stages,
-        default_repo_config_id="repo",
-        default_repository_available=False,
-    )
-    assert [blocker.code for blocker in blockers] == [
-        "default_repository_unavailable",
-        "stage_count_not_supported",
-        "step_count_not_supported",
-        "goal_not_supported",
-        "step_count_not_supported",
-    ]
-    assert list(blockers) == sorted(blockers, key=lambda blocker: (blocker.path, blocker.code))
-
-
-def test_portable_definition_preserves_exact_model_id() -> None:
-    definition = build_portable_definition(
-        inputs=(),
-        stages=(
-            {
-                "harnessConfig": {"agentKind": "claude", "modelId": "claude-sonnet"},
-                "steps": [{"kind": "agent.prompt", "prompt": "Inspect."}],
-            },
-        ),
-    )
-    harness = definition["stages"][0]["harnessConfig"]  # type: ignore[index]
-    assert harness == {
-        "agentKind": "claude",
-        "modelSelection": {"kind": "exact", "modelId": "claude-sonnet"},
-        "permissionPolicy": "workflowDefault",
-    }
-
-
-def test_portable_definition_preserves_exact_model_effort() -> None:
-    definition = build_portable_definition(
-        inputs=(),
-        stages=(
-            {
-                "harnessConfig": {
-                    "agentKind": "claude",
-                    "modelId": "claude-sonnet",
-                    "effort": "high",
-                },
-                "steps": [{"kind": "agent.prompt", "prompt": "Inspect."}],
-            },
-        ),
-    )
-    assert definition["stages"][0]["harnessConfig"] == {  # type: ignore[index]
-        "agentKind": "claude",
-        "modelSelection": {"kind": "exact", "modelId": "claude-sonnet"},
-        "effort": "high",
-        "permissionPolicy": "workflowDefault",
-    }
-
-
-def _argument_definition(*, prompt: str) -> dict[str, object]:
-    return {
-        "inputs": [
-            {"name": "required", "type": "string", "required": True},
-            {"name": "count", "type": "number", "required": False},
-            {"name": "enabled", "type": "boolean", "required": False},
-            {"name": "note", "type": "string", "required": False},
-        ],
-        "stages": [
-            {
-                "harnessConfig": {
-                    "agentKind": "claude",
-                    "modelSelection": {"kind": "targetDefault"},
-                    "permissionPolicy": "workflowDefault",
-                },
-                "steps": [{"kind": "agent.prompt", "prompt": prompt}],
-            }
-        ],
-    }
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({}, "required input 'required' has no argument"),
-        (
-            {"required": "ok", "extra": "no"},
-            "argument 'extra' is not a declared input",
-        ),
-        ({"required": 1}, "argument 'required' must be a string"),
-        (
-            {"required": "ok", "count": True},
-            "argument 'count' must be a number",
-        ),
-        (
-            {"required": "ok", "enabled": "yes"},
-            "argument 'enabled' must be a boolean",
-        ),
-    ],
-)
-def test_invocation_arguments_reject_missing_extra_and_wrong_types(
-    arguments: dict[str, object],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message.replace("'", "\\'")):
-        validate_invocation_arguments(  # type: ignore[arg-type]
-            _argument_definition(prompt="Use {{inputs.required}}"),
-            arguments,
-        )
-
-
-def test_optional_input_is_required_only_when_referenced() -> None:
-    arguments = {"required": "ok"}
-    validate_invocation_arguments(
-        _argument_definition(prompt="Use {{inputs.required}}"),
-        arguments,
-    )  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="prompt input 'note' has no argument"):
-        validate_invocation_arguments(
-            _argument_definition(prompt="Use {{inputs.required}} {{inputs.note}}"),
-            arguments,
-        )  # type: ignore[arg-type]
-
-
-@pytest.mark.parametrize(
-    "body",
-    [
-        {
-            "schemaVersion": 1,
-            "workflowDefinitionId": "10000000-0000-4000-8000-000000000001",
-            "expectedRevision": 1,
-            "arguments": {},
-            "target": {"kind": "managedCloud"},
-            "unexpected": True,
-        },
-        {
-            "schemaVersion": 1,
-            "workflowDefinitionId": "10000000-0000-4000-8000-000000000001",
-            "expectedRevision": 1,
-            "arguments": {},
-            "target": {"kind": "managedCloud", "unexpected": True},
-        },
-    ],
-)
-def test_invocation_request_rejects_unknown_top_level_and_target_fields(
-    body: dict[str, object],
-) -> None:
-    with pytest.raises(ValidationError) as captured:
-        WorkflowInvocationCreateRequest.model_validate(body)
-    assert any(error["type"] == "extra_forbidden" for error in captured.value.errors())
-
-
-def test_invocation_openapi_pins_exact_request_and_response_shapes() -> None:
-    schema = create_app().openapi()
-    operation = schema["paths"]["/v1/workflow-invocations/{invocation_id}"]
-    assert operation["put"]["requestBody"]["content"]["application/json"]["schema"]["anyOf"] == [
-        {"$ref": "#/components/schemas/WorkflowInvocationCreateRequestV2"},
-        {"$ref": "#/components/schemas/WorkflowInvocationCreateRequest"},
-    ]
-    assert operation["put"]["responses"]["200"]["content"]["application/json"]["schema"][
-        "anyOf"
-    ] == [
-        {"$ref": "#/components/schemas/WorkflowInvocationResponse"},
-        {"$ref": "#/components/schemas/WorkflowInvocationResponseV2"},
-    ]
-    assert operation["get"]["responses"]["200"]["content"]["application/json"]["schema"][
-        "anyOf"
-    ] == [
-        {"$ref": "#/components/schemas/ManagedWorkflowInvocationResponse"},
-        {"$ref": "#/components/schemas/WorkflowInvocationResponseV2"},
-    ]
-    assert operation["put"]["responses"]["201"]["content"]["application/json"]["schema"][
-        "anyOf"
-    ] == [
-        {"$ref": "#/components/schemas/WorkflowInvocationResponse"},
-        {"$ref": "#/components/schemas/WorkflowInvocationResponseV2"},
-    ]
-
-    components = schema["components"]["schemas"]
-    request = components["WorkflowInvocationCreateRequest"]
-    assert request["additionalProperties"] is False
-    assert request["required"] == [
-        "schemaVersion",
-        "workflowDefinitionId",
-        "expectedRevision",
-        "arguments",
-        "target",
-    ]
-    assert set(request["properties"]) == set(request["required"])
-    assert request["properties"]["schemaVersion"]["const"] == 1
-    assert request["properties"]["target"] == {
-        "$ref": "#/components/schemas/ManagedCloudWorkflowTarget"
-    }
-
-    response = components["WorkflowInvocationResponse"]
-    assert response["additionalProperties"] is False
-    assert set(response["properties"]) == {
-        "id",
-        "schemaVersion",
-        "workflowDefinitionId",
-        "definitionRevision",
-        "title",
-        "description",
-        "definition",
-        "arguments",
-        "placement",
-        "target",
-        "createdAt",
-    }
-    assert set(response["required"]) == set(response["properties"])
-    assert components["ManagedCloudWorkflowTarget"]["additionalProperties"] is False
-    assert components["ManagedCloudWorkflowTarget"]["properties"]["kind"]["const"] == (
-        "managedCloud"
-    )
-
-    request_v2 = components["WorkflowInvocationCreateRequestV2"]
-    assert request_v2["additionalProperties"] is False
-    assert request_v2["required"] == [
-        "schemaVersion",
-        "workflowDefinitionId",
-        "arguments",
-        "placement",
-    ]
-    assert set(request_v2["properties"]) == set(request_v2["required"])
-    assert request_v2["properties"]["schemaVersion"]["const"] == 2
-    assert request_v2["properties"]["placement"] == {
-        "$ref": "#/components/schemas/WorkflowInvocationPlacementV2"
-    }
-
-    placement_v2 = components["WorkflowInvocationPlacementV2"]
-    assert placement_v2["additionalProperties"] is False
-    assert set(placement_v2["required"]) == {"repoConfigId", "mode"}
-    assert set(placement_v2["properties"]["mode"]["enum"]) == {"worktree", "repo_root"}
-
-    response_v2 = components["WorkflowInvocationResponseV2"]
-    assert response_v2["additionalProperties"] is False
-    assert set(response_v2["properties"]) == {
-        "id",
-        "schemaVersion",
-        "workflowDefinitionId",
-        "definitionRevision",
-        "title",
-        "description",
-        "definition",
-        "arguments",
-        "placement",
-        "createdAt",
-    }
-    assert set(response_v2["required"]) == set(response_v2["properties"])
-    assert response_v2["properties"]["definition"] == {
-        "$ref": "#/components/schemas/WorkflowDefinitionDocumentV2"
-    }
-
-
-def test_managed_workflow_openapi_pins_required_nullable_and_status_contracts() -> None:
-    schemas = create_app().openapi()["components"]["schemas"]
-    managed = schemas["ManagedWorkflowExecutionResponse"]
-    assert set(managed["required"]) == set(managed["properties"])
-    for field in (
-        "execution",
-        "openTarget",
-        "deliveryErrorCode",
-        "observationErrorCode",
-        "acceptedAt",
-    ):
-        assert {branch.get("type") for branch in managed["properties"][field]["anyOf"]} & {"null"}
-
-    history = schemas["ManagedWorkflowHistoryItem"]
-    assert set(history["required"]) == set(history["properties"])
-    assert set(history["properties"]["deliveryStatus"]["enum"]) == {
-        "prepared",
-        "queued",
-        "delivering",
-        "accepted",
-        "delivery_failed",
-        "delivery_cancelled",
-    }
-    assert set(history["properties"]["desiredState"]["enum"]) == {
-        "active",
-        "cancelled",
-    }
-    execution_status = history["properties"]["executionStatus"]["anyOf"]
-    assert any(branch.get("type") == "null" for branch in execution_status)
-    assert next(branch for branch in execution_status if "enum" in branch)["enum"] == [
-        "accepted",
-        "running",
-        "completed",
-        "failed",
-        "cancelled",
-        "interrupted",
-    ]
 
 
 @pytest.mark.asyncio
 async def test_workflow_invocation_422_redacts_argument_values_only_for_this_route() -> None:
     body = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "workflowDefinitionId": "10000000-0000-4000-8000-000000000001",
-        "expectedRevision": 1,
         "arguments": {"ticket": ["ARGUMENT_VALUE_MUST_NOT_LEAK"]},
-        "target": {"kind": "managedCloud"},
+        "placement": {"repoConfigId": "root-1", "mode": "worktree"},
     }
     with pytest.raises(ValidationError) as captured:
-        WorkflowInvocationCreateRequest.model_validate(body)
+        WorkflowInvocationCreateRequestV2.model_validate(body)
     request = Request(
         {
             "type": "http",

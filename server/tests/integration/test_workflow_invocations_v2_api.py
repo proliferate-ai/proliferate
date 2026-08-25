@@ -23,7 +23,6 @@ from sqlalchemy import select
 
 from proliferate.db.models.cloud.repositories import RepoConfig
 from proliferate.db.models.workflows import WorkflowDefinition, WorkflowInvocation
-from proliferate.db.store import workflow_managed_execution as managed_execution_store
 from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.workflows.domain.invocation import canonical_json
 from tests.integration.cloud_api_helpers import register_and_login
@@ -142,8 +141,8 @@ async def test_v2_invocation_freezes_the_run_snapshot_contract_shape(
     ).scalar_one()
     assert invocation_row.invocation_json["definition"] == definition_row.definition_json
 
-    # A v1-shaped PUT replaying against this v2-occupied id is a caller-side
-    # collision: 409, never "stored data is invalid".
+    # A gen-1-shaped PUT is no longer a recognized wire shape at all: with the
+    # v1 lane deleted the strict v2 request model rejects it at validation.
     v1_shaped_replay = await client.put(
         f"/v1/workflow-invocations/{invocation_id}",
         headers=_headers(owner),
@@ -155,7 +154,7 @@ async def test_v2_invocation_freezes_the_run_snapshot_contract_shape(
             "target": {"kind": "managedCloud"},
         },
     )
-    assert v1_shaped_replay.status_code == 409
+    assert v1_shaped_replay.status_code == 422
 
     # Idempotent replay returns the identical frozen record.
     replay = await client.put(
@@ -178,7 +177,7 @@ async def test_v2_invocation_freezes_the_run_snapshot_contract_shape(
     )
     assert conflicting.status_code == 409
 
-    # GET returns the frozen record directly (no managed-execution read).
+    # GET returns the frozen record directly.
     fetched = await client.get(
         f"/v1/workflow-invocations/{invocation_id}",
         headers=_headers(owner),
@@ -186,12 +185,7 @@ async def test_v2_invocation_freezes_the_run_snapshot_contract_shape(
     assert fetched.status_code == 200
     assert fetched.json() == frozen
 
-    # Gen-2 invocations never enter the managed-execution lane.
-    managed = await managed_execution_store.get_managed_execution(
-        db_session,
-        invocation_id=UUID(invocation_id),
-    )
-    assert managed is None
+    # The gen-1 managed-delivery routes no longer exist.
     deliver = await client.post(
         f"/v1/workflow-invocations/{invocation_id}/deliver",
         headers=_headers(owner),
@@ -262,26 +256,6 @@ async def test_v2_invocation_argument_and_placement_rejections(
     # Shape still holds: empty ids and unknown modes are rejected.
     assert await put(_invocation_body(definition_id, "")) == 422
     assert await put(_invocation_body(definition_id, str(repo.id), mode="floating")) == 422
-
-    # A v2 invocation of a v1 definition is invalid.
-    v1_created = await client.post(
-        "/v1/workflows",
-        headers=_headers(owner),
-        json={
-            "title": "Legacy",
-            "description": "",
-            "defaultRepoConfigId": None,
-            "inputs": [],
-            "stages": [
-                {
-                    "harnessConfig": {"agentKind": "claude", "modelId": None, "effort": None},
-                    "steps": [{"kind": "agent.prompt", "prompt": "Do it.", "goal": None}],
-                }
-            ],
-        },
-    )
-    assert v1_created.status_code == 201
-    assert await put(_invocation_body(str(v1_created.json()["id"]), str(repo.id))) == 400
 
     # Owner isolation: someone else's definition answers not-found.
     intruder_response = await client.put(

@@ -364,15 +364,18 @@ Assert: `workflow_run` row created, status `pending_delivery`,
 `resolved_plan_json` populated with interpolated args; local-lane delivery
 attempt recorded. **Stop at the seam** — no runtime execution.
 
-**SUPERSEDED (gen-2 builder):** the collector above
-(`tests/intent/specs/workflow-runs.spec.ts`) drives the gen-1 shape —
-editor → save version → `workflow_run`/`resolved_plan_json`. The new tier-2
-seam spec `workflow-trigger-seam.spec.ts` covers the gen-2 equivalent
-instead: main page → Run → trigger dialog → exactly one
+**SUPERSEDED (gen-2 builder; gen-1 lane deleted):** the gen-1 collector
+(`tests/intent/specs/workflow-runs.spec.ts`) and the server lane whose rows
+this entry asserts (`workflow_run` status `pending_delivery`,
+`resolved_plan_json`, local-lane delivery) no longer exist — the collector
+was deleted by the gen-2 ladder and the lane by
+`delivery/cull-sweep/delivery-spec-delete-gen1-workflows.md`. The tier-2
+seam spec `workflow-trigger-seam.spec.ts` covers the gen-2 equivalent:
+main page → Run → trigger dialog → exactly one
 `PUT /v1/workflow-invocations/{id}` carrying the frozen definition +
 placement, stopping at the same runtime seam (AnyHarness is absent in tier 2
-by standard). This entry's assertions stand as the historical record of the
-gen-1 collector being replaced; T2-WF-2 stays parked.
+by standard). This entry's assertions stand as the historical record;
+T2-WF-2 stays parked.
 
 ### T2-WF-2: poll trigger against stub feed
 The PR-B validation script (workflows-architecture §10) productionized:

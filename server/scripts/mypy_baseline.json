@@ -237,30 +237,6 @@
       "count": 1
     },
     {
-      "path": "proliferate/background/tasks/workflows.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 1
-    },
-    {
-      "path": "proliferate/background/tasks/workflows.py",
-      "code": "untyped-decorator",
-      "message": "Untyped decorator makes function \"cancel\" untyped",
-      "count": 1
-    },
-    {
-      "path": "proliferate/background/tasks/workflows.py",
-      "code": "untyped-decorator",
-      "message": "Untyped decorator makes function \"deliver\" untyped",
-      "count": 1
-    },
-    {
-      "path": "proliferate/background/tasks/workflows.py",
-      "code": "untyped-decorator",
-      "message": "Untyped decorator makes function \"observe\" untyped",
-      "count": 1
-    },
-    {
       "path": "proliferate/db/store/agent_gateway/credits.py",
       "code": "attr-defined",
       "message": "\"Result[Any]\" has no attribute \"rowcount\"",
@@ -480,18 +456,6 @@
       "path": "proliferate/db/store/users.py",
       "code": "call-overload",
       "message": "No overload variant of \"select\" matches argument type \"UUID\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/db/store/workflow_managed_delivery.py",
-      "code": "call-overload",
-      "message": "No overload variant of \"int\" matches argument type \"object\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/workflow_managed_projection.py",
-      "code": "call-overload",
-      "message": "No overload variant of \"int\" matches argument type \"object\"",
       "count": 2
     },
     {
@@ -1182,60 +1146,6 @@
       "path": "proliferate/server/web_app.py",
       "code": "arg-type",
       "message": "Argument 2 to \"add_exception_handler\" of \"Starlette\" has incompatible type \"Callable[[Request[State], HTTPException], Coroutine[Any, Any, Response]]\"; expected \"Callable[[Request[State], Exception], Response | Awaitable[Response]] | Callable[[WebSocket[State], Exception], Awaitable[None]]\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/workflows/api.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"workflow_history_item_response\" has incompatible type \"Any | str\"; expected \"WorkflowHistoryItem\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/workflows/api.py",
-      "code": "misc",
-      "message": "\"WorkflowHistoryItem\" object is not iterable",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/workflows/api.py",
-      "code": "str-unpack",
-      "message": "Unpacking a string is disallowed",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/workflows/domain/managed_execution.py",
-      "code": "no-any-return",
-      "message": "Returning Any from function declared to return \"int\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/workflows/managed.py",
-      "code": "return-value",
-      "message": "Incompatible return value type (got \"tuple[tuple[tuple[WorkflowHistoryItem, str], ...], str | None]\", expected \"tuple[tuple[WorkflowHistoryItem, str], str | None]\")",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/workflows/managed_models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 9
-    },
-    {
-      "path": "proliferate/server/workflows/managed_models.py",
-      "code": "unused-ignore",
-      "message": "Unused \"type: ignore\" comment",
-      "count": 7
-    },
-    {
-      "path": "proliferate/server/workflows/worker/observation.py",
-      "code": "call-overload",
-      "message": "No overload variant of \"int\" matches argument type \"object\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/workflows/worker/target_plan.py",
-      "code": "union-attr",
-      "message": "Item \"None\" of \"str | None\" has no attribute \"strip\"",
       "count": 1
     }
   ]

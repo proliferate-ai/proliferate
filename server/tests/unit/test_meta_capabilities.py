@@ -86,9 +86,7 @@ def test_capabilities_shape_and_version() -> None:
         "pricing",
         "githubRepositoryAccess",
         "managedCloud",
-        "workflowManagedRuns",
     }
-    assert caps.workflowManagedRuns is False
     for field, subfields in _CAPABILITY_FIELDS.items():
         if subfields is not None:
             assert set(dumped[field]) == set(subfields)

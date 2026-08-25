@@ -30,37 +30,19 @@ function toListItem(row: WorkflowDefinitionListRowV2): WorkflowMainListItem {
 }
 
 /**
- * Narrows the shared list response down to gen-2 rows, in the order the
- * server returned them. The list route puts `schemaVersion` on the row
- * itself (see `WorkflowDefinitionListRowV2`'s doc comment in the SDK) — a
- * plain data check here keeps this domain module import-clean (Cloud SDK
- * *types* only). `isWorkflowDefinitionV2(row.definition)` is a distinct,
- * runtime-value narrowing the SDK exports for reading a row's nested v2
- * fields (nodes/edges/...); this view never touches those, so it doesn't
- * need it.
+ * Projects the list response's rows (all gen-2 since the gen-1 lane was
+ * deleted; the `schemaVersion === 2` filter is defensive narrowing over the
+ * SDK's loose row type, not a mixed-version split), in the order the server
+ * returned them. A plain data check here keeps this domain module
+ * import-clean (Cloud SDK *types* only). `isWorkflowDefinitionV2
+ * (row.definition)` is a distinct, runtime-value narrowing the SDK exports
+ * for reading a row's nested v2 fields (nodes/edges/...); this view never
+ * touches those, so it doesn't need it.
  */
 export function selectWorkflowV2DefinitionRows(
   rows: readonly WorkflowDefinitionListRowV2[],
 ): WorkflowMainListItem[] {
   return rows.filter((row) => row.schemaVersion === 2).map(toListItem);
-}
-
-/**
- * The complement of `selectWorkflowV2DefinitionRows` over the same response:
- * every row the gen-2 surfaces cannot open. The shared `/v1/workflows` list
- * route returns gen-1 (`schemaVersion` 1) and gen-2 rows side by side, so
- * without this the gen-1 rows a user saved before the rebuild would be
- * dropped on the floor with nothing on screen saying so.
- *
- * Deliberately the complement rather than `schemaVersion === 1`: a row whose
- * version this build does not recognise (absent, or a future number) is
- * likewise not openable in the v2 builder, and surfacing it as legacy is
- * honest where silently discarding it is not.
- */
-export function selectWorkflowLegacyDefinitionRows(
-  rows: readonly WorkflowDefinitionListRowV2[],
-): WorkflowMainListItem[] {
-  return rows.filter((row) => row.schemaVersion !== 2).map(toListItem);
 }
 
 /**

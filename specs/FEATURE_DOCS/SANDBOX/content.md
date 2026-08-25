@@ -105,9 +105,9 @@ GitHub App install/reauth completion
 ([github_app/service.py](../../../server/proliferate/server/cloud/github_app/service.py)),
 sandbox bootstrap preclone of every configured environment
 ([materialize/sandbox.py](../../../server/proliferate/server/cloud/materialization/materialize/sandbox.py)),
-workspace creation (synchronously, in-request), and workflow delivery at a
-frozen base ref
-([delivery.py](../../../server/proliferate/server/workflows/worker/delivery.py)).
+and workspace creation (synchronously, in-request). (Gen-1 managed workflow
+delivery was a further trigger until that lane was deleted —
+`delivery/cull-sweep/delivery-spec-delete-gen1-workflows.md`.)
 Concurrent triggers serialize on the per-sandbox materialization lock; lock
 timeout is a typed busy error (503), never a second concurrent refresh.
 
@@ -379,7 +379,6 @@ server/proliferate/
 ├── server/cloud/workspaces/
 │   ├── service.py                        create flow: refresh, base validation, exact-ref proof
 │   └── provisioning.py                   worktree create call
-├── server/workflows/worker/delivery.py   frozen-base materialization for workflow runs
 ├── db/store/cloud_workspaces.py          archive/delete row writes
 └── integrations/anyharness/
     ├── workspaces.py                     worktree create + exact-ref clients

@@ -9,7 +9,6 @@ import {
 } from "#product/hooks/access/cloud/workflows/use-workflow-definitions-v2-access";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import {
-  selectWorkflowLegacyDefinitionRows,
   selectWorkflowV2DefinitionRows,
   workflowRunDefinitionTitle,
   type WorkflowMainListItem,
@@ -18,7 +17,6 @@ import { WorkflowMainDefinitionRow } from "#product/components/workflows/main/Wo
 import { WorkflowMainDeleteDialog } from "#product/components/workflows/main/WorkflowMainDeleteDialog";
 import { WorkflowMainEmptyState } from "#product/components/workflows/main/WorkflowMainEmptyState";
 import { WorkflowMainExecutionsGroup } from "#product/components/workflows/main/WorkflowMainExecutionsGroup";
-import { WorkflowMainLegacyGroup } from "#product/components/workflows/main/WorkflowMainLegacyGroup";
 import { WorkflowMainNewMenu } from "#product/components/workflows/main/WorkflowMainNewMenu";
 import { WorkflowTriggerDialog } from "#product/components/workflows/trigger/WorkflowTriggerDialog";
 import { useWorkflowExecutions } from "#product/hooks/workflows/facade/use-workflow-executions";
@@ -42,16 +40,10 @@ export interface WorkflowsMainSurfaceProps {
  * template), and the Run/Edit/Delete row actions.
  *
  * Split at the row (`WorkflowMainDefinitionRow`), the empty state
- * (`WorkflowMainEmptyState`), the legacy group
- * (`WorkflowMainLegacyGroup`) and the "new workflow" menu
+ * (`WorkflowMainEmptyState`), and the "new workflow" menu
  * (`WorkflowMainNewMenu`) so this file stays the orchestrator: it owns the
  * list query, the run-record fetch a Run click needs, the delete mutation,
  * and nothing about how any one piece paints.
- *
- * The shared list route returns gen-1 rows alongside gen-2 ones. They cannot
- * open in the v2 builder, so they get their own delete-only group rather than
- * being filtered away — a definition the user saved must not disappear with
- * nothing on screen accounting for it.
  */
 export function WorkflowsMainSurface({
   authCacheScope,
@@ -130,7 +122,6 @@ export function WorkflowsMainSurface({
 
   const rows = listQuery.data?.workflows ?? [];
   const items = selectWorkflowV2DefinitionRows(rows);
-  const legacyItems = selectWorkflowLegacyDefinitionRows(rows);
   const runningRecord: WorkflowDefinitionRecordV2 | undefined =
     runningId !== null && runQuery.data?.id === runningId ? runQuery.data : undefined;
 
@@ -143,14 +134,13 @@ export function WorkflowsMainSurface({
     needle.length === 0
     || haystacks.some((value) => value !== null && value.toLowerCase().includes(needle));
   const visibleItems = items.filter((item) => matches(item.title, item.description));
-  const visibleLegacy = legacyItems.filter((item) => matches(item.title, item.description));
   const visibleRuns = executions.runs.filter((run) => matches(
     workflowRunDefinitionTitle(run.definitionJson) ?? WORKFLOW_MAIN_COPY.executionFallbackTitle,
   ));
-  const filterable = items.length + legacyItems.length + executions.runs.length > 0;
+  const filterable = items.length + executions.runs.length > 0;
   const nothingMatches = needle.length > 0
     && filterable
-    && visibleItems.length + visibleLegacy.length + visibleRuns.length === 0;
+    && visibleItems.length + visibleRuns.length === 0;
 
   return (
     <ProductPageShell
@@ -178,7 +168,7 @@ export function WorkflowsMainSurface({
       ) : null}
 
       {items.length === 0 ? (
-        <WorkflowMainEmptyState onNew={onNew} legacyPresent={legacyItems.length > 0} />
+        <WorkflowMainEmptyState onNew={onNew} />
       ) : visibleItems.length > 0 ? (
         <Card
           surface="opaque"
@@ -222,16 +212,6 @@ export function WorkflowsMainSurface({
         <p className="px-1 text-ui-sm text-muted-foreground" role="status">
           {WORKFLOW_MAIN_COPY.filterNoMatches(filterText.trim())}
         </p>
-      ) : null}
-
-      {visibleLegacy.length > 0 ? (
-        <WorkflowMainLegacyGroup
-          items={visibleLegacy}
-          onDelete={(item) => {
-            setDeleteError(null);
-            setDeleteTarget(item);
-          }}
-        />
       ) : null}
 
       {runningRecord ? (
