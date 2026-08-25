@@ -283,5 +283,3 @@ async def test_accept_invitation_uses_shared_owner_path(
 
     assert result is expected
     assert calls == 1
-
-
