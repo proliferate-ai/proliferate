@@ -9,12 +9,11 @@ of `apps/packages/product-client/src` may import which. One record under
 - FE-FENCE-001: a top-level directory may import another only along an edge
   declared in the `[[edge]]` baseline of the record file. The baseline is the
   measured directory→directory graph at fence introduction — permissive by
-  construction, shrink-only afterwards (the Wave-4 re-fence ratchets it). A new
-  edge and a stale baseline row are both failures, so the baseline always
-  equals reality exactly.
+  construction, shrink-only afterwards. A new edge and a stale baseline row
+  are both failures, so the baseline always equals reality exactly.
 
-`--warn` reports everything and exits 0: the non-blocking mode this checker
-ships in while the cull-sweep waves move files underneath it.
+`--warn` reports everything and exits 0: the checker's non-blocking
+introduction mode, dropped when the baseline is ready to enforce.
 """
 
 from __future__ import annotations

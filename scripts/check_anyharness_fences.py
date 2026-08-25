@@ -14,8 +14,8 @@ records under `lints/anyharness/fences.toml` own the rules:
   sites live in `lints/anyharness/exceptions.toml`, one `(path, site)`
   fingerprint per site — never counts.
 
-`--warn` reports everything and exits 0: the non-blocking mode this checker
-ships in while the cull-sweep waves move files underneath it.
+`--warn` reports everything and exits 0: the checker's non-blocking
+introduction mode, dropped when the baseline is ready to enforce.
 """
 
 from __future__ import annotations

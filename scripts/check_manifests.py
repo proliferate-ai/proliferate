@@ -24,8 +24,8 @@ top-level domain it belongs to (`accounts`), `cloud/<sub>` for the cloud
 subsystems, the bare filename for package-root modules (`main.py`), or the
 first path segment for code outside `server/` (`background`, `integrations`).
 
-`--warn` reports everything and exits 0: the non-blocking mode this checker
-ships in while the cull-sweep waves move files underneath it.
+`--warn` reports everything and exits 0: the checker's non-blocking
+introduction mode, dropped when the declarations are ready to enforce.
 """
 
 from __future__ import annotations
