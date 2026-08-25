@@ -362,3 +362,20 @@ There are no remaining freeze blockers or deferred product decisions for this sl
 - Permitted repository write scope after freeze: ProductClient Workflows routes/components/hooks/domain/lib/copy/config and their colocated tests; existing Workflow Tier-2 intent specs; the authoritative Workflows documentation required to describe the frozen behavior. Shared primitives/design, SDKs, server, DB, runtime, and unrelated hosts are read-only unless the founder explicitly expands the slice.
 - Source priority during implementation: frozen specification and explicit founder rulings for desired behavior; aligned root design package for visual composition; base-revision code/schema/tests for current behavior and wiring; repository governing docs for ownership and proof.
 - Stop after implementation/review/proof, draft PR with ticket links, and isolated local launch. Do not merge, deploy, mark ready, or expand into the run-view redesign.
+
+---
+
+## Founder re-ruling — title correction (2026-08-25)
+
+The heading of this specification froze with the unfilled template placeholder
+`PR <N>`. Per the `delivery/**` authority model (a frozen artifact is never
+hand-edited except to record a founder re-ruling), this note records the
+correct title rather than rewriting the frozen heading:
+
+> PR 8 — Workflows index and builder use the supplied Workflows-v2 experience
+> without breaking execution
+
+No other content of this frozen specification is modified or reinterpreted by
+this note.
+
+Ruled by: founder — sign-off recorded in the pull request that lands this note.
