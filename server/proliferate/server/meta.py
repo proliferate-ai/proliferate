@@ -58,7 +58,6 @@ from proliferate.server.version import (
     server_version,
     worker_version,
 )
-from proliferate.server.workflows.managed import managed_workflow_delivery_enabled
 
 router = APIRouter()
 
@@ -164,7 +163,6 @@ class ServerCapabilities(BaseModel):
     pricing: PricingCapability
     githubRepositoryAccess: GitHubRepositoryAccessCapability
     managedCloud: ManagedCloudCapability
-    workflowManagedRuns: bool
 
 
 def _github_repository_access(config: Settings) -> GitHubRepositoryAccessCapability:
@@ -276,7 +274,6 @@ def build_server_capabilities(config: Settings) -> ServerCapabilities:
         pricing=pricing,
         githubRepositoryAccess=github_repository_access,
         managedCloud=managed_cloud,
-        workflowManagedRuns=managed_workflow_delivery_enabled(config),
     )
 
 

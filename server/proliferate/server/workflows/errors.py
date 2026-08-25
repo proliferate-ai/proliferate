@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from proliferate.errors import Conflict, InvalidRequest, NotFoundError, ProliferateError
+from proliferate.errors import Conflict, InvalidRequest, NotFoundError
 
 
 class WorkflowDefinitionNotFound(NotFoundError):
@@ -17,10 +17,6 @@ class InvalidWorkflowDefinition(InvalidRequest):
         super().__init__(message)
         if path is not None:
             self.extra_detail = {"path": path}
-
-
-class UnavailableWorkflowCatalogSelection(InvalidWorkflowDefinition):
-    code = "workflow_catalog_selection_unavailable"
 
 
 class WorkflowDefinitionRevisionConflict(Conflict):
@@ -55,34 +51,3 @@ class WorkflowInvocationConflict(Conflict):
 
     def __init__(self) -> None:
         super().__init__("A workflow invocation with this ID already exists with different input.")
-
-
-class WorkflowInvocationIneligible(ProliferateError):
-    code = "workflow_invocation_ineligible"
-    status_code = 422
-
-    def __init__(self, blockers: list[dict[str, str]]) -> None:
-        super().__init__("Workflow definition is not eligible for execution.")
-        self.extra_detail = {"blockers": blockers}
-
-
-class WorkflowManagedRunsUnavailable(ProliferateError):
-    code = "workflow_managed_runs_unavailable"
-    status_code = 503
-
-    def __init__(self) -> None:
-        super().__init__("Managed Workflow delivery is currently unavailable.")
-
-
-class WorkflowTargetLost(Conflict):
-    code = "workflow_target_lost"
-
-    def __init__(self) -> None:
-        super().__init__("The managed Workflow target can no longer be reached safely.")
-
-
-class InvalidWorkflowHistoryCursor(InvalidRequest):
-    code = "invalid_workflow_history_cursor"
-
-    def __init__(self) -> None:
-        super().__init__("Workflow history cursor is invalid.")

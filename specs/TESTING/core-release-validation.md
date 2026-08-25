@@ -322,7 +322,7 @@ blocked when the developer intentionally omits Stripe.
 
 | ID | Required validation |
 | --- | --- |
-| `T2-WF-1` | UI definition creation/edit, immutable versions, live reference validation, input coercion/interpolation, manual launch, and local/cloud delivery intent. The current collector (`tests/intent/specs/workflow-runs.spec.ts`) drives the gen-1 shape; the new tier-2 seam spec `workflow-trigger-seam.spec.ts` covers the gen-2 builder equivalent instead (see `specs/TESTING/scenarios.md#T2-WF-1`). |
+| `T2-WF-1` | UI definition creation/edit, live reference validation, manual launch, and the invocation-freeze seam. Covered by the tier-2 seam spec `workflow-trigger-seam.spec.ts` (the gen-1 collector `workflow-runs.spec.ts` and its lane are deleted; see `specs/TESTING/scenarios.md#T2-WF-1`). |
 | `T2-WF-2` | Poll item deduplication, invalid item reporting, cursor advancement only after scheduling, replay safety, dead endpoint behavior, and enabled-state truth. |
 | `T2-WF-3` | Function invocation CRUD, args schema, reserved namespace, write-only headers, rotation, and endpoint validation. |
 | `T2-WF-4` | Chat/workflow default-access authoring composes to the frozen provider/tool scope carried by a run. |
