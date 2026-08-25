@@ -14,6 +14,6 @@ public_surface = [
 ]
 
 allowed_importers = [
-    "cloud/agent_gateway",
     "main.py",
+    "agent_auth",
 ]

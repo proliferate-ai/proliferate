@@ -13,12 +13,11 @@ public_surface = [
 ]
 
 allowed_importers = [
-    "cloud/agent_gateway",
     "cloud/cloud_sandboxes",
     "cloud/gateway",
     "cloud/materialization",
-    "cloud/webhooks",
     "main.py",
     "organizations",
     "permissions.py",
+    "agent_auth",
 ]

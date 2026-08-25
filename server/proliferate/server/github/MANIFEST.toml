@@ -17,7 +17,6 @@ allowed_importers = [
     "cloud",
     "cloud/materialization",
     "cloud/repositories",
-    "cloud/webhooks",
     "cloud/workspaces",
     "main.py",
 ]
