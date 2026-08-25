@@ -14,10 +14,13 @@ name: CI Heavy Lanes (dispatch-only)
 #   scroll-physics           — structural half stays enforced per-PR by
 #                              check_transcript_scroll_writer.py in repo-shape.
 #   workflow-definition-lifecycle — tests the surface mid gen-2 rebuild.
-#                              While it lived in ci.yml it also blocked the
-#                              Deploy Staging workflow_run spine; that gate is
-#                              accepted-lost while demoted (surface is being
-#                              rebuilt) — a step-3 re-gating decision.
+#                              While it lived in ci.yml it failed CI on red
+#                              (that per-PR gate is accepted-lost while the
+#                              surface is being rebuilt — a step-3 re-gating
+#                              decision). Note: old comments claimed it also
+#                              blocked a Deploy Staging workflow_run spine;
+#                              deploy-staging.yml is dispatch-only and gates on
+#                              Server CI, so no such spine exists today.
 
 on:
   workflow_dispatch:

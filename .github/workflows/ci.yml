@@ -502,9 +502,8 @@ jobs:
   # ci-heavy-lanes.yml (dispatch-only) in the 2026-08 engineering cull.
   # Scroll-physics' structural half stays enforced per-PR by repo-shape's
   # check_transcript_scroll_writer.py; workflow-definition-lifecycle tested a
-  # surface mid gen-2 rebuild (and, while here, blocked the Deploy Staging
-  # workflow_run spine — accepted-lost while demoted). Re-gating either is the
-  # step-3 CI/CD spec's decision.
+  # surface mid gen-2 rebuild (its per-PR fail-closed gate is accepted-lost
+  # while demoted). Re-gating either is the step-3 CI/CD spec's decision.
 
   # ---------------------------------------------------------------------------
   # THE REQUIRED STATUS CHECKS FOR `main`.

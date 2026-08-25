@@ -94,6 +94,14 @@ release/deploy lanes.
 
 ## Implementation notes (recorded at freeze)
 
+- **Scope amendment (raised, not silent):** the spec's "touches only
+  `.github/workflows/**` + docs" was impossible to satisfy literally — the
+  hosted-Playwright census in `scripts/ci-cd/configure-playwright-apt.test.mjs`
+  hardcodes per-workflow expectations and reds `ci-cd-config` (and therefore
+  `ci-ok`) unless its map follows the job moves. The map entry moved with the
+  jobs (ci.yml → ci-heavy-lanes.yml, same three commands); no expectation was
+  weakened. Caught by the adversarial review pass.
+
 - Terraform-validate measured well under 2 minutes on the latest CI run →
   **kept per-PR** per the spec's own conditional.
 - The four demoted lanes moved verbatim into dispatch-only

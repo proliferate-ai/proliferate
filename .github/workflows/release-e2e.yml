@@ -332,6 +332,10 @@ jobs:
   # it never runs Tier-2, controller-local, self-host, or Tier-4 bodies here.
   release-e2e-staging:
     name: tier-3 staging lane (provisional)
+    # NOTE: the 'schedule' clause below is dead since the 2026-08 cull removed
+    # the cron (this lane stays reachable via dispatch). Kept because the
+    # qualification-runner workflow test asserts this exact expression; clean it
+    # up with the step-3 cadence ruling.
     if: >-
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' &&

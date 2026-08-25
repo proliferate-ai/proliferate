@@ -60,7 +60,7 @@ where the boundary to fakes sits. Four tiers:
 | Tier | What is real | What is faked or absent | Runs | Gates |
 | --- | --- | --- | --- | --- |
 | **1 — Unit / contract** | Logic; Postgres/SQLite where the guarantee lives in the DB | Everything across a network | Every PR, seconds | **Merge** |
-| **2 — Mocked intent** | Server + Desktop renderer in Chromium + real Postgres, booted on ports; real Stripe test mode for billing | AnyHarness, sandbox provider, LLM, IdP, email, Slack, and every other external provider | Every PR, minutes | **Merge** |
+| **2 — Mocked intent** | Server + Desktop renderer in Chromium + real Postgres, booted on ports; real Stripe test mode for billing | AnyHarness, sandbox provider, LLM, IdP, email, Slack, and every other external provider | On demand since the 2026-08 engineering cull (no tier-2 lane runs per-PR: the broad intent lanes and the focused workflow-definition cell are all dispatch-only; per-PR return is a step-3 CI/CD-spec decision) | **Merge (target)** |
 | **3 — Live end-to-end** | The selected world's real candidate server/runtime/provider boundaries, real agents on cheap models, and exact deploy artifacts | Boundaries outside the selected world are absent rather than simulated | Release train + on demand (the nightly cron was removed in the 2026-08 engineering cull; re-establishing a cadence is a step-3 CI/CD-spec decision) | **Release** |
 | **4 — Packaged install / upgrade** | Exact signed candidate packages plus retained production N−1 state upgraded through shipped mechanisms to exact candidate N | No claimed product boundary; updater/control channels are isolated while their artifacts and verification remain real | Release train | **Release** |
 
