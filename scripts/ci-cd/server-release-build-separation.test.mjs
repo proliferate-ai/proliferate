@@ -169,7 +169,7 @@ test("Server CI is now a gate only and publishes nothing", () => {
 
   assert.deepEqual(
     [...ciJobs.keys()],
-    ["changes", "lint", "test-unit", "test-integration", "server-ci-ok"],
+    ["changes", "build-artifact-runtime", "lint", "test-unit", "test-integration", "server-ci-ok"],
   );
   assert.doesNotMatch(serverCi, /docker\/build-push-action/);
   assert.doesNotMatch(serverCi, /softprops\/action-gh-release/);
