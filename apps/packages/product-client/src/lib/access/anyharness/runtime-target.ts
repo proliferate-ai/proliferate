@@ -1,12 +1,10 @@
 import type { CloudAgentKind, CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
-import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import {
   type CloudSandboxGatewayUrlSource,
   resolveCloudSandboxGatewayConnectionForWorkspace,
 } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { getCloudWorkspaceWithRetry } from "#product/lib/access/cloud/workspace-connection-retry";
-import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 
@@ -15,7 +13,7 @@ type CloudWorkspaceCommandMetadata = CloudWorkspaceDetail & {
 };
 
 export interface RuntimeTarget {
-  location: "local" | "cloud" | "target";
+  location: "local" | "cloud";
   baseUrl: string;
   authToken?: string;
   webSocketAuthTransport?: TerminalWebSocketAuthTransport;
@@ -31,30 +29,8 @@ export interface RuntimeTarget {
 export async function resolveRuntimeTargetForWorkspace(
   runtimeUrl: string,
   workspaceId: string,
-  ssh: DesktopSshBridge | null,
   cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<RuntimeTarget> {
-  const targetWorkspace = parseTargetWorkspaceSyntheticId(workspaceId);
-  if (targetWorkspace) {
-    if (!ssh) {
-      throw new Error("SSH direct access is only available in Desktop.");
-    }
-    const profile = await ssh.getProfile(targetWorkspace.targetId);
-    if (!profile) {
-      throw new Error(
-        "SSH direct access is not configured for this target. Add the SSH host, user, and key in Compute settings.",
-      );
-    }
-    const tunnel = await ssh.ensureTunnel(profile);
-    return {
-      location: "target",
-      baseUrl: tunnel.runtimeUrl,
-      anyharnessWorkspaceId: targetWorkspace.anyharnessWorkspaceId,
-      runtimeGeneration: 0,
-      targetId: targetWorkspace.targetId,
-    };
-  }
-
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
   if (!cloudWorkspaceId) {
     return {

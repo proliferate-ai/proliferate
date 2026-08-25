@@ -85,7 +85,6 @@ The bridge groups are:
 | `nativeUi` | Render native context menus, receive native commands, set running-agent quit protection, update Dock attention, and control WebView zoom. |
 | `updater` | Report updater support/version, check, download with progress, install, and relaunch while preserving the opaque native update handle. |
 | `worker` | Read the install id and ensure or stop the Desktop worker process. |
-| `ssh` | Persist SSH profiles and establish a tunnel that yields a normal AnyHarness connection. |
 | `scratch` | Preserve current local file-backed workspace scratch reads and writes. |
 | `diagnostics` | Hand an ownership-checked bounded renderer batch to native collector ingest, acknowledge root render-error admission, collect support bundles, save reports, and stage/read/delete support attachments. ProductClient producers use the platform-neutral renderer diagnostics port rather than the bridge directly. |
 
@@ -168,8 +167,8 @@ marker; CSS hiding is not a substitute for not mounting native behavior.
 
 Desktop-only product lifecycles include local runtime UI, local automation,
 worker enrollment tied to product auth, updater watching/presentation, native
-menu command handling, local-agent credential synchronization, SSH/tunnel UI,
-and native support/diagnostic collection. Host-owned window-lifetime behavior,
+menu command handling, local-agent credential synchronization, and native
+support/diagnostic collection. Host-owned window-lifetime behavior,
 including native appearance synchronization, is installed by the Desktop entry
 instead of crossing the product bridge. Native appearance follows the hydrated
 selected color mode: explicit light or dark modes set an AppKit override, while

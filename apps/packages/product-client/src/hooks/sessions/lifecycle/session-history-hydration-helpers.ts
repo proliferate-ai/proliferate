@@ -67,16 +67,15 @@ export function buildSessionHistoryFetchArgs(params: {
   requestHeaders?: HeadersInit;
   measurementOperationId?: MeasurementOperationId | null;
   timeoutMs?: number;
-  ssh: NonNullable<FetchSessionHistoryArgs>["ssh"];
   cloudClient: NonNullable<FetchSessionHistoryArgs>["cloudClient"];
 }): FetchSessionHistoryArgs {
   const { afterSeq, beforeSeq, limit, turnLimit, requestHeaders } = params;
-  const { measurementOperationId, timeoutMs, ssh, cloudClient } = params;
+  const { measurementOperationId, timeoutMs, cloudClient } = params;
   if (
     afterSeq == null && beforeSeq == null && limit == null && turnLimit == null
     && !requestHeaders && !measurementOperationId && timeoutMs == null
   ) {
-    return { ssh, cloudClient };
+    return { cloudClient };
   }
   return {
     ...(afterSeq != null ? { afterSeq } : {}),
@@ -86,7 +85,6 @@ export function buildSessionHistoryFetchArgs(params: {
     ...(requestHeaders ? { requestHeaders } : {}),
     ...(measurementOperationId ? { measurementOperationId } : {}),
     ...(timeoutMs != null ? { timeoutMs } : {}),
-    ssh,
     cloudClient,
   };
 }

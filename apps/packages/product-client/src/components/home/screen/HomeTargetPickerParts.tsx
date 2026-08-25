@@ -1,6 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "#product/primitives/utils/tw-merge";
-import { ComputeTargetSwatch } from "#product/components/compute/ComputeTargetSwatch";
 import { Button } from "#product/primitives/Button";
 import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
@@ -12,13 +11,10 @@ import {
   CloudIcon,
   Monitor,
 } from "#product/primitives/icons/platform";
-import { Terminal } from "#product/primitives/icons/workspace";
 import { Tree } from "#product/primitives/icons/workspace-git";
-import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/target-options";
 import type { HomeNextRepoLaunchKind } from "#product/lib/domain/home/home-next-launch";
 
 export const TARGET_PICKER_SURFACE_CLASS = `w-60 min-w-[175px] ${POPOVER_SURFACE_CLASS}`;
-export const TARGET_PICKER_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-border";
 
 const TARGET_PICKER_SECTION_CLASS =
   "flex min-h-6 items-center truncate px-2.5 py-1 text-ui-sm text-muted-foreground";
@@ -27,19 +23,8 @@ const TARGET_PICKER_MENU_ICON_CLASS = "size-full";
 
 export function homeTargetLaunchKindIcon(
   kind: HomeNextRepoLaunchKind,
-  target?: ComputeLaunchTargetOption | null,
   variant: "trigger" | "menu" = "trigger",
 ) {
-  if (kind === "ssh" && target) {
-    if (variant === "menu") {
-      return <ComputeTargetSwatch appearance={target.appearance} size="inherit" />;
-    }
-    return (
-      <span className={TARGET_PICKER_TRIGGER_ICON_CLASS}>
-        <ComputeTargetSwatch appearance={target.appearance} size="inherit" />
-      </span>
-    );
-  }
   const iconClassName = variant === "menu"
     ? TARGET_PICKER_MENU_ICON_CLASS
     : TARGET_PICKER_TRIGGER_ICON_CLASS;
@@ -50,8 +35,6 @@ export function homeTargetLaunchKindIcon(
       return <Monitor className={iconClassName} />;
     case "cloud":
       return <CloudIcon className={iconClassName} />;
-    case "ssh":
-      return <Terminal className={iconClassName} />;
   }
 }
 

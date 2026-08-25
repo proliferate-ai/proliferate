@@ -10,6 +10,12 @@ Depends on: [`lifecycle.md`](../../../../FEATURE_DOCS/SANDBOX/lifecycle.md),
 `mcp-skills.md` (document retired; no owning platform document replaces it), and
 [`AGENT_AUTH.md`](../../../../FEATURE_DOCS/AGENT_AUTH.md).
 
+Staleness note (2026-08-25): the SSH target product surface (SSH compute
+targets, `AddSshTargetDialog`, the SSH rows of the compute pane, SSH target
+enrollment, and the Desktop SSH tunnel) was deleted by the cull-sweep
+`delete-ssh-surface` delivery. Every SSH-target block below describes a
+destination that no longer exists and must not be built as written.
+
 Staleness note (2026-07-25): this document predates the Bifrost removal.
 Its Agents-scope content (the `agent-authentication` pane, its panes,
 primitives, deep links, copy files, and smoke steps) describes removed UI;

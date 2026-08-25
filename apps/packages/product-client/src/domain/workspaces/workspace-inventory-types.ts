@@ -13,7 +13,6 @@ export type WorkspaceInventoryLocationKind =
   | "local"
   | "managed_personal"
   | "managed_shared"
-  | "ssh"
   | "self_hosted"
   | "cloud"
   | "session"

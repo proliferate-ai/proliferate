@@ -1,7 +1,6 @@
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   logicalWorkspaceCloudMaterializationId,
-  logicalWorkspaceTargetMaterializationId,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   buildLocalSlotLogicalWorkspaceId,
@@ -26,8 +25,7 @@ export function logicalWorkspaceMatchesId(
         ? buildLocalSlotLogicalWorkspaceId(workspace.localWorkspace.id)
         : null
     )
-    || candidateId === logicalWorkspaceCloudMaterializationId(workspace)
-    || candidateId === logicalWorkspaceTargetMaterializationId(workspace);
+    || candidateId === logicalWorkspaceCloudMaterializationId(workspace);
 }
 
 export function logicalWorkspaceRelatedIds(
@@ -57,7 +55,6 @@ export function logicalWorkspaceRelatedIds(
     pushId(aliasId);
   }
   pushId(logicalWorkspaceCloudMaterializationId(workspace));
-  pushId(logicalWorkspaceTargetMaterializationId(workspace));
   pushId(workspace.preferredMaterializationId);
   return ids;
 }

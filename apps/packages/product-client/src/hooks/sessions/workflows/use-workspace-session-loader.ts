@@ -10,7 +10,6 @@ import {
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { getLatencyFlowRequestHeaders } from "#product/lib/infra/measurement/measurement-port";
 import { recordMeasurementMetric } from "#product/lib/infra/measurement/measurement-port";
-import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
@@ -21,7 +20,6 @@ export function useWorkspaceSessionLoader() {
   const host = useProductHost();
   const desktop = host.desktop;
   const localRuntime = desktop?.runtime ?? null;
-  const ssh = desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const {
@@ -75,7 +73,6 @@ export function useWorkspaceSessionLoader() {
       {
         requestHeaders,
         measurementOperationId: options?.measurementOperationId,
-        ssh,
         cloudClient,
       },
     );
@@ -90,7 +87,6 @@ export function useWorkspaceSessionLoader() {
     getWorkspaceSessionCacheSnapshot,
     localRuntime,
     setWorkspaceSessions,
-    ssh,
     cloudClient,
   ]);
 
@@ -98,6 +94,5 @@ export function useWorkspaceSessionLoader() {
 }
 
 function workspaceUsesResolvedRemoteRuntime(workspaceId: string): boolean {
-  return parseCloudWorkspaceSyntheticId(workspaceId) !== null
-    || parseTargetWorkspaceSyntheticId(workspaceId) !== null;
+  return parseCloudWorkspaceSyntheticId(workspaceId) !== null;
 }

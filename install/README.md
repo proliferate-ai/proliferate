@@ -1,114 +1,25 @@
-# Proliferate Target Installer
+# Proliferate Install Assets
 
-`proliferate-target-install.sh` installs the three target-side binaries:
-
-- `anyharness`: local runtime source of truth
-- `proliferate-worker`: outbound cloud bridge for enrollment, heartbeat, and inventory
-- `proliferate-supervisor`: restart wrapper for the runtime and worker
-
-The cloud target enrollment API emits a command in this shape:
-
-```sh
-curl -fsSL "$INSTALLER_URL" | \
-  PROLIFERATE_CLOUD_URL="$CLOUD_URL" \
-  PROLIFERATE_ENROLLMENT_TOKEN="$TOKEN" \
-  sh
-```
-
-If the binaries are already on `PATH`, the installer copies them into
-`~/.proliferate/bin`. Otherwise it downloads platform-specific artifacts from
-`PROLIFERATE_ARTIFACT_BASE_URL/<target>/<binary>`.
-
-The worker talks to the local AnyHarness runtime through
-`PROLIFERATE_ANYHARNESS_BASE_URL`, defaulting to `http://127.0.0.1:8457`, which
-is the default `anyharness serve` bind address used by the supervisor. Set
-`PROLIFERATE_ANYHARNESS_BEARER_TOKEN` only when the target runtime is configured
-to require bearer auth.
-
-By default, the user systemd unit is named `proliferate-target.service`. Local
-smoke tests can set `PROLIFERATE_SERVICE_NAME` and `PROLIFERATE_HOME` to install
-into an isolated service and data directory.
-
-The installer writes:
-
-- `~/.proliferate/worker/config.toml`
-- `~/.proliferate/supervisor/config.toml`
-- `~/.config/systemd/user/proliferate-target.service` when `systemctl` exists
-
-SSH onboarding uses this command surfaced in the Desktop Compute settings page.
-Managed cloud does not run this shell installer; managed cloud bootstrap
-writes worker and supervisor config directly inside the sandbox. Every
-managed-cloud launch is unconditionally Supervisor-owned: it launches
-Supervisor detached, and Supervisor starts AnyHarness and Worker itself. The
-legacy direct-nohup'd AnyHarness plus a separately launched Worker sidecar was
-deleted 2026-07-26 once the live E2B N-1→N update proof and the D5 BRIDGE
-proof both passed. `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME=false` does **not**
-restore that legacy launch path — there is no launch-topology rollback lever
-anymore. The flag now only suppresses the D5 `desiredTopology` heartbeat
-signal that tells an already-running legacy worker (from before the cutover)
-to bridge onto a Supervisor; rolling back the launch topology itself means
-rolling back the server deploy. See
+This directory holds file assets that ship into managed environments at build
+or bootstrap time. It no longer contains an interactive installer: the SSH
+target onboarding surface (and its `proliferate-target-install.sh` shell
+installer) was deleted, and managed cloud never ran a shell installer — managed
+cloud bootstrap writes worker and supervisor config directly inside the
+sandbox. Every managed-cloud launch is unconditionally Supervisor-owned: it
+launches Supervisor detached, and Supervisor starts AnyHarness and Worker
+itself. See
 [`specs/FEATURE_DOCS/MANAGED_RUNTIME.md`](../specs/FEATURE_DOCS/MANAGED_RUNTIME.md#launch-topology-by-surface)
 for the current launch flow and
 [`specs/supervisor.md`](../specs/supervisor.md)
 for what Supervisor owns as the parent process.
 
-## Environment Variables
+## `proliferate-git-credential-helper`
 
-| Variable | Purpose | Default |
-| --- | --- | --- |
-| `PROLIFERATE_CLOUD_URL` | Cloud API base URL used by the worker. | Required |
-| `PROLIFERATE_ENROLLMENT_TOKEN` | One-time target enrollment token. | Required |
-| `PROLIFERATE_HOME` | Target runtime home for binaries/config/state. | `$HOME/.proliferate` |
-| `PROLIFERATE_ARTIFACT_BASE_URL` | Base URL for platform binary downloads. | Release artifact base |
-| `PROLIFERATE_ANYHARNESS_BASE_URL` | Local URL the worker uses to call AnyHarness. | `http://127.0.0.1:8457` |
-| `PROLIFERATE_ANYHARNESS_BEARER_TOKEN` | Bearer token when local AnyHarness requires auth. | empty |
-| `PROLIFERATE_SERVICE_NAME` | user systemd service name. | `proliferate-target` |
-
-Enrollment only registers the target and worker. It does not carry GitHub,
-agent, MCP, or model credentials. Those are materialized later through
-worker-authenticated Cloud commands such as `materialize_environment`.
-
-## Local SSH Worker Smoke Test
-
-Use the Makefile smoke target when validating the full local Cloud -> SSH target
-path. It creates a scratch local Cloud database, starts the server locally,
-exposes it through `ngrok`, enrolls the SSH target, waits for worker heartbeat
-and AnyHarness health, then cleans up the remote smoke service.
-
-```sh
-make test-cloud-ssh-worker \
-  SSH_TARGET=ubuntu@44.247.206.119 \
-  SSH_KEY=/path/to/key.pem
-```
-
-For iterative debugging, keep the local Cloud server, ngrok tunnel, and remote
-smoke service running until `Ctrl-C`:
-
-```sh
-make dev-cloud-ssh-worker \
-  SSH_TARGET=ubuntu@44.247.206.119 \
-  SSH_KEY=/path/to/key.pem
-```
-
-The smoke command requires `ngrok`, `cargo-zigbuild`, local Postgres, and
-`server/.venv`. Set `CLOUD_SSH_WORKER_SKIP_BUILD=1` to reuse previously built
-Linux binaries, or `NGROK_URL=https://...` to reuse an existing tunnel.
-
-This smoke validates target enrollment, supervisor startup, AnyHarness health,
-worker heartbeat, and version reporting. A full automation smoke has additional
-requirements:
-
-- the local Cloud profile must have GitHub OAuth configured for the run creator
-- the target must clone/fetch the repo through `ensure_repo_checkout`
-- the requested agent must be installed/readied before `start_session`
-
-Until agent install/readiness is automated as part of target preparation, a
-fresh SSH target may need a one-time install through AnyHarness, for example:
-
-```sh
-ssh ubuntu@target-host \
-  'curl -fsS -X POST http://127.0.0.1:8457/v1/agents/claude/install \
-    -H "Content-Type: application/json" \
-    -d "{}"'
-```
+A POSIX sh git credential helper for sandboxes. The managed-cloud template
+build copies it to `~/.proliferate/bin/proliferate-git-credential-helper`
+inside the sandbox image, and materialization configures git to call it so
+clones and fetches read the current GitHub lease instead of a baked-in token.
+[`specs/FEATURE_DOCS/SANDBOX/github-auth.md`](../specs/FEATURE_DOCS/SANDBOX/github-auth.md)
+owns the credential flow;
+[`specs/FEATURE_DOCS/SANDBOX/content.md`](../specs/FEATURE_DOCS/SANDBOX/content.md)
+describes the sandbox content layout it lands in.

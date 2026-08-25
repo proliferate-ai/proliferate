@@ -547,16 +547,6 @@ raises `ValueError` because the legacy independent-launch config shape was
 deleted. So the mailbox path in the previous section is the only convergence
 path a cloud-sandbox target's Worker config can express.
 
-SSH-installed targets are a separate story: `install/proliferate-target-install.sh`
-does not set `self_update_enabled`, `anyharness_update_enabled`, or
-`supervisor_update_request_dir` in the Worker config it writes, so all three
-stay at their Rust-side defaults (both update gates false, mailbox dir
-absent). An SSH target therefore gets neither the legacy in-place binary
-swap nor the mailbox path — Worker binary convergence is off there today.
-Proliferate Supervisor still owns process supervision for SSH targets (the
-installer's systemd unit runs `proliferate-supervisor`, not the Worker
-directly); only the Worker's own binary-convergence gates are unset.
-
 ## Hard Rules
 
 - Treat every convergence action as non-fatal to the heartbeat loop.

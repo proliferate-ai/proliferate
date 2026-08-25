@@ -1,6 +1,5 @@
 import { anyHarnessCoworkStatusKey } from "@anyharness/sdk-react";
 import type { CoworkStatus } from "@anyharness/sdk";
-import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { QueryClient } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
@@ -15,7 +14,6 @@ import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/log
 import { findLogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   logicalWorkspaceCloudRuntimeMaterializationId,
-  logicalWorkspaceTargetMaterializationId,
   resolveLogicalWorkspaceMaterializationId,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
@@ -35,7 +33,6 @@ import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/clo
  * keys, same materialization resolution, same synthetic-cloud handling.
  */
 export interface ResolveWorkspaceConnectionInput {
-  ssh: DesktopSshBridge | null;
   cloudClient: ProliferateCloudClient | null;
   runtimeUrl: string;
   authStatus: string;
@@ -48,12 +45,11 @@ async function resolveWorkspaceConnectionWithCache(
   queryClient: QueryClient,
   runtimeUrl: string,
   workspaceId: string,
-  ssh: DesktopSshBridge | null,
   cloudClient: ProliferateCloudClient | null,
 ): Promise<ProductResolvedWorkspaceConnection> {
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
   if (!cloudWorkspaceId) {
-    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh, cloudClient);
+    return resolveWorkspaceConnection(runtimeUrl, workspaceId, cloudClient);
   }
 
   const cachedConnection = await queryClient.fetchQuery(
@@ -74,7 +70,6 @@ async function resolveWorkspaceConnectionWithCache(
 }
 
 export function useResolveWorkspaceConnection({
-  ssh,
   cloudClient,
   runtimeUrl,
   authStatus,
@@ -119,14 +114,9 @@ export function useResolveWorkspaceConnection({
       if (logicalWorkspace) {
         const explicitCloudRuntimeMaterializationId =
           logicalWorkspaceCloudRuntimeMaterializationId(logicalWorkspace);
-        const explicitTargetMaterializationId = logicalWorkspaceTargetMaterializationId(logicalWorkspace);
         const explicitLocalMaterializationId = logicalWorkspace.localWorkspace?.id ?? null;
         const materializationId = (
-          (
-            workspaceId === explicitCloudRuntimeMaterializationId
-            && !explicitTargetMaterializationId
-          )
-          || workspaceId === explicitTargetMaterializationId
+          workspaceId === explicitCloudRuntimeMaterializationId
           || workspaceId === explicitLocalMaterializationId
         )
           ? workspaceId
@@ -147,28 +137,20 @@ export function useResolveWorkspaceConnection({
             queryClient,
             runtimeUrl,
             explicitCloudRuntimeMaterializationId,
-            ssh,
             cloudClient,
           );
-        }
-
-        if (
-          explicitTargetMaterializationId
-          && materializationId === explicitTargetMaterializationId
-        ) {
-          return resolveWorkspaceConnectionWithCache(queryClient, runtimeUrl, explicitTargetMaterializationId, ssh, cloudClient);
         }
 
         if (
           logicalWorkspace.localWorkspace
           && materializationId === logicalWorkspace.localWorkspace.id
         ) {
-          return resolveWorkspaceConnectionWithCache(queryClient, runtimeUrl, logicalWorkspace.localWorkspace.id, ssh, cloudClient);
+          return resolveWorkspaceConnectionWithCache(queryClient, runtimeUrl, logicalWorkspace.localWorkspace.id, cloudClient);
         }
       }
 
-      return resolveWorkspaceConnectionWithCache(queryClient, runtimeUrl, workspaceId, ssh, cloudClient);
+      return resolveWorkspaceConnectionWithCache(queryClient, runtimeUrl, workspaceId, cloudClient);
     },
-    [authStatus, authUserId, cacheScopeKey, cloudClient, queryClient, runtimeUrl, selectedWorkspaceId, ssh],
+    [authStatus, authUserId, cacheScopeKey, cloudClient, queryClient, runtimeUrl, selectedWorkspaceId],
   );
 }

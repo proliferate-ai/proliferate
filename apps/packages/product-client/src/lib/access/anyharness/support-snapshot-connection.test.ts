@@ -51,7 +51,7 @@ describe("support-only bundled-local resolution", () => {
     }
   });
 
-  it.each(["cloud", "ssh", "standalone", "supervisor_owned"] as const)(
+  it.each(["cloud", "standalone", "supervisor_owned"] as const)(
     "never accepts a %s workspace",
     async (kind) => {
       const result = await resolveSupportSnapshotAccess(input({

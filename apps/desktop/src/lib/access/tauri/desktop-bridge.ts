@@ -1,13 +1,11 @@
 import type {
   DesktopBridge,
   DesktopSupportSnapshotBridge,
-  LocalRuntimeConnection,
   LocalRuntimeSnapshot,
   ProductCommand,
   RenderErrorReport,
   ScratchRecord,
   ScratchWriteResult,
-  SshProfile,
   WorkerStatus,
   WorkerConfiguration,
 } from "@proliferate/product-client/host/desktop-bridge";
@@ -57,12 +55,6 @@ import {
   ensureDesktopDispatchWorker,
   stopDesktopDispatchWorker,
 } from "./cloud-worker";
-import {
-  deleteSshDirectTargetProfile,
-  getSshDirectTargetProfile,
-  setSshDirectTargetProfile,
-} from "./ssh-target-profile";
-import { ensureSshAnyHarnessTunnel } from "./ssh-tunnel";
 import {
   readWorkspaceScratchPad,
   writeWorkspaceScratchPad,
@@ -272,23 +264,6 @@ export const desktopBridge: DesktopBridge = {
     },
     async stop(): Promise<void> {
       await stopDesktopDispatchWorker();
-    },
-  },
-
-  ssh: {
-    getProfile: getSshDirectTargetProfile,
-    saveProfile: setSshDirectTargetProfile,
-    removeProfile: deleteSshDirectTargetProfile,
-    async ensureTunnel(profile: SshProfile): Promise<LocalRuntimeConnection> {
-      const tunnel = await ensureSshAnyHarnessTunnel({
-        targetId: profile.targetId,
-        sshHost: profile.sshHost,
-        sshUser: profile.sshUser,
-        sshPort: profile.sshPort,
-        identityFile: profile.identityFile,
-        remoteAnyHarnessPort: profile.remoteAnyHarnessPort,
-      });
-      return { runtimeUrl: tunnel.localUrl };
     },
   },
 

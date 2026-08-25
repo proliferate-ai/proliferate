@@ -383,10 +383,6 @@ describe("useHomeNextLaunch", () => {
         defaultBranch: "main",
       },
     },
-    {
-      label: "SSH",
-      target: { kind: "ssh" },
-    },
   ])("rejects a forged $label launch before Web local workflows", async ({ target }) => {
     mocks.productHost.desktop = null;
     const { result } = renderHomeNextLaunch();

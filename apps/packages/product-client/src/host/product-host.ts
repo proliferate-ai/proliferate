@@ -233,8 +233,8 @@ export interface ProductAuthHost {
 
 /**
  * Non-secret, device-local product state (appearance, drafts, recent
- * selections). Must never hold login credentials, provider API keys, SSH
- * credentials, or PKCE secrets.
+ * selections). Must never hold login credentials, provider API keys, or
+ * PKCE secrets.
  *
  * Identity contract: this object's identity — not {@link ProductHost}, the
  * derived `ProductStorageContext`, or any telemetry object — is the

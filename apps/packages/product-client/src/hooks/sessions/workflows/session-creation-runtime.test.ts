@@ -42,7 +42,7 @@ describe("session creation runtime resolution", () => {
     expect(mocks.bootstrapHarnessRuntime).toHaveBeenCalledWith(runtime);
   });
 
-  it.each(["cloud:cloud-1", "target:target-1:workspace-runtime"])(
+  it.each(["cloud:cloud-1"])(
     "does not discover a local runtime for %s",
     async (workspaceId) => {
       await expect(

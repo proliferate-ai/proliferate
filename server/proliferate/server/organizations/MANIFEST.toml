@@ -1,0 +1,24 @@
+# System manifest (Organization Standard rule 2) — validated by
+# scripts/check_manifests.py; rules PROD-MANIFEST-001/002 in
+# lints/product/manifests.toml. allowed_importers is measured reality, not
+# permission-by-intention: the checker fails on drift in either direction.
+
+name = "organizations"
+spec = "specs/codebase/systems/product/organizations/README.md"
+owns = "Organizations, membership, invitations, and organization-level policy."
+
+public_surface = [
+    "proliferate.server.organizations.api",
+    "proliferate.server.organizations.service",
+    "proliferate.server.organizations.models",
+]
+
+allowed_importers = [
+    "accounts",
+    "billing",
+    "cloud/agent_run_config",
+    "cloud/integrations",
+    "cloud/runtime_workers",
+    "main.py",
+    "setup",
+]

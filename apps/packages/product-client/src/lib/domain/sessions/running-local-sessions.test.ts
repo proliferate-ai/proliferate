@@ -25,9 +25,8 @@ describe("isLocalWorkspaceId", () => {
     expect(isLocalWorkspaceId("ws-1")).toBe(true);
   });
 
-  it("rejects cloud and target synthetic ids and missing ids", () => {
+  it("rejects cloud synthetic ids and missing ids", () => {
     expect(isLocalWorkspaceId("cloud:cw-1")).toBe(false);
-    expect(isLocalWorkspaceId("target:tgt-1:ws-1")).toBe(false);
     expect(isLocalWorkspaceId(null)).toBe(false);
     expect(isLocalWorkspaceId(undefined)).toBe(false);
   });
@@ -41,7 +40,6 @@ describe("collectRunningLocalSessionIds", () => {
       "local-idle": candidate("ws-1", "idle"),
       "local-closed": candidate("ws-1", "closed"),
       "cloud-working": candidate("cloud:cw-1", "running"),
-      "target-working": candidate("target:tgt-1:ws-9", "running"),
       "unassigned-working": candidate(null, "running"),
     };
 

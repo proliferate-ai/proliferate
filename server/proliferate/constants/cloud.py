@@ -222,7 +222,6 @@ SUPPORTED_GIT_PROVIDER: str = "github"
 
 class CloudTargetKind(StrEnum):
     managed_cloud = "managed_cloud"
-    ssh = "ssh"
     desktop_dispatch = "desktop_dispatch"
     local_direct = "local_direct"
     self_hosted_cloud = "self_hosted_cloud"
@@ -277,7 +276,6 @@ SUPPORTED_CLOUD_TARGET_PROFILE_ROLES: tuple[str, ...] = tuple(
     role.value for role in CloudTargetProfileRole
 )
 SUPPORTED_ENROLLABLE_CLOUD_TARGET_KINDS: tuple[str, ...] = (
-    CloudTargetKind.ssh.value,
     CloudTargetKind.desktop_dispatch.value,
     CloudTargetKind.self_hosted_cloud.value,
 )

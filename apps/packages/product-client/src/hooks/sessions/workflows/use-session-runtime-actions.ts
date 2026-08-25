@@ -39,7 +39,6 @@ import { dispatchLiveWorkspacePinIntentEnvelopes } from "#product/hooks/sessions
 
 export function useSessionRuntimeActions() {
   const host = useProductHost();
-  const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const sessionStreamCache = useSessionStreamCache();
   const showToast = useToastStore((state) => state.show);
@@ -86,11 +85,10 @@ export function useSessionRuntimeActions() {
       if (options?.isCurrent && !options.isCurrent()) {
         return;
       }
-      const { workspaceId } = await getSessionClientAndWorkspace(sessionId, ssh, cloudClient);
+      const { workspaceId } = await getSessionClientAndWorkspace(sessionId, cloudClient);
       let session = await fetchSessionSummary(sessionId, {
         requestHeaders: options?.requestHeaders,
         measurementOperationId: options?.measurementOperationId,
-        ssh,
         cloudClient,
       });
       if (options?.isCurrent && !options.isCurrent()) {
@@ -135,7 +133,6 @@ export function useSessionRuntimeActions() {
         session = await resumeSession(sessionId, {
           requestHeaders: options?.requestHeaders,
           measurementOperationId: options?.measurementOperationId,
-          ssh,
           cloudClient,
         });
         if (options?.isCurrent && !options.isCurrent()) {
@@ -187,7 +184,7 @@ export function useSessionRuntimeActions() {
         console.debug("[session-runtime] session metadata refresh failed", error);
       }
     }
-  }, [applySessionSummary, rehydrateSessionSlotFromHistory, ssh, cloudClient]);
+  }, [applySessionSummary, rehydrateSessionSlotFromHistory, cloudClient]);
 
   const createSessionStreamFlushController = useSessionStreamFlushControllerFactory({
     sessionStreamCache,

@@ -40,7 +40,6 @@ export function useAuthRestartOffer(): AuthRestartOfferApi {
   const { authStatus, controlPlaneReachable } = useCloudAvailabilityState();
   const authReady = authStatus === "authenticated" && controlPlaneReachable;
   const host = useProductHost();
-  const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
 
   // Passive subscriber to the same query the harness panes drive: their
@@ -110,8 +109,8 @@ export function useAuthRestartOffer(): AuthRestartOfferApi {
     }
     // Fire-and-forget: per-session failures surface through each session's
     // normal error state (the executor tolerates them), never a modal error.
-    void restartSessionsOnNewAuth(targets, ssh, cloudClient);
-  }, [cloudClient, offer, ssh]);
+    void restartSessionsOnNewAuth(targets, cloudClient);
+  }, [cloudClient, offer]);
 
   const decline = useCallback(() => {
     // Decline is stateless by ruling: close the modal, record nothing.

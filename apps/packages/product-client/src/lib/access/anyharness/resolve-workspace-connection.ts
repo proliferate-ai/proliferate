@@ -1,5 +1,4 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
-import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { resolveRuntimeTargetForWorkspace } from "#product/lib/access/anyharness/runtime-target";
 import type { WorkspaceFilesystemOrigin } from "#product/lib/domain/files/path-references";
@@ -17,13 +16,11 @@ export interface ProductResolvedWorkspaceConnection {
 export async function resolveWorkspaceConnection(
   runtimeUrl: string,
   workspaceId: string,
-  ssh: DesktopSshBridge | null,
   cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<ProductResolvedWorkspaceConnection> {
   const target = await resolveRuntimeTargetForWorkspace(
     runtimeUrl,
     workspaceId,
-    ssh,
     cloudClient,
   );
   return {

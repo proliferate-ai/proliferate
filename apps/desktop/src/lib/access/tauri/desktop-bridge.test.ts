@@ -24,10 +24,6 @@ const mocks = vi.hoisted(() => ({
   getDesktopInstallId: vi.fn(),
   ensureDesktopDispatchWorker: vi.fn(),
   stopDesktopDispatchWorker: vi.fn(),
-  getSshDirectTargetProfile: vi.fn(),
-  setSshDirectTargetProfile: vi.fn(),
-  deleteSshDirectTargetProfile: vi.fn(),
-  ensureSshAnyHarnessTunnel: vi.fn(),
   readWorkspaceScratchPad: vi.fn(),
   writeWorkspaceScratchPad: vi.fn(),
   reportReactRenderError: vi.fn(),
@@ -91,14 +87,6 @@ vi.mock("@/lib/access/tauri/desktop-install-id", () => ({
 vi.mock("@/lib/access/tauri/cloud-worker", () => ({
   ensureDesktopDispatchWorker: mocks.ensureDesktopDispatchWorker,
   stopDesktopDispatchWorker: mocks.stopDesktopDispatchWorker,
-}));
-vi.mock("@/lib/access/tauri/ssh-target-profile", () => ({
-  getSshDirectTargetProfile: mocks.getSshDirectTargetProfile,
-  setSshDirectTargetProfile: mocks.setSshDirectTargetProfile,
-  deleteSshDirectTargetProfile: mocks.deleteSshDirectTargetProfile,
-}));
-vi.mock("@/lib/access/tauri/ssh-tunnel", () => ({
-  ensureSshAnyHarnessTunnel: mocks.ensureSshAnyHarnessTunnel,
 }));
 vi.mock("@/lib/access/tauri/workspace-scratch", () => ({
   readWorkspaceScratchPad: mocks.readWorkspaceScratchPad,
@@ -449,59 +437,6 @@ describe("worker", () => {
   it("delegates getInstallId", async () => {
     mocks.getDesktopInstallId.mockResolvedValue("install-1");
     await expect(desktopBridge.worker.getInstallId()).resolves.toBe("install-1");
-  });
-});
-
-describe("ssh", () => {
-  it("passes profile CRUD through", async () => {
-    const profile = {
-      targetId: "t1",
-      sshHost: "host",
-      sshUser: "user",
-      sshPort: 22,
-      identityFile: null,
-      remoteAnyHarnessPort: 8457,
-      workspaceRoot: null,
-    };
-    mocks.getSshDirectTargetProfile.mockResolvedValue(profile);
-    mocks.setSshDirectTargetProfile.mockResolvedValue(undefined);
-    mocks.deleteSshDirectTargetProfile.mockResolvedValue(undefined);
-
-    await expect(desktopBridge.ssh.getProfile("t1")).resolves.toEqual(profile);
-    expect(mocks.getSshDirectTargetProfile).toHaveBeenCalledWith("t1");
-
-    await desktopBridge.ssh.saveProfile(profile);
-    expect(mocks.setSshDirectTargetProfile).toHaveBeenCalledWith(profile);
-
-    await desktopBridge.ssh.removeProfile("t1");
-    expect(mocks.deleteSshDirectTargetProfile).toHaveBeenCalledWith("t1");
-  });
-
-  it("maps the tunnel localUrl to a runtime connection", async () => {
-    mocks.ensureSshAnyHarnessTunnel.mockResolvedValue({
-      localUrl: "http://127.0.0.1:5555",
-      localPort: 5555,
-    });
-
-    const connection = await desktopBridge.ssh.ensureTunnel({
-      targetId: "t1",
-      sshHost: "host",
-      sshUser: "user",
-      sshPort: 22,
-      identityFile: "/id",
-      remoteAnyHarnessPort: 8457,
-      workspaceRoot: "/root",
-    });
-
-    expect(connection).toEqual({ runtimeUrl: "http://127.0.0.1:5555" });
-    expect(mocks.ensureSshAnyHarnessTunnel).toHaveBeenCalledWith({
-      targetId: "t1",
-      sshHost: "host",
-      sshUser: "user",
-      sshPort: 22,
-      identityFile: "/id",
-      remoteAnyHarnessPort: 8457,
-    });
   });
 });
 

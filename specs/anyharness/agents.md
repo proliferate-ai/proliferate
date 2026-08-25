@@ -308,7 +308,7 @@ user's normal `HOME` and runs from the user home directory when available, so
 vendor CLIs write their usual local auth files.
 
 Cloud target enrollment, Git bootstrap, and workspace materialization do not
-install agents. Today a fresh cloud/SSH target may report worker and
+install agents. Today a fresh cloud target may report worker and
 AnyHarness online while `start_session` still fails with an
 install/readiness error until the requested agent is installed through this
 API, because the runtime startup pass reconciles *already-installed* agents
@@ -380,7 +380,7 @@ inventing a percentage. This detailed state is process-local and ephemeral;
 `/health.agentReconcile` intentionally remains coarse.
 
 Local and cloud clients consume this same contract. Local clients call the
-runtime directly. A selected cloud or SSH workspace resolves its AnyHarness
+runtime directly. A selected cloud workspace resolves its AnyHarness
 connection and calls the same route; the cloud sandbox gateway already proxies
 the request and response unchanged. Worker heartbeat remains desired-version
 and liveness state and does not receive per-download byte ticks. The settings

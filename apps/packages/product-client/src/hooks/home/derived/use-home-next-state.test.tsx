@@ -53,18 +53,11 @@ const stateMocks = vi.hoisted(() => {
     cloudRepoActionBySourceRoot: {},
     launchTarget: { kind: "local", sourceRoot: "/repo" },
   } as any;
-  const computeTargets = {
-    sshTargetOptions: [],
-    isLoading: false,
-  } as any;
-
   return {
     model,
     repository,
-    computeTargets,
     modelArgs: null as any,
     repositoryArgs: null as any,
-    computeTargetArgs: null as any,
   };
 });
 
@@ -82,12 +75,6 @@ vi.mock("#product/hooks/home/derived/use-home-next-repository-selection", () => 
   },
 }));
 
-vi.mock("#product/hooks/compute/derived/use-compute-target-options", () => ({
-  useComputeTargetOptions: (args: any) => {
-    stateMocks.computeTargetArgs = args;
-    return stateMocks.computeTargets;
-  },
-}));
 
 function resetMocks() {
   stateMocks.model.modelGate = { kind: "launchable" };
@@ -116,11 +103,8 @@ function resetMocks() {
   };
   stateMocks.repository.cloudRepoAction = { kind: "create" };
   stateMocks.repository.launchTarget = { kind: "local", sourceRoot: "/repo" };
-  stateMocks.computeTargets.sshTargetOptions = [];
-  stateMocks.computeTargets.isLoading = false;
   stateMocks.modelArgs = null;
   stateMocks.repositoryArgs = null;
-  stateMocks.computeTargetArgs = null;
 }
 
 function renderHomeNextState({
@@ -196,8 +180,6 @@ describe("useHomeNextState", () => {
   });
 
   it("forces the Web target model to repository Cloud and rejects local targets", () => {
-    stateMocks.computeTargets.sshTargetOptions = [{ id: "ssh-target-1" }];
-    stateMocks.computeTargets.isLoading = true;
     const web = renderHomeNextState({
       desktopTargetsAvailable: false,
       destination: "cowork",
@@ -210,10 +192,6 @@ describe("useHomeNextState", () => {
       repoLaunchKind: "cloud",
     });
     expect(stateMocks.modeArgs).toBeUndefined();
-    expect(stateMocks.computeTargetArgs).toEqual({ enabled: false });
-    expect(web.result.current.sshTargetOptions).toEqual([]);
-    expect(web.result.current.sshTargetsLoading).toBe(false);
-    expect(web.result.current.selectedSshTarget).toBeNull();
     expect(web.result.current.launchTarget).toBeNull();
     expect(web.result.current.canLaunchTarget).toBe(false);
     web.unmount();

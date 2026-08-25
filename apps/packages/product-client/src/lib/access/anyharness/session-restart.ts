@@ -1,4 +1,3 @@
-import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/session-runtime";
 import {
@@ -47,7 +46,6 @@ export interface SessionRestartOutcome {
 
 export async function restartSessionsOnNewAuth(
   targets: readonly SessionRestartTarget[],
-  ssh: DesktopSshBridge | null,
   cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<SessionRestartOutcome> {
   const restartedSessionIds: string[] = [];
@@ -70,7 +68,7 @@ export async function restartSessionsOnNewAuth(
     [...byWorkspace.values()].map(async (lane) => {
       for (const target of lane) {
         try {
-          await restartSingleSession(target.sessionId, ssh, cloudClient);
+          await restartSingleSession(target.sessionId, cloudClient);
           restartedSessionIds.push(target.sessionId);
         } catch (error: unknown) {
           // Tolerate per-session failure: the session surfaces its normal
@@ -103,12 +101,10 @@ export async function restartSessionsOnNewAuth(
 
 async function restartSingleSession(
   sessionId: string,
-  ssh: DesktopSshBridge | null,
   cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<void> {
   const { connection, materializedSessionId } = await getSessionClientAndWorkspace(
     sessionId,
-    ssh,
     cloudClient,
   );
   await dismissSession(connection, materializedSessionId);

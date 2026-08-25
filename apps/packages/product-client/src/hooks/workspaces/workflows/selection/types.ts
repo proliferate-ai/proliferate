@@ -1,7 +1,6 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type {
   DesktopRuntimeBridge,
-  DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 import type { Workspace } from "@anyharness/sdk";
 import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
@@ -57,7 +56,6 @@ export interface WorkspaceSelectionContext {
 
 export interface WorkspaceSelectionDeps {
   localRuntime: DesktopRuntimeBridge | null;
-  ssh?: DesktopSshBridge | null;
   cloudClient: CloudSandboxGatewayUrlSource | null;
   logicalWorkspaces: LogicalWorkspace[];
   rawWorkspaces: Workspace[];

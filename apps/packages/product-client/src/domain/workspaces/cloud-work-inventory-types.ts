@@ -118,7 +118,7 @@ export type RecentWorkSourceKind =
 export type RecentWorkRuntimeLocation =
   | "local_desktop"
   | "cloud_sandbox"
-  | "ssh_remote"
+  | "self_hosted_remote"
   | "offline"
   | "unknown";
 

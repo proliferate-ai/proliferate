@@ -30,7 +30,7 @@ import { webEnv } from "./config/env";
  * `ProductHostProvider` above ProductClient.
  *
  * `desktop` is always `null`: the Web host never mounts a native runtime,
- * workspace, SSH, updater, worker, native menu, or native filesystem lifecycle.
+ * workspace, updater, worker, native menu, or native filesystem lifecycle.
  * The static adapters (storage/links/clipboard/telemetry) keep stable identity
  * across snapshot replacements; the snapshot is replaced only when the auth
  * state, the readiness the viewer resolves, or the Cloud-client authority

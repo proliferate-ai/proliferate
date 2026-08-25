@@ -19,7 +19,6 @@ export function isSessionAlreadyGone(error: unknown): boolean {
 
 export function useSessionDismissActions() {
   const host = useProductHost();
-  const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
@@ -45,7 +44,7 @@ export function useSessionDismissActions() {
 
     try {
       const { materializedSessionId, workspaceId: resolvedWorkspaceId } =
-        await getSessionClientAndWorkspace(sessionId, ssh, cloudClient);
+        await getSessionClientAndWorkspace(sessionId, cloudClient);
       await dismissSessionMutation.mutateAsync({
         workspaceId: resolvedWorkspaceId,
         sessionId: materializedSessionId,
@@ -67,7 +66,6 @@ export function useSessionDismissActions() {
     dismissSessionMutation,
     getWorkspaceRuntimeBlockReason,
     showToast,
-    ssh,
     cloudClient,
   ]);
 

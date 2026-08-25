@@ -41,8 +41,8 @@ export function recentWorkRuntimeLabel(runtimeLocation: RecentWorkRuntimeLocatio
       return "Local Desktop";
     case "cloud_sandbox":
       return "Cloud runtime";
-    case "ssh_remote":
-      return "SSH remote";
+    case "self_hosted_remote":
+      return "Self-hosted remote";
     case "offline":
       return "Offline";
     case "unknown":

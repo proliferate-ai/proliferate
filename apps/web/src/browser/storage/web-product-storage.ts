@@ -5,7 +5,7 @@ import type { ProductStorage } from "@proliferate/product-client/host/product-ho
  * (appearance, drafts, recent selections) backed by `window.localStorage`.
  *
  * This is the ONLY browser-storage surface the Web host exposes to the product.
- * It must never hold login credentials, provider API keys, SSH credentials, or
+ * It must never hold login credentials, provider API keys, or
  * PKCE secrets — the production session lives in an HttpOnly refresh cookie plus
  * an in-memory access token, and the PKCE transaction lives in `sessionStorage`
  * behind the auth transport, neither of which routes through here.

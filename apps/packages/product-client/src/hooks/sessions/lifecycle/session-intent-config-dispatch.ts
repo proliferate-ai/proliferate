@@ -1,5 +1,4 @@
 import type { Session } from "@anyharness/sdk";
-import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import type { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import {
@@ -33,7 +32,6 @@ type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptio
 export const CONFIG_INTENT_DISPATCH_TIMEOUT_MS = 15_000;
 
 export interface ConfigIntentDispatchDeps {
-  ssh?: DesktopSshBridge | null;
   cloudClient: CloudSandboxGatewayUrlSource | null;
   getWorkspaceSurface: (
     workspaceId: string | null | undefined,
@@ -79,7 +77,6 @@ export async function dispatchConfigIntent(
       async (signal) => {
         const target = await getSessionClientAndWorkspace(
           intent.clientSessionId,
-          deps.ssh ?? null,
           deps.cloudClient,
         );
         if (signal.aborted || !isCurrentConfigDispatch(intent.intentId, dispatchedAt)) {

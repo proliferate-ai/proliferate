@@ -2,7 +2,6 @@ import type { Schema } from "./schema.js";
 
 export type CloudTargetKind =
   | "managed_cloud"
-  | "ssh"
   | "desktop_dispatch"
   | "local_direct"
   | "self_hosted_cloud";

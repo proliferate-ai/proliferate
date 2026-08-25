@@ -103,10 +103,6 @@ describe("sessionAuthSurface", () => {
     expect(sessionAuthSurface("cloud:cw-1")).toBe("cloud");
   });
 
-  it("maps SSH-target synthetic ids to no auth surface", () => {
-    expect(sessionAuthSurface("target:t-1:ahw-1")).toBeNull();
-  });
-
   it("maps a missing workspace to no auth surface", () => {
     expect(sessionAuthSurface(null)).toBeNull();
   });
@@ -146,8 +142,6 @@ describe("matchRunningSessions (Proof C6 scoping)", () => {
       entry({ sessionId: "other-harness", agentKind: "codex", workspaceId: "ws-1" }),
       // Wrong surface (cloud workspace on a local switch).
       entry({ sessionId: "other-surface", agentKind: "claude", workspaceId: "cloud:cw-1" }),
-      // SSH target: neither auth surface.
-      entry({ sessionId: "ssh-target", agentKind: "claude", workspaceId: "target:t-1:ahw-1" }),
       // Not running.
       entry({ sessionId: "idle", agentKind: "claude", workspaceId: "ws-1", status: "idle" }),
     ];

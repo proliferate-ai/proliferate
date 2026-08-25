@@ -227,7 +227,7 @@ describe("SidebarWorkspaceGitGlyph", () => {
       .toEqual({ kind: "cloud" });
   });
 
-  it.each(["local", "ssh"] as const)(
+  it.each(["local"] as const)(
     "renders no identity at all for a %s row without a PR",
     (variant) => {
       expect(resolveSidebarWorkspaceGitIdentity(null, variant)).toBeNull();

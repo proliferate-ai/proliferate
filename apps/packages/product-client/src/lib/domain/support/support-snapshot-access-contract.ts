@@ -12,7 +12,7 @@ export type SupportWorkspaceCandidate =
       anyharnessWorkspaceId: string;
     }
   | {
-      kind: "cloud" | "ssh" | "standalone" | "supervisor_owned";
+      kind: "cloud" | "standalone" | "supervisor_owned";
       workspaceId: string;
     };
 

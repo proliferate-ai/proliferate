@@ -111,6 +111,28 @@ covering rule whose `enforced_by` names the checker that reads the ratchet,
 so the `enforced_by`-exists validation above at least confirms that checker
 file is real.
 
+## Edge baselines
+
+A fence rule freezes a measured import graph rather than naming per-site debt:
+its record file carries `[[edge]]` tables (`from` / `to`) alongside the
+`[[rule]]` records, and the checker fails on a crossing outside the declared
+edges AND on a declared edge nothing crosses any more — the baseline always
+equals reality exactly, and may only shrink. The loader ignores non-`[[rule]]`
+tables in a rule file, so the baseline travels with the rule that owns it
+(`lints/anyharness/fences.toml`, `lints/frontend/fences.toml`). Removing a row
+when its last crossing dies is maintenance; adding a row is a net-new coupling
+and therefore an amendment.
+
+## Manifests
+
+Every server system folder carries a `MANIFEST.toml` — name, spec link, owns,
+public surface, allowed importers (Organization Standard rule 2). The manifest
+lives with the code it describes, not under `lints/`; the covering rules are
+`PROD-MANIFEST-*` in `product/manifests.toml`, enforced by
+`scripts/check_manifests.py`. `allowed_importers` is measured reality, not
+permission-by-intention: the checker fails on drift in either direction, so a
+new importer is a visible amendment and a stale entry is same-PR maintenance.
+
 ## Generated diagnostics
 
 Checkers emit diagnostics through `scripts/lint_records.py`, which renders the

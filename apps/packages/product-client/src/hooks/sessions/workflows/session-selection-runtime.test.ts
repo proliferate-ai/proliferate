@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 
 describe("session runtime selection", () => {
-  it.each(["cloud:cloud-1", "target:target-1:workspace-1"])(
+  it.each(["cloud:cloud-1"])(
     "does not discover a local runtime for %s",
     async (workspaceId) => {
       await expect(resolveRuntimeUrlForWorkspaceSessions(workspaceId, null)).resolves.toBe("");

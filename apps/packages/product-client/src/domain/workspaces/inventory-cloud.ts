@@ -90,8 +90,6 @@ function workspaceLocationKind(
   switch (workspace.sandboxType) {
     case "local":
       return "local";
-    case "ssh":
-      return "ssh";
     case "managed_shared":
       return "managed_shared";
     case "self_hosted":
@@ -99,6 +97,9 @@ function workspaceLocationKind(
     case "managed_personal":
       return "managed_personal";
     case undefined:
+    default:
+      // Stored rows may carry sandbox types the current union no longer
+      // names (e.g. pre-cull "ssh"); bucket them with the generic cloud kind.
       return "cloud";
   }
 }
@@ -107,8 +108,6 @@ function workspaceLocationLabel(workspace: CloudWorkspaceSummary): string {
   switch (workspace.sandboxType) {
     case "local":
       return "Local";
-    case "ssh":
-      return "SSH";
     case "managed_shared":
       return "Cloud";
     case "self_hosted":
@@ -116,6 +115,7 @@ function workspaceLocationLabel(workspace: CloudWorkspaceSummary): string {
     case "managed_personal":
       return "Cloud";
     case undefined:
+    default:
       return "Cloud";
   }
 }

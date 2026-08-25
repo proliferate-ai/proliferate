@@ -1,5 +1,4 @@
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import { targetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { cloudWorkspaceUsesCloudRuntime } from "#product/lib/domain/workspaces/cloud/cloud-runtime-kind";
 import type {
   CloudWorkspaceMaterializationSummary,
@@ -49,23 +48,6 @@ export function explicitLocalMaterializationAnyharnessId(
   return null;
 }
 
-export function logicalWorkspaceTargetMaterializationId(
-  workspace: Pick<LogicalWorkspace, "cloudWorkspace">,
-): string | null {
-  const directTarget = workspace.cloudWorkspace?.directTargetContext;
-  if (
-    directTarget?.targetKind !== "ssh"
-    || !directTarget.targetId
-    || !directTarget.anyharnessWorkspaceId
-  ) {
-    return null;
-  }
-  return targetWorkspaceSyntheticId(
-    directTarget.targetId,
-    directTarget.anyharnessWorkspaceId,
-  );
-}
-
 export function resolvePreferredLogicalWorkspaceMaterialization(
   localWorkspace: LogicalWorkspace["localWorkspace"],
   cloudWorkspace: LogicalWorkspace["cloudWorkspace"],
@@ -76,9 +58,6 @@ export function resolvePreferredLogicalWorkspaceMaterialization(
   const cloudWorkspaceUsesRuntime = cloudWorkspace
     ? cloudWorkspaceUsesCloudRuntime(cloudWorkspace)
     : false;
-  const directTargetId = cloudWorkspace
-    ? logicalWorkspaceTargetMaterializationId({ cloudWorkspace })
-    : null;
   const managedCloudId = cloudWorkspace
     ? cloudWorkspaceUsesRuntime
       ? cloudWorkspaceSyntheticId(cloudWorkspace.id)
@@ -86,7 +65,7 @@ export function resolvePreferredLogicalWorkspaceMaterialization(
     : mobilityWorkspace?.cloudWorkspaceId
       ? cloudWorkspaceSyntheticId(mobilityWorkspace.cloudWorkspaceId)
       : null;
-  const cloudId = directTargetId ?? managedCloudId;
+  const cloudId = managedCloudId;
   const fallbackOwner = cloudWorkspace && !cloudWorkspaceUsesRuntime
     ? "local"
     : "cloud";

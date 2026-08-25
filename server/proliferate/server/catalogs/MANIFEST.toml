@@ -1,0 +1,19 @@
+# System manifest (Organization Standard rule 2) — validated by
+# scripts/check_manifests.py; rules PROD-MANIFEST-001/002 in
+# lints/product/manifests.toml. allowed_importers is measured reality, not
+# permission-by-intention: the checker fails on drift in either direction.
+
+name = "catalogs"
+spec = "specs/FEATURE_DOCS/MODELS.md"
+owns = "Agent catalog serving: signed catalog documents and their distribution endpoints."
+
+public_surface = [
+    "proliferate.server.catalogs.api",
+    "proliferate.server.catalogs.service",
+    "proliferate.server.catalogs.models",
+]
+
+allowed_importers = [
+    "cloud/agent_gateway",
+    "main.py",
+]

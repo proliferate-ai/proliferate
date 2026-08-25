@@ -29,7 +29,6 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function useSessionCancelActions() {
   const host = useProductHost();
-  const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
@@ -58,7 +57,6 @@ export function useSessionCancelActions() {
       await enqueueSessionGoalLifecycleMutation(sessionId, async () => {
         const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(
           sessionId,
-          ssh,
           cloudClient,
         );
         // Re-read after earlier queued goal writes have settled. The streamed
@@ -119,7 +117,6 @@ export function useSessionCancelActions() {
     getWorkspaceRuntimeBlockReason,
     setGoalMutation,
     showToast,
-    ssh,
   ]);
 
   return { cancelActiveSession };
