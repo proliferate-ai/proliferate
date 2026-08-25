@@ -12,7 +12,7 @@ use proliferate_runtime_update_protocol::{
 
 use super::now_rfc3339;
 use crate::cloud_client::{CloudClient, HeartbeatResponse};
-use crate::{anyharness_update, config::WorkerConfig, error::WorkerError, self_update, versions};
+use crate::{config::WorkerConfig, error::WorkerError, versions};
 
 /// Published asset names on the downloads CDN (mirrors the legacy paths).
 const ANYHARNESS_ASSET: &str = "anyharness";
@@ -49,7 +49,7 @@ pub async fn converge_via_mailbox(
         }
     }
 
-    let anyharness_running = anyharness_update::running_anyharness_version(store);
+    let anyharness_running = versions::running_anyharness_version(store);
     if let Some(version) = plan_component(anyharness_running.as_deref(), anyharness_desired) {
         emit_request(
             config,
@@ -208,14 +208,14 @@ pub async fn write_update_request(
         return Ok(());
     }
 
-    let target = self_update::artifact_target()?;
+    let target = artifact_target()?;
     // R9R-001: the redirect path encodes the EXACT desired version so the server
     // resolves that version (fail-closed if unpublished) rather than the global
     // pin. A sandbox pinned to B can no longer be handed A behind an unversioned
     // redirect that resolves whatever "stable" currently points at.
     let redirect_path = redirect_path_for(component, &target, desired_version);
     let location = cloud.resolve_artifact_location(&redirect_path).await?;
-    let checksum_url = self_update::checksum_url_for(&location.url);
+    let checksum_url = checksum_url_for(&location.url);
     let checksum_bytes = cloud.download_from_url(&checksum_url).await?;
     let sha256 = parse_checksum_digest(&String::from_utf8_lossy(&checksum_bytes))?;
 
@@ -252,6 +252,34 @@ pub fn read_bridge_result(config: &WorkerConfig, request_id: &str) -> Option<Upd
         return None;
     }
     read_result(&path).ok()
+}
+
+/// The `<os>-<arch>` artifact target this Worker resolves download
+/// coordinates for. Fails on platforms the downloads CDN never publishes.
+fn artifact_target() -> Result<String, WorkerError> {
+    let unsupported = || WorkerError::ArtifactTargetUnsupported {
+        os: std::env::consts::OS,
+        arch: std::env::consts::ARCH,
+    };
+    let os = match std::env::consts::OS {
+        "linux" => "linux",
+        "macos" => "macos",
+        _ => return Err(unsupported()),
+    };
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
+        "aarch64" => "aarch64",
+        _ => return Err(unsupported()),
+    };
+    Ok(format!("{os}-{arch}"))
+}
+
+/// The published `.sha256` sits next to the binary, so its URL is the binary's
+/// resolved URL with the checksum suffix appended. Deriving it (rather than
+/// re-resolving the pinned-vs-fallback path via a second redirect) guarantees
+/// the checksum and binary come from the same directory — and thus version.
+fn checksum_url_for(binary_url: &str) -> String {
+    format!("{binary_url}.sha256")
 }
 
 /// The version-specific server download path the Supervisor-owned Worker
@@ -295,10 +323,9 @@ fn build_update_request(
 }
 
 /// Parse the lowercase hex digest out of a published `.sha256` file (a bare
-/// digest or the `sha256sum` "digest  filename" form). Unlike
-/// `self_update::verify_sha256`, this only extracts the digest — the Worker does
-/// not have the binary bytes to hash in the supervisor-owned path; the
-/// Supervisor re-verifies after it downloads.
+/// digest or the `sha256sum` "digest  filename" form). Extraction only — the
+/// Worker never has the binary bytes to hash in this path; the Supervisor
+/// re-verifies the digest after it downloads.
 fn parse_checksum_digest(checksum_file: &str) -> Result<String, WorkerError> {
     let digest = checksum_file
         .split_whitespace()
@@ -340,27 +367,18 @@ mod tests {
         TempDir(dir)
     }
 
-    // --- planning (unchanged semantics vs. the legacy swap) ---
+    // --- planning (semantics carried over from the deleted legacy swap) ---
 
-    fn legacy_config() -> WorkerConfig {
+    fn base_config() -> WorkerConfig {
         WorkerConfig {
             cloud_base_url: "https://cloud.test".to_string(),
             enrollment_token: None,
             worker_db_path: PathBuf::from("/tmp/w.sqlite3"),
             integration_gateway_home: None,
             heartbeat_interval_seconds: 30,
-            self_update_enabled: false,
-            anyharness_update_enabled: false,
-            anyharness_binary_path: None,
-            anyharness_launcher_path: None,
-            anyharness_workdir: None,
             runtime_base_url: "http://127.0.0.1:8457".to_string(),
             runtime_bearer_token: None,
             supervisor_update_request_dir: None,
-            supervisor_binary_path: None,
-            supervisor_config_path: None,
-            supervisor_config_toml: None,
-            supervisor_bridge_marker_dir: None,
             config_path: None,
         }
     }
@@ -519,7 +537,7 @@ mod tests {
 
         let dir = temp_dir();
         let updates = dir.0.join("updates");
-        let mut config = legacy_config();
+        let mut config = base_config();
         config.supervisor_update_request_dir = Some(updates.clone());
         config.worker_db_path = dir.0.join("worker.sqlite3");
         let store = WorkerStore::open(config.worker_db_path.clone()).expect("open store");
@@ -570,7 +588,7 @@ mod tests {
 
         let dir = temp_dir();
         let updates = dir.0.join("updates");
-        let mut config = legacy_config();
+        let mut config = base_config();
         config.supervisor_update_request_dir = Some(updates.clone());
         config.worker_db_path = dir.0.join("worker.sqlite3");
         let store = WorkerStore::open(config.worker_db_path.clone()).expect("open store");

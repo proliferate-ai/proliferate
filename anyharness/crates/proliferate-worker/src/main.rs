@@ -1,4 +1,3 @@
-mod anyharness_update;
 mod cloud_client;
 mod config;
 mod error;
@@ -8,10 +7,8 @@ mod launch_options_sync;
 mod lifecycle;
 mod logging;
 mod observability;
-mod posix_shell;
 mod process_lock;
 mod runtime;
-mod self_update;
 mod store;
 mod supervisor_bridge;
 #[cfg(test)]
