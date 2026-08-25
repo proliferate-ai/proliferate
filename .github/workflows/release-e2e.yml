@@ -775,7 +775,7 @@ jobs:
           workspaces: "."
       # docker + buildx ship on ubuntu-latest; ensure a builder exists for the
       # single-platform `buildx build --load` the server-image candidate uses.
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       # SELFHOST-CFN-1 builds a linux/arm64 candidate on this amd64 runner
       # (the shipped CloudFormation wrapper only offers Graviton t4g instance
       # types); QEMU binfmt makes that cross-platform buildx build possible.
