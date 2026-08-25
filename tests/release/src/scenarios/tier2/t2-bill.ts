@@ -90,7 +90,7 @@ function runFreeCreditGrantPass(userId: string): Promise<boolean> {
       // line (SyntaxError), so the pyExpr must be genuinely multi-line.
       "import asyncio\n" +
         "from proliferate.db.engine import async_session_factory\n" +
-        "from proliferate.server.cloud.agent_gateway.free_credits import ensure_user_free_credit_grant\n" +
+        "from proliferate.server.agent_auth.free_credits import ensure_user_free_credit_grant\n" +
         "async def _m():\n" +
         "    async with async_session_factory() as db:\n" +
         `        granted = await ensure_user_free_credit_grant(db, "${userId}")\n` +

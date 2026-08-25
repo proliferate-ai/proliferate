@@ -327,7 +327,7 @@ from proliferate.db.store.billing_subjects import (
 )
 from proliferate.db.store.billing import list_grants
 from proliferate.db.models.billing import BillingGrant
-from proliferate.db.models.cloud.agent_gateway import LlmCreditGrant
+from proliferate.db.models.agent_gateway import LlmCreditGrant
 from proliferate.db.store.agent_gateway.credits import (
     create_llm_credit_grant,
     get_remaining_credit_usd,
@@ -337,7 +337,7 @@ from proliferate.server.billing.accounting_pass import run_billing_accounting_pa
 from proliferate.server.billing.reconciler import run_billing_reconcile_pass
 from proliferate.server.billing.snapshot_state import load_snapshot_state_for_subject
 from proliferate.server.billing.snapshots import build_billing_snapshot
-from proliferate.server.cloud.agent_gateway.topups import reactivate_subject_if_credited
+from proliferate.server.agent_auth.topups import reactivate_subject_if_credited
 from proliferate.integrations.litellm import LiteLLMIntegrationError
 from proliferate.lib.infra.time.wall_clock import utcnow
 
@@ -556,7 +556,7 @@ from uuid import UUID
 from sqlalchemy import delete
 from proliferate.db.engine import async_session_factory
 from proliferate.db.models.billing import BillingGrant
-from proliferate.db.models.cloud.agent_gateway import LlmCreditGrant
+from proliferate.db.models.agent_gateway import LlmCreditGrant
 from proliferate.lib.infra.time.wall_clock import utcnow
 
 RECEIPT_FILE = os.environ["SEED_RECEIPT_FILE"]

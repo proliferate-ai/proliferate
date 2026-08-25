@@ -9,7 +9,7 @@ automation table's RESTRICT references drop with their owner in a later
 slice).
 
 Revision ID: c9d1e3f5a7b9
-Revises: e7a9c2d41f56
+Revises: b7d3f1e9a2c4
 Create Date: 2026-08-25 00:00:00.000000
 
 """
@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "c9d1e3f5a7b9"
-down_revision: str | None = "e7a9c2d41f56"
+down_revision: str | None = "b7d3f1e9a2c4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

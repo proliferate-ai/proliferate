@@ -82,9 +82,26 @@ members with zero surviving importers, verified by import graph:
   router shell). Its store and models stay — live consumers exist
   (`ai_magic`, `github/repos`). The Track A-a amendment moves `repos/` to
   `server/github/repos/`; its deletion here is cancelled.
-- `webhooks/` (E2B sandbox lifecycle webhooks; leaf consumer of the
-  sandbox stack) — after copying the HMAC verification shape into
-  `delivery/cull-sweep/notes-webhook-hmac.md`.
+- The E2B lane of `webhooks/` — after copying the HMAC verification shape
+  into `delivery/cull-sweep/notes-webhook-hmac.md`. Amendment recorded at
+  implementation: the draft's "leaf consumer, zero importers" claim was
+  wrong for one route — `cloud/webhooks/api.py` also served the LIVE
+  GitHub App webhook (`POST /v1/cloud/webhooks/github-app`, a wire path
+  baked into the installed GitHub App configuration). That route
+  relocates verbatim into the github system (`github/api.py`,
+  `webhook_router`); only `/v1/cloud/webhooks/e2b` and the E2B
+  service/receipt machinery die. The lane's e2e rig (signed-webhook
+  helpers, live-webhook Makefile target and pytest marker, the CI shard
+  list's hardcoded e2e file) dies with it.
+- Companion edit forced by the CASCADE drop: the `Automation` ORM model's
+  `cloud_agent_run_config_id` column loses its `ForeignKey` declaration
+  (the constraint is gone from the schema; metadata must match). The
+  automation table itself is Track F's deletion.
+- Deploy note (no code change can do this): RedBeat persists the
+  `cloud-sandbox-orphan-reap` beat entry in Redis across restarts, so
+  after this slice deploys, the stale `redbeat:cloud-sandbox-orphan-reap`
+  key must be deleted by hand or beat will keep dispatching an
+  unregistered task every five minutes.
 - `cloud/worker/` (orphan-sandbox reaper) together with its only caller,
   the `background/tasks/cloud_sandboxes.py` Celery task and its beat
   schedule entry. Verified: `cloud/worker/` serves no HTTP routes and has

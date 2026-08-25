@@ -581,7 +581,7 @@ server/proliferate/
   [test_cloud_sandbox_recovery.py](../../../server/tests/integration/test_cloud_sandbox_recovery.py),
   `test_cloud_sandbox_recovery_invariants.py` (deleted, cull part 1),
   [test_cloud_sandbox_reconnect_self_heal.py](../../../server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py),
-  [test_cloud_sandbox_orphan_reaper_lock.py](../../../server/tests/integration/test_cloud_sandbox_orphan_reaper_lock.py).
+  `test_cloud_sandbox_orphan_reaper_lock.py` (deleted, cull part 1).
 - Usage fencing and connection state machine (absorbed with the fencing
   section):
   [test_sandbox_materialization.py](../../../server/tests/unit/test_sandbox_materialization.py),

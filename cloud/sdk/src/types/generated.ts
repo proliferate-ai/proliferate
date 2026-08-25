@@ -486,10 +486,6 @@ export type CreateSkillConfiguredItemRequest =
   Schema<"CreateSkillConfiguredItemRequest">;
 export type PatchSkillConfiguredItemRequest =
   Schema<"PatchSkillConfiguredItemRequest">;
-export type CloudWorktreeRetentionPolicyRequest =
-  Schema<"CloudWorktreeRetentionPolicyRequest">;
-export type CloudWorktreeRetentionPolicyResponse =
-  Schema<"CloudWorktreeRetentionPolicyResponse">;
 export type CreateCloudWorkspaceSourceMaterialization =
   Schema<"CreateCloudWorkspaceSourceMaterialization">;
 export interface CreateCloudWorkspaceRequest {

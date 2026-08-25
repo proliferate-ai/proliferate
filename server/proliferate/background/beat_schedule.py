@@ -38,6 +38,4 @@ def build_beat_schedule(config: Settings = settings) -> BeatSchedule:
         },
     }
 
-        }
-
     return schedule

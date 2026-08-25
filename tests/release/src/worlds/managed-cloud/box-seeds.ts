@@ -209,7 +209,7 @@ from proliferate.db.engine import async_session_factory
 from proliferate.db.store import github_app as github_app_store
 from proliferate.db.store import repositories as repositories_store
 from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthorization
-from proliferate.server.cloud.github_app.service import refresh_github_app_installation_cache
+from proliferate.server.github.service import refresh_github_app_installation_cache
 from proliferate.server.cloud.cloud_sandboxes.service import ensure_personal_cloud_sandbox_exists
 from proliferate.server.cloud.materialization.service import materialize_sandbox
 

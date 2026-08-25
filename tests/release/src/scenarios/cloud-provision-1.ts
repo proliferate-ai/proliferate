@@ -562,7 +562,7 @@ const QUERY_WORKER_ENROLLMENT_PY = `import asyncio, json, os
 from uuid import UUID
 from sqlalchemy import select
 from proliferate.db.engine import async_session_factory
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 
 CLOUD_SANDBOX_ID = UUID(os.environ["CLOUD_SANDBOX_ID"])
 

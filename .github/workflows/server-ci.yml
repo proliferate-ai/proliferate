@@ -566,8 +566,7 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t files < <(
-            { find tests/integration -type f \( -name 'test_*.py' -o -name '*_test.py' \); \
-              echo tests/e2e/cloud/test_e2b_webhooks.py; } | LC_ALL=C sort -u
+            find tests/integration -type f \( -name 'test_*.py' -o -name '*_test.py' \) | LC_ALL=C sort -u
           )
           echo "Total integration test files: ${#files[@]}"
           if (( ${#files[@]} < 100 )); then
