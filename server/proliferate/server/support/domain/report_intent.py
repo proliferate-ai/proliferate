@@ -1,6 +1,6 @@
-"""Pure server-produced support tracker intent derivations.
+"""Pure server-produced support report intent derivations.
 
-These helpers derive the tracker-facing projection of a support report from the
+These helpers derive the stored projection of a support report from the
 private report intent: the canonical client release ID, the normalized Sentry
 references, and the scrubbed bounded summary. They never expose the raw report
 body; the summary is a redacted, length-capped derivative.
@@ -46,7 +46,7 @@ def parse_client_release_id(value: str | None) -> str | None:
     """Return the canonical release ID when valid, otherwise ``None``.
 
     A malformed value is treated as absent so it stores as NULL and the report
-    stays feedable with a visible warning. The component must be one of the
+    completes with a visible warning. The component must be one of the
     fixed release components; project names are never release components.
     """
 

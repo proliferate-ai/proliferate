@@ -323,14 +323,10 @@ class Settings(BaseSettings):
     support_report_attachment_max_bytes: int = 25 * 1024 * 1024
     support_report_total_attachment_max_bytes: int = 100 * 1024 * 1024
     support_report_internal_base_url: str = ""
-    # Dedicated Bearer key for the private completed-report feed
-    # (GET /internal/support/reports). Empty disables the feed (every request is
-    # rejected); the route still exists so the feed is dark-deployable.
-    support_feed_bearer_token: str = ""
     # When true, report completion rejects a NEW report whose client PROVIDED a
     # release value that failed canonical validation (captured at create time
     # as `client_release_provided`). Reports from old/legacy clients that never
-    # sent the field complete normally and stay feedable with a visible
+    # sent the field complete normally with a visible
     # warning. Defaults off: production enablement is an explicit ops flip once
     # desktop client adoption of the canonical `<component>@<version>+<sha>`
     # release ID is confirmed (old installed desktop builds send no release).

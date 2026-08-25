@@ -176,9 +176,8 @@ The train and hotfix scripts produce a raw GitHub Release ledger from merged PR
 metadata. Verify its tag (`proliferate-v<version>` or the applicable no-version
 `hotfix-*` tag), source SHA, generated notes, and referenced artifact releases.
 
-That raw release is not the consent-safe Issue Lifecycle release manifest.
-There is no checked-in release-manifest publisher/finalizer or landing-
-changelog publisher. [Issue Lifecycle](../../specs/codebase/systems/engineering/issue-lifecycle/support-loop.md)
-owns the target manifest, Support projection, finalizer validation, and future
-landing publication. Do not invent a manual publisher command or claim that
+That raw release is the only release ledger. There is no checked-in
+release-manifest publisher/finalizer or landing-changelog publisher (the
+issue-lifecycle system that owned that target was retired in the 2026-08
+engineering cull). Do not invent a manual publisher command or claim that
 the current raw release script performs those steps.

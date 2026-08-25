@@ -200,9 +200,9 @@ distinct. A handled AnyHarness incident adds a fresh incident UUID and the
 bounded request/session selection context needed to connect its runtime event
 to the caller-visible RFC 7807 problem without copying user content.
 
-[Issue Lifecycle](../issue-lifecycle/README.md) owns polling or receiving this
-provider evidence, deduplicating it, routing it into canonical issues, and
-following up with reporters. Observability does not own tracker state.
+No system currently polls or receives this provider evidence as issues; the
+issue-lifecycle system was retired in the 2026-08 engineering cull.
+Observability does not own tracker state.
 
 ## Failure behavior
 
@@ -235,7 +235,7 @@ credentials.
 ## Instrumenting a new feature
 
 Recommendation for surfacing "this should/shouldn't happen" signals so they land
-as tracked issues via [Issue Lifecycle](../issue-lifecycle/README.md). Choose by
+as Sentry issues. Choose by
 what actually happened, not by convenience — do not `raise` to flag a non-failure.
 
 | Situation | Use | Effect |

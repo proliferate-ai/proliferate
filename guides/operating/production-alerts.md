@@ -1,8 +1,7 @@
 # Production Grafana alerts
 
-Status: authoritative for the five production Grafana alert rules, their
-stable identity, and the dedicated dark issue-tracker webhook contact point,
-on the OLD workspace (`proliferate-ops`, g-e532d030d8). See
+Status: authoritative for the five production Grafana alert rules and their
+stable identity on the OLD workspace (`proliferate-ops`, g-e532d030d8). See
 [below](#the-new-workspace-proliferate-ops-rebuild) for the NEW workspace
 (`proliferate-ops-rebuild`, g-48655e6419), which uses a different (simpler,
 tracker-free) delivery design per the 2026-08-20 overnight execution spec's
@@ -15,8 +14,9 @@ Overview dashboard in the new workspace.
 
 Use this runbook to understand what each production alert detects, where to
 look first when it fires, and how to reproduce or roll back the rule-identity
-overlay and the tracker contact point. The end-to-end support boundary is owned
-by [`../../specs/codebase/systems/engineering/issue-lifecycle/support-loop.md`](../../specs/codebase/systems/engineering/issue-lifecycle/support-loop.md).
+overlay. The issue-tracker webhook contact point and the issue-lifecycle
+system it delivered to were retired in the 2026-08 engineering cull; alert
+delivery is SNS/Slack only.
 
 ## Fixed production target
 
@@ -36,16 +36,10 @@ The operator script refuses to write if any of these differ.
   Grafana Admin service-account token minted immediately before the operation
   and stored at `~/.proliferate-local/ops/grafana-admin.token` with mode `0600`.
   It is never the runtime Viewer credential.
-- AWS access to read `issue-tracker/app.grafanaWebhookSecret` at apply time.
-- AWS access to read `issue-tracker/sources.grafanaToken`: the dedicated Viewer
-  service-account token the tracker uses for runtime Grafana polling. It is a
-  read-only credential and is explicitly not the Admin token.
-
-Secrets policy: never paste the Admin token, the Viewer token, the webhook
-Bearer credential, workspace URLs, or request bodies into chat, issues, PRs, or
-docs. Share only rule UIDs, metadata names, checksums, and contact-point setting
-names. The operator script redacts URLs, authorization values, credentials, and
-bodies from all console output.
+Secrets policy: never paste the Admin token, workspace URLs, or request
+bodies into chat, issues, PRs, or docs. Share only rule UIDs, metadata names,
+and checksums. The operator script redacts URLs, authorization values,
+credentials, and bodies from all console output.
 
 ## The five rules
 
@@ -113,7 +107,6 @@ The repository artifacts are:
 
 ```text
 server/infra/observability/grafana/production-alerts.json   # rule identity + metadata overlay
-server/infra/observability/grafana/issue-tracker-contact.json  # dark contact-point template
 scripts/ops/grafana-alerting.mjs                            # check / export / apply / restore
 ```
 
@@ -124,10 +117,10 @@ node scripts/ops/grafana-alerting.mjs check
 node scripts/ops/grafana-alerting.mjs check --snapshot <exported-snapshot.json>
 ```
 
-`check` needs no network. It validates the checked-in overlay and contact
-template (target match, exactly five known UIDs, approved labels/annotations,
-log annotations only on `bfrmh7e7x2k8wd`, and a secret reference with no secret
-value). With `--snapshot` it detects UID/title drift against a captured export.
+`check` needs no network. It validates the checked-in overlay (target match,
+exactly five known UIDs, approved labels/annotations, and log annotations only
+on `bfrmh7e7x2k8wd`). With `--snapshot` it detects UID/title drift against a
+captured export.
 
 ### export / apply / restore (live)
 
@@ -137,85 +130,32 @@ GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-alerting.mjs apply   --receipt 
 GRAFANA_ALERTING_LIVE=1 node scripts/ops/grafana-alerting.mjs restore --receipt <private-path>
 ```
 
-These are live Grafana operations. `apply` requires the issue tracker to be
-serving `https://issues.proliferate.com/v1/ingest/grafana`, because that is the
-url the contact point it creates delivers to. All three refuse to touch the
-network unless `GRAFANA_ALERTING_LIVE=1` is set, so no live call happens by
-accident. Order:
+These are live Grafana operations. All three refuse to touch the network
+unless `GRAFANA_ALERTING_LIVE=1` is set, so no live call happens by accident.
+Order:
 
 1. `export` reads the live rules, contact points, and notification policy,
    normalizes them, captures the query checksums into a mode-`0600` rollback
    receipt outside Git, and refuses a public or worktree receipt path.
 2. `apply` re-reads live, hard-rejects any UID/title/query mismatch (it never
    recreates a rule), overlays only the approved labels/annotations while
-   preserving the query model byte-for-byte, **creates** the named
-   `issue-tracker-webhook` contact point (resolving the Bearer credential from
-   `issue-tracker/app.grafanaWebhookSecret` at execution time), and verifies the
-   notification policy checksum is unchanged. Contact-point creation is
-   **create-only**: `apply` refuses when the receiver already exists, because
-   updating in place would require replaying a credential the tooling never
-   retains. To re-apply, first run `restore` (which removes the
-   tooling-created receiver), then `apply`.
+   preserving the query model byte-for-byte, and verifies the notification
+   policy checksum is unchanged.
 3. `restore` replays the before-export rules from the receipt to the same
-   target-locked workspace and removes only the tooling-created
-   `issue-tracker-webhook` receiver (verifying the route tree and Slack
-   receivers are untouched, and restoring the pre-removal config if that
-   verification fails). It refuses a receipt claiming the receiver pre-existed
-   E1 — exported secure fields are redacted markers and must never be
-   replayed. The retained private receipt from the accepted E1 run is the
-   rollback authority for the created receiver; credential rotation is a
-   later, separately reviewed change.
+   target-locked workspace.
 
-The tracker contact point is created and removed through the Alertmanager
-config API rather than the provisioning API, because AMG Grafana 10.4 returns
-HTTP 500 (`no secrets configured for type 'webhook'`) for any webhook contact
-point created through provisioning.
+All live output is bounded to UIDs, metadata names, and checksums.
 
-All live output is bounded to UIDs, metadata names, checksums, and contact-point
-setting names.
+## Retired: the issue-tracker webhook contact point
 
-## Delivery auth on Grafana 10.4
-
-Live delivery auth is a dedicated static Bearer credential. The contact point
-sets `authorization_scheme: Bearer` and the operator script resolves
-`issue-tracker/app.grafanaWebhookSecret` at execution time; no other route uses
-that credential. This is **not** the HMAC-SHA256 `X-Grafana-Alerting-Signature`
-scheme that
-[`support-loop.md`](../../specs/codebase/systems/engineering/issue-lifecycle/support-loop.md)
-describes as the target contract. Grafana 10.4 does not support native HMAC
-signing, so moving to the signed scheme is coupled to a separately tested
-Grafana upgrade.
-
-## Health check is manual for now
-
-There is no scheduled Grafana canary, Lambda, workflow, or seventh business
-rule. To confirm delivery health, an operator runs `check` and inspects the
-bounded read-back from a live `export`/`apply`. A daily automated canary is
-deliberately out of scope.
-
-## How E2 activates the dark contact point
-
-E1 creates the `issue-tracker-webhook` contact point and proves it exists, but
-no notification policy references it, so it cannot deliver anything. E2 adds a
-notification-policy route that sends the six rules' notifications to the tracker
-contact point **in addition to** the existing Slack routes, then proves via live
-read-back that delivery reaches `https://issues.proliferate.com/v1/ingest/grafana`
-and that Slack routing is unchanged.
-
-## How to disable tracker delivery without disabling Slack
-
-Once E2 has activated the contact point:
-
-1. Remove only the notification-policy route that targets `issue-tracker-webhook`.
-   Leave the `slack-ops-alerts` (critical) and `slack-eng-triage` (warning)
-   routes in place.
-2. Optionally delete the `issue-tracker-webhook` contact point if it should no
-   longer exist. Never touch the Slack receivers.
-3. Read back the notification-policy checksum and confirm both Slack routes
-   remain active.
-
-Disabling tracker delivery is a notification-policy change, not a rule change:
-the six rules keep firing and keep routing to Slack exactly as before.
+Until the 2026-08 engineering cull, this tooling also owned a dark
+`issue-tracker-webhook` contact point delivering to the (now decommissioned)
+issue tracker at `issues.proliferate.com`. That contact point, its checked-in
+template, its secret references, and the never-activated E2 routing plan were
+all removed with the tracker. If the live OLD workspace still carries the
+receiver, remove it by hand through the Alertmanager config API (or the
+Grafana UI) — the current tooling no longer manages contact points. The five
+rules and their Slack/SNS delivery are unaffected.
 
 ## Verification
 
@@ -226,14 +166,11 @@ node --test scripts/ops/grafana-alerting.test.mjs
 node scripts/ops/grafana-alerting.mjs check
 ```
 
-Live acceptance (requires the tracker serving
-`https://issues.proliferate.com`): record one bounded receipt proving
-the six exact UIDs are present, every query checksum is unchanged before and
-after, the approved labels/annotations read back, only `bfrmh7e7x2k8wd` has log
-metadata, the tracker contact point exists and is unreferenced, the
+Live acceptance: record one bounded receipt proving the exact UIDs are
+present, every query checksum is unchanged before and after, the approved
+labels/annotations read back, only `bfrmh7e7x2k8wd` has log metadata, the
 notification-policy checksum is unchanged, critical still routes to
-`slack-ops-alerts`, warning still routes to `slack-eng-triage`, and no tracker
-issue or occurrence was created.
+`slack-ops-alerts`, and warning still routes to `slack-eng-triage`.
 
 ## Common failure modes
 
@@ -247,10 +184,9 @@ issue or occurrence was created.
 ## Final report
 
 Report the environment, the five rule UIDs, metadata names, before/after query
-checksums, the notification-policy checksum, whether the tracker contact point
-exists and is unreferenced, and the receipt path (never its contents). State
-explicitly that no Admin token, Viewer token, webhook credential, workspace URL,
-or request body was shared.
+checksums, the notification-policy checksum, and the receipt path (never its
+contents). State explicitly that no Admin token, workspace URL, or request body
+was shared.
 
 ## The NEW workspace (proliferate-ops-rebuild)
 

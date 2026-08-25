@@ -18,9 +18,6 @@ provider configuration part of repository law.
 - [Product Engagement](../../../specs/codebase/systems/product/engagement/README.md)
   owns Customer.io transport, profile attributes, lifecycle events, and send
   gates.
-- [Issue Lifecycle](../../../specs/codebase/systems/engineering/issue-lifecycle/README.md)
-  owns provider-evidence ingestion, deduplication, investigation, and
-  reporter follow-up.
 
 ## Provider Procedures
 

@@ -247,7 +247,5 @@ contract), [`specs/frontend/telemetry.md`](frontend/telemetry.md),
 (span doctrine), [`engineering/analytics/`](codebase/systems/engineering/analytics/README.md)
 (anonymous telemetry, PostHog, Metabase),
 [`guides/operating/production-alerts.md`](../guides/operating/production-alerts.md)
-(the six Grafana rules), [`guides/operating/analytics/`](../guides/operating/analytics/README.md)
-(operating Sentry/PostHog), and
-[`issue-lifecycle/`](codebase/systems/engineering/issue-lifecycle/README.md)
-(how provider evidence becomes tracked issues).
+(the six Grafana rules), and [`guides/operating/analytics/`](../guides/operating/analytics/README.md)
+(operating Sentry/PostHog).

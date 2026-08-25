@@ -42,7 +42,7 @@ Common secret groups:
 - Remote runtime observability: `CLOUD_RUNTIME_SENTRY_DSN`,
   `CLOUD_TARGET_SENTRY_DSN`.
 - Billing: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`.
-- Support tracker/storage: support S3, GitHub, Linear, and Slack credentials.
+- Support storage: support S3 and Slack credentials.
 
 After rotation:
 

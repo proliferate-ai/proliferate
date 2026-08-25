@@ -4,37 +4,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import or_, select, tuple_
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.auth import User
 from proliferate.db.models.support import SupportReport
 from proliferate.lib.infra.time.wall_clock import utcnow
-
-
-@dataclass(frozen=True)
-class SupportFeedReportRow:
-    """Privacy-safe projection of a completed report for the internal feed.
-
-    Only fields the feed may expose are read. The account email is never
-    selected; ``owner_outreach_email`` is the explicit outreach override only.
-    """
-
-    id: str
-    owner_user_id: UUID
-    kind: str
-    tracker_summary: str | None
-    client_release_id: str | None
-    notify_me: bool
-    credit_consent: bool
-    credit_name: str | None
-    owner_outreach_email: str | None
-    telemetry_refs: dict[str, object]
-    created_at: datetime
-    completed_at: datetime
 
 
 @dataclass(frozen=True)
@@ -221,10 +198,6 @@ async def mark_report_completed(
     report_id: str,
     complete_request_id: str | None,
     object_manifest: dict[str, object],
-    tracker_status: str | None = None,
-    github_status: str | None = None,
-    linear_status: str | None = None,
-    crosslink_status: str | None = None,
 ) -> tuple[SupportReportSnapshot, bool]:
     row = await _require_report_row(db, report_id)
     should_notify = row.slack_notified_at is None
@@ -233,15 +206,6 @@ async def mark_report_completed(
         row.completed_at = utcnow()
     row.complete_request_id = complete_request_id
     row.object_manifest_json = _dump_json(object_manifest)
-    if tracker_status is not None:
-        row.tracker_status = tracker_status
-        row.tracker_next_attempt_at = utcnow() if tracker_status == "pending" else None
-    if github_status is not None:
-        row.github_status = github_status
-    if linear_status is not None:
-        row.linear_status = linear_status
-    if crosslink_status is not None:
-        row.crosslink_status = crosslink_status
     row.updated_at = utcnow()
     await db.flush()
     return _snapshot(row), should_notify
@@ -279,198 +243,11 @@ async def mark_cloud_diagnostics_status(
     return _snapshot(row)
 
 
-async def get_tracker_status(
-    db: AsyncSession,
-    *,
-    report_id: str,
-) -> SupportReportSnapshot:
-    return await _require_report(db, report_id)
-
-
-async def claim_due_tracker_report(
-    db: AsyncSession,
-    *,
-    report_id: str | None = None,
-    lease_seconds: int = 300,
-) -> SupportReportSnapshot | None:
-    now = utcnow()
-    query = (
-        select(SupportReport)
-        .where(
-            SupportReport.status == "completed",
-            SupportReport.tracker_status.in_(
-                ("pending", "partial", "failed_retryable", "in_progress")
-            ),
-            or_(
-                SupportReport.tracker_next_attempt_at.is_(None),
-                SupportReport.tracker_next_attempt_at <= now,
-            ),
-            or_(
-                SupportReport.tracker_locked_until.is_(None),
-                SupportReport.tracker_locked_until <= now,
-            ),
-        )
-        .order_by(SupportReport.created_at.asc())
-        .limit(1)
-        .with_for_update(skip_locked=True)
-    )
-    if report_id is not None:
-        query = query.where(SupportReport.id == report_id)
-    row = (await db.execute(query)).scalar_one_or_none()
-    if row is None:
-        return None
-    row.tracker_status = "in_progress"
-    row.tracker_attempt_count = (row.tracker_attempt_count or 0) + 1
-    row.tracker_locked_until = now + timedelta(seconds=lease_seconds)
-    row.updated_at = now
-    await db.flush()
-    return _snapshot(row)
-
-
-async def record_tracker_success(
-    db: AsyncSession,
-    *,
-    report_id: str,
-    tracker_status: str,
-    github_status: str,
-    linear_status: str,
-    crosslink_status: str,
-    github_issue_id: str | None,
-    github_issue_number: int | None,
-    github_issue_url: str | None,
-    linear_issue_id: str | None,
-    linear_issue_identifier: str | None,
-    linear_issue_url: str | None,
-) -> SupportReportSnapshot:
-    row = await _require_report_row(db, report_id)
-    now = utcnow()
-    row.tracker_status = tracker_status
-    row.tracker_synced_at = now
-    row.tracker_locked_until = None
-    row.tracker_next_attempt_at = None if tracker_status in {"completed", "disabled"} else now
-    row.tracker_last_error_code = None
-    row.tracker_last_error_message = None
-    row.github_status = github_status
-    row.linear_status = linear_status
-    row.crosslink_status = crosslink_status
-    if github_issue_id is not None:
-        row.github_issue_id = github_issue_id
-        row.github_issue_number = github_issue_number
-        row.github_issue_url = github_issue_url
-        row.github_synced_at = now
-        row.github_create_attempted_at = row.github_create_attempted_at or now
-    if linear_issue_id is not None:
-        row.linear_issue_id = linear_issue_id
-        row.linear_issue_identifier = linear_issue_identifier
-        row.linear_issue_url = linear_issue_url
-        row.linear_synced_at = now
-        row.linear_create_attempted_at = row.linear_create_attempted_at or now
-    if crosslink_status == "completed":
-        row.crosslink_synced_at = now
-    row.updated_at = now
-    await db.flush()
-    return _snapshot(row)
-
-
-async def record_tracker_failure(
-    db: AsyncSession,
-    *,
-    report_id: str,
-    status: str,
-    error_code: str,
-    error_message: str,
-    next_attempt_at: datetime | None,
-    github_status: str | None = None,
-    linear_status: str | None = None,
-    crosslink_status: str | None = None,
-) -> SupportReportSnapshot:
-    row = await _require_report_row(db, report_id)
-    row.tracker_status = status
-    row.tracker_locked_until = None
-    row.tracker_next_attempt_at = next_attempt_at
-    row.tracker_last_error_code = error_code[:128]
-    row.tracker_last_error_message = error_message[:2000]
-    if github_status is not None:
-        row.github_status = github_status
-    if linear_status is not None:
-        row.linear_status = linear_status
-    if crosslink_status is not None:
-        row.crosslink_status = crosslink_status
-    row.updated_at = utcnow()
-    await db.flush()
-    return _snapshot(row)
-
-
-async def mark_tracker_slack_notified(
-    db: AsyncSession,
-    *,
-    report_id: str,
-) -> SupportReportSnapshot:
-    row = await _require_report_row(db, report_id)
-    row.tracker_slack_notified_at = utcnow()
-    row.updated_at = utcnow()
-    await db.flush()
-    return _snapshot(row)
-
-
-async def list_completed_reports_for_feed(
-    db: AsyncSession,
-    *,
-    after_completed_at: datetime | None,
-    after_id: str | None,
-    limit: int,
-) -> list[SupportFeedReportRow]:
-    """Return completed reports ordered by ``(completed_at, id)``.
-
-    An empty cursor (both bounds ``None``) starts from the oldest completion.
-    The caller reads ``limit + 1`` to determine ``hasMore``.
-    """
-
-    query = (
-        select(SupportReport, User.outreach_email)
-        .join(User, User.id == SupportReport.owner_user_id)
-        .where(
-            SupportReport.status == "completed",
-            SupportReport.completed_at.is_not(None),
-        )
-        .order_by(SupportReport.completed_at.asc(), SupportReport.id.asc())
-        .limit(limit)
-    )
-    if after_completed_at is not None and after_id is not None:
-        query = query.where(
-            tuple_(SupportReport.completed_at, SupportReport.id) > (after_completed_at, after_id)
-        )
-    rows = (await db.execute(query)).all()
-    return [_feed_row(report, outreach_email) for report, outreach_email in rows]
-
-
-def _feed_row(row: SupportReport, owner_outreach_email: str | None) -> SupportFeedReportRow:
-    assert row.completed_at is not None
-    return SupportFeedReportRow(
-        id=row.id,
-        owner_user_id=row.owner_user_id,
-        kind=row.kind,
-        tracker_summary=row.tracker_summary,
-        client_release_id=row.client_release_id,
-        notify_me=row.notify_me,
-        credit_consent=row.credit_consent,
-        credit_name=row.credit_name,
-        owner_outreach_email=owner_outreach_email,
-        telemetry_refs=_dict_json(row.telemetry_refs_json),
-        created_at=row.created_at,
-        completed_at=row.completed_at,
-    )
-
-
 async def _require_report_row(db: AsyncSession, report_id: str) -> SupportReport:
     row = await db.get(SupportReport, report_id)
     if row is None:
         raise LookupError(f"Support report not found: {report_id}")
     return row
-
-
-async def _require_report(db: AsyncSession, report_id: str) -> SupportReportSnapshot:
-    return _snapshot(await _require_report_row(db, report_id))
 
 
 def _snapshot(row: SupportReport) -> SupportReportSnapshot:

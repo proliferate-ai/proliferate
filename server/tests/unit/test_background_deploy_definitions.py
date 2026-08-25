@@ -224,8 +224,6 @@ def _run_validate_config(tmp_path: Path, env: dict[str, str]) -> subprocess.Comp
         "API_BASE_URL": "https://api/base",
         "WEB_URL": "https://web",
         "E2B_TEMPLATE_REF": "tpl",
-        "SUPPORT_FEED_SECRET_ARN": "arn:secret",
-        "SUPPORT_TRACKER_ENABLED": "false",
         # Container names default to nonempty literals in the workflow env; the
         # bash body reads them straight from the environment, so supply them.
         "ECS_WORKER_CONTAINER_NAME": "worker",

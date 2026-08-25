@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from proliferate.server.support.domain.tracker_intent import (
+from proliferate.server.support.domain.report_intent import (
     TRACKER_SUMMARY_MAX_CHARS,
     build_tracker_summary,
     normalize_telemetry_refs,

@@ -52,7 +52,6 @@ def test_deploy_masks_account_and_external_aws_identifiers() -> None:
     configure = steps["Configure AWS credentials"]
 
     assert "AWS_DEPLOY_ROLE_ARN" in mask_run
-    assert "SUPPORT_FEED_SECRET_ARN" in mask_run
     assert "::add-mask::" in mask_run
     assert configure["with"]["mask-aws-account-id"] is True
 

@@ -109,9 +109,9 @@ state must be discovered at operation time. Changes to provider configuration
 do not change this contract unless they require a new event, attribute,
 transport, or send gate in source.
 
-Issue-reporter follow-up and notifications after a fix belong to
-[Engineering Issue Lifecycle](../../engineering/issue-lifecycle/README.md),
-not Product Engagement.
+Issue-reporter follow-up and notifications after a fix are not owned by
+Product Engagement (the issue-lifecycle system that owned them was retired in
+the 2026-08 engineering cull).
 
 ## Known Current Gaps
 

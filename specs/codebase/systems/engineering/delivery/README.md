@@ -274,17 +274,14 @@ supply an explicit comparison SHA.
   test tiers, scenarios, and evidence requirements.
 - [Desktop Updates](desktop-updates.md) owns installed-product updater and
   release-notice behavior.
-- [Issue Lifecycle](../issue-lifecycle/support-loop.md) owns the consent-safe
-  release manifest, Support projection, finalizer validation, and future
-  landing publication.
 - [Observability](../observability/README.md) consumes component artifact
   identity as Sentry `release` and structured-log `release_id`; event
   production does not redefine Delivery identity.
 
 The current release scripts publish a raw GitHub Release ledger from merged PR
-metadata. They do not publish the Issue Lifecycle manifest, run its finalizer,
-or update the landing changelog. No checked-in landing-changelog or release-
-manifest publisher exists.
+metadata. No checked-in landing-changelog or release-manifest publisher exists
+(the issue-lifecycle system that owned that target was retired in the 2026-08
+engineering cull).
 
 ## Current Gaps
 
@@ -305,8 +302,7 @@ manifest publisher exists.
   Supervisor design owns process lifecycle, but current cloud bootstrap starts
   AnyHarness and a separate Worker sidecar directly; staged Supervisor launch
   helpers have no active call site.
-- Raw product release publication and the Issue Lifecycle manifest/finalizer
-  remain separate, and landing publication is not automated.
+- Landing publication is not automated.
 
 ## Merge Gate
 

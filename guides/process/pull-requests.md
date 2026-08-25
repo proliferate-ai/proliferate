@@ -39,12 +39,9 @@ readiness. Before readiness, also update the body with:
 
 Use the proof depth required by [`../../specs/TESTING.md`](../../specs/TESTING.md).
 
-If the PR has a support relationship, link it through the tracker. Confirm in
-the PR body that the relationship was linked; do not include tracker, report,
-user, or support identifiers, report bodies, emails, private messages,
-telemetry identities, or other private source data. Consent-safe projection
-from the tracker remains behavior owned by the
-[Issue Lifecycle system](../../specs/codebase/systems/engineering/issue-lifecycle/support-loop.md).
+Do not include report, user, or support identifiers, report bodies, emails,
+private messages, telemetry identities, or other private source data in the
+PR body.
 
 ## Ready For Review
 
@@ -121,6 +118,6 @@ Current mechanical classification has three important edge cases:
 
 When review changes the outcome or ownership, update the summary, proof,
 title, and labels before merge. Recheck the readiness rules after the last
-change. Generated release-note and finalizer behavior remains owned by
-[`../deploying/README.md`](../deploying/README.md) and the Issue Lifecycle
-system; public polished changelog pages are a separate product surface.
+change. Generated release-note behavior remains owned by
+[`../deploying/README.md`](../deploying/README.md); public polished changelog
+pages are a separate product surface.

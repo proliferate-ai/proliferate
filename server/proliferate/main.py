@@ -86,7 +86,6 @@ from proliferate.server.release import resolve_server_release_id
 from proliferate.server.setup.api import router as first_run_setup_router
 from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 from proliferate.server.support.api import router as support_router
-from proliferate.server.support.feed.api import router as support_feed_router
 from proliferate.server.version import server_version
 from proliferate.server.web_app import mount_web_app
 from proliferate.server.workflows.api import invocations_router as workflow_invocations_router
@@ -365,10 +364,6 @@ def create_app() -> FastAPI:
     )
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
     app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
-    # Private completed-report feed. Logical route /internal/support/reports
-    # (externally /api/internal/support/reports); dark-deployable behind a
-    # dedicated Bearer key.
-    app.include_router(support_feed_router, prefix=api_prefix, tags=["support-feed"])
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])
     app.include_router(organizations_router, prefix=f"{api_prefix}/v1", tags=["organizations"])
     app.include_router(
