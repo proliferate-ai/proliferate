@@ -347,10 +347,11 @@ response, after a hard reload, after list reopen, on an authenticated GET, and
 again on the revision-2 update. Then delete and assert both the normal list
 and the authenticated API no longer expose it. The real server and Postgres
 are in scope; AnyHarness is skipped because this PR does not execute
-definitions. This scenario runs fail-closed in the CI/deploy spine (the
-"Workflow definition lifecycle (tier-2)" job in ci.yml — a red result fails CI
-and blocks Deploy Staging, and the check is eligible for a future repository
-required-status rule); the broad intent lane remains provisional.
+definitions. This scenario runs strictly (no continue-on-error) in the
+dispatch-only `ci-heavy-lanes.yml` since the 2026-08 engineering cull — it no
+longer runs per-PR or blocks Deploy Staging while the surface is mid gen-2
+rebuild; re-gating is a step-3 CI/CD-spec decision. The broad intent lane
+remains provisional.
 
 **PARKED (ruled 2026-07-08): the execution scenarios below remain deferred
 until their owning workflow-execution PRs. T2-WFDEF-1 above is active and

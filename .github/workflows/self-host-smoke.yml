@@ -7,27 +7,27 @@ name: Self-Host Smoke
 # /meta, setup-token claim, desktop password login, invite, invited
 # registration, and membership checks (SMOKE_PHASE=1 restricts the script to
 # the health assertions). Nobody lives in the production-compose lane day to
-# day, so this is the check that keeps it from regressing silently. Designed
-# to be a blocking required check on PRs to main.
+# day, so this is the check that keeps it from regressing silently.
+#
+# Off the PR path since the 2026-08 engineering cull: it runs on push:main
+# (post-merge signal; that run also seeds the buildx layer cache) and on
+# dispatch, and is no longer a required check on PRs. The T4-SH-2 artifact-chain
+# incident gate in release-e2e-selfhost.yml is unaffected. Whether a per-PR
+# smoke returns is the step-3 CI/CD spec's call
+# (delivery/engineering-cull/delivery-spec-ci-diet.md).
 #
 # Before the heavy image/Compose smoke, this same required Ubuntu job runs the
 # no-network deploy/template suite, including the rendered GNU timeout proof
 # that a TERM-resistant CloudFormation bootstrap is hard-bounded and signaled.
 #
-# No on.*.paths filter: a path-skipped run of a required check never reports a
-# conclusion, so unrelated PRs would sit on a Pending check forever and be
-# unmergeable. Instead a cheap changes job always runs, diffs against the merge
-# base, and gates the heavy smoke job on the surfaces that change the smoke
-# result (server image inputs plus the deploy bundle and this workflow). A
-# skipped smoke job reports a "skipped" conclusion, which branch protection
-# treats as satisfied, so doc-only PRs still skip the image build while the
-# check always goes green. The push:main run seeds the buildx layer cache that
-# PR builds restore from, so steady-state runtime is dominated by the ~30s
-# stack boot, not the build.
+# A cheap changes job runs first, diffs the push against its previous head,
+# and gates the heavy smoke job on the surfaces that change the smoke result
+# (server image inputs plus the deploy bundle and this workflow), so doc-only
+# merges skip the image build. Dispatch always runs the smoke. The push:main
+# run seeds the buildx layer cache, so steady-state runtime is dominated by
+# the ~30s stack boot, not the build.
 
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -69,14 +69,10 @@ jobs:
       - name: Diff against merge base
         id: detect
         env:
-          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
           PUSH_BEFORE: ${{ github.event.before || '' }}
         run: |
           set -euo pipefail
           case "$GITHUB_EVENT_NAME" in
-            pull_request)
-              base="$(git merge-base "origin/${BASE_REF}" HEAD)"
-              ;;
             push)
               base="$PUSH_BEFORE"
               if [[ ! "$base" =~ ^[0-9a-f]{40}$ ]] || [[ "$base" =~ ^0+$ ]] \
