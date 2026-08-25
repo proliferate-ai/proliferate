@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { WorkflowDefinitionListRowV2 } from "@proliferate/cloud-sdk";
 import {
   formatWorkflowUpdatedAt,
-  selectWorkflowLegacyDefinitionRows,
   selectWorkflowV2DefinitionRows,
 } from "./main-view-model";
 
@@ -58,48 +57,6 @@ describe("selectWorkflowV2DefinitionRows", () => {
     ]);
 
     expect(items[0].description).toBe("");
-  });
-});
-
-describe("selectWorkflowLegacyDefinitionRows", () => {
-  it("keeps every row the v2 selector drops, so no saved definition is lost", () => {
-    const rows = [
-      row({ id: "wf-v2", schemaVersion: 2 }),
-      row({ id: "wf-v1", schemaVersion: 1 }),
-      row({ id: "wf-untyped", schemaVersion: undefined }),
-      row({ id: "wf-future", schemaVersion: 3 }),
-    ];
-
-    const v2Ids = selectWorkflowV2DefinitionRows(rows).map((item) => item.id);
-    const legacyIds = selectWorkflowLegacyDefinitionRows(rows).map((item) => item.id);
-
-    expect(legacyIds).toEqual(["wf-v1", "wf-untyped", "wf-future"]);
-    expect([...v2Ids, ...legacyIds].sort()).toEqual(rows.map((r) => r.id).sort());
-  });
-
-  it("projects the same fields a delete needs, revision included", () => {
-    const items = selectWorkflowLegacyDefinitionRows([
-      row({
-        id: "wf-v1",
-        title: "Nightly triage",
-        description: undefined,
-        revision: 7,
-        updatedAt: "2020-03-05T00:00:00Z",
-        schemaVersion: 1,
-      }),
-    ]);
-
-    expect(items).toEqual([{
-      id: "wf-v1",
-      title: "Nightly triage",
-      description: "",
-      updatedAt: "2020-03-05T00:00:00Z",
-      revision: 7,
-    }]);
-  });
-
-  it("returns nothing when every row is gen-2", () => {
-    expect(selectWorkflowLegacyDefinitionRows([row({ schemaVersion: 2 })])).toEqual([]);
   });
 });
 

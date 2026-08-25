@@ -172,18 +172,6 @@ PRODUCT_CLIENT_DOMAIN_FORBIDDEN_GLOBALS = {
 }
 PRODUCT_CLIENT_DOMAIN_FIXTURE_IMPORTS = {
     (
-        "workflows/definition.test.ts",
-        "../../../../../../fixtures/contracts/workflow-definition/full.json",
-    ): "fixtures/contracts/workflow-definition/full.json",
-    (
-        "workflows/definition.test.ts",
-        "../../../../../../fixtures/contracts/workflow-definition/minimal.json",
-    ): "fixtures/contracts/workflow-definition/minimal.json",
-    (
-        "workflows/definition.test.ts",
-        "../../../../../../fixtures/contracts/workflow-definition/v2-full.json",
-    ): "fixtures/contracts/workflow-definition/v2-full.json",
-    (
         "workflows/definition-v2.test.ts",
         "../../../../../../fixtures/contracts/workflow-definition/v2-full.json",
     ): "fixtures/contracts/workflow-definition/v2-full.json",

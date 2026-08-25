@@ -1,11 +1,11 @@
 // Workflows gen-2 (schema_version 2) wire types, hand-authored on the frozen
-// Workflows ADR contract and reconciled field-for-field against PR2's
-// regenerated openapi.ts (origin/codex/workflows-gen2-pr2-server-v2:
-// WorkflowDefinitionDocumentV2 / WorkflowDefinitionResponseV2 /
-// WorkflowInvocationResponseV2 / WorkflowNodeModelConfigV2). Once PR2 is in
-// this chain's base, `make cloud-openapi` + `make cloud-client-generate`
-// regenerate the canonical schemas and this file is replaced by them (restack
-// task — any remaining drift is a finding, not silently absorbed).
+// Workflows ADR contract and reconciled field-for-field against the
+// regenerated openapi.ts (WorkflowDefinitionDocumentV2 /
+// WorkflowDefinitionResponseV2 / WorkflowInvocationResponseV2 /
+// WorkflowNodeModelConfigV2 — v2-only since the gen-1 lane was deleted).
+// Replacing this file with the generated schemas is a deliberate follow-up
+// refactor of the gen-2 SDK; any drift found before then is a finding, not
+// silently absorbed.
 
 export type WorkflowNodeTypeV2 = "agent" | "human_in_loop";
 

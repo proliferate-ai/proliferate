@@ -9,5 +9,4 @@ export * from "./commands.js";
 export * from "./sessions.js";
 export * from "./live.js";
 export * from "./harness-launch-options.js";
-export * from "./workflows.js";
 export * from "./workflows-v2.js";

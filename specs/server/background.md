@@ -128,11 +128,10 @@ explicit multi-transaction sequence — write "pending" + commit → external ca
 (no open txn) → write result + commit — *or*, preferably, write the intent + an
 outbox row and let a worker do the call.
 
-Managed Workflow execution is a current outbox consumer with exactly three
-bounded operations: `workflows.deliver`, `workflows.observe`, and
-`workflows.cancel`. Their domain service uses persisted generation CAS so broker
-redelivery and worker crashes repeat the same logical phase rather than minting
-new execution identity.
+Integration credential revocation is a current outbox consumer
+(`integrations.revocation.process`): the revocation job row is written with the
+intent, the outbox row rides the same transaction, and the worker's operation
+is idempotent under broker redelivery.
 
 ## `background/celery_app.py`
 
@@ -174,11 +173,6 @@ The bridge from the durable outbox to the broker.
   mutation or routing policy beyond the supported task registry. Read-only
   operational snapshots may expose counts and ages only; they never expose
   identifiers, request payloads, responses, or credentials.
-
-Managed Workflow relay telemetry includes per-family pending depth and oldest
-age plus current queued/delivering, accepted-nonterminal, pending-cancel,
-unreachable, target-lost, and projection-conflict aggregates. Worker attempt
-metrics contain only the fixed operation and a bounded safe code.
 
 ## `background/tasks/<area>.py`
 

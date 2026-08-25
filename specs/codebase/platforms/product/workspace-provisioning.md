@@ -100,7 +100,7 @@ scratch:
   requires a real `repo_environment_id` and preserves the existing
   repository/branch behavior; its API response carries `workspaceKind =
   repositoryWorktree` with a populated `repo` and `repoEnvironmentId`.
-- `scratch` (managed Workflow runs) forbids a `repo_environment_id`, uses the
+- `scratch` (no user repository) forbids a `repo_environment_id`, uses the
   `main` branch with no base branch, and serializes `repo`/`repoEnvironmentId`
   and `runtime.environmentId` as `null` — never fabricated. Repository branch
   uniqueness (the active partial index) applies only to repository worktrees, so

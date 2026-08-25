@@ -114,7 +114,7 @@ legacy implementation/evidence hand-off for the pointers below.
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
 | Create, save, reload, reopen, edit, and delete a validated workflow definition through the Desktop web UI — API-seeded repo selected, exact ordered inputs/stages/steps asserted at every reload | 2 | `tests/intent/specs/workflow-definitions.spec.ts` (`T2-WFDEF-1`; real server + Postgres, AnyHarness skipped; runs strictly in the dispatch-only `ci-heavy-lanes.yml` since the 2026-08 engineering cull — off the per-PR spine pending the step-3 re-gating decision; the broad intent lane stays provisional) |
-| Create/edit/trigger workflow via UI → run created, plan resolved, delivery attempted (up to the sandbox seam) | 2 | parked |
+| Trigger a workflow via UI → exactly one invocation PUT carrying the frozen definition + placement, UI survives the runtime-plane PUT failing (stops at the runtime seam) | 2 | `tests/intent/specs/workflow-trigger-seam.spec.ts` (`T2-WF-1`; see `specs/TESTING/scenarios.md#T2-WF-1`) |
 | Workflow run reaches terminal state with a real agent | 3 | parked |
 | Poll trigger against stub feed: replay-safe, invalid items surfaced | 2 | parked |
 | Workflow services live: schedule + poll triggers, emit, chaining, Slack delivery | 3 | parked |

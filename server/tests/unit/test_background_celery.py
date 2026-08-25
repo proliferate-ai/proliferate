@@ -17,9 +17,6 @@ from proliferate.background.config import (
     NOTIFICATIONS_QUEUE,
     NOTIFICATIONS_SEND_SLACK_TASK,
     PERIODIC_DEFAULT_QUEUE,
-    WORKFLOW_CANCEL_TASK,
-    WORKFLOW_DELIVER_TASK,
-    WORKFLOW_OBSERVE_TASK,
     build_celery_config,
     enabled_worker_queues,
 )
@@ -51,9 +48,6 @@ def test_celery_app_import_registers_noop_task_without_broker_connection() -> No
     assert CLOUD_SANDBOX_ORPHAN_REAP_TASK in celery_app.tasks
     assert CUSTOMERIO_ENGAGEMENT_SYNC_TASK in celery_app.tasks
     assert NOTIFICATIONS_SEND_SLACK_TASK in celery_app.tasks
-    assert WORKFLOW_DELIVER_TASK in celery_app.tasks
-    assert WORKFLOW_OBSERVE_TASK in celery_app.tasks
-    assert WORKFLOW_CANCEL_TASK in celery_app.tasks
     assert INTEGRATION_REVOCATION_PROCESS_TASK in celery_app.tasks
     assert INTEGRATION_REVOCATION_SWEEP_TASK in celery_app.tasks
     assert celery_app.tasks[HEALTH_NOOP_TASK].run() == "ok"
@@ -74,9 +68,6 @@ def test_celery_routes_and_queues_match_ratified_names() -> None:
         CLOUD_SANDBOX_ORPHAN_REAP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
         NOTIFICATIONS_SEND_SLACK_TASK: {"queue": NOTIFICATIONS_QUEUE},
         CUSTOMERIO_ENGAGEMENT_SYNC_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
-        WORKFLOW_DELIVER_TASK: {"queue": DEFAULT_QUEUE},
-        WORKFLOW_OBSERVE_TASK: {"queue": DEFAULT_QUEUE},
-        WORKFLOW_CANCEL_TASK: {"queue": DEFAULT_QUEUE},
         INTEGRATION_REVOCATION_PROCESS_TASK: {"queue": DEFAULT_QUEUE},
         INTEGRATION_REVOCATION_SWEEP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     }
@@ -200,9 +191,10 @@ def test_celery_config_rejects_redis_broker() -> None:
         raise AssertionError("expected Redis broker URL to be rejected")
 
 
-def test_only_workflow_task_wrapper_imports_workflow_domain() -> None:
-    # Slice 5b adds exactly one thin task wrapper. Background infrastructure
-    # remains domain-neutral; business choreography stays behind worker/service.
+def test_background_never_imports_workflow_domain() -> None:
+    # Background infrastructure is domain-neutral: with the gen-1 managed
+    # lane's task wrapper gone, no background module may import
+    # server.workflows at all.
     background_dir = Path(__file__).resolve().parents[2] / "proliferate" / "background"
     offenders: list[str] = []
     for source in background_dir.rglob("*.py"):
@@ -210,20 +202,9 @@ def test_only_workflow_task_wrapper_imports_workflow_domain() -> None:
             stripped = line.strip()
             if not (stripped.startswith("import ") or stripped.startswith("from ")):
                 continue
-            if "server.workflows" in stripped.lower() and source.name != "workflows.py":
+            if "server.workflows" in stripped.lower():
                 offenders.append(f"{source.name}: {stripped}")
     assert offenders == []
-
-
-def test_workflow_tasks_retry_escaped_crashes_without_attempt_ceiling() -> None:
-    from proliferate.background.celery_app import celery_app
-
-    for name in (WORKFLOW_DELIVER_TASK, WORKFLOW_OBSERVE_TASK, WORKFLOW_CANCEL_TASK):
-        task = celery_app.tasks[name]
-        assert task.autoretry_for == (Exception,)
-        assert task.retry_backoff is True
-        assert task.retry_backoff_max == 60
-        assert task.max_retries is None
 
 
 def test_celery_queue_selector_rejects_unknown_queue() -> None:

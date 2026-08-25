@@ -41,8 +41,6 @@ export interface AppCapabilities {
   managedCloudStatus: OperatorCapabilityStatus;
   /** The bundled agent LLM gateway is enabled on this server. */
   agentGatewayEnabled: boolean;
-  /** New managed Workflow delivery is enabled by the connected server. */
-  workflowManagedRunsEnabled: boolean;
   /** Server-declared deployment mode. */
   deploymentMode: DeploymentMode;
   /** True when the connected server is not the hosted product. */
@@ -100,7 +98,6 @@ export function resolveEffectiveContract(
     pricing: { available: true, url: opts.fallback.pricingUrl },
     githubRepositoryAccess: { status: "ready", provider: "github_app", displayName: null },
     managedCloud: { status: "ready", repositoryAuthority: "github_app", source: "legacy" },
-    workflowManagedRuns: false,
   };
 }
 
@@ -142,7 +139,6 @@ export function deriveAppCapabilities(
       githubRepositoryAccessDisplayName: null,
       managedCloudStatus: "disabled",
       agentGatewayEnabled: false,
-      workflowManagedRunsEnabled: false,
       deploymentMode: "self_managed",
       isSelfManaged: true,
       serverDisplayName: connectedServerHost,
@@ -168,7 +164,6 @@ export function deriveAppCapabilities(
     githubRepositoryAccessDisplayName: githubRepositoryAccess.displayName,
     managedCloudStatus: managedCloud.status,
     agentGatewayEnabled: reachable && contract.agentGateway,
-    workflowManagedRunsEnabled: reachable && contract.workflowManagedRuns === true,
     deploymentMode: contract.deployment.mode,
     isSelfManaged: !hosted,
     serverDisplayName: hosted
