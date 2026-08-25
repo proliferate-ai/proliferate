@@ -7,11 +7,6 @@
 # check_max_lines' caps, so they must not be listed under [[max_lines]].
 
 [[max_lines]]
-path = "apps/desktop/src-tauri/src/commands/ssh_tunnel.rs"
-max_lines = 728
-reason = "existing desktop native oversized file"
-
-[[max_lines]]
 path = "apps/desktop/src-tauri/src/diagnostics/support_snapshot/artifact_store/unix_fs.rs"
 max_lines = 658
 reason = "Support snapshot artifact store's Unix filesystem layer: private-by-construction root creation, metadata repair, and the O_NOFOLLOW open/read/write paths share the same permission constants and repair state machine, and the mkdir-mode hardening this slice adds is only meaningful next to the repair it guards. Split into unix_fs/{root,entry}.rs when a second artifact kind lands."
@@ -28,7 +23,7 @@ reason = "Desktop diagnostics broker server: the accept loop, per-request admiss
 
 [[max_lines]]
 path = "apps/packages/product-client/src/components/home/screen/HomeNextScreen.test.tsx"
-max_lines = 743
+max_lines = 728
 reason = "home screen suite: unified-composer/target-persistence coverage joined by the PRO-165 home-attachment battery (+ button snapshot payload, whole-screen drop, dropped-path local_ref recovery, local/remote target-flip clearing, attachment-only launch, failure retention, chip removal)"
 
 [[max_lines]]
@@ -73,7 +68,7 @@ reason = "relocated existing oversized domain test; no growth"
 
 [[max_lines]]
 path = "apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts"
-max_lines = 840
+max_lines = 805
 reason = "managed sandbox cloud workspace indicators + PR 5 explicit-materialization attachment cases extend existing oversized test file"
 
 [[max_lines]]

@@ -66,7 +66,6 @@ export function useSessionCreationActions() {
   const storageContext = useProductStorageContext();
   const desktop = host.desktop;
   const localRuntime = desktop?.runtime ?? null;
-  const ssh = desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockError } = useWorkspaceRuntimeBlock();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
@@ -324,7 +323,6 @@ export function useSessionCreationActions() {
         existingProjectedRecord,
         frozenDefaultLiveSessionControlValuesByAgentKind,
         localRuntime,
-        ssh,
         cloudClient,
         options: pendingCreationLifecycle.current
           ? {
@@ -406,7 +404,6 @@ export function useSessionCreationActions() {
     invalidateWorkspaceCollectionsForRuntime,
     runtimeUrl,
     localRuntime,
-    ssh,
     cloudClient,
     promptSession,
     removeWorkspaceSessionRecord,

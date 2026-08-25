@@ -3,9 +3,7 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 import type {
   DesktopRuntimeBridge,
-  DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
-import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
@@ -47,7 +45,7 @@ export async function resolveRuntimeUrlForWorkspaceSessions(
   workspaceId: string,
   runtime: DesktopRuntimeBridge | null,
 ): Promise<string> {
-  if (parseTargetWorkspaceSyntheticId(workspaceId) || parseCloudWorkspaceSyntheticId(workspaceId)) {
+  if (parseCloudWorkspaceSyntheticId(workspaceId)) {
     return useHarnessConnectionStore.getState().runtimeUrl.trim();
   }
   return ensureRuntimeReadyForSessions(runtime);
@@ -59,7 +57,6 @@ export async function fetchWorkspaceSessions(
   options?: {
     requestHeaders?: HeadersInit;
     measurementOperationId?: MeasurementOperationId | null;
-    ssh?: DesktopSshBridge | null;
     cloudClient: CloudSandboxGatewayUrlSource | null;
   },
 ): Promise<WorkspaceSession[]> {
@@ -71,7 +68,6 @@ export async function fetchWorkspaceSessions(
       category: "session.list",
       headers: options?.requestHeaders,
     }),
-    options?.ssh ?? null,
     options?.cloudClient ?? null,
   );
   const visibleSessions = filterReplacedSessionTombstones(workspaceId, sessions) ?? [];

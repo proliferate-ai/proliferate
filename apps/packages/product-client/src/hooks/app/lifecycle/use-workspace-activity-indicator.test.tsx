@@ -27,7 +27,7 @@ const harnessState = vi.hoisted(() => ({
     sessionLastInteracted: {} as Record<string, string>,
     sessionLastViewedAt: {} as Record<string, string>,
     workspaceLastInteracted: {} as Record<string, string>,
-    workspaceTypes: ["local", "worktree", "cloud", "ssh"],
+    workspaceTypes: ["local", "worktree", "cloud"],
   },
   deferredHome: {
     launches: {} as Record<string, { workspaceId: string }>,
@@ -89,7 +89,7 @@ describe("useWorkspaceActivityIndicator", () => {
       sessionLastInteracted: {},
       sessionLastViewedAt: {},
       workspaceLastInteracted: {},
-      workspaceTypes: ["local", "worktree", "cloud", "ssh"],
+      workspaceTypes: ["local", "worktree", "cloud"],
     };
     harnessState.deferredHome = {
       launches: {},

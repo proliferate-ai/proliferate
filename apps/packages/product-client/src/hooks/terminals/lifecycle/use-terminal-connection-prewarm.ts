@@ -2,13 +2,12 @@ import { useEffect, useRef } from "react";
 import { useTerminalWorkspaceConnection } from "#product/hooks/terminals/workflows/use-terminal-workspace-connection";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
-// Q16 — hoist the gateway token refresh and SSH tunnel warm-up out of the lazy
-// pane-attach path and into workspace selection/bootstrap. Once a workspace is
-// selected and its runtime is no longer blocked, we fire-and-forget a single
-// connection resolution: `resolveTerminalWorkspaceConnection` mints a fresh
-// gateway access token and, on the desktop SSH path, calls `ssh.ensureTunnel`
-// to open the tunnel the later attach reuses. Pane activation then consumes a
-// pre-warmed connection instead of paying that cost on the critical path.
+// Q16 — hoist the gateway token refresh out of the lazy pane-attach path and
+// into workspace selection/bootstrap. Once a workspace is selected and its
+// runtime is no longer blocked, we fire-and-forget a single connection
+// resolution: `resolveTerminalWorkspaceConnection` mints a fresh gateway
+// access token. Pane activation then consumes a pre-warmed connection instead
+// of paying that cost on the critical path.
 //
 // The pre-warm is best-effort and silent. A failure never surfaces a new error
 // state; the ref is reset so a later attach (or re-selection) resolves the

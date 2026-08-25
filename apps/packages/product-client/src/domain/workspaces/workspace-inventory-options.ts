@@ -21,7 +21,7 @@ export const SOURCE_ORDER: Record<WorkspaceInventorySourceKind, number> = {
 export const RUNTIME_ORDER: Record<RecentWorkRuntimeLocation, number> = {
   local_desktop: 0,
   cloud_sandbox: 1,
-  ssh_remote: 2,
+  self_hosted_remote: 2,
   offline: 3,
   unknown: 4,
 };

@@ -29,7 +29,6 @@ describe("useHomeNextTargetSelectionState — stale cloud selection normalizatio
       destination: "repository",
       repositorySelection: { kind: "auto" },
       repoLaunchKind: "cloud",
-      selectedSshTargetId: null,
       baseBranchOverride: null,
     });
 
@@ -48,7 +47,6 @@ describe("useHomeNextTargetSelectionState — stale cloud selection normalizatio
       destination: "repository",
       repositorySelection: { kind: "auto" },
       repoLaunchKind: "cloud",
-      selectedSshTargetId: null,
       baseBranchOverride: null,
     });
 
@@ -66,7 +64,6 @@ describe("useHomeNextTargetSelectionState — stale cloud selection normalizatio
       destination: "repository",
       repositorySelection: { kind: "auto" },
       repoLaunchKind: "local",
-      selectedSshTargetId: null,
       baseBranchOverride: null,
     });
 

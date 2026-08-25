@@ -30,8 +30,6 @@ const screenMocks = vi.hoisted(() => {
       isLoading: false,
       isError: false,
     },
-    sshTargetOptions: [],
-    sshTargetsLoading: false,
     cloudRepoActionBySourceRoot: {},
     cloudRepoTarget: null,
     cloudRepoAction: { kind: "create" },
@@ -132,9 +130,6 @@ vi.mock("#product/components/home/screen/HomeTargetPicker", () => ({
           <>
             <button type="button" onClick={() => props.onSelectCowork()}>Mock cowork</button>
             <button type="button" onClick={() => props.onSelectRuntime("local")}>Mock local</button>
-            <button type="button" onClick={() => props.onSelectRuntime("ssh", "ssh-target-1")}>
-              Mock ssh
-            </button>
           </>
         ) : null}
         <button type="button" onClick={() => props.onSelectRepository("/repo-b")}>
@@ -269,8 +264,6 @@ function resetHomeNext() {
   screenMocks.homeNext.effectiveModelSelection = { kind: "codex", modelId: "gpt-5.4" };
   screenMocks.homeNext.launchTarget = { kind: "cowork" };
   screenMocks.onboardingCards.splice(0);
-  screenMocks.homeNext.sshTargetOptions = [];
-  screenMocks.homeNext.sshTargetsLoading = false;
   screenMocks.homeNextStateArgs = null;
   screenMocks.targetPickerProps = null;
   screenMocks.leadingControlsProps = null;

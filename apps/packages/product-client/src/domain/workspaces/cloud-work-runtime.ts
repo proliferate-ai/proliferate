@@ -37,9 +37,8 @@ export function recentWorkRuntimeLocationForWorkspace(
     case "managed_personal":
     case "managed_shared":
       return "cloud_sandbox";
-    case "ssh":
     case "self_hosted":
-      return "ssh_remote";
+      return "self_hosted_remote";
     case undefined:
       return "unknown";
   }
@@ -117,7 +116,6 @@ export function recentWorkCommandability(
   }
   if (
     workspace.sandboxType === "local" ||
-    workspace.sandboxType === "ssh" ||
     workspace.sandboxType === "self_hosted"
   ) {
     return "not_commandable";
@@ -236,6 +234,5 @@ function workspaceUsesDirectTargetRuntime(
 ): boolean {
   return Boolean(workspace.directTargetContext)
     || workspace.sandboxType === "local"
-    || workspace.sandboxType === "ssh"
     || workspace.sandboxType === "self_hosted";
 }

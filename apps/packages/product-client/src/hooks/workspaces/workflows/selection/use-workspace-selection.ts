@@ -24,7 +24,6 @@ export function useWorkspaceSelection() {
   const host = useProductHost();
   const desktop = host.desktop;
   const localRuntime = desktop?.runtime ?? null;
-  const ssh = desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const {
     cancelPreviousWorkspaceDisplayQueries,
@@ -77,7 +76,6 @@ export function useWorkspaceSelection() {
         : [];
       const deps = {
         localRuntime,
-        ssh,
         cloudClient,
         cache: {
           cancelPreviousWorkspaceDisplayQueries,
@@ -121,7 +119,6 @@ export function useWorkspaceSelection() {
       refreshCloudWorkspaceConnection,
       setSelectedLogicalWorkspaceId,
       setSelectedWorkspace,
-      ssh,
       cloudClient,
     ]),
     clearWorkspaceRuntimeState: useCallback((

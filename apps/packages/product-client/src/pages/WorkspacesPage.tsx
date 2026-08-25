@@ -159,8 +159,6 @@ function placementLabelForVariant(
   switch (variant) {
     case "cloud":
       return "Cloud";
-    case "ssh":
-      return "SSH";
     case "local":
     case "worktree":
       return null;

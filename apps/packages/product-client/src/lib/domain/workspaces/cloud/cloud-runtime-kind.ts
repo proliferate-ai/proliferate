@@ -12,7 +12,6 @@ export function cloudWorkspaceUsesCloudRuntime(
 
   if (
     workspace.executionTarget?.kind === "local_desktop"
-    || workspace.executionTarget?.kind === "ssh"
     || workspace.executionTarget?.kind === "self_hosted"
   ) {
     return false;
@@ -22,14 +21,13 @@ export function cloudWorkspaceUsesCloudRuntime(
   if (
     targetKind === "desktop_dispatch"
     || targetKind === "local_direct"
-    || targetKind === "ssh"
     || targetKind === "self_hosted_cloud"
   ) {
     return false;
   }
 
   const sandboxType = workspace?.sandboxType ?? "managed_personal";
-  return sandboxType !== "local" && sandboxType !== "ssh" && sandboxType !== "self_hosted";
+  return sandboxType !== "local" && sandboxType !== "self_hosted";
 }
 
 export function cloudWorkspaceUsesCloudSandboxGateway(

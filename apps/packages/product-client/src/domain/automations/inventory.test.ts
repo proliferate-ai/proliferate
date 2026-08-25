@@ -97,19 +97,11 @@ describe("automation inventory", () => {
     const [local] = buildAutomationInventoryItems([
       automation({ targetMode: "local" }),
     ], { clientSurface: "web", now: NOW });
-    const [ssh] = buildAutomationInventoryItems([
-      automation({ executionTarget: "ssh", targetKind: "ssh" }),
-    ], { clientSurface: "web", now: NOW });
     const [desktopLocal] = buildAutomationInventoryItems([
       automation({ targetMode: "local" }),
     ], { clientSurface: "desktop", now: NOW });
 
     expect(local).toMatchObject({
-      targetAvailability: "desktop_required",
-      runNowDisabledReason: "Check this out on the desktop.",
-    });
-    expect(ssh).toMatchObject({
-      targetLabel: "SSH target",
       targetAvailability: "desktop_required",
       runNowDisabledReason: "Check this out on the desktop.",
     });
@@ -277,29 +269,13 @@ describe("automation inventory", () => {
     expect(week[1].occurrences).toMatchObject([{ automationId: "auto-1" }]);
   });
 
-  it("uses target kind when labeling calendar occurrences", () => {
-    const week = buildAutomationCalendarWeek([
-      automation({
-        targetMode: "personal_cloud",
-        targetKind: "ssh",
-      }),
-    ], {
-      anchorDate: ANCHOR,
-      now: NOW,
-    });
-
-    expect(week[1].occurrences).toMatchObject([
-      { targetLabel: "SSH target" },
-    ]);
-  });
-
   it("maps run statuses", () => {
     const items = buildAutomationRunInventoryItems([
       run("queued"),
       run("creating_workspace"),
       run("dispatching"),
       run("dispatched", { cloudWorkspaceId: "cw-1" }),
-      run("dispatched", { id: "run-ssh", anyharnessWorkspaceId: "aw-1", cloudTargetKindSnapshot: "ssh" }),
+      run("dispatched", { id: "run-direct", anyharnessWorkspaceId: "aw-1", cloudTargetKindSnapshot: "self_hosted_cloud" }),
       run("failed", { lastErrorMessage: "Boom" }),
       run("cancelled"),
       run("queued_elsewhere" as AutomationRunInventoryRecord["status"], { id: "run-unknown" }),
@@ -310,7 +286,7 @@ describe("automation inventory", () => {
       ["Creating cloud workspace", "working", "none", "Personal cloud"],
       ["Sending prompt", "working", "none", "Personal cloud"],
       ["Session started", "done", "openable", "Personal cloud"],
-      ["Session started", "done", "openable", "SSH target"],
+      ["Session started", "done", "openable", "Personal cloud"],
       ["Failed", "blocked", "none", "Personal cloud"],
       ["Cancelled", "done", "none", "Personal cloud"],
       ["Status unavailable", "waiting", "none", "Personal cloud"],
@@ -334,7 +310,7 @@ describe("automation inventory", () => {
     ]);
   });
 
-  it("keeps local and ssh runs visible but desktop-required on web", () => {
+  it("keeps local and direct-target runs visible but desktop-required on web", () => {
     const items = buildAutomationRunInventoryItems([
       run("dispatched", {
         id: "run-local",
@@ -342,10 +318,10 @@ describe("automation inventory", () => {
         anyharnessWorkspaceId: "aw-local",
       }),
       run("dispatched", {
-        id: "run-ssh",
+        id: "run-direct",
         targetMode: "personal_cloud",
-        anyharnessWorkspaceId: "aw-ssh",
-        cloudTargetKindSnapshot: "ssh",
+        anyharnessWorkspaceId: "aw-direct",
+        cloudTargetKindSnapshot: "self_hosted_cloud",
       }),
       run("dispatched", {
         id: "run-cloud",
@@ -360,7 +336,7 @@ describe("automation inventory", () => {
       item.targetLabel,
     ])).toEqual([
       ["run-local", "desktop_required", "Check this out on the desktop.", "Local"],
-      ["run-ssh", "desktop_required", "Check this out on the desktop.", "SSH target"],
+      ["run-direct", "desktop_required", "Check this out on the desktop.", "Personal cloud"],
       ["run-cloud", "openable", null, "Personal cloud"],
     ]);
   });
@@ -372,9 +348,9 @@ describe("automation inventory", () => {
         targetMode: "local",
       }),
       run("failed", {
-        id: "run-ssh-failed",
+        id: "run-direct-failed",
         targetMode: "personal_cloud",
-        cloudTargetKindSnapshot: "ssh",
+        cloudTargetKindSnapshot: "self_hosted_cloud",
         lastErrorMessage: "Could not create workspace",
       }),
     ], { clientSurface: "web" });
@@ -386,7 +362,7 @@ describe("automation inventory", () => {
       item.openDisabledReason,
     ])).toEqual([
       ["run-local-queued", "Queued, local executor not available yet", "none", null],
-      ["run-ssh-failed", "Failed", "none", null],
+      ["run-direct-failed", "Failed", "none", null],
     ]);
   });
 });

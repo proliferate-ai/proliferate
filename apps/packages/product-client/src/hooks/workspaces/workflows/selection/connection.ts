@@ -5,7 +5,6 @@ import {
   startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
 import { ensureRuntimeReady } from "#product/hooks/workspaces/workflows/runtime-ready";
-import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import type {
   ReadyCloudReadinessResult,
@@ -20,11 +19,10 @@ export async function resolveSelectionConnection(
   cloudReadiness: ReadyCloudReadinessResult,
 ): Promise<WorkspaceConnectionResult> {
   const runtimeReadyStartedAt = startLatencyTimer();
-  const targetWorkspace = parseTargetWorkspaceSyntheticId(context.workspaceId);
   const localWorkspaceId = cloudReadiness.kind === "local"
     ? cloudReadiness.runtimeWorkspaceId ?? context.workspaceId
     : context.workspaceId;
-  const desktopRuntimeUrl = cloudReadiness.kind === "local" && !targetWorkspace
+  const desktopRuntimeUrl = cloudReadiness.kind === "local"
     ? await ensureRuntimeReady(deps.localRuntime)
     : useHarnessConnectionStore.getState().runtimeUrl;
   logLatency("workspace.select.runtime_ready", {
@@ -38,7 +36,6 @@ export async function resolveSelectionConnection(
     ? (await resolveWorkspaceConnection(
       desktopRuntimeUrl,
       localWorkspaceId,
-      deps.ssh ?? null,
       deps.cloudClient,
     )).connection
     : await deps.cache.refreshCloudWorkspaceConnection(cloudReadiness.cloudWorkspaceId)

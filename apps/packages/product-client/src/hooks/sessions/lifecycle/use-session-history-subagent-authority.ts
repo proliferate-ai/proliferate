@@ -24,7 +24,6 @@ export interface SessionHistorySubagentAuthorityInput {
 
 export function useSessionHistorySubagentAuthority() {
   const host = useProductHost();
-  const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const { mountSubagentChildSession } = useLinkedSessionMounting();
 
@@ -42,18 +41,16 @@ export function useSessionHistorySubagentAuthority() {
       transcript: input.transcript,
       fetchParentRoster: () => fetchSessionSubagentRoster(input.sessionId, {
         requestHeaders: input.requestHeaders,
-        ssh,
         cloudClient,
       }),
       fetchVisibleSessionIds: async () => new Set(
         (await fetchSessionWorkspaceSummaries(input.sessionId, {
-          ssh,
           cloudClient,
         })).map((session) => session.id),
       ),
       isCurrent: input.isCurrent,
     });
-  }, [cloudClient, ssh]);
+  }, [cloudClient]);
 
   const applyAuthority = useCallback((
     effects: Awaited<ReturnType<typeof resolveHistorySubagentAuthority>>["effects"],

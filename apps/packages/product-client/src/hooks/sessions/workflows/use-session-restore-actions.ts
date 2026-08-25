@@ -36,7 +36,6 @@ export function useSessionRestoreActions() {
   const host = useProductHost();
   const desktop = host.desktop;
   const localRuntime = desktop?.runtime ?? null;
-  const ssh = desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
@@ -92,7 +91,7 @@ export function useSessionRestoreActions() {
       });
 
       const targetResolveStartedAt = startLatencyTimer();
-      const { target } = await getWorkspaceClientAndId(runtimeUrl, workspaceId, ssh, cloudClient);
+      const { target } = await getWorkspaceClientAndId(runtimeUrl, workspaceId, cloudClient);
       logLatency("session.restore.target_resolved", {
         workspaceId,
         anyharnessWorkspaceId: target.anyharnessWorkspaceId,
@@ -182,7 +181,6 @@ export function useSessionRestoreActions() {
     dismissSessionMutation,
     restoreDismissedSessionMutation,
     showToast,
-    ssh,
     cloudClient,
     upsertWorkspaceSessionRecord,
   ]);

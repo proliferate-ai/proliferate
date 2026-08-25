@@ -663,9 +663,6 @@ describe("sidebar workspace filters", () => {
   });
 
   it("normalizes all selected workspace types back to the default order", () => {
-    expect(resolveSidebarWorkspaceTypes(["ssh", "cloud", "local", "worktree"])).toEqual(
-      DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-    );
     expect(resolveSidebarWorkspaceTypes(["cloud", "local", "worktree"])).toEqual([
       "local",
       "worktree",

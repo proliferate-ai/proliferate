@@ -39,7 +39,6 @@ let activeDispatcherOwner: symbol | null = null;
 
 export function useSessionIntentDispatcher(): void {
   const host = useProductHost();
-  const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const dispatchVersion = useSessionIntentStore((state) => state.dispatchVersion);
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
@@ -85,7 +84,6 @@ export function useSessionIntentDispatcher(): void {
           maybeGenerateWorkspaceName,
           promptSessionMutation,
           rehydrateSessionSlotFromHistory,
-          ssh,
           cloudClient,
           upsertWorkspaceSessionRecord,
         });
@@ -94,7 +92,6 @@ export function useSessionIntentDispatcher(): void {
         await dispatchConfigIntent(intent, {
           getWorkspaceSurface,
           setSessionConfigOptionMutation,
-          ssh,
           cloudClient,
           upsertWorkspaceSessionRecord,
           onFailure: (message) => {
@@ -111,13 +108,13 @@ export function useSessionIntentDispatcher(): void {
         });
         break;
       case "resolve_interaction":
-        await dispatchInteractionIntent(intent, { resolveInteractionMutation, ssh, cloudClient });
+        await dispatchInteractionIntent(intent, { resolveInteractionMutation, cloudClient });
         break;
       case "edit_pending_prompt":
-        await dispatchEditPendingPromptIntent(intent, { editPendingPromptMutation, ssh, cloudClient });
+        await dispatchEditPendingPromptIntent(intent, { editPendingPromptMutation, cloudClient });
         break;
       case "delete_pending_prompt":
-        await dispatchDeletePendingPromptIntent(intent, { deletePendingPromptMutation, ssh, cloudClient });
+        await dispatchDeletePendingPromptIntent(intent, { deletePendingPromptMutation, cloudClient });
         break;
     }
   }, [
@@ -132,7 +129,6 @@ export function useSessionIntentDispatcher(): void {
     resolveInteractionMutation,
     setSessionConfigOptionMutation,
     showErrorToast,
-    ssh,
     cloudClient,
     upsertWorkspaceSessionRecord,
   ]);

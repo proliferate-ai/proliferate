@@ -113,7 +113,6 @@ export function inferLifecycle(
     || mobilityLifecycle === "moving_to_cloud"
     || mobilityLifecycle === "cloud_active"
     || mobilityLifecycle === "shared_cloud_active"
-    || mobilityLifecycle === "ssh_active"
     || mobilityLifecycle === "moving_to_local"
     || mobilityLifecycle === "handoff_failed"
     || mobilityLifecycle === "cleanup_failed"
@@ -147,7 +146,6 @@ function effectiveOwnerFromMobilityOwner(
     case "cloud":
     case "personal_cloud":
     case "shared_cloud":
-    case "ssh":
       return "cloud";
     default:
       return null;

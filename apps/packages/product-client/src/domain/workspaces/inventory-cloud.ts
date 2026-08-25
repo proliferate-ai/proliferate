@@ -90,8 +90,6 @@ function workspaceLocationKind(
   switch (workspace.sandboxType) {
     case "local":
       return "local";
-    case "ssh":
-      return "ssh";
     case "managed_shared":
       return "managed_shared";
     case "self_hosted":
@@ -107,8 +105,6 @@ function workspaceLocationLabel(workspace: CloudWorkspaceSummary): string {
   switch (workspace.sandboxType) {
     case "local":
       return "Local";
-    case "ssh":
-      return "SSH";
     case "managed_shared":
       return "Cloud";
     case "self_hosted":

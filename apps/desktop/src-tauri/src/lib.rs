@@ -16,7 +16,7 @@ mod workspace_activity_indicator;
 use commands::{
     anonymous_telemetry, cloud_worker, config, desktop_identity,
     diagnostics as diagnostics_commands, drag_drop, google_workspace_mcp, keychain, process,
-    runtime, shell, ssh_tunnel, support, support_snapshot, window_chrome, workspace_scratch,
+    runtime, shell, support, support_snapshot, window_chrome, workspace_scratch,
 };
 use quit_flow::QuitFlowState;
 use tauri::Manager;
@@ -268,7 +268,6 @@ pub fn run() {
         .manage(shutdown_coordinator.clone())
         .manage(QuitFlowState::default())
         .manage(workspace_activity_indicator::WorkspaceActivityIndicatorStore::default())
-        .manage(ssh_tunnel::SshTunnelState::default())
         .manage(window_chrome::WindowChromeZoom::default())
         .invoke_handler(tauri::generate_handler![
             anonymous_telemetry::load_anonymous_telemetry_bootstrap,
@@ -321,9 +320,6 @@ pub fn run() {
             window_chrome::apply_macos_window_chrome,
             window_chrome::set_webview_zoom,
             process::command_exists,
-            ssh_tunnel::install_ssh_target_runtime,
-            ssh_tunnel::probe_ssh_target_connection,
-            ssh_tunnel::ensure_ssh_anyharness_tunnel,
             keychain::get_auth_session,
             keychain::set_auth_session,
             keychain::clear_auth_session,
