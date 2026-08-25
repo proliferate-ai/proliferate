@@ -2,8 +2,8 @@
 // Retained runtime /login budget collector + fail-closed gate (phase-6 cutover).
 //
 // WHY A RUNTIME COLLECTOR (not a static manifest walker). The binding legacy
-// baseline was produced by a manifest-walking collector (retired; in git
-// history) that walks the Vite manifest's STATIC import closure. For the replacement browser
+// baseline was produced by a retired collector (in git history) that walked
+// the Vite manifest's STATIC import closure. For the replacement browser
 // host that tool is not a faithful gate: the manifest still associates
 // side-effect assets (e.g. `ding-*.mp3`) with `index.html`, so it would count
 // bytes the browser never requests on `/login`. The phase-6 contract requires
