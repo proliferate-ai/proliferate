@@ -83,43 +83,11 @@ class WorkerDesiredVersions(_CamelModel):
     anyharness: str | None = None
 
 
-class WorkerSupervisorBridge(_CamelModel):
-    """Server-materialized D5 bridge inputs for an already-provisioned legacy
-    target (R9R-002).
-
-    A legacy Worker's persisted config carries none of the supervisor-owned
-    fields, so without these it could never bridge. The server delivers the
-    Supervisor config TOML + a supervisor-owned Worker config TOML and the paths
-    to write them through the live heartbeat channel; the legacy Worker
-    materializes both, starts the Supervisor, and hands the box off. Absent for
-    Supervisor-first provisions (their on-disk config already carries the inputs)
-    and for every non-flag-enabled target.
-    """
-
-    supervisor_binary_path: str
-    supervisor_config_path: str
-    supervisor_config_toml: str
-    worker_config_path: str
-    worker_config_toml: str
-    marker_dir: str
-
-
 class WorkerHeartbeatResponse(_CamelModel):
     worker_id: str
     server_time: datetime
     heartbeat_interval_seconds: int
     desired_versions: WorkerDesiredVersions
-    # Make Managed Runtime Updates Supervisor-Owned, decision 6 (the D5
-    # bridge): "supervisor_owned" only for cloud-sandbox targets while
-    # `settings.supervisor_owned_runtime` is on, else None/absent. A legacy
-    # Worker that has never seen this field treats it exactly like an absent
-    # one (old-worker compat, same shape as `desired_versions`).
-    desired_topology: str | None = None
-    # R9R-002: the materialized bridge inputs delivered to an already-provisioned
-    # legacy target the server is migrating. Present only alongside
-    # ``desired_topology == "supervisor_owned"`` for a provisioned cloud-sandbox
-    # target with runtime credentials; absent otherwise. Old-worker compatible.
-    supervisor_bridge: WorkerSupervisorBridge | None = None
     # The server-owned verdict on whether this Worker may upload target launch
     # options. Required on every new-server 200 — a successful,
     # authenticated heartbeat always states the verdict explicitly, and a Worker
