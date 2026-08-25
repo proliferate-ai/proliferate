@@ -1,0 +1,18 @@
+# System manifest (Organization Standard rule 2) — validated by
+# scripts/check_manifests.py; rules PROD-MANIFEST-001/002 in
+# lints/product/manifests.toml. allowed_importers is measured reality, not
+# permission-by-intention: the checker fails on drift in either direction.
+
+name = "setup"
+spec = "specs/codebase/systems/product/onboarding/README.md"
+owns = "First-run claim flow for single-org mode: the server-rendered /setup page and its lifecycle."
+
+public_surface = [
+    "proliferate.server.setup.api",
+    "proliferate.server.setup.service",
+]
+
+allowed_importers = [
+    "main.py",
+    "organizations",
+]

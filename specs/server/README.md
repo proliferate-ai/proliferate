@@ -49,6 +49,12 @@ The rules listed under [Current gaps](#current-gaps) are the ones that remain
 unenforced; the reviewed exception ledger remains the operating tolerance until
 those gaps close.
 
+Every domain folder additionally carries a `MANIFEST.toml` — name, governing
+spec, owns, public surface, and its measured allowed importers — validated by
+[check_manifests.py](../../scripts/check_manifests.py) under the
+`PROD-MANIFEST-*` records in
+[lints/product/manifests.toml](../../lints/product/manifests.toml).
+
 ## The Core Idea
 
 The server is a **grid**: columns are business domains such as Billing, Cloud,

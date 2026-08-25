@@ -1,0 +1,42 @@
+# System manifests — every system folder carries a MANIFEST.toml declaring
+# owns / public surface / allowed importers / spec link (Organization Standard
+# rule 2). Enforced by scripts/check_manifests.py over the server plane,
+# introduced in warn mode by the cull-sweep Wave 0
+# (delivery/cull-sweep/delivery-spec-wave0-manifests-and-checkers.md). The
+# runtime and client planes do not carry manifests yet; their fence checkers
+# (check_anyharness_fences.py, check_frontend_fences.py) hold their
+# boundaries at the folder grain instead.
+
+[[rule]]
+id = "PROD-MANIFEST-001"
+title = "every server system folder carries a valid MANIFEST.toml"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_manifests.py"
+mode = "lint"
+scope = "server/proliferate/server/*/, server/proliferate/server/cloud/{agent_gateway,integrations,integration_gateway,worker,runtime_workers,github_app}/"
+
+rule = """Every server system folder must carry a MANIFEST.toml that parses, declares name, spec, owns, public_surface, and allowed_importers, and points spec at a file that exists."""
+alternative = """Add or repair the folder's MANIFEST.toml; seed allowed_importers from the checker's measured reality, never from intention."""
+why = """The manifest is the machine-readable ownership claim the Organization Standard builds on: no folder without an owner, no owner without a spec. A manifest that names a dead spec or omits a field is an ownership claim nobody can verify."""
+
+[rule.example]
+bad = """server/proliferate/server/billing/ with no MANIFEST.toml, or one whose spec names a deleted doc"""
+good = """server/proliferate/server/billing/MANIFEST.toml with spec = "specs/FEATURE_DOCS/BILLING.md" and all five fields present"""
+
+[[rule]]
+id = "PROD-MANIFEST-002"
+title = "allowed_importers equals measured reality exactly"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_manifests.py"
+mode = "lint"
+scope = "server/proliferate/server/**/MANIFEST.toml"
+
+rule = """A manifest's allowed_importers must equal the measured importer set exactly: every actual importer declared, no declared importer without an actual import."""
+alternative = """A new importer appearing is a net-new coupling — either route the need through an already-allowed importer or treat the addition as a constitution amendment (flag in the PR description, stop for founder review). A stale entry after a refactor is maintenance: remove the row in the same PR."""
+why = """An allowed_importers list that drifts from reality in either direction is aspirational documentation — exactly what the lints system exists to forbid. Exact equality keeps the declaration falsifiable and makes new coupling visible in review."""
+
+[rule.example]
+bad = """billing's manifest allowing "workflows" while no workflows file imports proliferate.server.billing"""
+good = """allowed_importers seeded from scripts/check_manifests.py's measured set and updated in the PR that changes an import"""
