@@ -166,8 +166,67 @@ jobs:
           echo "Server-relevant changes since ${base}: ${relevant}"
           echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
 
-  lint:
+  # Builds the artifact-runtime bundle exactly once per run and shares it as a
+  # workflow artifact. The three consumer lanes (lint, test-unit, every
+  # test-integration shard) previously each ran a full `pnpm install` solely to
+  # repeat this identical vite build; they now download the bundle instead.
+  # Same no-op/polarity pattern as the lanes: green (not `skipped`) on a
+  # non-server diff, and the consumers' download steps are gated identically so
+  # neither side waits on an artifact that was never produced.
+  build-artifact-runtime:
+    name: Build artifact runtime
     needs: changes
+    # `always()` so a failed or cancelled `changes` job can never turn this
+    # lane into a `skipped` conclusion. See the no-op step's polarity note.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: No server-relevant changes
+        if: needs.changes.outputs.relevant == 'false'
+        working-directory: .
+        run: |
+          echo "No server-relevant paths in this diff; nothing for this lane to verify."
+          echo "Reporting success (not skipped) so this check always reports a conclusion."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.relevant != 'false'
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.changes.outputs.relevant != 'false'
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        if: needs.changes.outputs.relevant != 'false'
+        with:
+          version: 10
+
+      - name: Install workspace dependencies
+        if: needs.changes.outputs.relevant != 'false'
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Build artifact runtime
+        if: needs.changes.outputs.relevant != 'false'
+        run: pnpm -C server/artifact-runtime build
+        working-directory: .
+
+      - name: Upload artifact-runtime bundle
+        if: needs.changes.outputs.relevant != 'false'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: artifact-runtime-static
+          path: server/proliferate/server/artifact_runtime/static
+          if-no-files-found: error
+          # upload-artifact excludes dotfiles by default; the bundle has none
+          # today, but a future vite `build.manifest` would emit .vite/ and be
+          # silently dropped without this.
+          include-hidden-files: true
+
+  lint:
+    needs:
+      - changes
+      - build-artifact-runtime
     # `always()` so a failed or cancelled `changes` job can never turn this
     # lane into a `skipped` conclusion. See the no-op step's polarity note.
     if: always()
@@ -200,10 +259,6 @@ jobs:
         if: needs.changes.outputs.relevant != 'false'
         with:
           node-version: "22"
-      - uses: pnpm/action-setup@v6
-        if: needs.changes.outputs.relevant != 'false'
-        with:
-          version: 10
       - uses: astral-sh/setup-uv@v7
         if: needs.changes.outputs.relevant != 'false'
       - uses: actions/setup-python@v7
@@ -217,15 +272,18 @@ jobs:
           node scripts/validate-agent-catalog.mjs
         working-directory: .
 
-      - name: Install workspace dependencies
+      # The vite build empties its outDir before writing; mirror that so the
+      # downloaded bundle cannot interleave with stale committed hashes.
+      - name: Reset committed artifact-runtime bundle
         if: needs.changes.outputs.relevant != 'false'
-        run: pnpm install --frozen-lockfile
-        working-directory: .
+        run: rm -rf proliferate/server/artifact_runtime/static
 
-      - name: Build artifact runtime
+      - name: Download artifact-runtime bundle
         if: needs.changes.outputs.relevant != 'false'
-        run: pnpm -C server/artifact-runtime build
-        working-directory: .
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          name: artifact-runtime-static
+          path: server/proliferate/server/artifact_runtime/static
 
       - name: Install dependencies
         if: needs.changes.outputs.relevant != 'false'
@@ -273,7 +331,9 @@ jobs:
   # to move these suites onto a self-provisioned Postgres/Redis started by a
   # gated step, not to reintroduce the skip.
   test-unit:
-    needs: changes
+    needs:
+      - changes
+      - build-artifact-runtime
     # `always()` so a failed or cancelled `changes` job can never turn this
     # lane into a `skipped` conclusion. See the no-op step's polarity note.
     if: always()
@@ -329,14 +389,6 @@ jobs:
         if: needs.changes.outputs.relevant != 'false'
         with:
           ref: ${{ inputs.git_sha || github.ref }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: needs.changes.outputs.relevant != 'false'
-        with:
-          node-version: "22"
-      - uses: pnpm/action-setup@v6
-        if: needs.changes.outputs.relevant != 'false'
-        with:
-          version: 10
       - uses: astral-sh/setup-uv@v7
         if: needs.changes.outputs.relevant != 'false'
       - uses: actions/setup-python@v7
@@ -344,15 +396,18 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install workspace dependencies
+      # The vite build empties its outDir before writing; mirror that so the
+      # downloaded bundle cannot interleave with stale committed hashes.
+      - name: Reset committed artifact-runtime bundle
         if: needs.changes.outputs.relevant != 'false'
-        run: pnpm install --frozen-lockfile
-        working-directory: .
+        run: rm -rf proliferate/server/artifact_runtime/static
 
-      - name: Build artifact runtime
+      - name: Download artifact-runtime bundle
         if: needs.changes.outputs.relevant != 'false'
-        run: pnpm -C server/artifact-runtime build
-        working-directory: .
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          name: artifact-runtime-static
+          path: server/proliferate/server/artifact_runtime/static
 
       - name: Install dependencies
         if: needs.changes.outputs.relevant != 'false'
@@ -372,7 +427,9 @@ jobs:
   # to move these suites onto a self-provisioned Postgres/Redis started by a
   # gated step, not to reintroduce the skip.
   test-integration:
-    needs: changes
+    needs:
+      - changes
+      - build-artifact-runtime
     # `always()` so a failed or cancelled `changes` job can never turn this
     # lane into a `skipped` conclusion. See the no-op step's polarity note.
     if: always()
@@ -432,14 +489,6 @@ jobs:
         if: needs.changes.outputs.relevant != 'false'
         with:
           ref: ${{ inputs.git_sha || github.ref }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: needs.changes.outputs.relevant != 'false'
-        with:
-          node-version: "22"
-      - uses: pnpm/action-setup@v6
-        if: needs.changes.outputs.relevant != 'false'
-        with:
-          version: 10
       - uses: astral-sh/setup-uv@v7
         if: needs.changes.outputs.relevant != 'false'
       - uses: actions/setup-python@v7
@@ -447,15 +496,18 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install workspace dependencies
+      # The vite build empties its outDir before writing; mirror that so the
+      # downloaded bundle cannot interleave with stale committed hashes.
+      - name: Reset committed artifact-runtime bundle
         if: needs.changes.outputs.relevant != 'false'
-        run: pnpm install --frozen-lockfile
-        working-directory: .
+        run: rm -rf proliferate/server/artifact_runtime/static
 
-      - name: Build artifact runtime
+      - name: Download artifact-runtime bundle
         if: needs.changes.outputs.relevant != 'false'
-        run: pnpm -C server/artifact-runtime build
-        working-directory: .
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          name: artifact-runtime-static
+          path: server/proliferate/server/artifact_runtime/static
 
       - name: Install dependencies
         if: needs.changes.outputs.relevant != 'false'
@@ -567,6 +619,7 @@ jobs:
     name: server-ci-ok
     needs:
       - changes
+      - build-artifact-runtime
       - lint
       - test-unit
       - test-integration

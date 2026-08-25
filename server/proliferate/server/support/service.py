@@ -20,6 +20,11 @@ from proliferate.middleware.request_context import (
     set_support_report_context,
 )
 from proliferate.server.support.domain.message import normalize_support_message
+from proliferate.server.support.domain.report_intent import (
+    build_tracker_summary,
+    normalize_telemetry_refs,
+    parse_client_release_id,
+)
 from proliferate.server.support.domain.report_records import (
     expected_manifest_entries,
     expected_manifest_keys,
@@ -32,11 +37,6 @@ from proliferate.server.support.domain.report_records import (
     tenant_context_for_report,
     trusted_workspace_refs_for_report,
     workspace_refs_for_create,
-)
-from proliferate.server.support.domain.tracker_intent import (
-    build_tracker_summary,
-    normalize_telemetry_refs,
-    parse_client_release_id,
 )
 from proliferate.server.support.errors import (
     SupportMessageEmpty,
@@ -381,8 +381,8 @@ async def _complete_db_backed_report(
     # Enforcement distinguishes legacy-absent from provided-but-malformed:
     # a client that PROVIDED a release value which failed canonical validation
     # is rejected (it declares the new schema and should send a valid ID), but
-    # a legacy client that never sent the field completes normally and stays
-    # feedable with a visible warning. Off by default; production enablement is
+    # a legacy client that never sent the field completes normally with a
+    # visible warning. Off by default; production enablement is
     # an explicit ops flip once desktop client adoption is confirmed.
     if (
         settings.support_report_require_client_release

@@ -7,8 +7,8 @@ instead of copying them into repository docs.
 
 The code-owned behavior and privacy contract live in the
 [Sentry system document](../../../specs/codebase/systems/engineering/observability/sentry.md).
-Issue ingestion and deduplication belong to
-[Issue Lifecycle](../../../specs/codebase/systems/engineering/issue-lifecycle/README.md).
+There is no downstream issue-ingestion system; the issue-lifecycle system
+was retired in the 2026-08 engineering cull.
 
 ## Applicability and safety
 
@@ -83,8 +83,6 @@ name or upload workflow proves intended wiring, not current provider state.
    paths, email, or display name.
 5. Follow the correlation value to structured logs when server/runtime context
    is needed. Keep full private evidence in its source system.
-6. If the event should enter canonical issue tracking, verify that through the
-   Issue Lifecycle procedure rather than changing Sentry grouping by hand.
 
 For a synthetic canary, alert test, or production exception, obtain explicit
 approval for that provider/product mutation and define rollback first. This

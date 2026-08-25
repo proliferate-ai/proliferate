@@ -14,20 +14,20 @@ pub fn parse_agent_catalog_json(json: &str) -> anyhow::Result<AgentCatalogDocume
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::agents::catalog::schema::draft_catalog_json;
+    use crate::domains::agents::catalog::schema::canonical_catalog_json;
 
     #[test]
-    fn parses_and_validates_the_draft_catalog() {
-        let document = parse_agent_catalog_json(draft_catalog_json()).expect("draft must load");
+    fn parses_and_validates_the_canonical_catalog() {
+        let document = parse_agent_catalog_json(canonical_catalog_json()).expect("catalog must load");
 
         assert_eq!(document.schema_version, 2);
-        assert_eq!(document.catalog_version, draft_catalog_version());
+        assert_eq!(document.catalog_version, canonical_catalog_version());
     }
 
     #[test]
     fn rejects_a_document_that_fails_validation() {
         let mut raw: serde_json::Value =
-            serde_json::from_str(draft_catalog_json()).expect("draft must parse");
+            serde_json::from_str(canonical_catalog_json()).expect("catalog must parse");
         raw["catalogVersion"] = serde_json::Value::String(" ".to_string());
         let json = serde_json::to_string(&raw).expect("serialize");
 
@@ -39,13 +39,13 @@ mod tests {
         );
     }
 
-    fn draft_catalog_version() -> String {
+    fn canonical_catalog_version() -> String {
         let text = std::fs::read_to_string(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../scripts/agent-catalog/catalog.draft.json"
+            "/../../../catalogs/agents/catalog.json"
         ))
-        .expect("read draft catalog");
-        serde_json::from_str::<serde_json::Value>(&text).expect("parse draft")["catalogVersion"]
+        .expect("read canonical catalog");
+        serde_json::from_str::<serde_json::Value>(&text).expect("parse catalog")["catalogVersion"]
             .as_str()
             .expect("catalogVersion")
             .to_string()

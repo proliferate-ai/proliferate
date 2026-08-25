@@ -110,8 +110,6 @@ see [Releases](releases.md).
   it before a canonical service and command exist deliberately fails.
 - The nightly and hotfix coordinators have no LiteLLM job. Deploy an exact
   LiteLLM ref through `Promote Production` with that exact surface selected.
-- `Cloud Live Webhook` is manual-only and is not part of CI, staging, the
-  nightly train, or production promotion.
 - Desktop staging builds only. A selected production Desktop lane can publish
   updater/download assets after validating the version and live feed.
 

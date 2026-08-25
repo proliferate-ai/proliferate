@@ -255,10 +255,10 @@ pub struct AgentCatalogProbeRun {
 }
 
 #[cfg(test)]
-pub(crate) fn draft_catalog_json() -> &'static str {
+pub(crate) fn canonical_catalog_json() -> &'static str {
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../../scripts/agent-catalog/catalog.draft.json"
+        "/../../../catalogs/agents/catalog.json"
     ))
 }
 

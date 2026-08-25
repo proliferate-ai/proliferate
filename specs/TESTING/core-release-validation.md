@@ -288,7 +288,7 @@ blocked when the developer intentionally omits Stripe.
 | `T2-DISPATCH-1` | Continue remotely creates or reuses one cloud workspace and private exposure; disable removes Web/mobile visibility without a passive wake. Open-in-Web/mobile/Desktop, QR/copy, signed-out handoff, source/exposure indicators, scoped direct attach, and deep links enforce the same access decision. |
 | `T2-API-1` | Personal and admin-gated organization Cowork API keys show the raw value once, persist only an HMAC/prefix, expire/revoke, and deny cross-organization use. Programmatic create/send/poll with auto-cascade converges runtime-config then agent-auth once, caps retry, and reports typed failure without duplicate work. |
 | `T2-DELEGATE-1` | Subagent, Cowork, plan-review, and code-review items share canonical identity/status ordering across tabs, popovers, sidebar, transcript, and details. Parent provenance, wake receipts, raw-id hiding, contiguous hierarchy, close/delete confirmation, and parent-composer availability remain correct. |
-| `T2-SUPPORT-1` | With controlled S3 and tracker providers, native-window/modal job shapes, diagnostics scope, attachments, urgent/notify/credit/log flags, outreach email, immediate-close queueing, immutable idempotent creation, safe target reissue, exact completion manifest, unauthorized workspace handling, no-wake collection, and full content/secret sanitization hold. |
+| `T2-SUPPORT-1` | With a controlled S3 provider, native-window/modal job shapes, diagnostics scope, attachments, urgent/notify/credit/log flags, outreach email, immediate-close queueing, immutable idempotent creation, safe target reissue, exact completion manifest, unauthorized workspace handling, no-wake collection, and full content/secret sanitization hold. |
 
 ### Workspaces, configuration, secrets, and integrations
 
@@ -547,7 +547,7 @@ every-release gate without becoming another upgrade world.
 | `T4-DELEGATE-1` | Session-link, subagent, Cowork, review, wake, or prompt-policy changes | Upgrade while children/reviewers run, messages queue, wakes arm, a review is partially submitted, and a Cowork workspace is active. Handles, provenance, cursors, prompts, results, hierarchy, and closure survive; each queued effect occurs once and old tokens cannot widen scope. |
 | `T4-COWORKART-1` | Artifact manifest/domain/MCP/HTTP/rendering changes | N reads N-1 manifests for every supported type and old Cowork aliases while preserving ids, paths, metadata, files, git history, and protection. New routes and atomic mutations work; malformed/partial old manifests fail visibly without rewriting user files. |
 | `T4-SLACK-1` | Slack schema, Worker, OAuth, event, or outbound queue changes | Upgrade an active connection/thread with claimed inbound work, accepted/queued outbound work, and a rate-limit retry. Config and mappings persist, replay creates no second work, accepted messages are not resent, and N drains retryable work with the same idempotency keys. |
-| `T4-SUPPORT-1` | Desktop support job, server report, S3 manifest, or tracker schema changes | An N-1 queued/partial report survives N; compatible defaults apply, local upload resumes, targets refresh without object-set conflict, and completion/Slack/GitHub/Linear effects occur once while privacy/correlation/redaction remain intact. |
+| `T4-SUPPORT-1` | Desktop support job, server report, or S3 manifest changes | An N-1 queued/partial report survives N; compatible defaults apply, local upload resumes, targets refresh without object-set conflict, and completion/Slack effects occur once while privacy/correlation/redaction remain intact. |
 | `T4-TEMPLATE-1` | E2B image, bootstrap, runtime, Worker, or agent seed changes | New sandboxes use the N immutable template. An existing paused N-1 sandbox wakes on its existing image with data intact; only separately supported Worker/runtime/catalog mechanisms may converge in place. Rolling-tag movement affects new sandboxes only. |
 | `T4-ROLLING-1` | Server/API/Worker/runtime deployment order changes | Supported mixed-version rollout orders preserve health, command/event continuity, and in-flight work while components drain/restart; rollback returns to the last-good operational set. Wire-shape compatibility belongs to `T4-CONTRACT-1`. |
 | `T4-CONTRACT-1` | AnyHarness/OpenAPI/SDK/event/Worker wire contract changes | N-1 SDK/Desktop/Worker with N peers and N clients with supported N-1 peers complete workspace/session/stream flows. Empty resume bodies, optional fields, unknown events, enum/error casing, generated artifacts, and reducers remain compatible; unsupported breaks fail explicitly instead of corrupting or misrouting. |
@@ -658,7 +658,10 @@ The runner and the manual qualification worlds now enforce these foundations:
   jobs are not `continue-on-error`, run through the protected `Qualification`
   environment, preserve the runner's exit code, and upload their V4 evidence;
   and
-- the scheduled legacy local and staging lanes remain explicitly provisional,
+- the legacy local and staging lanes (dispatch-only since the 2026-08
+  engineering cull removed the nightly cron; the schedule-only local lane is
+  currently unreachable pending the step-3 cadence ruling) remain explicitly
+  provisional,
   `continue-on-error`, and capable of skipping their whole lane when a
   preflight dependency is absent. Their output is diagnostic signal, never
   qualification.
@@ -666,10 +669,13 @@ The runner and the manual qualification worlds now enforce these foundations:
 The remaining enforcement exceptions are:
 
 - the two broad Tier 2 jobs in `intent-tests.yml` remain
-  `continue-on-error`, and the broad billing job skips when
+  `continue-on-error` and are dispatch-only since the 2026-08 engineering
+  cull, and the broad billing job skips when
   `STRIPE_TEST_SECRET_KEY` is absent. The manual strict Tier 2 qualification
-  job fails closed on that missing key, while only the focused workflow
-  definition lifecycle cell currently gates ordinary CI;
+  job fails closed on that missing key. The focused workflow definition
+  lifecycle cell no longer gates ordinary CI: it runs strictly in the
+  dispatch-only `ci-heavy-lanes.yml`, with re-gating a step-3 CI/CD-spec
+  decision;
 - production promotion validates staging deployment evidence but does not
   invoke or verify a trusted Tier 3/4 qualification aggregate for the same
   source SHA and artifact digests;

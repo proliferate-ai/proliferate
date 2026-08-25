@@ -658,8 +658,6 @@ export type SupportReportCreateResponse =
   Schema<"SupportReportCreateResponse">;
 export type SupportReportServerCorrelation =
   Schema<"SupportReportServerCorrelation">;
-export type SupportReportTrackerResponse =
-  Schema<"SupportReportTrackerResponse">;
 export type SupportReportUploadRequest =
   Schema<"SupportReportUploadRequest">;
 export interface SupportReportUploadFile {

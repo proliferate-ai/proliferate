@@ -21,9 +21,8 @@
 
 ## Support and attribution (optional)
 
-- [ ] If this PR has support relationships, I linked them through the tracker
-  API. No tracker, report, user, or support IDs or private source data appear
-  in this PR.
+- [ ] No report, user, or support IDs or private source data appear in this
+  PR.
 
 ## Verification
 

@@ -231,15 +231,14 @@ gate.
 | --- | --- | --- |
 | `agent-runtime-compat.yml` | Manual | Exercise live local AnyHarness compatibility with configured agent credentials. |
 | `catalog-probe.yml` | Scheduled daily or manual | Probe agent/catalog pins through the protected `Catalog Probe` environment, pass sanitized outputs to a separate write-capable PR job, and create or update an owned GitHub issue on scheduled failure. |
-| `ci.yml` | Push to `main`, pull request, or manual | Run repository shape, configuration, candidate-handoff, Rust, SDK, client, and workflow checks. Required-check policy is external to this file. |
-| `cloud-live-webhook.yml` | Manual | Exercise a live E2B webhook through an externally reachable target. |
-| `cloud-tests.yml` | Manual | Run credentialed cloud lifecycle and runtime suites. |
+| `ci-heavy-lanes.yml` | Manual | Run the four lanes demoted off the per-PR path in the 2026-08 engineering cull (candidate-build-handoff, login-budget, scroll-physics, workflow-definition-lifecycle), verbatim moves out of `ci.yml`. Re-gating is a step-3 CI/CD-spec decision. |
+| `ci.yml` | Push to `main`, pull request, or manual | Run repository shape, configuration, Rust, SDK, client, and workflow checks. Required-check policy is external to this file. |
 | `codeql.yml` | Push or pull request on `main`, plus weekly schedule | Run CodeQL security analysis. |
-| `intent-tests.yml` | Pull request or manual | Run the broad intent and billing suites; these lanes are currently provisional/non-blocking. |
+| `intent-tests.yml` | Manual | Run the broad intent and billing suites; provisional/non-blocking, and off the PR path since the 2026-08 cull. |
 | `pr-metadata.yml` | Pull-request metadata events | Enforce ready-PR title and label metadata mechanically. Human policy belongs to the PR procedure. |
-| `release-e2e-selfhost.yml` | Scheduled, manual, or reusable | Run self-host artifact-chain and optional provisioning qualification. Tier 4 and self-host provisioning use separate non-cancelling job groups; no current release coordinator calls it. |
-| `release-e2e.yml` | Scheduled or manual | Run live Tier 3 release qualification; it is not a per-PR merge gate. Local, staging, Tier 2, managed-cloud, and self-host use independent non-cancelling job groups, so unrelated worlds may overlap while same-world runs do not. These groups do not promise FIFO ordering. |
-| `self-host-smoke.yml` | Pull request, push to `main`, or manual | Smoke the production Compose path when relevant paths change. Branch-protection status is not encoded here. |
+| `release-e2e-selfhost.yml` | Manual | Run self-host artifact-chain and optional provisioning qualification. The nightly cron and never-called `workflow_call` interface were removed in the 2026-08 cull. Tier 4 and self-host provisioning use separate non-cancelling job groups. |
+| `release-e2e.yml` | Manual | Run live Tier 3 release qualification; it is not a per-PR merge gate. The daily cron was removed in the 2026-08 cull (the schedule-only local lane is currently unreachable, pending the step-3 cadence ruling). Local, staging, Tier 2, managed-cloud, and self-host use independent non-cancelling job groups, so unrelated worlds may overlap while same-world runs do not. These groups do not promise FIFO ordering. |
+| `self-host-smoke.yml` | Push to `main` or manual | Smoke the production Compose path when relevant paths change. Off the PR path since the 2026-08 cull; the push run also seeds the buildx layer cache. |
 | `server-ci.yml` | Relevant push/PR, manual, or reusable | Validate the server. It is a gate, not a publisher: the release image and asset build lives in `_build-server.yml`. |
 
 Server CI's shrink-only mypy census compares a pull request with its base SHA
@@ -274,17 +273,14 @@ supply an explicit comparison SHA.
   test tiers, scenarios, and evidence requirements.
 - [Desktop Updates](desktop-updates.md) owns installed-product updater and
   release-notice behavior.
-- [Issue Lifecycle](../issue-lifecycle/support-loop.md) owns the consent-safe
-  release manifest, Support projection, finalizer validation, and future
-  landing publication.
 - [Observability](../observability/README.md) consumes component artifact
   identity as Sentry `release` and structured-log `release_id`; event
   production does not redefine Delivery identity.
 
 The current release scripts publish a raw GitHub Release ledger from merged PR
-metadata. They do not publish the Issue Lifecycle manifest, run its finalizer,
-or update the landing changelog. No checked-in landing-changelog or release-
-manifest publisher exists.
+metadata. No checked-in landing-changelog or release-manifest publisher exists
+(the issue-lifecycle system that owned that target was retired in the 2026-08
+engineering cull).
 
 ## Current Gaps
 
@@ -305,8 +301,7 @@ manifest publisher exists.
   Supervisor design owns process lifecycle, but current cloud bootstrap starts
   AnyHarness and a separate Worker sidecar directly; staged Supervisor launch
   helpers have no active call site.
-- Raw product release publication and the Issue Lifecycle manifest/finalizer
-  remain separate, and landing publication is not automated.
+- Landing publication is not automated.
 
 ## Merge Gate
 
@@ -337,8 +332,11 @@ The required status checks for `main` are:
 | `Analyze (python)` | CodeQL |
 | `Analyze (rust)` | CodeQL |
 | `Validate PR title and labels` | PR Metadata |
-| `Detect smoke-relevant changes` | Self-Host Smoke |
-| `Production compose smoke` | Self-Host Smoke |
+
+2026-08 engineering cull: the two Self-Host Smoke checks (`Detect
+smoke-relevant changes`, `Production compose smoke`) left this list when
+`self-host-smoke.yml` came off the PR path; removing them from branch
+protection is a founder settings action recorded in the cull PR description.
 
 Names are check-run display names, as `gh pr checks` prints them. No individual
 lane name from `ci.yml` or `server-ci.yml` belongs on the list: the rollups are
@@ -347,7 +345,9 @@ strictly stronger, and a per-lane name is a name that can rot. Because a
 lane never requires a branch-protection edit.
 
 Excluded on purpose: `intent-tests (provisional)` and `intent-billing
-(provisional)` are `continue-on-error` while the harness earns trust; the Vercel
+(provisional)` are `continue-on-error` while the harness earns trust and no
+longer run on PRs at all (dispatch-only since the 2026-08 cull); the CI Heavy
+Lanes jobs are dispatch-only demotions from `ci.yml` (same cull); the Vercel
 checks are third-party. `docker` and `self-hosted-release-assets` used to be
 excluded as release-only jobs inside Server CI; they now live in
 `_build-server.yml` and are outside the rollup's file entirely. Server CI's

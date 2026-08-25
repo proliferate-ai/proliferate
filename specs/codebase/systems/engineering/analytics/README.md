@@ -17,8 +17,6 @@ messaging.
   read-only BI client may query.
 - [Observability](../observability/README.md) owns logs, exceptions, Sentry,
   and production correlation.
-- [Issue Lifecycle](../issue-lifecycle/README.md) owns ingestion and
-  deduplication of provider evidence.
 - [Delivery](../delivery/README.md) owns release and artifact identity.
 
 ## First-Party Daily Activity

@@ -73,7 +73,7 @@ reason = "managed sandbox cloud workspace indicators + PR 5 explicit-materializa
 
 [[max_lines]]
 path = "apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts"
-max_lines = 687
+max_lines = 684
 reason = "workspace git-status threading extends existing oversized test file; R7 archiving-train hide-set deletion (§3.10) shrinks it further (archivedIds fixture removed)"
 
 [[max_lines]]

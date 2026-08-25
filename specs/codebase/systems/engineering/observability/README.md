@@ -6,9 +6,6 @@ between application failures and CloudWatch/Grafana signals.
 
 - [Sentry](sentry.md) — component initialization, release and environment
   identity, transmitted data, scrubbing, correlation, and failure behavior.
-- [Issue Lifecycle](../issue-lifecycle/README.md) — ingestion,
-  deduplication, canonical issue routing, investigation, and reporter follow-up
-  after Sentry or Grafana evidence exists.
 - [Delivery](../delivery/README.md) — the artifact and deploy identity used as
   the `release`/`release_id` correlation key.
 
@@ -26,8 +23,6 @@ Observability does not own:
 
 - product/adoption analytics, which belongs to
   [Engineering Analytics](../analytics/README.md);
-- provider-evidence polling, deduplication, or issue state, which belongs to
-  Issue Lifecycle;
 - release construction and promotion, which belongs to Delivery;
 - mutable Sentry projects, alert rules, integrations, or Slack destinations.
   Operators discover that state at execution time using the
