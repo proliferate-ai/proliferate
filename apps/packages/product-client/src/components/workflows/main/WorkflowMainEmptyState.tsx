@@ -43,20 +43,13 @@ function WorkflowStarterTemplateCard({
  */
 export function WorkflowMainEmptyState({
   onNew,
-  legacyPresent = false,
 }: {
   onNew: (template: WorkflowStarterTemplateV2 | null) => void;
-  /** A legacy group renders below; the headline must not claim there is nothing. */
-  legacyPresent?: boolean;
 }) {
   return (
     <EmptyState
-      title={legacyPresent ? WORKFLOW_MAIN_COPY.emptyWithLegacyTitle : WORKFLOW_MAIN_COPY.emptyTitle}
-      description={
-        legacyPresent
-          ? WORKFLOW_MAIN_COPY.emptyWithLegacyDescription
-          : WORKFLOW_MAIN_COPY.emptyDescription
-      }
+      title={WORKFLOW_MAIN_COPY.emptyTitle}
+      description={WORKFLOW_MAIN_COPY.emptyDescription}
       action={(
         <div className="flex w-full max-w-2xl flex-col items-center gap-4">
           <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">

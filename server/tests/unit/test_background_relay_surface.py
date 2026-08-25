@@ -18,9 +18,6 @@ from proliferate.background.config import (
     HEALTH_NOOP_TASK,
     INTEGRATION_REVOCATION_PROCESS_TASK,
     PERIODIC_DEFAULT_QUEUE,
-    WORKFLOW_CANCEL_TASK,
-    WORKFLOW_DELIVER_TASK,
-    WORKFLOW_OBSERVE_TASK,
 )
 from proliferate.background.relay import (
     SUPPORTED_OUTBOX_TASKS,
@@ -73,12 +70,9 @@ async def test_backlog_snapshot_reports_supported_pending_by_family(
     assert snapshot.supported_pending_by_family == {
         HEALTH_NOOP_TASK: 2,
         INTEGRATION_REVOCATION_PROCESS_TASK: 0,
-        WORKFLOW_DELIVER_TASK: 0,
-        WORKFLOW_OBSERVE_TASK: 0,
-        WORKFLOW_CANCEL_TASK: 0,
     }
     assert snapshot.supported_oldest_pending_age_by_family[HEALTH_NOOP_TASK] >= 0
-    assert snapshot.supported_oldest_pending_age_by_family[WORKFLOW_DELIVER_TASK] == 0
+    assert snapshot.supported_oldest_pending_age_by_family[INTEGRATION_REVOCATION_PROCESS_TASK] == 0
     assert "background.not.enabled" not in snapshot.supported_pending_by_family
 
 
@@ -116,18 +110,11 @@ async def test_run_relay_tick_publishes_and_snapshots(
     assert tick.supported_pending_by_family == {
         HEALTH_NOOP_TASK: 0,
         INTEGRATION_REVOCATION_PROCESS_TASK: 0,
-        WORKFLOW_DELIVER_TASK: 0,
-        WORKFLOW_OBSERVE_TASK: 0,
-        WORKFLOW_CANCEL_TASK: 0,
     }
     assert tick.supported_oldest_pending_age_by_family == {
         HEALTH_NOOP_TASK: 0.0,
         INTEGRATION_REVOCATION_PROCESS_TASK: 0.0,
-        WORKFLOW_DELIVER_TASK: 0.0,
-        WORKFLOW_OBSERVE_TASK: 0.0,
-        WORKFLOW_CANCEL_TASK: 0.0,
     }
-    assert tick.managed_workflows.queued_or_delivering_count == 0
 
 
 def test_task_wrapper_never_imports_store() -> None:

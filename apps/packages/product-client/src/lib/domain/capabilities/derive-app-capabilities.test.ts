@@ -25,7 +25,6 @@ function contract(
     pricing: { available: false, url: null },
     githubRepositoryAccess: { status: "disabled", provider: null, displayName: null },
     managedCloud: { status: "disabled", repositoryAuthority: null, source: "legacy" },
-    workflowManagedRuns: false,
     ...overrides,
   };
 }
@@ -55,7 +54,6 @@ describe("deriveAppCapabilities", () => {
     // contract. (Pre-gate-flip this was `true`.)
     expect(caps.cloudComputeEnabled).toBe(false);
     expect(caps.agentGatewayEnabled).toBe(true);
-    expect(caps.workflowManagedRunsEnabled).toBe(false);
     expect(caps.isSelfManaged).toBe(false);
     expect(caps.serverDisplayName).toBeNull();
     expect(caps.serverLogoUrl).toBeNull();
@@ -151,7 +149,6 @@ describe("deriveAppCapabilities", () => {
         billing: true,
         cloudWorkspaces: true,
         agentGateway: true,
-        workflowManagedRuns: true,
       }),
     });
 
@@ -159,20 +156,6 @@ describe("deriveAppCapabilities", () => {
     expect(caps.billingEnabled).toBe(false);
     expect(caps.cloudComputeEnabled).toBe(false);
     expect(caps.agentGatewayEnabled).toBe(false);
-    expect(caps.workflowManagedRunsEnabled).toBe(false);
-  });
-
-  it("enables managed Workflow runs only from a reachable explicit contract", () => {
-    expect(deriveAppCapabilities({
-      reachable: true,
-      connectedServerHost: "app.proliferate.com",
-      contract: contract({ workflowManagedRuns: true }),
-    }).workflowManagedRunsEnabled).toBe(true);
-    expect(deriveAppCapabilities({
-      reachable: true,
-      connectedServerHost: "old.example.com",
-      contract: null,
-    }).workflowManagedRunsEnabled).toBe(false);
   });
 });
 

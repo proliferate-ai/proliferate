@@ -259,7 +259,6 @@ function seedCloudQueries(
       repositoryAuthority: "github_app",
       source: "v2",
     },
-    workflowManagedRuns: false,
   });
   client.setQueryData(agentGatewayCapabilitiesKey(), {
     gatewayEnabled: true,

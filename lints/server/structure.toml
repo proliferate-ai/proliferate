@@ -1,6 +1,6 @@
-# Server file/folder shape rules (SRV-STRUCT), completed-migration path blocks
-# (SRV-PATHS), and the managed Workflows plane boundary (SRV-WFLOW). A path
-# should tell a reader what kind of code is allowed there.
+# Server file/folder shape rules (SRV-STRUCT) and completed-migration path
+# blocks (SRV-PATHS). A path should tell a reader what kind of code is
+# allowed there.
 
 [[rule]]
 id = "SRV-STRUCT-1"
@@ -102,47 +102,3 @@ the same concern means neither is authoritative. There is no utils/ bucket."""
 [rule.example]
 bad = "server/proliferate/utils/time.py"
 good = "server/proliferate/lib/infra/time/clock.py"
-
-[[rule]]
-id = "SRV-WFLOW-1"
-title = "Managed Workflows do not import the legacy Cloud plane"
-owner = "server"
-status = "law"
-enforced_by = "scripts/check_workflow_managed_boundaries.py"
-mode = "lint"
-scope = "server/proliferate/server/workflows/**"
-
-rule = """The managed Workflows domain must not import the legacy Cloud
-command/session/event planes: proliferate.db.models.cloud.sync,
-proliferate.db.store.cloud_sync,
-proliferate.db.store.support_session_diagnostics,
-proliferate.server.cloud.commands, or
-proliferate.server.cloud.gateway.proxy."""
-alternative = """Use the managed Workflow plane's own stores and models."""
-why = """Keeping managed Workflows off the legacy Cloud command/session/event
-planes lets the new plane evolve independently instead of inheriting the old
-plane's run-control semantics."""
-
-[rule.example]
-bad = "from proliferate.server.cloud.commands import enqueue  # under server/workflows/"
-good = "from proliferate.db.store.workflow_runs import load_run"
-
-[[rule]]
-id = "SRV-WFLOW-2"
-title = "Managed Workflows do not name legacy Cloud plane symbols"
-owner = "server"
-status = "law"
-enforced_by = "scripts/check_workflow_managed_boundaries.py"
-mode = "lint"
-scope = "server/proliferate/server/workflows/**"
-
-rule = """Managed Workflows code must not reference the legacy Cloud plane
-symbols CloudCommandKind, CloudCommandSnapshot, CloudSessionEvent,
-CloudSessionProjection, or CloudTranscriptItem by name."""
-alternative = """Use the managed Workflow run/session vocabulary."""
-why = """Closes the same boundary as SRV-WFLOW-1 at the identifier level, so an
-indirect re-export cannot reopen it."""
-
-[rule.example]
-bad = "CloudSessionEvent used anywhere under server/proliferate/server/workflows/"
-good = "WorkflowRunEvent from the managed run vocabulary"

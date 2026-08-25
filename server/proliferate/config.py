@@ -81,8 +81,6 @@ class Settings(BaseSettings):
     celery_task_always_eager: bool = False
     celery_task_time_limit_seconds: int = 3600
     celery_task_soft_time_limit_seconds: int = 3300
-    workflow_managed_runs_enabled: bool = False
-    workflow_managed_freshness_stale_seconds: float = 60.0
     # Publisher-confirm timeout (seconds) for broker publishes. With confirm mode
     # enabled the relay waits up to this long for RabbitMQ to durably ack a
     # publish; a nack, a confirm timeout, or connection ambiguity raises so the

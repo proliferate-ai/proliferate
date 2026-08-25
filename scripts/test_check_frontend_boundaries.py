@@ -2394,12 +2394,10 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
                 "const load = () => import(\"@anyharness/sdk\").then("
                 "({ deriveCanonicalPlan }) => deriveCanonicalPlan);\n"
             ),
-            "apps/packages/product-client/src/domain/workflows/definition.test.ts": (
+            "apps/packages/product-client/src/domain/workflows/definition-v2.test.ts": (
                 'import { describe } from "vitest";\n'
-                "import full from "
-                '"../../../../../../fixtures/contracts/workflow-definition/full.json";\n'
-                "import minimal from "
-                '"../../../../../../fixtures/contracts/workflow-definition/minimal.json";\n'
+                "import v2Full from "
+                '"../../../../../../fixtures/contracts/workflow-definition/v2-full.json";\n'
             ),
             "apps/packages/product-client/src/domain/chats/transcript/transcript-presentation.test.ts": (
                 'import { it } from "vitest";\n'
@@ -2408,8 +2406,7 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
                 "import codex from "
                 '"../../../../../../../fixtures/contracts/native-subagent-transcript/codex.json";\n'
             ),
-            "fixtures/contracts/workflow-definition/full.json": "{}\n",
-            "fixtures/contracts/workflow-definition/minimal.json": "{}\n",
+            "fixtures/contracts/workflow-definition/v2-full.json": "{}\n",
             "fixtures/contracts/native-subagent-transcript/claude.json": "{}\n",
             "fixtures/contracts/native-subagent-transcript/codex.json": "{}\n",
         }

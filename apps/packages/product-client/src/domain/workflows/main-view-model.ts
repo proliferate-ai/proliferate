@@ -46,24 +46,6 @@ export function selectWorkflowV2DefinitionRows(
 }
 
 /**
- * The complement of `selectWorkflowV2DefinitionRows` over the same response:
- * every row the gen-2 surfaces cannot open. The shared `/v1/workflows` list
- * route returns gen-1 (`schemaVersion` 1) and gen-2 rows side by side, so
- * without this the gen-1 rows a user saved before the rebuild would be
- * dropped on the floor with nothing on screen saying so.
- *
- * Deliberately the complement rather than `schemaVersion === 1`: a row whose
- * version this build does not recognise (absent, or a future number) is
- * likewise not openable in the v2 builder, and surfacing it as legacy is
- * honest where silently discarding it is not.
- */
-export function selectWorkflowLegacyDefinitionRows(
-  rows: readonly WorkflowDefinitionListRowV2[],
-): WorkflowMainListItem[] {
-  return rows.filter((row) => row.schemaVersion !== 2).map(toListItem);
-}
-
-/**
  * The main page's Executions group: every run this runtime knows about,
  * newest first, ties broken by id — the same total order
  * `selectNewestWorkflowRun` (run-selection.ts) resolves a single run with, so

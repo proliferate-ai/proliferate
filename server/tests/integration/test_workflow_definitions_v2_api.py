@@ -145,27 +145,21 @@ async def test_v2_definition_crud_lifecycle(
 
 
 @pytest.mark.asyncio
-async def test_v1_and_v2_definitions_list_side_by_side(client: AsyncClient) -> None:
+async def test_gen1_shaped_create_is_rejected_and_list_is_v2_only(client: AsyncClient) -> None:
     owner = await register_and_login(client, "wf-v2-mixed@example.com")
 
+    # The gen-1 wire shape is no longer a recognized request at all.
     v1 = await client.post("/v1/workflows", headers=_headers(owner), json=_v1_payload())
-    assert v1.status_code == 201
+    assert v1.status_code == 422
     v2 = await client.post("/v1/workflows", headers=_headers(owner), json=_v2_payload())
     assert v2.status_code == 201
 
     listed = await client.get("/v1/workflows", headers=_headers(owner))
     assert listed.status_code == 200
-    by_version = {item["schemaVersion"]: item for item in listed.json()["workflows"]}
-    assert set(by_version) == {1, 2}
-    assert "stages" in by_version[1]
-    assert "definition" in by_version[2]
-
-    eligibility = await client.get(
-        f"/v1/workflows/{v2.json()['id']}/run-eligibility",
-        headers=_headers(owner),
-    )
-    assert eligibility.status_code == 200
-    assert eligibility.json() == {"eligible": True, "blockers": []}
+    items = listed.json()["workflows"]
+    assert [item["schemaVersion"] for item in items] == [2]
+    assert "definition" in items[0]
+    assert "stages" not in items[0]
 
 
 @pytest.mark.asyncio
@@ -192,15 +186,6 @@ async def test_v2_document_rejections_surface_paths(client: AsyncClient) -> None
     rejected = await client.post("/v1/workflows", headers=_headers(owner), json=with_placement)
     assert rejected.status_code == 422
 
-    cross_version = await client.post("/v1/workflows", headers=_headers(owner), json=_v1_payload())
-    assert cross_version.status_code == 201
-    upgraded = await client.put(
-        f"/v1/workflows/{cross_version.json()['id']}",
-        headers=_headers(owner),
-        json={**_v2_payload(), "expectedRevision": 1},
-    )
-    assert upgraded.status_code == 400
-    assert upgraded.json()["detail"]["path"] == "definition.schemaVersion"
 
 
 @pytest.mark.asyncio
@@ -237,12 +222,12 @@ async def test_v2_default_repository_is_an_opaque_runtime_space_id(
 
 
 @pytest.mark.asyncio
-async def test_v1_body_cannot_update_a_v2_definition(
+async def test_v1_shaped_body_cannot_update_a_v2_definition(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """The v1 update path must reject v2 rows outright: before the guard it
-    ran v1 validation and NULLed definition_json on the way to a 500."""
+    """A gen-1-shaped update body rejects at the wire (the v1 lane is gone)
+    and the stored v2 row is untouched — no destructive partial write."""
 
     owner = await register_and_login(client, "wf-v2-downgrade-guard@example.com")
     created = await client.post("/v1/workflows", headers=_headers(owner), json=_v2_payload())
@@ -254,8 +239,7 @@ async def test_v1_body_cannot_update_a_v2_definition(
         headers=_headers(owner),
         json={**_v1_payload(), "expectedRevision": 1},
     )
-    assert downgraded.status_code == 400
-    assert downgraded.json()["detail"]["path"] == "schemaVersion"
+    assert downgraded.status_code == 422
 
     # The row is untouched: still v2, document intact, revision unchanged.
     row = (
