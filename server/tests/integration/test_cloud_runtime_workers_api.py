@@ -14,7 +14,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_STATUS_ACTIVE,
 )
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from tests.helpers.worker_heartbeat import (
     authed_user as _authed_user,

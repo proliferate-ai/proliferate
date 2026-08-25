@@ -425,7 +425,7 @@ scoped keys and verify both model listing and denied out-of-group invocation.
 | Server target store/API | `server/proliferate/server/cloud/harness_launch_options/` |
 | Runtime and cloud SDKs | `anyharness/sdk/`, `cloud/sdk/` |
 | Product presentation | `apps/packages/product-client/src/lib/domain/agents/cloud-launch-catalog.ts` |
-| Gateway control plane | `server/proliferate/server/cloud/agent_gateway/` |
+| Gateway control plane | `server/proliferate/server/agent_auth/` |
 | Gateway data plane | `server/litellm/` |
 
 ## Decision record

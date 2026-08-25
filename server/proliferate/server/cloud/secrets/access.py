@@ -14,7 +14,7 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import repositories as repositories_store
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 
 
 @dataclass(frozen=True)

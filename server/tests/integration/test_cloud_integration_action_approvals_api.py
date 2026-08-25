@@ -16,21 +16,21 @@ from proliferate.db.models.cloud.integration_approvals import (
     CloudIntegrationActionApproval,
     CloudIntegrationActionApprovalEvent,
 )
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
-from proliferate.server.cloud.integration_gateway.domain.execution_session import (
+from proliferate.server.integration_gateway.gateway.domain.execution_session import (
     verify_execution_session_token,
 )
-from proliferate.server.cloud.integration_gateway.domain.tool_policy import (
+from proliferate.server.integration_gateway.gateway.domain.tool_policy import (
     ToolCallRequiresApproval,
     decide_tool_call,
 )
-from proliferate.server.cloud.integrations.action_approvals.domain.actions import (
+from proliferate.server.integration_gateway.connections.action_approvals.domain.actions import (
     canonical_payload_digest,
 )
-from proliferate.server.cloud.integrations.action_approvals.transactions import (
+from proliferate.server.integration_gateway.connections.action_approvals.transactions import (
     consume_action_for_execution_committed,
 )
 from proliferate.lib.infra.encryption.json import encrypt_json
@@ -269,17 +269,17 @@ async def test_gateway_requires_trusted_session_then_persists_one_safe_bound_ret
         raise AssertionError("approval-gated action entered credential or provider access")
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.resolve_launch", forbidden
+        "proliferate.server.integration_gateway.gateway.service.resolve_launch", forbidden
     )
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.account_for_provider",
+        "proliferate.server.integration_gateway.gateway.service.account_for_provider",
         forbidden,
     )
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool", forbidden
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool", forbidden
     )
     monkeypatch.setattr(
-        "proliferate.server.cloud.integrations.action_approvals.service."
+        "proliferate.server.integration_gateway.connections.action_approvals.service."
         "accounts_store.get_ready_account_for_provider",
         forbidden,
     )

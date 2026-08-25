@@ -1,0 +1,223 @@
+"""Routes for GitHub App cloud authorization."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from proliferate.auth.dependencies import current_product_user
+from proliferate.db.engine import get_async_session
+from proliferate.db.models.auth import User
+from proliferate.lib.product.redirect_callbacks.page import render_redirect_callback_page
+from proliferate.permissions import CurrentOrgUser, current_path_org_admin, current_path_org_member
+from proliferate.server.github.models import (
+    GitHubAppInstallationStartResponse,
+    GitHubAppInstallationStatusResponse,
+    GitHubAppUserAuthorizationStartResponse,
+    GitHubAppUserAuthorizationStatusResponse,
+    GitHubRepoAuthorityResponse,
+)
+from proliferate.server.github.repos.models import (
+    CloudGitRepositoriesResponse,
+    cloud_git_repositories_payload,
+)
+from proliferate.server.github.repos.service import (
+    DEFAULT_REPO_AFFILIATION,
+    DEFAULT_REPO_VISIBILITY,
+)
+from proliferate.server.github.service import (
+    complete_github_app_installation_redirect,
+    complete_github_app_user_authorization_callback,
+    create_github_app_installation_url,
+    create_github_app_user_authorization_url,
+    get_github_app_installation_status,
+    get_github_app_user_authorization_status,
+    get_github_repo_authority_status,
+    list_github_app_accessible_repositories,
+)
+from proliferate.server.github.transactions import (
+    commit_github_app_reauthorization_on_error,
+)
+
+_REAUTH_TRANSACTION_DEPENDENCIES = [Depends(commit_github_app_reauthorization_on_error)]
+
+router = APIRouter(prefix="/github-app", tags=["github-app"])
+organization_router = APIRouter(
+    prefix="/organizations/{organization_id}/github-app",
+    tags=["github-app"],
+)
+callback_router = APIRouter(prefix="/github-app", tags=["github-app"])
+setup_callback_router = APIRouter(prefix="/integrations/github", tags=["github-app"])
+
+
+@router.get(
+    "/user-authorization/start",
+    response_model=GitHubAppUserAuthorizationStartResponse,
+)
+async def start_github_app_user_authorization_endpoint(
+    return_to: str | None = Query(default=None, alias="returnTo"),
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> GitHubAppUserAuthorizationStartResponse:
+    return await create_github_app_user_authorization_url(
+        db,
+        user=user,
+        return_to=return_to,
+    )
+
+
+@router.get(
+    "/user-authorization",
+    response_model=GitHubAppUserAuthorizationStatusResponse,
+)
+async def github_app_user_authorization_status_endpoint(
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> GitHubAppUserAuthorizationStatusResponse:
+    return await get_github_app_user_authorization_status(db, user=user)
+
+
+@router.get(
+    "/accessible-repos",
+    response_model=CloudGitRepositoriesResponse,
+    dependencies=_REAUTH_TRANSACTION_DEPENDENCIES,
+)
+async def list_github_app_accessible_repositories_endpoint(
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+    query: str | None = None,
+    cursor: str | None = None,
+    limit: int = 50,
+    affiliation: str = DEFAULT_REPO_AFFILIATION,
+    visibility: str = DEFAULT_REPO_VISIBILITY,
+) -> CloudGitRepositoriesResponse:
+    page = await list_github_app_accessible_repositories(
+        db,
+        user=user,
+        query=query,
+        cursor=cursor,
+        limit=limit,
+        affiliation=affiliation,
+        visibility=visibility,
+    )
+    return cloud_git_repositories_payload(page)
+
+
+@router.get(
+    "/repos/{git_owner}/{git_repo_name}/authority",
+    response_model=GitHubRepoAuthorityResponse,
+)
+async def github_app_repo_authority_endpoint(
+    git_owner: str,
+    git_repo_name: str,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> GitHubRepoAuthorityResponse:
+    return await get_github_repo_authority_status(
+        db,
+        user=user,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
+
+
+@organization_router.get(
+    "/installation/start",
+    response_model=GitHubAppInstallationStartResponse,
+)
+async def start_github_app_installation_endpoint(
+    return_to: str | None = Query(default=None, alias="returnTo"),
+    db: AsyncSession = Depends(get_async_session),
+    org_user: CurrentOrgUser = Depends(current_path_org_admin),
+) -> GitHubAppInstallationStartResponse:
+    return await create_github_app_installation_url(
+        db,
+        org_user=org_user,
+        return_to=return_to,
+    )
+
+
+@organization_router.get(
+    "/installation",
+    response_model=GitHubAppInstallationStatusResponse,
+)
+async def github_app_installation_status_endpoint(
+    db: AsyncSession = Depends(get_async_session),
+    org_user: CurrentOrgUser = Depends(current_path_org_member),
+) -> GitHubAppInstallationStatusResponse:
+    return await get_github_app_installation_status(db, org_user=org_user)
+
+
+@callback_router.get("/user-authorization/callback")
+async def github_app_user_authorization_callback_endpoint(
+    code: str = Query(...),
+    state: str = Query(...),
+    db: AsyncSession = Depends(get_async_session),
+) -> RedirectResponse:
+    redirect_url = await complete_github_app_user_authorization_callback(
+        db,
+        code=code,
+        state=state,
+    )
+    return RedirectResponse(redirect_url, status_code=302)
+
+
+@callback_router.get(
+    "/installation/callback",
+    dependencies=_REAUTH_TRANSACTION_DEPENDENCIES,
+)
+async def github_app_installation_callback_endpoint(
+    installation_id: str | None = Query(default=None),
+    setup_action: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> RedirectResponse:
+    redirect_url = await complete_github_app_installation_redirect(
+        db,
+        installation_id=installation_id,
+        setup_action=setup_action,
+        state=state,
+    )
+    return RedirectResponse(redirect_url, status_code=302)
+
+
+@setup_callback_router.get(
+    "/callback",
+    dependencies=_REAUTH_TRANSACTION_DEPENDENCIES,
+)
+async def github_app_setup_callback_endpoint(
+    installation_id: str | None = Query(default=None),
+    setup_action: str | None = Query(default=None),
+    # GitHub calls the App's Setup URL after install AND after later
+    # repository-selection changes; those GitHub-initiated redirects carry no
+    # signed `state`. Accept a missing state and refresh scope instead of 422.
+    state: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> RedirectResponse:
+    redirect_url = await complete_github_app_installation_redirect(
+        db,
+        installation_id=installation_id,
+        setup_action=setup_action,
+        state=state,
+    )
+    return RedirectResponse(redirect_url, status_code=302)
+
+
+@callback_router.get("/connected", response_class=HTMLResponse)
+async def github_app_connected_page_endpoint() -> HTMLResponse:
+    # Self-host-safe landing for GitHub App callbacks when no web app exists to
+    # return to. Served by the API itself, so it never 404s on an API-only
+    # deployment. Desktop/web deployments redirect to their own settings pages
+    # instead (see `_default_return_after_callback`).
+    return HTMLResponse(
+        render_redirect_callback_page(
+            title="GitHub App connected",
+            status_label="Connected",
+            message=(
+                "The Proliferate GitHub App is connected. You can close this tab and "
+                "return to Proliferate."
+            ),
+            tone="success",
+        )
+    )

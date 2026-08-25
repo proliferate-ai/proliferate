@@ -35,7 +35,7 @@ from proliferate.auth.identity.types import (
 from proliferate.auth.identity.web_beta import ensure_web_beta_email_allowed
 from proliferate.db.store.auth import create_auth_code
 from proliferate.db.store.users import github_oauth_account_or_email_exists
-from proliferate.server.cloud.agent_gateway.signup_hook import (
+from proliferate.server.agent_auth.signup_hook import (
     schedule_agent_gateway_user_enrollment,
 )
 from proliferate.server.notifications import (

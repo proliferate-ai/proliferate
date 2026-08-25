@@ -11,7 +11,7 @@ from proliferate.integrations.anyharness.workspaces import (
     create_remote_worktree_workspace,
     resolve_runtime_workspace,
 )
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.provisioning_observability import provisioning_phase
 from proliferate.server.cloud.workspaces.domain.origin import resolve_workspace_origin_entrypoint
 

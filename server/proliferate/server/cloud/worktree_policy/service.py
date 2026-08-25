@@ -18,7 +18,7 @@ from proliferate.db.store.cloud_worktree_policy import (
     load_cloud_worktree_policy_for_user,
     save_cloud_worktree_policy,
 )
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 
 CloudWorktreePolicySource = Literal["persisted", "default"]
 

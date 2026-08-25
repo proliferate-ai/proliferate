@@ -23,6 +23,7 @@ from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.lib.infra.encryption.fernet import decrypt_text
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.billing.authorization import (
     assert_cloud_sandbox_resume_allowed_for_owner,
 )
@@ -30,7 +31,6 @@ from proliferate.server.cloud.cloud_sandboxes.transactions import (
     commit_cloud_sandbox_session,
     run_after_commit,
 )
-from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.provisioning_observability import provisioning_phase
 
 logger = logging.getLogger("proliferate.cloud.cloud_sandboxes")

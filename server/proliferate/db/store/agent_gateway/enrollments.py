@@ -18,7 +18,7 @@ from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_SYNC_STATUS_PENDING,
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
 )
-from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment
+from proliferate.db.models.agent_gateway import AgentGatewayEnrollment
 from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.agent_gateway.enrollment_keys import revoke_enrollment_keys
 from proliferate.db.store.agent_gateway.mappers import enrollment_record

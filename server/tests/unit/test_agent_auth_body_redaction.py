@@ -24,7 +24,7 @@ from pydantic import ValidationError
 from starlette.requests import Request
 
 from proliferate.main import _redacts_entire_body, _validation_error_handler
-from proliferate.server.cloud.agent_gateway.models import (
+from proliferate.server.agent_auth.models import (
     AgentApiKeyCreateRequest,
     AgentProviderConfigCreateRequest,
 )

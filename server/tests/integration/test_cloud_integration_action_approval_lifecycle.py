@@ -18,8 +18,8 @@ from proliferate.db.models.cloud.integration_approvals import (
     CloudIntegrationActionApproval,
     CloudIntegrationActionApprovalEvent,
 )
-from proliferate.db.models.cloud.integrations import CloudIntegrationAccount
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.integrations import CloudIntegrationAccount
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.integrations import action_approvals as approvals_store
 from proliferate.lib.infra.time.wall_clock import utcnow

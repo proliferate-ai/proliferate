@@ -28,9 +28,9 @@ from proliferate.integrations.integration_oauth.models import (
     RegisteredOAuthClient,
 )
 from proliferate.lib.infra.encryption.json import encrypt_json
-from proliferate.server.cloud.integrations.oauth import clients as oauth_clients
-from proliferate.server.cloud.integrations.oauth import service as oauth_service
-from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.server.integration_gateway.connections.oauth import clients as oauth_clients
+from proliferate.server.integration_gateway.connections.oauth import service as oauth_service
+from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 

@@ -17,7 +17,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_MEMBER,
 )
 from proliferate.db.models.billing import BillingBudgetLimit, UsageSegment
-from proliferate.db.models.cloud.agent_gateway import AgentLlmUsageEvent
+from proliferate.db.models.agent_gateway import AgentLlmUsageEvent
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.agent_gateway.credits import create_llm_credit_grant
 from proliferate.db.store.billing_runtime_usage import resolve_billing_subject_id_for_user

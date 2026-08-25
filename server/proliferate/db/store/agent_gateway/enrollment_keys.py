@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import AGENT_GATEWAY_CIPHERTEXT_KEY_ID
-from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollmentKey
+from proliferate.db.models.agent_gateway import AgentGatewayEnrollmentKey
 from proliferate.db.store.agent_gateway.mappers import enrollment_key_record
 from proliferate.db.store.agent_gateway.records import AgentGatewayEnrollmentKeyRecord
 from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text

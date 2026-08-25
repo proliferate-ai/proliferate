@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
+from proliferate.db.models.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.integrations.sandbox import get_sandbox_provider

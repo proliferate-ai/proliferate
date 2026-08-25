@@ -1,0 +1,20 @@
+# System manifest (Organization Standard rule 2) — validated by
+# scripts/check_manifests.py; rules PROD-MANIFEST-001/002 in
+# lints/product/manifests.toml. allowed_importers is measured reality, not
+# permission-by-intention: the checker fails on drift in either direction.
+
+name = "seam"
+spec = "specs/FEATURE_DOCS/MANAGED_RUNTIME.md"
+owns = "Runtime worker enrollment, identity, and heartbeat endpoints: the CP↔runtime seam's worker registry."
+
+public_surface = [
+    "proliferate.server.seam.workers.api",
+    "proliferate.server.seam.workers.service",
+    "proliferate.server.seam.workers.models",
+]
+
+allowed_importers = [
+    "cloud",
+    "cloud/harness_launch_options",
+    "cloud/materialization",
+]

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.cloud import CloudSandboxStatus
 from proliferate.db.store import harness_launch_options as launch_options_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.harness_launch_options.models import (
     AgentReadiness,
     CopiedLaunchOptionsResponse,

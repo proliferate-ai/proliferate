@@ -36,15 +36,15 @@ from proliferate.permissions import (
     OwnerContext,
     OwnerSelection,
 )
+from proliferate.server.agent_auth.signup_hook import (
+    schedule_agent_gateway_org_enrollment,
+)
 from proliferate.server.billing.seat_reconciliation import (
     maybe_create_organization_seat_adjustment,
 )
 from proliferate.server.billing.subjects import (
     ensure_organization_billing_subject_state,
     ensure_personal_billing_subject_state,
-)
-from proliferate.server.cloud.agent_gateway.signup_hook import (
-    schedule_agent_gateway_org_enrollment,
 )
 from proliferate.server.organizations import invitation_delivery
 from proliferate.server.organizations.admin_emails import is_admin_listed_email

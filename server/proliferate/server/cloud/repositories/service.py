@@ -25,12 +25,9 @@ from proliferate.db.store.repositories import (
 from proliferate.db.store.repositories import (
     remove_cloud_repo_environment as remove_cloud_repo_environment_row,
 )
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.materialization import service as materialization_service
-from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
-from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
 from proliferate.server.cloud.repositories.models import (
     RepoConfigResponse,
     RepoEnvironmentResponse,
@@ -38,6 +35,9 @@ from proliferate.server.cloud.repositories.models import (
     UpdateRepoConfigRequest,
     repo_environment_payload,
 )
+from proliferate.server.github.repo_authority import require_github_cloud_repo_authority
+from proliferate.server.github.repos.domain.github_credentials import CloudRepoGitHubCredentials
+from proliferate.server.github.repos.service import get_repo_branches_for_credentials
 
 
 async def list_repositories(

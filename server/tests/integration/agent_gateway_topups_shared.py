@@ -22,8 +22,8 @@ from proliferate.db.store.billing_subjects import (
     set_billing_subject_overage_enabled,
 )
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
-from proliferate.server.cloud.agent_gateway import enrollment as enrollment_service
-from proliferate.server.cloud.agent_gateway import topups as topups_service
+from proliferate.server.agent_auth import enrollment as enrollment_service
+from proliferate.server.agent_auth import topups as topups_service
 
 
 async def create_user(db_session: AsyncSession) -> uuid.UUID:

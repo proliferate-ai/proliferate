@@ -11,9 +11,9 @@ from proliferate.config import settings
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.integrations.integration_oauth.models import TokenResponse
 from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.integrations import access as integration_access
-from proliferate.server.cloud.integrations.access import ensure_provider_access
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.integration_gateway.connections import access as integration_access
+from proliferate.server.integration_gateway.connections.access import ensure_provider_access
 from tests.integration.test_integration_provider_access import SLACK_SCOPES, _account_for
 
 

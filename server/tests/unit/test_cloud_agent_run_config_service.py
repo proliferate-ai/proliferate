@@ -23,7 +23,7 @@ from proliferate.server.cloud.agent_run_config.models import (
     AgentRunConfigCreateRequest,
     AgentRunConfigUpdateRequest,
 )
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 
 
 def _config(**overrides: object) -> SimpleNamespace:

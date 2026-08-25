@@ -4,7 +4,7 @@
 
 The agent-auth surfaces move real provider secrets and minted gateway keys
 through their hot paths: the cloud enrollment/migration/topup flows in
-``server/proliferate/server/cloud/agent_gateway`` and the AnyHarness render and
+``server/proliferate/server/agent_auth`` and the AnyHarness render and
 model-snapshot planes under ``route_auth`` / ``model_snapshot``. A single
 ``logger.info("minted %s", virtual_key)`` or ``tracing::warn!(%value_ciphertext,
 ...)`` writes a live credential into logs that ship to a collector — an
@@ -75,8 +75,9 @@ OWNED_RULE_IDS = frozenset(
 # custody planes (store + models + encryption, where ``value_ciphertext`` and
 # the decrypt paths actually live), and the Rust render + snapshot planes.
 SCANNED_ROOTS: list[tuple[str, frozenset[str]]] = [
-    ("server/proliferate/server/cloud/agent_gateway", frozenset({".py"})),
+    ("server/proliferate/server/agent_auth", frozenset({".py"})),
     ("server/proliferate/db/store/agent_gateway", frozenset({".py"})),
+    ("server/proliferate/db/models/agent_gateway.py", frozenset({".py"})),
     ("server/proliferate/db/models/cloud", frozenset({".py"})),
     ("server/proliferate/lib/infra/encryption", frozenset({".py"})),
     (
@@ -216,6 +217,10 @@ def iter_source_files() -> list[Path]:
     for root, suffixes in SCANNED_ROOTS:
         base = REPO_ROOT / root
         if not base.exists():
+            continue
+        if base.is_file():
+            if base.suffix in suffixes:
+                files.append(base)
             continue
         for path in base.rglob("*"):
             if path.suffix not in suffixes or not path.is_file():

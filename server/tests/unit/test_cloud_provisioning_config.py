@@ -15,7 +15,7 @@ from proliferate.config import Settings
 from proliferate.config_defaults import DEFAULT_CORS_ALLOW_ORIGINS, ENV_FILES
 from proliferate.integrations.sandbox import e2b as e2b_runtime
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 
 
 def _settings(**overrides: object) -> Settings:

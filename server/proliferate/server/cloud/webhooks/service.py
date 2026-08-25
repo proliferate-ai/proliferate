@@ -32,6 +32,7 @@ from proliferate.integrations.sandbox import (
     verify_e2b_webhook_signature,
 )
 from proliferate.lib.infra.time.wall_clock import utcnow
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.billing.authorization import (
     record_cloud_sandbox_billing_block,
     resolve_cloud_sandbox_billing_block,
@@ -42,7 +43,6 @@ from proliferate.server.billing.runtime_usage import (
     open_cloud_sandbox_provider_usage,
     remember_cloud_sandbox_event_receipt,
 )
-from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.gateway.service import (
     invalidate_cloud_sandbox_gateway_access_for_user,
 )

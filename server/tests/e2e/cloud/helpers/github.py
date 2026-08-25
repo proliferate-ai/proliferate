@@ -95,7 +95,7 @@ async def seed_github_app_authorization(
     from proliferate.integrations.github.app_user_tokens import (
         refresh_github_app_user_authorization,
     )
-    from proliferate.server.cloud.github_app.service import (
+    from proliferate.server.github.service import (
         refresh_github_app_installation_cache,
     )
     from proliferate.lib.infra.time.wall_clock import utcnow

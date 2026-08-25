@@ -595,7 +595,7 @@ class TestSingleOrgProductUserBypass:
         """The single-org bypass only lifts the blanket product gate.
 
         A repo-import surface that genuinely needs a GitHub connection keeps
-        its own point-of-use guard (proliferate/server/cloud/repos/service.py's
+        its own point-of-use guard (proliferate/server/github/repos/service.py's
         ``_require_github_access_token`` / the GitHub App authorization check),
         so it still fails cleanly instead of silently granting access.
         """

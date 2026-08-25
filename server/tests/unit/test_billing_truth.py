@@ -27,13 +27,13 @@ from proliferate.server.billing.pricing import (
     compute_price_per_hour_cents,
     compute_price_per_hour_usd,
 )
-from proliferate.server.cloud.agent_gateway.free_credits import free_credit_amount_usd
-from proliferate.server.cloud.agent_gateway.topups import (
+from proliferate.server.agent_auth.free_credits import free_credit_amount_usd
+from proliferate.server.agent_auth.topups import (
     AUTO_TOPUP_ADMIN_ALERT_MARKER,
     LlmTopupRunResult,
     _record_topup_admin_alert_intent,
 )
-from proliferate.server.cloud.agent_gateway.usage_import import (
+from proliferate.server.agent_auth.usage_import import (
     apply_llm_margin,
     llm_margin_multiplier,
 )
@@ -236,7 +236,7 @@ def test_a9_alert_intent_default_matches_topups() -> None:
 def test_a9_alert_intent_emits_marker_without_email() -> None:
     from uuid import uuid4
 
-    from proliferate.server.cloud.agent_gateway import topups as topups_module
+    from proliferate.server.agent_auth import topups as topups_module
 
     captured: list[logging.LogRecord] = []
 

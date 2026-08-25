@@ -12,8 +12,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.integrations import CloudIntegrationToolCallEvent
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.integrations import CloudIntegrationToolCallEvent
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from proliferate.integrations.mcp_remote import McpRemoteError
 from tests.integration.test_cloud_integration_gateway_api import (
     _gateway_bearer,
@@ -58,7 +58,7 @@ async def test_call_tool_success_writes_audit_event(
         return {"content": [{"type": "text", "text": "ok"}], "isError": False}
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         fake_call_tool,
     )
 
@@ -94,7 +94,7 @@ async def test_call_tool_upstream_failure_writes_audit_event(
         raise McpRemoteError("upstream is down", code="transport_error")
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         failing_call_tool,
     )
 
@@ -128,7 +128,7 @@ async def test_call_tool_tool_level_error_writes_audit_event(
         return {"content": [{"type": "text", "text": "bad args"}], "isError": True}
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         erroring_call_tool,
     )
 

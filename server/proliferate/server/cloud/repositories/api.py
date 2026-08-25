@@ -8,21 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.server.cloud.github_app.transactions import (
-    commit_github_app_reauthorization_on_error,
-)
-from proliferate.server.cloud.repos.access import CloudRepoGitHubCredentialsDependency
-from proliferate.server.cloud.repos.models import (
-    CloudGitRepositoriesResponse,
-    RepoBranchesResponse,
-    cloud_git_repositories_payload,
-)
-from proliferate.server.cloud.repos.service import (
-    DEFAULT_REPO_AFFILIATION,
-    DEFAULT_REPO_VISIBILITY,
-    get_cloud_repo_branches,
-    list_cloud_repositories,
-)
 from proliferate.server.cloud.repositories.models import (
     RepoConfigResponse,
     RepoConfigsListResponse,
@@ -37,6 +22,21 @@ from proliferate.server.cloud.repositories.service import (
     repo_environment_response,
     save_repo_environment,
     update_repo_config,
+)
+from proliferate.server.github.repos.access import CloudRepoGitHubCredentialsDependency
+from proliferate.server.github.repos.models import (
+    CloudGitRepositoriesResponse,
+    RepoBranchesResponse,
+    cloud_git_repositories_payload,
+)
+from proliferate.server.github.repos.service import (
+    DEFAULT_REPO_AFFILIATION,
+    DEFAULT_REPO_VISIBILITY,
+    get_cloud_repo_branches,
+    list_cloud_repositories,
+)
+from proliferate.server.github.transactions import (
+    commit_github_app_reauthorization_on_error,
 )
 
 _REAUTH_TRANSACTION_DEPENDENCIES = [Depends(commit_github_app_reauthorization_on_error)]

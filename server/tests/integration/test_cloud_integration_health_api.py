@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
-from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
 from proliferate.config import settings
 from proliferate.lib.infra.encryption.json import encrypt_json
 from tests.e2e.cloud.helpers.auth import create_user_and_login
@@ -164,7 +164,7 @@ async def test_health_isolates_non_cloud_probe_failure(
         raise TimeoutError("provider timed out")
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integrations.health.ensure_provider_access", _boom
+        "proliferate.server.integration_gateway.connections.health.ensure_provider_access", _boom
     )
 
     response = await client.get(HEALTH_URL, headers=auth.headers)

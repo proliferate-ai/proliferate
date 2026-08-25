@@ -9,13 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.models.cloud.integrations import (
+from proliferate.db.models.integrations import (
     CloudIntegrationAccount,
     CloudIntegrationDefinition,
     CloudIntegrationOAuthClient,
     CloudIntegrationToolSchemaCache,
 )
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.db.store.integrations import oauth_clients as oauth_clients_store
@@ -23,11 +23,11 @@ from proliferate.db.store.integrations.definition_security_revisions import (
     ensure_current_definition_security_revision,
 )
 from proliferate.lib.infra.encryption.json import encrypt_json
-from proliferate.server.cloud.integrations.config import (
+from proliferate.server.integration_gateway.connections.config import (
     parse_definition_config,
     render_mcp_url,
 )
-from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
 from proliferate.integrations.integration_oauth import normalize_resource_url
 from tests.integration.test_cloud_integration_gateway_api import (
     _authed_user,
@@ -94,7 +94,7 @@ async def _assert_provider_rejected_without_io(
         return {"content": [], "isError": False}
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         _unexpected_provider_call,
     )
     result = await _tool_call(
@@ -234,7 +234,7 @@ async def test_retired_pinned_oauth_client_rejects_before_provider_io(
         return {"content": [], "isError": False}
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         _unexpected_provider_call,
     )
     result = await _tool_call(
@@ -288,7 +288,7 @@ async def test_disconnect_after_admission_cannot_recreate_cache_or_future_access
         return [{"name": "resolve-library-id", "inputSchema": {"type": "object"}}]
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integrations.tools.mcp_remote.list_tools",
+        "proliferate.server.integration_gateway.connections.tools.mcp_remote.list_tools",
         _blocked_list_tools,
     )
     headers = {"Authorization": f"Bearer {bearer}"}

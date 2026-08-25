@@ -13,7 +13,7 @@ second recommended pattern.
 
 | Boundary | Question | Lives in | Returns |
 |---|---|---|---|
-| **Authentication** | Who is the caller? | `auth/dependencies.py` for users; `server/cloud/runtime_workers/auth.py` for Workers | the actor (`User` / `WorkerAuthContext`) |
+| **Authentication** | Who is the caller? | `auth/dependencies.py` for users; `server/seam/workers/auth.py` for Workers | the actor (`User` / `WorkerAuthContext`) |
 | **Org authorization** | Does the caller have the right org standing? | `permissions.py` (request deps and factories) | `OwnerContext` or `CurrentOrgUser` |
 | **Resource access** | Can this caller touch *this* resource? | `server/<domain>/access.py` | the resource snapshot, or raises 403/404 |
 | **Product rule** | Given this state, is the action permitted now? | `server/<domain>/domain/policy.py` | `PolicyVerdict` |
@@ -102,7 +102,7 @@ server/proliferate/
     domain/
       policy.py              # pure product-rule verdicts (per domain)
 
-  server/cloud/runtime_workers/
+  server/seam/workers/
     auth.py                  # WorkerAuthContext + opaque bearer-token dependency
 ```
 
@@ -240,7 +240,7 @@ code migration, not an assumption a caller should make from this guide.
 ### Allowed
 
 - `Depends(...)` functions returning a user actor (`User`). The separate
-  Worker actor dependency remains in `server/cloud/runtime_workers/auth.py`.
+  Worker actor dependency remains in `server/seam/workers/auth.py`.
 - JWT parsing (via `auth/jwt`), session/user lookup.
 - Platform-level admin checks that scope to identity, not a resource.
 
@@ -315,7 +315,7 @@ response instead.
 
 ## Worker actor
 
-`server/cloud/runtime_workers/auth.py::authenticate_worker` authenticates an
+`server/seam/workers/auth.py::authenticate_worker` authenticates an
 enrolled runtime Worker. A Worker is not a user and does not present a JWT or a
 Target id. It presents an opaque bearer token; the dependency hashes that token,
 loads the active `cloud_runtime_worker`, and returns a frozen
@@ -338,7 +338,7 @@ loads the active `cloud_runtime_worker`, and returns a frozen
 ### Standard shape
 
 ```python
-# server/cloud/runtime_workers/auth.py
+# server/seam/workers/auth.py
 async def authenticate_worker(
     request: Request,
     db: AsyncSession = Depends(get_async_session),

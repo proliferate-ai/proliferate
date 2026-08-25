@@ -11,7 +11,7 @@ from proliferate.db.store.cloud_workspace_materializations import (
     CloudWorkspaceMaterializationValue,
 )
 from proliferate.integrations.anyharness.models import RemoteGitStatusSnapshot
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.workspaces.materializations.service import (
     _require_clean_publishable_source,
 )

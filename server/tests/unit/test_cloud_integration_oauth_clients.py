@@ -9,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.integrations.definitions import IntegrationDefinitionRecord
 from proliferate.integrations.integration_oauth import IntegrationOAuthProviderError
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.integrations.config import serialize_definition_config
-from proliferate.server.cloud.integrations.oauth import clients
-from proliferate.server.cloud.integrations.oauth import service as oauth_service
-from proliferate.server.cloud.integrations.seeds import SEED_DEFINITIONS
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.integration_gateway.connections.config import serialize_definition_config
+from proliferate.server.integration_gateway.connections.oauth import clients
+from proliferate.server.integration_gateway.connections.oauth import service as oauth_service
+from proliferate.server.integration_gateway.connections.seeds import SEED_DEFINITIONS
 
 
 def _definition(*, namespace: str = "slack", mode: str = "static") -> IntegrationDefinitionRecord:

@@ -666,7 +666,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] Provisioning does not fire on authority-chain completion: the
       user-auth callback alone schedules the bootstrap even when no
       installation exists
-      ([github_app/service.py](../../../server/proliferate/server/cloud/github_app/service.py)),
+      ([github_app/service.py](../../../server/proliferate/server/github/service.py)),
       the installation callback never bootstraps the sandbox, and org
       membership changes trigger nothing. Gate the bootstrap on the
       complete chain (membership ∧ installation ∧ user-auth) in both

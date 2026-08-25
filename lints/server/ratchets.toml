@@ -9,7 +9,7 @@ max_lines = 695
 reason = "managed sandbox GitHub grant read path extends existing identity store + SG10 review: explicit crypto-secret calls retain the original readable grant flow instead of line-neutral compression"
 
 [[max_lines]]
-path = "server/proliferate/db/models/cloud/agent_gateway.py"
+path = "server/proliferate/db/models/agent_gateway.py"
 max_lines = 551
 reason = "C-train composition: C-2 agent_auth_delivery_ack model joins the B/D cut; agent_gateway_enrollment_key model added for per-(subject,harness) scoped virtual keys (B2), then the agent_model_snapshot re-key (B4) documented why its scope carries NO unique key and what that costs the reader (the active row is plural in principle, so reads tie-break on id); AgentApiKey gains a kind column (D1); a module split is deferred to the model-taxonomy pass rather than done mid-stack; typed-config write gate loosens ck_agent_auth_selection_api_key_shape with a why-not-tighter comment; SG12 keeps the base docstring intact while the direct wall-clock owner import adds one line ; +8: FR-3 adds the three nullable gateway-verification columns (status, delta, verified_at) on the enrollment_key model"
 
@@ -29,12 +29,12 @@ max_lines = 665
 reason = "W-F2 period-boundary gate adds one guard clause (a billing_reason check plus its drop report and the hold-clear that must still run) to _handle_invoice_paid; the reporter and its context assembly live in webhook_drops.py. W-F5 drop visibility: the intake path was already 595/600 before this change, so threading the Stripe event id through the five handlers and adding one report call per silent early return cannot fit under the cap. The drop vocabulary, levels, paid-detection, and all per-reason context assembly were split out to webhook_drops.py to keep the growth to call sites only; splitting the handlers themselves is deferred to the billing service taxonomy pass rather than done inside an observability-only fix. Adversarial-review fix pass (MAJOR 1) adds a two-line reporter call at the dispatch fall-through's 13th silent drop (unhandled_event_type); billing error normalization changes only the direct error import"
 
 [[max_lines]]
-path = "server/proliferate/server/cloud/agent_gateway/enrollment.py"
+path = "server/proliferate/server/agent_auth/enrollment.py"
 max_lines = 636
 reason = "C-train composition re-attaches C-1 both-surface sync-completion pokes; D train: org-only ensure_signup_enrollment + per-(org,member) LiteLLM identity + fingerprint-driven per-key re-mint; shrank again when ensure_user_enrollment died (D-3), split pending"
 
 [[max_lines]]
-path = "server/proliferate/server/cloud/agent_gateway/service.py"
+path = "server/proliferate/server/agent_auth/service.py"
 max_lines = 820
 reason = "delivery-ack hardening (server-bounded ack revision + trust-boundary docs) nudged the gateway service over the 800 server-layer cap; split pending with the service taxonomy pass; typed-config write gate threads the registry providerConfig vocabulary into the store put and pins R5's azure field set ; +21: FR-3 adds get_verification_verdicts reading the governing enrollment's per-harness gateway-enablement verdicts for the additive capabilities surface; PRO-129 splits put_harness_settings out to a dedicated harness_settings.py module (settings are not auth), pulling the file back down to 820"
 

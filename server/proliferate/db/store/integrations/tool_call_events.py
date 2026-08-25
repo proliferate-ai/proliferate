@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.integrations import CloudIntegrationToolCallEvent
+from proliferate.db.models.integrations import CloudIntegrationToolCallEvent
 
 
 async def record_tool_call_event(

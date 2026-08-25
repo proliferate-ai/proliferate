@@ -336,7 +336,7 @@ not a softer version of the rule.
   examples include Organization role gates in
   [organizations/service.py](../../server/proliferate/server/organizations/service.py),
   Cloud integration admin checks in
-  [cloud/integrations/service.py](../../server/proliferate/server/cloud/integrations/service.py),
+  [integration_gateway/connections/service.py](../../server/proliferate/server/integration_gateway/connections/service.py),
   and Agent Run Config visibility checks in
   [agent_run_config/service.py](../../server/proliferate/server/cloud/agent_run_config/service.py).
   In addition, `permissions.py` currently composes actor deps, stores, billing
@@ -371,7 +371,7 @@ not a softer version of the rule.
   [Billing reconciliation](../../server/proliferate/server/billing/reconciler.py),
   [anonymous telemetry](../../server/proliferate/server/anonymous_telemetry/worker.py),
   and three Agent Gateway loops in
-  [worker.py](../../server/proliferate/server/cloud/agent_gateway/worker.py).
+  [worker.py](../../server/proliferate/server/agent_auth/worker.py).
   The one-off
   [enqueue_health.py](../../server/proliferate/background/enqueue_health.py)
   command also remains a direct background-store client. These paths require a

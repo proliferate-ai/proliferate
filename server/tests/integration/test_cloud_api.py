@@ -12,7 +12,7 @@ from proliferate.integrations.github import (
     GitHubRepositorySummary,
     GitHubRepoBranches,
 )
-from proliferate.server.cloud.repos import service as repos_service
+from proliferate.server.github.repos import service as repos_service
 from tests.integration.cloud_api_helpers import (
     link_github_account,
     register_and_login,

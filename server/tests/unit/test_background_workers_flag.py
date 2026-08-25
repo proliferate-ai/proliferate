@@ -13,7 +13,7 @@ import pytest
 
 import proliferate.server.billing.reconciler as reconciler
 from proliferate.config import settings
-from proliferate.server.cloud.agent_gateway.worker import (
+from proliferate.server.agent_auth.worker import (
     start_agent_gateway_enrollment_backfill,
     start_agent_gateway_llm_topups,
     start_agent_gateway_usage_import,

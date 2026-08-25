@@ -2,7 +2,7 @@
 
 The scenario contract: the cold-provisioning path under test is the GitHub
 App authorization callback (`complete_github_app_user_authorization_callback`,
-server/proliferate/server/cloud/github_app/service.py:274) calling
+server/proliferate/server/github/service.py:274) calling
 `ensure_personal_cloud_sandbox_exists` + `schedule_materialize_sandbox`. That
 callback needs a real GitHub OAuth `code`, and this repo's dev GitHub App's
 callback URL is pinned to the `main` profile's port

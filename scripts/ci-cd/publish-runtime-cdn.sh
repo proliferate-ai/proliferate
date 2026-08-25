@@ -2,7 +2,7 @@
 # Publish the bare AnyHarness runtime + worker binaries to the downloads CDN.
 #
 # The cloud server's artifact redirects
-# (server/proliferate/server/cloud/runtime_workers/service.py:
+# (server/proliferate/server/seam/workers/service.py:
 # `runtime_artifact_redirect_url` / `worker_artifact_redirect_url`) 302 a sandbox
 # worker to
 #   {base}/runtime/stable/{version}/{target}/anyharness(.sha256)

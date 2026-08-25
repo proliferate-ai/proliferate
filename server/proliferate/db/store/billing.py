@@ -28,8 +28,8 @@ from proliferate.db.models.billing import (
     BillingUsageExport,
     UsageSegment,
 )
-from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.repositories import RepoConfig, RepoEnvironment
 
 
 def coerce_utc(value: datetime | None) -> datetime | None:

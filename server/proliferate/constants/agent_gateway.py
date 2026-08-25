@@ -38,7 +38,7 @@ AGENT_AUTH_SURFACES = (AGENT_AUTH_SURFACE_LOCAL, AGENT_AUTH_SURFACE_CLOUD)
 AGENT_AUTH_HARNESS_KINDS = ("claude", "codex", "opencode", "grok", "cursor")
 
 # Harnesses whose launch supports the gateway (virtual-key) recipe. Lives here
-# (not in server/cloud/agent_gateway/selection_rules.py) so the db/store layer
+# (not in server/agent_auth/selection_rules.py) so the db/store layer
 # can consult it too without violating the store→server import boundary
 # (check_server_boundaries.py) — the store uses it to skip the disabled
 # gateway revision-marker row for a harness that can never carry one; the

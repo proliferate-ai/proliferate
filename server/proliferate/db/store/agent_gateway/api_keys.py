@@ -15,7 +15,7 @@ from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_TYPED_KINDS,
     AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
 )
-from proliferate.db.models.cloud.agent_gateway import AgentApiKey
+from proliferate.db.models.agent_gateway import AgentApiKey
 from proliferate.db.store.agent_gateway.mappers import api_key_record
 from proliferate.db.store.agent_gateway.records import AgentApiKeyRecord
 from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text

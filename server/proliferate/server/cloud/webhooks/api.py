@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, Header, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.engine import get_async_session
-from proliferate.server.cloud.github_app.webhooks import handle_github_app_webhook
 from proliferate.server.cloud.webhooks.models import E2BWebhookReceipt
 from proliferate.server.cloud.webhooks.service import handle_e2b_webhook
+from proliferate.server.github.webhooks import handle_github_app_webhook
 
 router = APIRouter(prefix="/webhooks", tags=["cloud_webhooks"])
 

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.repositories import service
 from proliferate.server.cloud.repositories.models import SaveRepoEnvironmentRequest
 

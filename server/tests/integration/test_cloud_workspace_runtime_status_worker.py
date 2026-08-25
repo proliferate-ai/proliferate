@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CLOUD_RUNTIME_WORKER_OFFLINE_THRESHOLD_SECONDS
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.server.cloud.workspaces import service as workspaces_service

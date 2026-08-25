@@ -296,7 +296,7 @@ not a softer version of the rule.
       installations currently emit this heartbeat without a Celery worker or
       Beat process, so a Beat-only move would silently remove it.
 - [ ] **Agent Gateway enrollment backfill.**
-      [`_backfill_loop`](../../server/proliferate/server/cloud/agent_gateway/worker.py)
+      [`_backfill_loop`](../../server/proliferate/server/agent_auth/worker.py)
       is started by `start_agent_gateway_enrollment_backfill` from the
       [`main.py` lifespan](../../server/proliferate/main.py) when both
       Agent Gateway and `run_background_workers` are enabled. It runs
@@ -307,7 +307,7 @@ not a softer version of the rule.
       the existing feature and worker gates, immediate-first-run cadence, and
       retry and replay behavior are characterized for a Beat-fired task.
 - [ ] **Agent Gateway usage import.**
-      [`_usage_import_loop`](../../server/proliferate/server/cloud/agent_gateway/worker.py)
+      [`_usage_import_loop`](../../server/proliferate/server/agent_auth/worker.py)
       is started by `start_agent_gateway_usage_import` from the
       [`main.py` lifespan](../../server/proliferate/main.py) under the
       same Agent Gateway and `run_background_workers` gates. It runs
@@ -319,7 +319,7 @@ not a softer version of the rule.
       behavior are characterized for a Beat-fired task, including safe replay
       of LiteLLM spend-log paging and credit-exhaustion effects.
 - [ ] **Agent Gateway LLM top-up.**
-      [`_topup_loop`](../../server/proliferate/server/cloud/agent_gateway/worker.py)
+      [`_topup_loop`](../../server/proliferate/server/agent_auth/worker.py)
       is started by `start_agent_gateway_llm_topups` from the
       [`main.py` lifespan](../../server/proliferate/main.py) only when
       Agent Gateway, top-up configuration, and `run_background_workers` enable

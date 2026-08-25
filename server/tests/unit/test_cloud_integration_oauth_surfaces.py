@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.integrations.oauth import surfaces
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.integration_gateway.connections.oauth import surfaces
 
 
 def test_oauth_return_target_defaults_to_desktop() -> None:

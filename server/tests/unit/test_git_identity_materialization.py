@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.materialization.materialize import (
     git_identity,
     repo_environment,

@@ -11,8 +11,8 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_sandboxes as sandbox_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.runtime_workers.auth import WorkerAuthContext, authenticate_worker
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.seam.workers.auth import WorkerAuthContext, authenticate_worker
 
 
 async def current_launch_options_worker_target(

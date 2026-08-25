@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.db.models.auth import OAuthAccount
-from proliferate.db.models.cloud.agent_gateway import AgentApiKey
+from proliferate.db.models.agent_gateway import AgentApiKey
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store, organizations as organization_store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject

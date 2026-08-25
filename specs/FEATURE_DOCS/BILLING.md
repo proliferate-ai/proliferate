@@ -154,7 +154,7 @@ neither dominates. Both compute paths
 `_resolve_compute_limit_pause`,
 [`authorization.py`](../../server/proliferate/server/billing/authorization.py)'s
 `_compute_budget_cap_breach`) and the LLM import path
-([`usage_import.py`](../../server/proliferate/server/cloud/agent_gateway/usage_import.py)'s
+([`usage_import.py`](../../server/proliferate/server/agent_auth/usage_import.py)'s
 `_enforce_org_llm_limits`) check every enabled row before deciding.
 Display-only,
 [`resolve_effective_limit`](../../server/proliferate/server/billing/budget_limits.py)
@@ -346,9 +346,9 @@ never bypasses an active budget limit.**
 ([`constants/agent_gateway.py`](../../server/proliferate/constants/agent_gateway.py))
 has `ok`, `exhausted` (credit ran out), `limit_reached` (an admin cap
 bound, regardless of credit). `_enforce_subject_exhaustion`
-([`usage_import.py`](../../server/proliferate/server/cloud/agent_gateway/usage_import.py))
+([`usage_import.py`](../../server/proliferate/server/agent_auth/usage_import.py))
 never overwrites `limit_reached`; top-up reactivation
-([`topups.py`](../../server/proliferate/server/cloud/agent_gateway/topups.py))
+([`topups.py`](../../server/proliferate/server/agent_auth/topups.py))
 only clears `exhausted`. Only `_enforce_org_llm_limits` clears
 `limit_reached`, once every applicable limit passes and credit is positive.
 

@@ -73,7 +73,7 @@ Two GitHub relationships, deliberately separate:
 - **Installation** of the App on the org/repo: grants the repositories.
 
 Routes live in
-[github_app/api.py](../../../server/proliferate/server/cloud/github_app/api.py):
+[github_app/api.py](../../../server/proliferate/server/github/api.py):
 start/status/callback for each flow, plus GitHub's Setup-URL callback (no
 signed state; it can only complete an installation the signed flows
 began), plus the accessible-repos and per-repo authority endpoints.
@@ -86,7 +86,7 @@ schedules that pair's eager sandbox bootstrap —
 document only owns the authority events themselves.
 
 Authority status for a repository
-([github_app/models.py](../../../server/proliferate/server/cloud/github_app/models.py))
+([github_app/models.py](../../../server/proliferate/server/github/models.py))
 is one of: `authorized`, `needs_reauth`, `missing_authorization`,
 `missing_installation`, `not_covered`, `missing_user_repo_access`,
 `operator_configuration_required`, `error`. The no-unrepairable-action law
@@ -191,9 +191,9 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] A parallel pre-App credential path survives: the repo catalog and
       branch-listing routes still build credentials from the user's
       product OAuth account
-      ([repos/domain/github_credentials.py](../../../server/proliferate/server/cloud/repos/domain/github_credentials.py),
+      ([repos/domain/github_credentials.py](../../../server/proliferate/server/github/repos/domain/github_credentials.py),
       consumed by
-      [repos/service.py](../../../server/proliferate/server/cloud/repos/service.py))
+      [repos/service.py](../../../server/proliferate/server/github/repos/service.py))
       even though the add-repo dialog already reads the App-token
       accessible-repos catalog. Migrate the catalog and branch routes
       onto App tokens, delete the OAuth credential builder (grep-gate:
@@ -206,10 +206,10 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       materialization-triggering action).
 - [ ] Three callback routes overlap: the installation callback and the
       Setup-URL callback complete installations through near-identical
-      paths ([github_app/api.py](../../../server/proliferate/server/cloud/github_app/api.py)).
+      paths ([github_app/api.py](../../../server/proliferate/server/github/api.py)).
       Consolidate on one completion function with thin entrypoints.
 - [ ] The status enum outgrew its consumers: `operator_configuration_
       required` and `error` exist in
-      [models.py](../../../server/proliferate/server/cloud/github_app/models.py)
+      [models.py](../../../server/proliferate/server/github/models.py)
       but predate some client status handling; sweep client switch sites
       for exhaustiveness.

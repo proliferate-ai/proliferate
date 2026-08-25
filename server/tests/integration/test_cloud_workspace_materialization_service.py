@@ -19,13 +19,13 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.repositories import RepoConfig, RepoEnvironment
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.integrations.anyharness.models import RemoteGitStatusSnapshot
 from proliferate.integrations.github.repos import GitHubRepoBranches
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.integrations.anyharness.models import ResolvedRemoteWorkspace
 from proliferate.db.store import cloud_workspace_materializations as materialization_store
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store

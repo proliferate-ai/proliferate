@@ -3,7 +3,7 @@
 Used to talk to remote MCP servers (``tools/list`` + ``tools/call``) when an
 integration account is materialized for a user. This is the outbound client
 half of the integrations subsystem; the inbound catalog/config lives under
-``proliferate.server.cloud.integrations``.
+``proliferate.server.integration_gateway.connections``.
 
 Speaks just enough of the MCP streamable-HTTP transport to enumerate and invoke
 tools on a remote server:

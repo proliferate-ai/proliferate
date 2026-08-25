@@ -8,7 +8,7 @@ import pytest
 from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.anyharness.models import ResolvedRemoteWorkspace
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.workspaces import provisioning
 
 

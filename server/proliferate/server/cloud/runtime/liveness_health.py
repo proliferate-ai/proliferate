@@ -10,7 +10,7 @@ from uuid import UUID
 from proliferate.integrations import anyharness
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.lib.infra.time.elapsed import duration_ms
-from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
+from proliferate.server.event_logging import format_exception_message, log_cloud_event
 
 
 async def wait_for_runtime_health(

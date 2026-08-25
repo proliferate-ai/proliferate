@@ -33,15 +33,8 @@ from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.anyharness.models import RemoteGitStatusSnapshot
 from proliferate.integrations.anyharness.workspaces import get_runtime_git_status
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.github_app.repo_authority import (
-    require_github_cloud_repo_authority,
-)
-from proliferate.server.cloud.repos.domain.github_credentials import (
-    CloudRepoGitHubCredentials,
-)
-from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
 from proliferate.server.cloud.workspaces.materializations.summaries import (
     materialization_summary,
     operation_id_for,
@@ -54,6 +47,13 @@ from proliferate.server.cloud.workspaces.models import (
     ReportMaterializationRequest,
     WorkspaceMaterializationSummary,
 )
+from proliferate.server.github.repo_authority import (
+    require_github_cloud_repo_authority,
+)
+from proliferate.server.github.repos.domain.github_credentials import (
+    CloudRepoGitHubCredentials,
+)
+from proliferate.server.github.repos.service import get_repo_branches_for_credentials
 
 
 async def validate_cloud_copy_local_source(

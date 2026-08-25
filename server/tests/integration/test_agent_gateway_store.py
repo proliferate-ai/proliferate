@@ -10,7 +10,7 @@ from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.agent_gateway import AgentApiKey
+from proliferate.db.models.agent_gateway import AgentApiKey
 from proliferate.db.models.organizations import Organization
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.agent_gateway import DesiredAuthSource

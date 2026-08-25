@@ -16,7 +16,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from tests.helpers.worker_heartbeat import (
     authed_user as _authed_user,
     enroll_worker as _enroll_worker,
@@ -129,8 +129,8 @@ class TestHeartbeatServiceRevalidatesTheWorkerRow:
         client: AsyncClient,
         db_session: AsyncSession,
     ) -> None:
-        from proliferate.server.cloud.errors import CloudApiError
-        from proliferate.server.cloud.runtime_workers.service import record_heartbeat
+        from proliferate.server.api_errors import CloudApiError
+        from proliferate.server.seam.workers.service import record_heartbeat
 
         auth = await _authed_user(client, db_session, prefix="worker-snap-race-gone")
         enrolled = await _enroll_worker(client, auth, install_id="install-snap-race-gone")
@@ -153,8 +153,8 @@ class TestHeartbeatServiceRevalidatesTheWorkerRow:
         client: AsyncClient,
         db_session: AsyncSession,
     ) -> None:
-        from proliferate.server.cloud.errors import CloudApiError
-        from proliferate.server.cloud.runtime_workers.service import record_heartbeat
+        from proliferate.server.api_errors import CloudApiError
+        from proliferate.server.seam.workers.service import record_heartbeat
 
         auth = await _authed_user(client, db_session, prefix="worker-snap-race-revoked")
         enrolled = await _enroll_worker(client, auth, install_id="install-snap-race-revoked")
@@ -182,7 +182,7 @@ class TestHeartbeatServiceRevalidatesTheWorkerRow:
         auth = await _authed_user(client, db_session, prefix="worker-snap-race-live")
         enrolled = await _enroll_worker(client, auth, install_id="install-snap-race-live")
 
-        from proliferate.server.cloud.runtime_workers.service import record_heartbeat
+        from proliferate.server.seam.workers.service import record_heartbeat
 
         response = await record_heartbeat(db_session, worker_id=uuid.UUID(enrolled["workerId"]))
         assert response.launch_options_upload_allowed is False

@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from tests.integration.test_cloud_runtime_workers_api import (
     _authed_user,
     _desktop_enrollment_token,
@@ -259,7 +259,7 @@ class TestWorkerArtifactDownload:
         monkeypatch.setenv("WORKER_VERSION", "1.2.3")
 
     def _stub_probe(self, monkeypatch: pytest.MonkeyPatch, *, exists: bool) -> list[str]:
-        from proliferate.server.cloud.runtime_workers import service as service_module
+        from proliferate.server.seam.workers import service as service_module
 
         probed: list[str] = []
 
@@ -339,7 +339,7 @@ class TestRuntimeArtifactDownload:
         monkeypatch.setenv("RUNTIME_VERSION", "3.4.5")
 
     def _stub_probe(self, monkeypatch: pytest.MonkeyPatch, *, exists: bool) -> list[str]:
-        from proliferate.server.cloud.runtime_workers import service as service_module
+        from proliferate.server.seam.workers import service as service_module
 
         probed: list[str] = []
 

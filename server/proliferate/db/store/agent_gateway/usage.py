@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import AGENT_USAGE_IMPORT_CURSOR_ID
-from proliferate.db.models.cloud.agent_gateway import (
+from proliferate.db.models.agent_gateway import (
     AgentLlmUsageEvent,
     AgentLlmUsageImportCursor,
 )

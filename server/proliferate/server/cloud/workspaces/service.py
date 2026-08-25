@@ -33,9 +33,8 @@ from proliferate.integrations.anyharness.workspaces import (
     materialize_workspace_at_ref,
 )
 from proliferate.lib.infra.time.wall_clock import utcnow
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.materialization import paths as materialization_paths
 from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.server.cloud.materialization.locks import CloudMaterializationLockTimeout
@@ -46,8 +45,6 @@ from proliferate.server.cloud.materialization.materialize.repo_environment impor
     CloudRepoCheckoutError,
 )
 from proliferate.server.cloud.provisioning_observability import provisioning_phase
-from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
-from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
 from proliferate.server.cloud.workspaces.domain.naming import resolve_generated_branch_name
 from proliferate.server.cloud.workspaces.materializations.service import (
     validate_cloud_copy_local_source,
@@ -74,6 +71,9 @@ from proliferate.server.cloud.workspaces.provisioning import (
 from proliferate.server.cloud.workspaces.provisioning import (
     resolve_repo_root as _resolve_repo_root,
 )
+from proliferate.server.github.repo_authority import require_github_cloud_repo_authority
+from proliferate.server.github.repos.domain.github_credentials import CloudRepoGitHubCredentials
+from proliferate.server.github.repos.service import get_repo_branches_for_credentials
 
 logger = logging.getLogger("proliferate.cloud.workspaces")
 

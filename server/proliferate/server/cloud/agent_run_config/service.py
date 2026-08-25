@@ -19,6 +19,7 @@ from proliferate.db.store.cloud_agent_run_config import (
     CloudAgentRunConfigDefaultRecord,
     CloudAgentRunConfigRecord,
 )
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.agent_run_config.domain.resolve import (
     AgentRunConfigIssue,
     ResolvedAgentRunConfig,
@@ -29,7 +30,6 @@ from proliferate.server.cloud.agent_run_config.models import (
     AgentRunConfigCreateRequest,
     AgentRunConfigUpdateRequest,
 )
-from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.organizations.domain.policy import organization_admin_roles
 
 

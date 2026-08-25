@@ -116,8 +116,8 @@ domain/policy.py and declare it as an endpoint dependency."""
 why = """Authorization scattered through orchestration hides access decisions
 and makes an authentication change cross domain boundaries. Adoption is partial:
 Organization role gates in organizations/service.py, Cloud integration admin
-checks in cloud/integrations/service.py, and Agent Run Config visibility checks
-in cloud/agent_run_config/service.py are still inline, and permissions.py itself
+checks in integration_gateway/connections/service.py, and Agent Run Config
+visibility checks in cloud/agent_run_config/service.py are still inline, and permissions.py itself
 composes actor deps, stores, billing services, and request/RLS context — only
 auth/authorization.py is the dependency-free authorization leaf. No checker
 classifies an inline service check."""
@@ -227,7 +227,7 @@ why = """Domain-owned loops each bring their own restart, observability, and
 failure model, so work is neither uniformly restartable nor uniformly
 observable. Periodic process loops remain in billing/reconciler.py,
 anonymous_telemetry/worker.py, and three Agent Gateway loops in
-cloud/agent_gateway/worker.py, and background/enqueue_health.py is a direct
+agent_auth/worker.py, and background/enqueue_health.py is a direct
 background-store client. Closing this needs a deployed, behaviour-equivalent
 background plane before any checker can be turned on."""
 

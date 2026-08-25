@@ -10,7 +10,7 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_CLOSED_BY_WEBHOOK_KILLED,
     USAGE_SEGMENT_CLOSED_BY_WEBHOOK_TIMEOUT,
 )
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.webhooks import service as webhook_service
 from proliferate.server.cloud.webhooks.service import (
     _should_ignore_sandbox_event,

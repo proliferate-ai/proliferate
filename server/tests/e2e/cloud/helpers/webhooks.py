@@ -17,7 +17,7 @@ from proliferate.constants.cloud import (
     RepoEnvironmentKind,
 )
 from proliferate.db.models.billing import SandboxEventReceipt, UsageSegment
-from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
+from proliferate.db.models.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject

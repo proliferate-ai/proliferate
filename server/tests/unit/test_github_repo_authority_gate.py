@@ -19,9 +19,9 @@ from fastapi.testclient import TestClient
 
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.github_app import repo_authority
-from proliferate.server.cloud.github_app.api import router as github_app_router
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.github import repo_authority
+from proliferate.server.github.api import router as github_app_router
 
 _APP_FIELDS = {
     "github_app_id": "12345",

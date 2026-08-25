@@ -10,14 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.models.cloud.integrations import CloudIntegrationToolCallEvent
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.integrations import CloudIntegrationToolCallEvent
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
-from proliferate.server.cloud.integration_gateway.domain.tool_policy import (
+from proliferate.server.integration_gateway.gateway.domain.tool_policy import (
     SLACK_MUTATING_TOOL_NAMES,
 )
-from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
 from proliferate.lib.infra.encryption.json import encrypt_json
 from tests.integration.test_cloud_integration_gateway_api import (
     GATEWAY_URL,
@@ -125,7 +125,7 @@ async def test_known_slack_read_tool_executes_directly(
         return {"content": [{"type": "text", "text": "read result"}], "isError": False}
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         fake_call_tool,
     )
 
@@ -166,7 +166,7 @@ async def test_every_known_slack_mutation_returns_typed_approval_required(
         raise AssertionError("Slack mutation reached the upstream MCP")
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         unexpected_call_tool,
     )
 
@@ -235,7 +235,7 @@ async def test_unknown_or_inexact_slack_tool_fails_closed(
         raise AssertionError("Unknown Slack tool reached the upstream MCP")
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         unexpected_call_tool,
     )
 
@@ -265,7 +265,7 @@ async def test_unrecognized_policy_verdict_fails_closed(
     bearer = await _gateway_bearer(client, db_session, prefix="gw-policy-verdict")
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.decide_tool_call",
+        "proliferate.server.integration_gateway.gateway.service.decide_tool_call",
         lambda **_kwargs: object(),
     )
 
@@ -305,7 +305,7 @@ async def test_non_slack_provider_preserves_current_tool_execution(
         return {"content": [{"type": "text", "text": "ok"}], "isError": False}
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         fake_call_tool,
     )
 

@@ -26,7 +26,7 @@ from proliferate.constants.organizations import (
 )
 from proliferate.db import engine as engine_module
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.agent_gateway import LlmCreditGrant
+from proliferate.db.models.agent_gateway import LlmCreditGrant
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject

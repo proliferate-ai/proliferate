@@ -15,12 +15,12 @@ from proliferate.constants.organizations import (
     ORGANIZATION_STATUS_ACTIVE,
 )
 from proliferate.db.models.auth import OAuthAccount
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import github_app as github_app_store
 from proliferate.integrations.github import GitHubAppInstallationInfo
 from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthorization
-from proliferate.server.cloud.github_app import repo_authority
+from proliferate.server.github import repo_authority
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 

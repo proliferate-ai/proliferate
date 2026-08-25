@@ -22,7 +22,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.workspaces import service as workspaces_service
 from proliferate.server.cloud.workspaces.models import CreateCloudWorkspaceRequest
 

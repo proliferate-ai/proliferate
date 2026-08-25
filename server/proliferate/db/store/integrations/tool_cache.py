@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.integrations import (
+from proliferate.db.models.integrations import (
     CloudIntegrationAccount,
     CloudIntegrationToolSchemaCache,
 )

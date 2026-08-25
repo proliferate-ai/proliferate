@@ -1,6 +1,6 @@
 """Integration tests for the control-plane gateway verification loop (FR-3).
 
-Covers ``proliferate.server.cloud.agent_gateway.verification.run_verification``
+Covers ``proliferate.server.agent_auth.verification.run_verification``
 against a real Postgres session and a fake ``list_models``: the expected-set
 diff verdicts (ok / missing / extra), the config-unavailable degraded fallback,
 error-means-no-overwrite, key-material redaction, and the worker's flag gating.
@@ -24,8 +24,8 @@ from proliferate.db.models.organizations import Organization
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.integrations import litellm
-from proliferate.server.cloud.agent_gateway import verification
-from proliferate.server.cloud.agent_gateway.worker import start_agent_gateway_verification
+from proliferate.server.agent_auth import verification
+from proliferate.server.agent_auth.worker import start_agent_gateway_verification
 
 
 async def _create_enrollment(db_session: AsyncSession) -> uuid.UUID:

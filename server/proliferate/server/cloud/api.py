@@ -2,43 +2,45 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from proliferate.server.cloud.agent_gateway.api import (
+from proliferate.server.agent_auth.api import (
     gateway_account_router as agent_gateway_router,
 )
-from proliferate.server.cloud.agent_gateway.api import (
+from proliferate.server.agent_auth.api import (
     organization_router as agent_auth_organization_router,
 )
-from proliferate.server.cloud.agent_gateway.api import router as agent_auth_router
+from proliferate.server.agent_auth.api import router as agent_auth_router
 from proliferate.server.cloud.agent_run_config.api import router as agent_run_config_router
 from proliferate.server.cloud.cloud_sandboxes.api import router as cloud_sandboxes_router
-from proliferate.server.cloud.github_app.api import (
-    organization_router as github_app_organization_router,
-)
-from proliferate.server.cloud.github_app.api import router as github_app_router
 from proliferate.server.cloud.harness_launch_options.api import (
     router as harness_launch_options_router,
 )
-from proliferate.server.cloud.integration_gateway.api import router as integration_gateway_router
-from proliferate.server.cloud.integrations.action_approvals.api import (
-    router as integration_action_approvals_router,
-)
-from proliferate.server.cloud.integrations.api import admin_router as integrations_admin_router
-from proliferate.server.cloud.integrations.api import router as integrations_router
-from proliferate.server.cloud.repos.api import router as repos_router
 from proliferate.server.cloud.repositories.api import router as repositories_router
-from proliferate.server.cloud.runtime_workers.api import (
-    admin_router as runtime_workers_admin_router,
-)
-from proliferate.server.cloud.runtime_workers.api import (
-    router as runtime_workers_router,
-)
-from proliferate.server.cloud.runtime_workers.api import (
-    worker_router as runtime_worker_router,
-)
 from proliferate.server.cloud.secrets.api import router as secrets_router
 from proliferate.server.cloud.webhooks.api import router as webhooks_router
 from proliferate.server.cloud.workspaces.api import router as workspaces_router
 from proliferate.server.cloud.worktree_policy.api import router as worktree_policy_router
+from proliferate.server.github.api import (
+    organization_router as github_app_organization_router,
+)
+from proliferate.server.github.api import router as github_app_router
+from proliferate.server.github.repos.api import router as repos_router
+from proliferate.server.integration_gateway.connections.action_approvals.api import (
+    router as integration_action_approvals_router,
+)
+from proliferate.server.integration_gateway.connections.api import (
+    admin_router as integrations_admin_router,
+)
+from proliferate.server.integration_gateway.connections.api import router as integrations_router
+from proliferate.server.integration_gateway.gateway.api import router as integration_gateway_router
+from proliferate.server.seam.workers.api import (
+    admin_router as runtime_workers_admin_router,
+)
+from proliferate.server.seam.workers.api import (
+    router as runtime_workers_router,
+)
+from proliferate.server.seam.workers.api import (
+    worker_router as runtime_worker_router,
+)
 
 # Legacy cloud domains (commands, targets, claims, mobility, live sync,
 # runtime config, plugins, skills, slack) are parked: their tables were

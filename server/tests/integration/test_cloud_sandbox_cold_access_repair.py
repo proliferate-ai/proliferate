@@ -32,7 +32,7 @@ from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.store import cloud_sandboxes as sandbox_store
 from proliferate.db.store.cloud_sandboxes import cloud_sandbox_value
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.gateway import service as gateway_service
 from proliferate.server.cloud.materialization import operation, runner
 from proliferate.server.cloud.materialization import service as materialization_service

@@ -14,7 +14,7 @@ from sqlalchemy import Row, and_, delete, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
-from proliferate.db.models.cloud.integrations import (
+from proliferate.db.models.integrations import (
     CloudIntegrationAccount,
     CloudIntegrationDefinition,
     CloudIntegrationPolicy,

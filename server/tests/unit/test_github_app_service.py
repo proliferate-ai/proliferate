@@ -11,8 +11,8 @@ from proliferate.db.store import github_app as github_app_store
 from proliferate.db.store.github_app import GitHubAppInstallationOrganizationConflict
 from proliferate.integrations.github.app_installations import GitHubAppInstallationInfo
 from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthorization
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.github_app import service
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.github import service
 
 
 @dataclass(frozen=True)

@@ -16,7 +16,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_OWNER,
 )
 from proliferate.db.models.billing import BillingBudgetLimit, UsageSegment
-from proliferate.db.models.cloud.agent_gateway import AgentLlmUsageEvent
+from proliferate.db.models.agent_gateway import AgentLlmUsageEvent
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from tests.helpers.desktop_auth import mint_desktop_token_payload

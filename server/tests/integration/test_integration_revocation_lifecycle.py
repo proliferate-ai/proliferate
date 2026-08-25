@@ -15,13 +15,13 @@ from proliferate.db.models.cloud.integration_approvals import (
     CloudIntegrationActionApproval,
     CloudIntegrationActionApprovalEvent,
 )
-from proliferate.db.models.cloud.integration_authorization import (
+from proliferate.db.models.integration_authorization import (
     CloudIntegrationAuthorizationAttempt,
 )
-from proliferate.db.models.cloud.integration_revocation import (
+from proliferate.db.models.integration_revocation import (
     CloudIntegrationRevocationJob,
 )
-from proliferate.db.models.cloud.integrations import (
+from proliferate.db.models.integrations import (
     CloudIntegrationAccount,
     CloudIntegrationOAuthFlow,
     CloudIntegrationToolSchemaCache,
@@ -40,8 +40,8 @@ from proliferate.db.store.integrations.definition_security_revisions import (
 from proliferate.integrations.integration_oauth.errors import IntegrationOAuthProviderError
 from proliferate.lib.infra.encryption.fernet import encrypt_text
 from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
-from proliferate.server.cloud.integrations import revocation as revocation_service
-from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.server.integration_gateway.connections import revocation as revocation_service
+from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
 from tests.integration.test_cloud_integration_gateway_api import _authed_user
 
 
