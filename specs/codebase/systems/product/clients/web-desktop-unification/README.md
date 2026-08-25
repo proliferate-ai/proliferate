@@ -494,27 +494,24 @@ Desktop now mounts the product through the typed host boundary and, after the
 mechanical extraction, is a thin native host: the working product source moved
 into `@proliferate/product-client` while native UI, local runtime, files,
 credentials, SSH, updater, support, shared identity, navigation, storage, and
-telemetry all route through that boundary. See
-[the Desktop product move](migration/d1h.md) — PR #1215, merge `c6e094b41`.
+telemetry all route through that boundary (the Desktop product move — PR
+#1215, merge `c6e094b41`).
 
 The legacy Web replacement has also landed. The duplicate Web product is
 deleted and `apps/web` is now a thin browser host that mounts the same
 compiled ProductClient with `desktop: null`, keeping only browser-owned
 auth/callback, storage, links, clipboard, telemetry, deployment, and
-Cloud-client adapters. See [the legacy Web replacement](migration/d1i.md) —
-PR #1229, merge `d8ceabb4e`. The durable inputs and proofs across the
-extraction and replacement are:
-
-- [landed extraction proof](migration/d1g.md);
-- [application-entry contract](../../../../../FEATURE_DOCS/DESKTOP_HOST.md);
-- [Desktop product move record](migration/d1h.md);
-- [legacy Web replacement record](migration/d1i.md);
-- [binding legacy-Web bundle baseline](migration/web-bundle-baseline-c6e094b41.json); and
-- [phase-6 login budget candidate ledger](migration/login-runtime-budget-candidate.json).
+Cloud-client adapters (the legacy Web replacement — PR #1229, merge
+`d8ceabb4e`).
 
 Desktop and hosted Web were qualified against the shared implementation and
-cut over. The phase-6 first-load budget ruling and cutover gate are recorded
-in [the legacy Web replacement record](migration/d1i.md#phase-6--hosted-web-first-load-budget-wdu-1247-d1).
+cut over. The phase-6 first-load budget caps come from founder decision
+WDU-1247-D1 (2026-07-15) and are enforced by
+`scripts/measure-login-runtime-budget.mjs`. The migration's slice-level
+evidence records and bundle-baseline ledgers lived under `migration/` in this
+directory and are retained in git history; the durable application-entry
+contract remains
+[`specs/FEATURE_DOCS/DESKTOP_HOST.md`](../../../../../FEATURE_DOCS/DESKTOP_HOST.md).
 
 Related authoritative docs:
 

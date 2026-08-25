@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Retained runtime /login budget collector + fail-closed gate (phase-6 cutover).
 //
-// WHY A RUNTIME COLLECTOR (not the static manifest walker). The binding legacy
-// baseline was produced by `scripts/collect-web-bundle-baseline.mjs`, which
-// walks the Vite manifest's STATIC import closure. For the replacement browser
+// WHY A RUNTIME COLLECTOR (not a static manifest walker). The binding legacy
+// baseline was produced by a retired collector (in git history) that walked
+// the Vite manifest's STATIC import closure. For the replacement browser
 // host that tool is not a faithful gate: the manifest still associates
 // side-effect assets (e.g. `ding-*.mp3`) with `index.html`, so it would count
 // bytes the browser never requests on `/login`. The phase-6 contract requires
@@ -404,7 +404,7 @@ const ledger = {
   compressionMetric: "gzip (Node zlib, level 9) for js/css/svg/other; emitted bytes for fonts/images/audio",
   caps: { ...CAPS, source: "founder decision WDU-1247-D1 (2026-07-15), gzip-9 bytes" },
   legacyBaseline: {
-    source: "specs/codebase/systems/product/clients/web-desktop-unification/migration/web-bundle-baseline-c6e094b41.json",
+    source: "legacy-Web bundle baseline ledger, captured on base c6e094b41 (retired doc; in git history)",
     jsGzipBytes: 471212,
     cssGzipBytes: 24226,
     note: "recorded context; the enforceable gate is the founder caps above",

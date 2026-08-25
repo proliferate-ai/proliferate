@@ -108,7 +108,6 @@ REQUIRED_READMES = (
     "specs/codebase/systems/product/chat/README.md",
     "specs/codebase/systems/product/clients/README.md",
     "specs/codebase/systems/product/clients/web-desktop-unification/README.md",
-    "specs/codebase/systems/product/clients/web-desktop-unification/migration/README.md",
     "specs/codebase/systems/product/engagement/README.md",
     "specs/codebase/systems/product/onboarding/README.md",
     "specs/codebase/systems/product/organizations/README.md",
