@@ -30,14 +30,14 @@ function toListItem(row: WorkflowDefinitionListRowV2): WorkflowMainListItem {
 }
 
 /**
- * Narrows the shared list response down to gen-2 rows, in the order the
- * server returned them. The list route puts `schemaVersion` on the row
- * itself (see `WorkflowDefinitionListRowV2`'s doc comment in the SDK) — a
- * plain data check here keeps this domain module import-clean (Cloud SDK
- * *types* only). `isWorkflowDefinitionV2(row.definition)` is a distinct,
- * runtime-value narrowing the SDK exports for reading a row's nested v2
- * fields (nodes/edges/...); this view never touches those, so it doesn't
- * need it.
+ * Projects the list response's rows (all gen-2 since the gen-1 lane was
+ * deleted; the `schemaVersion === 2` filter is defensive narrowing over the
+ * SDK's loose row type, not a mixed-version split), in the order the server
+ * returned them. A plain data check here keeps this domain module
+ * import-clean (Cloud SDK *types* only). `isWorkflowDefinitionV2
+ * (row.definition)` is a distinct, runtime-value narrowing the SDK exports
+ * for reading a row's nested v2 fields (nodes/edges/...); this view never
+ * touches those, so it doesn't need it.
  */
 export function selectWorkflowV2DefinitionRows(
   rows: readonly WorkflowDefinitionListRowV2[],

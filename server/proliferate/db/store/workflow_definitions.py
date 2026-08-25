@@ -104,7 +104,7 @@ async def create_workflow_definition(
     default_repo_config_id: UUID | None,
     inputs_json: list[dict[str, object]],
     stages_json: list[dict[str, object]],
-    schema_version: int = 1,
+    schema_version: int,
     definition_json: dict[str, object] | None = None,
 ) -> WorkflowDefinitionSnapshot:
     now = utcnow()

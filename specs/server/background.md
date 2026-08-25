@@ -174,11 +174,6 @@ The bridge from the durable outbox to the broker.
   operational snapshots may expose counts and ages only; they never expose
   identifiers, request payloads, responses, or credentials.
 
-Managed Workflow relay telemetry includes per-family pending depth and oldest
-age plus current queued/delivering, accepted-nonterminal, pending-cancel,
-unreachable, target-lost, and projection-conflict aggregates. Worker attempt
-metrics contain only the fixed operation and a bounded safe code.
-
 ## `background/tasks/<area>.py`
 
 Thin task wrappers — the boundary between the broker and a domain.
