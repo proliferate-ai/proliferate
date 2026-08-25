@@ -39,7 +39,7 @@ At the end:
 
 - Desktop and Web use the same pages, routes, components, hooks, stores,
   product workflows, Cloud SDK wiring, and AnyHarness SDK wiring.
-- Desktop keeps local workspaces, local AnyHarness, SSH, and native behavior.
+- Desktop keeps local workspaces, local AnyHarness, and native behavior.
 - Web exposes the same product for managed-cloud work and never pretends it can
   access the user's local machine.
 - Host differences are passed through one typed `ProductHost`.
@@ -259,8 +259,8 @@ recent selections.
 
 The migration does not require preserving old Web storage or migrating
 existing preference values between storage backends. Login credentials,
-provider keys, SSH credentials, and PKCE secrets never use this interface.
-Desktop-native persisted state such as SSH profiles or updater state remains
+provider keys, and PKCE secrets never use this interface.
+Desktop-native persisted state such as updater state remains
 inside its Desktop owner.
 
 ### Links and routing
@@ -410,7 +410,7 @@ safe and scriptable:
 - Verify managed-cloud workspaces and gateway AnyHarness behavior through the
   same shared implementation on Desktop and Web.
 - Verify Desktop still supports local work and Web contains no Tauri/native
-  imports and starts no local-runtime, local-workspace, or SSH behavior.
+  imports and starts no local-runtime or local-workspace behavior.
 - Verify auth start/callback/logout, inbound links, billing returns, and the
   external URL/configuration producers used by hosted Web.
 - Enforce the recorded Web first-load performance budget before cutover.
@@ -457,7 +457,7 @@ not a hosted-Web cutover requirement.
   requires review rather than a silent budget increase.
 - Cloud create/open/resume, chat, transcript, files, settings, billing,
   integrations, and workflows use the shared implementation.
-- Web has no local AnyHarness discovery or direct SSH behavior.
+- Web has no local AnyHarness discovery.
 - External auth/billing return URLs are verified against the deployed host.
 
 ## Completion criteria
@@ -466,7 +466,7 @@ The migration is complete when:
 
 - Desktop and Web import and mount the same compiled ProductClient.
 - Desktop preserves its current visual and behavioral product baseline.
-- Desktop retains local AnyHarness, local workspace, SSH, updater, worker,
+- Desktop retains local AnyHarness, local workspace, updater, worker,
   local automation, and native support behavior through the typed bridge.
 - Web receives the same managed-cloud product experience and exposes no fake
   local capability.
@@ -493,7 +493,7 @@ native child-WebView capability have been removed.
 Desktop now mounts the product through the typed host boundary and, after the
 mechanical extraction, is a thin native host: the working product source moved
 into `@proliferate/product-client` while native UI, local runtime, files,
-credentials, SSH, updater, support, shared identity, navigation, storage, and
+credentials, updater, support, shared identity, navigation, storage, and
 telemetry all route through that boundary. See
 [the Desktop product move](migration/d1h.md) — PR #1215, merge `c6e094b41`.
 

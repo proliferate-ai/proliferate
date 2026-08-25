@@ -667,7 +667,7 @@ the host seam: `host.desktop.files.readDroppedPaths()` reads the macOS drag
 pasteboard right after the DOM drop (`dragDropEnabled` stays `false`; native
 Tauri drag-drop would swallow DOM drops app-wide). The resolver is only wired
 for local-runtime workspaces, mirroring `resolveRuntimeTargetForWorkspace`:
-`cloud:*` sandboxes and `target:*` SSH targets cannot read this machine's
+`cloud:*` sandboxes cannot read this machine's
 paths and keep the byte-upload-only behavior, as do the web host and any drag
 whose pasteboard carries no filenames or whose shape does not correspond to
 the dropped FileList (`droppedPathsMatchFiles`: every File must consume a

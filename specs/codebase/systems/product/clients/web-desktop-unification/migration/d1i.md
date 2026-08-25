@@ -73,7 +73,7 @@ changes. Static adapters keep stable identity across replacements.
 | ProductHost group | Web implementation | Notes |
 | --- | --- | --- |
 | `surface` | `"web"` | `document.documentElement.dataset.proliferateClient = "web"` at bootstrap. |
-| `desktop` | **always `null`** | No local runtime, workspace, SSH, updater, worker, native menu, or native filesystem lifecycle mounts. Proven by `web-host.test.tsx`. |
+| `desktop` | **always `null`** | No local runtime, workspace, updater, worker, native menu, or native filesystem lifecycle mounts. Proven by `web-host.test.tsx`. |
 | `auth` | `createWebAuthOperations` (`browser/auth/web-auth-transport.ts`) | `startLogin`/`finishLogin`/`restoreSession`/`logout`/`cancel`; consolidates `web-auth-flow.ts` + `pkce.ts` (PKCE/cookie/CSRF/session stay browser-owned). Anonymous methods: `github`, `google`, `sso`. |
 | `cloud.client` | `createWebCloudClient` + `getWebSandboxGatewayAccessToken` | Reuses the exact client `WebCloudRoot` built; arms the sandbox-gateway token provider with the web session accessor. Constructs no second client. |
 | `deployment` | `webEnv.apiBaseUrl` | No `switchDeployment` on Web. |

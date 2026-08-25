@@ -414,7 +414,7 @@ UUID, workspace, exact optional `modelId`, complete generic `controlValues`,
 subagent preference, and replacement target before sending `POST /v1/sessions`.
 The ledger stores intent, not availability or frozen defaults. This seam is
 enabled only for the bundled local runtime,
-which deploys in lockstep with ProductClient; cloud and SSH runtimes can lag and
+which deploys in lockstep with ProductClient; cloud runtimes can lag and
 retain the pre-existing server-minted create behavior until they advertise an
 equivalent capability. Session create reloads current target launch options,
 exact-validates the selection, and atomically stores `ResolvedLaunchIntent`;

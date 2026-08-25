@@ -153,7 +153,7 @@ lookup, inspection, target discovery, open, or reveal operation. A locator
 never carries nullable workspace and absolute authorities at the same time.
 
 Workspace filesystem provenance comes from the resolved runtime target:
-`local` maps to `desktop-local`, while Cloud and SSH-target runtimes map to
+`local` maps to `desktop-local`, while Cloud runtimes map to
 `remote`. A successfully fetched cached Cloud gateway is also authoritative
 remote evidence. Host surface, workspace-id spelling, inventory rows, and
 equal-looking roots are not provenance. Resolution pending and rejection stay
@@ -284,7 +284,7 @@ header rendered once per frame, never duplicated per source/rendered/diff
 subview, containing (left to right, via `FileViewerToolbar`):
 
 - **Breadcrumbs**: a leading literal `Files` crumb (never the workspace's
-  absolute/home/SSH/companion root) that calls `onRevealFilesPath("")` to
+  absolute/home/companion root) that calls `onRevealFilesPath("")` to
   reveal the 02A tree root, followed by normalized workspace-relative
   directory crumbs (each opens the dock and reveals that directory) and an
   inert final basename crumb. Long paths truncate/scroll within the flex
