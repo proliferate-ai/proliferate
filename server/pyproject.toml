@@ -22,7 +22,6 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "cryptography>=49.0.0",
     "python-multipart>=0.0.32",
-    "python-dateutil>=2.9.0",
     "pyyaml>=6.0.3",
     "rfc8785>=0.1.4",
     "e2b>=2.37.1",

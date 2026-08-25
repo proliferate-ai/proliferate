@@ -17,12 +17,8 @@ HTTP server.
 ## Files
 
 - `fork-request.json` — body shape for `POST /session/{id}/fork`.
-- `auth-header-example.json` — Basic-auth header shape with a FAKE password
-  (`OPENCODE_SERVER_PASSWORD`, username defaults to `opencode`).
 - `message-list-response.json` — representative `GET /session/{id}/message`
   response (ascending array of `{info, parts}`).
-- `qualification-registry-entry.json` — shape of one row in
-  `catalogs/agents/qualifications/targeted-fork-sidedoor.json`.
 
 ## Vendor hazard (why pre-validation is mandatory)
 
