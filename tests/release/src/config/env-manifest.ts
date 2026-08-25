@@ -348,21 +348,6 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["sandbox"],
   },
   {
-    name: "RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME",
-    description:
-      "Confirmation switch (set to `1`) asserting that the candidate API under test runs with " +
-      "PROLIFERATE_SUPERVISOR_OWNED_RUNTIME=1, so a Worker heartbeat returns desiredTopology=" +
-      "supervisor_owned and the Worker writes the durable mailbox update request rather than swapping " +
-      "the binary itself (server default is ON since 2026-07-26; this switch still confirms the " +
-      "candidate under test actually has it enabled). T4-RUNTIME-1 requires the supervisor-owned topology to " +
-      "observe the contract's Worker-mailbox -> Supervisor-activation flow; absent -> blocked (the " +
-      "legacy direct-Worker path would contradict the contract).",
-    whereItLives:
-      "Set by the dispatch that deploys the candidate API with the supervisor-owned runtime flag enabled.",
-    secret: false,
-    lanes: ["sandbox"],
-  },
-  {
     name: "RELEASE_E2E_SELFHOST_PROVISION",
     description:
       "Opt-in switch (set to `1`) authorizing the self-hosting scenarios (SELFHOST-INSTALL-1 cold boot, " +
