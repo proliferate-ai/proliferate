@@ -212,7 +212,7 @@ Source: [Worker lifecycle guide](../worker.md) "Launch Policy", `server/prolifer
 
 On desktop that owner is the app itself (runtime and worker are bundled sidecars). On managed cloud, the supervisor owns both children and executes all swaps; the worker never downloads, replaces, kills, or rolls back binaries — it only writes mailbox requests.
 
-Enforced by: config schema (managed cloud never emits the legacy in-place swap gates), supervisor code structure (worker has no download/swap/kill logic on the mailbox path).
+Enforced by: worker code structure (the worker has no download/swap/kill/exec logic at all — the legacy in-place swap paths were deleted; the mailbox write is its only convergence surface).
 
 Failure mode: If the worker were allowed to kill/swap processes it doesn't own, you'd have two competing update executors racing each other, violating the immutability invariant below.
 
@@ -290,7 +290,7 @@ Failure mode: Self-updating the supervisor would require it to restart itself wh
 
 | Approach | Why It Failed | When |
 | --- | --- | --- |
-| Worker-owned in-place binary swap (legacy) | Violated "single update owner" — the worker doesn't own the process tree but was killing/restarting AnyHarness. Replaced by mailbox-based convergence where the supervisor (the actual parent) owns all swaps. | 2026-07-26 (supervisor mailbox proven, legacy path deprecated) |
+| Worker-owned in-place binary swap (legacy) | Violated "single update owner" — the worker doesn't own the process tree but was killing/restarting AnyHarness. Replaced by mailbox-based convergence where the supervisor (the actual parent) owns all swaps. Deleted (with the worker self-`exec` update and the D5 bridge) by the cull sweep's delete-worker-legacy track once the fleet was fully supervisor-owned. | 2026-07-26 (supervisor mailbox proven); deleted 2026-08-25 |
 | Separate catalog document push | Would break catalog immutability — pins could change mid-session. Would also require reasoning about two versions (runtime + catalog) and handling their divergence/rollback independently. Binary-only transport eliminated the problem. | Before 2026-07 (agent-distribution design) |
 | Automatic re-enrollment on credential failure | Security risk: a compromised worker could re-authenticate indefinitely. Enrollment is one-time bootstrap; revocation must stick. | Ruled in worker identity design |
 | Random/UUID mailbox request IDs | Would queue unbounded duplicates for a stuck heartbeat. Deterministic IDs (hash of component + version) make replays idempotent. | Mailbox protocol design (2026-07) |
@@ -298,13 +298,7 @@ Failure mode: Self-updating the supervisor would require it to restart itself wh
 
 ## Gaps
 
-### G1: Legacy convergence paths still exist
-
-`proliferate-worker/src/anyharness_update.rs` (worker-owned pgrep/kill/swap of the runtime), the worker's self-`exec` update ([`self_update.rs`](../../anyharness/crates/proliferate-worker/src/self_update.rs)), and the D5 bridge that migrates legacy sandboxes still exist. All of it deletes once the fleet is fully supervisor-owned and the bridge window closes.
-
-**Issue:** Follow-up after supervisor fleet convergence is verified.
-
-### G2: Binary swaps don't wait for live sessions
+### G1: Binary swaps don't wait for live sessions
 
 The supervisor kills and restarts the runtime even mid-conversation. Desktop updates happen at app startup when no sessions exist, and in cloud the disruption window is one process restart on a fleet that updates at most daily. Deferring swaps around long-running work is a known UX gap to revisit, not an accident.
 
@@ -315,13 +309,13 @@ The supervisor kills and restarts the runtime even mid-conversation. Desktop upd
 Live proofs (both PASSED on real E2B sandboxes 2026-07-26):
 
 - **UPDATE proof**: A fresh supervisor-owned sandbox converging pins 0.3.47→0.3.48 end to end, this mailbox consumer included, zero rollbacks, ~75s convergence.
-- **D5 BRIDGE proof**: In-place migration of an already-running legacy Worker's process tree onto Supervisor via `supervisor_bridge`, not a fresh provision — sandbox `iwwvadhffzxoora56f437`, ~2.5s, no destroy/recreate.
+- **D5 BRIDGE proof**: In-place migration of an already-running legacy Worker's process tree onto Supervisor via the one-time bridge, not a fresh provision — sandbox `iwwvadhffzxoora56f437`, ~2.5s, no destroy/recreate. (The bridge code was deleted after full fleet convergence; the proof stands as the record that the migration completed.)
 
 Focused tests:
 
 - `proliferate-supervisor/src/update/activate.rs` (inline state-machine tests)
 - `proliferate-worker/src/supervisor_bridge/mailbox.rs` (deterministic request ID, idempotency)
 - `proliferate-worker/src/identity/` (enrollment precedence)
-- `proliferate-worker/src/process_lock.rs` (exclusive flock, bridge hand-off)
+- `proliferate-worker/src/process_lock.rs` (exclusive flock)
 - `server/tests/unit/test_worker_heartbeat.py`
 - `anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs` (invalid catalog fails build)

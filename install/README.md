@@ -42,11 +42,10 @@ managed-cloud launch is unconditionally Supervisor-owned: it launches
 Supervisor detached, and Supervisor starts AnyHarness and Worker itself. The
 legacy direct-nohup'd AnyHarness plus a separately launched Worker sidecar was
 deleted 2026-07-26 once the live E2B N-1→N update proof and the D5 BRIDGE
-proof both passed. `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME=false` does **not**
-restore that legacy launch path — there is no launch-topology rollback lever
-anymore. The flag now only suppresses the D5 `desiredTopology` heartbeat
-signal that tells an already-running legacy worker (from before the cutover)
-to bridge onto a Supervisor; rolling back the launch topology itself means
+proof both passed. There is no launch-topology lever of any kind: the
+`PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` flag and the D5 `desiredTopology`
+heartbeat signal it gated were deleted with the Worker-side bridge once the
+fleet was fully supervisor-owned; rolling back the launch topology means
 rolling back the server deploy. See
 [`specs/FEATURE_DOCS/MANAGED_RUNTIME.md`](../specs/FEATURE_DOCS/MANAGED_RUNTIME.md#launch-topology-by-surface)
 for the current launch flow and

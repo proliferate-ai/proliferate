@@ -40,15 +40,14 @@ catalog deletion lands, a legacy catalog version). Liveness is derived
 at read time from `status = 'online'` and `last_seen_at` within 90 seconds; the
 application does not eagerly write `offline`.
 
-Two convergence topologies exist. On a **supervisor-owned target**
-(`supervisor_update_request_dir` set; the server's
-`supervisor_owned_runtime` provisioning), the Worker only *writes* a durable
+One convergence topology exists. On a **supervisor-owned target**
+(`supervisor_update_request_dir` set), the Worker only *writes* a durable
 update request into `.proliferate/supervisor/updates`; Proliferate
 Supervisor consumes it (verify → download → re-verify → stage → atomic
 activate → dependency-ordered restart → health-gate → rollback) and writes a
-result file beside it. On a **legacy target**, the Worker still performs the
-in-place swap itself (deprecated, deletion-pending). Triage must first
-establish which topology the target runs, from the Worker config key names.
+result file beside it. A Worker config with no mailbox dir (desktop)
+converges nothing — the legacy Worker-owned in-place swaps were deleted by
+the cull sweep's delete-worker-legacy track.
 
 Fresh enrollment also writes the integration-gateway credential file. Restart
 from durable identity does not recreate a missing gateway file, and an invalid
@@ -150,9 +149,9 @@ sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=.*/\1/p' \
 sqlite3 -readonly "$HOME/.proliferate/worker/worker.sqlite3" \
   'select worker_id, updated_at from identity where id = 1;'
 sqlite3 -readonly "$HOME/.proliferate/worker/worker.sqlite3" \
-  'select converged_version, failed_pin, updated_at from anyharness_update where id = 1;'
-# (anyharness_update is legacy-topology state only; on a supervisor-owned
-#  target inspect the mailbox instead:)
+  'select converged_version, updated_at from anyharness_update where id = 1;'
+# (converged_version is the last Supervisor activation the Worker reconciled;
+#  the pending work itself lives in the mailbox:)
 ls -la "$HOME/.proliferate/supervisor/updates" 2>/dev/null
 tail -n 200 "$HOME/proliferate-worker.log"
 test -e "$HOME/.proliferate/anyharness/integration-gateway.json" && \
