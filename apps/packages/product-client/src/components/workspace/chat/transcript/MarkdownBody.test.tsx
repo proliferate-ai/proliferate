@@ -8,6 +8,8 @@ import {
 } from "./ChatContentSearchContext";
 import {
   MarkdownBody,
+  useMarkdownFencedCodeStart,
+  useMarkdownStreamingSource,
   type MarkdownLinkRenderInput,
 } from "./MarkdownBody";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "#product/config/transcript-link-styles";
@@ -189,4 +191,79 @@ describe("MarkdownBody presentation", () => {
     expect(html).toContain(CHAT_TRANSCRIPT_LINK_CLASS);
     expect(html).not.toContain("hover:text-foreground");
   });
+
+  it("exposes the streaming render copy to fenced code renderers", () => {
+    const source = "```ts\nconst ready = true;\n```";
+    const html = renderMarkdown(source, {
+      isStreaming: true,
+      renderCodeBlock: () => createElement(StreamingSourceProbe),
+    });
+
+    expect(html).toContain('data-markdown-streaming="true"');
+    expect(html).toContain(`data-markdown-source="${escapeHtmlAttr(source)}"`);
+  });
+
+  it("exposes settled markdown as a non-streaming render copy", () => {
+    const source = "```ts\nconst ready = true;\n```";
+    const html = renderMarkdown(source, {
+      renderCodeBlock: () => createElement(StreamingSourceProbe),
+    });
+
+    expect(html).toContain('data-markdown-streaming="false"');
+    expect(html).toContain(`data-markdown-source="${escapeHtmlAttr(source)}"`);
+  });
+
+  it("publishes the stabilized render copy into fenced-code context", () => {
+    const source = "```ts\nconst ready = true;\n```\n\nOpen [config](/tmp/project/config";
+    const html = renderMarkdown(source, {
+      isStreaming: true,
+      renderCodeBlock: () => createElement(StreamingSourceProbe),
+    });
+
+    expect(html).toContain('data-markdown-streaming="true"');
+    expect(html).toContain("Open [config](/tmp/project/config)");
+    expect(html).not.toMatch(/data-markdown-source="[^"]*Open \[config\]\(\/tmp\/project\/config"/);
+  });
+
+  it("exposes fenced-code start position to fenced code renderers", () => {
+    const first = "```mermaid\nflowchart LR\n  A --> B\n```";
+    const second = "```mermaid\nflowchart LR\n  A --> B";
+    const html = renderMarkdown(`${first}\n\n${second}`, {
+      isStreaming: true,
+      renderCodeBlock: () => createElement(FencedCodeStartProbe),
+    });
+
+    expect(html).toMatch(/data-start-line="[1-9]\d*"/);
+    expect(html).toMatch(/data-start-offset="\d+"/);
+    const lines = [...html.matchAll(/data-start-line="(\d+)"/g)].map((match) => Number(match[1]));
+    const offsets = [...html.matchAll(/data-start-offset="(\d+)"/g)].map((match) => Number(match[1]));
+    expect(lines).toHaveLength(2);
+    expect(offsets).toHaveLength(2);
+    expect(lines[0]).toBeLessThan(lines[1]);
+    expect(offsets[0]).toBeLessThan(offsets[1]);
+  });
 });
+
+function StreamingSourceProbe() {
+  const streaming = useMarkdownStreamingSource();
+  return createElement("span", {
+    "data-markdown-streaming": streaming.isStreaming ? "true" : "false",
+    "data-markdown-source": streaming.source,
+  });
+}
+
+function FencedCodeStartProbe() {
+  const start = useMarkdownFencedCodeStart();
+  return createElement("span", {
+    "data-start-line": start.startLine == null ? "" : String(start.startLine),
+    "data-start-offset": start.startOffset == null ? "" : String(start.startOffset),
+  });
+}
+
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}

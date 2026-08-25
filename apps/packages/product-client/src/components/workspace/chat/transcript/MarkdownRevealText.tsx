@@ -11,7 +11,7 @@ export const MarkdownRevealContext =
 
 export interface HastNode {
   position?: {
-    start: { offset?: number };
+    start: { offset?: number; line?: number };
     end: { offset?: number };
   };
   children?: HastNode[];

@@ -119,7 +119,9 @@ apps/packages/product-client/src/components/workspace/chat/transcript/transcript
   ProductClient renderers injected at TranscriptItemBlock, ClaudePlanCard, and
   ConnectedProposedPlanItem: only workspace file references render FilePathLink
   mentions; external/web link hrefs defer to MarkdownBody's default anchor
-  (ProviderLinkMention); fenced code renders shiki-highlighted HTML in the shell
+  (ProviderLinkMention); fenced mermaid renders as a diagram when the fence is
+  complete and mermaid can draw it, otherwise shiki-highlighted HTML in the
+  shell; other fenced languages stay on that highlighted shell
 
 apps/packages/product-client/src/components/workspace/chat/transcript/ProviderLinkMention.tsx
   shared inline provider-icon link mention + URL/host classification
@@ -261,6 +263,19 @@ Rules:
   anchor's color/underline.
 - Web falls back to unhighlighted (identically styled) code blocks; shiki stays
   out of the web bundle.
+- Completed fenced `mermaid` blocks render as diagrams through `MermaidDiagram`,
+  dispatched from `renderTranscriptCodeBlock` and `renderDesktopCodeBlock`.
+  Incomplete streaming mermaid fences and invalid or unsupported syntax stay on
+  `CodeBlock`. A closed mermaid fence keeps its diagram while a later mermaid
+  fence is still open, including when both blocks have the same source. Copy
+  always writes the original mermaid source, not SVG.
+- Diagram SVG is sanitized with DOMPurify's SVG profile (`USE_PROFILES` svg and
+  svgFilters, `FORBID_TAGS` `script` and `foreignObject`) plus the transcript
+  URL policy that blocks `javascript:`, `data:`, and `vbscript:`. Mermaid is
+  initialized only by one module-level renderer, with `startOnLoad: false`,
+  `securityLevel: "strict"`, `htmlLabels: false`, and
+  `suppressErrorRendering: true`. Parse and render failures stay on `CodeBlock`
+  and are not reported to Sentry or diagnostics. Observability delta: none.
 
 ## Contextual Assistant-Text Actions
 
