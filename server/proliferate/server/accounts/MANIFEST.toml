@@ -13,5 +13,4 @@ public_surface = [
 
 allowed_importers = [
     "main.py",
-    "organizations",
 ]
