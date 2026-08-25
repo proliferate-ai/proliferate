@@ -1,0 +1,18 @@
+# System manifest (Organization Standard rule 2) — validated by
+# scripts/check_manifests.py; rules PROD-MANIFEST-001/002 in
+# lints/product/manifests.toml. allowed_importers is measured reality, not
+# permission-by-intention: the checker fails on drift in either direction.
+
+name = "devtools"
+spec = "specs/server/README.md"
+owns = "Local development helper routes; never mounted for hosted deployments."
+
+public_surface = [
+    "proliferate.server.devtools.api",
+    "proliferate.server.devtools.service",
+    "proliferate.server.devtools.models",
+]
+
+allowed_importers = [
+    "main.py",
+]

@@ -1050,3 +1050,243 @@ rule = "AH-STORE-4"
 path = "anyharness/crates/anyharness-lib/src/live/workflows/mod.rs"
 site = "mod lifecycle_tests::crate::domains::workspaces::store::WorkspaceStore"
 reason = "the WorkflowManager constructs actors and heals the boot fence from the same three stores the actor uses; same gen-2 ADR ruling and same capability-trait target as actor.rs"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/activity/feeds.rs"
+site = "mod tests::crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/cowork/delegation/service.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/materialization/service_git_tests.rs"
+site = "crate::domains::repo_roots::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/materialization/service_git_tests.rs"
+site = "crate::domains::workspaces::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/materialization/workspace_service_git_tests.rs"
+site = "fn omitted_destination_crash_retry_adopts_the_recorded_checkout::crate::domains::workspaces::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/mobility/runtime/mod.rs"
+site = "crate::domains::reviews::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/mobility/runtime/mod.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/mobility/service/archive.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/mobility/service/archive/tests.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/mobility/service/export.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs"
+site = "mod tests::crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/service/mod.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs"
+site = "crate::domains::plans::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/deletion_tests.rs"
+site = "crate::domains::cowork::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/deletion_tests.rs"
+site = "crate::domains::reviews::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/service/mod.rs"
+site = "crate::domains::workspaces::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/session_extension.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs"
+site = "mod tests::crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs"
+site = "mod tests::crate::domains::terminals::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/archive/mod.rs"
+site = "mod tests::crate::domains::repo_roots::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/checkpoints/mod.rs"
+site = "mod tests::crate::domains::repo_roots::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/mod.rs"
+site = "fn delete_workspace_scoped_graph_rows_in_tx::crate::domains::terminals::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/purge.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/mod.rs"
+site = "mod purge_tests::crate::domains::cowork::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/mod.rs"
+site = "mod purge_tests::crate::domains::reviews::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/mod.rs"
+site = "mod purge_tests::crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/mod.rs"
+site = "mod purge_tests::crate::domains::terminals::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/purge_checkpoint_tests.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/purge_harness.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/purge_tests.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/options_tests.rs"
+site = "crate::domains::repo_roots::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/options_tests.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/options_tests.rs"
+site = "crate::domains::terminals::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/restore_tests.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/test_support.rs"
+site = "crate::domains::repo_roots::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/tests.rs"
+site = "crate::domains::repo_roots::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
+
+[[exception]]
+rule = "AH-FENCE-002"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/tests.rs"
+site = "crate::domains::sessions::store"
+reason = "wave-0 fence seed: pre-existing cross-domain store reach measured at fence introduction (2026-08-25); cleanup target for the system re-fence, not permission for new code"
