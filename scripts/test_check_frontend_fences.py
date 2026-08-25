@@ -112,6 +112,22 @@ class EdgeBaselineTest(FenceTestCase):
         self.assertEqual(result.violations, [])
         self.assertEqual(result.edges_seen, set())
 
+    def test_build_output_directory_is_not_a_top(self) -> None:
+        """src/generated/ exists only on a built checkout; it must never
+        become a fence target, or the graph would differ between a developer
+        machine and CI."""
+        result = self.scan(
+            {
+                "lib/domain/agents/registry.ts": (
+                    'import registry from "../../../generated/agent-registry.json?raw";\n'
+                ),
+                "generated/agent-registry.json": "{}\n",
+            },
+            baseline=set(),
+        )
+        self.assertEqual(result.violations, [])
+        self.assertEqual(result.edges_seen, set())
+
 
 class SelfPackageExportTest(FenceTestCase):
     def test_host_export_subpath_counts_as_an_edge(self) -> None:

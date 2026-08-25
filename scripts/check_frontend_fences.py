@@ -48,6 +48,11 @@ INTERNAL_SUBPATH = "internal/"
 # (src-root files are a known limit: the fence governs top-level directories
 # only, and src/App.tsx + src/ProductClient.tsx sit above them).
 SELF_EXPORT_TOPS = {"host": "host", "infra": "lib"}
+# Gitignored build output under src/ (written by
+# apps/packages/product-client/scripts/copy-product-client-assets.mjs). It is
+# data, not a source directory, and it exists only on a built checkout — a
+# top set that included it would differ between a developer machine and CI.
+BUILD_OUTPUT_DIRS = {"generated"}
 SOURCE_SUFFIXES = {".ts", ".tsx"}
 
 RULES = lint_records.load("frontend")
@@ -133,7 +138,11 @@ def collect_violations(
         raise SystemExit(f"{CHECKER}: missing package tree {src}")
     if baseline is None:
         baseline = load_edge_baseline(base)
-    tops = {entry.name for entry in src.iterdir() if entry.is_dir()}
+    tops = {
+        entry.name
+        for entry in src.iterdir()
+        if entry.is_dir() and entry.name not in BUILD_OUTPUT_DIRS
+    }
     violations: list[Violation] = []
     edges_seen: set[tuple[str, str]] = set()
 

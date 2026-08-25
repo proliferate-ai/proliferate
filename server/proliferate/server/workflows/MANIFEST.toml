@@ -15,7 +15,5 @@ public_surface = [
 ]
 
 allowed_importers = [
-    "background",
     "main.py",
-    "meta.py",
 ]
