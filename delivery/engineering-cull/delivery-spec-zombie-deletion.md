@@ -13,7 +13,7 @@ new machinery of any kind.
 | Workflow | Evidence |
 | --- | --- |
 | `cloud-tests.yml` | Dispatch-only; its `daytona` matrix legs invoke Makefile targets that do not exist and demand a `DAYTONA_API_KEY` — "daytona" appears nowhere else in the repository. The e2b legs' targets (`make test-cloud-e2b`, `test-agent-runtime-cloud-e2b`) remain reachable by hand via the Makefile. |
-| `cloud-live-webhook.yml` | Dispatch-only. Pre-step performed: `guides/**` grep found no references; the only documentation reference to either workflow was the delivery README's workflow-inventory table. |
+| `cloud-live-webhook.yml` | Dispatch-only. Pre-step performed: `guides/**` grep for the filename found no references; adversarial review then caught one reference by display name (`Cloud Live Webhook` in `guides/deploying/hosted.md`), removed in this PR. The delivery README's workflow-inventory rows were the only other documentation references. |
 
 ## Scope — explicitly kept
 
@@ -27,6 +27,8 @@ new machinery of any kind.
 
 - `specs/codebase/systems/engineering/delivery/README.md`: the two deleted
   workflows' inventory rows removed (same-PR docs law).
+- `guides/deploying/hosted.md`: the `Cloud Live Webhook` bullet removed
+  (referenced the deleted workflow by display name).
 
 ## Non-goals
 
