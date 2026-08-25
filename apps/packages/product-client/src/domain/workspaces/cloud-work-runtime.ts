@@ -40,6 +40,9 @@ export function recentWorkRuntimeLocationForWorkspace(
     case "self_hosted":
       return "self_hosted_remote";
     case undefined:
+    default:
+      // Stored rows may carry sandbox types the current union no longer
+      // names (e.g. pre-cull "ssh"); classify them as unknown, not undefined.
       return "unknown";
   }
 }
