@@ -10,8 +10,8 @@ reason = "managed sandbox GitHub grant read path extends existing identity store
 
 [[max_lines]]
 path = "server/proliferate/config.py"
-max_lines = 623
-reason = "managed Cloud, GitHub App, and Workflow flags extend the centralized deployment settings surface; split pending; +7: publisher-lane agent_catalog_artifact_base_url/agent_catalog_channel settings (Update Flow ADR, FR-1); +6: FR-3 adds the two gateway-verification settings (flag + interval)"
+max_lines = 606
+reason = "managed Cloud, GitHub App, and Workflow flags extend the centralized deployment settings surface; split pending; +7: publisher-lane agent_catalog_artifact_base_url/agent_catalog_channel settings (Update Flow ADR, FR-1); +6: FR-3 adds the two gateway-verification settings (flag + interval); -17: supervisor_owned_runtime deleted with the D5 bridge (cull sweep, delete-worker-legacy)"
 
 [[max_lines]]
 path = "server/proliferate/db/models/cloud/agent_gateway.py"

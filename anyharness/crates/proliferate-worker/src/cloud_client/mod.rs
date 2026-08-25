@@ -293,6 +293,34 @@ impl CloudClient {
     }
 }
 
+/// The `<os>-<arch>` artifact target this Worker resolves download
+/// coordinates for. Fails on platforms the downloads CDN never publishes.
+pub(crate) fn artifact_target() -> Result<String, WorkerError> {
+    let unsupported = || WorkerError::ArtifactTargetUnsupported {
+        os: std::env::consts::OS,
+        arch: std::env::consts::ARCH,
+    };
+    let os = match std::env::consts::OS {
+        "linux" => "linux",
+        "macos" => "macos",
+        _ => return Err(unsupported()),
+    };
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
+        "aarch64" => "aarch64",
+        _ => return Err(unsupported()),
+    };
+    Ok(format!("{os}-{arch}"))
+}
+
+/// The published `.sha256` sits next to the binary, so its URL is the binary's
+/// resolved URL with the checksum suffix appended. Deriving it (rather than
+/// re-resolving the pinned-vs-fallback path via a second redirect) guarantees
+/// the checksum and binary come from the same directory — and thus version.
+pub(crate) fn checksum_url_for(binary_url: &str) -> String {
+    format!("{binary_url}.sha256")
+}
+
 /// An artifact's CDN coordinates resolved without downloading the body: the
 /// post-redirect URL and its `Content-Length`. Used by the supervisor-owned
 /// Worker to stamp an update request the Supervisor later downloads.

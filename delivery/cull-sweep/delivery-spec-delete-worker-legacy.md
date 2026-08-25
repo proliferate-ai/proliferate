@@ -54,7 +54,11 @@ Rust (`anyharness/crates/proliferate-worker`):
   heartbeats and syncs but never converges anything.
 - Relocate the shared helpers the mailbox path consumes:
   `running_anyharness_version` → `versions.rs`; `artifact_target` /
-  `checksum_url_for` → private helpers in `mailbox.rs`.
+  `checksum_url_for` → `cloud_client` (crate-private), beside
+  `resolve_artifact_location`, which already owns the artifact-identity
+  rationale they implement. (The draft named `mailbox.rs`; landing them
+  there pushed it past the PROD-SIZE-1 line cap, and the cloud-client home
+  is the documented owner of artifact identity.)
 - Trim `WorkerConfig`: delete `self_update_enabled`,
   `anyharness_update_enabled`, `anyharness_binary_path`,
   `anyharness_launcher_path`, `anyharness_workdir`, `supervisor_binary_path`,
