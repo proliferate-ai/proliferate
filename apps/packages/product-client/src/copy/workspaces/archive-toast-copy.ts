@@ -25,28 +25,28 @@ export const ARCHIVE_TOAST_COPY = {
   archiveFailedDescription:
     "Couldn't save the snapshot. Your files are untouched, but running sessions were stopped. Try again.",
   unbornHeadDescription:
-    "Make a first commit before archiving — there's no commit to anchor the snapshot to.",
+    "Make a first commit before archiving. There's no commit to anchor the snapshot to.",
   busyDescription: "Another operation is still running. Try again in a moment.",
   unarchiveFailedDescription:
-    "Something went wrong while restoring. Your archived snapshot is intact — try again.",
+    "Something went wrong while restoring. Your archived snapshot is intact, so try again.",
   hollowCheckoutDescription:
     "This workspace's folder isn't its own git checkout, so a snapshot would capture the wrong repository.",
   gitLockedDescription: (file: string) =>
     `A git lock file is blocking the snapshot (${file}). If no git command is running, remove it and try again.`,
   headMismatchDescription:
-    "The restored workspace doesn't match the archived snapshot. Your snapshot is fully preserved — unarchive again to resolve.",
+    "The restored workspace doesn't match the archived snapshot. Your snapshot is fully preserved, so unarchive again to resolve.",
 
   dirtySubmoduleDescription:
-    "Some submodules were left untouched — they weren't captured in the snapshot.",
+    "Some submodules were left untouched. They weren't captured in the snapshot.",
   embeddedRepoDescription:
-    "An embedded repository was left untouched — it wasn't captured in the snapshot.",
+    "An embedded repository was left untouched. It wasn't captured in the snapshot.",
   partialCaptureUntrackedDescription:
     "Some untracked files couldn't be captured and were left out of the snapshot.",
   partialCaptureTrackedDescription:
     "Some tracked changes couldn't be captured and were left out of the snapshot.",
   abortedGitOperationDescription:
     "An in-progress git operation was aborted so the snapshot could be taken safely.",
-  noSnapshotDescription: "No prior snapshot was found — the workspace was restored as-is.",
+  noSnapshotDescription: "No prior snapshot was found. The workspace was restored as-is.",
   historyIncompleteDescription:
     "Some history couldn't be restored. The workspace is usable, but a few commits may be missing.",
 } as const;

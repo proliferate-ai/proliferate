@@ -164,7 +164,7 @@ export const HARNESS_PANE_COPY = {
   allModelsNotReadYetSuffix: "Retry to check now.",
   allModelsRetry: "Retry",
   allModelsSeedDescription:
-    "Showing shipped catalog models — not yet verified by a probe.",
+    "Showing shipped catalog models. Not yet verified by a probe.",
   // Diagnostics-only provenance (attestation + install identity) — never a gate.
   allModelsProvenance: (line: string) => `Observed by ${line}`,
   allModelsModes: (modes: readonly string[]) => `Modes: ${modes.join(", ")}`,
