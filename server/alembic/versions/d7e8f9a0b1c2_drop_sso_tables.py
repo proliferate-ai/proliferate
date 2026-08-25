@@ -13,7 +13,7 @@ the database before running migrations as a standing deploy-time step — that
 snapshot is the only recovery path for the data.
 
 Revision ID: d7e8f9a0b1c2
-Revises: e7a9c2d41f56
+Revises: b7d3f1e9a2c4
 Create Date: 2026-08-25 00:00:00.000000
 
 """
@@ -25,7 +25,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d7e8f9a0b1c2"
-down_revision: str | None = "e7a9c2d41f56"
+down_revision: str | None = "b7d3f1e9a2c4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
