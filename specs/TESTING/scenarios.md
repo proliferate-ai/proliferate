@@ -35,52 +35,11 @@ Steps: log in in context A; revoke the session (settings UI or API); context A
 performs any authenticated call.
 Assert: the call fails and the UI returns to signed-out state.
 
-### T2-AUTH-3: SSO OIDC round-trip (mock IdP)
-Preconditions: mock OIDC container (e.g. dex) running; org admin creates an
-`sso_connection` (scope `organization`, protocol `oidc`, `jit_policy:
-create_member`, `default_role: member`) via
-`POST /organizations/{id}/sso/connections` → `.../enable`.
-Note (survey): SSO config is **admin-role gated only — no plan/billing gate
-exists in code**. No Stripe precondition.
-Steps: signed-out browser → `GET /sso/discover` path via the login UI →
-`POST /web/sso/start` → mock IdP auto-approves identity
-`newuser@allowed.test` → callback.
-Assert: `sso_identity` row created; user lands signed-in; membership created
-with `default_role`; re-login with the same identity reuses the user (no dup).
-Negatives: identity with email on a non-configured domain → discover finds no
-connection; `jit_policy: disabled` + unknown user → enumerated error, not 500;
-tampered `state` on callback → rejected.
-
 ### T2-AUTH-4: login-method availability seam
 Assert: with Google/GitHub client env unset, `provider_enabled()` hides those
 buttons; with env set, buttons render. (Real Google/GitHub round-trips are
 tier 3 — their endpoints are not overridable, so they cannot be mocked
 without product changes we are not making.)
-
-### T2-AUTH-5: org SSO login entry points (PR #1048)
-The user-facing ways *in* to org SSO: a slug login page (`/login`,
-`/login/<slug>`), the cold-login "Sign in with SSO" affordance, and
-`/join/<orgId>` web sign-in. All resolve an org **slug or id** to that org's
-SSO connection via `GET /auth/sso/discover`, then hand off to the existing
-start flow. This is the **entry-point seam**, distinct from the OIDC
-round-trip (T2-AUTH-3): discover reads the connection's stored state and never
-contacts the IdP, so the seam is fully assertable without one.
-Assert (server seam, driven directly): unknown slug AND an existing org with
-no SSO both return the identical generic answer (`enabled:false`,
-`reason:"not_available"`, no ids) so slugs can't be cycled to enumerate orgs;
-a slug (and an org id, the `/join` input) resolving to an ENABLED connection
-returns exactly the start ids (`organizationId`, `connectionId`, `protocol`,
-`displayName`). Setup seeds an enabled org-scope OIDC `sso_connection` row
-directly (same spirit as the invitation-expiry direct-DB seed) since discover
-never calls the IdP.
-Assert (desktop web build): the `OrgSsoLoginLink` affordance on `/login`
-expands to a slug field; submitting an unavailable slug (unknown, or an
-existing org with no SSO) surfaces the one generic error and does not start
-SSO.
-Surface note: the tier-2 stack boots the **desktop web build** (`apps/desktop`),
-so the `apps/web` pages (`LoginSsoPage`, the auth-screen link, `/join`) are not
-rendered here; their logic sits on the same discover seam these cases pin. The
-positive kickoff redirect and the full round-trip are T2-AUTH-3's.
 
 ---
 
@@ -401,11 +360,6 @@ canonical migration map.
 (`SINGLE_ORG_MODE`/`PROLIFERATE_SINGLE_ORG_MODE`) wins in both directions.
 (config.py:376-379.)
 
-### T1-SH-2: SSO env alias equivalence (unit)
-Every SSO setting carries exactly the two-form alias pair, and the bare
-`SSO_*` form populates the field identically to `PROLIFERATE_SSO_*`. Guards the
-docs' canonical bare-form promise; a new SSO var can't ship with only one alias.
-
 ### T1-SH-3: `/meta` wire contract (unit)
 Golden field names AND order on `MetaResponse` and the live JSON. `/meta` is
 what the connect dialog's trust screen renders; a rename/reorder breaks every
@@ -465,17 +419,9 @@ boots `DEBUG=true`, under which this posture is not reachable — debug mode
 intentionally waives the template requirement).
 `tests/intent/specs/cloud-provisioning-gating.spec.ts`.
 
-### T2-SH-7: SSO discover truthfulness (extends T2-AUTH-5) + gateway model eligibility
-Two self-hosting-relevant additions to the existing entry-point-seam spec and
-a new runtime-dependent spec, respectively:
-- `tests/intent/specs/sso-entry-points.spec.ts` gained a negative case: a
-  connection whose `status` is `'enabled'` but whose OIDC config drifted
-  incomplete afterward (an admin edit `enable_organization_sso_connection`
-  itself cannot produce, since it re-tests live endpoints before flipping
-  status) must still report `enabled:false` with the specific
-  `oidc_configuration_error` reason — never a false positive. Seeded via a new
-  `seedIncompleteEnabledOrgSsoConnection` helper (`tests/intent/stack/seed.ts`).
-- `tests/intent/specs/gateway-eligibility.spec.ts` (new): after pushing a
+### T2-SH-7: gateway model eligibility
+One runtime-dependent spec:
+- `tests/intent/specs/gateway-eligibility.spec.ts`: after pushing a
   gateway-only agent-auth state (no native credential), session creation
   REJECTS an ID absent from the target's current `HarnessLaunchOptions` and
   ACCEPTS an exact observed ID, proven against the real AnyHarness HTTP API

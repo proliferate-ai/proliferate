@@ -73,7 +73,7 @@ def test_every_migrated_orm_wall_clock_default_remains_a_deferred_owner_referenc
         ("cloud_integration_revocation_job", "updated_at", "default"),
     }
     assert lifecycle_references.issubset(wall_clock_references)
-    assert len(wall_clock_references) == 224
+    assert len(wall_clock_references) == 216
     assert other_references == [
         ("cloud_integration_action_approval", "updated_at", "onupdate"),
         ("cloud_integration_action_approval_event", "updated_at", "onupdate"),

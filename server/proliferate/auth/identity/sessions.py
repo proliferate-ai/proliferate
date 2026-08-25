@@ -26,11 +26,6 @@ from proliferate.auth.models import (
     UserRead,
 )
 from proliferate.auth.pkce import verify_pkce
-from proliferate.auth.sso.branding import (
-    sso_brand_label_for_connection,
-    sso_brand_label_from_subject,
-)
-from proliferate.auth.sso.deployment_config import deployment_sso_connection
 from proliferate.auth.tokens import (
     REFRESH_TOKEN_AUDIENCE,
     claimed_token_generation,
@@ -43,9 +38,7 @@ from proliferate.constants.auth import (
     REFRESH_TOKEN_LIFETIME_SECONDS,
 )
 from proliferate.db.models.auth import User
-from proliferate.db.store import auth_sso as sso_store
 from proliferate.db.store.auth import consume_auth_code
-from proliferate.db.store.auth_sso_records import SsoIdentityRecord
 from proliferate.db.store.users import bump_user_token_generation
 
 WEB_REFRESH_COOKIE = "proliferate_web_refresh"
@@ -225,18 +218,6 @@ async def auth_viewer_payload(
         )
         for identity in identities
     ]
-    for identity in await sso_store.list_sso_identities_for_user(db, user_id=user.id):
-        display_name, brand_label = await _sso_identity_labels(db, identity)
-        linked.append(
-            AuthLinkedProvider(
-                provider="sso",
-                connected=True,
-                account_email=identity.email,
-                account_id=identity.provider_subject,
-                display_name=display_name,
-                brand_label=brand_label,
-            )
-        )
     connected_providers = {identity.provider for identity in identities}
     linked.extend(
         AuthLinkedProvider(
@@ -265,31 +246,6 @@ async def auth_viewer_payload(
         availability,
         auth_password_credential(user),
     )
-
-
-async def _sso_identity_labels(
-    db: AsyncSession,
-    identity: SsoIdentityRecord,
-) -> tuple[str, str | None]:
-    if identity.connection_id is not None:
-        connection = await sso_store.get_sso_connection(
-            db,
-            connection_id=identity.connection_id,
-            include_deleted=True,
-        )
-        if connection is not None:
-            return (
-                connection.display_name,
-                sso_brand_label_for_connection(connection, identity.provider_subject),
-            )
-    if identity.connection_key == "deployment":
-        connection = deployment_sso_connection()
-        if connection is not None:
-            return (
-                connection.display_name,
-                sso_brand_label_for_connection(connection, identity.provider_subject),
-            )
-    return "SSO", sso_brand_label_from_subject(identity.provider_subject)
 
 
 def auth_session_response(

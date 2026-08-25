@@ -4,7 +4,6 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import { useAuditedAuth } from "#product/hooks/auth/facade/use-audited-auth";
 import { writePendingOrganizationJoinTarget } from "#product/lib/access/persistence/organization-join-target";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
-import { canFallbackToStandardInviteSignIn } from "#product/lib/domain/organizations/join-auth";
 
 function organizationJoinTargetFromSearch(search: string): string | null {
   const params = new URLSearchParams(search);
@@ -41,19 +40,8 @@ export function useOrganizationJoinAuthLaunch() {
     }
 
     startedForOrganizationRef.current = joinOrganizationId;
-    void startLogin({
-      kind: "sso",
-      organizationId: joinOrganizationId,
-    }).catch(async (error: unknown) => {
-      if (!canFallbackToStandardInviteSignIn(error)) {
-        return;
-      }
-
-      try {
-        await startLogin({ kind: "github" });
-      } catch {
-        // AuthShell remains visible and lets the user retry manually.
-      }
+    void startLogin({ kind: "github" }).catch(() => {
+      // AuthShell remains visible and lets the user retry manually.
     });
   }, [authStatus, joinOrganizationId, startLogin]);
 }

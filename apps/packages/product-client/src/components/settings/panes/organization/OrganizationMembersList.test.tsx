@@ -9,12 +9,11 @@ describe("buildMemberRows", () => {
     const rows = buildMemberRows(
       [
         member({
-          email: "sso@example.com",
+          email: "password@example.com",
           authMethods: [
             {
-              provider: "sso",
-              label: "SSO",
-              brandLabel: "Google SSO",
+              provider: "password",
+              label: "Email/password",
             },
           ],
         }),
@@ -26,9 +25,8 @@ describe("buildMemberRows", () => {
               label: "GitHub",
             },
             {
-              provider: "sso",
-              label: "Okta SSO",
-              brandLabel: "Okta SSO",
+              provider: "google",
+              label: "Google",
             },
           ],
         }),
@@ -36,9 +34,9 @@ describe("buildMemberRows", () => {
       [],
     );
 
-    expect(rows[0]?.authLabel).toBe("Google SSO");
-    expect(rows[0]?.searchText).toContain("google sso");
-    expect(rows[1]?.authLabel).toBe("GitHub, Okta SSO");
+    expect(rows[0]?.authLabel).toBe("Email/password");
+    expect(rows[0]?.searchText).toContain("email/password");
+    expect(rows[1]?.authLabel).toBe("GitHub, Google");
   });
 });
 

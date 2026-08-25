@@ -72,7 +72,7 @@ violation is caught before merge rather than silently landing.
 
 The launcher migrates the selected profile database before starting the apps.
 It reserves a Mobile Web port but does not start Expo. It also does not start
-Celery workers or the optional Stripe, LiteLLM, tunnel, native-Mobile, or SSO
+Celery workers or the optional Stripe, LiteLLM, tunnel, or native-Mobile
 flows unless their focused command or flag is used.
 
 ## Existing Postgres And Redis
@@ -175,7 +175,7 @@ The launcher reads `.env`, `.env.local`, `server/.env`, and
 [`../../specs/developing/reference/env-vars.yaml`](../../specs/developing/reference/env-vars.yaml) to find the owner of
 an environment variable.
 
-The full state, port, database, identity, SSO, and gateway contract is in
+The full state, port, database, identity, and gateway contract is in
 [`dev-profiles.md`](dev-profiles.md).
 
 ## Common Modes
@@ -196,7 +196,7 @@ when the test is complete.
 
 | Task | Runbook |
 | --- | --- |
-| Understand profile ownership, ports, identity, SSO, or LiteLLM | [`dev-profiles.md`](dev-profiles.md) |
+| Understand profile ownership, ports, identity, or LiteLLM | [`dev-profiles.md`](dev-profiles.md) |
 | Choose a frontend-only, backend-session, or GitHub auth layer | [`feature-worktree-auth.md`](feature-worktree-auth.md) |
 | Exercise local billing and Stripe webhooks | [`stripe-local-testing.md`](stripe-local-testing.md) |
 | Manually smoke the GitHub App credential path | [`github-app-manual-qa.md`](github-app-manual-qa.md) |

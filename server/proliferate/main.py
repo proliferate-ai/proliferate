@@ -39,7 +39,6 @@ from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.accounts.desktop.api import router as desktop_router
 from proliferate.server.accounts.identity.api import router as identity_auth_router
-from proliferate.server.accounts.sso.api import router as sso_auth_router
 from proliferate.server.ai_magic.api import router as ai_magic_router
 from proliferate.server.analytics.api import router as analytics_router
 from proliferate.server.anonymous_telemetry.api import router as anonymous_telemetry_router
@@ -80,7 +79,6 @@ from proliferate.server.organizations.registration_api import router as self_reg
 from proliferate.server.organizations.registration_pages import (
     router as registration_pages_router,
 )
-from proliferate.server.organizations.sso.api import router as organization_sso_router
 from proliferate.server.organizations.usage.api import router as organization_usage_router
 from proliferate.server.release import resolve_server_release_id
 from proliferate.server.setup.api import router as first_run_setup_router
@@ -323,10 +321,6 @@ def create_app() -> FastAPI:
 
     # ── Auth: Desktop PKCE flow ──
     app.include_router(desktop_router, prefix=f"{api_prefix}/auth", tags=["auth"])
-    # SSO routes use literal `sso`/`oidc` path segments and must be registered before
-    # the generic identity `/{surface}/{provider}/start` and `/{provider}/callback`
-    # routes, which would otherwise shadow them (capturing `sso`/`oidc` as `{provider}`).
-    app.include_router(sso_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
     app.include_router(github_app_callback_router, prefix=f"{api_prefix}/auth", tags=["auth"])
     app.include_router(github_app_setup_callback_router, prefix=api_prefix, tags=["auth"])
     app.include_router(identity_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
@@ -366,11 +360,6 @@ def create_app() -> FastAPI:
     app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])
     app.include_router(organizations_router, prefix=f"{api_prefix}/v1", tags=["organizations"])
-    app.include_router(
-        organization_sso_router,
-        prefix=f"{api_prefix}/v1",
-        tags=["organizations"],
-    )
     app.include_router(
         organization_usage_router,
         prefix=f"{api_prefix}/v1",

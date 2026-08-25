@@ -82,17 +82,13 @@ function memberAuthLabel(methods: OrganizationMemberAuthMethodRecord[] | null | 
 
 function authMethodLabel(method: OrganizationMemberAuthMethodRecord): string {
   const label = method.label.trim();
-  if (method.provider === "sso" && label.toLowerCase() === "sso" && method.brandLabel) {
-    return method.brandLabel;
-  }
-  return label || method.brandLabel?.trim() || authProviderFallbackLabel(method.provider);
+  return label || authProviderFallbackLabel(method.provider);
 }
 
 function authProviderFallbackLabel(provider: string): string {
   if (provider === "github") return "GitHub";
   if (provider === "google") return "Google";
   if (provider === "apple") return "Apple";
-  if (provider === "sso") return "SSO";
   return provider.toUpperCase();
 }
 

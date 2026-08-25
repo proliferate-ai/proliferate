@@ -3,7 +3,6 @@ import {
   Archive,
   KeyRound,
   LifeBuoy,
-  Link2,
   Palette,
   SlidersHorizontal,
 } from "#product/primitives/icons/core";
@@ -100,7 +99,6 @@ const SETTINGS_NAV_ICONS = {
   "organization-members": Users,
   "organization-model-policy": Brain,
   "organization-secrets": KeyRound,
-  "organization-sso": Link2,
   "personal-secrets": KeyRound,
   "repo-actions": MousePointerClick,
   "repo-environment": KeyRound,

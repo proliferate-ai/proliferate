@@ -8,7 +8,6 @@ from typing import Any
 
 import httpx
 
-from proliferate.auth.sso.policy import email_domain
 from proliferate.config import settings
 from proliferate.constants.organizations import PUBLIC_EMAIL_DOMAINS
 
@@ -21,6 +20,12 @@ logger = logging.getLogger(__name__)
 
 def _customerio_enabled() -> bool:
     return bool(settings.customerio_site_id and settings.customerio_api_key)
+
+
+def email_domain(email: str | None) -> str | None:
+    if not email or "@" not in email:
+        return None
+    return email.rsplit("@", 1)[1].strip().lower().removeprefix("@")
 
 
 def derive_email_type(email: str | None) -> str:

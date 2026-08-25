@@ -689,8 +689,7 @@ OAuth case proves:
   its role; and
 - an uninvited identity is denied.
 
-New password, GitHub, and Google accounts require invitations. Only an
-explicitly configured SSO JIT policy may bypass that rule.
+New password, GitHub, and Google accounts require invitations.
 
 ### Self-host cases
 

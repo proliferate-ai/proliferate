@@ -9,19 +9,14 @@ max_lines = 695
 reason = "managed sandbox GitHub grant read path extends existing identity store + SG10 review: explicit crypto-secret calls retain the original readable grant flow instead of line-neutral compression"
 
 [[max_lines]]
-path = "server/proliferate/config.py"
-max_lines = 616
-reason = "managed Cloud and GitHub App flags extend the centralized deployment settings surface; split pending; +7: publisher-lane agent_catalog_artifact_base_url/agent_catalog_channel settings (Update Flow ADR, FR-1); +6: FR-3 adds the two gateway-verification settings (flag + interval); -2: gen-1 workflow flags deleted (cull-sweep Track B)"
-
-[[max_lines]]
 path = "server/proliferate/db/models/cloud/agent_gateway.py"
 max_lines = 551
 reason = "C-train composition: C-2 agent_auth_delivery_ack model joins the B/D cut; agent_gateway_enrollment_key model added for per-(subject,harness) scoped virtual keys (B2), then the agent_model_snapshot re-key (B4) documented why its scope carries NO unique key and what that costs the reader (the active row is plural in principle, so reads tie-break on id); AgentApiKey gains a kind column (D1); a module split is deferred to the model-taxonomy pass rather than done mid-stack; typed-config write gate loosens ck_agent_auth_selection_api_key_shape with a why-not-tighter comment; SG12 keeps the base docstring intact while the direct wall-clock owner import adds one line ; +8: FR-3 adds the three nullable gateway-verification columns (status, delta, verified_at) on the enrollment_key model"
 
 [[max_lines]]
 path = "server/proliferate/db/store/organizations.py"
-max_lines = 777
-reason = "D1 adds get_default_organization_for_user (earliest active membership = signup placement org, the v1 payer law); SG09 review restores the collision-ladder and race-backstop rationale; SSO JIT membership persistence is relocated from auth_sso into its Organization store owner; split pending with the org-store taxonomy pass"
+max_lines = 721
+reason = "D1 adds get_default_organization_for_user (earliest active membership = signup placement org, the v1 payer law); SG09 review restores the collision-ladder and race-backstop rationale; SSO cull removed JIT membership persistence and slug login resolution; split pending with the org-store taxonomy pass"
 
 [[max_lines]]
 path = "server/proliferate/server/accounts/identity/api.py"
@@ -107,11 +102,6 @@ reason = "billing error normalization characterizes both snapshot-read and verdi
 path = "server/tests/integration/test_cloud_workspace_materialization_service.py"
 max_lines = 1190
 reason = "durable materialization ledger service suite (intent/report/unlink transitions, redaction, primary selection, recorded-sandbox reconciliation, repo-less workspace, install-id redaction, generation replay/crash-retry/terminal-reintent) + PR 5 exact-ref create coverage; new fail-closed source cases split to test_cloud_workspace_exact_ref_source.py; + lost-workspace rematerialization rejection (C7)"
-
-[[max_lines]]
-path = "server/tests/integration/test_organizations_api.py"
-max_lines = 624
-reason = "added admin-only coverage for GET .../invitations"
 
 [[max_lines]]
 path = "server/tests/integration/test_stripe_webhook_drop_visibility.py"

@@ -18,7 +18,7 @@ describe("describeAuthIssue", () => {
   });
 
   it("describes an unknown access denial generically", () => {
-    expect(describeAuthIssue({ kind: "access_denied", code: "sso_jit_disabled" })).toBe(
+    expect(describeAuthIssue({ kind: "access_denied", code: "some_future_code" })).toBe(
       "This account isn't allowed to sign in here.",
     );
   });

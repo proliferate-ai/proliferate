@@ -13,9 +13,6 @@ import {
   type UseConnectServerResult,
 } from "#product/hooks/auth/workflows/use-connect-server";
 import {
-  canFallbackToStandardInviteSignIn,
-} from "#product/lib/domain/organizations/join-auth";
-import {
   clearPendingOrganizationJoinTarget,
   readPendingOrganizationJoinTarget,
   writePendingOrganizationJoinTarget,
@@ -214,10 +211,10 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
 
     void (async () => {
       // Methods-aware sign-in: a password-only server (self-hosted with no
-      // GitHub OAuth app) has no SSO/GitHub browser flow to launch, so leave
+      // GitHub OAuth app) has no GitHub browser flow to launch, so leave
       // the user on the normal sign-in surface with guidance instead of firing
       // a dead redirect. Cloud advertises github, so it keeps today's behavior;
-      // a fetch failure also falls through to the SSO/GitHub path.
+      // a fetch failure also falls through to the GitHub path.
       try {
         const methods = await getDesktopAuthMethods(apiBaseUrl);
         if (methods.passwordLogin && !methods.github) {
@@ -227,31 +224,16 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
           return;
         }
       } catch {
-        // Ignore — fall through to the SSO/GitHub launch (today's behavior).
+        // Ignore — fall through to the GitHub launch (today's behavior).
       }
 
-      setStatusMessage("Opening organization sign-in to accept this invitation.");
+      setStatusMessage("Opening sign-in to accept this invitation.");
       try {
-        await startLogin({
-          kind: "sso",
-          organizationId: transientJoinOrganizationId,
-        });
-      } catch (error: unknown) {
-        if (!canFallbackToStandardInviteSignIn(error)) {
-          setStatusMessage(
-            "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
-          );
-          return;
-        }
-
-        setStatusMessage("Opening sign-in to accept this invitation.");
-        try {
-          await startLogin({ kind: "github" });
-        } catch {
-          setStatusMessage(
-            "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
-          );
-        }
+        await startLogin({ kind: "github" });
+      } catch {
+        setStatusMessage(
+          "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
+        );
       }
     })();
   }, [

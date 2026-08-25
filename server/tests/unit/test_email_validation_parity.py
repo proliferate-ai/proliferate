@@ -16,7 +16,7 @@ The fix is two-sided:
   serialize.
 - ``UserRead.email`` is widened from the inherited ``EmailStr`` to plain
   ``str`` so it always serializes, regardless of how a row reached the table
-  (OAuth/SSO provider-supplied emails, or any row already in the database from
+  (OAuth provider-supplied emails, or any row already in the database from
   before this fix existed).
 
 These tests assert that agreement directly: creating an account with a
@@ -74,7 +74,7 @@ def test_normalize_account_email_accepts_real_shaped_domains(email: str) -> None
 
 # ---------------------------------------------------------------------------
 # Read path: UserRead must serialize any row already in the table, including
-# rows that did not go through normalize_account_email (OAuth/SSO-provisioned,
+# rows that did not go through normalize_account_email (OAuth-provisioned,
 # or written before this fix existed).
 # ---------------------------------------------------------------------------
 
@@ -103,7 +103,7 @@ async def test_get_users_me_never_500s_for_reserved_tld_account(client, test_eng
     ``normalize_account_email`` now refuses to create a ``.test`` account
     through the product's own registration surfaces, so this simulates the
     one remaining way such a row can exist -- provisioned directly (as an
-    OAuth/SSO arrival would be, or as a row already in the database from
+    OAuth arrival would be, or as a row already in the database from
     before this fix existed) -- and asserts the read side still never 500s.
     """
     email = "someone@example.test"

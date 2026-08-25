@@ -77,7 +77,6 @@ class OrganizationResponse(OrganizationBaseModel):
 class OrganizationMemberAuthMethodResponse(OrganizationBaseModel):
     provider: str
     label: str
-    brand_label: str | None = Field(default=None, alias="brandLabel")
 
 
 class OrganizationMemberResponse(OrganizationBaseModel):
@@ -182,7 +181,6 @@ def member_response(record: MemberRecord) -> OrganizationMemberResponse:
             OrganizationMemberAuthMethodResponse(
                 provider=method.provider,
                 label=method.label,
-                brand_label=method.brand_label,
             )
             for method in record.auth_methods
         ],

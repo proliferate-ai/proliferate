@@ -204,7 +204,7 @@ do not turn the migration into a separate hardening program.
 ## Authentication
 
 The visible authentication experience is shared. ProductClient owns the auth
-gate, method selection, password forms, provider/SSO buttons, callback status
+gate, method selection, password forms, provider buttons, callback status
 presentation, and transition into the product.
 
 The hosts expose the same product-level operations: restore a session, start
@@ -476,7 +476,7 @@ The migration is complete when:
   connected Desktop/Web-only rules remain in `src/lib/domain/**`.
 - ProductClient contains no raw Tauri access, browser auth transport, or
   vendor-specific host implementation.
-- Connected Cloud billing, organization SSO, cloud-environment, and workflow
+- Connected Cloud billing, cloud-environment, and workflow
   surfaces live in ProductClient's component, access, workflow, and domain
   owners rather than a separate package.
 - The old Web product implementation and embedded browser are gone.

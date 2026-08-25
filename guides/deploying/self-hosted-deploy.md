@@ -246,7 +246,7 @@ bundle-only download. Working from a monorepo checkout instead?
      password remain available without it);
    - a GitHub App for cloud-workspace repository access;
    - `E2B_API_KEY` and `E2B_TEMPLATE_NAME` together for E2B cloud workspaces;
-   - the LiteLLM gateway, SSO, or invitation email independently.
+   - the LiteLLM gateway or invitation email independently.
    The complete keys and pairing rules are in
    [.env.production.example](../../server/deploy/.env.production.example)
    and [env-vars.yaml](../../specs/developing/reference/env-vars.yaml).

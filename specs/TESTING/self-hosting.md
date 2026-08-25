@@ -27,7 +27,7 @@ compose-on-EC2 covers both.
 
 Orthogonal layers, each independently on/off:
 
-- Auth: password (default) / GitHub OAuth / Google / OIDC SSO — desktop asks
+- Auth: password (default) / GitHub OAuth / Google — desktop asks
   `GET /auth/desktop/methods` and renders what's configured.
 - Add-on: cloud sandboxes (GitHub App + E2B key + self-built template).
 - Add-on: model gateway (`--profile agent-gateway`, LiteLLM).
@@ -67,10 +67,6 @@ folded, renamed, split, or rewritten before it can claim target coverage.
 **T1-SH-1: single-org derivation.** Pure config test: `telemetry_mode=
 "self_managed"` ⇒ `single_org_mode` true; `"hosted_product"` ⇒ false;
 `single_org_mode_override` wins in both directions. (`config.py:376`.)
-
-**T1-SH-2: SSO alias equivalence.** Settings built from `SSO_CLIENT_ID=x`
-equals settings built from `PROLIFERATE_SSO_CLIENT_ID=x`, for every SSO var.
-Guards the docs' canonical-form promise (docs standardized on bare `SSO_*`).
 
 **T1-SH-3: `/meta` contract.** Golden-fixture the response shape
 (`serverVersion` et al.) — this is the wire contract the connect dialog's

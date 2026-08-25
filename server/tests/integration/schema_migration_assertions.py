@@ -2,7 +2,6 @@ from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from tests.integration.background_schema_assertions import assert_background_outbox_schema
-from tests.integration.sso_schema_assertions import assert_sso_schema
 
 
 async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> None:
@@ -45,9 +44,6 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "provider_grant",
         "repo_config",
         "repo_environment",
-        "sso_connection",
-        "sso_challenge",
-        "sso_identity",
         "usage_segment",
         "user",
         "webhook_event_receipt",
@@ -83,7 +79,6 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
     }.isdisjoint(tables)
 
     await assert_background_outbox_schema(conn)
-    await assert_sso_schema(conn)
 
     organization_columns = await conn.run_sync(
         lambda sync_conn: {

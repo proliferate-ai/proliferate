@@ -17,10 +17,7 @@ import { ApiClient } from "../../fixtures/http.js";
  * configured? Deliberately posture-agnostic (does not assume GitHub OAuth is
  * or isn't configured on the box this runs against), asserting internal
  * consistency and the one thing every self-hosted box must offer: password
- * login. Also spot-checks the SSO discovery entry point (`/auth/sso/
- * discover`, T2-AUTH-5's server-level seam) survives on real infra without an
- * org context — a self-hosted box may have no SSO connections at all, and
- * discover must answer cleanly rather than 500.
+ * login.
  *
  * Read-only against a STANDING box (RELEASE_E2E_SELFHOST_URL, same var
  * T3-SH-3/T3-SH-4 use) — no provisioning, no mutation, no login attempted
@@ -36,7 +33,6 @@ export const t3Sh5: ScenarioDefinition = {
   plan: () => [
     { description: "GET /auth/desktop/methods; assert password_login=true and the shape is well-formed" },
     { description: "GET /auth/desktop/github/availability; assert enabled<->client_id consistency" },
-    { description: "GET /auth/sso/discover with no org context; assert it answers cleanly (never 500) with no ids" },
   ],
   run: async (ctx) => {
     if (ctx.dryRun) {
@@ -80,27 +76,8 @@ export const t3Sh5: ScenarioDefinition = {
         `/auth/desktop/github/availability.enabled (${github.enabled})`,
     );
 
-    // Posture-agnostic (this box may or may not have deployment-level SSO
-    // configured, which this scenario has no way to know) — the guarantee
-    // worth proving on real infra is that the route survives at all and
-    // returns a well-formed answer, never a 500, for the no-context case
-    // every unconfigured self-hosted box hits by default.
-    const discover = await client.get<{
-      enabled?: boolean;
-      connectionId?: string | null;
-    }>("/auth/sso/discover");
-    assert.equal(typeof discover.enabled, "boolean", "T3-SH-5: discover.enabled must be a boolean");
-    if (!discover.enabled) {
-      assert.equal(
-        discover.connectionId ?? null,
-        null,
-        "T3-SH-5: discover must not report a connection id when SSO is not enabled",
-      );
-    }
-
     console.log(
-      `[T3-SH-5] ${baseUrl} sign-in surface is truthful (password_login=true, github=${methods.github}, ` +
-        `discover.enabled=${discover.enabled} for the no-context case).`,
+      `[T3-SH-5] ${baseUrl} sign-in surface is truthful (password_login=true, github=${methods.github}).`,
     );
   },
 };

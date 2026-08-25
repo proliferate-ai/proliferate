@@ -1,12 +1,11 @@
 import { AUTH_ACCOUNT_LABELS } from "#product/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 
-export type AccountProviderKind = "github" | "google" | "apple" | "sso";
+export type AccountProviderKind = "github" | "google" | "apple";
 
 export interface AccountProviderView {
   provider: AccountProviderKind;
   label: string;
-  brandLabel?: string | null;
   accountLabel?: string | null;
   connected: boolean;
   status?: "ready" | "needs_reauth" | "expired";
@@ -155,12 +154,6 @@ export interface AccountProviderViewsInput {
   githubAccountLabel: string | null;
   githubConnected: boolean;
   googleAccounts: Array<{ accountEmail?: string | null; accountId?: string | null }>;
-  ssoAccounts: Array<{
-    accountEmail?: string | null;
-    accountId?: string | null;
-    displayName?: string | null;
-    brandLabel?: string | null;
-  }>;
   googleAvailable: boolean;
   showProviders: boolean;
 }
@@ -169,7 +162,6 @@ export function buildAccountProviderViews({
   githubAccountLabel,
   githubConnected,
   googleAccounts,
-  ssoAccounts,
   googleAvailable,
   showProviders,
 }: AccountProviderViewsInput): AccountProviderView[] {
@@ -185,13 +177,7 @@ export function buildAccountProviderViews({
     ];
   }
 
-  const providers: AccountProviderView[] = ssoAccounts.map((account) => ({
-    provider: "sso" as const,
-    label: account.displayName ?? "SSO",
-    brandLabel: account.brandLabel ?? account.displayName ?? null,
-    accountLabel: account.accountEmail ?? account.accountId ?? "Connected",
-    connected: true,
-  }));
+  const providers: AccountProviderView[] = [];
 
   providers.push(
     {

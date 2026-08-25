@@ -49,7 +49,7 @@ endpoint declares the lowest actor or organization context it requires.
 anonymous
 └── current_active_user                    active user
     └── current_limited_user               compatibility actor seam; currently no extra gate
-        ├── current_product_user           product readiness with the current single-org/SSO rules
+        ├── current_product_user           product readiness with the current single-org rules
         └── current_organization_actor     organization-surface readiness
 
 current_product_user
@@ -88,7 +88,6 @@ server/proliferate/
     users.py                 # UserManager (fastapi-users lifecycle plumbing)
     desktop/                 # leaf models and callback pages
     identity/                # provider protocol, stores, sessions, and credential primitives
-    sso/                     # SSO protocol vocabulary, policy, and configuration
     jwt.py                   # auth crypto/protocol primitive
     oauth.py                 # auth crypto/protocol primitive
     passwords.py             # auth crypto/protocol primitive
@@ -97,7 +96,6 @@ server/proliferate/
   server/accounts/
     desktop/                 # /auth/desktop routes and Desktop account-entry orchestration
     identity/                # /auth web/mobile routes and account-entry orchestration
-    sso/                     # /auth/sso routes and SSO account-entry orchestration
 
   server/<domain>/
     access.py                # resource-access route deps (per domain)
@@ -146,8 +144,6 @@ async def current_product_user(
     db: AsyncSession = Depends(get_async_session),
 ) -> User:
     if settings.single_org_mode:
-        return user
-    if await user_has_active_organization_sso_membership(db, user_id=user.id):
         return user
     return await _require_product_ready(db, user)
 ```
@@ -232,7 +228,7 @@ token is part of that domain's enrollment lifecycle.
 |---|---|
 | `current_active_user` | active user, no GitHub requirement |
 | `current_limited_user` | compatibility actor seam over `current_active_user`; currently adds no gate |
-| `current_product_user` | active user plus current product readiness — the default for product/cloud surfaces. Single-org instances bypass the GitHub check; hosted users with an active organization SSO membership also pass, while other hosted users require account readiness. |
+| `current_product_user` | active user plus current product readiness — the default for product/cloud surfaces. Single-org instances bypass the GitHub check; hosted users require account readiness. |
 | `current_organization_actor` | actor for organization-membership surfaces; applies the current hosted readiness gate and single-org bypass |
 | `optional_current_active_user` | maybe authenticated (public route with extra behavior when signed in) |
 
@@ -276,16 +272,14 @@ async def current_product_user(
 ) -> User:
     if settings.single_org_mode:
         return user
-    if await user_has_active_organization_sso_membership(db, user_id=user.id):
-        return user
     return await _require_product_ready(db, user)
 ```
 
 ### OAuth and account-entry surfaces
 
-Product account entry lives under `server/accounts/identity/**`; the Desktop
-account-entry boundary lives under `server/accounts/desktop/**`; and SSO account
-entry lives under `server/accounts/sso/**`. GitHub uses the shared
+Product account entry lives under `server/accounts/identity/**`, and the
+Desktop account-entry boundary lives under `server/accounts/desktop/**`.
+GitHub uses the shared
 `/auth/github/callback` provider callback for desktop, web, and mobile.
 The surface is recovered from the stored auth challenge, so the GitHub OAuth app
 needs only one callback URL:

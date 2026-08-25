@@ -305,21 +305,6 @@ else
   info "agent gateway disabled."
 fi
 
-# --- Deployment SSO (only when enabled) ---------------------------------------
-
-section "Deployment SSO"
-if proliferate_is_truthy "$(get SSO_ENABLED)"; then
-  info "SSO_ENABLED=true; client id: $(shape SSO_OIDC_CLIENT_ID); client secret: $(shape SSO_OIDC_CLIENT_SECRET)"
-  sso_jit="$(get SSO_JIT_POLICY)"
-  if [[ "${sso_jit:-disabled}" == "disabled" && -z "$(get ADMIN_EMAILS)" ]]; then
-    warn "SSO_JIT_POLICY=disabled (or unset) and ADMIN_EMAILS is empty: no SSO sign-in can create the first user. Set ADMIN_EMAILS (password sign-in) or SSO_JIT_POLICY=create_member."
-  else
-    pass "SSO first-user path is reachable (ADMIN_EMAILS set or SSO_JIT_POLICY auto-provisions)."
-  fi
-else
-  info "SSO disabled."
-fi
-
 # --- Optional add-on config shape (redacted) ---------------------------------
 
 section "Add-on configuration (redacted)"

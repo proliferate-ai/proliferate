@@ -13,17 +13,4 @@ describe("ProviderBrandIcon", () => {
     expect(container.querySelector('[data-auth-provider-brand="github"]')?.getAttribute("class"))
       .toContain("icon-control");
   });
-
-  it.each([
-    ["Auth0", "auth0"],
-    ["Okta", "okta"],
-    ["Microsoft Entra", "microsoft"],
-    ["GitLab", "gitlab"],
-    ["Google Workspace", "google-sso"],
-    ["Company SSO", "sso"],
-  ])("maps %s SSO labels to the expected provider brand", (label, brand) => {
-    const { container } = render(<ProviderBrandIcon provider="sso" label={label} />);
-
-    expect(container.querySelector(`[data-auth-provider-brand="${brand}"]`)).toBeTruthy();
-  });
 });

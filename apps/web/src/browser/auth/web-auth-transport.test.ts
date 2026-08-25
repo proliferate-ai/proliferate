@@ -12,10 +12,7 @@ import {
 } from "./web-auth-transport";
 
 vi.mock("../../lib/access/cloud/auth/web-auth-flow", () => ({
-  SSO_SLUG_UNAVAILABLE_CODE: "sso_slug_unavailable",
   startWebAuthFlow: vi.fn(async () => {}),
-  startWebSsoFlow: vi.fn(async () => {}),
-  startWebSsoFlowForSlug: vi.fn(async () => {}),
   completeWebAuthFlow: vi.fn(),
   webAuthFlowErrorCode: (error: unknown) =>
     error && typeof error === "object" && "code" in error
@@ -61,13 +58,6 @@ describe("mapFailureCallbackIssue", () => {
     });
   });
 
-  it("maps SSO denial codes to access_denied", () => {
-    expect(mapFailureCallbackIssue("sso_email_domain_not_allowed")).toEqual({
-      kind: "access_denied",
-      code: "sso_email_domain_not_allowed",
-    });
-  });
-
   it("maps a missing-params code to a malformed callback failure", () => {
     expect(mapFailureCallbackIssue("missing_callback_params")).toEqual({
       kind: "callback_failed",
@@ -104,25 +94,6 @@ describe("createWebAuthOperations", () => {
       provider: "github",
       purpose: undefined,
     });
-  });
-
-  it("starts slug SSO through the browser flow", async () => {
-    const { ops } = makeOps();
-    void ops.startLogin({ kind: "sso", slug: "acme" });
-    await Promise.resolve();
-    expect(flowMock.startWebSsoFlowForSlug).toHaveBeenCalledWith("acme");
-  });
-
-  it("marks an unavailable slug as not attempted", async () => {
-    flowMock.startWebSsoFlowForSlug.mockRejectedValueOnce(
-      Object.assign(new Error("SSO is unavailable."), {
-        code: "sso_slug_unavailable",
-      }),
-    );
-    const { ops } = makeOps();
-
-    await expect(ops.startLogin({ kind: "sso", slug: "missing" }))
-      .rejects.toSatisfy(isLoginNotAttempted);
   });
 
   it("rejects password/apple as not-attempted so no failure event is emitted", async () => {

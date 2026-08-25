@@ -4,16 +4,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.sso.branding import (
-    sso_brand_label_for_connection,
-    sso_brand_label_from_subject,
-)
-from proliferate.auth.sso.deployment_config import deployment_sso_connection
-from proliferate.auth.sso.types import DEPLOYMENT_SSO_CONNECTION_KEY
-from proliferate.db.models.auth import AuthIdentity, OAuthAccount, SsoConnection, SsoIdentity, User
+from proliferate.db.models.auth import AuthIdentity, OAuthAccount, User
 from proliferate.db.store.organization_records import MemberAuthMethodRecord
 
 
@@ -81,44 +75,6 @@ async def list_member_auth_methods(
             MemberAuthMethodRecord(provider=provider, label=_auth_provider_label(provider)),
         )
 
-    sso_rows = (
-        await db.execute(
-            select(SsoIdentity, SsoConnection)
-            .outerjoin(SsoConnection, SsoConnection.id == SsoIdentity.connection_id)
-            .where(
-                SsoIdentity.user_id.in_(unique_user_ids),
-                or_(
-                    SsoIdentity.organization_id.is_(None),
-                    SsoIdentity.organization_id == organization_id,
-                ),
-            )
-            .order_by(SsoIdentity.user_id.asc(), SsoIdentity.linked_at.asc())
-        )
-    ).all()
-    for identity, connection in sso_rows:
-        connection_record = connection
-        if connection_record is None and identity.connection_key == DEPLOYMENT_SSO_CONNECTION_KEY:
-            connection_record = deployment_sso_connection()
-        if connection_record is not None:
-            display_name = connection_record.display_name
-            brand_label = sso_brand_label_for_connection(
-                connection_record,
-                identity.provider_subject,
-            )
-        else:
-            display_name = "SSO"
-            brand_label = sso_brand_label_from_subject(identity.provider_subject)
-        _append_member_auth_method(
-            methods,
-            seen,
-            identity.user_id,
-            MemberAuthMethodRecord(
-                provider="sso",
-                label=display_name,
-                brand_label=brand_label,
-            ),
-            dedupe_key=f"sso:{brand_label or display_name}:{identity.connection_key}",
-        )
     return methods
 
 
@@ -127,13 +83,10 @@ def _append_member_auth_method(
     seen: dict[UUID, set[str]],
     user_id: UUID,
     method: MemberAuthMethodRecord,
-    *,
-    dedupe_key: str | None = None,
 ) -> None:
-    key = dedupe_key or method.provider
-    if key in seen[user_id]:
+    if method.provider in seen[user_id]:
         return
-    seen[user_id].add(key)
+    seen[user_id].add(method.provider)
     methods[user_id].append(method)
 
 

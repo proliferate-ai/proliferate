@@ -21,7 +21,6 @@ export type SettingsNavIconId =
   | "organization-members"
   | "organization-model-policy"
   | "organization-secrets"
-  | "organization-sso"
   | "personal-secrets"
   | "repo-actions"
   | "repo-environment"
@@ -113,7 +112,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         id: "org_auth",
         heading: "Authentication",
         items: [
-          { kind: "section", id: "organization-sso", label: "Single sign-on", iconId: "organization-sso", adminOnly: true },
         ],
       },
     ],

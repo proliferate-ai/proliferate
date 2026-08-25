@@ -24,7 +24,7 @@ const CORE_FEATURES = [
 
 const ENTERPRISE_FEATURES = [
   "Custom compute unit and LLM credit pools",
-  "SSO, org-wide secrets, and audit trails",
+  "Org-wide secrets and audit trails",
   "Bring your own model credentials",
   "Custom instance types or VPC deployment",
   "Dedicated account manager, FDE, and premium support",
