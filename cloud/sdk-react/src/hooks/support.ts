@@ -1,7 +1,6 @@
 import {
   completeSupportReportUpload as completeSupportReportUploadWithClient,
   createSupportReport as createSupportReportWithClient,
-  ensureSupportReportTracker as ensureSupportReportTrackerWithClient,
   type SupportMessageContext,
   type SupportReportCreateRequest,
 } from "@proliferate/cloud-sdk";
@@ -75,7 +74,6 @@ export function useCloudSupportReportActions(): CloudSupportReportActions {
         );
       }
       clientJobIdRef.current = null;
-      void ensureSupportReportTrackerWithClient(report.reportId, client).catch(() => undefined);
     },
     [client],
   );

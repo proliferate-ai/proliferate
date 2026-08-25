@@ -484,8 +484,8 @@ Pause is the steady state of an idle sandbox, not an exception:
   because a silently dead Worker means stale binaries and expiring git
   credentials with no user-visible symptom. A paused/creating/error/destroyed
   sandbox's Worker is not expected to be heartbeating and is never reported
-  degraded. Routing that condition into the production alert path (issue
-  tracker) is still open — see gap list.
+  degraded. Routing that condition into the production alert path is still
+  open — see gap list.
 - Runtime pressure telemetry (CPU, memory, and disk) flows from AnyHarness
   health to the client pressure surfaces. Lifecycle transports the
   measurement; [content.md](content.md) owns what consumes
@@ -649,8 +649,8 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       missing Worker surfaces as `workerDegraded: true` on the workspace
       runtime-status payload and logs a structured warning on each read
       (PR #1526), but nothing routes that condition into the production
-      alert path (issue tracker), and the warm-reuse path still never
-      relaunches a dead Worker.
+      alert path, and the warm-reuse path still never relaunches a dead
+      Worker.
 - [ ] The account model is one sandbox per user globally (partial unique
       index on `owner_user_id`; org variants are stubs that raise, and
       the store hardcodes `organization_id=None`,

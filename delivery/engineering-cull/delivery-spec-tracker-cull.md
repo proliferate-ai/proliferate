@@ -82,7 +82,10 @@ Plain revert restores code and docs. Live Grafana contact point and the external
    "Retired" section now states.
 4. **Fourth ops follow-up:** `terraform apply` for `server/infra/main.tf`
    (removes the tracker variables and the `support-tracker-secret-parameters`
-   IAM policy from live state).
+   IAM policy from live state). **Fifth:** delete the lingering SSM
+   parameters the old deploy wrote if they exist
+   (`/proliferate/<env>/support/github-app-private-key`,
+   `/proliferate/<env>/support/linear-api-key`).
 5. **Checker edit (founder review):** `scripts/check_docs.py`
    `REQUIRED_READMES` row for the deleted `issue-lifecycle/README.md` removed
    in the same PR; `lints/server/ratchets.toml` config.py ratchet shrunk
