@@ -1,9 +1,7 @@
 //! Cross-document invariants pairing a v2 agent catalog with the registry
-//! it was probed against. Run wherever a registry pairing is in scope
-//! (build pipeline, sync validation); the current draft pins no registry
-//! (`probedAgainst.registryVersion: null`) and references slots a future
-//! registry revision will declare, so this is a separate entry rather than
-//! part of the loader path.
+//! it was probed against (`probedAgainst.registryVersion`). Run wherever a
+//! registry pairing is in scope (build pipeline, sync validation); pairing
+//! is a separate entry rather than part of the loader path.
 
 use super::schema::{AgentCatalogAuthSignal, AgentCatalogDocument};
 use super::validation::BASELINE_AUTH_CONTEXT_ID;
@@ -128,24 +126,24 @@ fn declared_env_var_kind(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::agents::catalog::schema::draft_catalog_json;
+    use crate::domains::agents::catalog::schema::canonical_catalog_json;
     use crate::domains::agents::catalog::validation::validate_agent_catalog_document;
     use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
     use crate::domains::agents::registry::schema::AgentRegistryAuthSlotEnvVar;
 
-    fn draft_catalog() -> AgentCatalogDocument {
-        serde_json::from_str(draft_catalog_json()).expect("draft catalog must parse")
+    fn canonical_catalog() -> AgentCatalogDocument {
+        serde_json::from_str(canonical_catalog_json()).expect("canonical catalog must parse")
     }
 
     fn signal(json: serde_json::Value) -> AgentCatalogAuthSignal {
         serde_json::from_value(json).expect("signal must parse")
     }
 
-    /// Pairing fixture: the draft's auth contexts reference slots a future
-    /// registry revision will declare, so pairing tests use a hand-trimmed
-    /// catalog whose contexts resolve against the bundled registry.
+    /// Pairing fixture: pairing tests use a hand-trimmed catalog whose auth
+    /// contexts are guaranteed to resolve against the bundled registry,
+    /// rather than asserting that property of the full shipped catalog.
     fn pairing_catalog(signals: Option<serde_json::Value>) -> AgentCatalogDocument {
-        let mut catalog = draft_catalog();
+        let mut catalog = canonical_catalog();
         catalog.agents.truncate(1);
         let claude = &mut catalog.agents[0];
         claude

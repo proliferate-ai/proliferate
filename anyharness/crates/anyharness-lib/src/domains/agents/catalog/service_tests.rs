@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use super::loader::parse_agent_catalog_json;
-use super::schema::draft_catalog_json;
+use super::schema::canonical_catalog_json;
 use super::service::{ActiveCatalog, AgentCatalogService};
 use super::sync::CatalogSyncService;
 
-fn draft_catalog() -> ActiveCatalog {
-    let document = parse_agent_catalog_json(draft_catalog_json()).expect("draft must load");
+fn canonical_catalog() -> ActiveCatalog {
+    let document = parse_agent_catalog_json(canonical_catalog_json()).expect("catalog must load");
     ActiveCatalog::new(Arc::new(document))
 }
 
@@ -30,7 +30,7 @@ fn bundled_catalog_declares_goal_support_for_claude_and_codex_only() {
 
 #[test]
 fn pins_surface_catalog_harness_versions() {
-    let catalog = draft_catalog();
+    let catalog = canonical_catalog();
     let claude = catalog.pins("claude").expect("claude pins");
     assert_eq!(claude.agent_process.version, "0.66.0-proliferate.2");
     assert_eq!(

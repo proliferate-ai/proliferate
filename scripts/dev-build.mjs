@@ -35,7 +35,8 @@ const PACKAGES = [
     dir: "apps/packages/product-client",
     filter: "@proliferate/product-client",
     upstream: ["cloud/sdk", "cloud/sdk-react", "anyharness/sdk", "anyharness/sdk-react", "apps/packages/design"],
-    // copy-product-client-assets.mjs generates src/generated/agent-registry.json
+    // apps/packages/product-client/scripts/copy-product-client-assets.mjs
+    // generates src/generated/agent-registry.json
     // from this file, which lives outside the package.
     extra: ["catalogs/agents/registry.json"],
   },

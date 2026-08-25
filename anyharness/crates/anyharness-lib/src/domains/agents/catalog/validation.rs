@@ -233,20 +233,20 @@ fn validate_signal(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::agents::catalog::schema::draft_catalog_json;
+    use crate::domains::agents::catalog::schema::canonical_catalog_json;
 
-    fn draft_catalog() -> AgentCatalogDocument {
-        serde_json::from_str(draft_catalog_json()).expect("draft catalog must parse")
+    fn canonical_catalog() -> AgentCatalogDocument {
+        serde_json::from_str(canonical_catalog_json()).expect("canonical catalog must parse")
     }
 
     #[test]
-    fn draft_catalog_validates() {
-        validate_agent_catalog_document(&draft_catalog()).expect("draft catalog must validate");
+    fn canonical_catalog_validates() {
+        validate_agent_catalog_document(&canonical_catalog()).expect("canonical catalog must validate");
     }
 
     #[test]
     fn rejects_duplicate_presentation_model_ids() {
-        let mut catalog = draft_catalog();
+        let mut catalog = canonical_catalog();
         let duplicate = catalog.agents[0].session.presentation_models[0].clone();
         catalog.agents[0].session.presentation_models.push(duplicate);
         let error = validate_agent_catalog_document(&catalog).expect_err("duplicate must fail");
@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn rejects_duplicate_auth_context_ids() {
-        let mut catalog = draft_catalog();
+        let mut catalog = canonical_catalog();
         let duplicate = catalog.agents[0].auth_contexts[0].clone();
         catalog.agents[0].auth_contexts.push(duplicate);
         let error = validate_agent_catalog_document(&catalog).expect_err("duplicate must fail");

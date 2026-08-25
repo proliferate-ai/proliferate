@@ -24,7 +24,7 @@ Every file or symbol reference is a relative markdown link to the actual
 path, not a bare backtick name:
 
 ```markdown
-[selection_rules.py](../../../../server/proliferate/server/cloud/agent_gateway/selection_rules.py)
+[selection_rules.py](../server/proliferate/server/cloud/agent_gateway/selection_rules.py)
 ```
 
 [`check_docs.py`](../scripts/check_docs.py) validates link destinations, so a

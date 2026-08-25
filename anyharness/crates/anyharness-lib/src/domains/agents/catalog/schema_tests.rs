@@ -3,16 +3,16 @@
 
 use super::*;
 
-fn parse_draft() -> AgentCatalogDocument {
-    serde_json::from_str(draft_catalog_json()).expect("draft catalog must parse")
+fn parse_canonical() -> AgentCatalogDocument {
+    serde_json::from_str(canonical_catalog_json()).expect("canonical catalog must parse")
 }
 
 #[test]
-fn draft_catalog_parses_with_expected_shape() {
-    let catalog = parse_draft();
+fn canonical_catalog_parses_with_expected_shape() {
+    let catalog = parse_canonical();
 
     assert_eq!(catalog.schema_version, 2);
-    assert_eq!(catalog.catalog_version, draft_catalog_version().as_str());
+    assert_eq!(catalog.catalog_version, canonical_catalog_version().as_str());
     let probed_against = catalog.probed_against.as_ref().expect("probedAgainst");
     assert_eq!(
         probed_against.registry_version.as_deref(),
@@ -143,13 +143,13 @@ fn bundled_registry_version() -> String {
         .to_string()
 }
 
-fn draft_catalog_version() -> String {
+fn canonical_catalog_version() -> String {
     let text = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../../scripts/agent-catalog/catalog.draft.json"
+        "/../../../catalogs/agents/catalog.json"
     ))
-    .expect("read draft catalog");
-    serde_json::from_str::<serde_json::Value>(&text).expect("parse draft")["catalogVersion"]
+    .expect("read canonical catalog");
+    serde_json::from_str::<serde_json::Value>(&text).expect("parse catalog")["catalogVersion"]
         .as_str()
         .expect("catalogVersion")
         .to_string()
