@@ -286,49 +286,27 @@ describe("AuthScreenLayout", () => {
     expect(screen.getByText("start locally")).toBeTruthy();
   });
 
-  it("prioritizes GitHub unavailable copy when every sign-in path is unavailable", () => {
+  it("shows GitHub unavailable copy when every sign-in path is unavailable", () => {
     render(
       <AuthScreenLayout
         mode="auth"
         githubSignInAvailable={false}
         githubSignInUnavailableDescription="Control plane is unreachable."
-        ssoSignInUnavailableDescription="SSO is not configured."
       />,
     );
 
     expect(screen.getByText("Control plane is unreachable.")).toBeTruthy();
-    expect(screen.queryByText("SSO is not configured.")).toBeNull();
   });
 
-  it("shows the SSO action when deployment SSO is available", () => {
-    const { container } = render(
-      <AuthScreenLayout
-        mode="auth"
-        githubSignInAvailable
-        ssoSignInAvailable
-        ssoDisplayName="Google SSO"
-        onGitHubSignIn={() => {}}
-        onSsoSignIn={() => {}}
-      />,
-    );
-
-    expect(screen.getByText("Continue with GitHub")).toBeTruthy();
-    expect(screen.getByText("Continue with Google SSO")).toBeTruthy();
-    expect(container.querySelector('[data-auth-provider-brand="google-sso"]')).toBeTruthy();
-  });
-
-  it("offers a cancel action while SSO sign-in is pending", () => {
+  it("offers a cancel action while GitHub sign-in is pending", () => {
     const onCancelSignIn = vi.fn();
 
     render(
       <AuthScreenLayout
         mode="auth"
         githubSignInAvailable
-        ssoSignInAvailable
-        ssoSubmitting
-        ssoDisplayName="Okta SSO"
+        submitting
         onGitHubSignIn={() => {}}
-        onSsoSignIn={() => {}}
         onCancelSignIn={onCancelSignIn}
       />,
     );

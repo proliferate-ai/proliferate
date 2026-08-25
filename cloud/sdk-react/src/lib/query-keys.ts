@@ -112,10 +112,6 @@ export function cloudIntegrationAdminDefinitionsKey(organizationId: string | nul
   return [...cloudIntegrationsRootKey(), "admin-definitions", organizationId] as const;
 }
 
-export function organizationSsoConnectionsKey(organizationId: string | null) {
-  return [...cloudRootKey(), "organizations", organizationId, "sso-connections"] as const;
-}
-
 export function cloudMcpConnectionsKey() {
   return [...cloudPluginInventoryRootKey(), "mcp-connections"] as const;
 }

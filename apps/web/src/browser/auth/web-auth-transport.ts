@@ -11,17 +11,14 @@ import { markLoginNotAttempted } from "@proliferate/product-client/internal/lib/
 
 import {
   completeWebAuthFlow,
-  SSO_SLUG_UNAVAILABLE_CODE,
   startWebAuthFlow,
-  startWebSsoFlow,
-  startWebSsoFlowForSlug,
   webAuthFlowErrorCode,
 } from "../../lib/access/cloud/auth/web-auth-flow";
 import { isWebBetaAuthErrorCode } from "../../lib/domain/auth/web-auth-errors";
 
 /**
  * The Web transport behind `host.auth`. It consolidates the existing browser
- * PKCE/OAuth/SSO flow (`web-auth-flow`, `pkce`) and the code exchange into the
+ * PKCE/OAuth flow (`web-auth-flow`, `pkce`) and the code exchange into the
  * shared {@link ProductAuthHost} operations. ProductClient owns the login UI and
  * gate; this module owns only browser transport and never imports
  * `auth-token-store`: the production session lives in the HttpOnly refresh
@@ -44,7 +41,7 @@ export interface WebAuthTransportDeps {
   logout: () => Promise<void>;
 }
 
-// A promise that never settles: an OAuth/SSO redirect flow leaves the page via
+// A promise that never settles: an OAuth redirect flow leaves the page via
 // `window.location.assign`, so `startLogin` neither resolves (no premature
 // `auth_signed_in`) nor rejects once the redirect is in flight. The session
 // resumes out of band through `finishLogin` on the callback route.
@@ -52,22 +49,8 @@ function pendingRedirect(): Promise<ProductLoginOutcome> {
   return new Promise<ProductLoginOutcome>(() => {});
 }
 
-/**
- * SSO server codes that are a *denial* (not a transport failure): the account or
- * connection is not allowed, so they normalize to `access_denied`, exactly like
- * the beta-gate codes. Every other failure is a `callback_failed`.
- */
-const SSO_ACCESS_DENIED_CODES = new Set([
-  "sso_connection_not_found",
-  "not_configured",
-  "sso_email_domain_not_allowed",
-  "sso_user_not_team_member",
-  "sso_jit_disabled",
-  "sso_user_already_in_team",
-]);
-
 function isAccessDeniedCode(code: string): boolean {
-  return isWebBetaAuthErrorCode(code) || SSO_ACCESS_DENIED_CODES.has(code);
+  return isWebBetaAuthErrorCode(code);
 }
 
 /** Map a provider-reported failure callback (`?error=<code>`) to an issue. Also
@@ -105,7 +88,7 @@ function mapExchangeFailureIssue(error: unknown): ProductAuthIssue {
 /**
  * Build the four `host.auth` operations over the existing browser auth flow.
  * `startLogin` maps each {@link LoginRequest} to the browser flow hosted Web
- * supports (github/google OAuth + org/slug SSO); unsupported methods reject as
+ * supports (github/google OAuth); unsupported methods reject as
  * "not attempted" so the audited wrapper re-throws without a failure event.
  * `finishLogin` performs at most one code exchange per call — the caller
  * (`AuthCallbackRoute`) additionally single-flights it under Strict Mode, and
@@ -122,27 +105,6 @@ export function createWebAuthOperations(
       case "github":
       case "google": {
         await startWebAuthFlow({ provider: request.kind, purpose: request.purpose });
-        return pendingRedirect();
-      }
-      case "sso": {
-        if (request.slug) {
-          try {
-            await startWebSsoFlowForSlug(request.slug);
-          } catch (error) {
-            if (webAuthFlowErrorCode(error) === SSO_SLUG_UNAVAILABLE_CODE) {
-              throw markLoginNotAttempted(
-                error instanceof Error ? error : new Error("SSO is unavailable."),
-              );
-            }
-            throw error;
-          }
-        } else {
-          await startWebSsoFlow({
-            email: request.email,
-            organizationId: request.organizationId,
-            connectionId: request.connectionId,
-          });
-        }
         return pendingRedirect();
       }
       case "password":
@@ -177,7 +139,7 @@ export function createWebAuthOperations(
   }
 
   async function cancelLogin(): Promise<void> {
-    // A hosted-Web OAuth/SSO login is a full-page redirect: there is no
+    // A hosted-Web OAuth login is a full-page redirect: there is no
     // in-process flow to abort, so cancellation is a no-op (matching the prior
     // Web behavior, which had no cancel path).
   }

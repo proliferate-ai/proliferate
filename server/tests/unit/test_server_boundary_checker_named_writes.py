@@ -309,7 +309,7 @@ def test_same_named_owner_service_calls_are_legal(tmp_path: Path) -> None:
     ("relative_path", "source"),
     [
         (
-            "server/proliferate/auth/sso/user_resolution.py",
+            "server/proliferate/auth/identity/sessions.py",
             "from proliferate.db.store import organization_invitations as invitations\n"
             "from proliferate.db.store import organizations as organizations\n"
             "invitations.has_live_pending_invitation_for_organization_email()\n"

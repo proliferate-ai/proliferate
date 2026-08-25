@@ -92,13 +92,13 @@ describe("useOrganizationJoinInvitationFlow", () => {
   beforeEach(() => {
     clearTestStorage();
     hostMocks.startLogin.mockReset();
-    hostMocks.startLogin.mockResolvedValue({ provider: "sso", source: "desktop_callback" });
+    hostMocks.startLogin.mockResolvedValue({ provider: "github", source: "desktop_callback" });
     connectServerMocks.available = true;
     connectServerMocks.step = "closed";
     connectServerMocks.openForUrl.mockReset();
     connectServerMocks.openForUrl.mockResolvedValue(undefined);
     // Default: current server is Cloud (no configured base URL); GitHub is
-    // advertised, so the SSO/GitHub launch path is exercised.
+    // advertised, so the GitHub launch path is exercised.
     deploymentMocks.apiBaseUrl = "";
     apiMocks.isOfficialHostedApiBaseUrl.mockReset();
     apiMocks.isOfficialHostedApiBaseUrl.mockImplementation((url: string) => url.includes("proliferate.com"));
@@ -113,33 +113,17 @@ describe("useOrganizationJoinInvitationFlow", () => {
     useAuthStore.setState({ status: "bootstrapping", session: null, user: null, error: null });
   });
 
-  it("starts organization SSO for anonymous invite links with no origin (unchanged behavior)", async () => {
-    renderJoinInvitationFlow(ORIGIN_LESS);
-
-    await waitFor(() => {
-      expect(hostMocks.startLogin).toHaveBeenCalledWith({
-        kind: "sso",
-        organizationId: "org-1",
-      });
-    });
-    expect(hostMocks.startLogin).not.toHaveBeenCalledWith({ kind: "github" });
-    expect(connectServerMocks.openForUrl).not.toHaveBeenCalled();
-  });
-
-  it("falls back to standard sign-in when the invited organization has no SSO", async () => {
-    hostMocks.startLogin.mockRejectedValueOnce(
-      new Error("SSO is not configured for this environment."),
-    );
-
+  it("starts GitHub sign-in for anonymous invite links with no origin", async () => {
     renderJoinInvitationFlow(ORIGIN_LESS);
 
     await waitFor(() => {
       expect(hostMocks.startLogin).toHaveBeenCalledWith({ kind: "github" });
     });
+    expect(connectServerMocks.openForUrl).not.toHaveBeenCalled();
   });
 
-  it("does not fall back to GitHub for a configured SSO provider failure", async () => {
-    hostMocks.startLogin.mockRejectedValueOnce(new Error("SSO sign-in failed"));
+  it("surfaces guidance when the sign-in launch fails", async () => {
+    hostMocks.startLogin.mockRejectedValueOnce(new Error("sign-in failed"));
 
     const { result } = renderJoinInvitationFlow(ORIGIN_LESS);
 
@@ -148,7 +132,6 @@ describe("useOrganizationJoinInvitationFlow", () => {
         "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
       );
     });
-    expect(hostMocks.startLogin).not.toHaveBeenCalledWith({ kind: "github" });
   });
 
   it("surfaces the trust-confirm dialog and starts NO auth when the invite origin differs from the current server", async () => {
@@ -171,10 +154,7 @@ describe("useOrganizationJoinInvitationFlow", () => {
     renderJoinInvitationFlow(entry);
 
     await waitFor(() => {
-      expect(hostMocks.startLogin).toHaveBeenCalledWith({
-        kind: "sso",
-        organizationId: "org-1",
-      });
+      expect(hostMocks.startLogin).toHaveBeenCalledWith({ kind: "github" });
     });
     expect(connectServerMocks.openForUrl).not.toHaveBeenCalled();
   });

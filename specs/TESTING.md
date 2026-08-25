@@ -147,7 +147,6 @@ repeatedly, that evidence — not speculation — justifies building a fake then
 
 | Dependency | Test control |
 | --- | --- |
-| SSO IdP | Mock OIDC container (asserts any identity on demand) |
 | Invite/notification email | Token capture (test-only endpoint), no send |
 | Stripe | **Real network exception:** Stripe test mode + test clocks; required and fail-closed in trusted CI |
 | Poll feeds | Stub feed (replaying, per the poll contract) |

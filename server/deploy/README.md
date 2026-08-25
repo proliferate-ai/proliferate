@@ -84,11 +84,10 @@ host/filesystem/storage fails.
   (`https://<host>/llm`) + at least one provider key. `bootstrap.sh`/`update.sh`
   then manage the `agent-gateway` profile automatically and wait for `litellm`
   to report healthy before finishing.
-- **GitHub sign-in / SSO / invitation email:** `GITHUB_OAUTH_CLIENT_ID`+`_SECRET`,
-  `SSO_ENABLED`+`SSO_OIDC_*`, and `RESEND_API_KEY`+`RESEND_FROM_EMAIL` are all
-  optional and independent of each other — see `.env.production.example` for
-  the full set and `preflight.sh`/`doctor.sh` for the completeness checks each
-  one gets.
+- **GitHub sign-in / invitation email:** `GITHUB_OAUTH_CLIENT_ID`+`_SECRET`
+  and `RESEND_API_KEY`+`RESEND_FROM_EMAIL` are optional and independent of
+  each other — see `.env.production.example` for the full set and
+  `preflight.sh`/`doctor.sh` for the completeness checks each one gets.
 - **Instance branding:** `INSTANCE_NAME`, `INSTANCE_LOGO_URL`,
   `INSTANCE_SUPPORT_EMAIL`, `INSTANCE_SUPPORT_URL` — shown in the connected
   Desktop app; all optional.

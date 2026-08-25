@@ -43,9 +43,9 @@ class Organization(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255))
-    # Human-friendly, URL-safe handle used for per-org SSO login links
-    # (``/login/<slug>``). Nullable so legacy rows and races never block a
-    # write; a partial unique index keeps live slugs unambiguous.
+    # Human-friendly, URL-safe organization handle. Nullable so legacy rows
+    # and races never block a write; a partial unique index keeps live slugs
+    # unambiguous.
     slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
     logo_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logo_image: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -118,7 +118,7 @@ Desktop; email/password can be used without it. E2B credentials are optional
 and enable managed cloud sandboxes when `E2BApiKey` and `E2BTemplateName` are
 both set. Cloud repository
 access additionally requires a GitHub App configured through host-local
-overrides. The LiteLLM gateway, SSO, and invitation email are also independent
+overrides. The LiteLLM gateway and invitation email are also independent
 optional capabilities rather than base-stack requirements.
 
 The GitHub release tag still uses the `server-v*` line, but `ReleaseVersion`

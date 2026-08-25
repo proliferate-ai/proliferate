@@ -25,8 +25,6 @@ const m = vi.hoisted(() => ({
   beginDesktopProviderAuth: vi.fn(async () => {}),
   pollGitHubDesktopSession: vi.fn(() => new Promise(() => {})),
   abortError: vi.fn((message: string) => new Error(message)),
-  beginDesktopSsoSignIn: vi.fn(async () => {}),
-  discoverDesktopSso: vi.fn(async () => ({ enabled: false, reason: "not_configured" })),
   getGitHubDesktopAuthAvailability: vi.fn(async () => ({ enabled: true })),
   getProliferateApiBaseUrl: vi.fn(() => "http://api.test"),
   checkControlPlaneReachable: vi.fn(async () => false),
@@ -62,11 +60,7 @@ vi.mock("@/lib/integrations/auth/proliferate-auth", () => ({
   isPendingDesktopAuthExpired: m.isPendingDesktopAuthExpired,
   pollGitHubDesktopSession: m.pollGitHubDesktopSession,
 }));
-vi.mock("@/lib/integrations/auth/proliferate-sso-auth", () => ({
-  beginDesktopSsoSignIn: m.beginDesktopSsoSignIn,
-}));
 vi.mock("@proliferate/product-client/internal/lib/access/cloud/auth-probes", () => ({
-  discoverDesktopSso: m.discoverDesktopSso,
   getGitHubDesktopAuthAvailability: m.getGitHubDesktopAuthAvailability,
 }));
 vi.mock("@/lib/infra/proliferate-api", () => ({

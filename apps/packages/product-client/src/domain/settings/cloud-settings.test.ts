@@ -21,7 +21,6 @@ describe("cloud settings section model", () => {
       "environments",
       "organization",
       "organization-secrets",
-      "sso",
       "billing",
       "support",
     ]);

@@ -9,8 +9,8 @@
 // serves `/chat/completions` or `/v1/messages` — there is no fake inference
 // here; any unrecognized path (which includes every inference route) 404s.
 //
-// Pattern mirrors tests/intent/fakes/mock-idp/server.ts (a plain node:http
-// loopback server the booted server points AGENT_GATEWAY_LITELLM_BASE_URL at).
+// A plain node:http loopback server the booted server points
+// AGENT_GATEWAY_LITELLM_BASE_URL at.
 //
 // Verified against client.py's documented pinned-image quirks so the fake's
 // behavior matches production, not an idealized admin API:
@@ -169,7 +169,7 @@ export async function startLitellmManagementFake(): Promise<LitellmManagementFak
     const method = (req.method ?? "GET").toUpperCase();
     // NOTE: real admin auth uses an `Authorization: Bearer <master_key>` header;
     // the fake accepts any request (it is loopback + run-scoped, never reachable
-    // outside this process), matching the mock-idp fake's posture.
+    // outside this process).
 
     if (method === "GET" && path === "/health/liveliness") {
       sendJson(res, 200, { status: "ok" });

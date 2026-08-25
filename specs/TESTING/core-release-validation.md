@@ -266,9 +266,7 @@ blocked when the developer intentionally omits Stripe.
 | --- | --- |
 | `T2-AUTH-1` | Fresh `/setup` claim, password login, logout, relogin, wrong-password rejection, and permanent second-claim rejection. |
 | `T2-AUTH-2` | Access/refresh rotation and revocation: every existing browser or token loses access immediately and cannot silently reauthenticate. |
-| `T2-AUTH-3` | Mock-OIDC discovery, start, callback, JIT membership, identity reuse, disabled JIT, disallowed domain, unknown user, tampered state, issuer mismatch, and audience mismatch. |
 | `T2-AUTH-4` | Google/GitHub availability, PKCE/state/callback error handling, button truthfulness, and uniform non-enumerating failures up to the real-provider boundary. |
-| `T2-AUTH-5` | Slug, org-id, join, and cold-login SSO entry points; unknown and unconfigured organizations return the same non-enumerating answer. |
 | `T2-AUTH-6` | Unknown email, inactive user, OAuth-only user, wrong password, normalized-email/IP throttles, trusted-proxy rules, and the password-login kill switch preserve non-enumerating responses and dummy verification. Exact-email/domain Web-beta allowlists match case-insensitively for existing users and OAuth callbacks, deny with the stable 403/redirect code, and never gate Desktop or mobile. |
 | `T2-INV-1` | Invite, fresh-browser acceptance, role assignment, resend/rotation, revoke, expiry, reuse, duplicate, and wrong-email rejection. |
 | `T2-INV-2` | Single-org register-via-invite creates the account and membership atomically; a bad token or email creates neither. |
@@ -360,9 +358,9 @@ credential fails the required check.
 
 | ID | Required validation |
 | --- | --- |
-| `T2-SH-1` | Single-org claim/owner semantics, invite registration, adaptive password/GitHub/SSO entry, and permanently closed setup. |
+| `T2-SH-1` | Single-org claim/owner semantics, invite registration, adaptive password/GitHub entry, and permanently closed setup. |
 | `T2-SH-2` | Live `/meta` capability/version/deployment/support contract for base, add-on, and hosted postures. |
-| `T2-SH-3` | Missing or partial E2B, gateway, SSO, support, and billing configuration never crash-loops the control plane and returns actionable, secret-safe errors. |
+| `T2-SH-3` | Missing or partial E2B, gateway, support, and billing configuration never crash-loops the control plane and returns actionable, secret-safe errors. |
 | `T2-SH-4` | Gateway route materialization is fail-closed when live provider enumeration is absent; session create accepts only exact IDs subsequently reported by that target's override-free harness observation, through a real local runtime HTTP seam without an LLM call. |
 | `T2-OBS-1` | Telemetry routing is exact for local development, self-managed, and hosted-product postures. Vendor capture is hosted-only, anonymous telemetry honors opt-out and typed low-cardinality schemas, exceptions emit once, replay defaults off, and prompts/files/paths/repos/settings/credentials stay masked or blocked. |
 | `T2-UPDATER-1` | Desktop and Supervisor component-updater decision matrices reject equal/downgrade versions, bad signatures/checksums, unsafe component/path/size/archive input, partial downloads, interrupted staging, and unhealthy activation. Atomic swap, last-good rollback, retry, and cleanup leave exactly one trusted active version; no failed candidate is reported healthy. |
@@ -385,7 +383,6 @@ and matrices enumerate only routes valid for that target.
 | ID | Required validation |
 | --- | --- |
 | `T3-AUTH-1` | Real hosted Google and GitHub sign-in, PKCE/state/callback, account linking, logout/revocation, and provider denial against deployed TLS/DNS. |
-| `T3-AUTH-2` | Deployed OIDC SSO and invitation/email delivery round-trip with JIT, existing-user reuse, role assignment, and negative identities. |
 | `T3-AUTH-3` | Native iOS/Android Apple sign-in plus mobile password/provider session path covers callback/deep link, account-link collision, SecureStore refresh after kill/reopen, provider revocation, logout/cache clearing, and GitHub-readiness transition against deployed TLS. |
 | `T3-SURF-1` | Desktop product renderer, hosted Web after unification, mobile Web, and native mobile can sign in, open the same cloud workspace, send a bounded prompt, observe completion, and reload history. Desktop/Web render billing management; mobile renders the supported plan summary and policy/account state without inventing unsupported checkout/portal controls. Packaged Desktop host integration is Tier 4. |
 | `T3-ONBOARD-1` | Fresh Desktop, Web, iOS, and Android users traverse identity, provider, run, and workspace readiness to first useful work. GitHub, billing, managed-credit/BYOK, agent-auth, and target blockers preserve the prompt and resume; pending ids reconcile once; analytics contain only stable blocker codes. |
@@ -628,7 +625,7 @@ than copied or treated as target coverage by name.
 | legacy `T2-SH-2`, `T2-SH-3`, `T2-SH-4` | Fold claim, invite/register, and adaptive-auth collectors into canonical `T2-SH-1`. |
 | legacy `T2-SH-5` | Rename the live `/meta` capability collector claim to canonical `T2-SH-2`. |
 | legacy `T2-SH-6` | Reclassify partial-E2B safety as one cell of canonical `T2-SH-3`. |
-| legacy `T2-SH-7` | Split incomplete-SSO truth into `T2-SH-3`/`T2-AUTH-5`; gateway eligibility becomes canonical `T2-SH-4`. |
+| legacy `T2-SH-7` | Gateway eligibility becomes canonical `T2-SH-4` (the incomplete-SSO half retired with the SSO cull). |
 | legacy `T3-GW-1` | Retire the guarantee ID and audit its real gateway collector beneath `LOCAL-2`, contributing to `T3-CHAT-1`, `T3-AUTHROUTE-1`, and the managed-spend cell of `T3-BILL-1`. |
 | legacy `T3-UPDATE-1` | Split steady-state install/catalog proof into `T3-AGENT-1`/`T3-MODELREG-1`; real N-1→N behavior belongs to `T4-RUNTIME-1` with `T4-CATALOG-1`. The old server-pushed catalog model is not trusted input. |
 | old `T3-SH-1` through `T3-SH-4` | Keep the canonical IDs only after expanding their partial collectors across the `SH-*` journeys. Name equality alone is not coverage. |

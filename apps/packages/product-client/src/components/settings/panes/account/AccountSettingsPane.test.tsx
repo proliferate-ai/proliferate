@@ -98,12 +98,6 @@ describe("AccountSettingsPane", () => {
         githubLabel="@pablo"
         providers={[
           {
-            provider: "sso",
-            label: "Auth0",
-            accountLabel: "pablo@proliferate.com",
-            connected: true,
-          },
-          {
             provider: "github",
             label: "GitHub",
             accountLabel: "@pablo",
@@ -127,45 +121,19 @@ describe("AccountSettingsPane", () => {
       />,
     );
 
-    expect(screen.getByText("Auth0")).toBeTruthy();
-    expect(screen.getByText("pablo@proliferate.com")).toBeTruthy();
     expect(screen.getByText("pablo@gmail.com")).toBeTruthy();
     expect(screen.getByText("Apple")).toBeTruthy();
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
-    // The four sign-in method rows carry icon-control glyphs; the identity
+    // The three sign-in method rows carry icon-control glyphs; the identity
     // header above them carries its own smaller icon-compact GitHub glyph —
     // confirm the sizing actually splits along that line, not just that a
     // pre-filtered selector matches itself.
     const allBrandIcons = container.querySelectorAll("[data-auth-provider-brand]");
-    expect(allBrandIcons.length).toBe(5);
+    expect(allBrandIcons.length).toBe(4);
     const controlIcons = [...allBrandIcons].filter((icon) => icon.classList.contains("icon-control"));
     const compactIcons = [...allBrandIcons].filter((icon) => icon.classList.contains("icon-compact"));
-    expect(controlIcons.length).toBe(4);
+    expect(controlIcons.length).toBe(3);
     expect(compactIcons.length).toBe(1);
-  });
-
-  it("uses SSO brand labels for icons without changing the visible provider label", () => {
-    const { container } = render(
-      <AccountSettingsPane
-        displayName="Pablo"
-        email="pablo@example.com"
-        profileSummary="Ready."
-        githubLabel="@pablo"
-        providers={[
-          {
-            provider: "sso",
-            label: "SSO",
-            brandLabel: "Google SSO",
-            accountLabel: "pablo@proliferate.com",
-            connected: true,
-          },
-        ]}
-        actions={{}}
-      />,
-    );
-
-    expect(screen.getByText("SSO")).toBeTruthy();
-    expect(container.querySelector('[data-auth-provider-brand="google-sso"]')).toBeTruthy();
   });
 
   it("keeps email password separate from linked providers", async () => {

@@ -242,7 +242,6 @@ export function SettingsScreen({
               "organization-integrations": !controlPlaneReachable,
               "agent-api-keys": !controlPlaneReachable,
               "organization-secrets": !controlPlaneReachable,
-              "organization-sso": !controlPlaneReachable,
               "personal-secrets": !controlPlaneReachable,
             }}
             onCheckForUpdates={() => { void checkNow(); }}

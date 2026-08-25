@@ -1,7 +1,7 @@
 // Public, unauthenticated server capability probes. Promoted out of the retained
 // Desktop host `lib/integrations/auth/*` into product-owned cloud access per the
 // owner ruling: these are plain HTTP GETs that read what a connected deployment
-// supports (password login, GitHub OAuth availability, SSO discovery). They
+// supports (password login, GitHub OAuth availability). They
 // carry no PKCE verifier, token, session, or user record — the secret OAuth /
 // PKCE transport stays host-side. Callers pass the deployment base URL
 // explicitly (the product host supplies `host.deployment.apiBaseUrl`), so these
@@ -111,70 +111,6 @@ export async function getGitHubDesktopAuthAvailability(
     });
     throw error;
   }
-}
-
-// --- SSO discovery ----------------------------------------------------------
-
-interface SsoDiscoveryResponse {
-  enabled: boolean;
-  scope?: "deployment" | "organization" | null;
-  connectionId?: string | null;
-  organizationId?: string | null;
-  protocol?: "oidc" | "saml" | null;
-  displayName?: string | null;
-  reason?: string | null;
-}
-
-export interface DesktopSsoDiscovery {
-  enabled: boolean;
-  scope: "deployment" | "organization" | null;
-  connectionId: string | null;
-  organizationId: string | null;
-  protocol: "oidc" | "saml" | null;
-  displayName: string | null;
-  reason: string | null;
-}
-
-export interface DiscoverDesktopSsoOptions {
-  apiBaseUrl: string;
-  email?: string | null;
-  organizationId?: string | null;
-  connectionId?: string | null;
-  slug?: string | null;
-}
-
-export async function discoverDesktopSso(
-  options: DiscoverDesktopSsoOptions,
-): Promise<DesktopSsoDiscovery> {
-  const params = new URLSearchParams();
-  if (options.email) params.set("email", options.email);
-  if (options.organizationId) params.set("organizationId", options.organizationId);
-  if (options.connectionId) params.set("connectionId", options.connectionId);
-  if (options.slug) params.set("slug", options.slug);
-  const query = params.toString();
-  const response = await fetchAuthResponse(
-    buildUrl(`/auth/sso/discover${query ? `?${query}` : ""}`, options.apiBaseUrl),
-    {
-      headers: {
-        Accept: "application/json",
-      },
-    },
-  );
-
-  if (!response.ok) {
-    throw await parseAuthError(response);
-  }
-
-  const payload = (await response.json()) as SsoDiscoveryResponse;
-  return {
-    enabled: payload.enabled,
-    scope: payload.scope ?? null,
-    connectionId: payload.connectionId ?? null,
-    organizationId: payload.organizationId ?? null,
-    protocol: payload.protocol ?? null,
-    displayName: payload.displayName ?? null,
-    reason: payload.reason ?? null,
-  };
 }
 
 // --- GitHub OAuth app settings link -----------------------------------------

@@ -1,1 +1,0 @@
-"""SSO protocol integrations."""

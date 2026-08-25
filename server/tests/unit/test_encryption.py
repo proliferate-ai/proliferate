@@ -31,8 +31,6 @@ _CONFIG_INJECTED_STORE_MODULES = (
     "proliferate.db.store.agent_gateway.api_keys",
     "proliferate.db.store.agent_gateway.enrollment_keys",
     "proliferate.db.store.agent_gateway.enrollments",
-    "proliferate.db.store.auth_sso",
-    "proliferate.db.store.auth_sso_records",
     "proliferate.db.store.cloud_secrets",
     "proliferate.db.store.github_app",
 )

@@ -22,7 +22,6 @@ export interface OrganizationMemberRecord {
 export interface OrganizationMemberAuthMethodRecord {
   provider: string;
   label: string;
-  brandLabel?: string | null;
 }
 
 export interface OrganizationInvitationRecord {

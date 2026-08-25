@@ -5,7 +5,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { decodeWebAuthCallback } from "./web-auth-transport";
 
 /**
- * The narrow `/auth/callback` host route. It terminates the browser OAuth/SSO
+ * The narrow `/auth/callback` host route. It terminates the browser OAuth
  * redirect: it decodes the cold callback query into a normalized
  * {@link AuthCallback}, hands it to `host.auth.finishLogin` exactly once, and
  * then enters ProductClient. It owns no product UI or auth gate — a success

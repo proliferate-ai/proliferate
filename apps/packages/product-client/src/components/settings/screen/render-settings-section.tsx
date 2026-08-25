@@ -12,7 +12,6 @@ import { OrganizationIntegrationsPane } from "#product/components/settings/panes
 import { OrganizationMembersPane } from "#product/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "#product/components/settings/panes/OrganizationPane";
 import { OrganizationSecretsPane } from "#product/components/settings/panes/OrganizationSecretsPane";
-import { OrganizationSsoPane } from "#product/components/settings/panes/OrganizationSsoPane";
 import { PersonalSecretsPane } from "#product/components/settings/panes/PersonalSecretsPane";
 import { UserIntegrationsPane } from "#product/components/settings/panes/UserIntegrationsPane";
 import { OrganizationModelPolicyPane } from "#product/components/settings/panes/OrganizationModelPolicyPane";
@@ -54,7 +53,7 @@ export function renderSettingsSection(
   // Control-plane gate: surfaces that only need a reachable, signed-in control
   // plane (not cloud compute/E2B). These are the ADR FM6/Q9 control-plane
   // features — API keys, personal/organization secrets, organization
-  // integrations, SSO, and model policy — which must stay available whenever the
+  // integrations, and model policy — which must stay available whenever the
   // control plane is reachable and the user is authenticated, independent of
   // `cloudComputeEnabled`. CloudGuard renders children when its `cloudActive` is
   // true (and still shows CloudUnavailablePane when `controlPlaneReachable` is false), so
@@ -106,9 +105,6 @@ export function renderSettingsSection(
   }
   if (activeSection === "organization-limits") {
     return <OrganizationBudgetsPane />;
-  }
-  if (activeSection === "organization-sso") {
-    return renderCloudGatedPane(authGate, () => <OrganizationSsoPane />);
   }
   if (activeSection === "organization-model-policy") {
     return renderCloudGatedPane(authGate, () => <OrganizationModelPolicyPane />);

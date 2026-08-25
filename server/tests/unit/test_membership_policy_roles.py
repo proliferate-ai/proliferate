@@ -1,9 +1,9 @@
 """Role resolution tests for the single-org membership policy.
 
 Covers how ``place_new_identity`` picks the role for a brand-new instance
-membership: a live pending invitation wins, then the caller-provided SSO
-default role, then member; the ADMIN_EMAILS floor raises listed emails to at
-least admin. Placement/guard behavior lives in ``test_membership_policy``.
+membership: a live pending invitation wins, then member; the ADMIN_EMAILS
+floor raises listed emails to at least admin. Placement/guard behavior lives
+in ``test_membership_policy``.
 """
 
 from __future__ import annotations
@@ -66,8 +66,8 @@ async def _seed_invitation(  # type: ignore[no-untyped-def]
 
 
 # ---------------------------------------------------------------------------
-# SingleOrgPolicy: role resolution for new memberships (invited role, SSO
-# default_role, ADMIN_EMAILS floor)
+# SingleOrgPolicy: role resolution for new memberships (invited role,
+# ADMIN_EMAILS floor)
 # ---------------------------------------------------------------------------
 
 
@@ -130,76 +130,6 @@ async def test_single_org_mode_ignores_expired_invitation_role(
 
 
 @pytest.mark.asyncio
-async def test_single_org_mode_honors_sso_default_role(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "single_org_mode_override", True)
-
-    owner = await create_auth_user(
-        db_session, email="owner@acme.test", display_name="Owner", avatar_url=None
-    )
-    await _seed_instance_org(db_session, owner_id=owner.id)
-
-    joiner = await create_auth_user(
-        db_session, email="jit-admin@acme.test", display_name=None, avatar_url=None
-    )
-    await place_new_identity(db_session, joiner, default_role=ORGANIZATION_ROLE_ADMIN)
-
-    joiner_orgs = await organization_store.list_organizations_for_user(db_session, joiner.id)
-    assert joiner_orgs[0].membership.role == ORGANIZATION_ROLE_ADMIN
-
-
-@pytest.mark.asyncio
-async def test_single_org_mode_invitation_role_wins_over_default_role(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "single_org_mode_override", True)
-
-    owner = await create_auth_user(
-        db_session, email="owner@acme.test", display_name="Owner", avatar_url=None
-    )
-    instance_org = await _seed_instance_org(db_session, owner_id=owner.id)
-    await _seed_invitation(
-        db_session,
-        organization_id=instance_org.id,
-        invited_by_user_id=owner.id,
-        email="invited-member@acme.test",
-        role=ORGANIZATION_ROLE_MEMBER,
-    )
-
-    joiner = await create_auth_user(
-        db_session, email="invited-member@acme.test", display_name=None, avatar_url=None
-    )
-    await place_new_identity(db_session, joiner, default_role=ORGANIZATION_ROLE_ADMIN)
-
-    joiner_orgs = await organization_store.list_organizations_for_user(db_session, joiner.id)
-    assert joiner_orgs[0].membership.role == ORGANIZATION_ROLE_MEMBER
-
-
-@pytest.mark.asyncio
-async def test_single_org_mode_ignores_invalid_default_role(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "single_org_mode_override", True)
-
-    owner = await create_auth_user(
-        db_session, email="owner@acme.test", display_name="Owner", avatar_url=None
-    )
-    await _seed_instance_org(db_session, owner_id=owner.id)
-
-    joiner = await create_auth_user(
-        db_session, email="odd-role@acme.test", display_name=None, avatar_url=None
-    )
-    await place_new_identity(db_session, joiner, default_role="superuser")
-
-    joiner_orgs = await organization_store.list_organizations_for_user(db_session, joiner.id)
-    assert joiner_orgs[0].membership.role == ORGANIZATION_ROLE_MEMBER
-
-
-@pytest.mark.asyncio
 async def test_admin_emails_floor_raises_invited_member_to_admin(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
@@ -226,21 +156,3 @@ async def test_admin_emails_floor_raises_invited_member_to_admin(
 
     joiner_orgs = await organization_store.list_organizations_for_user(db_session, joiner.id)
     assert joiner_orgs[0].membership.role == ORGANIZATION_ROLE_ADMIN
-
-
-@pytest.mark.asyncio
-async def test_hosted_mode_ignores_default_role(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "single_org_mode_override", False)
-
-    user = await create_auth_user(
-        db_session, email="hosted@example.com", display_name=None, avatar_url=None
-    )
-    await place_new_identity(db_session, user, default_role=ORGANIZATION_ROLE_ADMIN)
-
-    orgs = await organization_store.list_organizations_for_user(db_session, user.id)
-    assert len(orgs) == 1
-    assert orgs[0].membership.role == ORGANIZATION_ROLE_OWNER
-    assert orgs[0].organization.is_instance is False

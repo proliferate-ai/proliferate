@@ -10,7 +10,6 @@
         "apps/packages/product-client/src/components/settings/panes/AppearancePane.tsx": 1,
         "apps/packages/product-client/src/components/settings/panes/OrganizationModelPolicyPane.tsx": 3,
         "apps/packages/product-client/src/components/settings/panes/OrganizationPane.tsx": 1,
-        "apps/packages/product-client/src/components/settings/panes/OrganizationSsoSettingsSurface.tsx": 3,
         "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAuthSection.tsx": 1,
         "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.tsx": 1,
         "apps/packages/product-client/src/components/settings/panes/environments/WorktreeStorageSection.tsx": 1,
@@ -113,7 +112,7 @@
   "stagedViolations": {
     "apps/packages/product-client/src/components/app/chrome/MacWindowControlsSafeArea.tsx|PROD-SCALE-35": 2,
     "apps/packages/product-client/src/components/app/sidebar/SidebarAccountFooter.tsx|PROD-SCALE-35": 1,
-    "apps/packages/product-client/src/components/auth/AuthScreenLayout.tsx|PROD-SCALE-35": 3,
+    "apps/packages/product-client/src/components/auth/AuthScreenLayout.tsx|PROD-SCALE-35": 1,
     "apps/packages/product-client/src/components/content/ui/DiffViewer.test.tsx|PROD-SCALE-35": 1,
     "apps/packages/product-client/src/components/content/ui/diff/ChatDiffViewer.tsx|PROD-SCALE-35": 1,
     "apps/packages/product-client/src/components/content/ui/diff/DiffContextExpander.tsx|PROD-SCALE-35": 1,

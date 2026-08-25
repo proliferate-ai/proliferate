@@ -38,11 +38,11 @@ import { webEnv } from "./config/env";
  */
 
 // The identity methods hosted Web advertises to the shared login screen while
-// anonymous. Legacy Web offered GitHub + Google OAuth and org/slug SSO (never
-// password or Apple); this is the faithful port of that set. A future stage may
-// replace this static list with a Web availability probe — the shared login UI
-// reads `methods` and refines what it renders.
-const WEB_ANONYMOUS_METHODS: AuthMethod[] = ["github", "google", "sso"];
+// anonymous. Legacy Web offered GitHub + Google OAuth (never password or
+// Apple); this is the faithful port of that set. A future stage may replace
+// this static list with a Web availability probe — the shared login UI reads
+// `methods` and refines what it renders.
+const WEB_ANONYMOUS_METHODS: AuthMethod[] = ["github", "google"];
 
 /** Map the Cloud `UserRead` session identity to the shared `ProductAuthUser`. */
 export function mapWebProductAuthUser(user: AuthUser): ProductAuthUser {

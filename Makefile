@@ -55,7 +55,6 @@ LOCAL_LITELLM_BASE_URL ?= http://127.0.0.1:14000
 LOCAL_LITELLM_MASTER_KEY ?= sk-proliferate-local-dev
 CLOUD_WORKER_TUNNEL ?= 0
 AUTH_PROFILE ?=
-SSO_STATUS ?= enabled
 AWS_REGION ?= us-east-1
 PROD_CLUSTER ?= proliferate-prod
 PROD_SERVICE ?= proliferate-prod-server
@@ -132,13 +131,13 @@ PROFILE_DB_READY_COMMAND = :;
 PROFILE_DB_ENSURE_COMMAND = :;
 endif
 
-ifneq ($(filter dev dev-init setup run seed-sso,$(MAKECMDGOALS)),)
+ifneq ($(filter dev dev-init setup run,$(MAKECMDGOALS)),)
 ifeq ($(strip $(PROFILE)),)
 $(error PROFILE is required. Example: make dev PROFILE=main)
 endif
 endif
 
-.PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth seed-sso server-db-up server-db-wait \
+.PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
         server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
@@ -260,10 +259,6 @@ run: dev-artifacts-ready
 	fi; \
 	export API_BASE_URL="http://127.0.0.1:$$PROLIFERATE_API_PORT"; \
 	export FRONTEND_BASE_URL="$${FRONTEND_BASE_URL:-http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT}"; \
-	if [ -n "$${AUTH_PROFILE:-}" ]; then \
-		sso_oidc_callback_base_url="$${PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL:-$$API_BASE_URL}"; \
-		echo "SSO callback URL for provider console: $$sso_oidc_callback_base_url/auth/sso/oidc/callback"; \
-	fi; \
 	export CORS_ALLOW_ORIGINS="http://localhost:$$PROLIFERATE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_WEB_PORT,http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT,http://localhost:$$PROLIFERATE_MOBILE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_MOBILE_WEB_PORT,http://tauri.localhost,tauri://localhost"; \
 	export STRIPE_CHECKOUT_SUCCESS_URL="$$FRONTEND_BASE_URL/settings/cloud?checkout=success"; \
 	export STRIPE_CHECKOUT_CANCEL_URL="$$FRONTEND_BASE_URL/settings/cloud?checkout=cancel"; \
@@ -435,54 +430,6 @@ dev-mobile-tunnel: dev-mobile-auth
 
 dev-web-auth:
 	@node scripts/dev-web-auth.mjs
-
-seed-sso:
-	@set -e; \
-	org_id="$(ORG_ID)"; \
-	if [ -z "$$org_id" ]; then org_id="$(org_id)"; fi; \
-	if [ -z "$$org_id" ]; then \
-		echo "ORG_ID is required. Example: make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>"; \
-		exit 1; \
-	fi; \
-	database_url_override_set="$${DATABASE_URL+x}"; \
-	database_url_override_value="$${DATABASE_URL:-}"; \
-	launch_env=$$( \
-		PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
-		PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
-		PROLIFERATE_WEB_HMR_PORT="$(PROLIFERATE_WEB_HMR_PORT)" \
-		PROLIFERATE_HOSTED_WEB_PORT="$(PROLIFERATE_HOSTED_WEB_PORT)" \
-		PROLIFERATE_MOBILE_WEB_PORT="$(PROLIFERATE_MOBILE_WEB_PORT)" \
-		PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE="$(PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE)" \
-		ANYHARNESS_PORT="$(ANYHARNESS_PORT)" \
-		ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
-		PROLIFERATE_DEV_HOME="$(PROLIFERATE_DEV_HOME)" \
-		PROLIFERATE_DEV_DB_NAME="$(PROLIFERATE_DEV_DB_NAME)" \
-		node scripts/dev.mjs ensure --profile "$(PROFILE)" \
-	); \
-	$(SERVER_ENV_SOURCE) \
-	. "$$launch_env"; \
-	$(AUTH_PROFILE_ENV_SOURCE) \
-	if [ -z "$${AUTH_PROFILE:-}" ]; then \
-		echo "AUTH_PROFILE is required. Example: make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>"; \
-		exit 1; \
-	fi; \
-	if [ "$$database_url_override_set" = "x" ]; then \
-		export DATABASE_URL="$$database_url_override_value"; \
-	else \
-		$(PROFILE_DB_READY_COMMAND) \
-		export DATABASE_URL="$$( \
-			LOCAL_PGHOST="$(LOCAL_PGHOST)" \
-			LOCAL_PGPORT="$(LOCAL_PGPORT)" \
-			LOCAL_PGUSER="$(LOCAL_PGUSER)" \
-			LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" \
-			node scripts/dev.mjs database-url --db-name "$$PROLIFERATE_DEV_DB_NAME" \
-		)"; \
-		$(PROFILE_DB_ENSURE_COMMAND) \
-	fi; \
-	export API_BASE_URL="http://127.0.0.1:$$PROLIFERATE_API_PORT"; \
-	echo "Seeding org SSO for profile $$PROLIFERATE_DEV_PROFILE with auth profile $$AUTH_PROFILE"; \
-	(cd server && DATABASE_URL="$$DATABASE_URL" uv run alembic upgrade head); \
-	(cd server && DATABASE_URL="$$DATABASE_URL" uv run python ../scripts/seed_sso.py --org-id "$$org_id" --status "$(SSO_STATUS)")
 
 # --- Server (Python control plane) ---
 

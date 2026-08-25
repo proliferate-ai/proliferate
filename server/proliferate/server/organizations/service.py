@@ -65,10 +65,7 @@ from proliferate.server.organizations.domain.profile import (
 from proliferate.server.organizations.errors import OrganizationServiceError
 from proliferate.server.organizations.join_links import organization_join_url
 from proliferate.server.organizations.landing import build_join_landing_html
-from proliferate.server.organizations.membership_policy import (
-    ensure_instance_membership_not_removed,
-    place_new_identity,
-)
+from proliferate.server.organizations.membership_policy import place_new_identity
 
 OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
 
@@ -722,35 +719,6 @@ async def try_accept_invitation(
         authenticated_email=authenticated_email,
     )
     return accepted
-
-
-async def provision_sso_jit_membership(
-    db: AsyncSession,
-    actor_user: OrganizationActor,
-    *,
-    organization_id: UUID,
-    authenticated_email: str,
-    role: str,
-) -> MembershipRecord:
-    await ensure_instance_membership_not_removed(
-        db,
-        organization_id=organization_id,
-        user_id=actor_user.id,
-        email=authenticated_email,
-    )
-    membership = await organization_store.ensure_sso_jit_membership(
-        db,
-        organization_id=organization_id,
-        user_id=actor_user.id,
-        role=role,
-    )
-    await maybe_create_organization_seat_adjustment(
-        db,
-        organization_id=organization_id,
-        membership_id=membership.id,
-    )
-    schedule_agent_gateway_org_enrollment(organization_id, actor_user.id, db=db)
-    return membership
 
 
 async def accept_invitation(

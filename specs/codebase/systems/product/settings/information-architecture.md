@@ -204,7 +204,6 @@ Org       organization, organization-members, billing,
           organization-limits, organization-secrets (all adminOnly)
           Policies:        organization-integrations,
                            organization-model-policy
-          Authentication:  organization-sso
 Repo      environments, compute ("Personal compute")
 Agents    agent-defaults, agent-authentication
 ```
@@ -233,7 +232,7 @@ from the section. Sections are defined in
 SETTINGS_CONTENT_SECTIONS = [
   "general", "appearance", "keyboard", "account", "personal-secrets",
   "organization", "organization-secrets", "organization-members",
-  "billing", "organization-limits", "organization-sso", "organization-integrations",
+  "billing", "organization-limits", "organization-integrations",
   "organization-model-policy", "environments", "compute",
   "worktrees", "archived-chats", "agent-authentication",
   "agent-defaults",
@@ -269,8 +268,8 @@ KeyboardShortcutsPane.tsx    ModelRegistryPane.tsx
 OrganizationBudgetsPane.tsx
 OrganizationIntegrationsPane.tsx
 OrganizationMembersPane.tsx  OrganizationPane.tsx
-OrganizationSecretsPane.tsx  OrganizationSsoPane.tsx
-PersonalSecretsPane.tsx      SettingsScaffoldPane.tsx
+OrganizationSecretsPane.tsx  PersonalSecretsPane.tsx
+SettingsScaffoldPane.tsx
 SlackBotPane.tsx             (parked)
 WorktreesPane.tsx
 
@@ -346,7 +345,7 @@ owner.
 ### 4.2 What remains scaffolded / parked
 
 Connected panes keep their existing feature-owned content: organization
-profile/members/invitations, billing, secrets (personal + org), SSO,
+profile/members/invitations, billing, secrets (personal + org),
 org integrations, environments, personal compute, worktree pruning,
 agent authentication, and agent defaults.
 
@@ -463,9 +462,8 @@ Members
     that admins can copy. The join link is the organization join endpoint. A
     signed-in matching invited user can accept the invitation; an anonymous
     user is sent through the organization's configured auth path and returned
-    to the join flow. Organizations with enabled SSO start that SSO connection
-    from the join link; organizations without SSO fall back to standard product
-    sign-in. Domain auto-join uses the same link but is Enterprise-only.
+    to the join flow. Domain auto-join uses the same link but is
+    Enterprise-only.
 
 Billing
   maturity: real-now; plan comparison remains described separately below
@@ -516,7 +514,7 @@ Plans
       cloud auth: Proliferate gateway and BYO model credentials
       workflows per person: unlimited
       team members: unlimited
-      extras: SSO, org-wide secrets, audit trails, custom instance types,
+      extras: org-wide secrets, audit trails, custom instance types,
         programmatic access, productivity insights,
         VPC deployment, account manager, FDE, premium support.
 
@@ -571,8 +569,6 @@ Org (all adminOnly)
   Policies
     organization-integrations OrganizationIntegrationsPane org-owned integrations
     organization-model-policy SettingsScaffoldPane         allowed/default models
-  Authentication
-    organization-sso       OrganizationSsoPane            single sign-on
 Repo
   environments             EnvironmentsPane               environments
   compute                  ComputePane                    personal compute / SSH targets
@@ -608,7 +604,7 @@ does not mean visible.
 SETTINGS_CONTENT_SECTIONS = [
   "general", "appearance", "keyboard", "account", "personal-secrets",
   "organization", "organization-secrets", "organization-members",
-  "billing", "organization-limits", "organization-sso", "organization-integrations",
+  "billing", "organization-limits", "organization-integrations",
   "organization-model-policy", "environments", "compute",
   "worktrees", "archived-chats", "agent-authentication",
   "agent-defaults",
@@ -700,7 +696,6 @@ Org
   organization-secrets      spec 03 (shell) + secrets story (content)
   organization-integrations org integrations spec
   organization-model-policy future model policy spec
-  organization-sso          spec 03 (shell) + enterprise SSO story (content)
 Repo
   environments              spec 03 (shell) + per-repo content owned by
                             the broader env config story; existing

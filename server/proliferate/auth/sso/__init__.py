@@ -1,1 +1,0 @@
-"""SSO authentication subsystem."""

@@ -3,7 +3,7 @@
 Split out of service.py because the repo-shape server-boundary check forbids
 service.py from importing DB session entrypoints or ORM models directly
 (SRV-SVC-2 / SRV-SVC-3) — mirrors the transactions.py
-convention used elsewhere (e.g. organizations/sso/transactions.py).
+convention used elsewhere in the server tree.
 """
 
 from __future__ import annotations

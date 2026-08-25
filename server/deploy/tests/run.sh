@@ -207,22 +207,6 @@ pfout="$("$DEPLOY_DIR/preflight.sh" "$t" 2>&1 || true)"
 echo "$pfout" | grep -q "REDBEAT_REDIS_URL is empty" && ok "cloud workspaces with empty REDBEAT_REDIS_URL warns" || no "expected a REDBEAT_REDIS_URL warning"
 pf "$t" && ok "empty REDBEAT_REDIS_URL does not block" || no "empty REDBEAT_REDIS_URL should not block"
 
-# -- SSO: enabled but missing client secret and no endpoint source -> BLOCK.
-printf 'SITE_ADDRESS=api.example.com\nSSO_ENABLED=true\nSSO_OIDC_CLIENT_ID=abc\n' >"$t"
-pf "$t" && no "incomplete SSO config should BLOCK" || ok "incomplete SSO config blocks"
-
-# -- SSO: complete public-client config (token endpoint auth method "none"
-# needs no client secret) with an admin floor set -> pass, no lockout warning.
-printf 'SITE_ADDRESS=api.example.com\nSSO_ENABLED=true\nSSO_OIDC_CLIENT_ID=abc\nSSO_OIDC_ISSUER_URL=https://idp.example.com\nSSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD=none\nADMIN_EMAILS=admin@example.com\n' >"$t"
-pf "$t" && ok "complete public-client SSO config passes" || no "complete public-client SSO config should pass"
-
-# -- SSO: complete config, default JIT policy, no ADMIN_EMAILS floor -> warns
-# about a first-user lockout but does not block.
-printf 'SITE_ADDRESS=api.example.com\nSSO_ENABLED=true\nSSO_OIDC_CLIENT_ID=abc\nSSO_OIDC_CLIENT_SECRET=shh\nSSO_OIDC_ISSUER_URL=https://idp.example.com\n' >"$t"
-pfout="$("$DEPLOY_DIR/preflight.sh" "$t" 2>&1 || true)"
-echo "$pfout" | grep -q "No SSO sign-in can create the first user" && ok "SSO first-user-lockout warns" || no "expected a first-user-lockout warning"
-pf "$t" && ok "SSO first-user-lockout warning does not block" || no "SSO first-user-lockout warning should not block"
-
 # -- GitHub OAuth: one of client id / secret set -> warns, does not block.
 printf 'SITE_ADDRESS=api.example.com\nGITHUB_OAUTH_CLIENT_ID=abc\n' >"$t"
 pfout="$("$DEPLOY_DIR/preflight.sh" "$t" 2>&1 || true)"
@@ -231,12 +215,11 @@ pf "$t" && ok "GitHub OAuth partial config does not block" || no "GitHub OAuth p
 
 # -- per-section OK lines must not be suppressed by an UNRELATED earlier
 # error: missing SITE_ADDRESS still blocks the run, but a fully consistent
-# gateway and a complete SSO config must still print their confirmations so
-# the operator can tell which sections actually validated.
-printf 'AGENT_GATEWAY_ENABLED=true\nLITELLM_MASTER_KEY=a\nAGENT_GATEWAY_LITELLM_MASTER_KEY=a\nLITELLM_POSTGRES_PASSWORD=p\nAGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://api.example.com/llm\nANTHROPIC_API_KEY=sk-ant-x\nSSO_ENABLED=true\nSSO_OIDC_CLIENT_ID=abc\nSSO_OIDC_CLIENT_SECRET=shh\nSSO_OIDC_ISSUER_URL=https://idp.example.com\nADMIN_EMAILS=admin@example.com\n' >"$t"
+# gateway must still print its confirmation so the operator can tell which
+# sections actually validated.
+printf 'AGENT_GATEWAY_ENABLED=true\nLITELLM_MASTER_KEY=a\nAGENT_GATEWAY_LITELLM_MASTER_KEY=a\nLITELLM_POSTGRES_PASSWORD=p\nAGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://api.example.com/llm\nANTHROPIC_API_KEY=sk-ant-x\nADMIN_EMAILS=admin@example.com\n' >"$t"
 pfout="$("$DEPLOY_DIR/preflight.sh" "$t" 2>&1 || true)"
 echo "$pfout" | grep -q "Agent gateway config is internally consistent" && ok "gateway OK line survives an unrelated error" || no "gateway OK line suppressed by an unrelated error"
-echo "$pfout" | grep -q "SSO OIDC config is complete" && ok "SSO OK line survives an unrelated error" || no "SSO OK line suppressed by an unrelated error"
 pf "$t" && no "missing SITE_ADDRESS should still BLOCK" || ok "unrelated error still blocks the run"
 
 # ---------------------------------------------------------------------------

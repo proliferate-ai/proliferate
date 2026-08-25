@@ -18,7 +18,6 @@ import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orc
 import { useAppCapabilitiesFor } from "@proliferate/product-client/internal/hooks/capabilities/derived/use-app-capabilities";
 import { useDesktopAuthMethodsFor } from "@proliferate/product-client/internal/hooks/access/cloud/auth/use-auth-methods";
 import { useGitHubDesktopAuthAvailabilityFor } from "@proliferate/product-client/internal/hooks/access/cloud/auth/use-github-auth-availability";
-import { useSsoDiscoveryFor } from "@proliferate/product-client/internal/hooks/access/cloud/auth/use-sso-discovery";
 
 import {
   buildAnonymousMethods,
@@ -73,20 +72,17 @@ export function DesktopProductHostProvider({
   const { controlPlaneReachable } = useAppCapabilitiesFor(apiBaseUrl);
   const { data: authMethods } = useDesktopAuthMethodsFor(apiBaseUrl);
   const { data: githubAvailability } = useGitHubDesktopAuthAvailabilityFor(apiBaseUrl);
-  const { data: ssoDiscovery } = useSsoDiscoveryFor(apiBaseUrl, { enabled: controlPlaneReachable });
 
   const passwordAvailable = controlPlaneReachable && authMethods?.passwordLogin === true;
   const githubAvailable = controlPlaneReachable && githubAvailability?.enabled === true;
-  const ssoAvailable = controlPlaneReachable && ssoDiscovery?.enabled === true;
 
   const methods = useMemo(
     () =>
       buildAnonymousMethods({
         passwordAvailable,
         githubAvailable,
-        ssoAvailable,
       }),
-    [passwordAvailable, githubAvailable, ssoAvailable],
+    [passwordAvailable, githubAvailable],
   );
   const methodsKey = methods.join(",");
   // Method availability replaces the host only while anonymous; once
@@ -166,7 +162,6 @@ export function DesktopProductHostProvider({
     [
       actions.signInWithGitHub,
       actions.signInWithPassword,
-      actions.signInWithSso,
       actions.signOut,
       actions.cancelAuthFlow,
       actions.linkGoogle,

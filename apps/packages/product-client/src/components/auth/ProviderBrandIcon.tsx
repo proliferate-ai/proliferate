@@ -2,19 +2,16 @@ import { useId } from "react";
 
 import type { AuthProvider } from "#product/domain/auth/model";
 import { Mail } from "#product/primitives/icons/platform";
-import { Shield } from "#product/primitives/icons/product";
 
-export type AuthProviderIconKind = AuthProvider | "sso" | "password";
+export type AuthProviderIconKind = AuthProvider | "password";
 
 interface ProviderBrandIconProps {
   provider: AuthProviderIconKind;
-  label?: string | null;
   className?: string;
 }
 
 export function ProviderBrandIcon({
   provider,
-  label,
   className = "icon-control",
 }: ProviderBrandIconProps) {
   if (provider === "github") {
@@ -22,9 +19,6 @@ export function ProviderBrandIcon({
   }
   if (provider === "apple") {
     return <AppleBrandMark className={className} />;
-  }
-  if (provider === "sso") {
-    return <SsoBrandMark label={label} className={className} />;
   }
   if (provider === "password") {
     return (
@@ -36,76 +30,6 @@ export function ProviderBrandIcon({
     );
   }
   return <GoogleBrandMark className={className} />;
-}
-
-type SsoBrandKind =
-  | "auth0"
-  | "gitlab"
-  | "google"
-  | "microsoft"
-  | "okta"
-  | "sso";
-
-function SsoBrandMark({
-  label,
-  className,
-}: {
-  label?: string | null;
-  className: string;
-}) {
-  const brand = ssoBrandForLabel(label);
-  if (brand === "auth0") {
-    return <Auth0BrandMark className={className} />;
-  }
-  if (brand === "gitlab") {
-    return <GitLabBrandMark className={className} />;
-  }
-  if (brand === "google") {
-    return <GoogleBrandMark brand="google-sso" className={className} />;
-  }
-  if (brand === "microsoft") {
-    return <MicrosoftBrandMark className={className} />;
-  }
-  if (brand === "okta") {
-    return <OktaBrandMark className={className} />;
-  }
-  return (
-    <Shield
-      aria-hidden="true"
-      data-auth-provider-brand="sso"
-      className={className}
-    />
-  );
-}
-
-function ssoBrandForLabel(label: string | null | undefined): SsoBrandKind {
-  const normalized = label
-    ?.toLowerCase()
-    .replace(/[^a-z0-9]+/gu, " ")
-    .trim() ?? "";
-  if (!normalized) {
-    return "sso";
-  }
-  if (normalized.includes("auth0")) {
-    return "auth0";
-  }
-  if (normalized.includes("gitlab")) {
-    return "gitlab";
-  }
-  if (normalized.includes("google")) {
-    return "google";
-  }
-  if (
-    normalized.includes("microsoft")
-    || normalized.includes("entra")
-    || normalized.includes("azure")
-  ) {
-    return "microsoft";
-  }
-  if (normalized.includes("okta")) {
-    return "okta";
-  }
-  return "sso";
 }
 
 function GitHubBrandMark({ className }: { className: string }) {
@@ -136,20 +60,14 @@ function AppleBrandMark({ className }: { className: string }) {
   );
 }
 
-function GoogleBrandMark({
-  brand = "google",
-  className,
-}: {
-  brand?: "google" | "google-sso";
-  className: string;
-}) {
+function GoogleBrandMark({ className }: { className: string }) {
   const pathId = `google-brand-path-${useId().replace(/[^a-zA-Z0-9_-]/gu, "")}`;
   const clipPathId = `google-brand-clip-${useId().replace(/[^a-zA-Z0-9_-]/gu, "")}`;
 
   return (
     <svg
       aria-hidden="true"
-      data-auth-provider-brand={brand}
+      data-auth-provider-brand="google"
       className={className}
       viewBox="0 0 32 32"
     >
@@ -168,74 +86,6 @@ function GoogleBrandMark({
         <path d="M0 37l30-23 7.9 1L48 0v48H0z" clipPath={`url(#${clipPathId})`} fill="#34a853" />
         <path d="M48 48L17 24l-4-3 35-10z" clipPath={`url(#${clipPathId})`} fill="#4285f4" />
       </g>
-    </svg>
-  );
-}
-
-function Auth0BrandMark({ className }: { className: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      data-auth-provider-brand="auth0"
-      className={className}
-      viewBox="0 0 64 64"
-    >
-      <path
-        d="M49.012 51.774L42.514 32l17.008-12.22h-21.02L32.005 0h21.032l6.506 19.78c3.767 11.468-.118 24.52-10.53 31.993zm-34.023 0L31.998 64l17.015-12.226-17.008-12.22zm-10.516-32c-3.976 12.1.64 24.917 10.5 32.007v-.007L21.482 32 4.474 19.774l21.025.007L31.998 0H10.972z"
-        fill="#eb5424"
-      />
-    </svg>
-  );
-}
-
-function GitLabBrandMark({ className }: { className: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      data-auth-provider-brand="gitlab"
-      className={className}
-      viewBox="0 0 64 64"
-      fillRule="evenodd"
-    >
-      <path d="M32 61.477L43.784 25.2H20.216z" fill="#e24329" />
-      <path d="M32 61.477L20.216 25.2H3.7z" fill="#fc6d26" />
-      <path d="M3.7 25.2L.12 36.23a2.44 2.44 0 0 0 .886 2.728L32 61.477z" fill="#fca326" />
-      <path d="M3.7 25.2h16.515L13.118 3.366c-.365-1.124-1.955-1.124-2.32 0z" fill="#e24329" />
-      <path d="M32 61.477L43.784 25.2H60.3z" fill="#fc6d26" />
-      <path d="M60.3 25.2l3.58 11.02a2.44 2.44 0 0 1-.886 2.728L32 61.477z" fill="#fca326" />
-      <path d="M60.3 25.2H43.784l7.098-21.844c.365-1.124 1.955-1.124 2.32 0z" fill="#e24329" />
-    </svg>
-  );
-}
-
-function MicrosoftBrandMark({ className }: { className: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      data-auth-provider-brand="microsoft"
-      className={className}
-      viewBox="0 0 32 32"
-    >
-      <path d="M0 0h15.206v15.206H0z" fill="#f25022" />
-      <path d="M16.794 0H32v15.206H16.794z" fill="#7fba00" />
-      <path d="M0 16.794h15.206V32H0z" fill="#00a4ef" />
-      <path d="M16.794 16.794H32V32H16.794z" fill="#ffb900" />
-    </svg>
-  );
-}
-
-function OktaBrandMark({ className }: { className: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      data-auth-provider-brand="okta"
-      className={className}
-      viewBox="0 0 64 64"
-    >
-      <path
-        d="M32 0C14.37 0 0 14.267 0 32s14.268 32 32 32 32-14.268 32-32S49.63 0 32 0zm0 48c-8.866 0-16-7.134-16-16s7.134-16 16-16 16 7.134 16 16-7.134 16-16 16z"
-        fill="#007dc1"
-      />
     </svg>
   );
 }

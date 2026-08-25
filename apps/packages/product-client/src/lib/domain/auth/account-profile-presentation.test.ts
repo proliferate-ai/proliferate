@@ -106,7 +106,6 @@ describe("buildAccountProviderViews", () => {
       githubAccountLabel: null,
       githubConnected: false,
       googleAccounts: [],
-      ssoAccounts: [],
       googleAvailable: true,
       showProviders: false,
     });
@@ -122,21 +121,19 @@ describe("buildAccountProviderViews", () => {
     ]);
   });
 
-  it("lists SSO accounts first, then GitHub, then Google", () => {
+  it("lists GitHub first, then Google", () => {
     const providers = buildAccountProviderViews({
       githubAccountLabel: "@octocat",
       githubConnected: true,
       googleAccounts: [{ accountEmail: "person@example.com" }],
-      ssoAccounts: [{ accountEmail: "person@work.com", displayName: "Okta" }],
       googleAvailable: true,
       showProviders: true,
     });
 
     expect(providers.map((provider) => provider.provider)).toEqual([
-      "sso",
       "github",
       "google",
     ]);
-    expect(providers[1]).toMatchObject({ accountLabel: "@octocat", connected: true });
+    expect(providers[0]).toMatchObject({ accountLabel: "@octocat", connected: true });
   });
 });

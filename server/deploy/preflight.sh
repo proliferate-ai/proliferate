@@ -123,7 +123,7 @@ if [[ -n "$E2B_API_KEY" && -z "$E2B_TEMPLATE_NAME" ]]; then
 elif [[ -z "$E2B_API_KEY" && -n "$E2B_TEMPLATE_NAME" ]]; then
   warn "E2B_TEMPLATE_NAME is set but E2B_API_KEY is empty. The server reports operator_configuration_required and cloud workspaces stay unavailable until both are set."
 elif [[ -n "$E2B_API_KEY" && -n "$E2B_TEMPLATE_NAME" ]]; then
-  ok "E2B provisioning config is a complete pair. GitHub-backed cloud workspaces additionally require a complete GitHub App config (checked in section 7)."
+  ok "E2B provisioning config is a complete pair. GitHub-backed cloud workspaces additionally require a complete GitHub App config (checked in section 6)."
 fi
 
 # --- 3. Agent gateway pairing ------------------------------------------------
@@ -177,49 +177,7 @@ if [[ -n "$E2B_API_KEY" && -n "$E2B_TEMPLATE_NAME" ]]; then
   fi
 fi
 
-# --- 5. Deployment SSO (OIDC) completeness ------------------------------------
-#
-# A usable OIDC connection needs a client id, an issuer/discovery/static
-# endpoint source, and a client secret (unless the token-endpoint auth method
-# is "none", e.g. a public client). Mirrors
-# auth.sso.deployment_config.deployment_sso_configuration_error() so preflight
-# catches the same incompleteness before an operator discovers it at sign-in.
-
-if proliferate_is_truthy "$(get SSO_ENABLED)"; then
-  SSO_ERRORS_BEFORE="$ERRORS"
-  SSO_CLIENT_ID="$(get SSO_OIDC_CLIENT_ID)"
-  SSO_CLIENT_SECRET="$(get SSO_OIDC_CLIENT_SECRET)"
-  SSO_AUTH_METHOD="$(get SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD)"
-  SSO_ISSUER="$(get SSO_OIDC_ISSUER_URL)"
-  SSO_DISCOVERY="$(get SSO_OIDC_DISCOVERY_URL)"
-  SSO_AUTHZ_EP="$(get SSO_OIDC_AUTHORIZATION_ENDPOINT)"
-  SSO_TOKEN_EP="$(get SSO_OIDC_TOKEN_ENDPOINT)"
-  SSO_JWKS_EP="$(get SSO_OIDC_JWKS_URI)"
-  SSO_JIT="$(get SSO_JIT_POLICY)"
-  ADMIN_EMAILS_VAL="$(get ADMIN_EMAILS)"
-
-  if [[ -z "$SSO_CLIENT_ID" ]]; then
-    err "SSO_ENABLED=true but SSO_OIDC_CLIENT_ID is empty."
-  fi
-  if [[ -z "$SSO_CLIENT_SECRET" && "$SSO_AUTH_METHOD" != "none" ]]; then
-    err "SSO_ENABLED=true but SSO_OIDC_CLIENT_SECRET is empty (required unless SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD=none)."
-  fi
-  if [[ -z "$SSO_ISSUER" && -z "$SSO_DISCOVERY" \
-        && ! ( -n "$SSO_AUTHZ_EP" && -n "$SSO_TOKEN_EP" && -n "$SSO_JWKS_EP" ) ]]; then
-    err "SSO_ENABLED=true but no endpoint source is set. Set SSO_OIDC_ISSUER_URL or SSO_OIDC_DISCOVERY_URL, or all of SSO_OIDC_AUTHORIZATION_ENDPOINT/SSO_OIDC_TOKEN_ENDPOINT/SSO_OIDC_JWKS_URI."
-  fi
-  # First-user lockout: a disabled JIT policy rejects every unknown user, so
-  # with no ADMIN_EMAILS floor and (by definition, at first boot) no
-  # pre-provisioned user, nobody can complete a first SSO login.
-  if [[ "${SSO_JIT:-disabled}" == "disabled" && -z "$ADMIN_EMAILS_VAL" ]]; then
-    warn "SSO_ENABLED=true with SSO_JIT_POLICY=disabled (the default) and ADMIN_EMAILS empty. No SSO sign-in can create the first user; either set ADMIN_EMAILS so an admin can sign in with password first, or set SSO_JIT_POLICY=create_member."
-  fi
-  if [[ "$ERRORS" -eq "$SSO_ERRORS_BEFORE" ]]; then
-    ok "SSO OIDC config is complete."
-  fi
-fi
-
-# --- 6. GitHub sign-in (OAuth) partial config ---------------------------------
+# --- 5. GitHub sign-in (OAuth) partial config ---------------------------------
 
 GITHUB_OAUTH_ID="$(get GITHUB_OAUTH_CLIENT_ID)"
 GITHUB_OAUTH_SECRET="$(get GITHUB_OAUTH_CLIENT_SECRET)"
@@ -231,7 +189,7 @@ elif [[ -n "$GITHUB_OAUTH_ID" && -n "$GITHUB_OAUTH_SECRET" ]]; then
   ok "GitHub OAuth sign-in config is a complete pair."
 fi
 
-# --- 7. GitHub App (cloud repo access) partial config -------------------------
+# --- 6. GitHub App (cloud repo access) partial config -------------------------
 #
 # Distinct credential set from GitHub OAuth sign-in above. Not required for
 # the base install, but REQUIRED for GitHub-backed managed-cloud workspaces:
@@ -271,7 +229,7 @@ if [[ -n "$E2B_API_KEY" && -n "$E2B_TEMPLATE_NAME" && "$GITHUB_APP_PRESENT_COUNT
   warn "E2B is fully configured but the GitHub App is not. Cloud workspace creation enforces GitHub App repo authority, so cloud workspaces stay unavailable (operator_configuration_required) until the App config is complete."
 fi
 
-# --- 8. Runtime binaries for cloud workspaces --------------------------------
+# --- 7. Runtime binaries for cloud workspaces --------------------------------
 #
 # install-runtime.sh fails when a CLOUD_*_SOURCE_BINARY_PATH points at a missing
 # file and no RUNTIME_BINARY_URL is set to fetch it. Surface that here rather
@@ -285,7 +243,7 @@ for var in CLOUD_RUNTIME_SOURCE_BINARY_PATH CLOUD_WORKER_SOURCE_BINARY_PATH CLOU
   fi
 done
 
-# --- 9. Unknown / likely-typo keys -------------------------------------------
+# --- 8. Unknown / likely-typo keys -------------------------------------------
 #
 # Compare the operator's env keys against the shipped example schema plus the
 # small set of generated/managed keys the scripts add. An unknown key is
@@ -309,16 +267,6 @@ LITELLM_POSTGRES_DB
 LITELLM_POSTGRES_USER
 PROLIFERATE_LITELLM_IMAGE
 PROLIFERATE_LITELLM_IMAGE_TAG
-SSO_OIDC_AUTHORIZATION_ENDPOINT
-SSO_OIDC_TOKEN_ENDPOINT
-SSO_OIDC_JWKS_URI
-SSO_OIDC_USERINFO_ENDPOINT
-SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD
-SSO_OIDC_CALLBACK_BASE_URL
-SSO_PROTOCOL
-SSO_DISPLAY_NAME
-SSO_LOGIN_POLICY
-SSO_OIDC_SCOPES
 MANAGED
 } | sort -u >"$known_keys_file"
 
@@ -329,7 +277,7 @@ while IFS= read -r key; do
   fi
 done < <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE" | sed 's/=$//' | sort -u)
 
-# --- 10. Duplicate keys -------------------------------------------------------
+# --- 9. Duplicate keys -------------------------------------------------------
 
 dupes="$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE" | sed 's/=$//' | sort | uniq -d || true)"
 if [[ -n "$dupes" ]]; then
