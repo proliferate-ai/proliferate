@@ -5,8 +5,12 @@ Make Managed Runtime Updates Supervisor-Owned, decision 1: nullable
 ``cloud_sandbox``, added by revision ``6f545e279264``. ``head`` already runs
 this migration on every test via the session-scoped ``migrated_test_database``
 fixture (proving upgrade-to-head), so this test isolates the migration itself:
-downgrading one step removes the columns, re-upgrading restores them, on a
-disposable database.
+upgrading the disposable database to the revision under test, downgrading one
+step to remove the columns, and re-upgrading to restore them. The downgrade
+test pins ``_REVISION`` rather than head because the chain above it contains
+irreversible cull migrations (e.g. ``d7e8f9a0b1c2``) that a head-first
+downgrade cannot cross — the same pattern as the other migration up/down
+proofs.
 """
 
 from __future__ import annotations
@@ -49,10 +53,10 @@ async def test_migration_upgrade_adds_desired_version_columns() -> None:
 
 async def test_migration_downgrade_removes_desired_version_columns() -> None:
     async with temporary_database("desired_versions_down") as (_name, database_url):
-        await run_migrations_async(database_url)
+        config = build_alembic_config(database_url)
+        await asyncio.to_thread(command.upgrade, config, _REVISION)
         assert await _cloud_sandbox_columns(database_url) >= _NEW_COLUMNS
 
-        config = build_alembic_config(database_url)
         await asyncio.to_thread(command.downgrade, config, _DOWN_REVISION)
 
         columns_after_downgrade = await _cloud_sandbox_columns(database_url)
