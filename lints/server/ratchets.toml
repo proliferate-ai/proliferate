@@ -10,8 +10,8 @@ reason = "managed sandbox GitHub grant read path extends existing identity store
 
 [[max_lines]]
 path = "server/proliferate/config.py"
-max_lines = 623
-reason = "managed Cloud, GitHub App, and Workflow flags extend the centralized deployment settings surface; split pending; +7: publisher-lane agent_catalog_artifact_base_url/agent_catalog_channel settings (Update Flow ADR, FR-1); +6: FR-3 adds the two gateway-verification settings (flag + interval)"
+max_lines = 620
+reason = "managed Cloud, GitHub App, and Workflow flags extend the centralized deployment settings surface; split pending; +7: publisher-lane agent_catalog_artifact_base_url/agent_catalog_channel settings (Update Flow ADR, FR-1); +6: FR-3 adds the two gateway-verification settings (flag + interval); -3: cull Track F removes the CustomerIO settings"
 
 [[max_lines]]
 path = "server/proliferate/db/models/cloud/agent_gateway.py"
@@ -85,8 +85,8 @@ reason = "D train: D2 free-credit dedupe proofs + converted-claim guard + import
 
 [[max_lines]]
 path = "server/tests/integration/test_auth_flow.py"
-max_lines = 2331
-reason = "existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage + SG10 review: explicit crypto-secret fixture setup retains the nested grant construction; PRO-111 desktop handoff/error page coverage (launch script + provider error page + web-stays-302 pin) adds three tests to the existing desktop/mobile provider callback surface; PRO-111 review fixes: M2 folds the launch-script test into a parse-deep-link-then-exchange assertion, L5 tightens the error-page tone assertion"
+max_lines = 2316
+reason = "-15: cull Track F removes the customerio sync-scheduling mocks/assertions; existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage + SG10 review: explicit crypto-secret fixture setup retains the nested grant construction; PRO-111 desktop handoff/error page coverage (launch script + provider error page + web-stays-302 pin) adds three tests to the existing desktop/mobile provider callback surface; PRO-111 review fixes: M2 folds the launch-script test into a parse-deep-link-then-exchange assertion, L5 tightens the error-page tone assertion"
 
 [[max_lines]]
 path = "server/tests/integration/test_billing_accounting.py"

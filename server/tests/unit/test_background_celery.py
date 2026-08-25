@@ -104,8 +104,6 @@ def test_beat_schedule_has_exactly_one_relay_entry_by_default() -> None:
     assert sweep_schedule.minute == {0, 15, 30, 45}
 
 
-
-
 def test_celery_config_reads_settings_without_result_backend() -> None:
     config = _test_settings(
         celery_broker_url="amqp://worker:secret@rabbitmq:5672/proliferate",

@@ -106,5 +106,3 @@ async def test_remove_cloud_repo_environment_deletes_unused_environment(
     )
 
     assert calls == [("acme", "rocket")]
-
-
