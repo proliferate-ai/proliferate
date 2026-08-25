@@ -1,6 +1,6 @@
 # Analytics And Observability Operations
 
-Status: authoritative operator index for analytics, engagement, and
+Status: authoritative operator index for analytics and
 observability providers.
 
 Use these procedures to discover current provider state and verify that the
@@ -15,15 +15,11 @@ provider configuration part of repository law.
   durable facts and views.
 - [Engineering Observability](../../../specs/codebase/systems/engineering/observability/README.md)
   owns event production, scrubbing, correlation, structured logs, and Sentry.
-- [Product Engagement](../../../specs/codebase/systems/product/engagement/README.md)
-  owns Customer.io transport, profile attributes, lifecycle events, and send
-  gates.
 
 ## Provider Procedures
 
 | Provider | Procedure | Typical applicability |
 | --- | --- | --- |
-| Customer.io | [customerio.md](customerio.md) | Hosted product engagement; self-hosters only when they configure their own destination. |
 | Metabase | [metabase.md](metabase.md) | Hosted analytics and deployments that operate a compatible analytics database. |
 | PostHog | [posthog.md](posthog.md) | Hosted capture/replay and deployments that explicitly configure their own project. |
 | Sentry | [sentry.md](sentry.md) | Hosted observability and deployments that explicitly configure their own projects. |

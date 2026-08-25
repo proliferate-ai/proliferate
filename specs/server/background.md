@@ -195,8 +195,8 @@ Thin task wrappers — the boundary between the broker and a domain.
   the domain's service or `domain/`.
 
 ```python
-# background/tasks/customerio_sync.py
-async def _run_engagement_sync() -> None:
+# background/tasks/cloud_sandboxes.py
+async def _run_orphan_reap() -> None:
     engine = create_async_engine(
         settings.database_url,
         pool_pre_ping=True,
@@ -204,7 +204,8 @@ async def _run_engagement_sync() -> None:
     )
     try:
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
-        await run_customerio_engagement_sync(session_factory)
+        async with session_factory() as db:
+            await run_orphan_sandbox_reap_pass(db)
     finally:
         await engine.dispose()
 ```

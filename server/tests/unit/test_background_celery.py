@@ -9,7 +9,6 @@ from kombu import Queue
 from proliferate.background.config import (
     BACKGROUND_RELAY_TASK,
     CLOUD_SANDBOX_ORPHAN_REAP_TASK,
-    CUSTOMERIO_ENGAGEMENT_SYNC_TASK,
     DEFAULT_QUEUE,
     HEALTH_NOOP_TASK,
     INTEGRATION_REVOCATION_PROCESS_TASK,
@@ -49,7 +48,6 @@ def test_celery_app_import_registers_noop_task_without_broker_connection() -> No
     assert HEALTH_NOOP_TASK in celery_app.tasks
     assert BACKGROUND_RELAY_TASK in celery_app.tasks
     assert CLOUD_SANDBOX_ORPHAN_REAP_TASK in celery_app.tasks
-    assert CUSTOMERIO_ENGAGEMENT_SYNC_TASK in celery_app.tasks
     assert NOTIFICATIONS_SEND_SLACK_TASK in celery_app.tasks
     assert WORKFLOW_DELIVER_TASK in celery_app.tasks
     assert WORKFLOW_OBSERVE_TASK in celery_app.tasks
@@ -73,7 +71,6 @@ def test_celery_routes_and_queues_match_ratified_names() -> None:
         BACKGROUND_RELAY_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
         CLOUD_SANDBOX_ORPHAN_REAP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
         NOTIFICATIONS_SEND_SLACK_TASK: {"queue": NOTIFICATIONS_QUEUE},
-        CUSTOMERIO_ENGAGEMENT_SYNC_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
         WORKFLOW_DELIVER_TASK: {"queue": DEFAULT_QUEUE},
         WORKFLOW_OBSERVE_TASK: {"queue": DEFAULT_QUEUE},
         WORKFLOW_CANCEL_TASK: {"queue": DEFAULT_QUEUE},
@@ -107,35 +104,6 @@ def test_beat_schedule_has_exactly_one_relay_entry_by_default() -> None:
     assert sweep_schedule.minute == {0, 15, 30, 45}
 
 
-def test_beat_schedule_keeps_single_relay_entry_with_customerio_enabled() -> None:
-    schedule = build_beat_schedule(
-        _test_settings(customerio_site_id="site", customerio_api_key="key")
-    )
-
-    relay_entries = [
-        name for name, entry in schedule.items() if entry["task"] == BACKGROUND_RELAY_TASK
-    ]
-    assert relay_entries == [RELAY_SCHEDULE_ENTRY]
-    entry = schedule["customerio-engagement-sync"]
-    assert entry["task"] == CUSTOMERIO_ENGAGEMENT_SYNC_TASK
-    customerio_schedule = entry["schedule"]
-    assert isinstance(customerio_schedule, crontab)
-    assert customerio_schedule.minute == {0}
-    assert customerio_schedule.hour == {9}
-    assert customerio_schedule.day_of_week == set(range(7))
-    assert customerio_schedule.day_of_month == set(range(1, 32))
-    assert customerio_schedule.month_of_year == set(range(1, 13))
-
-
-def test_beat_schedule_requires_both_customerio_credentials() -> None:
-    incomplete_settings = (
-        _test_settings(customerio_site_id="site", customerio_api_key=""),
-        _test_settings(customerio_site_id="", customerio_api_key="key"),
-        _test_settings(customerio_site_id="", customerio_api_key=""),
-    )
-
-    for config in incomplete_settings:
-        assert "customerio-engagement-sync" not in build_beat_schedule(config)
 
 
 def test_celery_config_reads_settings_without_result_backend() -> None:

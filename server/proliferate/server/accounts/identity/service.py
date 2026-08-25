@@ -35,9 +35,6 @@ from proliferate.auth.identity.types import (
 from proliferate.auth.identity.web_beta import ensure_web_beta_email_allowed
 from proliferate.db.store.auth import create_auth_code
 from proliferate.db.store.users import github_oauth_account_or_email_exists
-from proliferate.server.accounts.desktop.service import (
-    schedule_customerio_desktop_authenticated_user_sync,
-)
 from proliferate.server.cloud.agent_gateway.signup_hook import (
     schedule_agent_gateway_user_enrollment,
 )
@@ -181,7 +178,6 @@ def _schedule_desktop_github_login_side_effects(
     verified: VerifiedProviderIdentity,
     notify_signup: bool,
 ) -> None:
-    schedule_customerio_desktop_authenticated_user_sync(user)
     if notify_signup:
         schedule_signup_slack_notification(
             SignupSlackNotification(

@@ -85,8 +85,7 @@ def schedule_agent_gateway_user_enrollment(
     Passing the request ``db`` defers scheduling until after its transaction
     commits so the enrollment task (own session) can see the freshly created
     user row AND the default org minted alongside it; rows that never commit
-    never enroll. Without a ``db`` the task starts immediately
-    (customerio-scheduler pattern).
+    never enroll. Without a ``db`` the task starts immediately.
     """
     name = f"agent-gateway-enroll-user-{user_id}"
     if db is None:

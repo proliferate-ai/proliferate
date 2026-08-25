@@ -6,7 +6,6 @@ GitHub OAuth completion for the desktop auth boundary.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import secrets
 from typing import TYPE_CHECKING
@@ -68,10 +67,6 @@ from proliferate.db.store.users import (
     get_active_user_by_id,
     github_oauth_account_or_email_exists,
     update_user_github_profile,
-)
-from proliferate.integrations.customerio import (
-    identify_customerio_user,
-    track_customerio_desktop_authenticated,
 )
 from proliferate.integrations.github import (
     GitHubIntegrationError,
@@ -215,44 +210,6 @@ async def get_active_user_or_400(db: AsyncSession, user_id: UUID) -> User:
             status_code=status.HTTP_400_BAD_REQUEST,
         )
     return user
-
-
-async def sync_customerio_desktop_authenticated_user(user: User) -> None:
-    user_id = str(user.id)
-    await identify_customerio_user(
-        user_id=user_id,
-        email=user.email,
-        display_name=user.display_name,
-        github_login=user.github_login,
-        github_avatar_url=user.avatar_url,
-        created_at=user.created_at,
-    )
-    await track_customerio_desktop_authenticated(user_id=user_id)
-
-
-def _handle_customerio_sync_task_completion(task: asyncio.Task[None]) -> None:
-    if task.cancelled():
-        return
-
-    exc = task.exception()
-    if exc is None:
-        return
-
-    logger.exception(
-        "Customer.io desktop auth sync task failed unexpectedly",
-        exc_info=(type(exc), exc, exc.__traceback__),
-    )
-
-
-def schedule_customerio_desktop_authenticated_user_sync(user: User) -> None:
-    coro = sync_customerio_desktop_authenticated_user(user)
-    try:
-        task = asyncio.create_task(coro, name=f"customerio-desktop-auth-{user.id}")
-    except Exception:
-        coro.close()
-        logger.exception("Could not schedule Customer.io desktop auth sync task")
-        return
-    task.add_done_callback(_handle_customerio_sync_task_completion)
 
 
 async def create_desktop_auth_code(
@@ -444,7 +401,6 @@ async def finish_github_desktop_callback(
         state=state_data["desktop_state"],
         redirect_uri=state_data["redirect_uri"],
     )
-    schedule_customerio_desktop_authenticated_user_sync(user)
     schedule_agent_gateway_user_enrollment(user.id, db=db)
     if not github_account_or_email_exists:
         schedule_signup_slack_notification(

@@ -7,7 +7,6 @@ from celery.schedules import crontab
 from proliferate.background.config import (
     BACKGROUND_RELAY_TASK,
     CLOUD_SANDBOX_ORPHAN_REAP_TASK,
-    CUSTOMERIO_ENGAGEMENT_SYNC_TASK,
     INTEGRATION_REVOCATION_SWEEP_TASK,
 )
 from proliferate.config import Settings, settings
@@ -39,12 +38,6 @@ def build_beat_schedule(config: Settings = settings) -> BeatSchedule:
             "schedule": crontab(minute="*/15"),
         },
     }
-
-    if config.customerio_site_id and config.customerio_api_key:
-        schedule["customerio-engagement-sync"] = {
-            "task": CUSTOMERIO_ENGAGEMENT_SYNC_TASK,
-            "schedule": crontab(minute="0", hour="9"),
-        }
 
     if config.cloud_provisioning_configured:
         schedule["cloud-sandbox-orphan-reap"] = {

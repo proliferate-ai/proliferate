@@ -240,9 +240,6 @@ class Settings(BaseSettings):
     apple_private_key: str = ""
     mobile_redirect_uri: str = "proliferate://auth/callback"
 
-    # Customer.io (optional)
-    customerio_site_id: str = ""
-    customerio_api_key: str = ""
     resend_api_key: str = ""
     resend_from_email: str = "hello@proliferate.dev"
     frontend_base_url: str = ""

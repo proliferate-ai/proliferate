@@ -50,7 +50,7 @@ Inside the file:
 - Payload dataclasses (when the integration parses structured responses).
 - Public functions exported to product code.
 
-Examples: `anthropic.py`, `customerio.py`, `github.py`, `resend.py`,
+Examples: `anthropic.py`, `github.py`, `resend.py`,
 `anonymous_telemetry.py`.
 
 ### Shape 2: Folder, single provider

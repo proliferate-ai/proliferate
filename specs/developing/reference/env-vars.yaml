@@ -907,18 +907,6 @@
 # Server: Messaging
 # ═══════════════════════════════════════════════════════════════════════
 
-- name: CUSTOMERIO_SITE_ID
-  secret: true
-  default: ""
-  description: Customer.io workspace ID
-  tags: [production]
-
-- name: CUSTOMERIO_API_KEY
-  secret: true
-  default: ""
-  description: Customer.io API auth
-  tags: [production]
-
 - name: RESEND_API_KEY
   secret: true
   default: ""
