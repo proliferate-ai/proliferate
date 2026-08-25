@@ -4,6 +4,7 @@ import {
 } from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import type {
   GitPanelMode,
+  GitPanelReviewFile,
   GitPanelReviewScope,
   GitPanelSection,
 } from "#product/lib/domain/workspaces/changes/git-panel-diff";
@@ -14,6 +15,23 @@ export interface GitPanelSectionStats {
   deletions: number;
 }
 
+export interface GitPanelLiveDiffEvidence {
+  additions?: number | null;
+  deletions?: number | null;
+  patch?: string | null;
+  binary?: boolean | null;
+  truncated?: boolean | null;
+}
+
+export interface GitPanelReviewEvidence {
+  source: "current" | "recorded" | "none";
+  additions: number;
+  deletions: number;
+  patch: string | null;
+  binary: boolean;
+  truncated: boolean;
+}
+
 export interface LastTurnUndoStateInput {
   mode: GitPanelMode;
   lastTurnUndoCompleted: boolean;
@@ -22,14 +40,42 @@ export interface LastTurnUndoStateInput {
   patchCount: number;
 }
 
+export function resolveGitPanelReviewEvidence(
+  file: GitPanelReviewFile,
+  liveDiff: GitPanelLiveDiffEvidence | null | undefined,
+): GitPanelReviewEvidence {
+  if (file.currentDiff) {
+    return {
+      source: "current",
+      additions: liveDiff?.additions ?? file.currentDiff.additions,
+      deletions: liveDiff?.deletions ?? file.currentDiff.deletions,
+      patch: liveDiff?.patch ?? null,
+      binary: Boolean(liveDiff?.binary || file.currentDiff.binary),
+      truncated: Boolean(liveDiff?.truncated),
+    };
+  }
+
+  const recordedPatch = file.touched?.recordedPatch?.trim()
+    ? file.touched.recordedPatch
+    : null;
+  return {
+    source: recordedPatch ? "recorded" : "none",
+    additions: file.touched?.recordedAdditions ?? 0,
+    deletions: file.touched?.recordedDeletions ?? 0,
+    patch: recordedPatch,
+    binary: false,
+    truncated: false,
+  };
+}
+
 export function summarizeGitPanelSectionStats(
   sections: readonly GitPanelSection[],
 ): GitPanelSectionStats {
   return sections.reduce(
     (stats, section) => {
       for (const file of section.files) {
-        stats.additions += file.currentDiff?.additions ?? 0;
-        stats.deletions += file.currentDiff?.deletions ?? 0;
+        stats.additions += file.currentDiff?.additions ?? file.touched?.recordedAdditions ?? 0;
+        stats.deletions += file.currentDiff?.deletions ?? file.touched?.recordedDeletions ?? 0;
       }
       return stats;
     },

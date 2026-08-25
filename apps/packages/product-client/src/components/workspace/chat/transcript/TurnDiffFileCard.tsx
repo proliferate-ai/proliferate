@@ -3,6 +3,7 @@ import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import { useTurnCurrentFilePatch } from "#product/hooks/chat/cache/use-turn-current-file-diffs";
 import { useLazyDiffFileLines } from "#product/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { GitPanelReviewFile } from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import { resolveDiffDisplayPolicy } from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import { CircleAlert } from "#product/primitives/icons/status";
 import { FileCode, FileIcon } from "#product/primitives/icons/workspace";
 import { RefreshCw } from "#product/primitives/icons/platform";
@@ -64,14 +65,24 @@ export function TurnDiffFileCard({
   const { fileLines, requestFileLines } = useLazyDiffFileLines({
     workspaceId,
     path: file.path,
-    enabled: isRuntimeReady,
+    enabled: isRuntimeReady && Boolean(currentDiff),
   });
+  const liveDiffData = currentDiff ? diffQuery.data : null;
   const emptyDiffState = formatEmptyDiffState({
-    binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
-    truncated: Boolean(diffQuery.data?.truncated && !patch),
+    binary: Boolean(liveDiffData?.binary || currentDiff?.binary),
+    truncated: Boolean(liveDiffData?.truncated && !patch),
   });
-  const displayAdditions = currentDiff || diffQuery.data ? additions : fallbackAdditions;
-  const displayDeletions = currentDiff || diffQuery.data ? deletions : fallbackDeletions;
+  const recordedPatch = !currentDiff ? file.touched?.recordedPatch ?? null : null;
+  const recordedPolicy = recordedPatch
+    ? resolveDiffDisplayPolicy({
+        path: file.path,
+        additions: file.touched?.recordedAdditions ?? 0,
+        deletions: file.touched?.recordedDeletions ?? 0,
+        patch: recordedPatch,
+      })
+    : null;
+  const displayAdditions = currentDiff ? additions : fallbackAdditions;
+  const displayDeletions = currentDiff ? deletions : fallbackDeletions;
 
   return (
     <TurnDiffFileRow
@@ -103,12 +114,29 @@ export function TurnDiffFileCard({
           onOpenFile={onOpenFile}
         />
       ) : !currentDiff ? (
-        <TurnDiffInlineState
-          icon={<FileIcon className="icon-paired" />}
-          title="No current diff"
-          description="This file was touched, but there are no current changes to review against the selected base."
-          onOpenFile={onOpenFile}
-        />
+        recordedPatch && recordedPolicy ? (
+          !recordedPolicy.canRenderInline ? (
+            <DiffDisplayPolicyPlaceholder
+              title={recordedPolicy.placeholderTitle}
+              description={recordedPolicy.placeholderDescription}
+            />
+          ) : (
+            <DiffViewer
+              patch={recordedPatch}
+              filePath={file.displayPath}
+              contentSearchUnitId={`diff:${turnId}:${file.path}`}
+              viewportClassName={TURN_DIFF_VIEWPORT_CLASS}
+              variant="chat"
+            />
+          )
+        ) : (
+          <TurnDiffInlineState
+            icon={<FileIcon className="icon-paired" />}
+            title="No current diff"
+            description="This file was touched, but there are no current changes to review against the selected base."
+            onOpenFile={onOpenFile}
+          />
+        )
       ) : !metadataPolicy?.canFetchInline ? (
         <DiffDisplayPolicyPlaceholder
           title={metadataPolicy?.placeholderTitle ?? "Too large to render inline"}
@@ -144,7 +172,7 @@ export function TurnDiffFileCard({
               fileLines={fileLines}
               onRequestFileLines={requestFileLines}
             />
-            {diffQuery.data?.truncated ? (
+            {liveDiffData?.truncated ? (
               <p className="px-3 py-2 text-center text-chat text-muted-foreground">
                 Diff truncated because it is too large
               </p>

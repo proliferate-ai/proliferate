@@ -149,9 +149,9 @@ export function useTurnCurrentFilePatch({
       && Boolean(currentDiff)
       && Boolean(metadataPolicy?.canFetchInline),
   });
-  const additions = diffQuery.data?.additions ?? currentDiff?.additions ?? 0;
-  const deletions = diffQuery.data?.deletions ?? currentDiff?.deletions ?? 0;
-  const patch = diffQuery.data?.patch ?? null;
+  const additions = currentDiff ? diffQuery.data?.additions ?? currentDiff.additions : 0;
+  const deletions = currentDiff ? diffQuery.data?.deletions ?? currentDiff.deletions : 0;
+  const patch = currentDiff ? diffQuery.data?.patch ?? null : null;
   const patchPolicy = useMemo(
     () => patch
       ? resolveDiffDisplayPolicy({
@@ -168,7 +168,9 @@ export function useTurnCurrentFilePatch({
     currentDiff,
     metadataPolicy,
     diffQuery,
-    diffErrorMessage: diffQuery.isError ? formatDiffErrorMessage(diffQuery.error) : null,
+    diffErrorMessage: currentDiff && diffQuery.isError
+      ? formatDiffErrorMessage(diffQuery.error)
+      : null,
     additions,
     deletions,
     patch,
