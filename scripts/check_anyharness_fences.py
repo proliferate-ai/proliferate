@@ -46,9 +46,24 @@ RULES = lint_records.load("anyharness")
 # Any `crate::domains::<name>` reference — use statements and inline qualified
 # paths alike. Grouped heads (`use crate::domains::{a, b}`) do not occur in the
 # tree today; the unit tests pin that a group head at the domains level is still
-# reported rather than silently skipped.
+# reported rather than silently skipped. The store pattern captures the full
+# trailing path so two different store imports in the same scope get distinct
+# ledger fingerprints.
 DOMAIN_REF_RE = re.compile(r"crate::domains::([A-Za-z_][A-Za-z0-9_]*|\{)")
-STORE_REF_RE = re.compile(r"crate::domains::([A-Za-z_][A-Za-z0-9_]*)::store\b")
+STORE_REF_RE = re.compile(
+    r"crate::domains::([a-z_][a-z0-9_]*)::store\b((?:::[A-Za-z_][A-Za-z0-9_]*)*)"
+)
+# Multi-line/grouped use statements a single-line path scan cannot see:
+# `use crate::{ domains::x::.., .. };` hides `crate::domains::` across the
+# brace, and `use crate::domains::x::{store::Y, ..};` hides `::store` behind
+# it. Statement heads are detected here and the joined statement re-scanned.
+USE_HEAD_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\b")
+CRATE_GROUP_DOMAIN_RE = re.compile(r"\bdomains\s*::\s*([a-z_][a-z0-9_]*)")
+CRATE_GROUP_STORE_RE = re.compile(r"\bdomains\s*::\s*([a-z_][a-z0-9_]*)\s*::\s*store\b")
+DOMAIN_GROUP_STORE_RE = re.compile(
+    r"crate::domains::([a-z_][a-z0-9_]*)\s*::\s*\{[^;]*\bstore\b"
+)
+MAX_STATEMENT_LINES = 100
 
 # A violation's fingerprint is `<enclosing symbol>::<content anchor>` — never a
 # line number, so a site survives reformatting and moves within its file. Same
@@ -152,8 +167,38 @@ def collect_violations(
         for path in sorted((domains_root / domain).rglob("*.rs")):
             relative = path.relative_to(base).as_posix()
             lines = path.read_text(encoding="utf-8").splitlines()
-            for lineno, raw in enumerate(lines, 1):
-                line = strip_line_comment(raw)
+            stripped = [strip_line_comment(raw) for raw in lines]
+
+            def edge_ref(target: str, lineno: int, detail: str) -> None:
+                if target == domain or target not in domains:
+                    return
+                edges_seen.add((domain, target))
+                if (domain, target) not in baseline:
+                    violations.append(
+                        Violation(
+                            EDGE_RULE,
+                            relative,
+                            lineno,
+                            fingerprint(lines, lineno, f"crate::domains::{target}"),
+                            f"undeclared domain edge {domain} -> {target}: {detail}",
+                        )
+                    )
+
+            def store_ref(target: str, lineno: int, anchor: str, detail: str) -> None:
+                if target == domain or target not in domains:
+                    return
+                violations.append(
+                    Violation(
+                        STORE_RULE,
+                        relative,
+                        lineno,
+                        fingerprint(lines, lineno, anchor),
+                        f"cross-domain store reach {domain} -> {target}: {detail}",
+                    )
+                )
+
+            for lineno, line in enumerate(stripped, 1):
+                detail = lines[lineno - 1].strip()[:120]
                 for match in DOMAIN_REF_RE.finditer(line):
                     target = match.group(1)
                     if target == "{":
@@ -171,38 +216,69 @@ def collect_violations(
                             )
                         )
                         continue
-                    if target == domain or target not in domains:
-                        continue
-                    edges_seen.add((domain, target))
-                    if (domain, target) not in baseline:
-                        violations.append(
-                            Violation(
-                                EDGE_RULE,
-                                relative,
-                                lineno,
-                                fingerprint(lines, lineno, f"crate::domains::{target}"),
-                                f"undeclared domain edge {domain} -> {target}: "
-                                f"{raw.strip()[:120]}",
-                            )
-                        )
+                    edge_ref(target, lineno, detail)
                 for match in STORE_REF_RE.finditer(line):
-                    target = match.group(1)
-                    if target == domain or target not in domains:
-                        continue
-                    violations.append(
-                        Violation(
-                            STORE_RULE,
-                            relative,
+                    store_ref(match.group(1), lineno, match.group(0), detail)
+
+            # Statement pass: joined use statements, for the grouped forms the
+            # per-line pass cannot see. The forms are disjoint from the per-line
+            # matches (a `crate::{..}` group never contains the literal
+            # `crate::domains::`, and a `<domain>::{..store..}` group never puts
+            # `::store` directly after the domain), so nothing double-counts.
+            for index, line in enumerate(stripped):
+                if not USE_HEAD_RE.match(line):
+                    continue
+                statement = line
+                cursor = index
+                while ";" not in statement and cursor + 1 < len(stripped):
+                    cursor += 1
+                    statement += " " + stripped[cursor]
+                    if cursor - index >= MAX_STATEMENT_LINES:
+                        break
+                lineno = index + 1
+                detail = statement.strip()[:120]
+                if re.search(r"crate\s*::\s*\{", statement):
+                    for match in CRATE_GROUP_DOMAIN_RE.finditer(statement):
+                        edge_ref(match.group(1), lineno, detail)
+                    for match in CRATE_GROUP_STORE_RE.finditer(statement):
+                        store_ref(
+                            match.group(1),
                             lineno,
-                            fingerprint(
-                                lines, lineno, f"crate::domains::{target}::store"
-                            ),
-                            f"cross-domain store reach {domain} -> {target}: "
-                            f"{raw.strip()[:120]}",
+                            f"crate::domains::{match.group(1)}::store",
+                            detail,
                         )
+                for match in DOMAIN_GROUP_STORE_RE.finditer(statement):
+                    store_ref(
+                        match.group(1),
+                        lineno,
+                        f"crate::domains::{match.group(1)}::{{store}}",
+                        detail,
                     )
 
-    return ScanResult(violations, baseline - edges_seen, edges_seen)
+    # Repeated identical anchors in one scope (e.g. two file-top use statements
+    # of the same sibling store module) get occurrence ordinals so every site
+    # keeps a distinct ledger fingerprint — the `#2` convention the anyharness
+    # ledger already documents.
+    seen_keys: dict[tuple[str, str, str], int] = {}
+    numbered: list[Violation] = []
+    for violation in violations:
+        key = (violation.rule_id, violation.relative_path, violation.site)
+        count = seen_keys.get(key, 0) + 1
+        seen_keys[key] = count
+        if count == 1:
+            numbered.append(violation)
+        else:
+            numbered.append(
+                Violation(
+                    violation.rule_id,
+                    violation.relative_path,
+                    violation.lineno,
+                    f"{violation.site}#{count}",
+                    violation.detail,
+                )
+            )
+
+    return ScanResult(numbered, baseline - edges_seen, edges_seen)
 
 
 def apply_exceptions(

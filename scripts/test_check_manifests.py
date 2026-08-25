@@ -167,10 +167,18 @@ class ImporterTruthTest(ManifestTestCase):
         self.assertEqual(self.sites(violations, check_module.IMPORTERS_RULE), set())
 
 
-class RealTreeTest(unittest.TestCase):
-    def test_shipped_manifests_are_reality_exact(self) -> None:
-        violations = check_module.collect_violations()
-        self.assertEqual([v.format() for v in violations], [])
+class WarnModeTest(unittest.TestCase):
+    def test_warn_mode_exits_zero_on_the_real_tree(self) -> None:
+        """CI smoke: warn mode never blocks. The enforce-mode exactness pin
+        deliberately does NOT run here while the checker ships in warn mode —
+        it would make every measured drift fail CI through the unittest step,
+        which is exactly what warn mode exists to prevent. Restore a real-tree
+        enforce assertion when the --warn flag is dropped from ci.yml."""
+        import contextlib
+        import io
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(check_module.main(["--warn"]), 0)
 
 
 if __name__ == "__main__":

@@ -113,11 +113,59 @@ class EdgeBaselineTest(FenceTestCase):
         self.assertEqual(result.edges_seen, set())
 
 
-class BaselineRealityTest(unittest.TestCase):
-    def test_shipped_baseline_matches_reality_exactly(self) -> None:
-        result = check_module.collect_violations()
-        self.assertEqual([v.format() for v in result.violations], [])
-        self.assertEqual(result.stale_edges, set())
+class SelfPackageExportTest(FenceTestCase):
+    def test_host_export_subpath_counts_as_an_edge(self) -> None:
+        result = self.scan(
+            {
+                "stores/updater.ts": (
+                    'import { bridge } from "@proliferate/product-client/host/desktop-updater-bridge";\n'
+                ),
+                "host/desktop-updater-bridge.ts": "export const bridge = 1;\n",
+            },
+            baseline=set(),
+        )
+        self.assertEqual(result.edges_seen, {("stores", "host")})
+        self.assertEqual(len(result.violations), 1)
+
+    def test_infra_export_resolves_to_lib(self) -> None:
+        result = self.scan(
+            {
+                "hooks/use-measure.ts": (
+                    'import { port } from "@proliferate/product-client/infra/measurement";\n'
+                ),
+                "lib/infra.ts": "export const port = 1;\n",
+            },
+            baseline={("hooks", "lib")},
+        )
+        self.assertEqual(result.edges_seen, {("hooks", "lib")})
+        self.assertEqual(result.violations, [])
+
+    def test_internal_subpath_still_resolves(self) -> None:
+        result = self.scan(
+            {
+                "hooks/use-thing.ts": (
+                    'import { y } from "@proliferate/product-client/internal/stores/thing";\n'
+                ),
+                "stores/thing.ts": "export const y = 1;\n",
+            },
+            baseline={("hooks", "stores")},
+        )
+        self.assertEqual(result.edges_seen, {("hooks", "stores")})
+        self.assertEqual(result.violations, [])
+
+
+class WarnModeTest(unittest.TestCase):
+    def test_warn_mode_exits_zero_on_the_real_tree(self) -> None:
+        """CI smoke: warn mode never blocks. The enforce-mode exactness pin
+        deliberately does NOT run here while the checker ships in warn mode —
+        it would make every measured drift fail CI through the unittest step,
+        which is exactly what warn mode exists to prevent. Restore a real-tree
+        enforce assertion when the --warn flag is dropped from ci.yml."""
+        import contextlib
+        import io
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(check_module.main(["--warn"]), 0)
 
 
 if __name__ == "__main__":

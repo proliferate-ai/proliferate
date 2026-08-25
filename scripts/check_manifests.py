@@ -9,8 +9,8 @@ own the rules:
 - PROD-MANIFEST-001: every server system folder carries a MANIFEST.toml that
   parses, carries the required fields, and points `spec` at a file that
   exists. Coverage = every top-level domain under `server/proliferate/server/`
-  (minus the `cloud` megadomain, whose four live systems are manifested at
-  their subfolders until the cull-sweep Track A move) plus those live cloud
+  (minus the `cloud` megadomain, whose four live systems — spread over six
+  subfolders — are manifested at those subfolders) plus those live cloud
   system folders.
 - PROD-MANIFEST-002: a manifest's `allowed_importers` equals the measured
   importer set exactly — a real importer missing from the list and a listed
@@ -53,9 +53,8 @@ IMPORTERS_RULE = "PROD-MANIFEST-002"
 MANIFEST_NAME = "MANIFEST.toml"
 
 # The cloud megadomain never gets its own manifest: it is a folder of systems,
-# not a system, and the cull sweep dissolves it (Track A moves the live
-# subsystems below to real homes; Track A-b deletes the dark remainder, at
-# which point this whole cloud special case is dead code to remove).
+# not a system. Its live subsystems are manifested individually below; if the
+# folder ever dissolves, this special case goes with it.
 SKIPPED_DOMAINS = {"cloud"}
 REQUIRED_CLOUD_SYSTEMS = (
     "agent_gateway",

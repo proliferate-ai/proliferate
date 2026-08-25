@@ -3,10 +3,9 @@
 # rule 2). Enforced by scripts/check_manifests.py over the server plane,
 # introduced in warn mode by the cull-sweep Wave 0
 # (delivery/cull-sweep/delivery-spec-wave0-manifests-and-checkers.md). The
-# runtime and client planes gain manifests when their trees are regrouped by
-# system (cull-sweep Waves 3–4); their fence checkers
-# (check_anyharness_fences.py, check_frontend_fences.py) hold the line until
-# then.
+# runtime and client planes do not carry manifests yet; their fence checkers
+# (check_anyharness_fences.py, check_frontend_fences.py) hold their
+# boundaries at the folder grain instead.
 
 [[rule]]
 id = "PROD-MANIFEST-001"

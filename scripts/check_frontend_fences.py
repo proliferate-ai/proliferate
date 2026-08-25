@@ -40,7 +40,15 @@ PC_SRC_RELATIVE = ("apps", "packages", "product-client", "src")
 FENCES_RECORD_RELATIVE = ("lints", "frontend", "fences.toml")
 EDGE_RULE = "FE-FENCE-001"
 ALIAS_PREFIX = "#product/"
-SELF_PACKAGE_PREFIX = "@proliferate/product-client/internal/"
+SELF_PACKAGE_PREFIX = "@proliferate/product-client/"
+INTERNAL_SUBPATH = "internal/"
+# The package's non-internal subpath exports and the src directory each ships
+# from, per apps/packages/product-client/package.json "exports": ./host/* ships
+# src/host/*, and both ./infra/* entries ship modules that live under src/lib/.
+# ./ProductClient ships a src-root file, which is outside every top directory
+# (src-root files are a known limit: the fence governs top-level directories
+# only, and src/App.tsx + src/ProductClient.tsx sit above them).
+SELF_EXPORT_TOPS = {"host": "host", "infra": "lib"}
 SOURCE_SUFFIXES = {".ts", ".tsx"}
 
 RULES = lint_records.load("frontend")
@@ -84,15 +92,20 @@ def resolve_target_top(
 ) -> str | None:
     """The top-level directory a specifier lands in, or None if it leaves src.
 
-    Handles the three in-package spellings: the `#product/` alias, the
-    self-package `@proliferate/product-client/internal/` subpath, and relative
-    paths (normalized against the importing file's directory).
+    Handles the in-package spellings: the `#product/` alias, the self-package
+    `@proliferate/product-client/internal/*` subpath, the package's
+    non-internal subpath exports (SELF_EXPORT_TOPS), and relative paths
+    (normalized against the importing file's directory).
     """
     if specifier.startswith(ALIAS_PREFIX):
         segment = specifier[len(ALIAS_PREFIX) :].split("/", 1)[0]
         return segment if segment in tops else None
     if specifier.startswith(SELF_PACKAGE_PREFIX):
-        segment = specifier[len(SELF_PACKAGE_PREFIX) :].split("/", 1)[0]
+        subpath = specifier[len(SELF_PACKAGE_PREFIX) :]
+        if subpath.startswith(INTERNAL_SUBPATH):
+            segment = subpath[len(INTERNAL_SUBPATH) :].split("/", 1)[0]
+            return segment if segment in tops else None
+        segment = SELF_EXPORT_TOPS.get(subpath.split("/", 1)[0])
         return segment if segment in tops else None
     if specifier.startswith("."):
         normalized = posixpath.normpath((source_dir / specifier).as_posix())

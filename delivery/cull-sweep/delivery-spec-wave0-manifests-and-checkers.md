@@ -44,7 +44,12 @@ neither changes scope:
    owner) and the client records in `lints/frontend/` — not the literal
    `lints/runtime/` and `lints/client/` names drafted before that convention
    was surveyed.
-2. Track A moves the four live cloud systems to new homes in the same sweep.
-   Manifests are written where those systems live on main today
+2. Track A moves the four live cloud systems — housed in six folders
+   (`agent_gateway` → agent_auth; `integrations` + `integration_gateway` →
+   integration_gateway; `worker` + `runtime_workers` → seam workers;
+   `github_app` → github) — to new homes in the same sweep. Manifests are
+   written where those systems live on main today
    (`server/proliferate/server/cloud/...`) so `git mv` carries them; path
-   updates after Track A merges are a mechanical rebase.
+   updates after Track A merges are a mechanical rebase. (Clarified at
+   adversarial review: "four systems" and "six folders" describe the same
+   set; both counts appear in the implementation.)

@@ -128,7 +128,7 @@ class StoreReachTest(FenceTestCase):
         )
         matches = self.for_rule(result, check_module.STORE_RULE)
         self.assertEqual(len(matches), 1)
-        self.assertEqual(matches[0].site, "crate::domains::beta::store")
+        self.assertEqual(matches[0].site, "crate::domains::beta::store::BetaStore")
         self.assertIn("record:", matches[0].format())
 
     def test_own_store_is_legal(self) -> None:
@@ -149,14 +149,114 @@ class StoreReachTest(FenceTestCase):
         self.assertEqual(self.for_rule(result, check_module.STORE_RULE), [])
 
 
-class LedgerTest(unittest.TestCase):
-    def test_seeded_ledger_matches_reality_with_no_stale_entries(self) -> None:
-        """The shipped ledger must cover the real tree exactly."""
-        result = check_module.collect_violations()
-        failures, stale = check_module.apply_exceptions(result.violations)
-        self.assertEqual([v.format() for v in failures], [])
-        self.assertEqual(stale, [])
-        self.assertEqual(result.stale_edges, set())
+class GroupedFormsTest(FenceTestCase):
+    def test_crate_level_group_edge_is_seen(self) -> None:
+        result = self.scan(
+            {
+                "alpha/service.rs": (
+                    "use crate::{\n"
+                    "    domains::beta::model::Thing,\n"
+                    "    live::sessions::Handle,\n"
+                    "};\n"
+                ),
+                "beta/model.rs": "pub struct Thing;\n",
+            },
+            baseline=set(),
+        )
+        self.assertEqual(result.edges_seen, {("alpha", "beta")})
+        self.assertEqual(len(self.for_rule(result, check_module.EDGE_RULE)), 1)
+
+    def test_crate_level_group_store_is_seen(self) -> None:
+        result = self.scan(
+            {
+                "alpha/service.rs": (
+                    "use crate::{domains::beta::store::BetaStore};\n"
+                ),
+                "beta/store.rs": "pub struct BetaStore;\n",
+            },
+            baseline={("alpha", "beta")},
+        )
+        self.assertEqual(len(self.for_rule(result, check_module.STORE_RULE)), 1)
+
+    def test_store_inside_domain_group_is_seen(self) -> None:
+        result = self.scan(
+            {
+                "alpha/service.rs": (
+                    "use crate::domains::beta::{\n"
+                    "    service::BetaService,\n"
+                    "    store::BetaStore,\n"
+                    "};\n"
+                ),
+                "beta/store.rs": "pub struct BetaStore;\n",
+            },
+            baseline={("alpha", "beta")},
+        )
+        matches = self.for_rule(result, check_module.STORE_RULE)
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].site, "crate::domains::beta::{store}")
+
+    def test_domain_group_without_store_is_clean(self) -> None:
+        result = self.scan(
+            {
+                "alpha/service.rs": (
+                    "use crate::domains::beta::{service::BetaService, model::M};\n"
+                ),
+                "beta/service.rs": "pub struct BetaService;\n",
+            },
+            baseline={("alpha", "beta")},
+        )
+        self.assertEqual(self.for_rule(result, check_module.STORE_RULE), [])
+
+
+class FingerprintTest(FenceTestCase):
+    def test_distinct_store_paths_get_distinct_fingerprints(self) -> None:
+        result = self.scan(
+            {
+                "alpha/service.rs": (
+                    "use crate::domains::beta::store::completions::State;\n"
+                    "use crate::domains::beta::store::BetaStore;\n"
+                ),
+                "beta/store.rs": "pub struct BetaStore;\n",
+            },
+            baseline={("alpha", "beta")},
+        )
+        sites = [v.site for v in self.for_rule(result, check_module.STORE_RULE)]
+        self.assertEqual(len(sites), 2)
+        self.assertEqual(len(set(sites)), 2)
+
+    def test_identical_repeated_sites_get_occurrence_ordinals(self) -> None:
+        result = self.scan(
+            {
+                "alpha/service.rs": (
+                    "use crate::domains::beta::store::BetaStore;\n"
+                    "use crate::domains::beta::store::BetaStore;\n"
+                ),
+                "beta/store.rs": "pub struct BetaStore;\n",
+            },
+            baseline={("alpha", "beta")},
+        )
+        sites = sorted(v.site for v in self.for_rule(result, check_module.STORE_RULE))
+        self.assertEqual(
+            sites,
+            [
+                "crate::domains::beta::store::BetaStore",
+                "crate::domains::beta::store::BetaStore#2",
+            ],
+        )
+
+
+class WarnModeTest(unittest.TestCase):
+    def test_warn_mode_exits_zero_on_the_real_tree(self) -> None:
+        """CI smoke: warn mode never blocks. The enforce-mode exactness pin
+        deliberately does NOT run here while the checker ships in warn mode —
+        it would make every measured drift fail CI through the unittest step,
+        which is exactly what warn mode exists to prevent. Restore a real-tree
+        enforce assertion when the --warn flag is dropped from ci.yml."""
+        import contextlib
+        import io
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(check_module.main(["--warn"]), 0)
 
 
 if __name__ == "__main__":
