@@ -140,8 +140,15 @@ each other's dropped tables, so they cannot genuinely round-trip. The
 acceptance line "migration up/down round-trips on a dev database"
 becomes "migration upgrade applies cleanly on a dev database". Per founder
 ruling (existing user data is not a concern), there is no
-prod-snapshot-before-deploy step: the drops are irreversible and the
-docstrings say so, per the precedent.
+prod-snapshot-before-deploy step; deleted rows are unrecoverable.
+
+Amendment (2026-08-25, at implementation): the downgrade is **structure
+only** (recreate the dropped tables empty) rather than raising
+`NotImplementedError`. The merge train's other cull drops (Tracks B and C)
+landed the same way, because the migration suite downgrades from head
+through every newer revision (`test_cloud_sandbox_desired_versions_migration`)
+and an unimplemented downgrade at the head breaks it. Data remains
+unrecoverable; only the schema round-trips.
 
 ## Acceptance
 

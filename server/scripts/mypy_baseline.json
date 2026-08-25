@@ -189,12 +189,6 @@
       "count": 1
     },
     {
-      "path": "proliferate/background/tasks/cloud_sandboxes.py",
-      "code": "untyped-decorator",
-      "message": "Untyped decorator makes function \"cloud_sandbox_orphan_reap\" untyped",
-      "count": 1
-    },
-    {
       "path": "proliferate/background/tasks/health.py",
       "code": "import-untyped",
       "message": "Skipping analyzing \"celery\": module is installed, but missing library stubs or py.typed marker",
@@ -465,6 +459,24 @@
       "count": 1
     },
     {
+      "path": "proliferate/server/agent_auth/api.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"get\" of \"dict\" has incompatible type \"UUID | None\"; expected \"UUID\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/agent_auth/models.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 6
+    },
+    {
+      "path": "proliferate/server/agent_auth/service.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"active_unlimited_cloud_entitlement\" has incompatible type \"list[BillingEntitlement]\"; expected \"Sequence[EntitlementLike]\"",
+      "count": 1
+    },
+    {
       "path": "proliferate/server/ai_magic/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
@@ -699,36 +711,6 @@
       "count": 10
     },
     {
-      "path": "proliferate/server/agent_auth/api.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"get\" of \"dict\" has incompatible type \"UUID | None\"; expected \"UUID\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/agent_auth/models.py",
-      "code": "unused-ignore",
-      "message": "Unused \"type: ignore\" comment",
-      "count": 6
-    },
-    {
-      "path": "proliferate/server/agent_auth/service.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"active_unlimited_cloud_entitlement\" has incompatible type \"list[BillingEntitlement]\"; expected \"Sequence[EntitlementLike]\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/agent_run_config/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 9
-    },
-    {
-      "path": "proliferate/server/cloud/agent_run_config/models.py",
-      "code": "unused-ignore",
-      "message": "Unused \"type: ignore\" comment",
-      "count": 3
-    },
-    {
       "path": "proliferate/server/cloud/cloud_sandboxes/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
@@ -739,6 +721,138 @@
       "code": "arg-type",
       "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
       "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/failures.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/agent_auth.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"append\" of \"list\" has incompatible type \"tuple[tuple[str, str], dict[str, object]]\"; expected \"tuple[str, dict[str, object]]\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/repo_environment.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"CloudSandboxValue | None\", variable has type \"CloudSandboxValue\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"CloudSecretFilePayload\", variable has type \"CloudSecretEnvVarPayload\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
+      "code": "attr-defined",
+      "message": "\"CloudSecretEnvVarPayload\" has no attribute \"content\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
+      "code": "attr-defined",
+      "message": "\"CloudSecretEnvVarPayload\" has no attribute \"content_sha256\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
+      "code": "attr-defined",
+      "message": "\"CloudSecretEnvVarPayload\" has no attribute \"path\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/runner.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[()]\", variable has type \"tuple[str | None]\")",
+      "count": 4
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[Any, None]\", variable has type \"tuple[str | None]\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[None, Any | str]\", variable has type \"tuple[str | None]\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[None, Any]\", variable has type \"tuple[str | None]\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "assignment",
+      "message": "Incompatible types in assignment (expression has type \"tuple[None, str | None]\", variable has type \"tuple[str | None]\")",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
+      "code": "attr-defined",
+      "message": "\"object\" has no attribute \"sandbox_id\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/resume_acceptance.py",
+      "code": "arg-type",
+      "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/sandbox_io/target.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/materialization/service.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/cloud/secrets/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 7
+    },
+    {
+      "path": "proliferate/server/cloud/secrets/models.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/workspaces/materializations/summaries.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/cloud/workspaces/service.py",
+      "code": "return-value",
+      "message": "Incompatible return value type (got \"WorkspaceSummary\", expected \"WorkspaceDetail\")",
+      "count": 7
+    },
+    {
+      "path": "proliferate/server/devtools/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 3
     },
     {
       "path": "proliferate/server/github/api.py",
@@ -873,162 +987,6 @@
       "count": 2
     },
     {
-      "path": "proliferate/server/cloud/materialization/failures.py",
-      "code": "arg-type",
-      "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/materialize/agent_auth.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"append\" of \"list\" has incompatible type \"tuple[tuple[str, str], dict[str, object]]\"; expected \"tuple[str, dict[str, object]]\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/materialize/repo_environment.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"CloudSandboxValue | None\", variable has type \"CloudSandboxValue\")",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"CloudSecretFilePayload\", variable has type \"CloudSecretEnvVarPayload\")",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
-      "code": "attr-defined",
-      "message": "\"CloudSecretEnvVarPayload\" has no attribute \"content\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
-      "code": "attr-defined",
-      "message": "\"CloudSecretEnvVarPayload\" has no attribute \"content_sha256\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/materialize/secret_set.py",
-      "code": "attr-defined",
-      "message": "\"CloudSecretEnvVarPayload\" has no attribute \"path\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/runner.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"tuple[()]\", variable has type \"tuple[str | None]\")",
-      "count": 4
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"tuple[Any, None]\", variable has type \"tuple[str | None]\")",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"tuple[None, Any | str]\", variable has type \"tuple[str | None]\")",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"tuple[None, Any]\", variable has type \"tuple[str | None]\")",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
-      "code": "assignment",
-      "message": "Incompatible types in assignment (expression has type \"tuple[None, str | None]\", variable has type \"tuple[str | None]\")",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/sandbox_io/connect.py",
-      "code": "attr-defined",
-      "message": "\"object\" has no attribute \"sandbox_id\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/sandbox_io/resume_acceptance.py",
-      "code": "arg-type",
-      "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/sandbox_io/target.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/materialization/service.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/seam/workers/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 13
-    },
-    {
-      "path": "proliferate/server/cloud/secrets/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 7
-    },
-    {
-      "path": "proliferate/server/cloud/secrets/models.py",
-      "code": "unused-ignore",
-      "message": "Unused \"type: ignore\" comment",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/webhooks/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 4
-    },
-    {
-      "path": "proliferate/server/cloud/webhooks/service.py",
-      "code": "arg-type",
-      "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/workspaces/materializations/summaries.py",
-      "code": "unused-ignore",
-      "message": "Unused \"type: ignore\" comment",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/workspaces/service.py",
-      "code": "return-value",
-      "message": "Incompatible return value type (got \"WorkspaceSummary\", expected \"WorkspaceDetail\")",
-      "count": 7
-    },
-    {
-      "path": "proliferate/server/cloud/worktree_policy/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/devtools/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 3
-    },
-    {
       "path": "proliferate/server/organizations/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
@@ -1057,6 +1015,12 @@
       "code": "arg-type",
       "message": "Argument 1 to \"resolve_effective_limit\" has incompatible type \"list[BillingBudgetLimit]\"; expected \"Sequence[_LimitLike]\"",
       "count": 2
+    },
+    {
+      "path": "proliferate/server/seam/workers/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 13
     },
     {
       "path": "proliferate/server/support/domain/report_records.py",

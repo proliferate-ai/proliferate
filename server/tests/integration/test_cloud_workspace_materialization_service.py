@@ -59,7 +59,6 @@ async def _seed(
         is_superuser=False,
         is_verified=False,
     )
-    db.add(user)
     cfg = RepoConfig(
         id=uuid.uuid4(),
         user_id=user.id,
@@ -68,7 +67,7 @@ async def _seed(
         git_repo_name="widgets",
         commit_instructions="",
     )
-    db.add(cfg)
+    db.add_all([user, cfg])
     env = RepoEnvironment(
         id=uuid.uuid4(),
         repo_config_id=cfg.id,
@@ -78,6 +77,7 @@ async def _seed(
         default_branch="main",
     )
     db.add(env)
+    await db.flush()  # parent rows first: plain FKs, no relationship() edge to order by
     sandbox = None
     if with_sandbox:
         sandbox = CloudSandbox(
