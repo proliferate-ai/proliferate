@@ -2433,23 +2433,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/internal/support/reports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Support Report Feed */
-        get: operations["list_support_report_feed_internal_support_reports_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/billing/team-checkout": {
         parameters: {
             query?: never;
@@ -6432,61 +6415,6 @@ export interface components {
             email: string | null;
             /** Url */
             url: string | null;
-        };
-        /** SupportFeedItem */
-        SupportFeedItem: {
-            /** Reportid */
-            reportId: string;
-            /**
-             * Submittedat
-             * Format: date-time
-             */
-            submittedAt: string;
-            /**
-             * Completedat
-             * Format: date-time
-             */
-            completedAt: string;
-            /** Owneruserid */
-            ownerUserId: string;
-            /** Kind */
-            kind: string;
-            /** Summary */
-            summary?: string | null;
-            /** Releaseid */
-            releaseId?: string | null;
-            /** Releasewarning */
-            releaseWarning?: string | null;
-            /** Notifyme */
-            notifyMe: boolean;
-            /** Creditconsent */
-            creditConsent: boolean;
-            /** Creditname */
-            creditName?: string | null;
-            /** Outreachoverride */
-            outreachOverride?: string | null;
-            /** Privatecasereference */
-            privateCaseReference: string;
-            /** Sentryevents */
-            sentryEvents?: components["schemas"]["SupportFeedSentryEvent"][];
-            /** Cursor */
-            cursor: string;
-        };
-        /** SupportFeedPage */
-        SupportFeedPage: {
-            /** Items */
-            items: components["schemas"]["SupportFeedItem"][];
-            /** Nextcursor */
-            nextCursor?: string | null;
-            /** Hasmore */
-            hasMore: boolean;
-        };
-        /** SupportFeedSentryEvent */
-        SupportFeedSentryEvent: {
-            /** Project */
-            project: string;
-            /** Eventid */
-            eventId: string;
         };
         /** SupportMessageContext */
         SupportMessageContext: {
@@ -12890,40 +12818,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportReportCompleteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_support_report_feed_internal_support_reports_get: {
-        parameters: {
-            query?: {
-                cursor?: string | null;
-                limit?: number;
-            };
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SupportFeedPage"];
                 };
             };
             /** @description Validation Error */

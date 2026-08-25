@@ -54,11 +54,3 @@ class SupportReportAlreadyCompleted(SupportReportUploadInvalid):
     client treats it as success (idempotent cleanup), not a failure."""
 
     code = "support_report_already_completed"
-
-
-class SupportReportTrackerUnavailable(ProliferateError):
-    code = "support_report_tracker_unavailable"
-    status_code = 503
-
-    def __init__(self) -> None:
-        super().__init__("Support issue tracker creation is not configured.")

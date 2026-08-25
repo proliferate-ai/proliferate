@@ -6,13 +6,10 @@ import test from "node:test";
 
 import {
   ALLOWED_ANNOTATION_KEYS,
-  CONTACT_POINT_NAME,
   KNOWN_RULES,
   KNOWN_UIDS,
   LOG_RULE_UID,
   REPO_ROOT,
-  WEBHOOK_SECRET_REF,
-  assertContactTemplateSafe,
   assertLogAnnotationsOnlyOnLogRule,
   assertPrivateReceiptPath,
   canonicalize,
@@ -34,11 +31,9 @@ import {
   TARGET,
   WORKSPACE_BASE_URL,
   assertOperatorAccount,
-  canonicalJson,
   createGrafanaClient,
   resolveSecretField,
   ruleFromRulerEntry,
-  verifyRouteDelta,
 } from "./grafana-client.mjs";
 import { extractQueryModel } from "./grafana-alerting.mjs";
 
@@ -255,10 +250,6 @@ function fixtureRepo(rules = liveRulesFixture()) {
     }),
   };
   fs.writeFileSync(path.join(dir, "production-alerts.json"), JSON.stringify(overlay));
-  fs.copyFileSync(
-    path.join(REPO_ROOT, "server/infra/observability/grafana/issue-tracker-contact.json"),
-    path.join(dir, "issue-tracker-contact.json"),
-  );
   return root;
 }
 
@@ -294,369 +285,6 @@ test("upsertAlertRule PUTs JSON to the rule path with X-Disable-Provenance", asy
   assert.equal(req.headers["X-Disable-Provenance"], "true");
   assert.equal(req.headers["Content-Type"], "application/json");
   assert.deepEqual(JSON.parse(req.body).labels, { severity: "critical" });
-});
-
-function trackerContactFixture(credential = "resolved-credential-under-test") {
-  return {
-    name: CONTACT_POINT_NAME,
-    type: "webhook",
-    disableResolveMessage: false,
-    settings: { url: "https://issues.proliferate.com/v1/ingest/grafana", httpMethod: "POST", maxAlerts: 0, authorization_scheme: "Bearer" },
-    secureSettings: { authorization_credentials: credential },
-  };
-}
-
-test("upsertContactPoint appends the tracker receiver via the Alertmanager config API and pins the wire shape", async () => {
-  // Wire-shape pin (coordinator's live probe): full-config POST to the
-  // Alertmanager config API; the appended receiver carries non-secret fields
-  // in settings and the credential in secureSettings (encrypted server-side).
-  const state = newState();
-  const client = realClient(state);
-  await client.upsertContactPoint(trackerContactFixture());
-  const post = state.requests.find((r) => r.method === "POST" && r.path === ALERTMANAGER_CONFIG);
-  assert.ok(post, "one Alertmanager config POST issued");
-  const body = JSON.parse(post.body);
-  const receivers = body.alertmanager_config.receivers;
-  assert.deepEqual(receivers.map((r) => r.name), ["slack-eng-triage", "slack-ops-alerts", CONTACT_POINT_NAME]);
-  const cfg = receivers.at(-1).grafana_managed_receiver_configs[0];
-  assert.equal(cfg.type, "webhook");
-  assert.equal(cfg.disableResolveMessage, false);
-  assert.equal(cfg.settings.authorization_scheme, "Bearer");
-  assert.equal(cfg.settings.maxAlerts, 0);
-  assert.equal("authorization_credentials" in cfg.settings, false, "credential not in settings");
-  assert.equal(cfg.secureSettings.authorization_credentials, "resolved-credential-under-test");
-  // Slack receivers in the POSTed config are byte-identical to the GET.
-  assert.equal(canonicalJson(receivers.slice(0, 2)), canonicalJson(newState().amConfig.alertmanager_config.receivers));
-  // Route untouched in the POSTed body.
-  assert.equal(canonicalJson(body.alertmanager_config.route), canonicalJson(newState().amConfig.alertmanager_config.route));
-  // Read-back state: credential stored only as an encrypted marker.
-  const stored = state.amConfig.alertmanager_config.receivers.at(-1).grafana_managed_receiver_configs[0];
-  assert.equal(stored.secureFields.authorization_credentials, true);
-  assert.equal("secureSettings" in stored, false);
-});
-
-test("upsertContactPoint refuses other names and refuses a pre-existing tracker receiver", async () => {
-  const state = newState();
-  const client = realClient(state);
-  await assert.rejects(client.upsertContactPoint({ name: "slack-ops-alerts", type: "slack" }), /Refusing/);
-  await client.upsertContactPoint(trackerContactFixture());
-  await assert.rejects(client.upsertContactPoint(trackerContactFixture()), /pre-existing issue-tracker-webhook receiver/);
-});
-
-test("a write that tampers with the route hard-fails and restores the pre-write config", async () => {
-  const state = newState();
-  const client = realClient(state);
-  const originalRoute = canonicalJson(state.amConfig.alertmanager_config.route);
-  let tampered = false;
-  state.onAmPost = (s) => {
-    if (!tampered) {
-      tampered = true; // only the first (write) POST tampers; the restore POST must not.
-      s.amConfig.alertmanager_config.route = { receiver: CONTACT_POINT_NAME };
-    }
-  };
-  await assert.rejects(client.upsertContactPoint(trackerContactFixture("sekrit-credential")), (error) => {
-    assert.match(error.message, /route tree changed during write/);
-    assert.ok(!error.message.includes("sekrit-credential"), "no credential in error");
-    return true;
-  });
-  // The client re-POSTed the before-config: route + receivers back to original.
-  assert.equal(canonicalJson(state.amConfig.alertmanager_config.route), originalRoute);
-  assert.deepEqual(
-    state.amConfig.alertmanager_config.receivers.map((r) => r.name),
-    ["slack-eng-triage", "slack-ops-alerts"],
-  );
-  const amPosts = state.requests.filter((r) => r.method === "POST" && r.path === ALERTMANAGER_CONFIG);
-  assert.equal(amPosts.length, 2, "write POST + restore POST");
-});
-
-test("the expected autogen regeneration (one new tracker child) passes verification", async () => {
-  const state = newState();
-  const client = realClient(state);
-  // The regenerating fake adds exactly one autogen child for the new receiver;
-  // the strict guard must accept this and only this.
-  await client.upsertContactPoint(trackerContactFixture());
-  const autogen = state.amConfig.alertmanager_config.route.routes.find((r) =>
-    (r.object_matchers || []).some((m) => m[0] === "__grafana_autogenerated__"),
-  );
-  const names = autogen.routes.map((r) => r.receiver).sort();
-  assert.deepEqual(names, ["issue-tracker-webhook", "slack-eng-triage", "slack-ops-alerts"]);
-  // And the full cycle back: removal restores exactly the two originals.
-  await client.restoreContactPoints([]);
-  assert.deepEqual(autogen === undefined ? [] : state.amConfig.alertmanager_config.route.routes
-    .find((r) => (r.object_matchers || []).some((m) => m[0] === "__grafana_autogenerated__"))
-    .routes.map((r) => r.receiver).sort(), ["slack-eng-triage", "slack-ops-alerts"]);
-});
-
-test("an unexpected autogen child beyond the expected delta hard-fails and restores", async () => {
-  const state = newState();
-  const client = realClient(state);
-  state.onAmPost = (s) => {
-    const autogen = s.amConfig.alertmanager_config.route.routes.find((r) =>
-      (r.object_matchers || []).some((m) => m[0] === "__grafana_autogenerated__"),
-    );
-    autogen.routes.push({
-      object_matchers: [["__grafana_receiver__", "=", "rogue-receiver"]],
-      receiver: "rogue-receiver",
-    });
-  };
-  await assert.rejects(client.upsertContactPoint(trackerContactFixture()), (error) => {
-    assert.match(error.message, /unexpected autogenerated route change during write \(receiver rogue-receiver\)/);
-    return true;
-  });
-  // Auto-restore: back to the two slack receivers only.
-  assert.deepEqual(
-    state.amConfig.alertmanager_config.receivers.map((r) => r.name),
-    ["slack-eng-triage", "slack-ops-alerts"],
-  );
-});
-
-test("a mutation of an existing autogen child hard-fails as an unexpected delta", async () => {
-  const state = newState();
-  const client = realClient(state);
-  state.onAmPost = (s) => {
-    const autogen = s.amConfig.alertmanager_config.route.routes.find((r) =>
-      (r.object_matchers || []).some((m) => m[0] === "__grafana_autogenerated__"),
-    );
-    const slackChild = autogen.routes.find((r) => r.receiver === "slack-ops-alerts");
-    slackChild.group_by = ["tampered"];
-  };
-  await assert.rejects(
-    client.upsertContactPoint(trackerContactFixture()),
-    /unexpected autogenerated route change during write \(receiver slack-ops-alerts\)/,
-  );
-});
-
-// --- Strict removal delta (verifyRouteDelta unit coverage) --------------------
-
-function routeWithAutogenChildren(children) {
-  return {
-    receiver: "slack-eng-triage",
-    routes: [
-      { object_matchers: [["__grafana_autogenerated__", "=", "true"]], receiver: "slack-eng-triage", routes: children },
-    ],
-  };
-}
-
-function trackerChild(overrides = {}) {
-  return {
-    object_matchers: [["__grafana_receiver__", overrides.op || "=", overrides.target || CONTACT_POINT_NAME]],
-    receiver: overrides.receiver || CONTACT_POINT_NAME,
-    group_by: ["grafana_folder", "alertname"],
-  };
-}
-
-test("removal delta requires exactly one canonical tracker child before and zero after", () => {
-  const withChild = routeWithAutogenChildren([trackerChild()]);
-  const without = routeWithAutogenChildren([]);
-  // Happy path: one canonical child removed.
-  assert.deepEqual(verifyRouteDelta(withChild, without, "remove", "removal"), []);
-  // Missing pre-child: not a verified removal.
-  assert.ok(
-    verifyRouteDelta(without, without, "remove", "removal").some((f) => f.includes("expected exactly one")),
-  );
-  // Duplicate pre-children: rejected.
-  assert.ok(
-    verifyRouteDelta(routeWithAutogenChildren([trackerChild(), trackerChild()]), without, "remove", "removal")
-      .some((f) => f.includes("expected exactly one")),
-  );
-  // Wrong-target child (matcher name ours, receiver someone else's): rejected.
-  assert.ok(
-    verifyRouteDelta(routeWithAutogenChildren([trackerChild({ receiver: "slack-ops-alerts" })]), without, "remove", "removal")
-      .some((f) => f.includes("not the canonical")),
-  );
-  // Wrong-operator matcher: rejected.
-  assert.ok(
-    verifyRouteDelta(routeWithAutogenChildren([trackerChild({ op: "=~" })]), without, "remove", "removal")
-      .some((f) => f.includes("not the canonical")),
-  );
-  // Child still present after: rejected.
-  assert.ok(
-    verifyRouteDelta(withChild, withChild, "remove", "removal").some((f) => f.includes("still present")),
-  );
-});
-
-test("create delta requires the new child to be canonical", () => {
-  const without = routeWithAutogenChildren([]);
-  assert.deepEqual(verifyRouteDelta(without, routeWithAutogenChildren([trackerChild()]), "create", "write"), []);
-  assert.ok(
-    verifyRouteDelta(without, routeWithAutogenChildren([trackerChild({ op: "=~" })]), "create", "write")
-      .some((f) => f.includes("not the canonical")),
-  );
-  assert.ok(
-    verifyRouteDelta(without, routeWithAutogenChildren([trackerChild({ receiver: "rogue" })]), "create", "write")
-      .some((f) => f.includes("not the canonical")),
-  );
-});
-
-// --- Removal-path fail-closed restore (mirror of the create path) -------------
-
-test("a removal that damages the authored route hard-fails and restores the pre-removal config", async () => {
-  const state = newState();
-  const client = realClient(state);
-  await client.upsertContactPoint(trackerContactFixture());
-  const preRemoval = canonicalJson(state.amConfig.alertmanager_config);
-  let posts = 0;
-  state.onAmPost = (s) => {
-    posts += 1;
-    if (posts === 1) {
-      // Only the removal POST tampers; the restore POST must not.
-      s.amConfig.alertmanager_config.route.receiver = "tampered-default";
-    }
-  };
-  await assert.rejects(client.restoreContactPoints([]), (error) => {
-    assert.match(error.message, /Removal verification failed/);
-    assert.match(error.message, /operator-authored route tree changed during removal/);
-    assert.match(error.message, /the pre-removal Alertmanager config was restored/);
-    return true;
-  });
-  assert.equal(canonicalJson(state.amConfig.alertmanager_config), preRemoval);
-  // Tracker receiver is back (pre-removal state had it).
-  assert.ok(state.amConfig.alertmanager_config.receivers.some((r) => r.name === CONTACT_POINT_NAME));
-});
-
-test("a removal that damages a non-tracker receiver hard-fails and restores", async () => {
-  const state = newState();
-  const client = realClient(state);
-  await client.upsertContactPoint(trackerContactFixture());
-  const preRemoval = canonicalJson(state.amConfig.alertmanager_config);
-  let posts = 0;
-  state.onAmPost = (s) => {
-    posts += 1;
-    if (posts === 1) {
-      s.amConfig.alertmanager_config.receivers = s.amConfig.alertmanager_config.receivers.filter(
-        (r) => r.name !== "slack-ops-alerts",
-      );
-    }
-  };
-  await assert.rejects(client.restoreContactPoints([]), /non-tracker receivers changed during removal/);
-  assert.equal(canonicalJson(state.amConfig.alertmanager_config), preRemoval);
-});
-
-test("a failed restore on the removal path reports both errors and the live restore state", async () => {
-  const state = newState();
-  const client = realClient(state);
-  await client.upsertContactPoint(trackerContactFixture("sekrit-credential"));
-  let amPosts = 0;
-  const baseFetch = fakeGrafanaFetch(state);
-  const failingRestoreFetch = async (url, init = {}) => {
-    const method = init.method || "GET";
-    const p = new URL(url).pathname;
-    if (p === ALERTMANAGER_CONFIG && method === "POST") {
-      amPosts += 1;
-      if (amPosts === 1) {
-        // The removal POST "succeeds" but the stored route is tampered.
-        state.amConfig = encryptAmConfig(JSON.parse(init.body));
-        state.amConfig.alertmanager_config.route.receiver = "tampered-default";
-        return { ok: true, status: 202, text: async () => "{}" };
-      }
-      // The restore POST fails.
-      return { ok: false, status: 500, text: async () => "" };
-    }
-    return baseFetch(url, init);
-  };
-  const failingClient = createGrafanaClient({ fetchImpl: failingRestoreFetch, tokenProvider: () => "t" });
-  await assert.rejects(failingClient.restoreContactPoints([]), (error) => {
-    assert.match(error.message, /Removal verification failed/);
-    assert.match(error.message, /RESTORE ALSO FAILED/);
-    assert.match(error.message, /HTTP 500/);
-    assert.match(error.message, /DIFFERS from the pre-removal state - manual restore required/);
-    assert.ok(!error.message.includes("sekrit-credential"), "no credential in error");
-    return true;
-  });
-  assert.equal(amPosts, 2, "removal POST + attempted restore POST");
-});
-
-test("a failed restore after failed verification reports both errors and the live restore state", async () => {
-  const state = newState();
-  let amPosts = 0;
-  const failingRestoreFetch = async (url, init = {}) => {
-    const method = init.method || "GET";
-    const p = new URL(url).pathname;
-    if (p === ALERTMANAGER_CONFIG && method === "POST") {
-      amPosts += 1;
-      if (amPosts === 1) {
-        // The write "succeeds" but the stored route is tampered.
-        state.amConfig = encryptAmConfig(JSON.parse(init.body));
-        state.amConfig.alertmanager_config.route = { receiver: CONTACT_POINT_NAME };
-        return { ok: true, status: 202, text: async () => "{}" };
-      }
-      // The restore POST fails.
-      return { ok: false, status: 500, text: async () => "" };
-    }
-    return fakeGrafanaFetch(state)(url, init);
-  };
-  const client = createGrafanaClient({ fetchImpl: failingRestoreFetch, tokenProvider: () => "t" });
-  await assert.rejects(client.upsertContactPoint(trackerContactFixture("sekrit-credential")), (error) => {
-    // Both diagnoses present: the verification failure AND the restore failure.
-    assert.match(error.message, /Post-write verification failed/);
-    assert.match(error.message, /route tree changed during write/);
-    assert.match(error.message, /RESTORE ALSO FAILED/);
-    assert.match(error.message, /HTTP 500/);
-    // The re-GET reported the live state: tracker receiver still present.
-    assert.match(error.message, /STILL PRESENT - manual restore required/);
-    assert.ok(!error.message.includes("sekrit-credential"), "no credential in error");
-    return true;
-  });
-  assert.equal(amPosts, 2, "write POST + attempted restore POST");
-});
-
-test("a write whose credential is not stored encrypted hard-fails and restores", async () => {
-  const state = newState();
-  const client = realClient(state);
-  state.onAmPost = (s) => {
-    const tracker = s.amConfig.alertmanager_config.receivers.find((r) => r.name === CONTACT_POINT_NAME);
-    if (tracker) delete tracker.grafana_managed_receiver_configs[0].secureFields;
-  };
-  await assert.rejects(client.upsertContactPoint(trackerContactFixture()), /not stored as an encrypted secure field/);
-  assert.deepEqual(
-    state.amConfig.alertmanager_config.receivers.map((r) => r.name),
-    ["slack-eng-triage", "slack-ops-alerts"],
-  );
-});
-
-test("restoreContactPoints removes only the tracker receiver and leaves route + Slack untouched", async () => {
-  const state = newState();
-  const client = realClient(state);
-  await client.upsertContactPoint(trackerContactFixture());
-  const slackBefore = canonicalJson(newState().amConfig.alertmanager_config.receivers);
-  // The full add/remove cycle must return the route to its pristine shape:
-  // Grafana regenerates the autogen subtree, so after removal it again holds
-  // exactly one child per remaining receiver.
-  const pristineRoute = canonicalJson(encryptAmConfig(newState().amConfig).alertmanager_config.route);
-  await client.restoreContactPoints([{ uid: "slack1", name: "slack-ops-alerts", type: "slack", settings: {} }]);
-  assert.deepEqual(
-    state.amConfig.alertmanager_config.receivers.map((r) => r.name),
-    ["slack-eng-triage", "slack-ops-alerts"],
-  );
-  assert.equal(canonicalJson(state.amConfig.alertmanager_config.receivers), slackBefore);
-  assert.equal(canonicalJson(state.amConfig.alertmanager_config.route), pristineRoute);
-  // No DELETEs on the wire; removal is a config POST.
-  assert.equal(state.requests.filter((r) => r.method === "DELETE").length, 0);
-  // Idempotent when the receiver is already gone: no further write issued.
-  const writesBefore = state.requests.filter((r) => r.method !== "GET").length;
-  await client.restoreContactPoints([]);
-  assert.equal(state.requests.filter((r) => r.method !== "GET").length, writesBefore);
-});
-
-test("restoreContactPoints refuses a pre-existing tracker point (redacted secure fields must never be replayed)", async () => {
-  const state = newState();
-  // The receipt's exported point carries the provider's redaction placeholder
-  // where the real credential was; replaying it would destroy the credential.
-  const before = [
-    ...JSON.parse(JSON.stringify(state.contactPoints)),
-    {
-      uid: "cp9",
-      name: CONTACT_POINT_NAME,
-      type: "webhook",
-      settings: { httpMethod: "POST", authorization_credentials: "[REDACTED]" },
-    },
-  ];
-  state.contactPoints.push({ uid: "cp9", name: CONTACT_POINT_NAME, type: "webhook", settings: { httpMethod: "POST" } });
-  const client = realClient(state);
-  await assert.rejects(client.restoreContactPoints(before), /Refusing to restore a pre-existing/);
-  await assert.rejects(client.restoreContactPoints(before), /Re-run `apply`/);
-  // Fail-closed: no write of any kind was issued.
-  assert.equal(state.requests.filter((r) => r.method !== "GET").length, 0);
 });
 
 test("HTTP errors surface only path and status, never host or token", async () => {
@@ -756,13 +384,13 @@ test("resolveSecretField checks caller identity, then parses the named field", a
   const { impl, calls } = fakeAws(TARGET.awsAccount, async () => ({
     stdout: JSON.stringify({ grafanaWebhookSecret: "value-under-test" }),
   }));
-  const value = await resolveSecretField("issue-tracker/app", "grafanaWebhookSecret", { execFileImpl: impl });
+  const value = await resolveSecretField("ops/example-app", "grafanaWebhookSecret", { execFileImpl: impl });
   assert.equal(value, "value-under-test");
   assert.deepEqual(calls[0].args.slice(0, 2), ["sts", "get-caller-identity"]);
   const sm = calls[1];
   assert.equal(sm.cmd, "aws");
   assert.deepEqual(sm.args.slice(0, 2), ["secretsmanager", "get-secret-value"]);
-  assert.ok(sm.args.includes("issue-tracker/app"));
+  assert.ok(sm.args.includes("ops/example-app"));
   assert.ok(sm.args.includes(TARGET.awsRegion));
 });
 
@@ -771,7 +399,7 @@ test("a wrong AWS account is rejected before any secret read", async () => {
     throw new Error("secretsmanager must never be reached");
   });
   await assert.rejects(
-    resolveSecretField("issue-tracker/app", "grafanaWebhookSecret", { execFileImpl: impl }),
+    resolveSecretField("ops/example-app", "grafanaWebhookSecret", { execFileImpl: impl }),
     /not the fixed target account 157466816238/,
   );
   assert.equal(calls.filter((c) => c.args[0] === "secretsmanager").length, 0);
@@ -784,7 +412,7 @@ test("resolveSecretField failures never echo secret material", async () => {
   const { impl } = fakeAws(TARGET.awsAccount, async () => {
     throw new Error("aws stderr containing something-sensitive");
   });
-  await assert.rejects(resolveSecretField("issue-tracker/app", "x", { execFileImpl: impl }), (error) => {
+  await assert.rejects(resolveSecretField("ops/example-app", "x", { execFileImpl: impl }), (error) => {
     assert.ok(!error.message.includes("something-sensitive"));
     return true;
   });
@@ -792,7 +420,7 @@ test("resolveSecretField failures never echo secret material", async () => {
     stdout: JSON.stringify({ other: "v" }),
   }));
   await assert.rejects(
-    resolveSecretField("issue-tracker/app", "grafanaWebhookSecret", { execFileImpl: missingField }),
+    resolveSecretField("ops/example-app", "grafanaWebhookSecret", { execFileImpl: missingField }),
     /missing field/,
   );
 });
@@ -841,7 +469,7 @@ test("apply hard-rejects a live query mismatch rather than recreating", async ()
   await runExport({ client, receiptPath, repoRoot, now: () => "2026-07-14T00:00:00Z" });
   state.rules.find((r) => r.uid === "dfrmh7bc4yqrkf").data = [{ refId: "A", model: { expr: "TAMPERED" } }];
   await assert.rejects(
-    runApply({ client, secretResolver: async () => "secret", receiptPath, repoRoot }),
+    runApply({ client, receiptPath, repoRoot }),
     /drifted/,
   );
   const puts = state.requests.filter((r) => r.method === "PUT" && r.path.includes("dfrmh7bc4yqrkf"));
@@ -884,7 +512,7 @@ test("apply refuses when live matches the receipt but drifted from the checked-i
     { mode: 0o600 },
   );
   await assert.rejects(
-    runApply({ client, secretResolver: async () => "s", receiptPath, repoRoot }),
+    runApply({ client, receiptPath, repoRoot }),
     /drifted from the checked-in definition.*cfrmh7f2sbe2od/,
   );
   assert.equal(state.requests.filter((r) => r.method !== "GET").length, 0);
@@ -912,31 +540,12 @@ test("only bfrmh7e7x2k8wd may contain log annotations", () => {
   assert.throws(() => assertLogAnnotationsOnlyOnLogRule(missing), /missing log annotations/);
 });
 
-// --- Contact-point serialization: reference but no secret ----------------------
-
-test("contact template has a secret reference and no secret value", () => {
-  const contact = JSON.parse(
-    fs.readFileSync(path.join(REPO_ROOT, "server/infra/observability/grafana/issue-tracker-contact.json"), "utf8"),
-  );
-  assert.doesNotThrow(() => assertContactTemplateSafe(contact));
-  assert.ok(JSON.stringify(contact).includes(WEBHOOK_SECRET_REF));
-  assert.equal(contact.contactPoint.secureSettings.authorization_credentials.secretRef, WEBHOOK_SECRET_REF);
-});
-
-test("an inline credential value in the contact point is rejected", () => {
-  const contact = JSON.parse(
-    fs.readFileSync(path.join(REPO_ROOT, "server/infra/observability/grafana/issue-tracker-contact.json"), "utf8"),
-  );
-  contact.contactPoint.secureSettings.authorization_credentials = "glsa_live_secret_value_1234567890";
-  assert.throws(() => assertContactTemplateSafe(contact), /reference/);
-});
-
 // --- Redaction coverage ---------------------------------------------------------
 
 test("redaction covers urls, bearer values, and long tokens", () => {
-  const raw = "POST https://issues.proliferate.com/v1/ingest/grafana Authorization: Bearer glsa_abcdefghijklmnopqrstuvwxyz123";
+  const raw = "POST https://ops.example.invalid/v1/ingest/grafana Authorization: Bearer glsa_abcdefghijklmnopqrstuvwxyz123";
   const red = redact(raw);
-  assert.ok(!red.includes("issues.proliferate.com"));
+  assert.ok(!red.includes("ops.example.invalid"));
   assert.ok(!red.includes("glsa_abcdefghijklmnopqrstuvwxyz123"));
   assert.ok(red.includes("<redacted-url>"));
 });
@@ -952,32 +561,24 @@ test("wrong account, region, or workspace is rejected", () => {
 
 // --- apply cannot mutate the notification policy --------------------------------
 
-test("apply leaves the notification policy untouched and only touches the tracker contact point", async () => {
+test("apply leaves the notification policy and Alertmanager config untouched", async () => {
   const state = newState();
   const repoRoot = fixtureRepo(state.rules);
   const client = realClient(state);
   const receiptPath = tmpReceiptPath();
   await runExport({ client, receiptPath, repoRoot, now: () => "2026-07-14T00:00:00Z" });
   const policyBefore = JSON.stringify(state.notificationPolicy);
-  const result = await runApply({ client, secretResolver: async () => "resolved-secret", receiptPath, repoRoot });
+  const result = await runApply({ client, receiptPath, repoRoot });
   assert.equal(result.policyUnchanged, true);
   assert.equal(JSON.stringify(state.notificationPolicy), policyBefore);
   // No request ever targeted the policies route with a write.
   assert.ok(!state.requests.some((r) => r.method !== "GET" && r.path.endsWith("/policies")));
-  // The only contact-point write is one Alertmanager-config POST appending the
-  // tracker receiver, with the resolved credential in secureSettings only.
+  // Contact points and the Alertmanager config are never written by apply.
   assert.equal(state.requests.filter((r) => r.method !== "GET" && r.path.includes("contact-points")).length, 0);
-  const amWrites = state.requests.filter((r) => r.method === "POST" && r.path === ALERTMANAGER_CONFIG);
-  assert.equal(amWrites.length, 1);
-  const posted = JSON.parse(amWrites[0].body).alertmanager_config.receivers.at(-1);
-  assert.equal(posted.name, CONTACT_POINT_NAME);
-  const postedCfg = posted.grafana_managed_receiver_configs[0];
-  assert.equal(postedCfg.secureSettings.authorization_credentials, "resolved-secret");
-  assert.equal("authorization_credentials" in postedCfg.settings, false);
-  // The receipt captured the full before-config (no tracker receiver yet).
+  assert.equal(state.requests.filter((r) => r.method !== "GET" && r.path === ALERTMANAGER_CONFIG).length, 0);
+  // The receipt captured the full before-config for rollback context.
   const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
   assert.ok(receipt.before.alertmanagerConfig);
-  assert.ok(!receipt.before.alertmanagerConfig.alertmanager_config.receivers.some((r) => r.name === CONTACT_POINT_NAME));
   for (const uid of KNOWN_UIDS) {
     assert.equal(result.beforeChecksums[uid], result.afterChecksums[uid]);
   }
@@ -990,25 +591,24 @@ test("apply throws if the policy is mutated underneath it", async () => {
   const receiptPath = tmpReceiptPath();
   await runExport({ client, receiptPath, repoRoot, now: () => "2026-07-14T00:00:00Z" });
   state.onWrite = (method, p) => {
-    if (p === ALERTMANAGER_CONFIG) state.notificationPolicy.receiver = "tampered";
+    if (p.includes("/alert-rules/")) state.notificationPolicy.receiver = "tampered";
   };
   await assert.rejects(
-    runApply({ client, secretResolver: async () => "s", receiptPath, repoRoot }),
+    runApply({ client, receiptPath, repoRoot }),
     /Notification policy changed/,
   );
 });
 
-test("restore replays the before-export and removes a newly created tracker point", async () => {
+test("restore replays the before-export rules", async () => {
   const state = newState();
   const repoRoot = fixtureRepo(state.rules);
   const client = realClient(state);
   const receiptPath = tmpReceiptPath();
   await runExport({ client, receiptPath, repoRoot, now: () => "2026-07-14T00:00:00Z" });
-  await runApply({ client, secretResolver: async () => "s", receiptPath, repoRoot });
-  const receiverNames = () => state.amConfig.alertmanager_config.receivers.map((r) => r.name);
-  assert.ok(receiverNames().includes(CONTACT_POINT_NAME));
+  await runApply({ client, receiptPath, repoRoot });
   const { restored } = await runRestore({ client, receiptPath });
   assert.deepEqual(restored.sort(), [...KNOWN_UIDS].sort());
+  const receiverNames = () => state.amConfig.alertmanager_config.receivers.map((r) => r.name);
   assert.deepEqual(receiverNames(), ["slack-eng-triage", "slack-ops-alerts"]);
 });
 

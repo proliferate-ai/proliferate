@@ -8,7 +8,6 @@ import {
   assertOperatorAccount,
   createGrafanaClient,
   resolveSecretField,
-  resolveViewerToken,
 } from "./grafana-client.mjs";
 import { runContextualAwsCommand } from "./grafana-credential-process.mjs";
 import { readMetadataInventoryInternal } from "./grafana-metadata-inventory.mjs";
@@ -20,6 +19,11 @@ import {
   publicFixture,
   surfaceFailure,
 } from "./grafana-client.inventory.fixtures.mjs";
+
+// Concrete resolveSecretField instance used to exercise the contextual
+// credential-resolution machinery (signal + deadline guard + account gate).
+const resolveViewerToken = (options = {}) =>
+  resolveSecretField("ops/inventory", "grafanaToken", options);
 
 function assertAllCredentialUnavailable(result) {
   for (const surface of Object.values(result.surfaces)) {

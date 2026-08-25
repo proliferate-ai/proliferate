@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 // Operator tooling for the five production Grafana alert rules (ECS CPU
-// retired 2026-08-21, see guides/operating/production-alerts.md) and the dark
-// issue-tracker webhook contact point (support-system slice E1).
+// retired 2026-08-21, see guides/operating/production-alerts.md).
 // Contract: guides/operating/production-alerts.md
 // check is offline; export/apply/restore are live and refuse the network
 // unless GRAFANA_ALERTING_LIVE=1 (Phase 2, gated on slice A acceptance).
@@ -14,11 +13,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  CONTACT_POINT_NAME,
   TARGET,
   adminTokenProvider,
   createGrafanaClient,
-  resolveWebhookSecret,
 } from "./grafana-client.mjs";
 import {
   REPO_ROOT,
@@ -29,12 +26,10 @@ import {
 
 export { REPO_ROOT };
 const OVERLAY_REL = "server/infra/observability/grafana/production-alerts.json";
-const CONTACT_REL = "server/infra/observability/grafana/issue-tracker-contact.json";
 
-// Fixed production target + tracker contact-point name are owned by
-// grafana-client.mjs (single source of truth for the network target lock).
-export { CONTACT_POINT_NAME, TARGET };
-export const WEBHOOK_SECRET_REF = "issue-tracker/app.grafanaWebhookSecret";
+// Fixed production target is owned by grafana-client.mjs (single source of
+// truth for the network target lock).
+export { TARGET };
 
 // The five immutable rule identities. The one log-backed rule is flagged.
 // ECS CPU > 90% for 15m (cfrmh7d7od8g0c) was retired 2026-08-21: infra
@@ -227,46 +222,6 @@ export function assertLogAnnotationsOnlyOnLogRule(rules) {
   }
 }
 
-export function assertContactTemplateSafe(contact) {
-  const cp = contact.contactPoint;
-  if (!cp) {
-    throw new Error("Contact template is missing contactPoint");
-  }
-  if (cp.name !== CONTACT_POINT_NAME) {
-    throw new Error(`Contact point name must be ${CONTACT_POINT_NAME}`);
-  }
-  if (cp.type !== "webhook") {
-    throw new Error("Contact point must be a webhook");
-  }
-  const settings = cp.settings || {};
-  if (settings.url !== "https://issues.proliferate.com/v1/ingest/grafana") {
-    throw new Error("Contact point url is not the tracker ingest url");
-  }
-  if (settings.httpMethod !== "POST") {
-    throw new Error("Contact point must POST");
-  }
-  if (settings.maxAlerts !== 0) {
-    throw new Error("Contact point maxAlerts must be 0");
-  }
-  if (settings.authorization_scheme !== "Bearer") {
-    throw new Error("Contact point auth scheme must be Bearer");
-  }
-  if (contact.delivery?.sendResolved !== true) {
-    throw new Error("Contact point must send resolved notifications");
-  }
-  const secure = cp.secureSettings || {};
-  const cred = secure.authorization_credentials;
-  if (!cred || typeof cred !== "object" || cred.secretRef !== WEBHOOK_SECRET_REF) {
-    throw new Error(`Contact point must reference ${WEBHOOK_SECRET_REF} by secretRef`);
-  }
-  // Nothing under the contact point may look like an inline credential value.
-  const serialized = JSON.stringify(cp);
-  if (/"authorization_credentials"\s*:\s*"/.test(serialized)) {
-    throw new Error("Contact point contains an inline credential value, not a reference");
-  }
-  return true;
-}
-
 // Full offline validation of the checked-in artifacts.
 export function validateOverlayDocument(overlay) {
   verifyTarget(overlay.target);
@@ -348,29 +303,12 @@ function buildLiveClient() {
   return createGrafanaClient({ tokenProvider: () => adminTokenProvider() });
 }
 
-// Contract requirement 8: the webhook Bearer credential is read from its
-// canonical secret reference (issue-tracker/app.grafanaWebhookSecret) at
-// execution time and never printed.
-function buildLiveSecretResolver() {
-  return async (secretRef) => {
-    if (secretRef !== WEBHOOK_SECRET_REF) {
-      throw new Error(`Refusing to resolve a secret other than ${WEBHOOK_SECRET_REF}`);
-    }
-    return resolveWebhookSecret();
-  };
-}
-
 // Operations. Each accepts injected deps so tests use fakes and no network.
 export function runCheck({ repoRoot = REPO_ROOT, snapshotPath = null } = {}) {
   const overlay = JSON.parse(
     fs.readFileSync(path.join(repoRoot, OVERLAY_REL), "utf8"),
   );
-  const contact = JSON.parse(
-    fs.readFileSync(path.join(repoRoot, CONTACT_REL), "utf8"),
-  );
   validateOverlayDocument(overlay);
-  verifyTarget(contact.target);
-  assertContactTemplateSafe(contact);
 
   let drift = [];
   if (snapshotPath) {
@@ -382,7 +320,7 @@ export function runCheck({ repoRoot = REPO_ROOT, snapshotPath = null } = {}) {
       throw new Error(`Drift detected against snapshot:\n  ${drift.join("\n  ")}`);
     }
   }
-  return { overlay, contact, drift };
+  return { overlay, drift };
 }
 
 // Fail-closed gate: every live rule's query checksum must equal the checked-in
@@ -447,17 +385,12 @@ export async function runExport({ client, receiptPath, repoRoot = REPO_ROOT, now
   return { receiptPath: resolved, checksums };
 }
 
-// Overlay approved metadata and CREATE the tracker contact point (create-only:
-// a pre-existing tracker receiver is refused; run restore first, then apply).
-export async function runApply({ client, secretResolver, receiptPath, repoRoot = REPO_ROOT }) {
+// Overlay approved metadata onto the five live rules.
+export async function runApply({ client, receiptPath, repoRoot = REPO_ROOT }) {
   const receipt = readReceipt(receiptPath, { repoRoot });
   verifyTarget(receipt.target);
   const overlay = loadOverlay(repoRoot);
-  const contact = JSON.parse(
-    fs.readFileSync(path.join(repoRoot, CONTACT_REL), "utf8"),
-  );
   validateOverlayDocument(overlay);
-  assertContactTemplateSafe(contact);
 
   const beforePolicyChecksum = sha256(canonicalize(await client.getNotificationPolicy()));
   const beforeChecksums = {};
@@ -489,16 +422,6 @@ export async function runApply({ client, secretResolver, receiptPath, repoRoot =
   }
   assertQueryChecksumsUnchanged(beforeChecksums, afterChecksums);
 
-  // Resolve the Bearer credential from its canonical reference at execution time.
-  const credential = await secretResolver(WEBHOOK_SECRET_REF);
-  await client.upsertContactPoint({
-    name: contact.contactPoint.name,
-    type: contact.contactPoint.type,
-    disableResolveMessage: contact.contactPoint.disableResolveMessage,
-    settings: { ...contact.contactPoint.settings },
-    secureSettings: { authorization_credentials: credential },
-  });
-
   // The notification policy must be untouched.
   const afterPolicyChecksum = sha256(canonicalize(await client.getNotificationPolicy()));
   if (beforePolicyChecksum !== afterPolicyChecksum) {
@@ -514,12 +437,11 @@ export async function runRestore({ client, receiptPath, repoRoot = REPO_ROOT }) 
   for (const [uid, rule] of Object.entries(receipt.before.rules)) {
     await client.upsertAlertRule(uid, rule);
   }
-  await client.restoreContactPoints(receipt.before.contactPoints);
   return { restored: Object.keys(receipt.before.rules) };
 }
 
-// Bounded read-back output: only UIDs, metadata names, checksums, setting names.
-export function printBoundedReadback({ checksums = {}, contactSettingNames = [] }) {
+// Bounded read-back output: only UIDs, metadata names, checksums.
+export function printBoundedReadback({ checksums = {} }) {
   safeLog("read-back:");
   for (const uid of KNOWN_UIDS) {
     const known = KNOWN_RULES.find((r) => r.uid === uid);
@@ -527,7 +449,6 @@ export function printBoundedReadback({ checksums = {}, contactSettingNames = [] 
     const annNames = (known.log ? ALLOWED_ANNOTATION_KEYS : ["runbook_url"]).join(",");
     safeLog(`  ${uid} checksum=${checksums[uid] || "<pending>"} labels=[${labelNames}] annotations=[${annNames}]`);
   }
-  safeLog(`  contact-point ${CONTACT_POINT_NAME} settings=[${contactSettingNames.join(",")}]`);
 }
 
 function parseArgs(argv) {
@@ -551,7 +472,7 @@ async function main() {
   switch (parsed.command) {
     case "check": {
       runCheck({ snapshotPath: parsed.snapshot || null });
-      safeLog("check passed: five-rule overlay + dark contact template are consistent and safe.");
+      safeLog("check passed: five-rule overlay is consistent and safe.");
       return;
     }
     case "export": {
@@ -566,13 +487,9 @@ async function main() {
       const client = buildLiveClient();
       const result = await runApply({
         client,
-        secretResolver: buildLiveSecretResolver(),
         receiptPath: parsed.receipt,
       });
-      printBoundedReadback({
-        checksums: result.afterChecksums,
-        contactSettingNames: ["url", "httpMethod", "maxAlerts", "authorization_scheme"],
-      });
+      printBoundedReadback({ checksums: result.afterChecksums });
       return;
     }
     case "restore": {
@@ -584,9 +501,7 @@ async function main() {
     }
     default:
       throw new Error(
-        "Usage: grafana-alerting.mjs <check|export|apply|restore> [--receipt <path>] [--snapshot <path>]\n" +
-          "apply is create-only for the tracker contact point: it refuses when the receiver already exists\n" +
-          "(run restore to remove the tooling-created receiver first, then re-run apply).",
+        "Usage: grafana-alerting.mjs <check|export|apply|restore> [--receipt <path>] [--snapshot <path>]",
       );
   }
 }

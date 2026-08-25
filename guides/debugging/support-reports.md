@@ -4,23 +4,21 @@ Status: authoritative operator runbook for the currently shipped capture path.
 
 Use this runbook when a report is missing, stuck, rejected, incomplete in S3,
 or absent from Slack. The active system ends at durable capture plus a
-best-effort Slack receipt. It does not currently create GitHub/Linear issues,
-run triage/fix workflows, or notify reporters when a fix ships.
+best-effort Slack receipt. It does not create external issues, run
+triage/fix workflows, or notify reporters when a fix ships. (The issue-tracker
+loop that once projected reports into issues was retired in the 2026-08
+engineering cull.)
 
 Product behavior is defined in
 [`../../specs/codebase/systems/product/support/README.md`](../../specs/codebase/systems/product/support/README.md).
-The accepted closed-loop contract is in
-[`../../specs/codebase/systems/engineering/issue-lifecycle/support-loop.md`](../../specs/codebase/systems/engineering/issue-lifecycle/support-loop.md).
 
-## Quick access from a tracker issue
+## Quick access to a report's raw detail
 
-A tracker issue at `issues.proliferate.com` holds only a safe pointer: title,
-reporter identity, user/release, and the `reportId` (the issue `sourceKey` is
-`support:<reportId>`). The message body, diagnostics, and attachments (images
-etc.) live only in the private S3 bundle. To go from an issue to the raw detail:
+The message body, diagnostics, and attachments (images etc.) live only in the
+private S3 bundle. To go from a `reportId` (from the Slack receipt or the
+admin surface) to the raw detail:
 
-1. **Get the reportId.** From the tracker issue's `sourceKey`
-   (`support:<reportId>`) or the `reportId` field on its reporter/occurrence.
+1. **Get the reportId.** From the Slack receipt or the admin surface.
 2. **Fastest human path:** open the admin surface at
    `SUPPORT_REPORT_INTERNAL_BASE_URL` (prod:
    `https://app.proliferate.com/admin/support/reports`) and look up the report.
@@ -34,7 +32,7 @@ etc.) live only in the private S3 bundle. To go from an issue to the raw detail:
 ```bash
 # List everything captured for a report (message, diagnostics, attachments)
 BUCKET=proliferate-support-reports-prod
-RID=<reportId>                       # e.g. from tracker sourceKey support:<reportId>
+RID=<reportId>                       # e.g. from the Slack receipt
 DAY=<YYYY/MM/DD>                     # the report's created_at day, UTC
 aws s3api list-objects-v2 --bucket "$BUCKET" \
   --prefix "support/reports/$DAY/$RID/" \

@@ -47,7 +47,7 @@ test("public method wires the full fixed plan with one bearer and no mutation", 
   const token = "one-principal-token";
   const { client, trace } = publicFixture(twoPageCompletePlan(), { token,
     tokenProvider(context) { contexts.push(context); return token; } });
-  for (const name of ["upsertAlertRule", "postAlertmanagerConfig", "upsertContactPoint", "restoreContactPoints"]) {
+  for (const name of ["upsertAlertRule", "postAlertmanagerConfig"]) {
     client[name] = async () => { throw new Error(`inventory invoked mutation ${name}`); };
   }
   const result = await client.readMetadataInventory();
@@ -117,9 +117,7 @@ test("client retains the exact existing public method set plus inventory", () =>
     "listAlertRulesViaRuler",
     "postAlertmanagerConfig",
     "readMetadataInventory",
-    "restoreContactPoints",
     "upsertAlertRule",
-    "upsertContactPoint",
   ]);
 });
 

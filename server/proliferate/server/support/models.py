@@ -85,7 +85,7 @@ class SupportReportTelemetryReferences(BaseModel):
         max_length=255,
     )
     # Canonical {project, eventId} Sentry references. Clients should send these
-    # so the tracker can resolve the exact Sentry issue.
+    # so an operator can resolve the exact Sentry issue.
     sentry_events: list[SupportSentryEventReference] = Field(
         default_factory=list, alias="sentryEvents", max_length=20
     )

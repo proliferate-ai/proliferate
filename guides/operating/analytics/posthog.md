@@ -76,8 +76,8 @@ network requests in screenshots.
   confirm. Replay missing on Desktop: check that the account is in the internal
   audience list and that the PostHog project has replay enabled.
 - Provider data differs from checked-in behavior: capture event name, surface,
-  environment, release, observed time, and a redacted provider URL. Route
-  ingestion or deduplication defects to Issue Lifecycle.
+  environment, release, observed time, and a redacted provider URL, and raise
+  the defect directly (there is no downstream issue-ingestion system).
 
 Any project setting, retention, person/profile, or provider write requires a
 separate reviewed change; widening Desktop replay beyond the internal audience,

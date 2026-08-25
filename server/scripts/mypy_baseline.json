@@ -448,12 +448,6 @@
     },
     {
       "path": "proliferate/db/store/support_reports.py",
-      "code": "arg-type",
-      "message": "Argument 2 to \"join\" of \"Select\" has incompatible type \"bool\"; expected \"ColumnElement[Any] | _HasClauseElement[Any] | SQLCoreOperations[Any] | ExpressionElementRole[Any] | TypedColumnsClauseRole[Any] | Callable[[], ColumnElement[Any]] | LambdaElement | OnClauseRole | None\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/db/store/support_reports.py",
       "code": "attr-defined",
       "message": "\"object\" has no attribute \"__iter__\"; maybe \"__dir__\" or \"__str__\"? (not iterable)",
       "count": 2
@@ -1158,54 +1152,6 @@
       "path": "proliferate/server/support/domain/report_records.py",
       "code": "no-any-return",
       "message": "Returning Any from function declared to return \"dict[str, object]\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/support/feed/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 3
-    },
-    {
-      "path": "proliferate/server/support/feed/service.py",
-      "code": "call-arg",
-      "message": "Missing named argument \"completed_at\" for \"SupportFeedItem\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/support/feed/service.py",
-      "code": "call-arg",
-      "message": "Missing named argument \"credit_consent\" for \"SupportFeedItem\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/support/feed/service.py",
-      "code": "call-arg",
-      "message": "Missing named argument \"notify_me\" for \"SupportFeedItem\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/support/feed/service.py",
-      "code": "call-arg",
-      "message": "Missing named argument \"owner_user_id\" for \"SupportFeedItem\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/support/feed/service.py",
-      "code": "call-arg",
-      "message": "Missing named argument \"private_case_reference\" for \"SupportFeedItem\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/support/feed/service.py",
-      "code": "call-arg",
-      "message": "Missing named argument \"report_id\" for \"SupportFeedItem\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/support/feed/service.py",
-      "code": "call-arg",
-      "message": "Missing named argument \"submitted_at\" for \"SupportFeedItem\"",
       "count": 1
     },
     {
