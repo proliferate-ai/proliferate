@@ -3,8 +3,10 @@ Updates Supervisor-Owned).
 
 Covers the deterministic Python side of the frozen spec's test matrix:
 heartbeat overlay (target overrides pin; A != B isolation; null inherits pin;
-replayed heartbeats stable), the ``desiredTopology`` D5 signal, and the
-admin-authenticated setter route's auth + validation.
+replayed heartbeats stable) and the admin-authenticated setter route's auth +
+validation. The ``desiredTopology`` D5 signal died with the D5 bridge (the
+cull sweep's delete-worker-legacy track); the heartbeat ack carries pins and
+the launch-options verdict only.
 """
 
 from __future__ import annotations
@@ -17,24 +19,20 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.cloud import CloudSandboxStatus
 from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_ROLE_ADMIN,
     ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_STATUS_ACTIVE,
 )
-from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import instance_organizations as instance_organization_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_workers import service
-from proliferate.lib.infra.encryption.fernet import encrypt_text
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.helpers.worker_heartbeat import (
     enroll_sandbox_worker as _enroll_sandbox_worker,
     heartbeat as _heartbeat,
-    seed_owner as _seed_owner,
     seed_sandbox as _seed_sandbox,
 )
 
@@ -165,14 +163,14 @@ class TestHeartbeatDesiredVersionsOverlay:
         assert third["desiredVersions"]["anyharness"] == "7.7.7"
 
     @pytest.mark.asyncio
-    async def test_desktop_worker_never_overlays_or_signals_topology(
+    async def test_desktop_worker_gets_pins_only_no_topology_or_bridge_fields(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """A desktop worker (no cloud_sandbox_id) keeps pins-only, pre-PR behavior."""
-        monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
+        """A desktop worker (no cloud_sandbox_id) heartbeats fine, and the ack
+        carries no D5-bridge vocabulary at all — the ``desiredTopology`` /
+        ``supervisorBridge`` members left the wire with the bridge deletion."""
         auth = await create_user_and_login(client, db_session, email_prefix="desktop-overlay")
         enrollment = await client.post(
             "/v1/cloud/workers/desktop/enrollment",
@@ -188,25 +186,8 @@ class TestHeartbeatDesiredVersionsOverlay:
 
         body = await _heartbeat(client, worker_token)
 
-        assert body.get("desiredTopology") is None
-
-    @pytest.mark.asyncio
-    async def test_desired_topology_only_signalled_when_flag_on(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        sandbox = await _seed_sandbox(db_session, prefix="topology")
-        worker_token = await _enroll_sandbox_worker(client, db_session, sandbox=sandbox)
-
-        monkeypatch.setattr(settings, "supervisor_owned_runtime", False)
-        off_body = await _heartbeat(client, worker_token)
-        assert off_body.get("desiredTopology") is None
-
-        monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
-        on_body = await _heartbeat(client, worker_token)
-        assert on_body["desiredTopology"] == "supervisor_owned"
+        assert "desiredTopology" not in body
+        assert "supervisorBridge" not in body
 
 
 class TestSetSandboxDesiredVersionsRoute:
@@ -395,108 +376,3 @@ class TestVersionedArtifactRedirect:
                 target="linux-x86_64", version=rolling, asset="proliferate-worker"
             )
         assert excinfo.value.status_code == 404
-
-
-class _FakeProvider:
-    """A provider whose runtime context is deterministic (paths only) so the
-    heartbeat bridge-input builder can run without a live sandbox."""
-
-    user_home = "/home/user"
-    runtime_workdir = "/home/user/work"
-    runtime_binary_path = "/home/user/.proliferate/bin/anyharness"
-    runtime_port = 8080
-    runtime_endpoint_handles_cors = False
-
-
-class TestSupervisorBridgeDelivery:
-    """R9R-002: the heartbeat materializes + delivers the D5 bridge inputs for an
-    already-provisioned legacy target once the flag is on, so a legacy Worker
-    (whose config carries no bridge fields) can actually bridge."""
-
-    async def _provisioned_sandbox(self, db_session: AsyncSession, *, prefix: str) -> CloudSandbox:
-        owner = await _seed_owner(db_session, prefix=prefix)
-        sandbox = CloudSandbox(
-            owner_user_id=owner.id,
-            provider_sandbox_id=f"e2b-{uuid.uuid4().hex[:8]}",
-            status=CloudSandboxStatus.ready,
-            anyharness_base_url="https://runtime.example.invalid",
-            runtime_token_ciphertext=encrypt_text(
-                "runtime-token", secret=settings.cloud_secret_key
-            ),
-            anyharness_data_key_ciphertext=encrypt_text(
-                "data-key", secret=settings.cloud_secret_key
-            ),
-        )
-        db_session.add(sandbox)
-        await db_session.commit()
-        return sandbox
-
-    @pytest.mark.asyncio
-    async def test_delivers_bridge_inputs_when_flag_on(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
-        monkeypatch.setattr(service, "get_sandbox_provider", lambda _ref: _FakeProvider())
-        sandbox = await self._provisioned_sandbox(db_session, prefix="bridge-on")
-        worker_token = await _enroll_sandbox_worker(client, db_session, sandbox=sandbox)
-
-        body = await _heartbeat(client, worker_token)
-
-        assert body["desiredTopology"] == "supervisor_owned"
-        bridge = body["supervisorBridge"]
-        assert bridge is not None
-        assert bridge["supervisorBinaryPath"] == (
-            "/home/user/.proliferate/bin/proliferate-supervisor"
-        )
-        assert bridge["supervisorConfigPath"] == "/home/user/.proliferate/supervisor/config.toml"
-        assert bridge["workerConfigPath"] == "/home/user/.proliferate/worker/config.toml"
-        assert bridge["markerDir"] == "/home/user/.proliferate/worker/bridge"
-        # The delivered worker config is the supervisor-owned shape (mailbox +
-        # fence), so the Supervisor's spawned child is a mailbox writer.
-        assert "supervisor_update_request_dir" in bridge["workerConfigToml"]
-        assert "anyharness_update_enabled = false" in bridge["workerConfigToml"]
-        # The supervisor config carries the runtime env (mailbox drain target).
-        assert "update_request_dir" in bridge["supervisorConfigToml"]
-        assert f'ANYHARNESS_RUNTIME_TARGET_ID = "{sandbox.id}"' in bridge["supervisorConfigToml"]
-        assert (
-            f'PROLIFERATE_SANDBOX_ID = "{sandbox.provider_sandbox_id}"'
-            in bridge["supervisorConfigToml"]
-        )
-
-    @pytest.mark.asyncio
-    async def test_no_bridge_when_flag_off(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(settings, "supervisor_owned_runtime", False)
-        monkeypatch.setattr(service, "get_sandbox_provider", lambda _ref: _FakeProvider())
-        sandbox = await self._provisioned_sandbox(db_session, prefix="bridge-off")
-        worker_token = await _enroll_sandbox_worker(client, db_session, sandbox=sandbox)
-
-        body = await _heartbeat(client, worker_token)
-
-        assert body.get("supervisorBridge") is None
-
-    @pytest.mark.asyncio
-    async def test_no_bridge_when_unprovisioned(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        # Flag on but the target has no provider sandbox / runtime credentials:
-        # there is nothing to bridge, so no inputs are delivered.
-        monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
-        monkeypatch.setattr(service, "get_sandbox_provider", lambda _ref: _FakeProvider())
-        sandbox = await _seed_sandbox(db_session, prefix="bridge-unprov")
-        worker_token = await _enroll_sandbox_worker(client, db_session, sandbox=sandbox)
-
-        body = await _heartbeat(client, worker_token)
-
-        assert body["desiredTopology"] == "supervisor_owned"
-        assert body.get("supervisorBridge") is None

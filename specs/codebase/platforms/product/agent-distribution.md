@@ -562,15 +562,11 @@ options in the composer.
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] The legacy cloud topology still exists beside the supervisor:
-      [`proliferate-worker/src/anyharness_update.rs`](../../../../anyharness/crates/proliferate-worker/src/anyharness_update.rs)
-      (worker-owned pgrep/kill/swap of the runtime), the worker's
-      self-`exec` update
-      ([`self_update.rs`](../../../../anyharness/crates/proliferate-worker/src/self_update.rs)),
-      the server's non-supervisor provision branch, and the D5 bridge
-      that migrates legacy sandboxes. All of it — plus the
-      `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` gate itself — deletes once
-      the fleet is fully supervisor-owned.
+- [x] ~~The legacy cloud topology still exists beside the supervisor~~ —
+      deleted by the cull sweep's delete-worker-legacy track: the
+      worker-owned in-place runtime swap, the worker's self-`exec` update,
+      the D5 bridge, and the `PROLIFERATE_SUPERVISOR_OWNED_RUNTIME` gate
+      are all gone; the supervisor mailbox is the only convergence path.
 - [ ] Two known readiness inefficiencies, neither a correctness law:
       claude's Node gate shells out uncached on every read, and the
       journal-protected atomic activation guard

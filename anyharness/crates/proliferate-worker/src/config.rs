@@ -17,35 +17,6 @@ pub struct WorkerConfig {
     pub integration_gateway_home: Option<PathBuf>,
     #[serde(default = "default_heartbeat_interval_seconds")]
     pub heartbeat_interval_seconds: u64,
-    /// Whether this worker converges its own binary onto the server's pinned
-    /// version (heartbeat `desiredVersions`). Default false: only launchers
-    /// that own no update mechanism of their own (the sandbox sidecar) opt
-    /// in. The desktop app bundle owns its worker binary and must leave this
-    /// off.
-    #[serde(default)]
-    pub self_update_enabled: bool,
-    /// Whether this worker also converges the co-located AnyHarness runtime
-    /// binary onto the server's pinned version (heartbeat
-    /// `desiredVersions.anyharness`) by swapping it in place and relaunching
-    /// it. Independent of `self_update_enabled` so the worker-binary and
-    /// runtime-binary tracks are separately controllable. Default false: only
-    /// the sandbox sidecar opts in; the desktop app owns its bundled runtime
-    /// and must leave this off.
-    #[serde(default)]
-    pub anyharness_update_enabled: bool,
-    /// Fixed on-disk path of the AnyHarness runtime binary the worker swaps in
-    /// place. Required when `anyharness_update_enabled` is set.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub anyharness_binary_path: Option<PathBuf>,
-    /// On-disk path of the runtime launcher script the worker re-runs after a
-    /// swap (it `exec`s the fixed binary path with the original env). Required
-    /// when `anyharness_update_enabled` is set.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub anyharness_launcher_path: Option<PathBuf>,
-    /// Working directory the launcher is re-run in. Required when
-    /// `anyharness_update_enabled` is set.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub anyharness_workdir: Option<PathBuf>,
     /// Base URL of the co-located AnyHarness runtime HTTP API. Required for
     /// catalog sync (pushing fetched catalogs to the runtime). Defaults to
     /// `http://127.0.0.1:8457` when absent — the standard runtime port on
@@ -60,33 +31,16 @@ pub struct WorkerConfig {
     /// into. Set only for supervisor-owned targets (server value:
     /// `.proliferate/supervisor/updates`). When present the Worker becomes an
     /// *observer + writer*: on heartbeat divergence it writes ONE durable
-    /// `UpdateRequestV1` for the Supervisor to act on instead of running the
-    /// (now-fenced) in-place swap or self-exec. Absent => the legacy
-    /// independent-launch path (self-update + in-place AnyHarness swap).
+    /// `UpdateRequestV1` for the Supervisor to act on. Absent (a desktop
+    /// worker, whose app bundle owns both binaries) => the Worker never
+    /// converges anything; it only heartbeats and syncs.
+    ///
+    /// On-disk configs may still carry keys from the deleted legacy
+    /// convergence paths (`self_update_enabled`, `anyharness_update_enabled`,
+    /// the in-place swap paths, the D5 bridge coordinates); serde ignores
+    /// unknown fields, so those configs parse unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supervisor_update_request_dir: Option<PathBuf>,
-    /// D5 bridge inputs — present only on already-provisioned targets an
-    /// operator is migrating to Supervisor ownership. The one-time bridge
-    /// writes the Supervisor config to `supervisor_config_path`, starts the
-    /// Supervisor at `supervisor_binary_path` detached, confirms ownership,
-    /// records crash-safety markers under `supervisor_bridge_marker_dir`, and
-    /// exits cleanly so the Supervisor's own Worker child takes over. Any field
-    /// absent => the Worker never bridges (newly provisioned targets launch
-    /// Supervisor-first and skip this entirely).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supervisor_binary_path: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supervisor_config_path: Option<PathBuf>,
-    /// The Supervisor config TOML content the bridge writes to
-    /// `supervisor_config_path` (the server's `build_supervisor_config`
-    /// output). Carried in the Worker config so an already-provisioned sandbox
-    /// — which has no Supervisor config on disk yet — can materialize one
-    /// during the bridge. Absent => the bridge assumes the config is already on
-    /// disk and does not overwrite it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supervisor_config_toml: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supervisor_bridge_marker_dir: Option<PathBuf>,
     #[serde(skip)]
     pub config_path: Option<PathBuf>,
 }
@@ -230,53 +184,23 @@ worker_db_path = "/tmp/worker.sqlite3"
 "#;
 
     #[test]
-    fn self_update_defaults_off() {
-        // Desktop configs predate (and must never enable) self-update.
-        let config: WorkerConfig = toml::from_str(MINIMAL_CONFIG).expect("minimal config");
-        assert!(!config.self_update_enabled);
-    }
-
-    #[test]
-    fn self_update_opt_in_parses() {
-        let contents = format!("{MINIMAL_CONFIG}self_update_enabled = true\n");
-        let config: WorkerConfig = toml::from_str(&contents).expect("opt-in config");
-        assert!(config.self_update_enabled);
-    }
-
-    #[test]
-    fn anyharness_update_defaults_off_with_no_paths() {
-        // Desktop configs predate (and must never enable) the runtime swap.
-        let config: WorkerConfig = toml::from_str(MINIMAL_CONFIG).expect("minimal config");
-        assert!(!config.anyharness_update_enabled);
-        assert_eq!(config.anyharness_binary_path, None);
-        assert_eq!(config.anyharness_launcher_path, None);
-        assert_eq!(config.anyharness_workdir, None);
-    }
-
-    #[test]
-    fn anyharness_update_opt_in_parses_with_paths() {
+    fn legacy_convergence_keys_are_ignored_not_fatal() {
+        // Deployed configs (desktop writes `self_update_enabled = false`; the
+        // sandbox bootstrap emitted the legacy gates and D5 bridge
+        // coordinates) still carry keys from the deleted convergence paths.
+        // They must parse unchanged — serde skips unknown fields.
         let contents = format!(
-            "{MINIMAL_CONFIG}anyharness_update_enabled = true\n\
+            "{MINIMAL_CONFIG}self_update_enabled = false\n\
+             anyharness_update_enabled = false\n\
              anyharness_binary_path = \"/home/user/.proliferate/bin/anyharness\"\n\
              anyharness_launcher_path = \"/home/user/start-anyharness.sh\"\n\
-             anyharness_workdir = \"/home/user/repo\"\n"
+             anyharness_workdir = \"/home/user/repo\"\n\
+             supervisor_binary_path = \"/home/user/.proliferate/bin/proliferate-supervisor\"\n\
+             supervisor_config_path = \"/home/user/.proliferate/supervisor/config.toml\"\n\
+             supervisor_bridge_marker_dir = \"/home/user/.proliferate/supervisor\"\n"
         );
-        let config: WorkerConfig = toml::from_str(&contents).expect("opt-in config");
-        assert!(config.anyharness_update_enabled);
-        assert_eq!(
-            config.anyharness_binary_path.as_deref(),
-            Some(std::path::Path::new(
-                "/home/user/.proliferate/bin/anyharness"
-            ))
-        );
-        assert_eq!(
-            config.anyharness_launcher_path.as_deref(),
-            Some(std::path::Path::new("/home/user/start-anyharness.sh"))
-        );
-        assert_eq!(
-            config.anyharness_workdir.as_deref(),
-            Some(std::path::Path::new("/home/user/repo"))
-        );
+        let config: WorkerConfig = toml::from_str(&contents).expect("legacy-keyed config");
+        assert_eq!(config.cloud_base_url, "https://cloud.test");
     }
 
     #[test]
@@ -297,26 +221,18 @@ worker_db_path = "/tmp/worker.sqlite3"
     }
 
     #[test]
-    fn supervisor_owned_fields_default_absent() {
-        // Legacy (non-supervisor) configs never mention the mailbox or bridge:
-        // absent => today's independent-launch path is taken unchanged.
+    fn mailbox_dir_defaults_absent() {
+        // A desktop worker's config never mentions the mailbox: absent =>
+        // heartbeat + sync only, no convergence of any kind.
         let config: WorkerConfig = toml::from_str(MINIMAL_CONFIG).expect("minimal config");
         assert_eq!(config.supervisor_update_request_dir, None);
-        assert_eq!(config.supervisor_binary_path, None);
-        assert_eq!(config.supervisor_config_path, None);
-        assert_eq!(config.supervisor_config_toml, None);
-        assert_eq!(config.supervisor_bridge_marker_dir, None);
     }
 
     #[test]
-    fn supervisor_owned_fields_parse_when_present() {
+    fn mailbox_dir_parses_when_present() {
         let contents = format!(
             "{MINIMAL_CONFIG}\
-             supervisor_update_request_dir = \"/home/user/.proliferate/supervisor/updates\"\n\
-             supervisor_binary_path = \"/home/user/.proliferate/bin/proliferate-supervisor\"\n\
-             supervisor_config_path = \"/home/user/.proliferate/supervisor/config.toml\"\n\
-             supervisor_config_toml = \"anyharness_binary = \\\"/x\\\"\\n\"\n\
-             supervisor_bridge_marker_dir = \"/home/user/.proliferate/supervisor\"\n"
+             supervisor_update_request_dir = \"/home/user/.proliferate/supervisor/updates\"\n"
         );
         let config: WorkerConfig = toml::from_str(&contents).expect("supervisor-owned config");
         assert_eq!(
@@ -324,26 +240,6 @@ worker_db_path = "/tmp/worker.sqlite3"
             Some(std::path::Path::new(
                 "/home/user/.proliferate/supervisor/updates"
             ))
-        );
-        assert_eq!(
-            config.supervisor_binary_path.as_deref(),
-            Some(std::path::Path::new(
-                "/home/user/.proliferate/bin/proliferate-supervisor"
-            ))
-        );
-        assert_eq!(
-            config.supervisor_config_path.as_deref(),
-            Some(std::path::Path::new(
-                "/home/user/.proliferate/supervisor/config.toml"
-            ))
-        );
-        assert_eq!(
-            config.supervisor_config_toml.as_deref(),
-            Some("anyharness_binary = \"/x\"\n")
-        );
-        assert_eq!(
-            config.supervisor_bridge_marker_dir.as_deref(),
-            Some(std::path::Path::new("/home/user/.proliferate/supervisor"))
         );
     }
 }

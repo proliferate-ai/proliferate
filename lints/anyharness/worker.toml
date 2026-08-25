@@ -32,12 +32,12 @@ enforced_by = "scripts/check_proliferate_worker_structure.py"
 mode = "lint"
 scope = "anyharness/crates/proliferate-worker/src/**"
 
-rule = """All 16 files in REQUIRED_FILES must be present in the proliferate-worker crate."""
+rule = """All 15 files in REQUIRED_FILES must be present in the proliferate-worker crate."""
 alternative = """Keep the named module files in place; a real deletion is an amendment, not a refactor."""
 why = """Pins the target worker layout positively, not just negatively, so the shape cannot erode by deletion."""
 
 [rule.example]
-bad = """one of the 16 required worker modules deleted or renamed without updating the checker"""
+bad = """one of the 15 required worker modules deleted or renamed without updating the checker"""
 good = """cloud_client/, identity/, lifecycle/, store/ and the named root modules exist"""
 
 [[rule]]

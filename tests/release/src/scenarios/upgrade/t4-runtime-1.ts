@@ -43,9 +43,6 @@ import {
  *   - --lane local has no managed-cloud world and no E2B sandbox -> blocked.
  *   - no retained release id selected -> blocked
  *     (the founder-ruled default until a retained baseline is chosen).
- *   - the candidate API is not running with supervisor_owned_runtime -> blocked
- *     (a heartbeat would return the legacy direct-Worker topology, which
- *     contradicts the contract's "Worker writes the atomic mailbox request").
  *
  * Known mechanism gotcha to carry into the live proof (from T4-CLOUD-1 /
  * issue #1089): the released AnyHarness binary historically reported
@@ -57,8 +54,6 @@ import {
  * therefore carry the exact version each artifact actually REPORTS, not merely
  * its release tag, so the live proof asserts against observable truth.
  */
-
-const SUPERVISOR_OWNED_RUNTIME_ENV = "RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME";
 
 export const t4Runtime1: ScenarioDefinition = {
   id: "T4-RUNTIME-1",
@@ -82,11 +77,9 @@ export const t4Runtime1: ScenarioDefinition = {
   requiredEnv: [
     "RELEASE_E2E_SERVER_URL",
     RETAINED_RELEASE_ID_ENV,
-    SUPERVISOR_OWNED_RUNTIME_ENV,
   ],
   plan: () => [
     { description: "resolve the immutable retained-production N-1 template + manifest (else block)" },
-    { description: "confirm the candidate API runs with supervisor_owned_runtime (else block)" },
     { description: "authenticate a disposable actor; provision its sandbox from the N-1 template" },
     { description: "assert N-1 Supervisor/Worker/AnyHarness + bundled catalog/registry + agent identities" },
     { description: "create a cloud workspace/session; complete one bounded baseline turn" },
@@ -156,20 +149,11 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
     );
   }
 
-  // Read from ctx.env (the single runner authority), not process.env: the flag
-  // is declared in requiredEnv, so the runner surfaces it here and there is no
-  // second, divergent input path (T4R-CONTROL-001).
-  if (ctx.env.get(SUPERVISOR_OWNED_RUNTIME_ENV)?.trim() !== "1") {
-    throw new ScenarioBlockedError(
-      "T4-RUNTIME-1: the supervisor-owned runtime topology must be active on the candidate API for the " +
-        "heartbeat to return desiredTopology=supervisor_owned and for the Worker to write the durable " +
-        "mailbox request rather than swapping the binary itself (server default is ON since 2026-07-26; " +
-        "this check still confirms the candidate under test actually has it enabled). Deploy the " +
-        `candidate API with PROLIFERATE_SUPERVISOR_OWNED_RUNTIME=1 and set ${SUPERVISOR_OWNED_RUNTIME_ENV}=1 ` +
-        "to confirm it. Without it the observed behavior would be the legacy direct-Worker path, which " +
-        "contradicts the T4-RUNTIME-1 contract.",
-    );
-  }
+  // Supervisor-owned is the only runtime topology: the legacy direct-Worker
+  // path, the D5 bridge, and the server flag that gated its heartbeat signal
+  // were all deleted (cull sweep, delete-worker-legacy), so there is no
+  // topology confirmation to gate on — every candidate API launches
+  // Supervisor-owned unconditionally.
 
   // The live proof body is gated behind the retained-baseline availability
   // above. It is implemented incrementally as the retained-template mechanism

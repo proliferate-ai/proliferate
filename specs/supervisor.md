@@ -57,20 +57,13 @@ exist here, and both PASSED on real E2B sandboxes 2026-07-26: the UPDATE proof
 (a fresh supervisor-owned sandbox converging pins 0.3.47→0.3.48 end to end,
 this mailbox consumer included, zero rollbacks, ~75s convergence) and the D5
 BRIDGE proof (in-place migration of an already-running legacy Worker's
-process tree onto Supervisor via `supervisor_bridge`, not a fresh provision —
+process tree onto Supervisor via the one-time bridge, not a fresh provision —
 sandbox `iwwvadhffzxoora56f437`, ~2.5s, no destroy/recreate). Both proofs
 together cleared the gate to delete the server-side legacy launch path
 entirely (`server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py`
-now has only one launch topology). Everything below describes running code.
-
-The bridge's Rust-side worker log signature during a real migration: the
-Supervisor's first spawned Worker child exits once early with a
-`worker.sqlite3.lock` contention error (the bridging Worker still holds the
-flock while it confirms Supervisor ownership and exits), then the
-Supervisor's restart loop (`restart_delay_seconds`, default 5s) relaunches it
-and it acquires the lock cleanly on the second attempt. This one-time exit +
-5s-later clean restart is the expected, successful signature — not a crash
-loop — for exactly one Worker-child generation per bridge.
+now has only one launch topology); the Worker-side bridge code itself was
+deleted after full fleet convergence by the cull sweep's delete-worker-legacy
+track. Everything below describes running code.
 
 ## Target Shape
 

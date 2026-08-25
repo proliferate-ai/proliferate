@@ -6644,38 +6644,8 @@ export interface components {
             /** Heartbeatintervalseconds */
             heartbeatIntervalSeconds: number;
             desiredVersions: components["schemas"]["WorkerDesiredVersions"];
-            /** Desiredtopology */
-            desiredTopology?: string | null;
-            supervisorBridge?: components["schemas"]["WorkerSupervisorBridge"] | null;
             /** Launchoptionsuploadallowed */
             launchOptionsUploadAllowed: boolean;
-        };
-        /**
-         * WorkerSupervisorBridge
-         * @description Server-materialized D5 bridge inputs for an already-provisioned legacy
-         *     target (R9R-002).
-         *
-         *     A legacy Worker's persisted config carries none of the supervisor-owned
-         *     fields, so without these it could never bridge. The server delivers the
-         *     Supervisor config TOML + a supervisor-owned Worker config TOML and the paths
-         *     to write them through the live heartbeat channel; the legacy Worker
-         *     materializes both, starts the Supervisor, and hands the box off. Absent for
-         *     Supervisor-first provisions (their on-disk config already carries the inputs)
-         *     and for every non-flag-enabled target.
-         */
-        WorkerSupervisorBridge: {
-            /** Supervisorbinarypath */
-            supervisorBinaryPath: string;
-            /** Supervisorconfigpath */
-            supervisorConfigPath: string;
-            /** Supervisorconfigtoml */
-            supervisorConfigToml: string;
-            /** Workerconfigpath */
-            workerConfigPath: string;
-            /** Workerconfigtoml */
-            workerConfigToml: string;
-            /** Markerdir */
-            markerDir: string;
         };
         /** WorkflowDefinitionCreateRequestV2 */
         WorkflowDefinitionCreateRequestV2: {

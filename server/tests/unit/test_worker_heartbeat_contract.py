@@ -43,8 +43,6 @@ def _v1_response() -> WorkerHeartbeatResponse:
             worker=WORKER_PIN,
             anyharness=ANYHARNESS_PIN,
         ),
-        desired_topology=None,
-        supervisor_bridge=None,
         launch_options_upload_allowed=True,
     )
 
@@ -94,5 +92,3 @@ class TestCapabilityField:
             "worker": WORKER_PIN,
             "anyharness": ANYHARNESS_PIN,
         }
-        assert serialized["desiredTopology"] is None
-        assert serialized["supervisorBridge"] is None

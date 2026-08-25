@@ -4,10 +4,11 @@ Launching a cloud sandbox always launches Proliferate Supervisor first (via
 ``build_supervisor_config`` + ``build_detached_supervisor_launch_command``);
 Supervisor spawns and supervises AnyHarness and the Worker itself, so there is
 no separate worker-sidecar launch. The legacy direct-nohup'd AnyHarness path
-(gated by ``settings.supervisor_owned_runtime`` off) was deleted once the live
-E2B N-1->N update proof and the D5 BRIDGE proof both passed (2026-07-26); see
-the PR that deleted it for the caller-verification evidence. Providers and
-runtime probes are stubbed per the repo testing standard -- no real sandboxes.
+was deleted once the live E2B N-1->N update proof and the D5 BRIDGE proof both
+passed (2026-07-26); the ``supervisor_owned_runtime`` flag and the D5 bridge
+signal it gated died later, with the cull sweep's delete-worker-legacy track.
+Providers and runtime probes are stubbed per the repo testing standard -- no
+real sandboxes.
 """
 
 from __future__ import annotations
@@ -197,31 +198,6 @@ async def test_launches_supervisor_first_no_sidecar(
     assert stop_command in provider.commands
     assert provider.runtime_io_transactions
     assert not any(provider.runtime_io_transactions)
-
-
-def test_supervisor_owned_runtime_default_is_true(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pin ``supervisor_owned_runtime``'s field default now that the launch
-    path itself no longer branches on it (S5-B deleted the legacy branch, so
-    no launch-behavior test would catch a flipped default anymore).
-
-    This flag still gates the D5 ``desiredTopology`` heartbeat signal
-    (``record_heartbeat`` in ``runtime_workers/service.py``) that tells an
-    already-running legacy Worker to bridge onto a Supervisor. A silent flip
-    of the default to ``False`` would quietly stop advertising that bridge
-    signal to legacy workers still out there -- with no test failure to
-    surface it, since it no longer touches fresh-launch behavior at all.
-
-    Construct a fresh ``Settings()`` with both env var spellings cleared
-    (rather than asserting against the ambient module-level ``settings``
-    singleton) so this reflects only the field's own default, never
-    whatever env a dev's shell happens to export.
-    """
-    monkeypatch.delenv("PROLIFERATE_SUPERVISOR_OWNED_RUNTIME", raising=False)
-    monkeypatch.delenv("SUPERVISOR_OWNED_RUNTIME", raising=False)
-    from proliferate.config import Settings
-
-    fresh_settings = Settings()
-    assert fresh_settings.supervisor_owned_runtime is True
 
 
 class TestSupervisorLaunchCommandHardening:

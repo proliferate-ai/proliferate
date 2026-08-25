@@ -77,10 +77,10 @@ pub struct HeartbeatRequest {
 pub struct DesiredVersions {
     #[serde(default)]
     pub worker: Option<String>,
-    /// The AnyHarness runtime version the server pins. A sandbox worker with
-    /// `anyharness_update_enabled` converges the runtime binary onto it
-    /// (download / swap-in-place / relaunch); other workers ignore it. `None`
-    /// on an unstamped/old server, which the worker treats as a no-op.
+    /// The AnyHarness runtime version the server pins. A supervisor-owned
+    /// worker records divergence from it as a mailbox update request; other
+    /// workers ignore it. `None` on an unstamped/old server, which the worker
+    /// treats as a no-op.
     #[serde(default)]
     pub anyharness: Option<String>,
 }
@@ -95,28 +95,11 @@ pub struct HeartbeatResponse {
     pub status: Option<String>,
     #[serde(default)]
     pub server_time: Option<String>,
-    // Absent on servers that predate version convergence.
+    // Absent on servers that predate version convergence. Deployed servers may
+    // also still emit the deleted D5-bridge fields (`desiredTopology`,
+    // `supervisorBridge`); serde skips unknown fields, so they are tolerated.
     #[serde(default)]
     pub desired_versions: Option<DesiredVersions>,
-    /// The desired runtime-management topology for this target. `"supervisor_owned"`
-    /// (the only non-null value the server emits, and only for flag-enabled
-    /// cloud-sandbox targets) tells a Worker to route divergence through the
-    /// Supervisor mailbox and, if it is a legacy independent-launch Worker, to
-    /// perform the one-time D5 bridge to Supervisor ownership. Absent-tolerant,
-    /// exactly like `desired_versions`: older servers omit it and every Worker
-    /// treats `None` as today's behavior.
-    #[serde(default)]
-    pub desired_topology: Option<String>,
-    /// D5 bridge inputs the server materializes for an already-provisioned
-    /// LEGACY target it is migrating to Supervisor ownership (R9R-002). A legacy
-    /// Worker's persisted config has none of the bridge fields, so without this
-    /// it could never bridge; the server delivers the Supervisor + supervisor-
-    /// owned Worker config TOML and the paths through the live heartbeat channel
-    /// so the legacy Worker can materialize them and hand the box off. Absent for
-    /// Supervisor-first provisions (their on-disk config already carries the
-    /// inputs) and for every non-flag-enabled target.
-    #[serde(default)]
-    pub supervisor_bridge: Option<SupervisorBridgeInputs>,
     /// The server's verdict on whether THIS Worker may upload an agent-model
     /// snapshot (REL-10). The server owns `runtime_kind`, sandbox existence and
     /// destruction, and the owner the ingest route derives, so it — not the
@@ -138,25 +121,6 @@ pub struct IngestHarnessLaunchOptionsRequest {
     pub payload_json: String,
 }
 
-/// Server-delivered D5 bridge inputs (R9R-002). Carried on the heartbeat ack so
-/// an already-provisioned legacy Worker — whose on-disk config predates the
-/// supervisor-owned shape — can materialize the Supervisor config AND a
-/// supervisor-owned Worker config, then hand the box to a freshly-started
-/// Supervisor. All paths are absolute in-sandbox paths the server computes from
-/// the target's runtime context.
-#[derive(Debug, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SupervisorBridgeInputs {
-    pub supervisor_binary_path: String,
-    pub supervisor_config_path: String,
-    pub supervisor_config_toml: String,
-    /// The supervisor-owned Worker config TOML + its on-disk path. The bridge
-    /// overwrites the legacy Worker config with this so the Supervisor's spawned
-    /// Worker child is a mailbox writer (not the legacy in-place swapper).
-    pub worker_config_path: String,
-    pub worker_config_toml: String,
-    pub marker_dir: String,
-}
 
 impl CloudClient {
     pub fn new(config: &WorkerConfig) -> Result<Self, WorkerError> {
@@ -237,78 +201,6 @@ impl CloudClient {
             });
         }
         Ok(())
-    }
-
-    /// Fetch a pinned worker artifact via the server's redirect endpoint,
-    /// capturing the CDN URL the 302 resolved to. Unauthenticated by design
-    /// (the CDN artifacts are public); reqwest follows the 302 to the downloads
-    /// CDN. Uses a per-request timeout because a binary download can
-    /// legitimately outlive the client's default 30s cap on slow links.
-    ///
-    /// The resolved URL lets a caller fetch a sibling artifact (the binary's
-    /// `.sha256`) from the *same* published directory without re-hitting the
-    /// redirect: the server resolves pinned-vs-fallback independently per
-    /// request, so a second redirect could straddle a publish and pair the
-    /// binary with a checksum from a different version.
-    pub async fn download_worker_artifact(
-        &self,
-        target: &str,
-        asset: &str,
-    ) -> Result<DownloadedArtifact, WorkerError> {
-        let response = self
-            .http_download
-            .get(format!(
-                "{}/v1/cloud/worker/download/{target}/{asset}",
-                self.base_url
-            ))
-            .timeout(ARTIFACT_DOWNLOAD_TIMEOUT)
-            .send()
-            .await?;
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(WorkerError::Cloud { status, body });
-        }
-        // Capture the post-redirect URL before the body consumes the response.
-        let resolved_url = response.url().to_string();
-        let bytes = response.bytes().await?.to_vec();
-        Ok(DownloadedArtifact {
-            bytes,
-            resolved_url,
-        })
-    }
-
-    /// Fetch a pinned AnyHarness runtime artifact via the server's runtime
-    /// redirect endpoint, capturing the CDN URL the 302 resolved to. Parallel
-    /// to `download_worker_artifact`: unauthenticated (public CDN), follows the
-    /// redirect, and returns the resolved URL so the sibling `.sha256` can be
-    /// fetched from the same published directory (hence the same version)
-    /// without re-resolving the pinned-vs-fallback path a second time.
-    pub async fn download_runtime_artifact(
-        &self,
-        target: &str,
-        asset: &str,
-    ) -> Result<DownloadedArtifact, WorkerError> {
-        let response = self
-            .http_download
-            .get(format!(
-                "{}/v1/cloud/runtime/download/{target}/{asset}",
-                self.base_url
-            ))
-            .timeout(ARTIFACT_DOWNLOAD_TIMEOUT)
-            .send()
-            .await?;
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(WorkerError::Cloud { status, body });
-        }
-        let resolved_url = response.url().to_string();
-        let bytes = response.bytes().await?.to_vec();
-        Ok(DownloadedArtifact {
-            bytes,
-            resolved_url,
-        })
     }
 
     /// Fetch an artifact directly from an already-resolved CDN URL (used for
@@ -401,11 +293,32 @@ impl CloudClient {
     }
 }
 
-/// A downloaded worker artifact plus the CDN URL the server's redirect
-/// resolved to, so a sibling artifact can be fetched from the same directory.
-pub struct DownloadedArtifact {
-    pub bytes: Vec<u8>,
-    pub resolved_url: String,
+/// The `<os>-<arch>` artifact target this Worker resolves download
+/// coordinates for. Fails on platforms the downloads CDN never publishes.
+pub(crate) fn artifact_target() -> Result<String, WorkerError> {
+    let unsupported = || WorkerError::ArtifactTargetUnsupported {
+        os: std::env::consts::OS,
+        arch: std::env::consts::ARCH,
+    };
+    let os = match std::env::consts::OS {
+        "linux" => "linux",
+        "macos" => "macos",
+        _ => return Err(unsupported()),
+    };
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
+        "aarch64" => "aarch64",
+        _ => return Err(unsupported()),
+    };
+    Ok(format!("{os}-{arch}"))
+}
+
+/// The published `.sha256` sits next to the binary, so its URL is the binary's
+/// resolved URL with the checksum suffix appended. Deriving it (rather than
+/// re-resolving the pinned-vs-fallback path via a second redirect) guarantees
+/// the checksum and binary come from the same directory — and thus version.
+pub(crate) fn checksum_url_for(binary_url: &str) -> String {
+    format!("{binary_url}.sha256")
 }
 
 /// An artifact's CDN coordinates resolved without downloading the body: the
