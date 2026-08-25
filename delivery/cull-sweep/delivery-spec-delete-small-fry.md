@@ -33,3 +33,22 @@ Verified-dead removals + the stranded automations client stack + CI demotions.
 
 Client typechecks/builds; no poller mounts; server boots; migration round-trips;
 CI config valid.
+
+## Amendments (2026-08-25, ruled during execution)
+
+1. **`measure-login-runtime-budget.mjs` stays.** The verify-first gate caught a live
+   consumer: `ci.yml:496` runs it to enforce the login runtime budget (required lane
+   per the web-desktop-unification migration spec). Only `latency-benchmark.mjs` and
+   `inspect-{cursor,opencode}-models.mjs` verified dead.
+2. **Migration is irreversible by precedent.** `DROP TABLE IF EXISTS ... CASCADE` with
+   a `NotImplementedError` downgrade, matching cull precedent `f8b9c0d1e2f4`. A
+   recreate-downgrade would be a fake round-trip anyway: `automation` FKs reference
+   tables Track A-b drops. Acceptance line becomes: upgrade applies cleanly on a dev
+   DB. Per Pablo, no prod snapshot step: existing user data is not a concern.
+3. **Stranded-stack cascade approved.** The spec's listed client dirs close over a
+   wider zero-importer constellation, deleted with them: product-client
+   `domain/automations/`, `copy/automations/`, `hooks/access/anyharness/automations/`,
+   `config/automations.ts`, and the mobile automations tab
+   (`components/automations/` + its nav wiring), whose SDK hooks call server routes
+   that no longer exist. Every cascaded path is listed in the PR description with its
+   zero-importer evidence.
