@@ -72,7 +72,10 @@ async def test_backlog_snapshot_reports_supported_pending_by_family(
         INTEGRATION_REVOCATION_PROCESS_TASK: 0,
     }
     assert snapshot.supported_oldest_pending_age_by_family[HEALTH_NOOP_TASK] >= 0
-    assert snapshot.supported_oldest_pending_age_by_family[INTEGRATION_REVOCATION_PROCESS_TASK] == 0
+    revocation_age = snapshot.supported_oldest_pending_age_by_family[
+        INTEGRATION_REVOCATION_PROCESS_TASK
+    ]
+    assert revocation_age == 0
     assert "background.not.enabled" not in snapshot.supported_pending_by_family
 
 

@@ -187,7 +187,6 @@ async def test_v2_document_rejections_surface_paths(client: AsyncClient) -> None
     assert rejected.status_code == 422
 
 
-
 @pytest.mark.asyncio
 async def test_v2_default_repository_is_an_opaque_runtime_space_id(
     client: AsyncClient,
