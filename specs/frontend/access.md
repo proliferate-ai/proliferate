@@ -36,10 +36,6 @@ connector records plus local OAuth/native setup.
 Illustrative examples only, not a complete inventory:
 
 ```text
-hooks/access/cloud/automations/query-keys.ts
-hooks/access/cloud/automations/use-automations.ts
-hooks/access/cloud/automations/use-automation-mutations.ts
-
 hooks/access/cloud/billing/use-billing-plan.ts
 hooks/access/cloud/billing/use-llm-balance.ts
 hooks/access/cloud/billing/use-team-checkout.ts
@@ -76,8 +72,8 @@ hooks/access/<system>/<resource>/use-<action>-mutation.ts
 
 Do not put React Query key factories in `lib/access/**`; that layer owns raw
 transport, not React cache identity. Do not define remote-resource query keys
-inside product hook folders such as `hooks/automations/**`,
-`hooks/workspaces/**`, or `hooks/sessions/**`.
+inside product hook folders such as `hooks/workspaces/**` or
+`hooks/sessions/**`.
 
 Product hook folders may keep key helpers only for product-composed caches
 that combine multiple sources into one product-owned projection.

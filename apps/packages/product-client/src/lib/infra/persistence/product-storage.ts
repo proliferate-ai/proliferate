@@ -199,7 +199,7 @@ export interface ReadPersistedStringOptions {
  * Read a raw string product value through the injected ProductStorage — the
  * counterpart to {@link readPersistedJson} for the small set of keys whose
  * on-disk representation is a bare string (never JSON-encoded), e.g. the
- * selected logical workspace id, the local automation executor id, and the
+ * selected logical workspace id and the
  * legacy theme/model preference keys. Using the raw string preserves those
  * existing values with zero migration; JSON-decoding them would lose data.
  *

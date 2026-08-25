@@ -329,8 +329,6 @@ blocked when the developer intentionally omits Stripe.
 | `T2-WF-5` | Session binding, wrong workspace/harness, all-mutation lockout, acknowledged takeover, cancellation, quiescence, and ownership release. |
 | `T2-WF-6` | Both `/init` flows, signature derivation/diff, SSRF validation, first-call failure, and saved-definition truth. |
 | `T2-WF-7` | Schedule/poll CRUD, every missed-run policy, disabled-trigger behavior, concurrent tick claiming, queue ordering, and crash-safe outbox/retry seams. |
-| `T2-AUTO-1` | Personal/team automation CRUD, ownership/admin gates, target mode, immutable run-config snapshot, pause/enable/delete, manual trigger, and exposure intent. |
-| `T2-AUTO-2` | Scheduled occurrence deduplication and the runtime-config/agent-auth preflight cascade enqueue each convergence command once, read back applied revisions, retry within policy, and fail with a typed terminal error. |
 | `T2-SLACK-1` | Slack Bot OAuth state, one active connection, admin configuration, fixed/auto repo routing, allowed channels, inherited run config, and write-only token storage are exact. Signature/timestamp/challenge, event/thread dedupe, sub-three-second ack, follow-up reuse, ambiguity with zero workspace, config/auth cascade, outbound idempotency, rate limiting, retry, and reauth all hold. (No shipped Slack bot exists and no owning spec survives; row retained for scenario-inventory parity — a founder ruling is needed to delete or revive the SLACK scenarios.) |
 
 ### Billing
@@ -500,8 +498,6 @@ upstream calls, never by agent prose.
 | `T3-WF-8` | Workflow agent listing and messaging respect run/session scope and persist messages exactly once across reconnect. |
 | `T3-WF-9` | Bound-session lockout covers every mutation; acknowledged takeover quiesces the prior owner before releasing the binding. |
 | `T3-WF-10` | One real Slack notification survives post-acceptance crash/retry and is reconciled exactly once. |
-| `T3-AUTO-1` | Personal and organization manual/scheduled automations converge stale config/auth, create one workspace/session/prompt, complete a cheap real-agent turn, preserve the frozen config, and enforce private/shared exposure; disabled or policy-blocked automations create no work. |
-| `T3-AUTO-2` | Candidate Desktop worker/runtime plus the Desktop renderer claims, heartbeats, executes, and relays a local scheduled automation once; controlled worker/runtime restart after claim resumes or fails the same run durably without a second workspace/session/prompt. Packaged-app relaunch belongs to Tier 4. |
 
 ### Self-hosted and operational product paths
 

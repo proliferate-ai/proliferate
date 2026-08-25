@@ -183,16 +183,16 @@ test("journey-to-guarantee mappings live only in the machine manifest", () => {
   assert.doesNotMatch(tier4Contract, duplicateMappingPattern);
 });
 
-test("the required target has 69 Tier 2, 90 Tier 3, and 27 Tier 4 unique scenarios", () => {
+test("the required target has 67 Tier 2, 88 Tier 3, and 27 Tier 4 unique scenarios", () => {
   const scenarios = manifest.requiredScenarios;
-  assert.equal(scenarios.length, 186);
+  assert.equal(scenarios.length, 182);
   assert.equal(new Set(scenarios.map(({ id }) => id)).size, scenarios.length);
   assert.deepEqual(
     Object.fromEntries([2, 3, 4].map((tier) => [
       tier,
       scenarios.filter((scenario) => scenario.tier === tier).length,
     ])),
-    { 2: 69, 3: 90, 4: 27 },
+    { 2: 67, 3: 88, 4: 27 },
   );
   for (const scenario of scenarios) {
     assert.match(scenario.id, new RegExp(`^T${scenario.tier}-[A-Z0-9-]+$`));

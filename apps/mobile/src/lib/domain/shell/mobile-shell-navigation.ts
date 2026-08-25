@@ -53,8 +53,6 @@ export function mobileShellRouteSubtitle(route: RouteId): string | undefined {
       return "New chat";
     case "work":
       return "Workspaces";
-    case "automations":
-      return "Scheduled runs";
     case "settings":
       return "Account · device";
   }

@@ -75,10 +75,10 @@ const AuthenticatedLaunchLifecycles = lazy(() =>
   })),
 )
 
-// Session dispatch, runtime-to-client reconciliation, and local automation
-// all require an authenticated product session, so their owners are
-// authenticated-only + lazy: the login shell never fetches or parses those
-// runtime graphs (login runtime JS budget).
+// Session dispatch and runtime-to-client reconciliation both require an
+// authenticated product session, so their owners are authenticated-only +
+// lazy: the login shell never fetches or parses those runtime graphs (login
+// runtime JS budget).
 // Deferred home-launch resumption is owned by AuthenticatedLaunchLifecycles
 // above (it shares that component's launch-registry lifetime), so it is not
 // duplicated here.

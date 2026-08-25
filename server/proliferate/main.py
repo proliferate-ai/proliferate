@@ -14,9 +14,6 @@ from sqlalchemy.exc import SQLAlchemyError
 import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.auth  # noqa: F401
-
-# Retained automation tables must stay registered in SQLAlchemy metadata.
-import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
 import proliferate.db.models.support  # noqa: F401

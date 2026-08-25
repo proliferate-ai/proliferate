@@ -24,27 +24,6 @@ export const chats: ProductChat[] = [
   },
 ];
 
-export const automations = [
-  {
-    id: "candidate-screening",
-    name: "Candidate Screening",
-    detail: "Team - weekdays at 8:00 AM",
-    status: "enabled",
-  },
-  {
-    id: "dependency-bump",
-    name: "Dependency Bump",
-    detail: "Team - nightly dependency PR",
-    status: "enabled",
-  },
-  {
-    id: "docs-brief",
-    name: "Docs Brief",
-    detail: "Personal - Mondays",
-    status: "paused",
-  },
-] as const;
-
 export const chatMessages = [
   {
     id: "m1",

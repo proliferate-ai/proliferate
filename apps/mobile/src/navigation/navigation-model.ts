@@ -1,6 +1,6 @@
 import type { MobileIconName } from "../components/primitives/MobileIcon";
 
-export type RouteId = "home" | "work" | "automations" | "settings";
+export type RouteId = "home" | "work" | "settings";
 
 export interface DrawerRoute {
   id: RouteId;
@@ -39,7 +39,6 @@ export interface MobilePendingPrompt {
 
 export const drawerRoutes: DrawerRoute[] = [
   { id: "home", label: "Home", icon: "home" },
-  { id: "automations", label: "Automations", icon: "calendar-clock" },
   { id: "work", label: "Workspaces", icon: "workspaces" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];

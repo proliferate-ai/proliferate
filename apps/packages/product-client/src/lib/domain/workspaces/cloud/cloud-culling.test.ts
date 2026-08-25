@@ -8,11 +8,6 @@ import {
 } from "#product/lib/domain/workspaces/cloud/cloud-culling";
 import { buildWorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
 import { buildSettingsRepositoryEntries } from "#product/lib/domain/settings/repositories";
-import {
-  buildAutomationInventoryItems,
-  groupAutomationInventoryItems,
-  type AutomationInventoryRecord,
-} from "#product/domain/automations/inventory";
 
 function cloudWorkspace(id: string): CloudWorkspaceSummary {
   return { id, repo: { provider: "github", owner: "acme", name: "app" } } as unknown as CloudWorkspaceSummary;
@@ -97,44 +92,5 @@ describe("cloud-only repository culling (FR-2)", () => {
 
     const app = entries.find((entry) => entry.name === "app");
     expect(app?.availability).toBe("local_cloud");
-  });
-});
-
-describe("cloud-target automation carve-out (FM5)", () => {
-  function automation(
-    id: string,
-    targetMode: AutomationInventoryRecord["targetMode"],
-  ): AutomationInventoryRecord {
-    return {
-      id,
-      gitOwner: "acme",
-      gitRepoName: "app",
-      title: `Automation ${id}`,
-      schedule: { summary: "Daily", nextRunAt: "2026-08-16T00:00:00.000Z" },
-      targetMode,
-      enabled: true,
-    };
-  }
-
-  it("keeps cloud-target automations listed and badges them inactive", () => {
-    const items = buildAutomationInventoryItems([
-      automation("personal", "personal_cloud"),
-      automation("shared", "shared_cloud"),
-      automation("local", "local"),
-    ]);
-
-    // Carve-out: cloud-target rows are NOT filtered out.
-    expect(items.map((item) => item.id).sort()).toEqual(["local", "personal", "shared"]);
-
-    const byId = new Map(items.map((item) => [item.id, item]));
-    expect(byId.get("personal")?.targetInactiveBadge).toBe("Target no longer available");
-    expect(byId.get("shared")?.targetInactiveBadge).toBe("Target no longer available");
-    // Local targets stay active — no inactive badge.
-    expect(byId.get("local")?.targetInactiveBadge).toBeNull();
-
-    // Grouping never drops the cloud rows either.
-    const grouped = groupAutomationInventoryItems(items);
-    const groupedIds = grouped.flatMap((group) => group.items.map((item) => item.id));
-    expect(groupedIds.sort()).toEqual(["local", "personal", "shared"]);
   });
 });

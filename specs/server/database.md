@@ -31,7 +31,7 @@ db/models/
   <resource>.py        # one ORM file per resource cluster
 ```
 
-Examples: `cloud.py`, `billing.py`, `automations.py`, `auth.py`,
+Examples: `cloud.py`, `billing.py`, `auth.py`,
 `organizations.py`. A single ORM file may declare multiple related table
 classes (a primary entity plus its junction tables).
 

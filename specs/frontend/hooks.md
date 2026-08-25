@@ -60,8 +60,8 @@ Refs, local state, effects, DOM/native subscriptions, timers, platform UI APIs. 
 ```text
 hooks/access/cloud/billing/use-cloud-billing.ts
 hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache.ts
-hooks/access/cloud/automations/query-keys.ts        # keys live beside the owner
-hooks/access/cloud/automations/use-automations.ts
+hooks/access/cloud/integrations/query-keys.ts       # keys live beside the owner
+hooks/access/cloud/integrations/use-integration-catalog.ts
 ```
 Own query keys, `useQuery`/`useMutation`, retry policy, invalidation, cache shape, request telemetry. **Best practices:** one external resource per hook; **gate queries with `enabled`** instead of firing with null params; keep **mutation invalidation + optimistic update/rollback co-located here** (`onSuccess`/`onError`) so callers never touch the cache. No product workflow branching.
 

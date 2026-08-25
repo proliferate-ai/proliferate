@@ -1,9 +1,9 @@
-import type { AutomationOwnerScope } from "./generated.js";
+type AgentRunConfigOwnerScope = "personal" | "organization";
 
 export interface CloudAgentRunConfig {
   id: string;
   name: string;
-  ownerScope: AutomationOwnerScope | "system";
+  ownerScope: AgentRunConfigOwnerScope | "system";
   ownerUserId?: string | null;
   organizationId?: string | null;
   createdByUserId?: string | null;
@@ -34,7 +34,7 @@ export interface CloudAgentRunConfigListResponse {
 
 export interface CloudAgentRunConfigDefault {
   id: string;
-  ownerScope: AutomationOwnerScope;
+  ownerScope: AgentRunConfigOwnerScope;
   ownerUserId?: string | null;
   organizationId?: string | null;
   agentKind: string;
@@ -49,12 +49,12 @@ export interface CloudAgentRunConfigDefaultsResponse {
 }
 
 export interface CloudAgentRunConfigOwnerSelection {
-  ownerScope?: AutomationOwnerScope | "system";
+  ownerScope?: AgentRunConfigOwnerScope | "system";
   organizationId?: string | null;
 }
 
 export interface CloudAgentRunConfigDefaultOwnerSelection {
-  ownerScope?: AutomationOwnerScope;
+  ownerScope?: AgentRunConfigOwnerScope;
   organizationId?: string | null;
 }
 
@@ -67,7 +67,7 @@ export interface ListCloudAgentRunConfigsOptions
 
 export interface CreateCloudAgentRunConfigRequest {
   name: string;
-  ownerScope: AutomationOwnerScope;
+  ownerScope: AgentRunConfigOwnerScope;
   organizationId?: string | null;
   agentKind: string;
   modelId: string;
