@@ -400,32 +400,6 @@ export function isCloudWorkspaceConnectionQueryKey(
     && queryKey[3] === "connection";
 }
 
-export function automationsRootKey() {
-  return ["automations"] as const;
-}
-
-export interface AutomationsListKeyOptions {
-  ownerScope?: CloudOwnerScope | null;
-  organizationId?: string | null;
-}
-
-export function automationsListKey(options: AutomationsListKeyOptions = {}) {
-  return [
-    ...automationsRootKey(),
-    "list",
-    options.ownerScope ?? "personal",
-    options.organizationId ?? null,
-  ] as const;
-}
-
-export function automationDetailKey(automationId: string | null) {
-  return [...automationsRootKey(), "detail", automationId] as const;
-}
-
-export function automationRunsKey(automationId: string | null) {
-  return [...automationsRootKey(), "runs", automationId] as const;
-}
-
 export function agentRunConfigsRootKey() {
   return [...cloudRootKey(), "agent-run-configs"] as const;
 }

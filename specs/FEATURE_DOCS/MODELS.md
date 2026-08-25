@@ -178,7 +178,7 @@ Cloud API:
 - `POST /v1/cloud/harness-launch-options/{harnessKind}` from the authenticated
   target Worker
 
-Home, new chat, Settings, Cowork and reviews, workflows, automations, Web,
+Home, new chat, Settings, Cowork and reviews, workflows, Web,
 Desktop, and Mobile consume the same response for their selected target and
 harness. View mappers may label, order, group, search, or lay out exact keys.
 They may not union or intersect executable membership with catalog data.
@@ -256,8 +256,8 @@ complete `ResolvedLaunchIntent` in one transaction.
 to `controlValues.mode` before entering the session domain. First-party callers
 send `controlValues` directly.
 
-Saved preferences, pending creates, reviews, workflow nodes, and automation
-runs store intended identifiers, not availability. Every execution revalidates
+Saved preferences, pending creates, reviews, and workflow nodes
+store intended identifiers, not availability. Every execution revalidates
 that complete selection against the execution target's current observation.
 Unresolved intent fails typed or requests review; it never chooses a neighbor,
 alias, or first row.

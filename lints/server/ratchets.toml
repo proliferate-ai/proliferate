@@ -80,8 +80,8 @@ reason = "D train: D2 free-credit dedupe proofs + converted-claim guard + import
 
 [[max_lines]]
 path = "server/tests/integration/test_auth_flow.py"
-max_lines = 2331
-reason = "existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage + SG10 review: explicit crypto-secret fixture setup retains the nested grant construction; PRO-111 desktop handoff/error page coverage (launch script + provider error page + web-stays-302 pin) adds three tests to the existing desktop/mobile provider callback surface; PRO-111 review fixes: M2 folds the launch-script test into a parse-deep-link-then-exchange assertion, L5 tightens the error-page tone assertion"
+max_lines = 2316
+reason = "-15: cull Track F removes the customerio sync-scheduling mocks/assertions; existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage + SG10 review: explicit crypto-secret fixture setup retains the nested grant construction; PRO-111 desktop handoff/error page coverage (launch script + provider error page + web-stays-302 pin) adds three tests to the existing desktop/mobile provider callback surface; PRO-111 review fixes: M2 folds the launch-script test into a parse-deep-link-then-exchange assertion, L5 tightens the error-page tone assertion"
 
 [[max_lines]]
 path = "server/tests/integration/test_billing_accounting.py"

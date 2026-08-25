@@ -18,7 +18,6 @@ interface MobilePostHogInitConfig {
 export type MobileTelemetryScreen =
   | "home"
   | "work"
-  | "automations"
   | "settings"
   | "chat";
 

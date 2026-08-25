@@ -6,7 +6,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.store import automation_environment_references as automations_store
 from proliferate.db.store import cloud_repo_environment_materializations as repo_mat_store
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store import cloud_workspaces as cloud_workspaces_store
@@ -277,18 +276,6 @@ async def remove_cloud_repo_environment(
         raise CloudApiError(
             "cloud_repository_in_use",
             "Delete this repository's cloud workspaces before removing it.",
-            status_code=409,
-        )
-    if await automations_store.repo_environment_has_automation_references(
-        db,
-        repo_environment_id=environment.id,
-    ):
-        raise CloudApiError(
-            "cloud_repository_in_use",
-            (
-                "This repository has retained automation definitions or run history "
-                "and cannot be removed."
-            ),
             status_code=409,
         )
     await remove_cloud_repo_environment_row(

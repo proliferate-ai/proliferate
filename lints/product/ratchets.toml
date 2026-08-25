@@ -6,5 +6,5 @@
 
 [[max_lines]]
 path = "cloud/sdk/src/types/generated.ts"
-max_lines = 788
-reason = "existing generated cloud SDK type surface (+workspaceKind, git numstat fields, OpenAPI-derived materialization types, app-extra overlay, and PR 5 exact-ref create request fields; -actionBlock fields; + lostAt (C7))"
+max_lines = 659
+reason = "existing generated cloud SDK type surface (+workspaceKind, git numstat fields, OpenAPI-derived materialization types, app-extra overlay, and PR 5 exact-ref create request fields; -actionBlock fields; + lostAt (C7)); -129: cull Track F removes the Automation/LocalAutomation type blocks; -2: Track D's ssh-surface removal landed on main"

@@ -29,7 +29,6 @@ BACKGROUND_RELAY_TASK = "background.relay"
 # MessageCount depth alarm instead. It is a plain timestamp, never a secret.
 BACKGROUND_PUBLISH_TS_HEADER = "x_background_publish_ts"
 NOTIFICATIONS_SEND_SLACK_TASK = "notifications.send_slack"
-CUSTOMERIO_ENGAGEMENT_SYNC_TASK = "customerio.engagement_sync"
 CLOUD_SANDBOX_ORPHAN_REAP_TASK = "cloud_sandboxes.orphan_reap"
 INTEGRATION_REVOCATION_PROCESS_TASK = "integrations.revocation.process"
 INTEGRATION_REVOCATION_SWEEP_TASK = "integrations.revocation.sweep"
@@ -38,7 +37,6 @@ TASK_ROUTES: dict[str, dict[str, str]] = {
     HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     BACKGROUND_RELAY_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     NOTIFICATIONS_SEND_SLACK_TASK: {"queue": NOTIFICATIONS_QUEUE},
-    CUSTOMERIO_ENGAGEMENT_SYNC_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     CLOUD_SANDBOX_ORPHAN_REAP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     INTEGRATION_REVOCATION_PROCESS_TASK: {"queue": DEFAULT_QUEUE},
     INTEGRATION_REVOCATION_SWEEP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},

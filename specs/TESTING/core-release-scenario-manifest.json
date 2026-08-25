@@ -365,22 +365,6 @@
       }
     },
     {
-      "id": "T2-AUTO-1",
-      "tier": 2,
-      "implementation": {
-        "status": "deferred",
-        "reason": "automation API/execution are absent while automation persistence remains retained"
-      }
-    },
-    {
-      "id": "T2-AUTO-2",
-      "tier": 2,
-      "implementation": {
-        "status": "deferred",
-        "reason": "automation API/execution are absent while automation persistence remains retained"
-      }
-    },
-    {
       "id": "T2-SLACK-1",
       "tier": 2,
       "implementation": {
@@ -1147,22 +1131,6 @@
       "implementation": {
         "status": "deferred",
         "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow Slack notification not merged (workflows Part II)"
-      }
-    },
-    {
-      "id": "T3-AUTO-1",
-      "tier": 3,
-      "implementation": {
-        "status": "deferred",
-        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); automation API/execution are absent while automation persistence remains retained"
-      }
-    },
-    {
-      "id": "T3-AUTO-2",
-      "tier": 3,
-      "implementation": {
-        "status": "deferred",
-        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); automation API/execution are absent while automation persistence remains retained"
       }
     },
     {

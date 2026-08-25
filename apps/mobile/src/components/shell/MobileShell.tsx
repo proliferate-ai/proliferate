@@ -6,7 +6,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MobileAuthScreen } from "../auth/MobileAuthScreen";
 import { MobileConnectGitHubScreen } from "../auth/MobileConnectGitHubScreen";
 import { MobileOnboardingScreen } from "../onboarding/MobileOnboardingScreen";
-import { MobileAutomationsScreen } from "../automations/MobileAutomationsScreen";
 import { MobileChatScreen } from "../chat/MobileChatScreen";
 import { MobileHomeScreen } from "../home/MobileHomeScreen";
 import { MobileSettingsScreen } from "../settings/MobileSettingsScreen";
@@ -151,15 +150,6 @@ export function MobileShell() {
                 onOpenDrawer={() => nav.setDrawerOpen(true)}
                 onNewChat={() => nav.navigate("home")}
               />
-            ) : nav.route === "automations" ? (
-              <>
-                <MobileTopBar
-                  title={routeTitle(nav.route)}
-                  subtitle={subtitle}
-                  leading={{ kind: "menu", onPress: () => nav.setDrawerOpen(true) }}
-                />
-                <MobileAutomationsScreen />
-              </>
             ) : (
               <>
                 <MobileTopBar

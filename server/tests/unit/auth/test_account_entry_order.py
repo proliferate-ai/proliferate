@@ -121,11 +121,6 @@ async def test_desktop_new_user_places_before_profile_identity_admin_and_effects
     monkeypatch.setattr(desktop_service, "create_auth_code", auth_code)
     monkeypatch.setattr(
         desktop_service,
-        "schedule_customerio_desktop_authenticated_user_sync",
-        lambda *_args, **_kwargs: events.append("customerio"),
-    )
-    monkeypatch.setattr(
-        desktop_service,
         "schedule_agent_gateway_user_enrollment",
         lambda *_args, **_kwargs: events.append("agent_gateway"),
     )
@@ -152,7 +147,6 @@ async def test_desktop_new_user_places_before_profile_identity_admin_and_effects
         "identity",
         "admin",
         "auth_code",
-        "customerio",
         "agent_gateway",
         "signup_notification",
     ]

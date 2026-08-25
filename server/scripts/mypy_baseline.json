@@ -195,12 +195,6 @@
       "count": 1
     },
     {
-      "path": "proliferate/background/tasks/customerio_sync.py",
-      "code": "untyped-decorator",
-      "message": "Untyped decorator makes function \"customerio_engagement_sync\" untyped",
-      "count": 1
-    },
-    {
       "path": "proliferate/background/tasks/health.py",
       "code": "import-untyped",
       "message": "Skipping analyzing \"celery\": module is installed, but missing library stubs or py.typed marker",

@@ -1147,12 +1147,6 @@ class TestWebMobileProductAuthFlow:
     ) -> None:
         verifier, challenge = _make_pkce_pair()
         self._enable_identity_github(monkeypatch, "desktop-shared-github@example.com")
-        schedule_mock = Mock()
-        monkeypatch.setattr(
-            accounts_identity_service,
-            "schedule_customerio_desktop_authenticated_user_sync",
-            schedule_mock,
-        )
         schedule_signup_mock = Mock()
         monkeypatch.setattr(
             accounts_identity_service,
@@ -1186,8 +1180,6 @@ class TestWebMobileProductAuthFlow:
         assert "GitHub sign-in done" in callback.text
         assert "proliferate://auth/callback?code=" in callback.text
         assert "state=desktop-shared-github-state" in callback.text
-        schedule_mock.assert_called_once()
-        assert schedule_mock.call_args.args[0].email == "desktop-shared-github@example.com"
         schedule_signup_mock.assert_called_once()
         signup_notification = schedule_signup_mock.call_args.args[0]
         assert signup_notification.name == "GitHub Tester"
@@ -1218,12 +1210,6 @@ class TestWebMobileProductAuthFlow:
         await _create_user_via_manager("desktop-existing-github@example.com")
         verifier, challenge = _make_pkce_pair()
         self._enable_identity_github(monkeypatch, "desktop-existing-github@example.com")
-        schedule_mock = Mock()
-        monkeypatch.setattr(
-            accounts_identity_service,
-            "schedule_customerio_desktop_authenticated_user_sync",
-            schedule_mock,
-        )
         schedule_signup_mock = Mock()
         monkeypatch.setattr(
             accounts_identity_service,
@@ -1253,7 +1239,6 @@ class TestWebMobileProductAuthFlow:
         assert "GitHub sign-in done" in callback.text
         assert "proliferate://auth/callback?code=" in callback.text
         assert "state=desktop-existing-github-state" in callback.text
-        schedule_mock.assert_called_once()
         schedule_signup_mock.assert_not_called()
 
         token = await client.post(

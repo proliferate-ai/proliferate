@@ -6,7 +6,6 @@ export * from "./client/agent-run-configs.js";
 export * from "./client/agent-catalog.js";
 export * from "./client/harness-launch-options.js";
 export * from "./client/ai-magic.js";
-export * from "./client/automations.js";
 export * from "./client/billing.js";
 export * from "./client/cloud-secrets.js";
 export * from "./client/github-app.js";

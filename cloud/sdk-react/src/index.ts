@@ -1,6 +1,5 @@
 export * from "./context/CloudClientProvider.js";
 export * from "./hooks/auth.js";
-export * from "./hooks/automations.js";
 export * from "./hooks/agent-catalog.js";
 export * from "./hooks/harness-launch-options.js";
 export * from "./hooks/agent-gateway.js";

@@ -6,15 +6,14 @@ name: Windows compile check
 # turns the unknown into an error list.
 #
 # Non-blocking on purpose: it is a probe, not a gate, until the errors are fixed.
+#
+# Demoted from pull_request to a nightly probe (cull sweep, Track F): Windows
+# is not a launch-week surface, so this runs on schedule/dispatch only.
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "apps/desktop/src-tauri/**"
-      - "anyharness/crates/**"
-      - ".github/workflows/windows-compile-check.yml"
-      - "Cargo.lock"
+  schedule:
+    - cron: "23 9 * * *"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

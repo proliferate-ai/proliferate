@@ -81,8 +81,7 @@ REQUEST_ID_HEADER = "x-request-id"
 Rules:
 
 - Constants use `UPPER_SNAKE_CASE`.
-- Organize by area: `billing.py`, `cloud.py`, `auth.py`, `automations.py`,
-  `http.py`.
+- Organize by area: `billing.py`, `cloud.py`, `auth.py`, `http.py`.
 - Do not create `constants/misc.py`, `constants/common.py`, or
   `constants/helpers.py`.
 - If a value becomes deployment-specific, move it from `constants/**` to
