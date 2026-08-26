@@ -1,5 +1,12 @@
 # Agent Auth
 
+> Superseded as system authority by
+> [specs/codebase/systems/product/agent_auth/README.md](../codebase/systems/product/agent_auth/README.md)
+> (the `agent_auth` system spec, which describes `main` and carries this
+> document's gaps ledger). This document is retained as the detailed target
+> reference — per-harness recipes, the settings surface, delivery detail —
+> until it is folded in; where the two disagree, the system spec wins.
+
 Status: target. This document describes the accepted destination for the
 agent-auth platform. The body is written in the ideal state. Every
 difference from `main` today is listed in [Current gaps](#current-gaps);
