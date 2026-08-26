@@ -27,8 +27,8 @@ import type { ActorKeyIdentity } from "../services/qualification-litellm.js";
  * (`PUT {api_prefix}/v1/cloud/agent-auth/selections/{harness_kind}?surface=…`)
  * to select `gateway` for the representative harness — prerequisite state only.
  * The surface defaults to `local` (what the desktop pushes to a local runtime);
- * the managed-cloud scenario overrides it to `cloud` via `gatewaySurface` so the
- * cloud sandbox's materialized state.json carries the gateway source.
+ * `gatewaySurface` can override it to `cloud` (historically used by the
+ * managed-cloud scenarios, deleted with the cloud sandbox stack — cull part 2).
  * It MUST NOT call `PUT /v1/agent-auth/state` itself; Desktop pushes that.
  *
  * Verified against `origin/main` `0eab251fd`:
@@ -120,12 +120,10 @@ export interface AuthenticatedActorOptions {
   /**
    * Which agent-auth SURFACE to write the gateway selection to (default
    * "local"). The local runtime (local-workspace world) reads the `local`
-   * surface the desktop pushes; a CLOUD sandbox is materialized from the
-   * `cloud` surface only (`materialize_agent_auth` →
-   * `build_agent_auth_state(..., surface="cloud")`), and only a `cloud`-surface
-   * PUT triggers `schedule_materialize_agent_auth`
-   * (`agent_gateway/service.py`), so the managed-cloud scenario MUST select
-   * "cloud" or the sandbox's state.json carries no gateway source to probe.
+   * surface the desktop pushes. The `cloud` surface remains a valid selection
+   * surface on the kept agent-auth model, but its materialization consumer
+   * (the cloud sandbox stack) was deleted (cull part 2) — nothing reads a
+   * `cloud`-surface selection today.
    */
   gatewaySurface?: "local" | "cloud";
   /**
@@ -379,9 +377,9 @@ export async function authenticatedActor(
     if (cached !== undefined) {
       claim = cached;
     } else {
-      // Persist managed-cloud provider custody before the real setup claim can
-      // enqueue eager LiteLLM enrollment. Cache hits reuse this already-
-      // custodied owner and must not create a duplicate cleanup intent.
+      // Persist provider custody before the real setup claim can enqueue
+      // eager LiteLLM enrollment. Cache hits reuse this already-custodied
+      // owner and must not create a duplicate cleanup intent.
       const email = `qual-owner-${world.run.run_id}-${world.run.shard_id}@example.com`;
       enrollmentCustody = await options.beginActorEnrollmentCustody?.({ email });
       claim = performClaim(

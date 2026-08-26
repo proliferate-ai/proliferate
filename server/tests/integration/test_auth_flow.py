@@ -225,7 +225,7 @@ class TestEmailPasswordRoutesRemoved:
 
     @pytest.mark.asyncio
     async def test_protected_endpoint_without_token(self, client: AsyncClient) -> None:
-        resp = await client.get("/v1/cloud/workspaces")
+        resp = await client.get("/v1/cloud/repositories")
         assert resp.status_code == 401
 
 
@@ -257,7 +257,7 @@ class TestPasswordAuthFlow:
         assert bootstrap.json()["readiness"]["productReady"] is False
 
         protected = await client.get(
-            "/v1/cloud/workspaces",
+            "/v1/cloud/repositories",
             headers={"Authorization": f"Bearer {payload['accessToken']}"},
         )
         assert protected.status_code == 403
@@ -557,7 +557,7 @@ class TestSingleOrgProductUserBypass:
         access_token = login.json()["accessToken"]
 
         response = await client.get(
-            "/v1/cloud/workspaces",
+            "/v1/cloud/repositories",
             headers={"Authorization": f"Bearer {access_token}"},
         )
         assert response.status_code == 200
@@ -580,7 +580,7 @@ class TestSingleOrgProductUserBypass:
         access_token = login.json()["accessToken"]
 
         response = await client.get(
-            "/v1/cloud/workspaces",
+            "/v1/cloud/repositories",
             headers={"Authorization": f"Bearer {access_token}"},
         )
         assert response.status_code == 403
@@ -655,7 +655,7 @@ class TestDesktopPKCEFlow:
         # Step 3: A raw desktop token is authenticated but still limited until
         # the user has linked the GitHub product identity.
         resp = await client.get(
-            "/v1/cloud/workspaces",
+            "/v1/cloud/repositories",
             headers={"Authorization": f"Bearer {token_data['access_token']}"},
         )
         assert resp.status_code == 403
@@ -968,7 +968,7 @@ class TestDesktopGitHubBrowserFlow:
         )
 
         protected = await client.get(
-            "/v1/cloud/workspaces",
+            "/v1/cloud/repositories",
             headers={"Authorization": f"Bearer {token_data['access_token']}"},
         )
         assert protected.status_code == 200
@@ -1473,7 +1473,7 @@ class TestWebMobileProductAuthFlow:
         assert refreshed.status_code == 200
 
         protected = await client.get(
-            "/v1/cloud/workspaces",
+            "/v1/cloud/repositories",
             headers={"Authorization": f"Bearer {payload['accessToken']}"},
         )
         assert protected.status_code == 200
@@ -1518,7 +1518,7 @@ class TestWebMobileProductAuthFlow:
         assert google_payload["readiness"]["productReady"] is False
 
         blocked = await client.get(
-            "/v1/cloud/workspaces",
+            "/v1/cloud/repositories",
             headers={"Authorization": f"Bearer {google_payload['accessToken']}"},
         )
         assert blocked.status_code == 403

@@ -1,6 +1,6 @@
 """Browser-facing OAuth callback rendering for cloud integrations.
 
-Ported from ``server/cloud/mcp_oauth/pages.py`` +
+Ported from the former cloud MCP OAuth pages module +
 ``mcp_oauth/domain/flow_rules.build_oauth_web_completion_url`` (commit
 ``4b54c9f2b``), adapted onto the integrations flow result shape.
 """

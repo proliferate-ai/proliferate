@@ -124,7 +124,7 @@ For behavior outside the crate, use the current owners:
 - [Server structure](server/standards.md)
 - [AnyHarness structure](anyharness/README.md)
 - [Sandbox lifecycle](FEATURE_DOCS/SANDBOX/lifecycle.md)
-- [Repository environments and workspace provisioning](codebase/platforms/product/workspace-provisioning.md)
+- `Repository environments and workspace provisioning` (deleted, cull part 2)
 - [Billing](FEATURE_DOCS/BILLING.md)
 
 ## Dependency Direction

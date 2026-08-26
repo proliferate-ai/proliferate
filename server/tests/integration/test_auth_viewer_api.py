@@ -195,7 +195,7 @@ async def test_google_only_user_is_rejected_from_product_surface(
     await _link_provider(db_session, user_id, "google")
 
     response = await client.get(
-        "/v1/cloud/workspaces",
+        "/v1/cloud/repositories",
         headers={"Authorization": f"Bearer {access_token}"},
     )
 
@@ -258,7 +258,7 @@ async def test_legacy_github_oauth_account_backfills_as_ready(
     assert linked["github"]["connected"] is True
 
     allowed = await client.get(
-        "/v1/cloud/workspaces",
+        "/v1/cloud/repositories",
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert allowed.status_code == 200
@@ -287,7 +287,7 @@ async def test_github_grant_without_required_scopes_requires_reauth(
     assert payload["onboardingState"] == "needs_github"
 
     blocked = await client.get(
-        "/v1/cloud/workspaces",
+        "/v1/cloud/repositories",
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert blocked.status_code == 403

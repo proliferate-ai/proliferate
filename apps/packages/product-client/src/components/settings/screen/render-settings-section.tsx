@@ -11,8 +11,6 @@ import { OrganizationBudgetsPane } from "#product/components/settings/panes/Orga
 import { OrganizationIntegrationsPane } from "#product/components/settings/panes/OrganizationIntegrationsPane";
 import { OrganizationMembersPane } from "#product/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "#product/components/settings/panes/OrganizationPane";
-import { OrganizationSecretsPane } from "#product/components/settings/panes/OrganizationSecretsPane";
-import { PersonalSecretsPane } from "#product/components/settings/panes/PersonalSecretsPane";
 import { UserIntegrationsPane } from "#product/components/settings/panes/UserIntegrationsPane";
 import { OrganizationModelPolicyPane } from "#product/components/settings/panes/OrganizationModelPolicyPane";
 import { SettingsScaffoldPane } from "#product/components/settings/panes/SettingsScaffoldPane";
@@ -79,9 +77,6 @@ export function renderSettingsSection(
   if (activeSection === "account") {
     return <AccountPane />;
   }
-  if (activeSection === "personal-secrets") {
-    return renderCloudGatedPane(authGate, () => <PersonalSecretsPane />);
-  }
   if (activeSection === "integrations") {
     return renderCloudGatedPane(authGate, () => <UserIntegrationsPane focus={focus} />);
   }
@@ -96,9 +91,6 @@ export function renderSettingsSection(
   }
   if (activeSection === "organization-members") {
     return <OrganizationMembersPane />;
-  }
-  if (activeSection === "organization-secrets") {
-    return renderCloudGatedPane(authGate, () => <OrganizationSecretsPane />);
   }
   if (activeSection === "organization-integrations") {
     return renderCloudGatedPane(authGate, () => <OrganizationIntegrationsPane />);

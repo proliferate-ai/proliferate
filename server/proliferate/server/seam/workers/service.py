@@ -16,15 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.cloud import (
     CLOUD_INTEGRATION_GATEWAY_MCP_PATH,
-    CLOUD_RUNTIME_WORKER_CLOUD_ENROLLMENT_TTL_SECONDS,
     CLOUD_RUNTIME_WORKER_DESKTOP_ENROLLMENT_TTL_SECONDS,
     CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS,
 )
-from proliferate.db.store import cloud_sandboxes as cloud_sandbox_store
 from proliferate.db.store import instance_organizations as instance_organization_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import runtime_workers as store
-from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.integrations.desktop_downloads import (
     downloads_base_url,
     versioned_manifest_exists,
@@ -36,7 +33,6 @@ from proliferate.server.seam.workers.models import (
     DesktopWorkerEnrollmentResponse,
     DesktopWorkerRevokeResponse,
     IntegrationGatewayConfig,
-    SetSandboxDesiredVersionsResponse,
     WorkerDesiredVersions,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
@@ -117,32 +113,6 @@ def integration_gateway_config(token: str) -> IntegrationGatewayConfig:
         url=f"{base}{CLOUD_INTEGRATION_GATEWAY_MCP_PATH}",
         authorization=f"Bearer {token}",
     )
-
-
-async def create_cloud_sandbox_enrollment(
-    db: AsyncSession,
-    *,
-    cloud_sandbox_id: UUID,
-    owner_user_id: UUID,
-    organization_id: UUID | None = None,
-) -> str:
-    """Mint a pending enrollment token for a cloud sandbox worker.
-
-    Returns the raw enrollment token (only its hash is persisted).
-    """
-    token = secrets.token_urlsafe(_TOKEN_BYTES)
-    await store.create_enrollment(
-        db,
-        owner_user_id=owner_user_id,
-        organization_id=organization_id,
-        runtime_kind="cloud_sandbox",
-        cloud_sandbox_id=cloud_sandbox_id,
-        desktop_install_id=None,
-        created_by_user_id=owner_user_id,
-        token_hash=store.hash_enrollment_token(token),
-        expires_at=utcnow() + timedelta(seconds=CLOUD_RUNTIME_WORKER_CLOUD_ENROLLMENT_TTL_SECONDS),
-    )
-    return token
 
 
 async def create_desktop_enrollment(
@@ -315,14 +285,6 @@ async def record_heartbeat(
     # cloud_sandbox_id) always gets pins only, unchanged from before this PR.
     anyharness_pin = pinned_runtime_version()
     worker_pin = pinned_worker_version()
-    sandbox: CloudSandboxValue | None = None
-    if worker.cloud_sandbox_id is not None:
-        sandbox = await cloud_sandbox_store.load_cloud_sandbox_by_id(db, worker.cloud_sandbox_id)
-        if sandbox is not None:
-            if sandbox.desired_anyharness_version is not None:
-                anyharness_pin = sandbox.desired_anyharness_version
-            if sandbox.desired_worker_version is not None:
-                worker_pin = sandbox.desired_worker_version
     # REL-10: the advertised snapshot-upload verdict comes from the SAME pure
     # Agent Models rule the ingest route enforces, evaluated against the rows
     # just loaded. Nothing about the decision is restated here, so the ack can
@@ -335,12 +297,8 @@ async def record_heartbeat(
             worker=worker_pin,
             anyharness=anyharness_pin,
         ),
-        launch_options_upload_allowed=(
-            worker.runtime_kind == "cloud_sandbox"
-            and worker.cloud_sandbox_id is not None
-            and sandbox is not None
-            and sandbox.destroyed_at is None
-        ),
+        # Only cloud-sandbox workers ever uploaded launch options; that lane is gone.
+        launch_options_upload_allowed=False,
     )
 
 
@@ -373,37 +331,6 @@ async def _require_instance_admin(db: AsyncSession, *, user_id: UUID) -> None:
             "You do not have permission to manage sandbox runtime versions.",
             status_code=403,
         )
-
-
-async def set_sandbox_desired_versions(
-    db: AsyncSession,
-    *,
-    cloud_sandbox_id: UUID,
-    actor_user_id: UUID,
-    desired_anyharness_version: str | None,
-    desired_worker_version: str | None,
-) -> SetSandboxDesiredVersionsResponse:
-    """Overlay one sandbox's target-scoped desired versions (decision 1).
-
-    Admin-authenticated; changing target A never affects target B (each call
-    touches exactly the one ``cloud_sandbox`` row named by ``cloud_sandbox_id``).
-    """
-    await _require_instance_admin(db, user_id=actor_user_id)
-    updated = await cloud_sandbox_store.set_cloud_sandbox_desired_versions(
-        db,
-        cloud_sandbox_id,
-        desired_anyharness_version=desired_anyharness_version,
-        desired_worker_version=desired_worker_version,
-    )
-    if updated is None:
-        raise CloudApiError("cloud_sandbox_not_found", "Cloud sandbox not found.", status_code=404)
-    # The request's session dependency (get_async_session) commits on success;
-    # the service layer must not call db.commit() (server-boundary rule).
-    return SetSandboxDesiredVersionsResponse(
-        cloud_sandbox_id=str(updated.id),
-        desired_anyharness_version=updated.desired_anyharness_version,
-        desired_worker_version=updated.desired_worker_version,
-    )
 
 
 async def worker_artifact_redirect_url(*, target: str, asset: str) -> str:

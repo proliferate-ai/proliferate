@@ -57,7 +57,7 @@ terminals, and git.
   workspaces only through
   [use-workspace-entry-flow.ts](../../../../../apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-entry-flow.ts)
   (which routes creation through the managed
-  [workspace-provisioning](../../../platforms/product/workspace-provisioning.md) path).
+  `workspace-provisioning` path).
 
 ## Consumes
 
@@ -135,7 +135,7 @@ that outlives them.
   right-panel Background pane and activity rosters are its migration source
   ([../runs-triage/README.md](../runs-triage/README.md)).
 - **Workspace provisioning** (platform) owns creation semantics; this surface
-  is a caller ([workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md)).
+  is a caller (`workspace-provisioning.md`).
 - **AnyHarness** owns worktrees, files, terminals, git, and the runtime
   mobility boundary ([anyharness/README.md](../../../../anyharness/README.md),
   [migration.md](migration.md)).

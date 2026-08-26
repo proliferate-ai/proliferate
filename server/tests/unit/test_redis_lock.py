@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from contextlib import asynccontextmanager
 
 import pytest
 
 from proliferate.config import settings
 from proliferate.integrations import redis_lock
-from proliferate.server.cloud.materialization import locks
 
 
 @pytest.mark.asyncio
@@ -87,28 +85,10 @@ async def test_redis_lease_fails_when_renewal_loss_precedes_normal_body_exit(
 
 
 @pytest.mark.asyncio
-async def test_materialization_lock_maps_redis_unavailability(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    @asynccontextmanager
-    async def unavailable(**_kwargs: object):
-        raise redis_lock.RedisLeaseUnavailable("secret redis endpoint")
-        yield
-
-    monkeypatch.setattr(locks, "redis_lease", unavailable)
-
-    with pytest.raises(locks.CloudMaterializationLockUnavailable) as exc_info:
-        async with locks.redis_materialization_lock("sandbox-a"):
-            raise AssertionError("unreachable")
-
-    assert "secret" not in str(exc_info.value)
-
-
-@pytest.mark.asyncio
 async def test_redis_claim_is_taken_once_and_reusable_after_release() -> None:
     """The non-blocking claim behind cold-access repair scheduling.
 
-    Exercised against the live Redis the materialization lock already needs: the
+    Exercised against the live Redis the suite already needs: the
     first caller wins, concurrent callers get None (no duplicate work
     scheduled), and the winner's release frees the key for a later retry.
     """

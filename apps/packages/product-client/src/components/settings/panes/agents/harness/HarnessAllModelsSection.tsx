@@ -2,10 +2,6 @@ import { useMemo, useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import {
-  useCloudHarnessLaunchOptions,
-  useCloudSandbox,
-} from "@proliferate/cloud-sdk-react";
-import {
   useAgentLaunchOptionsQuery,
   useRefreshHarnessLaunchOptionsMutation,
 } from "@anyharness/sdk-react";
@@ -18,7 +14,6 @@ import { HarnessAllModelsFilterRow } from "#product/components/settings/panes/ag
 import { ModelTable, type ModelTableRow } from "#product/components/settings/panes/agents/harness/ModelTable";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
-import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { normalizeRuntimeLaunchModels } from "#product/lib/domain/settings/harness-catalog";
@@ -93,10 +88,21 @@ function retryHandler(
   }
 }
 
+// Inert facts for the resolver's cloud inputs: the local surface never runs
+// those queries, so they are permanently idle.
+const IDLE_QUERY_FACTS: HarnessModelsQueryFacts = {
+  isError: false,
+  errorCode: null,
+  serverAnswered: false,
+  isPending: false,
+  fetchStatus: "idle",
+};
+
 /**
- * Settings reads the selected target's launch-option response directly.
- * Local can request a new override-free observation; cloud reads the copied
- * target-scoped state and never seeds or overrides executable membership.
+ * Settings reads the selected target's launch-option response directly and
+ * can request a new override-free observation. The models list exists only
+ * where a runtime can observe it — the local surface; the cloud copy of
+ * target-scoped launch options is deleted, so other surfaces render nothing.
  *
  * Every status decision lives in `resolveAllModelsPresentation`; this
  * component only renders what it returns.
@@ -106,9 +112,20 @@ export function HarnessAllModelsSection({
   displayName,
   surface,
 }: HarnessAllModelsSectionProps) {
-  const { cloudActive } = useCloudAvailabilityState();
+  if (surface !== "local") {
+    return null;
+  }
+  return <LocalAllModelsSection harnessKind={harnessKind} displayName={displayName} />;
+}
+
+function LocalAllModelsSection({
+  harnessKind,
+  displayName,
+}: {
+  harnessKind: string;
+  displayName: string;
+}) {
   const showToast = useToastStore((state) => state.show);
-  const isLocal = surface === "local";
   // The fact behind a disabled local query: `ProductProviderRoot` blanks the
   // runtime URL for every non-healthy state, so the query alone cannot tell
   // "still connecting" from "gave up" (E-R22).
@@ -120,32 +137,15 @@ export function HarnessAllModelsSection({
   const restartLocalRuntime = useLocalRuntimeRestart();
 
   const refreshLaunchOptions = useRefreshHarnessLaunchOptionsMutation();
-  const cloudSandbox = useCloudSandbox(!isLocal && cloudActive);
-  const cloudLaunchOptionsQuery = useCloudHarnessLaunchOptions({
-    cloudSandboxId: cloudSandbox.data?.id,
-    harnessKind,
-    enabled: !isLocal && cloudActive,
-  });
   const runtimeLaunchOptionsQuery = useAgentLaunchOptionsQuery({
     harnessKind,
-    enabled: isLocal,
+    enabled: true,
   });
-  const launchOptions = isLocal
-    ? runtimeLaunchOptionsQuery.data
-    : cloudLaunchOptionsQuery.data;
-  // Engine ownership is a fact about the runtime SERVING the response, and the
-  // cloud snapshot has no field for it: the copy in Proliferate Cloud was taken
-  // from whichever runtime observed the harness, and this browser is not that
-  // runtime. Said out loud here rather than left to an absent field defaulting
-  // to false, which keeps the SDK field non-optional so a local runtime that
-  // stops sending it is a build break instead of a silently dimmed Refresh.
-  // Cloud renders no Refresh control at all, so on cloud this only governs
-  // which failed-probe line is shown, where "cannot re-probe" is the truth.
-  const payloadFacts: AllModelsPayloadFacts | undefined = isLocal
-    ? runtimeLaunchOptionsQuery.data
-    : cloudLaunchOptionsQuery.data
-      ? { ...cloudLaunchOptionsQuery.data, canManuallyRefresh: false }
-      : undefined;
+  const launchOptions = runtimeLaunchOptionsQuery.data;
+  // Engine ownership is a fact about the runtime SERVING the response, kept
+  // on the wire (rather than inferred) so a local runtime that stops sending
+  // it is a build break instead of a silently dimmed Refresh.
+  const payloadFacts: AllModelsPayloadFacts | undefined = runtimeLaunchOptionsQuery.data;
   const models = useMemo(
     () => normalizeRuntimeLaunchModels(harnessKind, launchOptions),
     [harnessKind, launchOptions],
@@ -171,9 +171,6 @@ export function HarnessAllModelsSection({
   }, [rows, filterText]);
 
   function handleRefresh() {
-    if (!isLocal) {
-      return;
-    }
     refreshLaunchOptions.mutate(harnessKind, {
       onError: (error) => {
         showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
@@ -185,36 +182,21 @@ export function HarnessAllModelsSection({
   // probe against yet); distinct from `handleRefresh`, which requests a new
   // probe over an already-answered harness.
   function handleRetryLoad() {
-    if (isLocal) {
-      void runtimeLaunchOptionsQuery.refetch?.();
-    } else {
-      void cloudSandbox.refetch?.();
-      void cloudLaunchOptionsQuery.refetch?.();
-    }
-  }
-
-  if (!isLocal && !cloudActive) {
-    return (
-      <SettingsSection title={HARNESS_PANE_COPY.tabAllModels} titleWeight="emphasized" surface="plain">
-        <p className="text-ui-sm text-muted-foreground">
-          {HARNESS_PANE_COPY.signInDescription(displayName)}
-        </p>
-      </SettingsSection>
-    );
+    void runtimeLaunchOptionsQuery.refetch?.();
   }
 
   // `formatRelativeTime` is the repo's one relative-age formatter (six other
   // call sites); reused rather than re-invented so "refreshed 2m ago" stays
   // byte-identical to every other surface's phrasing.
   const presentation = resolveAllModelsPresentation({
-    surface: isLocal ? "local" : "cloud",
+    surface: "local",
     displayName,
     connectionState,
     hasLocalRuntimeHost: restartLocalRuntime !== null,
     runtimeQuery: queryFacts(runtimeLaunchOptionsQuery),
-    sandboxQuery: queryFacts(cloudSandbox),
-    hasCloudSandboxId: Boolean(cloudSandbox.data?.id),
-    cloudLaunchOptionsQuery: queryFacts(cloudLaunchOptionsQuery),
+    sandboxQuery: IDLE_QUERY_FACTS,
+    hasCloudSandboxId: false,
+    cloudLaunchOptionsQuery: IDLE_QUERY_FACTS,
     launchOptions: payloadFacts,
     isRefreshMutationPending: Boolean(refreshLaunchOptions.isPending),
     isRefreshMutationPaused: Boolean(refreshLaunchOptions.isPaused),

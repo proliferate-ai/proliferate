@@ -113,8 +113,8 @@ def resolve_effective_limit(
     not use this to decide whether a subject is over cap; enforcement must
     check every applicable enabled limit independently against its own
     window's spend (see ``_enforce_org_llm_limits`` in
-    ``cloud/agent_gateway/usage_import.py`` and ``_resolve_compute_limit_pause``
-    in ``billing/reconciler.py``). This helper is for single-value
+    ``cloud/agent_gateway/usage_import.py``; the compute-side pause resolver
+    died with the billing reconciler, cull part 2). This helper is for single-value
     summary/display surfaces only (``billing/usage.py``,
     ``organizations/usage/service.py``).
     """

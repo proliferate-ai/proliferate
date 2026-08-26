@@ -22,11 +22,10 @@
 //
 // The connect target is real, not fabricated: `context7` is a genuine
 // `api_key`-kind entry in SEED_DEFINITIONS
-// (server/proliferate/server/cloud/integrations/seeds.py), upserted into
-// `cloud_integration_definition` on every server boot by
+// (server/proliferate/server/integration_gateway/connections/seeds.py),
+// upserted into `cloud_integration_definition` on every server boot by
 // `sync_seed_definitions` (server/proliferate/main.py). This spec resolves
-// its id with one direct-DB read (same class of seed-via-product-data as
-// secrets.spec.ts/cloud-workspace.spec.ts's own direct reads) — there is
+// its id with one direct-DB read — there is
 // still no API to list seed definitions by namespace directly, only the
 // full catalog.
 //

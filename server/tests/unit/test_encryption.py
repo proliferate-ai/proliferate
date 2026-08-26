@@ -31,7 +31,6 @@ _CONFIG_INJECTED_STORE_MODULES = (
     "proliferate.db.store.agent_gateway.api_keys",
     "proliferate.db.store.agent_gateway.enrollment_keys",
     "proliferate.db.store.agent_gateway.enrollments",
-    "proliferate.db.store.cloud_secrets",
     "proliferate.db.store.github_app",
 )
 _CRYPTO_HELPER_NAMES = {"encrypt_json", "decrypt_json", "encrypt_text", "decrypt_text"}

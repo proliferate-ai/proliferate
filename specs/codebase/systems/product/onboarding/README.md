@@ -12,7 +12,7 @@ account, credential, or workspace record.
 | Agent auth setup and the ack-gated "setting up" step | [AGENT_AUTH.md](../../../../FEATURE_DOCS/AGENT_AUTH.md) |
 | Harness distribution and install | [MODELS.md](../../../../FEATURE_DOCS/MODELS.md) |
 | Billing / credit readiness | [BILLING.md](../../../../FEATURE_DOCS/BILLING.md) |
-| First workspace creation | [workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md) |
+| First workspace creation | `workspace-provisioning.md` (deleted with the cloud provisioning stack, cull part 2; successor: [environments/README.md](../environments/README.md)) |
 | Organization join by invitation | [../organizations/invitations.md](../organizations/invitations.md) |
 
 ## Purpose
@@ -89,8 +89,9 @@ reads it and never holds the credential
   across a readiness change and resume through the normal launch path
   ([use-home-deferred-launch-runner.ts](../../../../../apps/packages/product-client/src/hooks/home/lifecycle/use-home-deferred-launch-runner.ts)).
 - **First workspace goes through provisioning.** Onboarding components
-  never hand-roll creation
-  ([workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md)).
+  never hand-roll creation (`workspace-provisioning.md` — deleted with the
+  cloud provisioning stack, cull part 2; successor:
+  [environments/README.md](../environments/README.md)).
 - **Managed-credit copy promises nothing the server cannot grant.**
   Allocations dedupe through billing/gateway primitives
   ([BILLING.md](../../../../FEATURE_DOCS/BILLING.md)).

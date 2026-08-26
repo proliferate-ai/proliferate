@@ -24,19 +24,14 @@ from __future__ import annotations
 import uuid
 from datetime import timedelta
 from decimal import Decimal
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
-    BILLING_DECISION_ORG_LIMIT_PAUSE,
-    BILLING_DECISION_USER_LIMIT_PAUSE,
     BILLING_MODE_OBSERVE,
-    BILLING_MODE_ENFORCE,
     FREE_INCLUDED_GRANT_TYPE,
 )
 from proliferate.constants.organizations import (
@@ -46,7 +41,7 @@ from proliferate.constants.organizations import (
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import BillingGrant, UsageSegment
 from proliferate.db.models.organizations import Organization, OrganizationMembership
-from proliferate.db.store.billing import BudgetLimitInput, replace_budget_limits
+from proliferate.db.store.billing import BudgetLimitInput
 from proliferate.db.store.billing_runtime_usage import (
     open_usage_segment_for_sandbox,
     resolve_organization_id_for_user,
@@ -57,10 +52,6 @@ from proliferate.db.store.billing_subjects import (
     ensure_personal_billing_subject,
 )
 from proliferate.server.billing import accounting as billing_accounting_service
-from proliferate.server.billing.authorization import (
-    CloudSandboxResumeBlockedError,
-    assert_cloud_sandbox_resume_allowed,
-)
 from proliferate.server.organizations.usage.service import get_usage_by_user
 from proliferate.lib.infra.time.wall_clock import utcnow
 from tests.integration.billing_accounting_helpers import patch_global_session_factory
@@ -178,153 +169,6 @@ async def test_org_less_owner_segment_has_no_organization(
     user_id = await _create_user(db_session)
     segment = await _open_segment_for(db_session, user_id, seconds=120.0)
     assert segment.organization_id is None
-
-
-@pytest.mark.asyncio
-async def test_org_wide_compute_cap_denies_resume(
-    db_session: AsyncSession,
-    test_engine: Any,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Org-wide compute cap crossed by real usage → resume denied."""
-    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    monkeypatch.setattr(settings, "pro_billing_enabled", False)
-    user_id, org_id = await _create_org_member(db_session)
-    await _seed_healthy_balance(db_session, user_id)
-    await _open_segment_for(db_session, user_id, seconds=3600.0)
-    await replace_budget_limits(
-        db_session, organization_id=org_id, limits=[_compute_limit(None, 60.0)]
-    )
-    await db_session.commit()
-
-    sandbox = SimpleNamespace(owner_user_id=user_id, organization_id=None)
-    with pytest.raises(CloudSandboxResumeBlockedError) as excinfo:
-        await assert_cloud_sandbox_resume_allowed(db_session, sandbox)  # type: ignore[arg-type]
-    assert excinfo.value.decision_type == BILLING_DECISION_ORG_LIMIT_PAUSE
-    assert excinfo.value.status_code == 402
-    await db_session.rollback()
-
-
-@pytest.mark.asyncio
-async def test_per_user_compute_cap_denies_resume(
-    db_session: AsyncSession,
-    test_engine: Any,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Per-user compute cap crossed by real usage → resume denied."""
-    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    monkeypatch.setattr(settings, "pro_billing_enabled", False)
-    user_id, org_id = await _create_org_member(db_session)
-    await _seed_healthy_balance(db_session, user_id)
-    await _open_segment_for(db_session, user_id, seconds=3600.0)
-    await replace_budget_limits(
-        db_session, organization_id=org_id, limits=[_compute_limit(user_id, 60.0)]
-    )
-    await db_session.commit()
-
-    sandbox = SimpleNamespace(owner_user_id=user_id, organization_id=None)
-    with pytest.raises(CloudSandboxResumeBlockedError) as excinfo:
-        await assert_cloud_sandbox_resume_allowed(db_session, sandbox)  # type: ignore[arg-type]
-    assert excinfo.value.decision_type == BILLING_DECISION_USER_LIMIT_PAUSE
-    await db_session.rollback()
-
-
-@pytest.mark.asyncio
-async def test_under_cap_resume_allowed(
-    db_session: AsyncSession,
-    test_engine: Any,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Usage below the org cap does not block a wake."""
-    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    monkeypatch.setattr(settings, "pro_billing_enabled", False)
-    user_id, org_id = await _create_org_member(db_session)
-    await _seed_healthy_balance(db_session, user_id)
-    await _open_segment_for(db_session, user_id, seconds=60.0)
-    await replace_budget_limits(
-        db_session, organization_id=org_id, limits=[_compute_limit(None, 100000.0)]
-    )
-    await db_session.commit()
-
-    sandbox = SimpleNamespace(owner_user_id=user_id, organization_id=None)
-    await assert_cloud_sandbox_resume_allowed(db_session, sandbox)  # type: ignore[arg-type]
-
-
-@pytest.mark.asyncio
-async def test_personal_workspace_unaffected_by_any_org_cap(
-    db_session: AsyncSession,
-    test_engine: Any,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An org-less owner is never enforced against org caps; resume allowed.
-
-    Even with heavy real usage, a segment for a user with no membership carries
-    ``organization_id=None``, so no org cap can bind — the personal path is
-    unaffected by the fix.
-    """
-    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    monkeypatch.setattr(settings, "pro_billing_enabled", False)
-    user_id = await _create_user(db_session)
-    await _seed_healthy_balance(db_session, user_id)
-    segment = await _open_segment_for(db_session, user_id, seconds=3600.0)
-    assert segment.organization_id is None
-    await db_session.commit()
-
-    sandbox = SimpleNamespace(owner_user_id=user_id, organization_id=None)
-    await assert_cloud_sandbox_resume_allowed(db_session, sandbox)  # type: ignore[arg-type]
-
-
-@pytest.mark.asyncio
-async def test_org_wide_cap_sums_across_members(
-    db_session: AsyncSession,
-    test_engine: Any,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Org-wide usage aggregates across every member's segments.
-
-    Two members of the same org each run a sandbox; both segments bill the org
-    subject and the org-wide cap sums their seconds by ``organization_id``.
-    """
-    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    monkeypatch.setattr(settings, "pro_billing_enabled", False)
-    owner_id, org_id = await _create_org_member(db_session)
-    await _seed_healthy_balance(db_session, owner_id)
-    second_id = await _create_user(db_session)
-    db_session.add(
-        OrganizationMembership(
-            organization_id=org_id,
-            user_id=second_id,
-            role=ORGANIZATION_ROLE_OWNER,
-            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-        )
-    )
-    await db_session.flush()
-    # Each member uses 40s; neither alone crosses a 60s org-wide cap, together
-    # they do.
-    await _open_segment_for(db_session, owner_id, seconds=40.0)
-    await _open_segment_for(db_session, second_id, seconds=40.0)
-    await replace_budget_limits(
-        db_session, organization_id=org_id, limits=[_compute_limit(None, 60.0)]
-    )
-    await db_session.commit()
-
-    # Both segments are attributed to the org.
-    seg_org_ids = (
-        (
-            await db_session.execute(
-                select(UsageSegment.organization_id).where(UsageSegment.organization_id == org_id)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    assert len(seg_org_ids) == 2
-
-    sandbox = SimpleNamespace(owner_user_id=owner_id, organization_id=None)
-    with pytest.raises(CloudSandboxResumeBlockedError) as excinfo:
-        await assert_cloud_sandbox_resume_allowed(db_session, sandbox)  # type: ignore[arg-type]
-    assert excinfo.value.decision_type == BILLING_DECISION_ORG_LIMIT_PAUSE
-    await db_session.rollback()
 
 
 @pytest.mark.asyncio

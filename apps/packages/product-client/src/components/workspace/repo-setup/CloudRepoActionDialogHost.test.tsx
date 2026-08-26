@@ -22,7 +22,6 @@ const state = vi.hoisted(() => ({
   reflectSaveInRepositories: true,
   authorityEnabled: false,
   saveCloudEnvironment: vi.fn((_args?: unknown) => Promise.resolve<unknown>(undefined)),
-  createCloudWorkspace: vi.fn((..._args: unknown[]) => Promise.resolve()),
   authorityRefetch: vi.fn(() => Promise.resolve({})),
   showRepoAddedToast: vi.fn(),
   cloneRepo: vi.fn((..._args: unknown[]) =>
@@ -147,12 +146,6 @@ vi.mock("#product/hooks/settings/workflows/use-github-app-installation", () => (
   }),
 }));
 
-vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
-  useCreateCloudWorkspace: () => ({
-    createCloudWorkspaceAndEnter: (...args: unknown[]) => state.createCloudWorkspace(...args),
-  }),
-}));
-
 // Stub the clone hook (which otherwise pulls in the AnyHarnessRuntime provider).
 vi.mock("#product/hooks/workspaces/workflows/use-clone-repo", () => ({
   useCloneRepo: () => ({
@@ -189,6 +182,11 @@ const setupIntent: CloudRepositoryIntent = {
   continuation: { repoGroupKeyToExpand: null, baseBranch: null },
 };
 
+const addIntent: CloudRepositoryIntent = {
+  kind: "add_cloud_repository",
+  repo: { gitProvider: "github", gitOwner: "proliferate-ai", gitRepoName: "repo-b" },
+};
+
 function resetState() {
   state.authorized = true;
   state.authorityStatus = "ready";
@@ -200,8 +198,6 @@ function resetState() {
   state.authorityEnabled = false;
   state.saveCloudEnvironment.mockClear();
   state.saveCloudEnvironment.mockImplementation(() => Promise.resolve());
-  state.createCloudWorkspace.mockClear();
-  state.createCloudWorkspace.mockImplementation(() => Promise.resolve());
   state.authorityRefetch.mockClear();
   state.showRepoAddedToast.mockClear();
   state.cloneRepo.mockClear();
@@ -241,15 +237,12 @@ describe("CloudRepoActionDialogHost", () => {
 
     render(<Harness />);
     act(() => {
-      useCloudRepositoryIntentStore.getState().begin(setupIntent);
+      useCloudRepositoryIntentStore.getState().begin(addIntent);
     });
     rerender();
 
     await waitFor(() => {
       expect(state.saveCloudEnvironment).toHaveBeenCalledTimes(1);
-    });
-    await waitFor(() => {
-      expect(state.createCloudWorkspace).toHaveBeenCalledTimes(1);
     });
     // Terminal success clears the intent (dialog closes) despite the flag flip.
     await waitFor(() => {
@@ -283,11 +276,8 @@ describe("CloudRepoActionDialogHost", () => {
     expect(useCloudRepositoryIntentStore.getState().activeIntent).not.toBeNull();
   });
 
-  it("does not save the environment twice when workspace creation fails before refetch (PR2-RETRY-07)", async () => {
+  it("saves the environment once and refuses a stale create-workspace intent without re-saving on retry (PR2-RETRY-07, cull part 2)", async () => {
     state.reflectSaveInRepositories = false;
-    state.createCloudWorkspace
-      .mockRejectedValueOnce(new Error("Workspace create failed"))
-      .mockResolvedValueOnce(undefined);
 
     let rerender = () => {};
     function Harness() {
@@ -303,19 +293,19 @@ describe("CloudRepoActionDialogHost", () => {
     });
     rerender();
 
-    expect(await screen.findByText("Workspace create failed")).toBeTruthy();
+    // The cloud workspace stack is deleted: the create arm refuses, and the
+    // host surfaces its normal error blocker.
+    expect(await screen.findByText("Cloud workspaces are no longer available.")).toBeTruthy();
     expect(state.saveCloudEnvironment).toHaveBeenCalledTimes(1);
-    expect(state.createCloudWorkspace).toHaveBeenCalledTimes(1);
 
     act(() => {
       screen.getByRole("button", { name: "Retry" }).click();
     });
 
-    await waitFor(() => {
-      expect(state.createCloudWorkspace).toHaveBeenCalledTimes(2);
-      expect(useCloudRepositoryIntentStore.getState().activeIntent).toBeNull();
-    });
+    // Retry refuses again without recreating the already-saved environment.
+    expect(await screen.findByText("Cloud workspaces are no longer available.")).toBeTruthy();
     expect(state.saveCloudEnvironment).toHaveBeenCalledTimes(1);
+    expect(useCloudRepositoryIntentStore.getState().activeIntent).not.toBeNull();
   });
 
   it("does not query repository authority while either managed-cloud operator capability is incomplete (PR2-AUTHORITY-06)", () => {
@@ -439,7 +429,7 @@ describe("CloudRepoActionDialogHost", () => {
 
     render(<Harness />);
     act(() => {
-      useCloudRepositoryIntentStore.getState().begin(setupIntent);
+      useCloudRepositoryIntentStore.getState().begin(addIntent);
     });
     rerender();
 

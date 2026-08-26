@@ -165,7 +165,7 @@ test("authenticatedActor writes the gateway selection to the requested surface (
   await authenticatedActor(world, "owner", { gatewaySurface: "cloud" }, transport);
   assert.ok(
     calls.includes("putGatewaySelection:claude:cloud"),
-    "the managed-cloud scenario must select the gateway route on the cloud surface",
+    "an overridden gatewaySurface writes the gateway selection to the cloud surface",
   );
 });
 

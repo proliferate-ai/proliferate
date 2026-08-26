@@ -61,22 +61,19 @@ describe("useWorkspaceOpenInWebActions", () => {
     cleanup();
   });
 
-  it("copies the link and shows feedback when opening the current workspace in web", async () => {
+  it("stays disabled even with a web app available (the cloud deep link died with the cloud stack)", () => {
     const { result } = renderHook(() => useWorkspaceOpenInWebActions());
+
+    expect(result.current.disabled).toBe(true);
+    expect(result.current.url).toBeNull();
 
     act(() => {
       result.current.openCurrentWorkspaceInWeb();
     });
 
-    const expectedUrl = "https://web.proliferate.com/cloud/workspaces/cloud-workspace-1";
-    await waitFor(() => {
-      expect(hookMocks.copyText).toHaveBeenCalledWith(expectedUrl);
-      expect(hookMocks.openExternal).toHaveBeenCalledWith(expectedUrl);
-      expect(hookMocks.showToast).toHaveBeenCalledWith(
-        "Workspace link copied. Opening in web...",
-        "info",
-      );
-    });
+    expect(hookMocks.copyText).not.toHaveBeenCalled();
+    expect(hookMocks.openExternal).not.toHaveBeenCalled();
+    expect(hookMocks.showToast).toHaveBeenCalledWith("Opening workspaces on the web is no longer available.");
   });
 
   it("disables the action and never opens anything when this deployment has no web app", () => {

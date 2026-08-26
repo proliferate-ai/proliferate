@@ -1,5 +1,4 @@
-import { useEffect, useMemo } from "react";
-import { cadence } from "@proliferate/design/cadence";
+import { useMemo } from "react";
 import type { RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 import {
   buildCoreCloudEnvironmentSaveRequest,
@@ -21,11 +20,6 @@ import { useRepoPreferencesStore } from "#product/stores/preferences/repo-prefer
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 
-// Was a raw 5000ms literal; already exactly on-scale, so this is a rename
-// onto `cadence.standardMs` rather than a value change (UX Latency +
-// Transitions ADR §4.7, Rung 6, Q8).
-const MATERIALIZATION_POLL_INTERVAL_MS = cadence.standardMs;
-
 export interface CloudRepoEnvironmentEditor {
   /** Non-null when the repository is GitHub-backed (cloud-capable). */
   cloudRepository: CloudSettingsRepositoryEntry | null;
@@ -44,15 +38,14 @@ export interface CloudRepoEnvironmentEditor {
     error: string | null;
   };
   save: () => Promise<void>;
-  /** Real cloud-materialization entry — the same PUT the add flow uses, seeded from local prefs. */
+  /** The same PUT the add flow uses, seeded from local prefs. */
   setUp: () => Promise<void>;
 }
 
 /**
  * Shared Cloud-context plumbing for the repo-scope settings pages: saved
  * environment lookup, GitHub App authority, branch list, the shared draft
- * state machine, save/set-up mutations, and a light refetch loop while a
- * materialization is pending/running (the repositories query has no polling).
+ * state machine, and the save/set-up mutations.
  */
 export function useCloudRepoEnvironmentEditor({
   repository,
@@ -113,23 +106,14 @@ export function useCloudRepoEnvironmentEditor({
     sourceKey: repository.sourceRoot,
     seed,
   });
+  // TODO(cull-trail): the server-side materialization ledger is deleted, so
+  // saved environments no longer carry a materialization status; the domain
+  // presentation keeps the parameter for the environments list plumbing.
   const status = cloudEnvironmentStatusPresentation({
     configured: cloudEnvironment !== null,
     dirty: draft.dirty,
-    materializationStatus: cloudEnvironment?.materialization?.status ?? null,
+    materializationStatus: null,
   });
-
-  const materializationStatus = cloudEnvironment?.materialization?.status ?? null;
-  const refetchRepoConfigs = repoConfigs.refetch;
-  useEffect(() => {
-    if (materializationStatus !== "pending" && materializationStatus !== "running") {
-      return;
-    }
-    const interval = setInterval(() => {
-      void refetchRepoConfigs();
-    }, MATERIALIZATION_POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [materializationStatus, refetchRepoConfigs]);
 
   async function save() {
     if (!cloudRepository) {

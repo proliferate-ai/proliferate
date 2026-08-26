@@ -1,5 +1,5 @@
-// Unit coverage for the five PR 7 self-host evidence kinds (GitHub auth,
-// dual-server switch isolation, gateway capability, cloud add-on, and the
+// Unit coverage for the PR 7 self-host evidence kinds (GitHub auth,
+// dual-server switch isolation, gateway capability, and the
 // CloudFormation-wrapper posture) — validateSelfHostCellEvidence's extended
 // dispatch plus the standalone validateSelfHostCfnWrapperEvidence. Exercises
 // each validator through the public `validateReportV4` entry point (the
@@ -17,7 +17,6 @@ import {
   validateReportV4,
   type CellEvidenceV1,
   type SelfHostCfnWrapperEvidenceV1,
-  type SelfHostCloudAddonEvidenceV1,
   type SelfHostGatewayEvidenceV1,
   type SelfHostGithubAuthEvidenceV1,
   type SelfHostSwitchIsolationEvidenceV1,
@@ -119,29 +118,6 @@ function gatewayEvidence(overrides: Partial<SelfHostGatewayEvidenceV1> = {}): Se
   };
 }
 
-function cloudAddonEvidence(overrides: Partial<SelfHostCloudAddonEvidenceV1> = {}): SelfHostCloudAddonEvidenceV1 {
-  return {
-    kind: "selfhost_cloud_addon",
-    artifact_ids: ["server/linux-amd64"],
-    server_version: "0.3.29",
-    anyharness_version: "0.3.29",
-    harness: "claude",
-    api_origin: "sh-run-1.qualification.proliferate.com",
-    controller_runtime_origin: "127.0.0.1:8542",
-    github_app_installation_id_hash: "a".repeat(64),
-    e2b_template_id: "tmpl-abc123",
-    sandbox_id_hash: "b".repeat(64),
-    workspace_id_hash: "c".repeat(64),
-    session_id_hash: "d".repeat(64),
-    turn_completed: true,
-    pause_wake_state_intact: true,
-    disable_truthful: true,
-    base_healthy_after_disable: true,
-    cleanup: selfHostCleanup(),
-    ...overrides,
-  };
-}
-
 function cfnWrapperEvidence(overrides: Partial<SelfHostCfnWrapperEvidenceV1> = {}): SelfHostCfnWrapperEvidenceV1 {
   return {
     kind: "selfhost_cfn_wrapper",
@@ -184,7 +160,6 @@ function scenarioForCell(cell: string | undefined): string {
       return SELFHOST_INSTALL_1_SCENARIO_ID;
     case "SH-GITHUB-AUTH":
     case "SH-GATEWAY":
-    case "SH-CLOUD-ADDON":
       return "SELFHOST-QUAL-1";
     case "SH-SWITCH-ISOLATION":
       return "SELFHOST-ISOLATION-1";
@@ -203,7 +178,7 @@ function baseReportV3(dimensions: Record<string, string>): TestRunReportV3 {
   byStatus.green = 1;
   // Bind each cell to its REAL owning scenario (PR7-CONTROL-007): the per-cell
   // evidence-kind binding is keyed on (scenario_id, cell), so a report that
-  // filed SH-GATEWAY/SH-CLOUD-ADDON/SH-SWITCH-ISOLATION/SH-CFN-WRAPPER evidence
+  // filed SH-GATEWAY/SH-SWITCH-ISOLATION/SH-CFN-WRAPPER evidence
   // under SELFHOST-INSTALL-1 (as this helper used to) never exercised the
   // binding. Derive the owning scenario from the cell dimension.
   const scenarioId = scenarioForCell(dimensions.cell);
@@ -292,10 +267,10 @@ function reportV4Forcing(
 
 // ── (scenario_id, cell) → kind binding (PR7-CONTROL-007) ─────────────────────
 
-test("validateReportV4 rejects a SELFHOST-QUAL-1 SH-GATEWAY cell carrying SH-CLOUD-ADDON evidence", () => {
-  // Structurally-valid cloud-addon evidence must not validate under the gateway cell.
+test("validateReportV4 rejects a SELFHOST-QUAL-1 SH-GATEWAY cell carrying SH-GITHUB-AUTH evidence", () => {
+  // Structurally-valid foreign-kind evidence must not validate under the gateway cell.
   assert.throws(
-    () => validateReportV4(reportV4Forcing("SELFHOST-QUAL-1", { cell: "SH-GATEWAY", harness: "claude" }, cloudAddonEvidence())),
+    () => validateReportV4(reportV4Forcing("SELFHOST-QUAL-1", { cell: "SH-GATEWAY", harness: "claude" }, githubAuthEvidence())),
     /requires "selfhost_gateway"/,
   );
 });
@@ -432,40 +407,6 @@ test("validateReportV4 rejects a green selfhost_gateway cell whose cleanup has a
   assert.throws(() => validateReportV4(reportV4With(GATEWAY_DIMS, dirty)), /incomplete on a green result/);
 });
 
-// ── selfhost_cloud_addon ─────────────────────────────────────────────────────
-
-const CLOUD_ADDON_DIMS = { cell: "SH-CLOUD-ADDON", harness: "claude" };
-
-test("validateReportV4 accepts a green cell with complete selfhost_cloud_addon evidence", () => {
-  validateReportV4(reportV4With(CLOUD_ADDON_DIMS, cloudAddonEvidence()));
-});
-
-test("validateReportV4 rejects selfhost_cloud_addon evidence missing a required key", () => {
-  const { e2b_template_id: _drop, ...incomplete } = cloudAddonEvidence();
-  assert.throws(
-    () => validateReportV4(reportV4With(CLOUD_ADDON_DIMS, incomplete as unknown as CellEvidenceV1)),
-    /undeclared or missing field/,
-  );
-});
-
-test("validateReportV4 rejects selfhost_cloud_addon evidence with an undeclared extra field", () => {
-  const dirty = { ...cloudAddonEvidence(), extra_field: "x" } as unknown as CellEvidenceV1;
-  assert.throws(() => validateReportV4(reportV4With(CLOUD_ADDON_DIMS, dirty)), /undeclared or missing field/);
-});
-
-test("validateReportV4 rejects a false literal-true field on selfhost_cloud_addon evidence", () => {
-  const dirty = cloudAddonEvidence({ base_healthy_after_disable: false as unknown as true });
-  assert.throws(
-    () => validateReportV4(reportV4With(CLOUD_ADDON_DIMS, dirty)),
-    /base_healthy_after_disable must be true/,
-  );
-});
-
-test("validateReportV4 rejects a green selfhost_cloud_addon cell whose cleanup has a false deletion flag", () => {
-  const dirty = cloudAddonEvidence({ cleanup: selfHostCleanup({ key_pair_deleted: false }) });
-  assert.throws(() => validateReportV4(reportV4With(CLOUD_ADDON_DIMS, dirty)), /incomplete on a green result/);
-});
-
 // ── selfhost_cfn_wrapper ─────────────────────────────────────────────────────
 
 const CFN_WRAPPER_DIMS = { cell: "SH-CFN-WRAPPER", harness: "claude" };
@@ -512,12 +453,11 @@ test("validateReportV4 rejects selfhost_cfn_wrapper evidence with an undeclared 
   assert.throws(() => validateReportV4(reportV4With(CFN_WRAPPER_DIMS, dirty)), /cleanup has undeclared/);
 });
 
-test("validateReportV4 rejects a green cell with null evidence across all five PR 7 kinds' dimensions", () => {
+test("validateReportV4 rejects a green cell with null evidence across all PR 7 kinds' dimensions", () => {
   for (const dims of [
     GITHUB_AUTH_DIMS,
     SWITCH_ISOLATION_DIMS,
     GATEWAY_DIMS,
-    CLOUD_ADDON_DIMS,
     CFN_WRAPPER_DIMS,
   ]) {
     assert.throws(() => validateReportV4(reportV4With(dims, null)), /requires complete evidence/);

@@ -165,10 +165,11 @@ tier-2 billing runs on Stripe **test mode** (`sk_test_`) + webhook forwarding
 Stripe, not a mock. Two independent config axes define the matrix and both
 branches of each must be covered where marked: `CLOUD_BILLING_MODE`
 (`off|observe|enforce`) and `PRO_BILLING_ENABLED` (pro plans vs legacy flat).
-Survey correction baked in: `authorize_sandbox_start` is **dead code** — the
-live start gate is `assert_cloud_sandbox_resume_allowed` on the resume/connect
-path (`server/proliferate/server/billing/authorization.py:193`); assert
-against that, never the dead function.
+Survey correction baked in: the whole authorizer is gone —
+`server/proliferate/server/billing/authorization.py` (with
+`authorize_sandbox_start` and `assert_cloud_sandbox_resume_allowed`) was
+deleted in #2243 with the dark cloud-billing stack; there is no start gate
+left to assert against.
 
 ### T2-BILL-1: checkout → grants → consumption → cut-off → reactivate
 The core loop, per the manual pass verified 2026-07-04 on the `billing`

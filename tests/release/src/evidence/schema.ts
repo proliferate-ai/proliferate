@@ -95,9 +95,11 @@ export interface TestRunReportV3 {
  * audit ruling #3) cover the functional local journeys; `tier2_billing` (PR 4)
  * binds, per Tier-2 cell, the asserted ruled policy values, safe Stripe
  * object/test-clock ids, and ledger deltas; PR 3 adds the four self-host
- * journey-cell kinds; PR 2 adds `cloud_provision_turn` for the managed-cloud
- * world. Each kind is validated by its own kind-scoped function; a kind never
- * touches another kind's validation (extension-contract rule).
+ * journey-cell kinds. (The PR 2 `cloud_provision_turn` and PR 6
+ * `managed_cloud_fixture_smoke` kinds, and the `selfhost_cloud_addon` kind,
+ * were deleted with the cloud sandbox stack — cull part 2.) Each kind is
+ * validated by its own kind-scoped function; a kind never touches another
+ * kind's validation (extension-contract rule).
  * Green-requires-complete-clean-evidence is preserved for every kind that
  * demands it.
  */
@@ -112,12 +114,9 @@ export type CellEvidenceV1 =
   | SelfHostDesktopOwnerEvidenceV1
   | SelfHostBaseTurnEvidenceV1
   | SelfHostInviteeEvidenceV1
-  | CloudProvisionTurnEvidenceV1
-  | ManagedCloudFixtureSmokeEvidenceV1
   | SelfHostGithubAuthEvidenceV1
   | SelfHostSwitchIsolationEvidenceV1
   | SelfHostGatewayEvidenceV1
-  | SelfHostCloudAddonEvidenceV1
   | SelfHostCfnWrapperEvidenceV1;
 
 /**
@@ -379,19 +378,6 @@ export interface SelfHostGatewayEvidenceV1 extends SelfHostEvidenceBaseV1 {
   restart_persisted: true;
 }
 
-export interface SelfHostCloudAddonEvidenceV1 extends SelfHostEvidenceBaseV1 {
-  kind: "selfhost_cloud_addon";
-  github_app_installation_id_hash: string;
-  e2b_template_id: string;
-  sandbox_id_hash: string;
-  workspace_id_hash: string;
-  session_id_hash: string;
-  turn_completed: true;
-  pause_wake_state_intact: true;
-  disable_truthful: true;
-  base_healthy_after_disable: true;
-}
-
 /**
  * The CloudFormation-wrapper posture cleanup block. Deliberately NOT
  * `SelfHostCleanupEvidenceBlock`: no EC2/security-group/key-pair exist in
@@ -584,154 +570,6 @@ export interface LocalMcpIntegrationEvidenceV1 {
   audit_event_id_hash: string;
   audit_ok: true;
   cleanup: LocalCleanupV1;
-}
-
-/**
- * ── CLOUD-PROVISION-1 evidence (spec step 10) ──────────────────────────────
- *
- * The bounded evidence a green managed-cloud provisioning cell attaches. It
- * binds the artifact identities (including the composite `e2b-template/<name>`
- * and `candidate-api/<subdomain>` receipts), the provider-verified template/
- * build IDs, the one-way sandbox-id hash, the Worker/Supervisor identity +
- * parentage proof, the covered-repository identity, the LiteLLM turn
- * correlation, the actor-isolation denial proof, and the full cleanup block —
- * with the same bounded/safe-string discipline the local kind uses. Every
- * string field passes the shared safe-token/hash/timestamp patterns; no raw
- * secret, provider key, local path, sandbox id, or credentialled URL is ever a
- * field value.
- *
- * TYPES are owned by the contracts stage; the kind-scoped validator
- * (`validateCloudProvisionTurnEvidence`) and sanitizer
- * (`sanitizeCloudProvisionTurnEvidence`) bodies are owned by the
- * scenario+evidence+cli workstream (BRIEF "Evidence"). Until implemented they
- * throw, so a green cloud cell fails closed rather than validating loose
- * evidence.
- */
-export interface CloudProvisionTurnEvidenceV1 {
-  kind: "cloud_provision_turn";
-  /** Every qualified artifact id, including the template + candidate-api receipts. */
-  artifact_ids: string[];
-  server_version: string;
-  anyharness_version: string;
-  worker_version: string;
-  supervisor_version: string;
-  harness: "claude";
-  model_id: string;
-  /** Provider-verified immutable E2B template identity + baked-input digest. */
-  template: {
-    template_id: string;
-    build_id: string;
-    input_hash: string;
-  };
-  /** One-way hash of the provider (E2B) sandbox id — never the raw id. */
-  sandbox_id_hash: string;
-  /**
-   * Worker liveness (spec step 5). `supervisor_is_parent` records the HONEST
-   * current state and is NOT required to be true: on current main the
-   * fresh-provision path launches the runtime directly (no Supervisor), and
-   * Supervisor-parentage is PR 9's guarantee, deferred there (ruled
-   * 2026-07-15). PR 2 proves exactly one Worker is running with matching
-   * version identities; it does not claim Supervisor parentage.
-   */
-  worker: {
-    supervisor_is_parent: boolean;
-    heartbeat_recent: true;
-  };
-  /** Covered repository materialized by the product at the pinned commit (spec step 7). */
-  covered_repo: {
-    name: string;
-    commit: string;
-    no_credential_in_remote: true;
-  };
-  /**
-   * Actor-B isolation denial proof (spec step 9). Each field is an OBSERVED
-   * boolean (MCW-001): actor B's product listing did not reveal actor A's
-   * sandbox, and the direct runtime rejected the missing-credential and
-   * actor-B-credential probes. A GREEN cell requires all three true (the
-   * validator gates it); the scenario throws before evidence if any is false,
-   * so these are proven, not fabricated.
-   */
-  isolation: {
-    actor_b_denied: boolean;
-    runtime_rejects_missing: boolean;
-    runtime_rejects_actor_b: boolean;
-  };
-  litellm: {
-    token_id_hash: string;
-    request_ids: string[];
-    window_started_at: string;
-    window_finished_at: string;
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-    spend_usd: number;
-  };
-  /**
-   * The managed-cloud cleanup block. Its shape mirrors
-   * `ManagedCloudCleanupEvidence` (worlds/managed-cloud/cleanup-kinds.ts) in
-   * snake_case: a green cell requires `failed === 0`, every ordinary deletion
-   * boolean true, and exactly one of template deletion or durable transfer true
-   * (spec "Cleanup reconciles every run-created resource").
-   */
-  cleanup: {
-    ledger_id_hash: string;
-    registered: number;
-    reconciled: number;
-    failed: number;
-    sandboxes_deleted: boolean;
-    template_deleted: boolean;
-    template_custody_transferred: boolean;
-    dns_record_deleted: boolean;
-    ec2_terminated: boolean;
-    security_group_deleted: boolean;
-    key_pair_deleted: boolean;
-    virtual_key_deleted: boolean;
-    litellm_subjects_deleted: boolean;
-    local_paths_removed: boolean;
-  };
-}
-
-/**
- * ── Managed-cloud shared-fixture live smoke evidence (MANAGED-CLOUD-FIXTURE-
- * SMOKE-1) ──────────────────────────────────────────────────────────────────
- *
- * One bounded evidence object per independently-judged matrix cell (callback-
- * relay / stripe-test-clock / billing-threshold / failure-injection / cleanup-
- * replay). Each carries exactly ONE entry in `cells` (its own), so the report
- * aggregates one row per cell. `provider_sweeps` is non-empty only on the
- * cleanup-replay cell (the sweep is the last cell's job). Bounded and secret-
- * free BY CONSTRUCTION: `external_ids` are test-mode/run-owned ids only (evt_/
- * cus_/tc_/sub_/we_/price ids), never a raw secret key, webhook secret, or
- * signed payload; the validator additionally rejects any external id that looks
- * like a Stripe secret (`sk_`/`rk_`/`whsec_`). Its kind-scoped validator +
- * sanitizer own its bounds; it does not touch any other kind.
- */
-export interface ManagedCloudFixtureSmokeEvidenceV1 {
-  kind: "managed_cloud_fixture_smoke";
-  /** Every qualified artifact id (candidate + run-scoped template/api receipts). */
-  artifact_ids: string[];
-  /** Provider-verified world identity (same shape the provision proof carries). */
-  world: {
-    source_sha: string;
-    server_digest: string;
-    e2b_template_id: string;
-    e2b_template_build_id: string;
-    e2b_template_input_hash: string;
-  };
-  /** Exactly one entry: the cell this evidence object belongs to. */
-  cells: Array<{
-    cell_id: string;
-    /** Bounded test-mode / run-owned ids only (never secrets). */
-    external_ids: string[];
-    observed_transition: string;
-    /** Bounded cleanup-ledger references this cell owns (safe tokens). */
-    cleanup_entries: string[];
-  }>;
-  /** Non-empty only on the cleanup-replay cell; each provider's remaining owned count. */
-  provider_sweeps: Array<{
-    provider: "aws" | "e2b" | "stripe" | "process" | "filesystem";
-    remaining_owned_resources: number;
-  }>;
 }
 
 /** V4 result: a V3 result plus one bounded optional evidence attachment. */
@@ -974,15 +812,6 @@ const CELL_REQUIRED_EVIDENCE_KIND: Readonly<Record<string, CellEvidenceV1["kind"
   "SELFHOST-INSTALL-1/SH-INVITEE": "selfhost_invitee",
   "SELFHOST-QUAL-1/SH-GITHUB-AUTH": "selfhost_github_auth",
   "SELFHOST-QUAL-1/SH-GATEWAY": "selfhost_gateway",
-  "SELFHOST-QUAL-1/SH-CLOUD-ADDON": "selfhost_cloud_addon",
-  // MANAGED-CLOUD-FIXTURE-SMOKE-1's five independently-judged cells each attach
-  // the SAME kind-scoped evidence (managed_cloud_fixture_smoke); the cell binds
-  // on its `cell` dimension so a green cell cannot carry null or a foreign kind.
-  "MANAGED-CLOUD-FIXTURE-SMOKE-1/callback-relay": "managed_cloud_fixture_smoke",
-  "MANAGED-CLOUD-FIXTURE-SMOKE-1/stripe-test-clock": "managed_cloud_fixture_smoke",
-  "MANAGED-CLOUD-FIXTURE-SMOKE-1/billing-threshold": "managed_cloud_fixture_smoke",
-  "MANAGED-CLOUD-FIXTURE-SMOKE-1/failure-injection": "managed_cloud_fixture_smoke",
-  "MANAGED-CLOUD-FIXTURE-SMOKE-1/cleanup-replay": "managed_cloud_fixture_smoke",
 };
 
 /**
@@ -1041,10 +870,9 @@ function validateEvidenceCellBinding(
   // artifact. A world-backed report always has a candidate identity here; a
   // diagnostic report (null) never reaches evidence validation with artifacts.
   // Scoped to the local kinds this binding was authored for (LQF-005): the
-  // `cloud_provision_turn` kind legitimately mixes run-scoped receipts
-  // (`e2b-template/…`, `candidate-api/…` minted DURING the run) into its
-  // artifact_ids, which are not in the pre-run candidate_build map — its own
-  // kind-scoped validator owns those bounds.
+  // `selfhost_*` kinds mix run-scoped receipts into their artifact_ids, which
+  // are not in the pre-run candidate_build map — their own kind-scoped
+  // validators own those bounds.
   const artifactIds = (evidence as { artifact_ids?: unknown }).artifact_ids;
   const kindBindsArtifacts = evidence.kind in SCENARIO_ARTIFACT_BOUND_KINDS;
   if (kindBindsArtifacts && candidateArtifactIds !== null && Array.isArray(artifactIds)) {
@@ -1061,10 +889,10 @@ function validateEvidenceCellBinding(
 /**
  * Evidence kinds whose `artifact_ids` are bound to the report's exact
  * `candidate_build` (LQF-005 rule d). The local-functional kinds only name
- * pre-built candidate artifacts; `cloud_provision_turn`/`selfhost_*` also carry
- * run-scoped receipts (templates, candidate-api subdomains, install bundles) not
- * present in the pre-run map, so they are deliberately excluded and rely on
- * their own kind-scoped validators.
+ * pre-built candidate artifacts; the `selfhost_*` kinds also carry run-scoped
+ * receipts (install bundles, run-scoped origins) not present in the pre-run
+ * map, so they are deliberately excluded and rely on their own kind-scoped
+ * validators.
  */
 const SCENARIO_ARTIFACT_BOUND_KINDS: Readonly<Record<string, true>> = {
   local_workspace_turn: true,
@@ -1524,16 +1352,6 @@ function validateCellEvidence(
     case "tier2_billing":
       validateTier2BillingEvidence(where, evidence as Tier2BillingEvidenceV1, result.status);
       return;
-    case "cloud_provision_turn":
-      validateCloudProvisionTurnEvidence(where, evidence as CloudProvisionTurnEvidenceV1, result.status);
-      return;
-    case "managed_cloud_fixture_smoke":
-      validateManagedCloudFixtureSmokeEvidence(
-        where,
-        evidence as ManagedCloudFixtureSmokeEvidenceV1,
-        result.status,
-      );
-      return;
     default:
       throw new ReportValidationError(`${where}.kind is unknown.`);
   }
@@ -1846,349 +1664,6 @@ function validateLocalMcpIntegrationEvidence(
   validateCleanupEvidence(where, evidence.cleanup, status);
 }
 
-const CLOUD_PROVISION_TURN_EVIDENCE_KEYS = [
-  "kind",
-  "artifact_ids",
-  "server_version",
-  "anyharness_version",
-  "worker_version",
-  "supervisor_version",
-  "harness",
-  "model_id",
-  "template",
-  "sandbox_id_hash",
-  "worker",
-  "covered_repo",
-  "isolation",
-  "litellm",
-  "cleanup",
-] as const;
-
-const TEMPLATE_EVIDENCE_KEYS = ["template_id", "build_id", "input_hash"] as const;
-const WORKER_EVIDENCE_KEYS = ["supervisor_is_parent", "heartbeat_recent"] as const;
-const COVERED_REPO_EVIDENCE_KEYS = ["name", "commit", "no_credential_in_remote"] as const;
-const ISOLATION_EVIDENCE_KEYS = ["actor_b_denied", "runtime_rejects_missing", "runtime_rejects_actor_b"] as const;
-const CLOUD_CLEANUP_EVIDENCE_KEYS = [
-  "ledger_id_hash",
-  "registered",
-  "reconciled",
-  "failed",
-  "sandboxes_deleted",
-  "template_deleted",
-  "template_custody_transferred",
-  "dns_record_deleted",
-  "ec2_terminated",
-  "security_group_deleted",
-  "key_pair_deleted",
-  "virtual_key_deleted",
-  "litellm_subjects_deleted",
-  "local_paths_removed",
-] as const;
-
-const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/;
-
-// ── MANAGED-CLOUD-FIXTURE-SMOKE-1 evidence key sets (append-only) ────────────
-const MANAGED_CLOUD_FIXTURE_SMOKE_EVIDENCE_KEYS = [
-  "kind",
-  "artifact_ids",
-  "world",
-  "cells",
-  "provider_sweeps",
-] as const;
-const FIXTURE_SMOKE_WORLD_KEYS = [
-  "source_sha",
-  "server_digest",
-  "e2b_template_id",
-  "e2b_template_build_id",
-  "e2b_template_input_hash",
-] as const;
-const FIXTURE_SMOKE_CELL_KEYS = ["cell_id", "external_ids", "observed_transition", "cleanup_entries"] as const;
-const FIXTURE_SMOKE_SWEEP_KEYS = ["provider", "remaining_owned_resources"] as const;
-const FIXTURE_SMOKE_SWEEP_PROVIDERS = new Set(["aws", "e2b", "stripe", "process", "filesystem"]);
-/** External ids must never carry Stripe secret material. */
-const STRIPE_SECRET_LOOKING_PATTERN = /^(sk|rk|whsec)_/;
-/** The cleanup-replay cell id ends with this dimension; only it carries sweeps. */
-const FIXTURE_SMOKE_CLEANUP_REPLAY_CELL_SUFFIX = "cell=cleanup-replay";
-/** Bound on the observed_transition free-ish string (still safe-token-checked in pieces). */
-const MAX_FIXTURE_SMOKE_TRANSITION_LENGTH = 400;
-const MAX_FIXTURE_SMOKE_EXTERNAL_IDS = 50;
-/** A canonical matrix cell id: `<SCENARIO>/<lane>/<dim>=<value>` (safe chars + one `=`, `/`). */
-const FIXTURE_SMOKE_CELL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\/[A-Za-z0-9._-]+=[A-Za-z0-9._-]+$/;
-
-/**
- * Kind-scoped validator for `cloud_provision_turn` (PR 2, spec step 10). Per
- * the extension contract: requires the exact declared key set on the object and
- * every nested object (no extra fields); bounds every string field with the
- * same safe-token/hash/timestamp patterns the local kind uses; reuses
- * `validateLitellmEvidence` verbatim for the `litellm` block; requires
- * `template.input_hash` and `sandbox_id_hash` be 64-hex digests and the
- * template ids safe tokens; requires `covered_repo.commit` be a full sha;
- * requires the `worker`/`covered_repo`/`isolation` proofs true (the isolation
- * fields are observed booleans the scenario emits true only when proven);
- * requires non-negative-integer cleanup counts and a boolean on every deletion
- * field; and on a GREEN cell requires `cleanup.failed === 0` and every
- * deletion boolean true (a non-green cell may record its own cleanup
- * failure). Does not touch `validateLocalWorkspaceTurnEvidence`.
- */
-function validateCloudProvisionTurnEvidence(
-  where: string,
-  evidence: CloudProvisionTurnEvidenceV1,
-  status: FinalTestStatus,
-): void {
-  requireExactKeys(evidence, CLOUD_PROVISION_TURN_EVIDENCE_KEYS, where);
-  if (evidence.kind !== "cloud_provision_turn") {
-    throw new ReportValidationError(`${where}.kind is unknown.`);
-  }
-  if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
-    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
-  }
-  for (const [index, id] of evidence.artifact_ids.entries()) {
-    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
-  }
-  requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
-  requireSafeEvidenceToken(`${where}.anyharness_version`, evidence.anyharness_version);
-  requireSafeEvidenceToken(`${where}.worker_version`, evidence.worker_version);
-  requireSafeEvidenceToken(`${where}.supervisor_version`, evidence.supervisor_version);
-  if (evidence.harness !== "claude") {
-    throw new ReportValidationError(`${where}.harness must be "claude".`);
-  }
-  requireSafeEvidenceToken(`${where}.model_id`, evidence.model_id);
-
-  const template = evidence.template;
-  if (typeof template !== "object" || template === null || Array.isArray(template)) {
-    throw new ReportValidationError(`${where}.template must be an object.`);
-  }
-  requireExactKeys(template, TEMPLATE_EVIDENCE_KEYS, `${where}.template`);
-  requireSafeEvidenceToken(`${where}.template.template_id`, template.template_id);
-  requireSafeEvidenceToken(`${where}.template.build_id`, template.build_id);
-  requireEvidenceHash(`${where}.template.input_hash`, template.input_hash);
-
-  requireEvidenceHash(`${where}.sandbox_id_hash`, evidence.sandbox_id_hash);
-
-  const worker = evidence.worker;
-  if (typeof worker !== "object" || worker === null || Array.isArray(worker)) {
-    throw new ReportValidationError(`${where}.worker must be an object.`);
-  }
-  requireExactKeys(worker, WORKER_EVIDENCE_KEYS, `${where}.worker`);
-  if (typeof worker.supervisor_is_parent !== "boolean") {
-    // Honest record, not a gate: Supervisor-parentage is PR 9's guarantee
-    // (deferred), so this is boolean, not required-true.
-    throw new ReportValidationError(`${where}.worker.supervisor_is_parent must be a boolean.`);
-  }
-  if (worker.heartbeat_recent !== true) {
-    throw new ReportValidationError(`${where}.worker.heartbeat_recent must be true.`);
-  }
-
-  const coveredRepo = evidence.covered_repo;
-  if (typeof coveredRepo !== "object" || coveredRepo === null || Array.isArray(coveredRepo)) {
-    throw new ReportValidationError(`${where}.covered_repo must be an object.`);
-  }
-  requireExactKeys(coveredRepo, COVERED_REPO_EVIDENCE_KEYS, `${where}.covered_repo`);
-  requireSafeEvidenceToken(`${where}.covered_repo.name`, coveredRepo.name);
-  if (typeof coveredRepo.commit !== "string" || !FULL_SHA_PATTERN.test(coveredRepo.commit)) {
-    throw new ReportValidationError(`${where}.covered_repo.commit must be a full lowercase 40-hex sha.`);
-  }
-  if (coveredRepo.no_credential_in_remote !== true) {
-    throw new ReportValidationError(`${where}.covered_repo.no_credential_in_remote must be true.`);
-  }
-
-  const isolation = evidence.isolation;
-  if (typeof isolation !== "object" || isolation === null || Array.isArray(isolation)) {
-    throw new ReportValidationError(`${where}.isolation must be an object.`);
-  }
-  requireExactKeys(isolation, ISOLATION_EVIDENCE_KEYS, `${where}.isolation`);
-  if (isolation.actor_b_denied !== true) {
-    throw new ReportValidationError(`${where}.isolation.actor_b_denied must be true.`);
-  }
-  if (isolation.runtime_rejects_missing !== true) {
-    throw new ReportValidationError(`${where}.isolation.runtime_rejects_missing must be true.`);
-  }
-  if (isolation.runtime_rejects_actor_b !== true) {
-    throw new ReportValidationError(`${where}.isolation.runtime_rejects_actor_b must be true.`);
-  }
-
-  validateLitellmEvidence(where, evidence.litellm);
-  validateCloudCleanupEvidence(where, evidence.cleanup, status);
-}
-
-function validateCloudCleanupEvidence(
-  where: string,
-  cleanup: CloudProvisionTurnEvidenceV1["cleanup"],
-  status: FinalTestStatus,
-): void {
-  if (typeof cleanup !== "object" || cleanup === null || Array.isArray(cleanup)) {
-    throw new ReportValidationError(`${where}.cleanup must be an object.`);
-  }
-  requireExactKeys(cleanup, CLOUD_CLEANUP_EVIDENCE_KEYS, `${where}.cleanup`);
-  requireEvidenceHash(`${where}.cleanup.ledger_id_hash`, cleanup.ledger_id_hash);
-  requireNonNegativeInteger(`${where}.cleanup.registered`, cleanup.registered);
-  requireNonNegativeInteger(`${where}.cleanup.reconciled`, cleanup.reconciled);
-  requireNonNegativeInteger(`${where}.cleanup.failed`, cleanup.failed);
-  const deletionFields = [
-    "sandboxes_deleted",
-    "dns_record_deleted",
-    "ec2_terminated",
-    "security_group_deleted",
-    "key_pair_deleted",
-    "virtual_key_deleted",
-    "litellm_subjects_deleted",
-    "local_paths_removed",
-  ] as const;
-  for (const field of deletionFields) {
-    requireBoolean(`${where}.cleanup.${field}`, cleanup[field]);
-  }
-  requireBoolean(`${where}.cleanup.template_deleted`, cleanup.template_deleted);
-  requireBoolean(
-    `${where}.cleanup.template_custody_transferred`,
-    cleanup.template_custody_transferred,
-  );
-  // Green-cell rule (spec "Cleanup and failure behavior"): a green cell requires
-  // failed === 0, every ordinary deletion boolean true, and exactly one of
-  // template deletion / durable transfer true. A non-green cell may record its
-  // own cleanup failure so the report is still persisted with a real nonzero
-  // exit rather than throwing and exiting 2.
-  if (status === "green") {
-    if (cleanup.failed > 0) {
-      throw new ReportValidationError(`${where}.cleanup.failed must be 0 for a green result.`);
-    }
-    if (deletionFields.some((field) => cleanup[field] !== true)) {
-      throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
-    }
-    if (cleanup.template_deleted === cleanup.template_custody_transferred) {
-      throw new ReportValidationError(
-        `${where}.cleanup must prove exactly one of template deletion or durable custody transfer on a green result.`,
-      );
-    }
-  }
-}
-
-/**
- * Kind-scoped validator for `managed_cloud_fixture_smoke`
- * (MANAGED-CLOUD-FIXTURE-SMOKE-1). Per the extension contract: requires the
- * exact declared key set on the object and every nested object; bounds every
- * string with safe-token/hash patterns; requires exactly ONE `cells` entry
- * (the cell this evidence belongs to); asserts no `external_ids` value looks
- * like a Stripe secret; requires non-negative sweep counts and a known provider
- * enum; and on a GREEN cleanup-replay cell requires every provider sweep to
- * report zero remaining resources. Does not touch any other kind's validator.
- */
-function validateManagedCloudFixtureSmokeEvidence(
-  where: string,
-  evidence: ManagedCloudFixtureSmokeEvidenceV1,
-  status: FinalTestStatus,
-): void {
-  requireExactKeys(evidence, MANAGED_CLOUD_FIXTURE_SMOKE_EVIDENCE_KEYS, where);
-  if (evidence.kind !== "managed_cloud_fixture_smoke") {
-    throw new ReportValidationError(`${where}.kind is unknown.`);
-  }
-  if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
-    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
-  }
-  for (const [index, id] of evidence.artifact_ids.entries()) {
-    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
-  }
-
-  const world = evidence.world;
-  if (typeof world !== "object" || world === null || Array.isArray(world)) {
-    throw new ReportValidationError(`${where}.world must be an object.`);
-  }
-  requireExactKeys(world, FIXTURE_SMOKE_WORLD_KEYS, `${where}.world`);
-  requireSafeEvidenceToken(`${where}.world.source_sha`, world.source_sha);
-  requireSafeEvidenceToken(`${where}.world.server_digest`, world.server_digest);
-  requireSafeEvidenceToken(`${where}.world.e2b_template_id`, world.e2b_template_id);
-  requireSafeEvidenceToken(`${where}.world.e2b_template_build_id`, world.e2b_template_build_id);
-  requireEvidenceHash(`${where}.world.e2b_template_input_hash`, world.e2b_template_input_hash);
-
-  if (!Array.isArray(evidence.cells) || evidence.cells.length !== 1) {
-    throw new ReportValidationError(`${where}.cells must contain exactly one entry (this cell's own).`);
-  }
-  const cell = evidence.cells[0]!;
-  const cellWhere = `${where}.cells[0]`;
-  if (typeof cell !== "object" || cell === null || Array.isArray(cell)) {
-    throw new ReportValidationError(`${cellWhere} must be an object.`);
-  }
-  requireExactKeys(cell, FIXTURE_SMOKE_CELL_KEYS, cellWhere);
-  // The canonical cell id carries `=` in its matrix dimension segment
-  // (`…/cell=callback-relay`), which the safe-token pattern deliberately
-  // excludes — so bound it with the matrix-cell-id shape instead.
-  if (
-    typeof cell.cell_id !== "string" ||
-    cell.cell_id.length === 0 ||
-    cell.cell_id.length > MAX_EVIDENCE_TOKEN_LENGTH ||
-    cell.cell_id.includes("..") ||
-    !FIXTURE_SMOKE_CELL_ID_PATTERN.test(cell.cell_id)
-  ) {
-    throw new ReportValidationError(`${cellWhere}.cell_id is missing or unsafe.`);
-  }
-  if (!Array.isArray(cell.external_ids) || cell.external_ids.length > MAX_FIXTURE_SMOKE_EXTERNAL_IDS) {
-    throw new ReportValidationError(`${cellWhere}.external_ids must be an array of at most ${MAX_FIXTURE_SMOKE_EXTERNAL_IDS}.`);
-  }
-  for (const [index, id] of cell.external_ids.entries()) {
-    requireSafeEvidenceToken(`${cellWhere}.external_ids[${index}]`, id);
-    if (STRIPE_SECRET_LOOKING_PATTERN.test(id)) {
-      throw new ReportValidationError(
-        `${cellWhere}.external_ids[${index}] looks like Stripe secret material; only test-mode ids are allowed.`,
-      );
-    }
-  }
-  if (
-    typeof cell.observed_transition !== "string" ||
-    cell.observed_transition.length === 0 ||
-    cell.observed_transition.length > MAX_FIXTURE_SMOKE_TRANSITION_LENGTH
-  ) {
-    throw new ReportValidationError(`${cellWhere}.observed_transition must be a bounded non-empty string.`);
-  }
-  if (!Array.isArray(cell.cleanup_entries)) {
-    throw new ReportValidationError(`${cellWhere}.cleanup_entries must be an array.`);
-  }
-  for (const [index, entry] of cell.cleanup_entries.entries()) {
-    requireSafeEvidenceToken(`${cellWhere}.cleanup_entries[${index}]`, entry);
-  }
-
-  if (!Array.isArray(evidence.provider_sweeps)) {
-    throw new ReportValidationError(`${where}.provider_sweeps must be an array.`);
-  }
-  for (const [index, sweep] of evidence.provider_sweeps.entries()) {
-    const sweepWhere = `${where}.provider_sweeps[${index}]`;
-    if (typeof sweep !== "object" || sweep === null || Array.isArray(sweep)) {
-      throw new ReportValidationError(`${sweepWhere} must be an object.`);
-    }
-    requireExactKeys(sweep, FIXTURE_SMOKE_SWEEP_KEYS, sweepWhere);
-    if (typeof sweep.provider !== "string" || !FIXTURE_SMOKE_SWEEP_PROVIDERS.has(sweep.provider)) {
-      throw new ReportValidationError(`${sweepWhere}.provider must be one of aws|e2b|stripe|process|filesystem.`);
-    }
-    requireNonNegativeInteger(`${sweepWhere}.remaining_owned_resources`, sweep.remaining_owned_resources);
-  }
-
-  // Only the cleanup-replay cell carries sweeps; every other cell's array is
-  // empty. A green cleanup-replay cell requires every sweep to report zero
-  // remaining owned resources (spec "Provider sweeps show zero owned resources").
-  const isCleanupReplay = cell.cell_id.endsWith(FIXTURE_SMOKE_CLEANUP_REPLAY_CELL_SUFFIX);
-  if (!isCleanupReplay && evidence.provider_sweeps.length > 0) {
-    throw new ReportValidationError(
-      `${where}.provider_sweeps is non-empty on a non-cleanup-replay cell (only cleanup-replay sweeps providers).`,
-    );
-  }
-  if (status === "green" && isCleanupReplay) {
-    const requiredProviders = ["aws", "e2b", "stripe", "process", "filesystem"] as const;
-    const observedProviders = evidence.provider_sweeps.map((sweep) => sweep.provider);
-    if (
-      evidence.provider_sweeps.length !== requiredProviders.length ||
-      requiredProviders.some((provider) => observedProviders.filter((value) => value === provider).length !== 1)
-    ) {
-      throw new ReportValidationError(
-        `${where}.provider_sweeps must contain exactly one aws|e2b|stripe|process|filesystem row ` +
-          "for a green cleanup-replay cell.",
-      );
-    }
-    if (evidence.provider_sweeps.some((sweep) => sweep.remaining_owned_resources !== 0)) {
-      throw new ReportValidationError(
-        `${where}.provider_sweeps reports remaining owned resources on a green cleanup-replay cell.`,
-      );
-    }
-  }
-}
-
 const SELFHOST_BASE_EVIDENCE_KEYS = [
   "kind",
   "artifact_ids",
@@ -2296,19 +1771,6 @@ const SELFHOST_GATEWAY_EVIDENCE_KEYS = [
   "gateway_spend_correlated",
   "master_key_not_used",
   "restart_persisted",
-] as const;
-
-const SELFHOST_CLOUD_ADDON_EVIDENCE_KEYS = [
-  ...SELFHOST_BASE_EVIDENCE_KEYS,
-  "github_app_installation_id_hash",
-  "e2b_template_id",
-  "sandbox_id_hash",
-  "workspace_id_hash",
-  "session_id_hash",
-  "turn_completed",
-  "pause_wake_state_intact",
-  "disable_truthful",
-  "base_healthy_after_disable",
 ] as const;
 
 const SELFHOST_CFN_WRAPPER_EVIDENCE_KEYS = [
@@ -2432,7 +1894,6 @@ function validateSelfHostCellEvidence(
     selfhost_github_auth: SELFHOST_GITHUB_AUTH_EVIDENCE_KEYS,
     selfhost_switch_isolation: SELFHOST_SWITCH_ISOLATION_EVIDENCE_KEYS,
     selfhost_gateway: SELFHOST_GATEWAY_EVIDENCE_KEYS,
-    selfhost_cloud_addon: SELFHOST_CLOUD_ADDON_EVIDENCE_KEYS,
   };
   const expectedKeys = typeof kind === "string" ? keysByKind[kind] : undefined;
   if (!expectedKeys) {
@@ -2605,19 +2066,6 @@ function validateSelfHostCellEvidence(
       requireTrue(`${where}.gateway_spend_correlated`, e.gateway_spend_correlated);
       requireTrue(`${where}.master_key_not_used`, e.master_key_not_used);
       requireTrue(`${where}.restart_persisted`, e.restart_persisted);
-      return;
-    }
-    case "selfhost_cloud_addon": {
-      const e = evidence as SelfHostCloudAddonEvidenceV1;
-      requireEvidenceHash(`${where}.github_app_installation_id_hash`, e.github_app_installation_id_hash);
-      requireSafeEvidenceToken(`${where}.e2b_template_id`, e.e2b_template_id);
-      requireEvidenceHash(`${where}.sandbox_id_hash`, e.sandbox_id_hash);
-      requireEvidenceHash(`${where}.workspace_id_hash`, e.workspace_id_hash);
-      requireEvidenceHash(`${where}.session_id_hash`, e.session_id_hash);
-      requireTrue(`${where}.turn_completed`, e.turn_completed);
-      requireTrue(`${where}.pause_wake_state_intact`, e.pause_wake_state_intact);
-      requireTrue(`${where}.disable_truthful`, e.disable_truthful);
-      requireTrue(`${where}.base_healthy_after_disable`, e.base_healthy_after_disable);
       return;
     }
     default:
@@ -2820,17 +2268,11 @@ const GREEN_EVIDENCE_REQUIRED_SCENARIOS: ReadonlySet<string> = new Set([
   "LOCAL-WORLD-SMOKE-1",
   "T2-BILL",
   SELFHOST_INSTALL_1_SCENARIO_ID,
-  "CLOUD-PROVISION-1",
-  // Every MANAGED-CLOUD-FIXTURE-SMOKE-1 cell emits its kind-scoped evidence on
-  // green (a bare string, matching CLOUD-PROVISION-1, to avoid a scenario→schema
-  // import cycle). Enforces "each fixture smoke cell has one independent terminal
-  // green result" carrying complete evidence.
-  "MANAGED-CLOUD-FIXTURE-SMOKE-1",
-  // Every SELFHOST-QUAL-1 cell (SH-GITHUB-AUTH / SH-GATEWAY / SH-CLOUD-ADDON)
-  // emits its kind-scoped evidence on green (a bare string here, not a scenario
-  // import, to keep schema.ts free of a scenario→schema cycle — matching
-  // CLOUD-PROVISION-1). Enforces the frozen Acceptance rule "Green requires
-  // complete evidence" for the optional-capability lane.
+  // Every SELFHOST-QUAL-1 cell (SH-GITHUB-AUTH / SH-GATEWAY) emits its
+  // kind-scoped evidence on green (a bare string here, not a scenario import,
+  // to keep schema.ts free of a scenario→schema cycle). Enforces the frozen
+  // Acceptance rule "Green requires complete evidence" for the
+  // optional-capability lane.
   "SELFHOST-QUAL-1",
   // PR7-CONTROL-007: CFN and isolation were missing here, so either could
   // validate GREEN with null evidence. Both now require their kind-scoped
@@ -2981,7 +2423,6 @@ export function sanitizeCellEvidence(
     evidence.kind === "selfhost_github_auth" ||
     evidence.kind === "selfhost_switch_isolation" ||
     evidence.kind === "selfhost_gateway" ||
-    evidence.kind === "selfhost_cloud_addon" ||
     evidence.kind === "selfhost_cfn_wrapper"
   ) {
     return sanitizeSelfHostCellEvidence(evidence, secretValues);
@@ -3090,11 +2531,6 @@ export function sanitizeCellEvidence(
           object_ids: evidence.stripe.object_ids.map(clean),
         },
       };
-    case "cloud_provision_turn":
-      // Owned by the managed-cloud slice; delegate to its kind-scoped sanitizer.
-      return sanitizeCloudProvisionTurnEvidence(evidence, secretValues);
-    case "managed_cloud_fixture_smoke":
-      return sanitizeManagedCloudFixtureSmokeEvidence(evidence, secretValues);
     default:
       return evidence;
   }
@@ -3223,107 +2659,12 @@ function sanitizeSelfHostCellEvidence(
         model_id: clean(e.model_id),
       } as SelfHostGatewayEvidenceV1;
     }
-    case "selfhost_cloud_addon": {
-      const e = evidence as SelfHostCloudAddonEvidenceV1;
-      return {
-        ...cleanedBase,
-        kind: "selfhost_cloud_addon",
-        github_app_installation_id_hash: clean(e.github_app_installation_id_hash),
-        e2b_template_id: clean(e.e2b_template_id),
-        sandbox_id_hash: clean(e.sandbox_id_hash),
-        workspace_id_hash: clean(e.workspace_id_hash),
-        session_id_hash: clean(e.session_id_hash),
-      } as SelfHostCloudAddonEvidenceV1;
-    }
     default:
       // Unreachable given the CellEvidenceV1 union; fall back to the base
       // sanitization rather than throwing so an unknown future kind still
       // gets its common fields redacted (the validator rejects it either way).
       return cleanedBase as unknown as CellEvidenceV1;
   }
-}
-
-/**
- * Kind-scoped sanitizer for `cloud_provision_turn` (PR 2). Applies the same
- * `redactSecrets`/`redactUrlCredentials`/`boundMessage` pipeline to every
- * string-bearing field (artifact ids, versions, model id, template ids +
- * input_hash, sandbox_id_hash, covered_repo name/commit, litellm token/request
- * ids, cleanup ledger_id_hash) so a raw secret or credentialled URL that
- * reached evidence is turned into a `[REDACTED]`-bearing string the validator
- * then rejects. Does not touch the local-kind sanitizer switch.
- */
-function sanitizeCloudProvisionTurnEvidence(
-  evidence: CloudProvisionTurnEvidenceV1,
-  secretValues: readonly string[],
-): CloudProvisionTurnEvidenceV1 {
-  const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
-  return {
-    ...evidence,
-    artifact_ids: evidence.artifact_ids.map(clean),
-    server_version: clean(evidence.server_version),
-    anyharness_version: clean(evidence.anyharness_version),
-    worker_version: clean(evidence.worker_version),
-    supervisor_version: clean(evidence.supervisor_version),
-    model_id: clean(evidence.model_id),
-    template: {
-      ...evidence.template,
-      template_id: clean(evidence.template.template_id),
-      build_id: clean(evidence.template.build_id),
-      input_hash: clean(evidence.template.input_hash),
-    },
-    sandbox_id_hash: clean(evidence.sandbox_id_hash),
-    worker: { ...evidence.worker },
-    covered_repo: {
-      ...evidence.covered_repo,
-      name: clean(evidence.covered_repo.name),
-      commit: clean(evidence.covered_repo.commit),
-    },
-    isolation: { ...evidence.isolation },
-    litellm: {
-      ...evidence.litellm,
-      token_id_hash: clean(evidence.litellm.token_id_hash),
-      request_ids: evidence.litellm.request_ids.map(clean),
-    },
-    cleanup: {
-      ...evidence.cleanup,
-      ledger_id_hash: clean(evidence.cleanup.ledger_id_hash),
-    },
-  };
-}
-
-/**
- * Kind-scoped sanitizer for `managed_cloud_fixture_smoke`. Applies the same
- * `redactSecrets`/`redactUrlCredentials`/`boundMessage` pipeline to every
- * string-bearing field (artifact ids, world identity, per-cell ids/transition/
- * cleanup entries) so a raw secret or credentialled URL that reached evidence
- * becomes a `[REDACTED]`-bearing string the validator then rejects. Numeric
- * sweep counts pass through untouched. Does not touch any other sanitizer.
- */
-function sanitizeManagedCloudFixtureSmokeEvidence(
-  evidence: ManagedCloudFixtureSmokeEvidenceV1,
-  secretValues: readonly string[],
-): ManagedCloudFixtureSmokeEvidenceV1 {
-  const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
-  return {
-    ...evidence,
-    artifact_ids: evidence.artifact_ids.map(clean),
-    world: {
-      ...evidence.world,
-      source_sha: clean(evidence.world.source_sha),
-      server_digest: clean(evidence.world.server_digest),
-      e2b_template_id: clean(evidence.world.e2b_template_id),
-      e2b_template_build_id: clean(evidence.world.e2b_template_build_id),
-      e2b_template_input_hash: clean(evidence.world.e2b_template_input_hash),
-    },
-    cells: evidence.cells.map((cell) => ({
-      ...cell,
-      cell_id: clean(cell.cell_id),
-      external_ids: cell.external_ids.map(clean),
-      observed_transition: clean(cell.observed_transition),
-      cleanup_entries: cell.cleanup_entries.map(clean),
-    })),
-    provider_sweeps: evidence.provider_sweeps.map((sweep) => ({ ...sweep })),
-  };
 }
 
 /** Applies `sanitizeCellEvidence` to every result in a V4 report. */

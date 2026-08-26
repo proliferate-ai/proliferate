@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.billing import BILLING_RECONCILER_LOCK_KEY
 from proliferate.db.models.billing import BillingDecisionEvent, UsageSegment, WebhookEventReceipt
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import (
     ensure_free_included_grant,
     ensure_organization_billing_subject,
@@ -128,17 +127,6 @@ async def resolve_billing_subject_id_for_user(
     if not settings.pro_billing_enabled:
         await ensure_free_included_grant(db, user_id, billing_subject_id=subject.id)
     return subject.id
-
-
-async def _get_workspace_billing_subject(
-    db: AsyncSession,
-    workspace_id: UUID,
-) -> tuple[UUID, UUID]:
-    workspace = await db.get(CloudWorkspace, workspace_id)
-    if workspace is None:
-        raise RuntimeError("Cloud workspace not found while opening usage segment.")
-    subject = await ensure_personal_billing_subject(db, workspace.owner_user_id)
-    return subject.id, workspace.owner_user_id
 
 
 async def _get_runtime_environment_billing_subject(
@@ -494,8 +482,6 @@ async def ensure_sandbox_usage_started(
             db,
             runtime_environment_id,
         )
-    elif workspace_id is not None:
-        billing_subject_id, owner_user_id = await _get_workspace_billing_subject(db, workspace_id)
     elif actor_user_id is not None:
         subject = await ensure_personal_billing_subject(db, actor_user_id)
         billing_subject_id = subject.id

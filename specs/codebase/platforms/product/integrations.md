@@ -40,7 +40,7 @@ AnyHarness session starts
 
 [`db/models/integrations.py`](../../../../server/proliferate/db/models/integrations.py)
 and
-[`db/models/cloud/integration_approvals.py`](../../../../server/proliferate/db/models/cloud/integration_approvals.py)
+``db/models/cloud/integration_approvals.py`` (deleted, cull part 2)
 own the current schema:
 
 | Table | Ownership |
@@ -196,7 +196,7 @@ Worker SQLite or rotating tokens as routine recovery.
 ## Cloud And Desktop Worker Startup
 
 Cloud materialization launches Proliferate Supervisor
-([`runtime_launch.py`](../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py)),
+(``runtime_launch.py`` (deleted, cull part 2)),
 which spawns and supervises both AnyHarness and Worker as its children —
 there is no separately launched Worker sidecar (the legacy direct-nohup'd
 AnyHarness plus independent Worker sidecar, `worker_sidecar.py`, was deleted
@@ -419,7 +419,7 @@ POST /v1/cloud/integrations/action-approvals/{approval_id}/revoke
 
 The mounted router files are
 [`integrations/api.py`](../../../../server/proliferate/server/integration_gateway/connections/api.py),
-[`action_approvals/api.py`](../../../../server/proliferate/server/integration_gateway/connections/action_approvals/api.py),
+``action_approvals/api.py`` (deleted, cull part 2),
 [`integration_gateway/api.py`](../../../../server/proliferate/server/integration_gateway/gateway/api.py),
 and [`runtime_workers/api.py`](../../../../server/proliferate/server/seam/workers/api.py).
 

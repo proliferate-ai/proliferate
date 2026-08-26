@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import type { Workspace } from "@anyharness/sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWorkspaceBootstrapActions } from "#product/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
-import { useCloudWorkspaceConnectionCache } from "#product/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useWorkspaceSelectionCache } from "#product/hooks/workspaces/cache/use-workspace-selection-cache";
 import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/logical-workspaces";
 import { buildStandardRepoProjection } from "#product/lib/domain/workspaces/cloud/standard-projection";
@@ -28,9 +27,7 @@ export function useWorkspaceSelection() {
   const {
     cancelPreviousWorkspaceDisplayQueries,
     getWorkspaceSelectionSnapshot,
-    invalidateCloudWorkspaceStartState,
   } = useWorkspaceSelectionCache();
-  const { refreshCloudWorkspaceConnection } = useCloudWorkspaceConnectionCache();
   const setSelectedWorkspace = useSessionSelectionStore((state) => state.activateWorkspace);
   const clearSelection = useSessionSelectionStore((state) => state.clearSelection);
   const setSelectedLogicalWorkspaceId = useSessionSelectionStore(
@@ -53,7 +50,6 @@ export function useWorkspaceSelection() {
     ) => {
       const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
       const {
-        cloudMobilityWorkspaces,
         coworkStatus,
         workspaceCollections,
       } = getWorkspaceSelectionSnapshot(runtimeUrl);
@@ -70,7 +66,6 @@ export function useWorkspaceSelection() {
           localWorkspaces: standardProjection?.localWorkspaces ?? [],
           repoRoots: standardProjection?.repoRoots ?? [],
           cloudWorkspaces: standardProjection?.cloudWorkspaces ?? [],
-          cloudMobilityWorkspaces,
           currentSelectionId: useSessionSelectionStore.getState().selectedWorkspaceId,
         })
         : [];
@@ -79,8 +74,6 @@ export function useWorkspaceSelection() {
         cloudClient,
         cache: {
           cancelPreviousWorkspaceDisplayQueries,
-          invalidateCloudWorkspaceStartState,
-          refreshCloudWorkspaceConnection,
         },
         logicalWorkspaces,
         rawWorkspaces: workspaceCollections?.localWorkspaces ?? [],
@@ -113,10 +106,8 @@ export function useWorkspaceSelection() {
       cancelPreviousWorkspaceDisplayQueries,
       clearSelection,
       getWorkspaceSelectionSnapshot,
-      invalidateCloudWorkspaceStartState,
       localRuntime,
       reconcileHotWorkspace,
-      refreshCloudWorkspaceConnection,
       setSelectedLogicalWorkspaceId,
       setSelectedWorkspace,
       cloudClient,

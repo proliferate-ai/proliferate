@@ -3,8 +3,8 @@
 Proof C1's server half (agent-auth.md "Applied means acknowledged"): a
 selection write reads *pending* on the selections route until the surface's
 runtime acknowledges the rendered document — desktop via
-``POST /v1/cloud/agent-auth/state/ack``, cloud via the materialization
-operation completing — and *applied* after. The revision is the out-of-order
+``POST /v1/cloud/agent-auth/state/ack`` (the cloud materialization half died
+with the sandbox stack, cull part 2) — and *applied* after. The revision is the out-of-order
 backstop only (a delayed ack for a superseded document never moves the stamp
 backwards); the content fingerprint is the change detector.
 """
@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -21,7 +20,6 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.db.store import agent_gateway as agent_gateway_store
-from proliferate.server.cloud.materialization.materialize import agent_auth
 from tests.integration.test_agent_gateway_api import (
     _authed_user,
     _create_key,
@@ -370,60 +368,6 @@ class TestDesktopAckFlipsPendingToApplied:
             json={"revision": 1, "fingerprint": "fp"},
         )
         assert unauthenticated.status_code == 401
-
-
-class TestCloudAckStampedByMaterializer:
-    @pytest.mark.asyncio
-    async def test_completed_materialization_flips_cloud_selection_applied(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        # Proof C2's ack half: the agent-auth materialization operation
-        # completing against the sandbox IS the cloud acknowledgement — no
-        # desktop-style ack route is involved.
-        user_id, headers = await _authed_user(client)
-        key = await _create_key(client, headers)
-        await _put_api_key_selection(
-            client,
-            headers,
-            harness="claude",
-            surface="cloud",
-            api_key_id=key["id"],
-            env_var_name="ANTHROPIC_API_KEY",
-        )
-        assert {
-            record["applied"]
-            for record in await _list_selections(client, headers, surface="cloud")
-        } == {False}
-
-        async def _noop_io(*args: object, **kwargs: object) -> None:
-            return None
-
-        async def _no_manifest(*args: object, **kwargs: object) -> str:
-            return ""
-
-        monkeypatch.setattr(agent_auth.sandbox_io, "write_private_file_atomic", _noop_io)
-        monkeypatch.setattr(agent_auth.sandbox_io, "remove_owned_files", _noop_io)
-        monkeypatch.setattr(agent_auth.sandbox_io, "run_materialization_script", _no_manifest)
-
-        ctx = SimpleNamespace(sandbox=SimpleNamespace(id=uuid.uuid4()), target=object())
-        await agent_auth.materialize_agent_auth(db_session, ctx=ctx, user_id=uuid.UUID(user_id))
-        await db_session.commit()
-
-        assert {
-            record["applied"]
-            for record in await _list_selections(client, headers, surface="cloud")
-        } == {True}
-
-        ack = await agent_gateway_store.get_delivery_ack(
-            db_session, user_id=uuid.UUID(user_id), surface="cloud"
-        )
-        assert ack is not None
-        cloud_state = (await _get_state(client, headers, "cloud")).json()
-        assert ack.acked_revision == cloud_state["revision"]
-        assert ack.acked_fingerprint == cloud_state["fingerprint"]
 
 
 class TestDeliveryAckStore:

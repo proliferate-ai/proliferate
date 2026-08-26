@@ -11,10 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from proliferate.background.config import INTEGRATION_REVOCATION_PROCESS_TASK
 from proliferate.config import settings
 from proliferate.db.models.background import BackgroundOutboxTask
-from proliferate.db.models.cloud.integration_approvals import (
-    CloudIntegrationActionApproval,
-    CloudIntegrationActionApprovalEvent,
-)
 from proliferate.db.models.integration_authorization import (
     CloudIntegrationAuthorizationAttempt,
 )
@@ -27,7 +23,6 @@ from proliferate.db.models.integrations import (
     CloudIntegrationToolSchemaCache,
 )
 from proliferate.db.store.integrations import accounts as accounts_store
-from proliferate.db.store.integrations import action_approvals as approvals_store
 from proliferate.db.store.integrations import authorization_attempts as attempts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.db.store.integrations import oauth_clients as oauth_clients_store
@@ -472,29 +467,6 @@ async def test_disconnect_invalidates_local_authority_and_enqueues_only_job_id(
         authorization_url="https://auth.linear.app/oauth/authorize",
         expires_at=datetime.now(UTC) + timedelta(minutes=10),
     )
-    approval, _created = await approvals_store.create_or_get_pending(
-        db_session,
-        owner_user_id=uuid.UUID(auth.user_id),
-        organization_id=None,
-        integration_account_id=account.id,
-        integration_account_grant_version=account.grant_version,
-        runtime_worker_id=uuid.uuid4(),
-        gateway_session_id=uuid.uuid4(),
-        workspace_id="workspace-disconnect",
-        anyharness_session_id="session-disconnect",
-        provider="linear",
-        tool="create_issue",
-        payload_digest="a" * 64,
-        binding_digest="b" * 64,
-        idempotency_key="c" * 64,
-        safe_summary="Create an issue",
-        safe_account_label="Linear connection",
-        safe_source_label="Test session",
-        safe_target=None,
-        safe_content_preview=None,
-        safe_content_character_count=None,
-        ttl_seconds=600,
-    )
     await tool_cache_store.upsert_tool_cache(
         db_session,
         account_id=account.id,
@@ -519,18 +491,6 @@ async def test_disconnect_invalidates_local_authority_and_enqueues_only_job_id(
     assert await db_session.get(CloudIntegrationToolSchemaCache, account.id) is None
     assert await db_session.get(CloudIntegrationAuthorizationAttempt, attempt.id) is None
     assert await db_session.get(CloudIntegrationOAuthFlow, flow.id) is None
-    revoked = await db_session.get(CloudIntegrationActionApproval, approval.id)
-    assert revoked is not None
-    assert revoked.status == "revoked"
-    assert revoked.revoked_at is not None
-    event = await db_session.scalar(
-        select(CloudIntegrationActionApprovalEvent).where(
-            CloudIntegrationActionApprovalEvent.approval_id == approval.id,
-            CloudIntegrationActionApprovalEvent.event_type == "revoked",
-        )
-    )
-    assert event is not None
-
     job = (await db_session.scalars(select(CloudIntegrationRevocationJob))).one()
     assert job.status == "pending"
     assert job.provider_client_id == provider_client.id

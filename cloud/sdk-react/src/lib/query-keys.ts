@@ -128,14 +128,6 @@ export function cloudConfiguredSkillsKey() {
   return [...cloudPluginInventoryRootKey(), "configured-skills"] as const;
 }
 
-export function sandboxProfileKey(sandboxProfileId: string | null) {
-  return [...cloudRootKey(), "sandbox-profile", sandboxProfileId] as const;
-}
-
-export function sandboxProfileRuntimeConfigKey(sandboxProfileId: string | null) {
-  return [...sandboxProfileKey(sandboxProfileId), "runtime-config"] as const;
-}
-
 export type CloudOwnerScope = "personal" | "organization";
 
 export interface CloudOwnerSelectionKey {
@@ -280,26 +272,6 @@ export function repoEnvironmentKey(
   ] as const;
 }
 
-export function cloudSecretsRootKey() {
-  return [...cloudRootKey(), "secrets"] as const;
-}
-
-export function personalCloudSecretsKey() {
-  return [...cloudSecretsRootKey(), "personal"] as const;
-}
-
-export function organizationCloudSecretsKey(organizationId: string | null) {
-  return [...cloudSecretsRootKey(), "organizations", organizationId] as const;
-}
-
-export function workspaceCloudSecretsKey(gitOwner: string, gitRepoName: string) {
-  return [...cloudSecretsRootKey(), "repos", gitOwner, gitRepoName] as const;
-}
-
-export function cloudSandboxKey() {
-  return [...cloudRootKey(), "cloud-sandbox"] as const;
-}
-
 export function githubAppRootKey(apiBaseUrl: string) {
   return [...cloudRootKey(), "github-app", apiBaseUrl] as const;
 }
@@ -341,61 +313,6 @@ export function githubRepoAuthorityKey(
   return [...githubAppRootKey(apiBaseUrl), "repo-authority", gitOwner, gitRepoName] as const;
 }
 
-export function cloudMobilityRootKey() {
-  return [...cloudRootKey(), "mobility"] as const;
-}
-
-export function cloudMobilityWorkspacesKey() {
-  return [...cloudMobilityRootKey(), "workspaces"] as const;
-}
-
-export function cloudMobilityWorkspaceKey(mobilityWorkspaceId: string) {
-  return [...cloudMobilityWorkspacesKey(), mobilityWorkspaceId] as const;
-}
-
-export function cloudWorkspaceConnectionKey(
-  workspaceId: string,
-  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
-) {
-  return [
-    ...cloudRootKey(),
-    "workspaces",
-    workspaceId,
-    "connection",
-    owner.ownerScope,
-    owner.organizationId,
-  ] as const;
-}
-
-export function cloudWorkspacesListRootKey() {
-  return [...cloudRootKey(), "workspaces", "list"] as const;
-}
-
-export function cloudWorkspacesKey(
-  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
-  scope: string | null = null,
-  lifecycle: string | null = null,
-  desktopInstallId: string | null = null,
-) {
-  return [
-    ...cloudWorkspacesListRootKey(),
-    owner.ownerScope,
-    owner.organizationId,
-    scope,
-    lifecycle,
-    desktopInstallId,
-  ] as const;
-}
-
-export function isCloudWorkspaceConnectionQueryKey(
-  queryKey: readonly unknown[],
-): boolean {
-  return queryKey[0] === "cloud"
-    && queryKey[1] === "workspaces"
-    && typeof queryKey[2] === "string"
-    && queryKey[3] === "connection";
-}
-
 export function organizationsRootKey() {
   return ["organizations"] as const;
 }
@@ -434,13 +351,4 @@ export function cloudTargetsKey() {
 
 export function cloudTargetKey(targetId: string | null) {
   return [...cloudTargetsKey(), targetId] as const;
-}
-
-export function cloudWorkspaceKey(
-  workspaceId: string | null,
-  desktopInstallId: string | null = null,
-) {
-  // desktopInstallId is a trailing element so that the install-agnostic
-  // cloudWorkspaceKey(workspaceId) still prefix-matches for invalidation.
-  return [...cloudRootKey(), "workspaces", workspaceId, desktopInstallId] as const;
 }

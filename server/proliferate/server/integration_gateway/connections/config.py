@@ -5,7 +5,7 @@ config, plus parse/serialize helpers between those dataclasses and the JSON
 string stored in ``cloud_integration_definition.config_json``.
 
 Ported from the old MCP catalog domain types
-(``server/proliferate/server/cloud/mcp_catalog/domain/types.py`` and
+(the former cloud MCP catalog domain types and
 ``domain/builders.py`` as of commit ``4b54c9f2b``), collapsed into a single
 per-definition config shape.
 """

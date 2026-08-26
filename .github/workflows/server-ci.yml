@@ -569,8 +569,10 @@ jobs:
             find tests/integration -type f \( -name 'test_*.py' -o -name '*_test.py' \) | LC_ALL=C sort -u
           )
           echo "Total integration test files: ${#files[@]}"
-          if (( ${#files[@]} < 100 )); then
-            echo "Refusing to shard: discovered only ${#files[@]} integration test files (expected >= 100)." >&2
+          # Floor lowered 100 -> 60: the cull sweep's part-2 deletion (PR #2243)
+          # brought the real count to ~84; a collapsed find still reads ~0.
+          if (( ${#files[@]} < 60 )); then
+            echo "Refusing to shard: discovered only ${#files[@]} integration test files (expected >= 60)." >&2
             echo "The find over tests/integration collapsed -- check for a moved or renamed test tree." >&2
             exit 1
           fi

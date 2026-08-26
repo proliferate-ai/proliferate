@@ -1098,27 +1098,10 @@ describe("HarnessPane authentication", () => {
 });
 
 describe("HarnessPane all models", () => {
-  it("renders the target-observed model grid without visibility controls", () => {
+  it("renders no expandable models list on the cloud surface (the copied observation store is gone)", () => {
     state.agentSurface = "cloud";
-    state.agentModels.data = {
-      harnessKind: "claude",
-      models: [
-        { id: "sonnet", displayName: "Sonnet 4.6" },
-        { id: "haiku", displayName: "Haiku 4.5", enabled: false },
-      ],
-      modes: [{ id: "build" }],
-      snapshotId: "snap-1",
-      probedAt: null,
-      origin: "snapshot",
-      overrideApplied: true,
-    };
     renderPane("claude");
-
-
-
-    expandModelList();
-    expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
-    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Models" })).toBeNull();
   });
 
   // The cloud-snapshot ingest route (POST /agent-models/{h}/refresh) is
@@ -1141,27 +1124,6 @@ describe("HarnessPane all models", () => {
     expect(screen.queryByRole("button", { name: /^Refresh$/ })).toBeNull();
   });
 
-  it("does not expose a server-side model-membership override", () => {
-    state.agentSurface = "cloud";
-    state.agentModels.data = {
-      harnessKind: "claude",
-      models: [
-        { id: "sonnet", displayName: "Sonnet 4.6" },
-        { id: "haiku", displayName: "Haiku 4.5", enabled: false },
-      ],
-      modes: [{ id: "build" }],
-      snapshotId: "snap-1",
-      probedAt: null,
-      origin: "snapshot",
-      overrideApplied: true,
-    };
-    renderPane("claude");
-
-
-    expandModelList();
-    expect(screen.queryByRole("switch")).toBeNull();
-    expect(overrideMutate).not.toHaveBeenCalled();
-  });
 });
 
 describe("HarnessPane all models (local composed observation)", () => {

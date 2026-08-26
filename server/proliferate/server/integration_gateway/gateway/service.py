@@ -21,15 +21,6 @@ from proliferate.integrations import mcp_remote
 from proliferate.integrations.mcp_remote import McpRemoteError
 from proliferate.server.api_errors import CloudApiError
 from proliferate.server.integration_gateway.connections.access import resolve_launch
-from proliferate.server.integration_gateway.connections.action_approvals.domain.actions import (
-    InvalidActionPayload,
-)
-from proliferate.server.integration_gateway.connections.action_approvals.service import (
-    ActionApprovalAccountRevisionMismatch,
-)
-from proliferate.server.integration_gateway.connections.action_approvals.transactions import (
-    request_action_approval_committed,
-)
 from proliferate.server.integration_gateway.connections.admission import admit_provider_operation
 from proliferate.server.integration_gateway.connections.tools import get_or_refresh_tool_cache
 from proliferate.server.integration_gateway.gateway.domain import json_rpc, virtual_tools
@@ -47,8 +38,6 @@ from proliferate.server.integration_gateway.gateway.domain.tool_policy import (
     decide_tool_call,
 )
 from proliferate.server.integration_gateway.gateway.errors import (
-    IntegrationGatewaySessionRequired,
-    IntegrationToolApprovalRequired,
     IntegrationToolNotAllowed,
     IntegrationToolPolicyError,
 )
@@ -219,55 +208,9 @@ async def call_provider_tool(
     try:
         decision = decide_tool_call(provider=provider, tool=tool)
         if isinstance(decision, ToolCallRequiresApproval):
-            if execution_session is None or not execution_session.is_action_capable:
-                raise IntegrationGatewaySessionRequired(provider=provider, tool=tool)
-            workspace_id = execution_session.workspace_id
-            anyharness_session_id = execution_session.anyharness_session_id
-            assert workspace_id is not None and anyharness_session_id is not None
-            # Resolve only the ready account identity needed to bind the
-            # request. Credential rendering and provider I/O remain below the
-            # allowed path and are never entered for an approval-gated action.
-            account_identity = await account_identity_for_provider(
-                db,
-                grant=grant,
-                provider=provider,
-            )
-            try:
-                approval = await request_action_approval_committed(
-                    grant=grant,
-                    gateway_session_id=execution_session.gateway_session_id,
-                    workspace_id=workspace_id,
-                    anyharness_session_id=anyharness_session_id,
-                    integration_account_id=account_identity.account_id,
-                    integration_account_grant_version=account_identity.grant_version,
-                    verdict=decision,
-                    arguments=arguments,
-                    account_label=(
-                        f"{account_identity.display_name} connection "
-                        f"{str(account_identity.account_id)[:8]}"
-                    ),
-                    source_label=(
-                        f"{grant.runtime_kind.title()} workspace "
-                        f"{workspace_id[:8]} session {anyharness_session_id[:8]}"
-                    ),
-                )
-            except InvalidActionPayload as error:
-                raise CloudApiError(
-                    "integration_action_payload_invalid",
-                    "Integration action arguments must be valid JSON values.",
-                    status_code=400,
-                ) from error
-            except ActionApprovalAccountRevisionMismatch as error:
-                raise CloudApiError(
-                    "integration_account_changed",
-                    "Integration account changed before approval could be requested.",
-                    status_code=409,
-                ) from error
-            raise IntegrationToolApprovalRequired(
-                provider=provider,
-                tool=tool,
-                approval=approval,
-            )
+            # Approval-gated actions fail closed: the approval surface that
+            # would have carried the decision left with the cloud sandbox stack.
+            raise IntegrationToolNotAllowed(provider=provider, tool=tool)
         if isinstance(decision, ToolCallDenied):
             raise IntegrationToolNotAllowed(provider=provider, tool=tool)
         if not isinstance(decision, ToolCallAllowed):

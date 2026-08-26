@@ -228,19 +228,14 @@ async function reconcileAfterHotPaint(input: {
   if (!isCurrent() || cloudReadiness.kind === "stale") {
     return;
   }
-  if (cloudReadiness.kind === "cloud-missing" || cloudReadiness.kind === "cloud-pending") {
+  if (cloudReadiness.kind === "cloud-missing") {
     return;
   }
 
   const readyReadiness: ReadyCloudReadinessResult = cloudReadiness;
   const connectionResult = await resolveSelectionConnection(
     deps,
-    {
-      ...context,
-      cloudWorkspaceId: readyReadiness.kind === "cloud-ready"
-        ? readyReadiness.cloudWorkspaceId
-        : null,
-    },
+    { ...context, cloudWorkspaceId: null },
     readyReadiness,
   ).catch(() => null);
   if (!connectionResult || !isCurrent()) {

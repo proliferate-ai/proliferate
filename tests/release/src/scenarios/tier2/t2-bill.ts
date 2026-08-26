@@ -69,7 +69,7 @@ const GATEWAY_GAP_REASON =
 /** Out-of-process pass invoking the real (unmocked) free-credit ensure
  * function directly against the booted profile DB — the same "run the
  * product's own pass function out of process" convention `billing.ts` uses
- * for the accounting/reconciler/topup passes, scoped to
+ * for the accounting/topup passes, scoped to
  * `ensure_user_free_credit_grant`.
  *
  * Returns whether the user OWNS the free-signup grant after the call — NOT
@@ -875,31 +875,11 @@ const t2Bill10: Tier2CellHandler = async (ctx: Tier2CellContext): Promise<Tier2C
   return { status: "green" };
 };
 
-// ── T2-BILL-11: reconciler singleton/advisory lock, concurrent workers,
-// restart, exactly-once convergence ────────────────────────────────────────
-const t2Bill11: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
-  // Concurrent invocations of the real reconcile pass: the advisory lock
-  // guarantees at most one logical pass proceeds at a time; both calls must
-  // return (not hang, not crash the process) and a subsequent call (restart)
-  // still converges cleanly.
-  const results = await Promise.allSettled([
-    Promise.resolve().then(() => b.runReconcilePass()),
-    Promise.resolve().then(() => b.runReconcilePass()),
-  ]);
-  for (const result of results) {
-    assert.equal(
-      result.status,
-      "fulfilled",
-      result.status === "rejected"
-        ? `reconciler pass crashed: ${String((result as PromiseRejectedResult).reason)}`
-        : "concurrent reconciler passes never crash the process",
-    );
-  }
-  // Restart: a subsequent pass after the concurrent pair still succeeds
-  // (singleton lock released cleanly, no wedge).
-  b.runReconcilePass();
-  return { status: "green" };
-};
+// T2-BILL-11 (reconciler singleton/advisory lock) was DELETED with the cloud
+// sandbox stack (cull part 2): its whole subject — the billing reconciler pass
+// (`server.billing.reconciler.run_billing_reconcile_pass`) — no longer exists
+// (billing is kept minus the reconciler), so there is no pass whose advisory
+// lock could be exercised.
 
 // ── T2-BILL-12: usage summary/timeseries/attribution/llm-balance match
 // seeded ledger truth ──────────────────────────────────────────────────────
@@ -1093,7 +1073,6 @@ const cases: Record<string, Tier2CellHandler> = {
   "T2-BILL-8": t2Bill8,
   "T2-BILL-9": t2Bill9,
   "T2-BILL-10": t2Bill10,
-  "T2-BILL-11": t2Bill11,
   "T2-BILL-12": t2Bill12,
   "T2-BILL-13": t2Bill13,
   "T2-BILL-14": t2Bill14,

@@ -149,7 +149,7 @@ async def test_known_slack_read_tool_executes_directly(
 
 
 @pytest.mark.asyncio
-async def test_every_known_slack_mutation_returns_typed_approval_required(
+async def test_every_known_slack_mutation_is_denied_before_upstream(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
@@ -188,13 +188,9 @@ async def test_every_known_slack_mutation_returns_typed_approval_required(
 
         assert result["isError"] is True
         error = result["structuredContent"]["error"]
-        assert error["code"] == "integration_tool_approval_required"
+        assert error["code"] == "integration_tool_not_allowed"
         assert error["provider"] == "slack"
         assert error["tool"] == tool
-        assert error["approval"]["required"] is True
-        assert error["approval"]["status"] == "pending"
-        assert error["approval"]["actionSummary"].startswith("Slack external action:")
-        assert len(error["approval"]["payloadDigest"]) == 64
         assert "agent-claimed-approval" not in str(error)
 
     await db_session.rollback()
@@ -210,7 +206,7 @@ async def test_every_known_slack_mutation_returns_typed_approval_required(
         .all()
     )
     assert {event.tool_name for event in events} == set(SLACK_MUTATING_TOOL_NAMES)
-    assert {event.error_code for event in events} == {"integration_tool_approval_required"}
+    assert {event.error_code for event in events} == {"integration_tool_not_allowed"}
     assert all(event.ok is False for event in events)
 
 
@@ -371,4 +367,4 @@ async def test_worker_token_and_gateway_arguments_cannot_bypass_policy(
         },
     )
     assert result["isError"] is True
-    assert result["structuredContent"]["error"]["code"] == ("integration_tool_approval_required")
+    assert result["structuredContent"]["error"]["code"] == ("integration_tool_not_allowed")

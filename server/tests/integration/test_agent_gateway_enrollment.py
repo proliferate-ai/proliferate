@@ -48,7 +48,7 @@ from proliferate.server.agent_auth.enrollment import (
     ensure_org_enrollment,
     ensure_signup_enrollment,
 )
-from proliferate.server.cloud.materialization.materialize.agent_auth import (
+from proliferate.server.agent_auth.state_render import (
     build_agent_auth_state,
 )
 from proliferate.lib.infra.time.wall_clock import utcnow
@@ -366,13 +366,13 @@ async def test_qualification_enrollment_stamps_exact_run_ownership(
 
 
 @pytest.mark.asyncio
-async def test_enrollment_sync_completion_pokes_both_delivery_surfaces(
+async def test_enrollment_sync_completion_pokes_the_local_delivery_surface(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
     """Proof C5 (agent-auth.md): a state pulled before enrollment sync lacks
-    the key; sync completion re-renders both surfaces with no unrelated
+    the key; sync completion re-renders the local surface with no unrelated
     mutation needed.
 
     Cloud poke: reaching ``synced`` schedules agent-auth materialization into
@@ -417,29 +417,9 @@ async def test_enrollment_sync_completion_pokes_both_delivery_surfaces(
     pre_revision = pre_state["revision"]
     assert isinstance(pre_revision, int) and pre_revision > 0
 
-    scheduled: list[tuple[uuid.UUID, bool]] = []
-
-    async def record_schedule(
-        db: AsyncSession,
-        *,
-        user_id: uuid.UUID,
-        ensure_sandbox: bool = False,
-    ) -> None:
-        scheduled.append((user_id, ensure_sandbox))
-
-    monkeypatch.setattr(
-        enrollment_service.materialization_service,
-        "schedule_materialize_agent_auth",
-        record_schedule,
-    )
-
     enrollment = await ensure_signup_enrollment(db_session, user_id)
     assert enrollment is not None
     assert enrollment.sync_status == "synced"
-
-    # Cloud surface: one plain (non-ensure) materialization pass scheduled —
-    # a user who never provisioned a sandbox still falls to bootstrap.
-    assert scheduled == [(user_id, False)]
 
     # Local surface: the SAME pull the desktop loops on now renders the key,
     # at a strictly newer revision, with no unrelated mutation.
@@ -483,26 +463,9 @@ async def test_already_synced_enrollment_does_not_re_poke(
     )
     pre_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
 
-    scheduled: list[uuid.UUID] = []
-
-    async def record_schedule(
-        db: AsyncSession,
-        *,
-        user_id: uuid.UUID,
-        ensure_sandbox: bool = False,
-    ) -> None:
-        scheduled.append(user_id)
-
-    monkeypatch.setattr(
-        enrollment_service.materialization_service,
-        "schedule_materialize_agent_auth",
-        record_schedule,
-    )
-
     again = await ensure_signup_enrollment(db_session, user_id)
     assert again is not None
     assert again.sync_status == "synced"
-    assert scheduled == []
     post_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
     assert post_state["revision"] == pre_state["revision"]
 

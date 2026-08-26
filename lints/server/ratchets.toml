@@ -30,28 +30,13 @@ reason = "W-F2 period-boundary gate adds one guard clause (a billing_reason chec
 
 [[max_lines]]
 path = "server/proliferate/server/agent_auth/enrollment.py"
-max_lines = 636
+max_lines = 630
 reason = "C-train composition re-attaches C-1 both-surface sync-completion pokes; D train: org-only ensure_signup_enrollment + per-(org,member) LiteLLM identity + fingerprint-driven per-key re-mint; shrank again when ensure_user_enrollment died (D-3), split pending"
 
 [[max_lines]]
 path = "server/proliferate/server/agent_auth/service.py"
-max_lines = 820
+max_lines = 808
 reason = "delivery-ack hardening (server-bounded ack revision + trust-boundary docs) nudged the gateway service over the 800 server-layer cap; split pending with the service taxonomy pass; typed-config write gate threads the registry providerConfig vocabulary into the store put and pins R5's azure field set ; +21: FR-3 adds get_verification_verdicts reading the governing enrollment's per-harness gateway-enablement verdicts for the additive capabilities surface; PRO-129 splits put_harness_settings out to a dedicated harness_settings.py module (settings are not auth), pulling the file back down to 820"
-
-[[max_lines]]
-path = "server/proliferate/server/cloud/materialization/materialize/agent_auth.py"
-max_lines = 725
-reason = "C-train composition: C-1 ensure-on-switch + C-2 delivery-ack stamping join the cut; D3 python arm adds the provider_config render branch + per-(harness,config_kind) translation table (_translate_provider_config_env) + typed-vault loading in _load_state_inputs; review fix cycle 1 hardens _hostname_first_label's userinfo/port stripping; review fix cycle 2 repairs the dangling Foundry-mapping docstring; integration adds A4 fail-closed + B3 per-harness key map on the same module D1 fail-closed comments: the renderer withholding predicate now names unfunded subjects explicitly (D train)"
-
-[[max_lines]]
-path = "server/proliferate/server/cloud/materialization/sandbox_io/connect.py"
-max_lines = 613
-reason = "sandbox connect/ready choreography (attempt CAS, usage convergence) + gateway-cache invalidation at the re-stamp (C8); split pending + SG10 review: explicit crypto-secret calls retain the original lifecycle spacing instead of line-neutral compression"
-
-[[max_lines]]
-path = "server/proliferate/server/cloud/workspaces/service.py"
-max_lines = 1123
-reason = "workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + scratch/repo-less read guards) + PR 5 exact-ref managed-Cloud creation and association path + cold-access repairing runtime-access resolution (S2); AnyHarness provisioning handoff split out per guides/domains.md; + git_identity_required translation (C3) + lost-status derivation (C7) + worker-staleness degraded surfacing (_worker_degraded, S3)"
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_api.py"
@@ -60,7 +45,7 @@ reason = "C-train composition; P1 auth rebuild rewrote keys/selections/state cov
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_enrollment.py"
-max_lines = 887
+max_lines = 850
 reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D train rewrote the suite org-first (D1 proof, floor mirroring, signup shape); C-1 added the both-surfaces poke coverage"
 
 [[max_lines]]
@@ -90,18 +75,8 @@ reason = "existing server oversized integration test"
 
 [[max_lines]]
 path = "server/tests/integration/test_billing_api.py"
-max_lines = 1944
+max_lines = 1763
 reason = "existing oversized billing integration suite; billing error normalization adds exact parent-router, nested-router, and permission-denial envelope characterization"
-
-[[max_lines]]
-path = "server/tests/integration/test_billing_fail_closed_read_errors.py"
-max_lines = 693
-reason = "billing error normalization characterizes both snapshot-read and verdict-persistence inheritance corridors in the existing fail-closed integration fixture"
-
-[[max_lines]]
-path = "server/tests/integration/test_cloud_workspace_materialization_service.py"
-max_lines = 1190
-reason = "durable materialization ledger service suite (intent/report/unlink transitions, redaction, primary selection, recorded-sandbox reconciliation, repo-less workspace, install-id redaction, generation replay/crash-retry/terminal-reintent) + PR 5 exact-ref create coverage; new fail-closed source cases split to test_cloud_workspace_exact_ref_source.py; + lost-workspace rematerialization rejection (C7)"
 
 [[max_lines]]
 path = "server/tests/integration/test_stripe_webhook_drop_visibility.py"
@@ -119,12 +94,7 @@ max_lines = 603
 reason = "PRO-111 adds the surface/error field assertions to the OAuthProviderTokenRejectedError redirect-shape test now that complete_oauth_provider_callback returns AuthCallbackRedirect instead of a bare url string; split pending"
 
 [[max_lines]]
-path = "server/tests/unit/test_agent_auth_materialization.py"
-max_lines = 990
+path = "server/tests/unit/test_agent_auth_state_render.py"
+max_lines = 637
 reason = "C-train composition: C-1/C-2 renderer additions; renderer unit suite (+fail-closed rewrites, +the renderer-merge tripwire; the contract-fixture producer class split out to test_agent_auth_state_contract_fixture.py); D3 python arm adds TestTranslateProviderConfigEnv (6-row table) + TestRenderProviderConfigSource coverage for the new provider_config wire source; review fix cycle 1 adds a userinfo/port hostname-derivation edge case"
-
-[[max_lines]]
-path = "server/tests/unit/test_cloud_connect_race.py"
-max_lines = 605
-reason = "connect/detach commit-ambiguity race suite (usage-close fencing fakes) + mark-lost stub wiring (C7)"
 

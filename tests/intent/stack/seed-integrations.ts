@@ -11,7 +11,7 @@
 // directly against `cloud_integration_definition` is the more direct way to
 // bootstrap the fixture. `sync_seed_definitions` (server/proliferate/main.py)
 // upserts every entry in `SEED_DEFINITIONS`
-// (server/proliferate/server/cloud/integrations/seeds.py) into
+// (server/proliferate/server/integration_gateway/connections/seeds.py) into
 // `cloud_integration_definition` on every server boot, so reading the row
 // directly is reading real seeded product data, not fabricating a stub.
 

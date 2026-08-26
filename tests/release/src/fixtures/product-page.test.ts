@@ -127,27 +127,16 @@ test("BROWSER_AUTH_SESSION_KEY matches the real desktop client's localStorage ke
   assert.equal(BROWSER_AUTH_SESSION_KEY, "proliferate.auth.session");
 });
 
-test("resolveDiagnosticsDir honours both lane debug vars (local preferred, cloud accepted)", () => {
+test("resolveDiagnosticsDir honours the local-world debug var and stays empty otherwise", () => {
   const savedLocal = process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
-  const savedCloud = process.env.MANAGED_CLOUD_SMOKE_DEBUG_DIR;
   try {
     delete process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
-    delete process.env.MANAGED_CLOUD_SMOKE_DEBUG_DIR;
     assert.equal(resolveDiagnosticsDir(), undefined, "no var → no diagnostics dir (green path is untouched)");
 
-    // The managed-cloud lane's own var must resolve — this is the fix: a cloud
-    // browser-turn failure (CLOUD-PROVISION-1) must capture diagnostics even
-    // though the local-lane var is unset.
-    process.env.MANAGED_CLOUD_SMOKE_DEBUG_DIR = "/tmp/mc-debug";
-    assert.equal(resolveDiagnosticsDir(), "/tmp/mc-debug");
-
-    // When both are set, the local var wins (the local lane is the only one
-    // that sets it, so there is never real contention; deterministic anyway).
     process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR = "/tmp/local-debug";
     assert.equal(resolveDiagnosticsDir(), "/tmp/local-debug");
   } finally {
     restoreEnv("LOCAL_WORLD_SMOKE_DEBUG_DIR", savedLocal);
-    restoreEnv("MANAGED_CLOUD_SMOKE_DEBUG_DIR", savedCloud);
   }
 });
 

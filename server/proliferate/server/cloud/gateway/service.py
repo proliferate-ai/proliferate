@@ -1,4 +1,13 @@
-"""Gateway access resolution for cloud sandbox runtimes."""
+"""Gateway access resolution for cloud sandbox runtimes.
+
+Held back from the part-2 dark-cloud delete (delivery spec amendment): the
+proxy/access modules beside this file are the only model-agnostic HTTP/SSE/WS
+forwarding code in the tree, and the target architecture keeps a machine-access
+proxy (``runtime_gateway``). The sandbox-resolution seam below is stubbed —
+its upstream (cloud_sandboxes provisioning + the sandbox billing authorizer)
+is deleted — so nothing here can resolve an upstream until a future
+``runtime_gateway`` supplies one.
+"""
 
 from __future__ import annotations
 
@@ -9,15 +18,6 @@ from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from proliferate.server.billing.authorization import (
-    assert_cloud_sandbox_resume_allowed_for_owner,
-)
-from proliferate.server.cloud.cloud_sandboxes.service import (
-    ensure_cloud_sandbox_ready,
-    load_cloud_sandbox_runtime_access_or_repair,
-    require_cloud_provisioning_configured,
-)
 
 
 class _UserWithId(Protocol):
@@ -38,11 +38,8 @@ class _CachedCloudSandboxGatewayAccess:
 
 
 _GATEWAY_ACCESS_CACHE_TTL_SECONDS = 60.0
-_GATEWAY_BILLING_ALLOW_CACHE_TTL_SECONDS = 5.0
 _gateway_access_cache: dict[UUID, _CachedCloudSandboxGatewayAccess] = {}
 _gateway_access_locks: dict[UUID, asyncio.Lock] = {}
-_gateway_billing_allow_cache: dict[UUID, float] = {}
-_gateway_billing_locks: dict[UUID, asyncio.Lock] = {}
 
 
 def _cached_gateway_access(user_id: UUID) -> CloudSandboxGatewayAccess | None:
@@ -60,14 +57,6 @@ def _gateway_access_lock(user_id: UUID) -> asyncio.Lock:
     if lock is None:
         lock = asyncio.Lock()
         _gateway_access_locks[user_id] = lock
-    return lock
-
-
-def _gateway_billing_lock(user_id: UUID) -> asyncio.Lock:
-    lock = _gateway_billing_locks.get(user_id)
-    if lock is None:
-        lock = asyncio.Lock()
-        _gateway_billing_locks[user_id] = lock
     return lock
 
 
@@ -91,50 +80,12 @@ def invalidate_cloud_sandbox_gateway_access_for_user(user_id: UUID) -> None:
 def _reset_cloud_sandbox_gateway_access_cache_for_tests() -> None:
     _gateway_access_cache.clear()
     _gateway_access_locks.clear()
-    _gateway_billing_allow_cache.clear()
-    _gateway_billing_locks.clear()
-
-
-def _billing_allow_is_cached(user_id: UUID) -> bool:
-    expires_at = _gateway_billing_allow_cache.get(user_id)
-    if expires_at is None:
-        return False
-    if expires_at <= time.monotonic():
-        _gateway_billing_allow_cache.pop(user_id, None)
-        return False
-    return True
-
-
-async def _assert_gateway_billing_allowed(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-) -> None:
-    if _billing_allow_is_cached(user_id):
-        return
-
-    async with _gateway_billing_lock(user_id):
-        if _billing_allow_is_cached(user_id):
-            return
-        # This authorizer builds the complete billing snapshot and may evaluate
-        # compute-budget windows, so cache only successful decisions briefly.
-        # A 402 is never remembered; the next request re-checks immediately.
-        await assert_cloud_sandbox_resume_allowed_for_owner(
-            db,
-            owner_user_id=user_id,
-        )
-        _gateway_billing_allow_cache[user_id] = (
-            time.monotonic() + _GATEWAY_BILLING_ALLOW_CACHE_TTL_SECONDS
-        )
 
 
 async def ensure_cloud_sandbox_gateway_access(
     db: AsyncSession,
     user: _UserWithId,
 ) -> CloudSandboxGatewayAccess:
-    require_cloud_provisioning_configured()
-    await _assert_gateway_billing_allowed(db, user_id=user.id)
-
     cached = _cached_gateway_access(user.id)
     if cached is not None:
         return cached
@@ -152,18 +103,11 @@ async def _resolve_cloud_sandbox_gateway_access(
     db: AsyncSession,
     user: _UserWithId,
 ) -> CloudSandboxGatewayAccess:
-    # Reached only on a cache miss (the caller holds the per-user lock), which is
-    # exactly where a cold row must trigger its own repair: a cached hit by
-    # definition already resolved. ``ensure_cloud_sandbox_ready`` above has
-    # already run the billing gate, so the repair cannot bypass it.
-    sandbox = await ensure_cloud_sandbox_ready(db, user)
-    (
-        upstream_base_url,
-        upstream_token,
-        _data_key,
-    ) = await load_cloud_sandbox_runtime_access_or_repair(sandbox, reason="gateway_access")
-    return CloudSandboxGatewayAccess(
-        upstream_base_url=upstream_base_url,
-        upstream_token=upstream_token,
-        runtime_generation=sandbox.runtime_generation,
+    # TODO(cull-trail): the cloud_sandboxes provisioning stack and the sandbox
+    # billing authorizer this resolution called are deleted (cull part 2). The
+    # gateway is held for the future runtime_gateway, which must supply its own
+    # upstream resolution here.
+    raise NotImplementedError(
+        "Cloud sandbox upstream resolution was deleted with the dark cloud "
+        "stack; the gateway is held for the future runtime_gateway."
     )

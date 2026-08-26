@@ -73,8 +73,8 @@ export interface DrainGrantsResult {
 
 /**
  * Runs `tests/release/scripts/billing_probe.py` in-process against the local
- * profile DB (same seam and env contract as T3-PROV-1's `prov1_fallback.py`),
- * returning the parsed JSON. Requires `RELEASE_E2E_LOCAL_DATABASE_URL`.
+ * profile DB (the read-only DB-seam convention of this runner), returning the
+ * parsed JSON. Requires `RELEASE_E2E_LOCAL_DATABASE_URL`.
  */
 export async function runBillingProbe(
   command: "meter-records" | "drain-grants",

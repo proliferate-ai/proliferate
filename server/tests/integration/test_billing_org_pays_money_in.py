@@ -31,7 +31,6 @@ untouched, and refill checkout is pointed at the paying org.
 from __future__ import annotations
 
 import uuid
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -41,7 +40,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from proliferate.auth.authorization import OwnerSelection
 from proliferate.config import settings
 from proliferate.constants.billing import (
-    BILLING_MODE_ENFORCE,
     FREE_INCLUDED_GRANT_TYPE,
     REFILL_10H_GRANT_TYPE,
 )
@@ -51,7 +49,6 @@ from proliferate.constants.organizations import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import BillingGrant
-from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.billing_runtime_usage import resolve_billing_subject_id_for_user
 from proliferate.db.store.billing_subjects import (
@@ -63,7 +60,6 @@ from proliferate.db import engine as engine_module
 from proliferate.permissions import _default_unscoped_selection_to_payer
 from proliferate.server.billing import checkout as checkout_module
 from proliferate.server.billing import stripe_webhooks, webhook_drops
-from proliferate.server.billing.authorization import assert_cloud_sandbox_resume_allowed
 from proliferate.server.billing.snapshots import (
     get_billing_snapshot_for_request,
     get_billing_snapshot_for_subject_in_session,
@@ -205,27 +201,6 @@ async def test_joining_first_org_moves_the_existing_grant_and_preserves_balance(
 
 
 @pytest.mark.asyncio
-async def test_org_members_first_start_is_allowed_under_enforce(
-    db_session: AsyncSession,
-    test_engine: Any,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The regression W-F1 actually caused: enforce-mode blocked a new org member.
-
-    With the free allowance stranded on personal, the enforce gate read an empty
-    org pool and denied the user's first sandbox start.
-    """
-    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    user = await _create_user(db_session)
-    await _add_org_membership(db_session, user.id)
-    await db_session.commit()
-
-    sandbox = SimpleNamespace(owner_user_id=user.id, organization_id=None)
-    # No raise: the org pool holds the user's free hours.
-    await assert_cloud_sandbox_resume_allowed(db_session, sandbox)
-
-
-@pytest.mark.asyncio
 async def test_snapshot_reports_org_pool_not_stranded_personal_balance(
     db_session: AsyncSession,
     test_engine: Any,
@@ -279,43 +254,6 @@ async def test_org_subject_snapshot_mints_the_allowance_for_a_named_actor(
     grant = await _free_grant(db_session, user.id)
     assert grant is not None
     assert grant.billing_subject_id == org_subject.id
-
-
-@pytest.mark.asyncio
-async def test_org_subject_snapshot_counts_the_actors_sandboxes_and_repos(
-    db_session: AsyncSession,
-    test_engine: Any,
-) -> None:
-    """Environment counts survive the move to an org subject.
-
-    ``cloud_sandbox`` and ``repo_config`` are owned by a USER, and both counters
-    reached that user through ``billing_subject.user_id`` — which is ``None`` on
-    an org. Pointing reads at the paying org therefore zeroed both: a member with
-    a running sandbox saw ``activeSandboxCount: 0`` (under-counting the
-    concurrency limit) and ``activeCloudRepoCount: 0`` against their repo limit.
-    """
-    user = await _create_user(db_session)
-    org_id = await _add_org_membership(db_session, user.id)
-    org_subject = await ensure_organization_billing_subject(db_session, org_id)
-    db_session.add(
-        CloudSandbox(
-            owner_user_id=user.id,
-            provider_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",
-            status="ready",
-        )
-    )
-    await db_session.commit()
-
-    snapshot = await get_billing_snapshot_for_subject_in_session(
-        db_session,
-        org_subject.id,
-        grant_user_id=user.id,
-    )
-    assert snapshot.active_sandbox_count == 1
-
-    # Without an actor there is no user to count for, so zero is correct.
-    anonymous = await get_billing_snapshot_for_subject_in_session(db_session, org_subject.id)
-    assert anonymous.active_sandbox_count == 0
 
 
 @pytest.mark.asyncio

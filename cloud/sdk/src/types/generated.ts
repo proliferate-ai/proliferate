@@ -1,4 +1,14 @@
 import type { Schema } from "./schema.js";
+import type {
+  CloudWorkspaceMaterializationSummary,
+  CloudWorkspaceSummaryWireBase,
+} from "./workspace-compat.js";
+
+export type {
+  CloudWorkspaceMaterializationSummary,
+  CloudWorkspaceSummaryWireBase,
+  RepoRef,
+} from "./workspace-compat.js";
 
 // Narrow string unions — kept hand-written because the server declares these as `str`
 // and the generated types would be too loose (`string`) for UI switch/display logic.
@@ -56,9 +66,6 @@ export interface CloudWorkspaceExecutionTargetSummary {
   online?: boolean | null;
 }
 
-// Derived from the generated OpenAPI schema — the wire contract is the source of
-// truth. Do not hand-copy fields here.
-export type CloudWorkspaceMaterializationSummary = Schema<"WorkspaceMaterializationSummary">;
 export type CloudWorkspaceMaterializationState =
   CloudWorkspaceMaterializationSummary["state"];
 export type CloudWorkspaceMaterializationTargetKind =
@@ -120,8 +127,6 @@ export function isCloudAgentKind(value: string): value is CloudAgentKind {
 }
 
 // Generated type aliases — names preserved so all existing import sites are unchanged.
-export type RepoRef                   = Schema<"RepoRef">;
-export type CloudSandboxResponse    = Schema<"CloudSandboxResponse">;
 export type BillingPlanInfo           = Schema<"CloudPlanInfo">;
 export type BillingUrlResponse        = Schema<"BillingUrlResponse">;
 export type OverageSettingsResponse   = Schema<"OverageSettingsResponse">;
@@ -214,45 +219,13 @@ interface CloudWorkspaceSummaryAppExtras {
   billing?: Schema<"WorkspaceBillingSummary"> | null;
 }
 
-// Derived from the generated OpenAPI ``WorkspaceSummary`` — the wire contract is
-// the source of truth. We override only the SDK's normalized display fields,
-// which product surfaces consume as their full domain unions rather than the
-// narrow subset this one server emits: the two status enums (SDK client
-// normalizes into ``CloudWorkspaceStatus`` — adds ``needs_rematerialization``/
-// ``pending``), and ``visibility``/``sandboxType``/``exposureState`` (workspaces
-// arrive from multiple scopes — exposed/org-all/claimable — so the client treats
-// these as the richer product unions). This is exactly the "existing normalized
-// status fields" overlay the PR spec's conformance section permits; no unrelated
-// wire field (materializations, runtime, cloudAccess, executionTarget, …) is
-// duplicated here.
-// ``Required<>`` over the wire base: the generated schema marks most fields
-// optional because they carry Pydantic defaults, but the server always
-// serializes them, and product consumers rely on their present-but-nullable
-// shape (matching the prior hand-written mirror). Off-wire app extras stay
-// optional via the separate intersection below.
-export type CloudWorkspaceSummary = Required<
-  Omit<
-    Schema<"WorkspaceSummary">,
-    | "status"
-    | "workspaceStatus"
-    | "visibility"
-    | "sandboxType"
-    | "exposureState"
-    | "runtime"
-    | "executionTarget"
-  >
-> & {
+export type CloudWorkspaceSummary = CloudWorkspaceSummaryWireBase & {
   status: CloudWorkspaceStatus;
   workspaceStatus: CloudWorkspaceStatus;
   visibility: CloudWorkspaceVisibility;
   sandboxType?: CloudWorkspaceSandboxType;
   exposureState?: CloudWorkspaceExposureState;
-  // Runtime status is the SDK's normalized ``CloudRuntimeStatus`` (adds
-  // ``provisioning``), the same normalized-status overlay as ``status``.
   runtime?: CloudWorkspaceRuntimeSummary;
-  // executionTarget.kind is the full target-kind union the product consumes
-  // (local_desktop | managed_cloud | self_hosted); this one server only
-  // ever emits the managed_cloud constant, so keep the richer SDK shape.
   executionTarget?: CloudWorkspaceExecutionTargetSummary;
 } & CloudWorkspaceSummaryAppExtras;
 

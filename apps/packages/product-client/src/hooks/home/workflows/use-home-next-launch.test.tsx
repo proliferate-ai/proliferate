@@ -47,7 +47,6 @@ import {
 const mocks = vi.hoisted(() => {
   const createThreadFromSelection = vi.fn();
   return {
-    createCloudWorkspaceAndEnterWithResult: vi.fn(),
     createEmptySessionWithResolvedConfig: vi.fn(),
     createLocalWorkspaceAndEnterWithResult: vi.fn(),
     createSessionWithResolvedConfig: vi.fn(),
@@ -75,12 +74,6 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
 vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ show: mocks.showToast, showError: mocks.showErrorToast }),
-}));
-
-vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
-  useCreateCloudWorkspace: () => ({
-    createCloudWorkspaceAndEnterWithResult: mocks.createCloudWorkspaceAndEnterWithResult,
-  }),
 }));
 
 vi.mock("#product/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
@@ -401,7 +394,6 @@ describe("useHomeNextLaunch", () => {
     expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
     expect(mocks.createLocalWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();
-    expect(mocks.createCloudWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
     expect(useChatLaunchIntentStore.getState().intentOrder).toEqual([]);
     expect(mocks.showToast).toHaveBeenCalledWith(
       "Local launch targets are available in the Desktop app.",
@@ -409,16 +401,13 @@ describe("useHomeNextLaunch", () => {
     );
   });
 
-  it("still invokes the Cloud workflow from Web Home", async () => {
+  it("refuses a stale cloud target with a not-started outcome (the cloud stack is deleted)", async () => {
     mocks.productHost.desktop = null;
-    mocks.createCloudWorkspaceAndEnterWithResult.mockResolvedValue({
-      status: "interrupted",
-      failureMessage: "Expected test interruption",
-    });
     const { result } = renderHomeNextLaunch();
+    let outcome: HomeNextLaunchOutcome = "launched";
 
     await act(async () => {
-      await result.current.launch({
+      outcome = await result.current.launch({
         text: "launch in cloud",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
         launchControlValues: {},
@@ -431,8 +420,8 @@ describe("useHomeNextLaunch", () => {
       });
     });
 
+    expect(outcome).toBe("not-started");
     expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
-    expect(mocks.createCloudWorkspaceAndEnterWithResult).toHaveBeenCalledTimes(1);
     expect(mocks.createLocalWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();
   });

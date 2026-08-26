@@ -403,7 +403,6 @@ function selfhostQualLike(): ScenarioDefinition {
     expandCells: () => [
       { dimensions: { cell: "SH-GITHUB-AUTH", harness: "claude" } },
       { dimensions: { cell: "SH-GATEWAY", harness: "claude" } },
-      { dimensions: { cell: "SH-CLOUD-ADDON", harness: "claude" } },
     ],
     planCell: () => [],
     runCells: async () => [],
@@ -448,9 +447,8 @@ test("--cells preserves SELFHOST-INSTALL-1's four baseline cells while narrowing
     "SH-INSTALL-CLAIM",
     "SH-INVITEE",
   ]);
-  // The other QUAL-1 cells are dropped (narrowed within the owning scenario).
+  // The other QUAL-1 cell is dropped (narrowed within the owning scenario).
   assert.ok(!executed.some((d) => d.cell === "SH-GITHUB-AUTH"), "SH-GITHUB-AUTH must be dropped");
-  assert.ok(!executed.some((d) => d.cell === "SH-CLOUD-ADDON"), "SH-CLOUD-ADDON must be dropped");
 });
 
 test("--cells matching no planned cell exits 2 before setup", async () => {

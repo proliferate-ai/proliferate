@@ -642,7 +642,7 @@ async def test_exhausted_budget_withholds_gateway_key_from_state_render(
     """
     from proliferate.db.store.agent_gateway import DesiredAuthSource
     from proliferate.db.store.agent_gateway.selections import put_auth_selections
-    from proliferate.server.cloud.materialization.materialize.agent_auth import (
+    from proliferate.server.agent_auth.state_render import (
         build_agent_auth_state,
     )
 
@@ -706,7 +706,7 @@ async def test_configured_default_budget_keeps_a_grantless_subject_open(
     """
     from proliferate.db.store.agent_gateway import DesiredAuthSource
     from proliferate.db.store.agent_gateway.selections import put_auth_selections
-    from proliferate.server.cloud.materialization.materialize.agent_auth import (
+    from proliferate.server.agent_auth.state_render import (
         build_agent_auth_state,
     )
 
@@ -752,7 +752,7 @@ async def test_unfunded_subject_fails_closed_at_gate_and_render(
     """
     from proliferate.db.store.agent_gateway import DesiredAuthSource
     from proliferate.db.store.agent_gateway.selections import put_auth_selections
-    from proliferate.server.cloud.materialization.materialize.agent_auth import (
+    from proliferate.server.agent_auth.state_render import (
         build_agent_auth_state,
     )
 

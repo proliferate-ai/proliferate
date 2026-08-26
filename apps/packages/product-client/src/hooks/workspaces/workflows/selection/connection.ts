@@ -5,7 +5,6 @@ import {
   startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
 import { ensureRuntimeReady } from "#product/hooks/workspaces/workflows/runtime-ready";
-import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import type {
   ReadyCloudReadinessResult,
   WorkspaceConnectionResult,
@@ -19,12 +18,8 @@ export async function resolveSelectionConnection(
   cloudReadiness: ReadyCloudReadinessResult,
 ): Promise<WorkspaceConnectionResult> {
   const runtimeReadyStartedAt = startLatencyTimer();
-  const localWorkspaceId = cloudReadiness.kind === "local"
-    ? cloudReadiness.runtimeWorkspaceId ?? context.workspaceId
-    : context.workspaceId;
-  const desktopRuntimeUrl = cloudReadiness.kind === "local"
-    ? await ensureRuntimeReady(deps.localRuntime)
-    : useHarnessConnectionStore.getState().runtimeUrl;
+  const localWorkspaceId = cloudReadiness.runtimeWorkspaceId ?? context.workspaceId;
+  const desktopRuntimeUrl = await ensureRuntimeReady(deps.localRuntime);
   logLatency("workspace.select.runtime_ready", {
     workspaceId: context.workspaceId,
     cloudWorkspaceId: context.cloudWorkspaceId,
@@ -32,21 +27,11 @@ export async function resolveSelectionConnection(
   });
 
   const connectionStartedAt = startLatencyTimer();
-  const workspaceConnection = cloudReadiness.kind === "local"
-    ? (await resolveWorkspaceConnection(
-      desktopRuntimeUrl,
-      localWorkspaceId,
-      deps.cloudClient,
-    )).connection
-    : await deps.cache.refreshCloudWorkspaceConnection(cloudReadiness.cloudWorkspaceId)
-      .then((connection) => ({
-        runtimeUrl: connection.runtimeUrl,
-        authToken: connection.accessToken ?? undefined,
-        anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
-        runtimeGeneration: connection.runtimeGeneration,
-        runtimeAccessKind: "proliferate-gateway" as const,
-        webSocketAuthTransport: connection.webSocketAuthTransport,
-      }));
+  const workspaceConnection = (await resolveWorkspaceConnection(
+    desktopRuntimeUrl,
+    localWorkspaceId,
+    deps.cloudClient,
+  )).connection;
   logLatency("workspace.select.connection_resolved", {
     workspaceId: context.workspaceId,
     anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
@@ -56,6 +41,6 @@ export async function resolveSelectionConnection(
   return {
     runtimeUrl: desktopRuntimeUrl,
     workspaceConnection,
-    materializedWorkspaceId: cloudReadiness.kind === "local" ? localWorkspaceId : context.workspaceId,
+    materializedWorkspaceId: localWorkspaceId,
   };
 }

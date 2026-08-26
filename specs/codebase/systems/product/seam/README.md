@@ -75,7 +75,7 @@ ack of event `seq`).
 ## 3. Public surface
 
 All routes mount under `/v1/cloud` via
-[cloud/api.py](../../../../../server/proliferate/server/cloud/api.py) (the mount point
+`cloud/api.py` (the mount point
 moves when that shell dissolves; the paths do not change).
 
 Worker-authenticated (bearer `worker_token`,
@@ -125,7 +125,7 @@ decision below.
 
 - [db/store/runtime_workers.py](../../../../../server/proliferate/db/store/runtime_workers.py)
   — its own store, and the only writer of the three tables above.
-- [db/store/cloud_sandboxes.py](../../../../../server/proliferate/db/store/cloud_sandboxes.py)
+- `db/store/cloud_sandboxes.py`
   — read-only: per-sandbox desired-version overrides and `destroyed_at` for
   the upload verdict (environments).
 - [db/store/organizations.py](../../../../../server/proliferate/db/store/organizations.py)

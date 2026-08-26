@@ -1,10 +1,9 @@
 """Proliferate API — FastAPI application factory."""
 
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +15,6 @@ import proliferate.db.models.agent_gateway  # noqa: F401
 import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.auth  # noqa: F401
-import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.github_app  # noqa: F401
 import proliferate.db.models.integration_authorization  # noqa: F401
 import proliferate.db.models.integration_revocation  # noqa: F401
@@ -44,6 +42,9 @@ from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.accounts.desktop.api import router as desktop_router
 from proliferate.server.accounts.identity.api import router as identity_auth_router
+from proliferate.server.agent_auth.api import gateway_account_router as agent_gateway_router
+from proliferate.server.agent_auth.api import organization_router as agent_auth_organization_router
+from proliferate.server.agent_auth.api import router as agent_auth_router
 from proliferate.server.agent_auth.worker import (
     start_agent_gateway_enrollment_backfill,
     start_agent_gateway_llm_topups,
@@ -63,20 +64,23 @@ from proliferate.server.anonymous_telemetry.worker import (
 )
 from proliferate.server.artifact_runtime.api import router as artifact_runtime_router
 from proliferate.server.billing.api import router as billing_router
-from proliferate.server.billing.reconciler import (
-    start_billing_reconciler,
-    stop_billing_reconciler,
-)
 from proliferate.server.catalogs.api import router as catalogs_router
-from proliferate.server.cloud.api import router as cloud_router
-from proliferate.server.cloud.gateway.api import router as gateway_router
 from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.github.api import callback_router as github_app_callback_router
+from proliferate.server.github.api import organization_router as github_app_organization_router
+from proliferate.server.github.api import router as github_app_router
 from proliferate.server.github.api import (
     setup_callback_router as github_app_setup_callback_router,
 )
+from proliferate.server.github.api import webhook_router as github_webhook_router
+from proliferate.server.github.repos.api import router as repos_router
 from proliferate.server.health import router as health_router
+from proliferate.server.integration_gateway.connections.api import (
+    admin_router as integrations_admin_router,
+)
+from proliferate.server.integration_gateway.connections.api import router as integrations_router
 from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
+from proliferate.server.integration_gateway.gateway.api import router as integration_gateway_router
 from proliferate.server.meta import router as meta_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.organizations.join_api import router as organization_join_router
@@ -86,6 +90,10 @@ from proliferate.server.organizations.registration_pages import (
 )
 from proliferate.server.organizations.usage.api import router as organization_usage_router
 from proliferate.server.release import resolve_server_release_id
+from proliferate.server.repositories.api import router as repositories_router
+from proliferate.server.seam.workers.api import admin_router as runtime_workers_admin_router
+from proliferate.server.seam.workers.api import router as runtime_workers_router
+from proliferate.server.seam.workers.api import worker_router as runtime_worker_router
 from proliferate.server.setup.api import router as first_run_setup_router
 from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 from proliferate.server.support.api import router as support_router
@@ -95,6 +103,30 @@ from proliferate.server.workflows.api import invocations_router as workflow_invo
 from proliferate.server.workflows.api import router as workflows_router
 
 
+def _cloud_compat_router() -> APIRouter:
+    """Kept systems that still serve under the historical ``/v1/cloud`` prefix.
+
+    The extracted systems' wire paths are part of installed clients, GitHub App
+    settings, and the generated SDK; the prefix stays until those consumers move.
+    """
+    router = APIRouter(prefix="/cloud", tags=["cloud"])
+    router.include_router(repos_router)
+    router.include_router(repositories_router)
+    router.include_router(github_app_router)
+    router.include_router(github_app_organization_router)
+    router.include_router(agent_auth_router)
+    router.include_router(agent_auth_organization_router)
+    router.include_router(agent_gateway_router)
+    router.include_router(runtime_workers_router)
+    router.include_router(runtime_worker_router)
+    router.include_router(runtime_workers_admin_router)
+    router.include_router(integration_gateway_router)
+    router.include_router(integrations_router)
+    router.include_router(integrations_admin_router)
+    router.include_router(github_webhook_router)
+    return router
+
+
 def _normalize_api_prefix(raw_prefix: str) -> str:
     if not raw_prefix or raw_prefix == "/":
         return ""
@@ -102,35 +134,6 @@ def _normalize_api_prefix(raw_prefix: str) -> str:
     if not normalized.startswith("/"):
         normalized = f"/{normalized}"
     return normalized.rstrip("/")
-
-
-def _validate_cloud_billing_configuration() -> None:
-    billing_mode = settings.cloud_billing_mode
-    if billing_mode == "off":
-        return
-    if not settings.e2b_api_key:
-        raise RuntimeError(
-            f"cloud_billing_mode={billing_mode} requires "
-            "E2B_API_KEY so metering and reconciliation can run."
-        )
-
-
-def _validate_e2b_template_configuration() -> None:
-    # A previously-healthy base instance must not be replaced by a crash-looping
-    # API just because E2B is half-configured (a common self-host mistake: set
-    # E2B_API_KEY, forget E2B_TEMPLATE_NAME). Partial cloud configuration
-    # disables the optional cloud-workspace capability and logs a loud warning;
-    # cloud-provisioning *requests* then fail with a specific, actionable error
-    # (see `settings.cloud_provisioning_config_error` consumers) instead of
-    # taking down auth and every other control-plane surface at boot.
-    config_error = settings.cloud_provisioning_config_error
-    if config_error is not None:
-        logging.getLogger("proliferate.startup").warning(
-            "Cloud workspace provisioning is DISABLED: %s Base control-plane "
-            "features remain available; cloud-workspace requests will return an "
-            "actionable configuration error until this is resolved.",
-            config_error,
-        )
 
 
 # Fragments that mark a request-body field as secret-bearing. FastAPI's default
@@ -252,8 +255,6 @@ async def _proliferate_error_handler(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    _validate_cloud_billing_configuration()
-    _validate_e2b_template_configuration()
     try:
         async with db_engine.engine.begin() as conn:
             await conn.run_sync(validate_database_schema)
@@ -275,8 +276,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # The periodic maintenance loops below no-op when
     # settings.run_background_workers is false (deterministic billing tests
     # drive these same passes on demand out-of-process).
-    if settings.cloud_billing_mode in {"observe", "enforce"}:
-        start_billing_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     agent_gateway_backfill_task = await start_agent_gateway_enrollment_backfill()
     agent_gateway_usage_import_task = await start_agent_gateway_usage_import()
@@ -290,7 +289,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await stop_agent_gateway_usage_import(agent_gateway_usage_import_task)
         await stop_agent_gateway_enrollment_backfill(agent_gateway_backfill_task)
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
-        await stop_billing_reconciler()
         flush_server_sentry()
 
 
@@ -352,8 +350,7 @@ def create_app() -> FastAPI:
         tags=["anonymous_telemetry"],
     )
     app.include_router(analytics_router, prefix=f"{api_prefix}/v1", tags=["analytics"])
-    app.include_router(cloud_router, prefix=f"{api_prefix}/v1", tags=["cloud"])
-    app.include_router(gateway_router, prefix=f"{api_prefix}/v1/gateway", tags=["gateway"])
+    app.include_router(_cloud_compat_router(), prefix=f"{api_prefix}/v1", tags=["cloud"])
     app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
     app.include_router(workflows_router, prefix=f"{api_prefix}/v1", tags=["workflows"])
     app.include_router(

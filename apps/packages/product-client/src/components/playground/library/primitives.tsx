@@ -1,4 +1,3 @@
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "#product/primitives/AlertDialog";
 import { AnchoredCommandPopover } from "#product/primitives/AnchoredCommandPopover";
 import { AnimatedCollapsibleContent } from "#product/primitives/AnimatedCollapsibleContent";
 import { AnimatedSwapText } from "#product/primitives/AnimatedSwapText";
@@ -167,25 +166,6 @@ function DialogDemo() {
   );
 }
 
-function AlertDialogDemo() {
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="secondary" size="sm">Open alert</Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete item?</AlertDialogTitle>
-          <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction>Delete</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
 
 function PopoverDemo() {
   return (
@@ -289,7 +269,6 @@ function TooltipPrimitiveDemo() {
 }
 
 export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
-  { name: "AlertDialog", subpath: "#product/primitives/AlertDialog", render: AlertDialogDemo },
   { name: "AnchoredCommandPopover", subpath: "#product/primitives/AnchoredCommandPopover", render: AnchoredCommandPopoverDemo },
   { name: "AnimatedCollapsibleContent", subpath: "#product/primitives/AnimatedCollapsibleContent", render: AnimatedCollapsibleContentDemo },
   { name: "AnimatedSwapText", subpath: "#product/primitives/AnimatedSwapText", render: AnimatedSwapTextDemo },

@@ -13,7 +13,6 @@ import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.auth  # noqa: F401
 import proliferate.db.models.background  # noqa: F401
 import proliferate.db.models.billing  # noqa: F401
-import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.github_app  # noqa: F401
 import proliferate.db.models.integration_authorization  # noqa: F401
 import proliferate.db.models.integration_revocation  # noqa: F401

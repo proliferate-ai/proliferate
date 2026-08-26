@@ -300,15 +300,15 @@ anyharness/crates/anyharness-lib/src/
 ## 9. Proof
 
 - Server unit: [test_agent_gateway_domain.py](../../../../../server/tests/unit/test_agent_gateway_domain.py)
-  (selection rules), [test_agent_auth_materialization.py](../../../../../server/tests/unit/test_agent_auth_materialization.py)
+  (selection rules), `test_agent_auth_materialization.py`
   (renderer), [test_agent_auth_state_contract_fixture.py](../../../../../server/tests/unit/test_agent_auth_state_contract_fixture.py)
   (wire pin), [test_agent_auth_body_redaction.py](../../../../../server/tests/unit/test_agent_auth_body_redaction.py),
   [test_agent_auth_settings_rider.py](../../../../../server/tests/unit/test_agent_auth_settings_rider.py).
 - Server integration: [test_agent_gateway_selections.py](../../../../../server/tests/integration/test_agent_gateway_selections.py),
   [test_agent_gateway_store.py](../../../../../server/tests/integration/test_agent_gateway_store.py),
   [test_agent_gateway_key_lifecycle.py](../../../../../server/tests/integration/test_agent_gateway_key_lifecycle.py),
-  [test_agent_auth_delivery_ack.py](../../../../../server/tests/integration/test_agent_auth_delivery_ack.py),
-  [test_agent_auth_materialization.py](../../../../../server/tests/integration/test_agent_auth_materialization.py),
+  `test_agent_auth_delivery_ack.py`,
+  `test_agent_auth_materialization.py`,
   [test_agent_gateway_policy_api.py](../../../../../server/tests/integration/test_agent_gateway_policy_api.py),
   [test_agent_gateway_policy_enforcement.py](../../../../../server/tests/integration/test_agent_gateway_policy_enforcement.py),
   [test_agent_gateway_api.py](../../../../../server/tests/integration/test_agent_gateway_api.py).

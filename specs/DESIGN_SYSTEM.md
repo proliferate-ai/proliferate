@@ -955,7 +955,7 @@ role, never by feature area** — a component's name describes what it does, not
 where it is used:
 
 - **Root files** — the base tier. Holds both the raw Radix (and other vendor)
-  wrapper families — `Dialog`, `AlertDialog`, `Popover`, `DropdownMenu`,
+  wrapper families — `Dialog`, `Popover`, `DropdownMenu`,
   `checkbox-primitive`, `tooltip-primitive`, `Command`, `Sonner` — and
   single-purpose visual atoms that don't compose another primitive: `Button`,
   `Input`, `Label`, `Badge`, `Switch`, `Select`, `Textarea`, `IconButton`,
@@ -1063,7 +1063,6 @@ index is the closed set, not a sample of it. Closure is mechanical in both direc
 
 | Component | Path | Purpose |
 | --- | --- | --- |
-| `AlertDialog` | [AlertDialog.tsx](../apps/packages/product-client/src/primitives/AlertDialog.tsx) | Raw `@radix-ui/react-alert-dialog` wrapper, styled to tokens. |
 | `AnimatedCollapsibleContent` | [AnimatedCollapsibleContent.tsx](../apps/packages/product-client/src/primitives/AnimatedCollapsibleContent.tsx) | Height + opacity disclosure motion for expand/collapse content; collapsed subtree is inert. |
 | `AnimatedSwapText` | [AnimatedSwapText.tsx](../apps/packages/product-client/src/primitives/AnimatedSwapText.tsx) | Crossfade transition when a keyed text value changes. |
 | `AnchoredCommandPopover` | [AnchoredCommandPopover.tsx](../apps/packages/product-client/src/primitives/AnchoredCommandPopover.tsx) | Popover surface raised by a command rather than a control — a zero-size fixed anchor near the top of the viewport, so surfaces with no trigger element (command palette, deep link, empty state) get the portal/chrome/dismissal/focus-neutrality of a popover instead of a centered `Dialog`. |
@@ -1203,7 +1202,7 @@ above are not migration debt); click-only popovers use
 | `AgentIdentityGlyph` | [AgentIdentityGlyph.tsx](../apps/packages/product-client/src/components/patterns/AgentIdentityGlyph.tsx) | Solid Seal renderer for every durable agent-identity surface; geometry and color come from the session-derived identity. |
 | `BillingGateState` | [BillingGateState.tsx](../apps/packages/product-client/src/components/patterns/BillingGateState.tsx) | Billing gate panel plus `BillingBalanceNotice` inline banner. The mapping from typed start-block reasons to a view is `billingGateView` in [billing-gate-presentation.ts](../apps/packages/product-client/src/lib/domain/billing/billing-gate-presentation.ts) — presentation logic, not a component. |
 | `PrStatusBadge` | [PrStatusBadge.tsx](../apps/packages/product-client/src/components/patterns/PrStatusBadge.tsx) | PR status dot (`PrStatusDot`) and tooltip-text helper (`prStatusTooltip`). The dot composes the `StatusDot` primitive; the domain mapping from a PR status to a tone is `prStatusTone` in [pr-status-presentation.ts](../apps/packages/product-client/src/lib/domain/workspaces/git-status/pr-status-presentation.ts). |
-| `secrets/SecretManagementPanel` | [secrets/SecretManagementPanel.tsx](../apps/packages/product-client/src/components/patterns/secrets/SecretManagementPanel.tsx) | Presentational secrets-management pattern (list, editor/delete dialogs, scope notice are private internals of this one export). |
+| `secrets/SecretManagementPanel` | `secrets/SecretManagementPanel.tsx` | Presentational secrets-management pattern (list, editor/delete dialogs, scope notice are private internals of this one export). |
 
 ### How to add a component
 

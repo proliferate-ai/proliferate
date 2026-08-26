@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
-import { useVisibleCloudWorkspaces } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudWorkRecencyInventory,
   type CloudWorkFilters,
@@ -32,8 +31,8 @@ export interface MobileWorkInventory {
 }
 
 export function useMobileWorkInventory(filters?: CloudWorkFilters): MobileWorkInventory {
-  const visibleWorkspaces = useVisibleCloudWorkspaces();
-  const data = visibleWorkspaces.data;
+  // The cloud workspace stack is deleted; the inventory is permanently empty.
+  const data: CloudWorkspaceSummary[] = EMPTY_WORKSPACES;
 
   const inventory = useMemo(() => {
     const workspaceById = new Map(data.map((workspace) => [workspace.id, workspace]));
@@ -60,12 +59,14 @@ export function useMobileWorkInventory(filters?: CloudWorkFilters): MobileWorkIn
 
   return {
     ...inventory,
-    error: visibleWorkspaces.error instanceof Error ? visibleWorkspaces.error : null,
-    isFetching: visibleWorkspaces.isFetching,
-    isLoading: visibleWorkspaces.isLoading,
-    refetch: visibleWorkspaces.refetch,
+    error: null,
+    isFetching: false,
+    isLoading: false,
+    refetch: async () => {},
   };
 }
+
+const EMPTY_WORKSPACES: CloudWorkspaceSummary[] = [];
 
 export function mobileCloudChatForWorkspace(
   workspace: CloudWorkspaceSummary,

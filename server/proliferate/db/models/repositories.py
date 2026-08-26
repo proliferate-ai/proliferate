@@ -17,7 +17,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.constants.cloud import (
-    CloudMaterializationStatus,
     GitProvider,
     RepoEnvironmentKind,
 )
@@ -34,13 +33,6 @@ _GIT_PROVIDER_ENUM = Enum(
 _REPO_ENVIRONMENT_KIND_ENUM = Enum(
     RepoEnvironmentKind,
     name="repo_environment_kind",
-    native_enum=False,
-    values_callable=lambda values: [value.value for value in values],
-    validate_strings=True,
-)
-_CLOUD_MATERIALIZATION_STATUS_ENUM = Enum(
-    CloudMaterializationStatus,
-    name="cloud_materialization_status",
     native_enum=False,
     values_callable=lambda values: [value.value for value in values],
     validate_strings=True,
@@ -138,54 +130,3 @@ class RepoEnvironment(Base):
         onupdate=utcnow,
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-
-class CloudRepoEnvironmentMaterialization(Base):
-    __tablename__ = "cloud_repo_environment_materialization"
-    __table_args__ = (
-        CheckConstraint(
-            "status IN ('pending', 'running', 'ready', 'error')",
-            name="ck_cloud_repo_environment_materialization_status",
-        ),
-        Index(
-            "ux_cloud_repo_environment_materialization",
-            "cloud_sandbox_id",
-            "repo_environment_id",
-            unique=True,
-        ),
-        Index(
-            "ix_cloud_repo_environment_materialization_status",
-            "cloud_sandbox_id",
-            "status",
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    cloud_sandbox_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
-        index=True,
-    )
-    repo_environment_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("repo_environment.id", ondelete="CASCADE"),
-        index=True,
-    )
-    status: Mapped[CloudMaterializationStatus] = mapped_column(
-        _CLOUD_MATERIALIZATION_STATUS_ENUM,
-        default=CloudMaterializationStatus.pending,
-    )
-    applied_repo_environment_updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-    applied_manifest_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    materialized_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utcnow,
-        onupdate=utcnow,
-    )

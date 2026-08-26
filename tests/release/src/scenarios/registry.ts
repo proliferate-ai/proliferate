@@ -29,8 +29,6 @@ import { t3Sh5 } from "./selfhost/t3-sh-5.js";
 import { localWorldSmoke1 } from "./local-world-smoke-1.js";
 import { t2Bill } from "./tier2/t2-bill.js";
 import { selfhostInstall1 } from "./selfhost-install-1.js";
-import { cloudProvision1 } from "./cloud-provision-1.js";
-import { managedCloudFixtureSmoke1 } from "./managed-cloud-fixture-smoke-1.js";
 import { selfhostIsolation1 } from "./selfhost-isolation-1.js";
 import { selfhostQual1 } from "./selfhost-qual-1.js";
 import { selfhostCfn1 } from "./selfhost-cfn-1.js";
@@ -92,8 +90,6 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   localWorldSmoke1,
   t2Bill,
   selfhostInstall1,
-  cloudProvision1,
-  managedCloudFixtureSmoke1,
   selfhostIsolation1,
   selfhostQual1,
   selfhostCfn1,

@@ -43,7 +43,6 @@ from proliferate.db.store.billing_subjects import ensure_organization_billing_su
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
 from proliferate.server.agent_auth.free_credits import ensure_signup_free_credit_grant
-from proliferate.server.cloud.materialization import service as materialization_service
 
 logger = logging.getLogger(__name__)
 
@@ -577,11 +576,6 @@ async def _sync_enrollment(
                 db,
                 user_id=synced.user_id,
                 surface=AGENT_AUTH_SURFACE_LOCAL,
-            )
-            # Cloud: push fresh agent-auth state into the user's live sandbox.
-            await materialization_service.schedule_materialize_agent_auth(
-                db,
-                user_id=synced.user_id,
             )
         return synced
     except LiteLLMIntegrationError as error:

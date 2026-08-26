@@ -1,10 +1,8 @@
 import { KeyRound } from "#product/primitives/icons/core";
-import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { Button } from "#product/primitives/Button";
-import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
 import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
 import { type RepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
 import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
@@ -79,7 +77,6 @@ function EnvironmentCloud({
   cloudSignInAvailable: boolean;
 }) {
   const editor = useCloudRepoEnvironmentEditor({ repository, cloudActive });
-  const cloudRepository = editor.cloudRepository;
 
   return (
     <RepoCloudGate
@@ -89,32 +86,9 @@ function EnvironmentCloud({
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}
     >
-      {cloudRepository ? (
-        <RepoEnvironmentSecretsPanel
-          gitOwner={cloudRepository.gitOwner}
-          gitRepoName={cloudRepository.gitRepoName}
-          enabled={cloudActive}
-        />
-      ) : null}
+      {null}
     </RepoCloudGate>
   );
-}
-
-function RepoEnvironmentSecretsPanel({
-  gitOwner,
-  gitRepoName,
-  enabled,
-}: {
-  gitOwner: string;
-  gitRepoName: string;
-  enabled: boolean;
-}) {
-  const panel = useCloudSecretsPanel({
-    scope: { kind: "workspace", gitOwner, gitRepoName },
-    enabled,
-  });
-
-  return <SecretManagementPanel {...panel} />;
 }
 
 function EnvironmentLocal({

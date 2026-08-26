@@ -28,12 +28,6 @@ PROTECTED_STORE_SYMBOLS = {
         "create_or_rotate_organization_invitation",
         "mark_invitation_delivery",
     ),
-    "proliferate.db.store.cloud_sandboxes": (
-        "accept_destroyed_cloud_sandbox_provider_observation",
-        "advance_cloud_sandbox_provider_observation_floor",
-        "apply_cloud_sandbox_provider_observation",
-        "mark_cloud_sandbox_provider_missing",
-    ),
 }
 
 
@@ -76,9 +70,8 @@ def test_named_write_registry_matches_frozen_contract() -> None:
     assert {store_module: len(symbols) for store_module, symbols in actual.items()} == {
         "proliferate.db.store.organizations": 13,
         "proliferate.db.store.organization_invitations": 3,
-        "proliferate.db.store.cloud_sandboxes": 4,
     }
-    assert sum(len(symbols) for symbols in actual.values()) == 20
+    assert sum(len(symbols) for symbols in actual.values()) == 16
     organization_persistence = frozenset(
         {
             "server/proliferate/db/store/organization_invitations.py",
@@ -98,17 +91,6 @@ def test_named_write_registry_matches_frozen_contract() -> None:
         )
         assert boundary.persistence_owner_paths == organization_persistence
         assert boundary.owner_service_hint == "proliferate.server.organizations.service"
-    cloud_boundary = module.NAMED_STORE_BOUNDARIES["proliferate.db.store.cloud_sandboxes"]
-    assert cloud_boundary.product_owner_prefix == (
-        "server",
-        "proliferate",
-        "server",
-        "cloud",
-    )
-    assert cloud_boundary.persistence_owner_paths == frozenset(
-        {"server/proliferate/db/store/cloud_sandboxes.py"}
-    )
-    assert cloud_boundary.owner_service_hint == "proliferate.server.cloud.cloud_sandboxes.service"
 
 
 @pytest.mark.parametrize(
@@ -138,11 +120,7 @@ def test_foreign_direct_import_rejects_every_protected_symbol(
     assert violation.rule_id == "SRV-STORE-5"
     assert violation.lineno == 1
     assert f"{store_module}.{symbol}" in violation.detail
-    expected_hint = (
-        "proliferate.server.cloud.cloud_sandboxes.service"
-        if store_module.endswith("cloud_sandboxes")
-        else "proliferate.server.organizations.service"
-    )
+    expected_hint = "proliferate.server.organizations.service"
     assert expected_hint in violation.detail
     assert violation.relative_path(tmp_path) == ("server/proliferate/server/billing/foreign.py")
 
@@ -176,8 +154,8 @@ def test_module_alias_access_is_rejected(tmp_path: Path, source: str) -> None:
 
 @pytest.mark.parametrize("literal_getattr", [False, True])
 def test_qualified_reference_is_rejected(tmp_path: Path, literal_getattr: bool) -> None:
-    store_module = "proliferate.db.store.cloud_sandboxes"
-    symbol = "apply_cloud_sandbox_provider_observation"
+    store_module = "proliferate.db.store.organization_invitations"
+    symbol = "mark_invitation_delivery"
     reference = (
         f'getattr({store_module}, "{symbol}")' if literal_getattr else f"{store_module}.{symbol}"
     )
@@ -193,14 +171,14 @@ def test_qualified_reference_is_rejected(tmp_path: Path, literal_getattr: bool) 
 
 
 def test_star_import_rejects_each_protected_store_symbol(tmp_path: Path) -> None:
-    store_module = "proliferate.db.store.cloud_sandboxes"
+    store_module = "proliferate.db.store.organization_invitations"
     _, violations = _check_named_source(
         tmp_path,
         "server/proliferate/server/billing/foreign.py",
         f"from {store_module} import *\n",
     )
 
-    assert len(violations) == 4
+    assert len(violations) == 3
     assert {item.rule_id for item in violations} == {"SRV-STORE-5"}
     for symbol in PROTECTED_STORE_SYMBOLS[store_module]:
         assert any(f"{store_module}.{symbol}" in item.detail for item in violations)
@@ -215,9 +193,9 @@ def test_star_import_rejects_each_protected_store_symbol(tmp_path: Path) -> None
             "mark_invitation_delivery",
         ),
         (
-            "server/proliferate/server/cloud/webhooks/service.py",
-            "proliferate.db.store.cloud_sandboxes",
-            "apply_cloud_sandbox_provider_observation",
+            "server/proliferate/server/organizations/service.py",
+            "proliferate.db.store.organizations",
+            "bind_team_checkout_session",
         ),
     ],
 )
@@ -248,11 +226,6 @@ def test_product_owner_may_access_its_protected_store(
             "server/proliferate/db/store/organization_invitations.py",
             "proliferate.db.store.organizations",
             "mark_team_checkout_failed_by_id",
-        ),
-        (
-            "server/proliferate/db/store/cloud_sandboxes.py",
-            "proliferate.db.store.cloud_sandboxes",
-            "mark_cloud_sandbox_provider_missing",
         ),
     ],
 )
@@ -297,9 +270,7 @@ def test_same_named_owner_service_calls_are_legal(tmp_path: Path) -> None:
         tmp_path,
         "server/proliferate/server/billing/foreign.py",
         "from proliferate.server.organizations import service as organization_service\n"
-        "from proliferate.server.cloud.cloud_sandboxes import service as cloud_service\n"
-        "organization_service.bind_team_checkout_session()\n"
-        "cloud_service.apply_cloud_sandbox_provider_observation()\n",
+        "organization_service.bind_team_checkout_session()\n",
     )
 
     assert violations == []

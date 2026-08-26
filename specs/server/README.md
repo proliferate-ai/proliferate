@@ -352,7 +352,7 @@ not a softer version of the rule.
   `lib/**` for audience or purity rules, and current non-Product consumers of
   `lib/product` remain outside the target audience.
 - [ ] **Raw-transport placement retains one exact exception.**
-  [cloud/gateway/proxy.py](../../server/proliferate/server/cloud/gateway/proxy.py)
+  `cloud/gateway/proxy.py` (deleted, cull part 2)
   owns raw HTTP and WebSocket proxy transport inside a product domain. Its
   `httpx` import is the one `SRV-INTEG-4` site in
   [exceptions.toml](../../lints/server/exceptions.toml).
@@ -360,13 +360,13 @@ not a softer version of the rule.
   domain.
 - [ ] **Service topology and package audiences are not gated.** Cloud Sandbox
   imports Gateway service in
-  [cloud_sandboxes/service.py](../../server/proliferate/server/cloud/cloud_sandboxes/service.py),
+  `cloud_sandboxes/service.py` (deleted, cull part 2),
   while Gateway imports Cloud Sandbox service in
-  [gateway/service.py](../../server/proliferate/server/cloud/gateway/service.py).
+  `gateway/service.py` (deleted, cull part 2).
   No generated graph rejects that cycle, and no third-party package map limits
   imports by coordinate.
 - [ ] **Background execution is not unified.** Periodic process loops remain in
-  [Billing reconciliation](../../server/proliferate/server/billing/reconciler.py),
+  `Billing reconciliation` (deleted, cull part 2),
   [anonymous telemetry](../../server/proliferate/server/anonymous_telemetry/worker.py),
   and three Agent Gateway loops in
   [worker.py](../../server/proliferate/server/agent_auth/worker.py).

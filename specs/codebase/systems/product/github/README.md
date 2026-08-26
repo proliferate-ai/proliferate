@@ -37,7 +37,7 @@ Store: [db/store/github_app.py](../../../../../server/proliferate/db/store/githu
 
 Routes (user-authenticated unless noted), mounted from
 [github/api.py](../../../../../server/proliferate/server/github/api.py) via
-[cloud/api.py](../../../../../server/proliferate/server/cloud/api.py) and
+`cloud/api.py` and
 [main.py](../../../../../server/proliferate/main.py):
 
 | Route | Serves |
@@ -178,7 +178,7 @@ Unit: [test_github_app_service.py](../../../../../server/tests/unit/test_github_
 [test_github_app_callback_return.py](../../../../../server/tests/unit/test_github_app_callback_return.py),
 [test_repos_service.py](../../../../../server/tests/unit/test_repos_service.py).
 Integration: [test_github_app_reauthorization.py](../../../../../server/tests/integration/test_github_app_reauthorization.py).
-E2E helper: [tests/e2e/cloud/helpers/github.py](../../../../../server/tests/e2e/cloud/helpers/github.py).
+E2E helper: `tests/e2e/cloud/helpers/github.py`.
 
 ## Failure modes
 

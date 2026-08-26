@@ -1,0 +1,18 @@
+# System manifest (Organization Standard rule 2) — validated by
+# scripts/check_manifests.py; rules PROD-MANIFEST-001/002 in
+# lints/product/manifests.toml. allowed_importers is measured reality, not
+# permission-by-intention: the checker fails on drift in either direction.
+
+name = "repositories"
+spec = "specs/server/README.md"
+owns = "Repo configs and their environments (local and cloud kinds): the repo-settings persistence the desktop client edits."
+
+public_surface = [
+    "proliferate.server.repositories.api",
+    "proliferate.server.repositories.service",
+    "proliferate.server.repositories.models",
+]
+
+allowed_importers = [
+    "main.py",
+]

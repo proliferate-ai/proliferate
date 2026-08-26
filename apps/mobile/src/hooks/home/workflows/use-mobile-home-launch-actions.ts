@@ -1,10 +1,7 @@
 import { useRef, useState } from "react";
 import type {
   CloudHarnessLaunchOptionsResponse,
-} from "@proliferate/cloud-sdk";
-import {
-  useCreateCloudWorkspace,
-} from "@proliferate/cloud-sdk-react";
+} from "@proliferate/product-client/internal/domain/chats/cloud/launch-options-model";
 import type { CloudLaunchComposerSelection } from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import {
@@ -36,73 +33,22 @@ export function useMobileHomeLaunchActions(input: {
   const submitInFlightRef = useRef(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const createWorkspace = useCreateCloudWorkspace();
 
+  // The cloud workspace stack is deleted: mobile has no launch target left,
+  // so submit refuses with an honest error instead of creating anything.
   async function submit(text: string): Promise<void> {
     const prompt = text.trim();
     if (!prompt || !input.selectedRepo || !input.selectedRuntime || submitInFlightRef.current) {
       return;
     }
-    if (!input.ownerUserId) {
-      setError("Account is still loading. Try again in a moment.");
-      return;
-    }
-    if (input.readinessBlockedReason) {
-      setError(input.readinessBlockedReason);
-      return;
-    }
-
-    submitInFlightRef.current = true;
-    setError(null);
-    const pendingPrompt = buildMobilePendingPrompt({
-      text: prompt,
-      selection: input.selection,
-      launchOptions: input.launchOptions,
-      repo: input.selectedRepo,
-      runtime: input.selectedRuntime,
-    });
-
-    try {
-      setStatus("Creating cloud workspace.");
-      const workspace = await createWorkspace.mutateAsync({
-        gitProvider: "github",
-        gitOwner: input.selectedRepo.gitOwner,
-        gitRepoName: input.selectedRepo.gitRepoName,
-        baseBranch: input.selectedBaseBranch,
-        branchName: buildBranchName(prompt),
-        generatedName: true,
-        displayName: buildWorkspaceDisplayName(prompt),
-        source: "mobile",
-      });
-      await savePendingMobilePrompt(workspace.id, input.ownerUserId, pendingPrompt)
-        .catch(() => undefined);
-      input.onSubmitted?.();
-      input.onOpenChat({
-        workspaceId: workspace.id,
-        workspaceName: workspace.displayName ?? workspace.repo?.name ?? "Workspace",
-        repoLabel: workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "",
-        branchLabel: workspace.repo?.branch ?? workspace.repo?.baseBranch ?? "main",
-        targetId: workspace.targetId ?? null,
-        workspaceRuntimeId: workspace.anyharnessWorkspaceId ?? null,
-        sessionId: null,
-        title: workspace.displayName ?? workspace.repo?.name ?? "Workspace",
-        status: workspace.workspaceStatus ?? workspace.status,
-        visibility: workspace.visibility,
-        initialPendingPrompt: pendingPrompt,
-      });
-      setStatus(null);
-    } catch (launchError) {
-      setStatus(null);
-      setError(launchError instanceof Error ? launchError.message : "Could not start this chat.");
-    } finally {
-      submitInFlightRef.current = false;
-    }
+    setStatus(null);
+    setError("Cloud workspaces are no longer available.");
   }
 
   return {
     error,
     status,
     submit,
-    submitting: createWorkspace.isPending || submitInFlightRef.current,
+    submitting: submitInFlightRef.current,
   };
 }

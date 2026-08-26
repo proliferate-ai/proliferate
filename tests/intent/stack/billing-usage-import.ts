@@ -256,7 +256,7 @@ export function runUsageImportPass(): Promise<void> {
 
 /** Synchronously enroll + sync every pending/missing subject against the fake
  * gateway (the real `backfill_enrollments` pass — see
- * `server/cloud/agent_gateway/enrollment.py`). Enrollment is normally
+ * `server/agent_auth/enrollment.py`). Enrollment is normally
  * fire-and-forget on signup (`signup_hook.py`); driving the backfill pass
  * directly gives deterministic, awaitable setup for tests instead of racing
  * a background task. Mints a real virtual key against the fake for every

@@ -16,7 +16,6 @@ describe("cloud repository removal invalidation", () => {
       ["cloud", "repositories"],
       ["cloud", "git-repositories"],
       ["cloud", "github-app", "https://api.example.test"],
-      ["cloud", "secrets", "repos", "acme", "rocket"],
     ]);
   });
 });

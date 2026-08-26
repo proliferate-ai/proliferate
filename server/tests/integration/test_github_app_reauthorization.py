@@ -5,15 +5,12 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import github_app as github_app_store
 from proliferate.integrations.github import GitHubAppInvalidGrant
 from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthorization
 from proliferate.server.github import repo_authority
-from proliferate.server.cloud.materialization import runner as materialization_runner
-from proliferate.server.cloud.materialization.materialize import github_credentials
 from tests.integration.cloud_api_helpers import configure_github_app, register_and_login
 
 
@@ -208,57 +205,3 @@ async def test_authority_endpoint_returns_actionable_response_and_persists_reaut
     assert second.status_code == 200
     assert second.json() == first.json()
     assert refresh_attempts == ["expired-refresh-token"]
-
-
-@pytest.mark.asyncio
-async def test_background_materialization_runner_persists_reauth(
-    client: AsyncClient,
-    db_session: AsyncSession,
-    test_engine: AsyncEngine,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    configure_github_app(monkeypatch)
-    session = await register_and_login(
-        client,
-        f"github-background-reauth-{uuid4().hex[:8]}@example.com",
-    )
-    user_id = UUID(session["user_id"])
-    await _seed_expired_authorization(db_session, user_id=user_id)
-    refresh_attempts: list[str] = []
-
-    async def _refresh(*, refresh_token: str) -> None:
-        refresh_attempts.append(refresh_token)
-        raise GitHubAppInvalidGrant("GitHub App authorization expired.")
-
-    monkeypatch.setattr(repo_authority, "refresh_github_app_user_authorization", _refresh)
-    monkeypatch.setattr(
-        materialization_runner,
-        "async_session_factory",
-        async_sessionmaker(test_engine, expire_on_commit=False),
-    )
-    paged: list[Exception] = []
-    monkeypatch.setattr(
-        materialization_runner,
-        "report_critical",
-        lambda exc, **_kwargs: paged.append(exc),
-    )
-
-    async def _materialize(db: AsyncSession) -> None:
-        await github_credentials.materialize_github_credentials(
-            db,
-            target=object(),  # Refresh fails before the sandbox target is used.
-            operation_id=uuid4(),
-            user_id=user_id,
-        )
-
-    await materialization_runner._run_with_fresh_session(_materialize, {})
-
-    db_session.expire_all()
-    persisted = await github_app_store.get_github_app_authorization_for_user(
-        db_session,
-        user_id=user_id,
-    )
-    assert persisted is not None
-    assert persisted.status == "needs_reauth"
-    assert refresh_attempts == ["expired-refresh-token"]
-    assert paged == []

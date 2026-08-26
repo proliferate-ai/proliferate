@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import pytest
 
-import proliferate.server.billing.reconciler as reconciler
 from proliferate.config import settings
 from proliferate.server.agent_auth.worker import (
     start_agent_gateway_enrollment_backfill,
@@ -58,17 +57,6 @@ async def test_gateway_loops_start_when_workers_enabled(
         for task in tasks:
             if task is not None:
                 task.cancel()
-
-
-def test_billing_reconciler_does_not_start_when_workers_disabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "run_background_workers", False)
-    monkeypatch.setattr(reconciler, "_reconciler_task", None, raising=False)
-
-    reconciler.start_billing_reconciler()
-
-    assert reconciler._reconciler_task is None
 
 
 def test_run_background_workers_defaults_true() -> None:

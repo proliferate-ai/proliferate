@@ -14,9 +14,6 @@ public_surface = [
 ]
 
 allowed_importers = [
-    "cloud",
-    "cloud/materialization",
-    "cloud/repositories",
-    "cloud/workspaces",
     "main.py",
+    "repositories",
 ]

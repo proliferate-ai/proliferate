@@ -12,7 +12,6 @@ from httpx import AsyncClient
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 PROTECTED_ENDPOINTS = [
-    ("GET", "/v1/cloud/cloud-sandbox"),
     ("GET", "/v1/billing/plan"),
     ("GET", "/v1/billing/cloud-plan"),
     ("GET", "/users/me"),

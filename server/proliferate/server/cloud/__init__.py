@@ -1,1 +1,1 @@
-"""Cloud workspace API package."""
+"""Cloud workspace API package (held: gateway only — see delivery spec amendment)."""

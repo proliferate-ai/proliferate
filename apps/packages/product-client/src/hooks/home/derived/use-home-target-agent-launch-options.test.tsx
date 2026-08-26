@@ -8,20 +8,6 @@ import {
 } from "#product/hooks/home/derived/use-home-target-agent-launch-options";
 
 const mocks = vi.hoisted(() => ({
-  cloudLaunchArgs: null as Record<string, unknown> | null,
-  cloudLaunchResult: {
-    data: undefined as unknown,
-    error: null as Error | null,
-    isError: false,
-    isLoading: false,
-  },
-  cloudSandboxEnabled: null as boolean | null,
-  cloudSandboxResult: {
-    data: { id: "cloud-sandbox-1" } as { id: string } | null | undefined,
-    error: null as Error | null,
-    isError: false,
-    isLoading: false,
-  },
   listArgs: null as Record<string, unknown> | null,
   listEntries: [] as unknown[],
   localArgs: null as Record<string, unknown> | null,
@@ -44,28 +30,8 @@ vi.mock("@anyharness/sdk-react", () => ({
   },
 }));
 
-vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useCloudSandbox: (enabled: boolean) => {
-    mocks.cloudSandboxEnabled = enabled;
-    return mocks.cloudSandboxResult;
-  },
-  useCloudHarnessLaunchOptions: (args: Record<string, unknown>) => {
-    mocks.cloudLaunchArgs = args;
-    return mocks.cloudLaunchResult;
-  },
-}));
-
 describe("useHomeTargetAgentLaunchOptions", () => {
   beforeEach(() => {
-    mocks.cloudLaunchArgs = null;
-    mocks.cloudLaunchResult = queryResult();
-    mocks.cloudSandboxEnabled = null;
-    mocks.cloudSandboxResult = {
-      data: { id: "cloud-sandbox-1" },
-      error: null,
-      isError: false,
-      isLoading: false,
-    };
     mocks.listArgs = null;
     mocks.listEntries = [];
     mocks.localArgs = null;
@@ -82,18 +48,11 @@ describe("useHomeTargetAgentLaunchOptions", () => {
     }));
 
     expect(mocks.localArgs).toEqual({ harnessKind: "claude", enabled: true });
-    expect(mocks.cloudSandboxEnabled).toBe(false);
-    expect(mocks.cloudLaunchArgs).toEqual({
-      cloudSandboxId: "cloud-sandbox-1",
-      harnessKind: "claude",
-      enabled: false,
-    });
     expect(result.current.data).toEqual({ harnessKind: "claude", options: null });
   });
 
-  it("reads copied options by the actual cloud sandbox id and disables local reads", () => {
+  it("treats a cloud target as permanently unobserved and disables local reads", () => {
     mocks.localResult = queryResult({ data: { harnessKind: "local-only", options: null } });
-    mocks.cloudLaunchResult = queryResult({ data: { harnessKind: "codex", options: null } });
     const { result } = renderHook(() => useHomeTargetAgentLaunchOptions({
       harnessKind: "codex",
       launchTarget: {
@@ -105,20 +64,11 @@ describe("useHomeTargetAgentLaunchOptions", () => {
     }));
 
     expect(mocks.localArgs).toEqual({ harnessKind: "codex", enabled: false });
-    expect(mocks.cloudSandboxEnabled).toBe(true);
-    expect(mocks.cloudLaunchArgs).toEqual({
-      cloudSandboxId: "cloud-sandbox-1",
-      harnessKind: "codex",
-      enabled: true,
-    });
-    expect(result.current.data).toEqual({ harnessKind: "codex", options: null });
+    expect(result.current.data).toBeUndefined();
+    expect(result.current.isTargetUnobserved).toBe(true);
   });
 
   it("reports a missing copied observation without falling back locally", () => {
-    mocks.cloudLaunchResult = queryResult({
-      error: Object.assign(new Error("not observed"), { status: 404 }),
-      isError: true,
-    });
     const { result } = renderHook(() => useHomeTargetAgentLaunchOptions({
       harnessKind: "grok",
       launchTarget: {
@@ -143,8 +93,6 @@ describe("useHomeTargetAgentLaunchOptions", () => {
     }));
 
     expect(mocks.localArgs).toEqual({ harnessKind: "claude", enabled: false });
-    expect(mocks.cloudSandboxEnabled).toBe(false);
-    expect(mocks.cloudLaunchArgs).toMatchObject({ enabled: false });
     expect(result.current.data).toBeUndefined();
   });
 

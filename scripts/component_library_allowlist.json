@@ -43,14 +43,6 @@
       "count": 1,
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
     },
-    "apps/packages/product-client/src/components/patterns/secrets/SecretManagementPanel.tsx": {
-      "count": 1,
-      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
-    },
-    "apps/packages/product-client/src/primitives/AlertDialog.tsx": {
-      "count": 1,
-      "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."
-    },
     "apps/packages/product-client/src/primitives/Badge.tsx": {
       "count": 1,
       "justification": "Pre-existing sanctioned component with no JSDoc; the index row carries its contract today. Backfill is documentation debt, and this allowance only shrinks."

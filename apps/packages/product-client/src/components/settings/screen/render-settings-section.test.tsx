@@ -6,16 +6,10 @@ import { renderSettingsSection } from "#product/components/settings/screen/rende
 import { type SettingsSection } from "#product/config/settings";
 import { type RepoScopeSelection } from "#product/lib/domain/settings/repo-scope-selection";
 
-// The six control-plane sections gated through CloudGuard. Each pane renders an
+// The control-plane sections gated through CloudGuard. Each pane renders an
 // identifiable marker so we can assert it mounted (rather than a gate pane).
 vi.mock("#product/components/settings/panes/agents/api-keys/ApiKeysPane", () => ({
   ApiKeysPane: () => <div>pane:agent-api-keys</div>,
-}));
-vi.mock("#product/components/settings/panes/PersonalSecretsPane", () => ({
-  PersonalSecretsPane: () => <div>pane:personal-secrets</div>,
-}));
-vi.mock("#product/components/settings/panes/OrganizationSecretsPane", () => ({
-  OrganizationSecretsPane: () => <div>pane:organization-secrets</div>,
 }));
 vi.mock("#product/components/settings/panes/OrganizationIntegrationsPane", () => ({
   OrganizationIntegrationsPane: () => <div>pane:organization-integrations</div>,
@@ -67,8 +61,6 @@ vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
 
 const CONTROL_PLANE_SECTIONS: { section: SettingsSection; marker: string }[] = [
   { section: "agent-api-keys", marker: "pane:agent-api-keys" },
-  { section: "personal-secrets", marker: "pane:personal-secrets" },
-  { section: "organization-secrets", marker: "pane:organization-secrets" },
   { section: "organization-integrations", marker: "pane:organization-integrations" },
   { section: "organization-model-policy", marker: "pane:organization-model-policy" },
 ];

@@ -2,8 +2,6 @@ import type { ReactElement } from "react"
 
 import { AddRepoFlowHost } from "#product/components/workspace/repo-setup/AddRepoFlowHost"
 import { CloudRepoActionDialogHost } from "#product/components/workspace/repo-setup/CloudRepoActionDialogHost"
-import { MaterializationHealthPassHost } from "#product/components/workspace/repo-setup/MaterializationHealthPassHost"
-import { WorkspaceAvailabilityActionHost } from "#product/components/workspace/repo-setup/WorkspaceAvailabilityActionHost"
 import { KeyboardShortcutsDialog } from "#product/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { HarnessUpdateToastPresenter } from "#product/components/feedback/HarnessUpdateToastPresenter"
 import { WorkflowResumePopoverPresenter } from "#product/components/workflows/run-view/WorkflowResumePopoverPresenter"
@@ -28,8 +26,6 @@ export default function AuthenticatedProductClient(): ReactElement {
         <AuthenticatedAppHost />
         <AddRepoFlowHost />
         <CloudRepoActionDialogHost />
-        <WorkspaceAvailabilityActionHost />
-        <MaterializationHealthPassHost />
         <HarnessUpdateToastPresenter />
         <WorkflowResumePopoverPresenter />
         <KeyboardShortcutsDialog />

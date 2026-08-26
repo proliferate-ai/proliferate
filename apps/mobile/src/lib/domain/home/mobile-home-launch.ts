@@ -1,6 +1,6 @@
 import type {
   CloudHarnessLaunchOptionsResponse,
-} from "@proliferate/cloud-sdk";
+} from "@proliferate/product-client/internal/domain/chats/cloud/launch-options-model";
 import type { CloudLaunchComposerSelection } from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";

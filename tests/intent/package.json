@@ -9,8 +9,6 @@
     "test:invitation": "playwright test specs/invitation.spec.ts",
     "test:member-visibility": "playwright test specs/member-visibility.spec.ts",
     "test:organization-roles": "playwright test specs/organization-roles.spec.ts",
-    "test:secrets": "playwright test specs/secrets.spec.ts",
-    "test:cloud-workspace": "playwright test specs/cloud-workspace.spec.ts",
     "test:billing": "playwright test --config playwright.billing.config.ts",
     "test:billing-import": "playwright test --config playwright.billing-import.config.ts",
     "test:unit": "tsx --test \"fakes/**/*.test.ts\" \"stack/**/*.test.ts\""

@@ -42,8 +42,8 @@ from proliferate.server.integration_gateway.connections.oauth import service as 
 from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
 from proliferate.config import settings
 from proliferate.lib.infra.encryption.json import decrypt_json
-from tests.e2e.cloud.helpers.auth import create_user_and_login
-from tests.e2e.cloud.helpers.github import seed_linked_github_account
+from tests.helpers.auth_session import create_user_and_login
+from tests.helpers.github_identity import seed_linked_github_account
 
 
 async def _authed_user(client: AsyncClient, db_session: AsyncSession, *, prefix: str):

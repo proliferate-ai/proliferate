@@ -2,7 +2,7 @@ import type {
   CloudHarnessLaunchControl,
   CloudHarnessLaunchModel,
   CloudHarnessLaunchOptionsResponse,
-} from "@proliferate/cloud-sdk";
+} from "./launch-options-model";
 import type { CloudLaunchComposerSelection } from "./composer-control-model";
 
 /** A presentation-only view over one target-observed launch control. */

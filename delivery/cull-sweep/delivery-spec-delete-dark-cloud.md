@@ -157,3 +157,62 @@ unrecoverable; only the schema round-trips.
 - Migration up/down round-trips on a dev database.
 - Docs: `specs/FEATURE_DOCS/SANDBOX/*` get supersession banners pointing at
   the environments spec-to-come; `python3 scripts/check_docs.py` green.
+
+## Amendment (2026-08-26, part-2 implementation findings)
+
+- **`repositories/` is desktop-live and survives.** Its local-environment
+  lane is the repo-settings persistence the desktop edits (PRO-350 landed
+  on it during launch week). Restored from the pre-deletion main into its
+  own system folder `server/proliferate/server/repositories/` (wire paths
+  `/v1/cloud/repositories*` unchanged, MANIFEST added) with the cloud-only
+  lanes severed: the materialization-ledger response fields, the
+  ensure-sandbox push on cloud-environment save, and the
+  workspaces-in-use delete guard.
+- **`harness_launch_options` (deferred from part 1) dies here** along with
+  its client surface; the dual-lane components keep their local lane.
+- **Approval-gated integration tools now fail closed**
+  (`integration_tool_not_allowed`): the approval surface left with the
+  sandbox stack, and a gated action that cannot be approved must deny,
+  not execute.
+- **Materialization engine salvage** (coordinator ruling): the frozen spec
+  governs over the Cull Plan's earlier reuse note — the engine is deleted,
+  with its invariants recorded in
+  `delivery/cull-sweep/notes-materialization-engine.md` against the
+  pre-deletion main SHA, and the desktop-live agent-auth state renderer
+  extracted to `server/agent_auth/state_render.py` before the deletion.
+- The billing reconciler's invariants are recorded in
+  `delivery/cull-sweep/notes-billing-reconciler.md` per the earlier ruling.
+
+## Amendment (2026-08-25, coordinator scope hold): the gateway folder survives
+
+`server/proliferate/server/cloud/gateway/` (`proxy.py`, `access.py`,
+`api.py`, `service.py`) is **held out of the part-2 delete set**. The
+proxy/access modules are the only model-agnostic HTTP/SSE/WS forwarding code
+in the tree, and the target architecture keeps a machine-access proxy
+(`runtime_gateway`) — this spec's earlier listing of the gateway as
+dark-delete contradicted the Target Tree's "runtime_gateway ← moved".
+`service.py`'s sandbox-resolution seam (its imports of the deleted
+`cloud_sandboxes` provisioning and the sandbox billing authorizer) is stubbed
+to raise `NotImplementedError` with a `TODO(cull-trail)`; the module is not
+mounted anywhere (the cloud router shell is gone), so the code is dark but
+preserved for the `runtime_gateway` move. Pablo's ruling is pending — a
+follow-up PR deletes the folder if he says delete.
+
+Consequently the acceptance grep changes: `grep -r "server.cloud"
+server/proliferate --include='*.py'` matches only
+`server/proliferate/server/cloud/gateway/` (the held folder's own intra-
+package imports) and nothing else.
+
+## Amendment (2026-08-25, part-2 implementation finding): the mobile app
+
+`apps/mobile` is a cloud-workspace client end to end — its sessions list,
+work inventory, chat, deep-link restoration, and home launch all read the
+deleted cloud workspace/sandbox surfaces. The spec was silent on it, and
+CI's required `mobile-typecheck` job forces a decision. Per coordinator
+ruling the cloud lanes are severed **inert, no scope change beyond
+compiling**: empty inventories and session lists, id-only chat references,
+launch-options permanently unobserved, submit refusing with "Cloud
+workspaces are no longer available." The shared composer/transcript domain
+surfaces it consumes from ProductClient (`domain/chats/cloud/*`) are kept.
+Whether the mobile app is retired or re-pointed at the environments rebuild
+is an open follow-up for Pablo.

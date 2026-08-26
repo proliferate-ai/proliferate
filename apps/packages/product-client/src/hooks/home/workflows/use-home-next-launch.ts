@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
-import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useHomeNextLaunchPromptActions } from "#product/hooks/home/workflows/use-home-next-launch-prompt-actions";
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
@@ -21,11 +20,9 @@ import {
   pendingWorkspaceFailureNoticeOwnsFailure,
 } from "#product/hooks/workspaces/workflows/pending-workspace-failure-notice";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useCoworkThreadLaunchContext } from "#product/providers/CoworkThreadLaunchProvider";
-import { launchHomeCloudTarget } from "#product/hooks/home/workflows/launch-home-cloud-target";
 import {
   beginHomeNextLaunch,
   describeHomeLaunchTarget,
@@ -57,7 +54,6 @@ export function useHomeNextLaunch() {
   const lastSubmitRef = useRef<LaunchSubmitFingerprint | null>(null);
   const showToast = useToastStore((state) => state.show);
   const showErrorToast = useToastStore((state) => state.showError);
-  const enqueueDeferredLaunch = useDeferredHomeLaunchStore((state) => state.enqueue);
   const beginLaunchIntent = useChatLaunchIntentStore((state) => state.begin);
   const clearLaunchIntent = useChatLaunchIntentStore((state) => state.clear);
   const failLaunchIntent = useChatLaunchIntentStore((state) => state.fail);
@@ -74,7 +70,6 @@ export function useHomeNextLaunch() {
     createLocalWorkspaceAndEnterWithResult,
     createWorktreeAndEnterWithResult,
   } = useWorkspaceEntryActions();
-  const { createCloudWorkspaceAndEnterWithResult } = useCreateCloudWorkspace();
   const { selectWorkspace } = useWorkspaceSelection();
 
   const launch = useCallback(async ({
@@ -319,34 +314,11 @@ export function useHomeNextLaunch() {
         return "launched";
       }
 
-      // The cloud branch mints its attempt id here like the other three rather
-      // than letting the cloud flow mint its own: without it the catch below
-      // had no attempt to scope this launch's failure to, and fell back to
-      // whatever attempt the user happened to be attending — which under
-      // concurrency is another launch's (PRO-230 review finding 1).
-      const cloudAttemptId = createPendingWorkspaceAttemptId();
-      launchAttemptId = cloudAttemptId;
-      return await launchHomeCloudTarget({
-        target,
-        attemptId: cloudAttemptId,
-        prompt,
-        attachmentSnapshots,
-        promptId,
-        launchIntentId,
-        modelSelection,
-        launchControlValues: resolvedLaunchControlValues,
-        initialSession,
-        createdAt: Date.now(),
-      }, {
-        createCloudWorkspaceAndEnterWithResult,
-        promptProjectedPendingWorkspaceSession,
-        promptProjectedOrCreateFreshSession,
-        markLaunchIntentMaterialized,
-        clearLaunchIntent,
-        enqueueDeferredLaunch,
-        navigate,
-        showToast,
-      });
+      // The cloud sandbox stack is deleted: a cloud target can no longer be
+      // launched. Desktop targets never resolve to cloud, but Web Home still
+      // falls back to a cloud target when no desktop is attached — that launch
+      // lands here and fails honestly via the shared catch's failure toast.
+      throw new Error("Cloud workspaces are no longer available.");
     } catch (error) {
       markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId, launchAttemptId);
       failLaunchIntent(launchIntentId, {
@@ -376,14 +348,12 @@ export function useHomeNextLaunch() {
   }, [
     beginLaunchIntent,
     clearLaunchIntent,
-    createCloudWorkspaceAndEnterWithResult,
     promptProjectedOrCreateFreshSession,
     promptProjectedPendingWorkspaceSession,
     createLocalWorkspaceAndEnterWithResult,
     createThreadFromSelection,
     createWorktreeAndEnterWithResult,
     desktopTargetsAvailable,
-    enqueueDeferredLaunch,
     failLaunchIntent,
     markLaunchIntentMaterialized,
     navigate,

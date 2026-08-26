@@ -7,7 +7,6 @@ import {
 import { billingGateView } from "#product/lib/domain/billing/billing-gate-presentation";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { PrStatusDot } from "#product/components/patterns/PrStatusBadge";
-import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import type { LibraryEntry, LibraryTier } from "./types";
 
@@ -49,24 +48,6 @@ function AgentIdentityGlyphDemo() {
   );
 }
 
-function SecretManagementPanelDemo() {
-  return (
-    <div className="max-h-64 overflow-y-auto">
-      <SecretManagementPanel
-        title="Secrets"
-        description="Environment variables and files for this scope."
-        filePathMode="relative"
-        envVars={[{ id: "API_KEY", name: "API_KEY", byteSize: 32, updatedAt: "2026-07-01T00:00:00.000Z" }]}
-        files={[]}
-        onSaveEnvVar={noop}
-        onDeleteEnvVar={noop}
-        onSaveFile={noop}
-        onDeleteFile={noop}
-      />
-    </div>
-  );
-}
-
 function BillingGateStateDemo() {
   return (
     <div className="flex w-full flex-col gap-3">
@@ -98,7 +79,6 @@ export const PRODUCT_PATTERNS_ENTRIES: LibraryEntry[] = [
   { name: "PrStatusBadge", subpath: "#product/components/patterns/PrStatusBadge", render: () => (
     <PrStatusDot status={{ kind: "open", number: 42 }} />
   ) },
-  { name: "secrets/SecretManagementPanel", subpath: "#product/components/patterns/secrets/SecretManagementPanel", render: SecretManagementPanelDemo },
 ];
 
 export const PRODUCT_PATTERNS_TIER: LibraryTier = {

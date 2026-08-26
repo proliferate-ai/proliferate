@@ -27,10 +27,10 @@
 // current_path_org_admin (organizations/domain/policy.py), never a 404 that
 // would leak existence differently — asserted below.
 //
-// Cloud personal secrets/workspaces would be the other "others' private state"
-// axis, but those surfaces are product-gated for password-only accounts at
-// tier 2 (see secrets.spec.ts / cloud-workspace.spec.ts) and belong to their
-// own rows; this file stays on the org-scoped visibility boundary, which is
+// Cloud personal secrets/workspaces used to be the other "others' private
+// state" axis, but those server surfaces (and their specs, secrets.spec.ts /
+// cloud-workspace.spec.ts) were deleted with the cloud sandbox stack (cull
+// part 2); this file stays on the org-scoped visibility boundary, which is
 // cleanly reachable for password accounts.
 
 import { expect, test } from "@playwright/test";

@@ -12,8 +12,6 @@
 
 from __future__ import annotations
 
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,8 +28,6 @@ from proliferate.server.seam.workers.models import (
     DesktopWorkerEnrollmentResponse,
     DesktopWorkerRevokeRequest,
     DesktopWorkerRevokeResponse,
-    SetSandboxDesiredVersionsRequest,
-    SetSandboxDesiredVersionsResponse,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
     WorkerHeartbeatRequest,
@@ -44,7 +40,6 @@ from proliferate.server.seam.workers.service import (
     revoke_desktop_worker,
     runtime_artifact_redirect_url,
     runtime_artifact_versioned_redirect_url,
-    set_sandbox_desired_versions,
     worker_artifact_redirect_url,
     worker_artifact_versioned_redirect_url,
 )
@@ -161,23 +156,4 @@ async def revoke_desktop_worker_endpoint(
         db,
         owner_user_id=user.id,
         desktop_install_id=body.desktop_install_id,
-    )
-
-
-@admin_router.put(
-    "/sandboxes/{cloud_sandbox_id}/desired-versions",
-    response_model=SetSandboxDesiredVersionsResponse,
-)
-async def set_sandbox_desired_versions_endpoint(
-    cloud_sandbox_id: UUID,
-    body: SetSandboxDesiredVersionsRequest,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> SetSandboxDesiredVersionsResponse:
-    return await set_sandbox_desired_versions(
-        db,
-        cloud_sandbox_id=cloud_sandbox_id,
-        actor_user_id=user.id,
-        desired_anyharness_version=body.desired_anyharness_version,
-        desired_worker_version=body.desired_worker_version,
     )

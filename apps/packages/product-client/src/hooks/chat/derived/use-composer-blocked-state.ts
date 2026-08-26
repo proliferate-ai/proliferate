@@ -10,7 +10,6 @@ import { useWorkspaceStatusPanelState } from "#product/hooks/workspaces/derived/
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useWorktreeMissingActions } from "#product/hooks/workspaces/workflows/use-worktree-missing-actions";
 import { usePendingWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-pending-workspace-entry-actions";
-import { useCloudWorkspaceStatusScreenActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-status-screen-actions";
 
 /**
  * Composer takeover: gathers the same data sources that used to drive the
@@ -32,10 +31,6 @@ export function useComposerBlockedState(options?: {
     workspaceId: panelState?.kind === "directory-missing" ? panelState.workspaceId : "",
   });
   const pendingEntryActions = usePendingWorkspaceEntryActions();
-  const cloudStatusActions = useCloudWorkspaceStatusScreenActions({
-    workspaceId: panelState?.kind === "cloud-status" ? panelState.workspaceId : "",
-    mode: panelState?.kind === "cloud-status" ? panelState.model.mode : "pending",
-  });
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
 
   return useMemo(() => {
@@ -99,13 +94,9 @@ export function useComposerBlockedState(options?: {
         message: composeBlockedStatusMessage(panelState.model.mode, panelState.model.title, panelState.model.description),
         primaryActionLabel:
           buildCloudWorkspaceCompactStatusView(panelState.model).primaryAction?.label ?? null,
-        primaryAction: cloudStatusActions.handlePrimaryAction
-          ? {
-            onSelect: cloudStatusActions.handlePrimaryAction,
-            loading: cloudStatusActions.isPrimaryActionPending,
-            disabled: cloudStatusActions.isPrimaryActionPending,
-          }
-          : null,
+        // The status-screen actions died with the cloud workspace stack, so
+        // the takeover renders the status without an action button.
+        primaryAction: null,
         // The lost-workspace delete is irreversible; the retired cloud
         // panel confirmed it and the takeover must too.
         primaryActionConfirmation:
@@ -152,7 +143,6 @@ export function useComposerBlockedState(options?: {
     panelState,
     worktreeMissingActions,
     pendingEntryActions,
-    cloudStatusActions,
     selectedCloudRuntime,
   ]);
 }

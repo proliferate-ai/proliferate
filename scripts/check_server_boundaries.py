@@ -123,12 +123,7 @@ AGENT_AUTH_SERVICE_CONCERN_EXCLUDED_FILES = {
     "models.py",
     "reconciler.py",
 }
-SERVICE_BOUNDARY_DEBT_MODULES = {
-    "server/proliferate/server/cloud/commands/agent_auth_refresh.py",
-    "server/proliferate/server/cloud/commands/transactions.py",
-    "server/proliferate/server/cloud/commands/wake.py",
-    "server/proliferate/server/cloud/workspaces/provisioning/preflight.py",
-}
+SERVICE_BOUNDARY_DEBT_MODULES: set[str] = set()
 
 
 @dataclass(frozen=True)
@@ -199,26 +194,6 @@ NAMED_STORE_BOUNDARIES: dict[str, NamedStoreBoundary] = {
             }
         ),
         owner_service_hint="proliferate.server.organizations.service",
-    ),
-    "proliferate.db.store.cloud_sandboxes": NamedStoreBoundary(
-        store_module="proliferate.db.store.cloud_sandboxes",
-        protected_symbols=frozenset(
-            {
-                "accept_destroyed_cloud_sandbox_provider_observation",
-                "advance_cloud_sandbox_provider_observation_floor",
-                "apply_cloud_sandbox_provider_observation",
-                "mark_cloud_sandbox_provider_missing",
-            }
-        ),
-        owner_label="Cloud sandbox",
-        product_owner_prefix=(
-            "server",
-            "proliferate",
-            "server",
-            "cloud",
-        ),
-        persistence_owner_paths=frozenset({"server/proliferate/db/store/cloud_sandboxes.py"}),
-        owner_service_hint="proliferate.server.cloud.cloud_sandboxes.service",
     ),
 }
 

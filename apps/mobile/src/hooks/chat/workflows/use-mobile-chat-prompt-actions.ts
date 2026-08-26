@@ -1,11 +1,13 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type {
-  CloudHarnessLaunchOptionsResponse,
   CloudSessionProjection,
   CloudTranscriptItem,
   CloudWorkspaceDetail,
   ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
+import type {
+  CloudHarnessLaunchOptionsResponse,
+} from "@proliferate/product-client/internal/domain/chats/cloud/launch-options-model";
 import {
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,

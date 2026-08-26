@@ -39,7 +39,6 @@ import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-
 import { useGitHubAppStateInvalidation } from "#product/hooks/workspaces/cache/use-github-app-state-invalidation";
 import { useGitHubAppUserAuthorization } from "#product/hooks/settings/workflows/use-github-app-user-authorization";
 import { useGitHubAppInstallation } from "#product/hooks/settings/workflows/use-github-app-installation";
-import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import { buildCloudAdminRequestMessage } from "#product/lib/domain/settings/github-app-copy";
 import {
   useCloneRepo,
@@ -135,7 +134,6 @@ export function CloudRepoActionDialogHost() {
 
   const saveEnvironment = useSaveRepoEnvironment();
   const validateBranches = useValidateCloudRepoBranches();
-  const { createCloudWorkspaceAndEnter } = useCreateCloudWorkspace();
   const cloneAttemptRef = useRef<{
     intent: CloudRepositoryIntent;
     attempt: CloneRepoAttempt;
@@ -183,18 +181,14 @@ export function CloudRepoActionDialogHost() {
   }, [saveEnvironment, validateBranches]);
 
   const createCloudWorkspace = useCallback(async (
-    target: CloudRepoIdentity,
-    continuation: CreateCloudWorkspaceContinuation,
+    _target: CloudRepoIdentity,
+    _continuation: CreateCloudWorkspaceContinuation,
   ) => {
-    await createCloudWorkspaceAndEnter(
-      {
-        gitOwner: target.gitOwner,
-        gitRepoName: target.gitRepoName,
-        baseBranch: continuation.baseBranch ?? undefined,
-      },
-      { repoGroupKeyToExpand: continuation.repoGroupKeyToExpand },
-    );
-  }, [createCloudWorkspaceAndEnter]);
+    // The cloud workspace stack is deleted; only a stale create/set-up intent
+    // can reach this arm (every launch surface refuses before dispatching).
+    // Throwing routes it to the host's normal error blocker.
+    throw new Error("Cloud workspaces are no longer available.");
+  }, []);
 
   const completeRepositoryRegistration = useCallback((target: CloudRepoIdentity) => {
     const onCompleted = useAddRepoFlowStore.getState().onCompleted;

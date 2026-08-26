@@ -5,8 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from proliferate.server.api_errors import CloudApiError
-from proliferate.server.cloud.repositories import service
+from proliferate.server.repositories import service
+
+# The workspaces-in-use delete guard died with the cloud workspace stack
+# (cull part 2); these pins cover the surviving desktop-live removal behind
+# DELETE /v1/cloud/repositories/{git_owner}/{git_repo_name}/environment.
 
 
 @pytest.mark.asyncio
@@ -38,39 +41,6 @@ async def test_remove_cloud_repo_environment_is_idempotent(
 
 
 @pytest.mark.asyncio
-async def test_remove_cloud_repo_environment_blocks_preserved_workspaces(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    environment_id = uuid.uuid4()
-
-    async def get_environment(*args: object, **kwargs: object) -> SimpleNamespace:
-        del args, kwargs
-        return SimpleNamespace(id=environment_id)
-
-    async def has_workspaces(*args: object, **kwargs: object) -> bool:
-        del args, kwargs
-        return True
-
-    monkeypatch.setattr(service, "get_cloud_repo_environment", get_environment)
-    monkeypatch.setattr(
-        service.cloud_workspaces_store,
-        "repo_environment_has_workspaces",
-        has_workspaces,
-    )
-
-    with pytest.raises(CloudApiError) as raised:
-        await service.remove_cloud_repo_environment(
-            object(),
-            user_id=uuid.uuid4(),
-            git_owner="acme",
-            git_repo_name="rocket",
-        )
-
-    assert raised.value.code == "cloud_repository_in_use"
-    assert raised.value.status_code == 409
-
-
-@pytest.mark.asyncio
 async def test_remove_cloud_repo_environment_deletes_unused_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -81,21 +51,12 @@ async def test_remove_cloud_repo_environment_deletes_unused_environment(
         del args, kwargs
         return SimpleNamespace(id=environment_id)
 
-    async def has_workspaces(*args: object, **kwargs: object) -> bool:
-        del args, kwargs
-        return False
-
     async def remove_row(*args: object, **kwargs: object) -> bool:
         del args
         calls.append((str(kwargs["git_owner"]), str(kwargs["git_repo_name"])))
         return True
 
     monkeypatch.setattr(service, "get_cloud_repo_environment", get_environment)
-    monkeypatch.setattr(
-        service.cloud_workspaces_store,
-        "repo_environment_has_workspaces",
-        has_workspaces,
-    )
     monkeypatch.setattr(service, "remove_cloud_repo_environment_row", remove_row)
 
     await service.remove_cloud_repo_environment(

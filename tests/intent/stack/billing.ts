@@ -256,12 +256,6 @@ export function runAccountingPass(): void {
   );
 }
 
-export function runReconcilePass(): void {
-  serverPass(
-    "import asyncio; from proliferate.server.billing.reconciler import run_billing_reconcile_pass; asyncio.run(run_billing_reconcile_pass())",
-  );
-}
-
 export function processSeatAdjustments(): void {
   serverPass(
     "import asyncio; from proliferate.server.billing.accounting import process_pending_seat_adjustments; asyncio.run(process_pending_seat_adjustments(limit=100))",

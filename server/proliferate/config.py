@@ -249,16 +249,6 @@ class Settings(BaseSettings):
     stripe_checkout_cancel_url: str = ""
     stripe_customer_portal_return_url: str = ""
     cloud_worker_base_url: str = ""
-    cloud_runtime_source_binary_path: str = ""
-    cloud_worker_source_binary_path: str = ""
-    cloud_supervisor_source_binary_path: str = ""
-    cloud_runtime_sentry_dsn: str = ""
-    cloud_runtime_sentry_environment: str = ""
-    cloud_runtime_sentry_release: str = ""
-    cloud_runtime_sentry_traces_sample_rate: float = 1.0
-    cloud_target_sentry_dsn: str = ""
-    cloud_target_sentry_environment: str = ""
-    cloud_target_sentry_traces_sample_rate: float = 1.0
     # Emergency, component-specific Sentry release overrides for the target
     # processes. Each must canonically name its own component
     # (`proliferate-worker@...` / `proliferate-supervisor@...`); a mismatched
@@ -267,8 +257,6 @@ class Settings(BaseSettings):
     # stamp. The prior shared `cloud_target_sentry_release` /
     # `PROLIFERATE_TARGET_SENTRY_RELEASE` override was removed because it could
     # not distinguish worker from supervisor events.
-    cloud_worker_sentry_release: str = ""
-    cloud_supervisor_sentry_release: str = ""
     cloud_jwt_signing_key_pem: str = ""
     cloud_jwt_signing_key_id: str = "local-dev"
     cloud_jwt_verification_keys_json: str = "[]"
@@ -354,27 +342,6 @@ class Settings(BaseSettings):
         if self.debug:
             return True
         return bool(self.e2b_template_name.strip())
-
-    @property
-    def cloud_provisioning_config_error(self) -> str | None:
-        """Actionable reason cloud provisioning is unavailable, or None if ready.
-
-        Names the missing requirement without echoing any secret value. Used
-        both to log a startup warning and to fail cloud-provisioning requests
-        with a specific error instead of crash-looping the API or booting the
-        wrong E2B template.
-        """
-        if self.debug:
-            return None
-        if not self.e2b_api_key.strip():
-            return None  # cloud provisioning intentionally disabled
-        if not self.e2b_template_name.strip():
-            return (
-                "E2B_API_KEY is set but E2B_TEMPLATE_NAME is empty. Set "
-                "E2B_TEMPLATE_NAME to the published runtime template for this "
-                "deployment to enable cloud workspaces."
-            )
-        return None
 
     @property
     def github_app_runtime_fields_present(self) -> tuple[bool, ...]:

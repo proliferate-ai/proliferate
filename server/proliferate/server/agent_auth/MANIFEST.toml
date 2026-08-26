@@ -16,8 +16,6 @@ public_surface = [
 allowed_importers = [
     "accounts",
     "billing",
-    "cloud",
-    "cloud/materialization",
     "main.py",
     "organizations",
 ]
