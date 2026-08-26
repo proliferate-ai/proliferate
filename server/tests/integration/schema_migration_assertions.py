@@ -22,15 +22,8 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "cloud_integration_oauth_flow",
         "cloud_integration_policy",
         "cloud_integration_tool_schema_cache",
-        "cloud_repo_environment_materialization",
         "cloud_runtime_worker",
         "cloud_runtime_worker_enrollment",
-        "cloud_sandbox",
-        "cloud_secret_env_var",
-        "cloud_secret_file",
-        "cloud_secret_set",
-        "cloud_workspace",
-        "cloud_workspace_materialization",
         "desktop_auth_code",
         "github_app_authorizations",
         "github_app_installations",
@@ -50,6 +43,19 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
     }
     assert {
         "cloud_repo_config",
+        "cloud_agent_run_config",
+        "cloud_agent_run_config_default",
+        "cloud_worktree_retention_policy",
+        "harness_launch_option_state",
+        "cloud_integration_action_approval",
+        "cloud_integration_action_approval_event",
+        "cloud_repo_environment_materialization",
+        "cloud_sandbox",
+        "cloud_secret_env_var",
+        "cloud_secret_file",
+        "cloud_secret_set",
+        "cloud_workspace",
+        "cloud_workspace_materialization",
         "cloud_repo_file",
         "cloud_runtime_environment",
         "managed_sandbox",
@@ -150,92 +156,6 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "ux_repo_environment_cloud",
         "ux_repo_environment_local_path",
     } <= repo_environment_indexes
-
-    cloud_sandbox_columns = await conn.run_sync(
-        lambda sync_conn: {
-            column["name"] for column in inspect(sync_conn).get_columns("cloud_sandbox")
-        }
-    )
-    assert {
-        "id",
-        "owner_user_id",
-        "sandbox_type",
-        "provider_sandbox_id",
-        "status",
-        "materialization_attempt",
-        "last_error",
-        "anyharness_base_url",
-        "runtime_token_ciphertext",
-        "anyharness_data_key_ciphertext",
-        "ready_at",
-        "last_health_at",
-        "provider_observed_at",
-        "destroyed_at",
-        "desired_anyharness_version",
-        "desired_worker_version",
-        "created_at",
-        "updated_at",
-    } <= cloud_sandbox_columns
-    assert {
-        "sandbox_profile_id",
-        "target_id",
-        "billing_subject_id",
-        "template_version",
-        "runtime_generation",
-    }.isdisjoint(cloud_sandbox_columns)
-    cloud_sandbox_indexes = await conn.run_sync(
-        lambda sync_conn: {
-            index["name"] for index in inspect(sync_conn).get_indexes("cloud_sandbox")
-        }
-    )
-    assert {
-        "ux_cloud_sandbox_personal_active",
-        "ux_cloud_sandbox_provider_sandbox_id",
-    } <= cloud_sandbox_indexes
-
-    cloud_workspace_columns = await conn.run_sync(
-        lambda sync_conn: {
-            column["name"] for column in inspect(sync_conn).get_columns("cloud_workspace")
-        }
-    )
-    assert {
-        "id",
-        "owner_user_id",
-        "repo_environment_id",
-        "display_name",
-        "git_branch",
-        "git_base_branch",
-        "anyharness_workspace_id",
-        "created_at",
-        "updated_at",
-        "archived_at",
-    } <= cloud_workspace_columns
-    assert {
-        "active_sandbox_id",
-        "runtime_url",
-        "runtime_token_ciphertext",
-        "cloud_repo_config_id",
-        "target_id",
-        "status_detail",
-        "template_version",
-    }.isdisjoint(cloud_workspace_columns)
-
-    secret_set_columns = await conn.run_sync(
-        lambda sync_conn: {
-            column["name"] for column in inspect(sync_conn).get_columns("cloud_secret_set")
-        }
-    )
-    assert {
-        "id",
-        "scope_kind",
-        "user_id",
-        "organization_id",
-        "repo_environment_id",
-        "version",
-        "created_at",
-        "updated_at",
-    } <= secret_set_columns
-    assert "cloud_repo_config_id" not in secret_set_columns
 
     runtime_worker_columns = await conn.run_sync(
         lambda sync_conn: {

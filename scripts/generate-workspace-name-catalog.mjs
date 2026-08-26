@@ -11,10 +11,6 @@ const typeScriptOutputPath = path.join(
   repoRoot,
   "apps/packages/product-client/src/domain/workspaces/workspace-name-catalog.generated.ts",
 );
-const serverOutputPath = path.join(
-  repoRoot,
-  "server/proliferate/server/cloud/workspaces/domain/animal_names_generated.py",
-);
 const deniedNames = new Set([
   "affirmed",
   "afghan",
@@ -371,4 +367,3 @@ const names = parseCatalog(raw).filter((name) => !deniedNames.has(name));
 const hash = createHash("sha256").update(JSON.stringify(names)).digest("hex");
 
 await writeFile(typeScriptOutputPath, renderTypeScript(names, hash));
-await writeFile(serverOutputPath, renderServer(names, hash));
