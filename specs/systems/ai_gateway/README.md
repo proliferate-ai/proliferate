@@ -132,6 +132,8 @@ Failure modes: LiteLLM unreachable at enrollment → `sync_status=failed`, backf
 
 ## Build list
 
+- [x] Claude 5 family added to the direct-Anthropic model list — PR #2249 (the first funded launch 403'd on `claude-sonnet-5`; lands on the next release run)
+- [ ] Refresh the codex model list the same way (gpt-5.2-era entries; codex's current default is newer — the same 403 is waiting)
 - [ ] Code split into `server/ai_gateway/` + manifest + recompose (with agent_auth's build list)
 - [ ] The blocked-signup-grant repair path (delta row 2) — also the live founder-org fix
 - [ ] Enable verification once config.yaml settles
