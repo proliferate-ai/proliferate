@@ -31,10 +31,21 @@ const HEALTH_REFRESH_INTERVAL_MS = 5 * 60_000;
  * connect/reconnect actions, which live in the settings pane.
  */
 export function useComposerIntegrationsState(): ComposerIntegrationsModel {
-  const { cloudActive } = useCloudAvailabilityState();
+  const { authStatus, controlPlaneReachable } = useCloudAvailabilityState();
   const { activeOrganizationId } = useActiveOrganization();
+  // Control-plane gate, NOT a cloud-compute gate. Integration health is a
+  // control-plane feature: the settings pane already reaches it through the
+  // `authGate`, and integration_gateway § 5 requires health to roll up into
+  // the composer BEFORE anything runs. The previous `cloudActive =
+  // cloudComputeEnabled && authenticated` coupling folded in the
+  // CLOUD_COMPUTE_TEMPORARILY_DISABLED kill switch, so the composer control
+  // was hidden for every signed-in production user while settings showed
+  // connected/needs-reauth providers. Same decoupling as
+  // `shouldSyncLocalAuthState` (lib/domain/agents/local-auth-state.ts), the
+  // settings `authGate` (render-settings-section.tsx, ADR FM6/Q9), and #2133.
+  const authReady = authStatus === "authenticated" && controlPlaneReachable;
   const healthQuery = useIntegrationHealth(activeOrganizationId, {
-    enabled: cloudActive,
+    enabled: authReady,
     refetchInterval: HEALTH_REFRESH_INTERVAL_MS,
     refetchOnWindowFocus: true,
   });

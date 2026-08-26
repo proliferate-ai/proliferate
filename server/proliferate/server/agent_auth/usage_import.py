@@ -240,16 +240,12 @@ async def run_usage_import(
             # record the row for manual review rather than silently dropping it.
             status = AGENT_USAGE_EVENT_STATUS_NEEDS_REVIEW
             unresolved += 1
+            # No key material (or derivative of it) in the log: the persisted
+            # usage-event row carries the full identifier as virtual_key_id,
+            # and litellm_request_id joins this line to that row for review.
             logger.warning(
                 "LiteLLM spend row has an unresolved virtual key",
-                extra={
-                    "litellm_request_id": entry.request_id,
-                    # A 12-char prefix of LiteLLM's stored key identifier (the
-                    # value used as virtual_key_id below), truncated for manual
-                    # review — a redacted hint, not the raw secret.
-                    # agent-auth:allow-secret-log
-                    "api_key_hint": entry.api_key[:12] if entry.api_key else None,
-                },
+                extra={"litellm_request_id": entry.request_id},
             )
 
         was_inserted = await agent_gateway_store.insert_usage_event_once(

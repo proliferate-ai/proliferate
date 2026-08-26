@@ -5,9 +5,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IntegrationHealthItem } from "@proliferate/cloud-sdk/client/integrations";
 import { useComposerIntegrationsState } from "#product/hooks/cloud/derived/use-composer-integrations-state";
 
+// File default is the shipped production posture: cloud COMPUTE disabled,
+// user signed in, control plane reachable. Integration health is a
+// control-plane feature and must stay live in exactly this posture (IG-1,
+// delivery/triage/2026-08-25-integrations-agent-auth.md) — every test below
+// doubles as the regression guard against re-coupling to cloud compute.
 const mocks = vi.hoisted(() => ({
   useIntegrationHealth: vi.fn(),
-  cloudActive: true,
+  authStatus: "authenticated" as string,
+  controlPlaneReachable: true,
 }));
 
 vi.mock("#product/hooks/access/cloud/integrations/use-integration-health", () => ({
@@ -15,7 +21,15 @@ vi.mock("#product/hooks/access/cloud/integrations/use-integration-health", () =>
 }));
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
-  useCloudAvailabilityState: () => ({ cloudActive: mocks.cloudActive }),
+  useCloudAvailabilityState: () => ({
+    authStatus: mocks.authStatus,
+    controlPlaneReachable: mocks.controlPlaneReachable,
+    // The shipped launch posture: compute off. The hook must not read these,
+    // but the mock carries them so a re-coupling regression sees the same
+    // values production does and fails the query-enabled assertions below.
+    cloudComputeEnabled: false,
+    cloudActive: false,
+  }),
 }));
 
 vi.mock("#product/hooks/organizations/facade/use-active-organization", () => ({
@@ -50,7 +64,8 @@ function stubHealth(items: IntegrationHealthItem[] | undefined) {
 
 afterEach(() => {
   vi.clearAllMocks();
-  mocks.cloudActive = true;
+  mocks.authStatus = "authenticated";
+  mocks.controlPlaneReachable = true;
 });
 
 describe("useComposerIntegrationsState", () => {
@@ -96,8 +111,32 @@ describe("useComposerIntegrationsState", () => {
     });
   });
 
-  it("disables the query when cloud is inactive", () => {
-    mocks.cloudActive = false;
+  it("keeps the health query live with cloud compute disabled", () => {
+    // The IG-1 regression: gating on cloudActive disabled this query for
+    // every signed-in production user. The file-default mock is exactly that
+    // posture (compute off, authenticated, reachable) — the query must run.
+    stubHealth([]);
+    renderHook(() => useComposerIntegrationsState());
+
+    expect(mocks.useIntegrationHealth).toHaveBeenCalledWith(
+      "org-1",
+      expect.objectContaining({ enabled: true }),
+    );
+  });
+
+  it("disables the query when signed out", () => {
+    mocks.authStatus = "anonymous";
+    stubHealth([]);
+    renderHook(() => useComposerIntegrationsState());
+
+    expect(mocks.useIntegrationHealth).toHaveBeenCalledWith(
+      "org-1",
+      expect.objectContaining({ enabled: false }),
+    );
+  });
+
+  it("disables the query when the control plane is unreachable", () => {
+    mocks.controlPlaneReachable = false;
     stubHealth([]);
     renderHook(() => useComposerIntegrationsState());
 

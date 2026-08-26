@@ -2605,6 +2605,11 @@ export interface components {
             publicBaseUrl: string | null;
             /** Enrollmentstatus */
             enrollmentStatus: string;
+            /**
+             * Creditsexhausted
+             * @default false
+             */
+            creditsExhausted: boolean;
             /** Verifications */
             verifications?: components["schemas"]["AgentGatewayVerificationVerdict"][];
         };

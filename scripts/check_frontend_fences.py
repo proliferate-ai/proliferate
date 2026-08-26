@@ -12,6 +12,15 @@ of `apps/packages/product-client/src` may import which. One record under
   construction, shrink-only afterwards. A new edge and a stale baseline row
   are both failures, so the baseline always equals reality exactly.
 
+- FE-FENCE-002: the cloud-compute gate tokens (`cloudActive`,
+  `cloudComputeEnabled`) may appear only in non-test source files declared in
+  the `[[cloud_gate_consumer]]` baseline of the same record file. The same
+  regression — a control-plane feature wrongly coupled to the cloud-compute
+  kill switch — was fixed four separate times (`shouldSyncLocalAuthState`,
+  the settings `authGate`, #2133, IG-1); this rule makes the fifth attempt a
+  visible amendment instead of a silent production outage. Comments and
+  string literals do not count; test files are exempt (they mock the gate).
+
 `--warn` reports everything and exits 0: the checker's non-blocking
 introduction mode, dropped when the baseline is ready to enforce.
 """
@@ -20,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import posixpath
+import re
 import sys
 import tomllib
 from dataclasses import dataclass
@@ -32,12 +42,21 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts import lint_records  # noqa: E402  (path shim must precede the import)
-from scripts.frontend_imports import collect_module_specifiers  # noqa: E402
+from scripts.frontend_imports import (  # noqa: E402
+    collect_module_specifiers,
+    tokenize_typescript,
+)
 
 CHECKER = "scripts/check_frontend_fences.py"
 PC_SRC_RELATIVE = ("apps", "packages", "product-client", "src")
 FENCES_RECORD_RELATIVE = ("lints", "frontend", "fences.toml")
 EDGE_RULE = "FE-FENCE-001"
+GATE_RULE = "FE-FENCE-002"
+# The cloud-compute gate tokens. `cloudActive = cloudComputeEnabled &&
+# authenticated` folds in the CLOUD_COMPUTE_TEMPORARILY_DISABLED kill switch,
+# so a control-plane feature that consumes either token is dead for every
+# production user while the switch is on.
+GATE_TOKEN_RE = re.compile(r"\b(cloudActive|cloudComputeEnabled)\b")
 ALIAS_PREFIX = "#product/"
 SELF_PACKAGE_PREFIX = "@proliferate/product-client/"
 INTERNAL_SUBPATH = "internal/"
@@ -64,11 +83,12 @@ class Violation:
     lineno: int
     site: str
     detail: str
+    rule_id: str = EDGE_RULE
 
     def format(self) -> str:
         """The record-generated diagnostic: rule, alternative, record path."""
         return lint_records.render_diagnostic(
-            RULES.rule(EDGE_RULE),
+            RULES.rule(self.rule_id),
             f"{self.relative_path}:{self.lineno}",
             self.detail,
         )
@@ -89,6 +109,50 @@ def load_edge_baseline(root: Path) -> set[tuple[str, str]]:
             )
         edges.add((entry["from"], entry["to"]))
     return edges
+
+
+def load_cloud_gate_baseline(root: Path) -> set[str]:
+    """The declared cloud-gate consumer set (paths relative to src).
+
+    Tolerates a missing record file (the fabricated trees in unit tests) —
+    the edge loader on the same file already fails a real run loudly.
+    """
+    path = root.joinpath(*FENCES_RECORD_RELATIVE)
+    if not path.is_file():
+        return set()
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    consumers: set[str] = set()
+    for entry in data.get("cloud_gate_consumer", []):
+        if "path" not in entry:
+            raise SystemExit(
+                f"{CHECKER}: {path}: [[cloud_gate_consumer]] entry missing path: {entry}"
+            )
+        consumers.add(entry["path"])
+    return consumers
+
+
+def is_test_relative_path(src_relative: str) -> bool:
+    """Test files may mock the gate tokens freely; the fence governs
+    shipped source only."""
+    parts = src_relative.split("/")
+    name = parts[-1]
+    return (
+        "__tests__" in parts
+        or "test" in parts
+        or ".test." in name
+        or ".stories." in name
+    )
+
+
+def code_only_lines(text: str, *, jsx: bool) -> list[str]:
+    """The file's lines with comments and string literals blanked, so a
+    token mention in a doc comment or a log key never counts as consumption."""
+    masked = ["\n" if char == "\n" else " " for char in text]
+    for token in tokenize_typescript(text, jsx=jsx):
+        if token.kind == "string":
+            continue
+        masked[token.start : token.end] = text[token.start : token.end]
+    return "".join(masked).splitlines()
 
 
 def resolve_target_top(
@@ -125,19 +189,24 @@ class ScanResult:
     violations: list[Violation]
     stale_edges: set[tuple[str, str]]
     edges_seen: set[tuple[str, str]]
+    stale_gate_consumers: set[str]
+    gate_consumers_seen: set[str]
 
 
 def collect_violations(
     root: Path | None = None,
     baseline: set[tuple[str, str]] | None = None,
+    gate_baseline: set[str] | None = None,
 ) -> ScanResult:
-    """Scan product-client against the directory-edge baseline."""
+    """Scan product-client against the directory-edge and cloud-gate baselines."""
     base = Path(root).resolve() if root is not None else REPO_ROOT
     src = base.joinpath(*PC_SRC_RELATIVE)
     if not src.is_dir():
         raise SystemExit(f"{CHECKER}: missing package tree {src}")
     if baseline is None:
         baseline = load_edge_baseline(base)
+    if gate_baseline is None:
+        gate_baseline = load_cloud_gate_baseline(base)
     tops = {
         entry.name
         for entry in src.iterdir()
@@ -145,12 +214,14 @@ def collect_violations(
     }
     violations: list[Violation] = []
     edges_seen: set[tuple[str, str]] = set()
+    gate_consumers_seen: set[str] = set()
 
     for top in sorted(tops):
         for path in sorted((src / top).rglob("*")):
             if path.suffix not in SOURCE_SUFFIXES or not path.is_file():
                 continue
             relative = path.relative_to(base).as_posix()
+            src_relative = path.relative_to(src).as_posix()
             source_dir = PurePosixPath(path.relative_to(src).parent.as_posix())
             text = path.read_text(encoding="utf-8")
             for statement in collect_module_specifiers(path, text):
@@ -169,7 +240,37 @@ def collect_violations(
                         )
                     )
 
-    return ScanResult(violations, baseline - edges_seen, edges_seen)
+            if is_test_relative_path(src_relative):
+                continue
+            file_hits = False
+            for lineno, line in enumerate(
+                code_only_lines(text, jsx=path.suffix == ".tsx"), start=1
+            ):
+                match = GATE_TOKEN_RE.search(line)
+                if match is None:
+                    continue
+                if not file_hits and src_relative not in gate_baseline:
+                    violations.append(
+                        Violation(
+                            relative,
+                            lineno,
+                            match.group(0),
+                            f"undeclared cloud-gate consumer: {match.group(0)!r} "
+                            f"outside the [[cloud_gate_consumer]] baseline",
+                            rule_id=GATE_RULE,
+                        )
+                    )
+                file_hits = True
+            if file_hits:
+                gate_consumers_seen.add(src_relative)
+
+    return ScanResult(
+        violations,
+        baseline - edges_seen,
+        edges_seen,
+        gate_baseline - gate_consumers_seen,
+        gate_consumers_seen,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -187,6 +288,10 @@ def main(argv: list[str] | None = None) -> int:
         f"lints/frontend/fences.toml: stale [[edge]] {source} -> {target} — "
         f"no import crosses that directory edge any more; remove the row"
         for (source, target) in sorted(result.stale_edges)
+    ] + [
+        f"lints/frontend/fences.toml: stale [[cloud_gate_consumer]] {path} — "
+        f"the file no longer consumes a cloud-gate token; remove the row"
+        for path in sorted(result.stale_gate_consumers)
     ]
 
     problems = len(violations) + len(stale_edge_reports)

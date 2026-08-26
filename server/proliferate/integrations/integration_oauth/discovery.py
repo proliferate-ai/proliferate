@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from typing import Any
 from urllib.parse import urlparse, urlunparse
 
@@ -10,9 +11,65 @@ from proliferate.integrations.integration_oauth.models import (
     AuthorizationServerMetadata,
     ProtectedResourceMetadata,
 )
+from proliferate.integrations.integration_oauth.netsafety import (
+    parse_public_https_origin,
+    resolve_public_addresses,
+)
 from proliferate.integrations.integration_oauth.revocation import (
     validate_revocation_endpoint_origin,
 )
+
+
+def _unsafe_discovery_target() -> IntegrationOAuthProviderError:
+    return IntegrationOAuthProviderError(
+        "discovery_failed",
+        "OAuth discovery refused a non-public or non-HTTPS URL.",
+    )
+
+
+async def _pinned_get(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    """SSRF-guarded GET: public-HTTPS-only, resolved once, address pinned.
+
+    Discovery URLs derive from admin-supplied MCP server URLs and from the
+    remote server's own responses, so every fetch target is validated —
+    HTTPS-only, no userinfo, every resolved address globally routable — and
+    the request then connects to the exact address that passed the check
+    (Host + SNI carry the hostname), so a rebinding resolver cannot swap in a
+    private address after validation (CodeQL py/full-ssrf; same pattern as
+    ``revocation.revoke_token``).
+    """
+
+    try:
+        hostname, port = parse_public_https_origin(url)
+        addresses = await resolve_public_addresses(hostname, port)
+    except ValueError as exc:
+        raise _unsafe_discovery_target() from exc
+    # Prefer IPv4 when both families are published (some deployment
+    # environments have no IPv6 route), matching the revocation client.
+    pinned_address = next(
+        (address for address in addresses if ipaddress.ip_address(address).version == 4),
+        addresses[0],
+    )
+    target = httpx.URL(url)
+    pinned_url = target.copy_with(host=pinned_address)
+    return await client.get(
+        pinned_url,
+        headers={"Host": target.netloc.decode("ascii")},
+        extensions={"sni_hostname": target.raw_host.decode("ascii")},
+    )
+
+
+def _require_https_endpoint_shape(url: str) -> str:
+    """Metadata endpoints must at least parse as public-HTTPS URLs."""
+
+    try:
+        parse_public_https_origin(url)
+    except ValueError as exc:
+        raise IntegrationOAuthProviderError(
+            "discovery_failed",
+            "OAuth provider metadata published a non-HTTPS endpoint.",
+        ) from exc
+    return url
 
 
 def _protected_resource_candidates(server_url: str) -> list[str]:
@@ -112,25 +169,37 @@ def _insert_www_auth_param(target: dict[str, str], raw: str) -> None:
 
 
 async def discover_protected_resource_metadata(server_url: str) -> ProtectedResourceMetadata:
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    # Every fetch goes through the pinned SSRF guard; an unsafe ``server_url``
+    # fails before any request leaves the process. Redirects are never
+    # followed: a public origin must not be able to bounce this client to a
+    # private one.
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=False, trust_env=False) as client:
         challenged_scope: str | None = None
         try:
-            response = await client.get(server_url)
+            response = await _pinned_get(client, server_url)
             www_authenticate = response.headers.get("www-authenticate")
             if www_authenticate:
                 params = _parse_www_authenticate(www_authenticate)
                 challenged_scope = params.get("scope")
                 resource_metadata_url = params.get("resource_metadata")
                 if resource_metadata_url:
-                    prm_response = await client.get(resource_metadata_url)
-                    prm_response.raise_for_status()
-                    return _parse_protected_resource(prm_response.json(), challenged_scope)
+                    try:
+                        prm_response = await _pinned_get(client, resource_metadata_url)
+                    except IntegrationOAuthProviderError:
+                        # An unsafe pointer is skipped, not fatal: the
+                        # well-known candidates on the validated origin still
+                        # get their turn (same posture as ignoring an unsafe
+                        # revocation endpoint).
+                        pass
+                    else:
+                        prm_response.raise_for_status()
+                        return _parse_protected_resource(prm_response.json(), challenged_scope)
         except httpx.HTTPError:
             pass
 
         for candidate in _protected_resource_candidates(server_url):
             try:
-                response = await client.get(candidate)
+                response = await _pinned_get(client, candidate)
                 response.raise_for_status()
                 return _parse_protected_resource(response.json(), challenged_scope)
             except (httpx.HTTPError, ValueError):
@@ -162,10 +231,14 @@ def _parse_protected_resource(
 async def discover_authorization_server_metadata(
     issuer: str,
 ) -> AuthorizationServerMetadata:
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    # Candidates all live on the issuer's origin; an unsafe issuer fails on
+    # the first pinned fetch, before any request leaves the process.
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=False, trust_env=False) as client:
         for candidate in _authorization_metadata_candidates(issuer):
             try:
-                response = await client.get(candidate)
+                # An unsafe URL raises the provider error and aborts the loop:
+                # every candidate shares the issuer's origin.
+                response = await _pinned_get(client, candidate)
                 response.raise_for_status()
                 payload = response.json()
             except (httpx.HTTPError, ValueError):
@@ -178,7 +251,18 @@ async def discover_authorization_server_metadata(
                     "This OAuth provider does not advertise PKCE S256 support.",
                 )
             discovered_issuer = str(payload["issuer"])
-            token_endpoint = str(payload["token_endpoint"])
+            # Endpoints from the metadata document become future request
+            # targets (token exchange carries client credentials); require the
+            # public-HTTPS shape up front rather than at first use.
+            token_endpoint = _require_https_endpoint_shape(str(payload["token_endpoint"]))
+            authorization_endpoint = _require_https_endpoint_shape(
+                str(payload["authorization_endpoint"])
+            )
+            registration_endpoint = (
+                _require_https_endpoint_shape(str(payload["registration_endpoint"]))
+                if payload.get("registration_endpoint")
+                else None
+            )
             revocation_endpoint = (
                 str(payload["revocation_endpoint"]) if payload.get("revocation_endpoint") else None
             )
@@ -195,13 +279,9 @@ async def discover_authorization_server_metadata(
                     revocation_endpoint = None
             return AuthorizationServerMetadata(
                 issuer=discovered_issuer,
-                authorization_endpoint=str(payload["authorization_endpoint"]),
+                authorization_endpoint=authorization_endpoint,
                 token_endpoint=token_endpoint,
-                registration_endpoint=(
-                    str(payload["registration_endpoint"])
-                    if payload.get("registration_endpoint")
-                    else None
-                ),
+                registration_endpoint=registration_endpoint,
                 token_endpoint_auth_methods_supported=_string_tuple(
                     payload.get("token_endpoint_auth_methods_supported")
                 ),

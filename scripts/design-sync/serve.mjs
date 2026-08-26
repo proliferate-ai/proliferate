@@ -16,7 +16,7 @@
  */
 import { createServer as createHttpServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { extname, join, normalize, sep } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MIME = {
@@ -48,11 +48,26 @@ function contentType(path) {
  * Returns null if the path would escape rootDir.
  */
 function safeJoin(rootDir, urlPath) {
-  const decoded = decodeURIComponent(urlPath.split("?")[0].split("#")[0]);
-  const rel = normalize(decoded).replace(/^([.][.][/\\])+/, "");
-  const full = normalize(join(rootDir, rel));
-  if (full !== rootDir && !full.startsWith(rootDir + sep)) return null;
+  let decoded;
+  try {
+    decoded = decodeURIComponent(urlPath.split("?")[0].split("#")[0]);
+  } catch {
+    return null; // malformed percent-encoding
+  }
+  if (decoded.includes("\0")) return null;
+  const root = resolve(rootDir);
+  const full = resolve(join(root, decoded));
+  if (full !== root && !full.startsWith(root + sep)) return null;
   return full;
+}
+
+/** Plain-text error response: never reflects request data, never sniffable. */
+function plainError(res, status, message) {
+  res.writeHead(status, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.end(message);
 }
 
 /**
@@ -75,16 +90,14 @@ export function createServer(rootDir, opts = {}) {
       }
       let targetPath = safeJoin(rootDir, req.url || "/");
       if (targetPath === null) {
-        res.writeHead(403);
-        res.end("Forbidden");
+        plainError(res, 403, "Forbidden");
         return;
       }
       let st;
       try {
         st = await stat(targetPath);
       } catch {
-        res.writeHead(404);
-        res.end("Not found: " + req.url);
+        plainError(res, 404, "Not found");
         return;
       }
       if (st.isDirectory()) {
@@ -92,8 +105,7 @@ export function createServer(rootDir, opts = {}) {
         try {
           st = await stat(targetPath);
         } catch {
-          res.writeHead(404);
-          res.end("Not found: " + req.url);
+          plainError(res, 404, "Not found");
           return;
         }
       }
@@ -109,8 +121,8 @@ export function createServer(rootDir, opts = {}) {
         res.end(body);
       }
     } catch (err) {
-      res.writeHead(500);
-      res.end("Server error: " + (err && err.message ? err.message : String(err)));
+      console.error("[design-sync serve]", err);
+      plainError(res, 500, "Server error");
     }
   });
 
