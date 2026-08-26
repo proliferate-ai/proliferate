@@ -30,10 +30,12 @@ split by boundary:
 - Server authentication, resource access, authorization helpers, and product
   policy layering live in [specs/server/auth.md](../../server/auth.md).
 - Agent LLM auth (key vault, selections, `state.json` delivery, per-harness
-  application) is owned by
-  [specs/FEATURE_DOCS/AGENT_AUTH.md](../../FEATURE_DOCS/AGENT_AUTH.md);
-  the LiteLLM-backed managed model gateway is owned by
-  [specs/FEATURE_DOCS/MODELS.md](../../FEATURE_DOCS/MODELS.md).
+  application) is owned by the
+  [agent_auth system spec](../systems/product/agent_auth/README.md)
+  ([specs/FEATURE_DOCS/AGENT_AUTH.md](../../FEATURE_DOCS/AGENT_AUTH.md) is
+  depth); the LiteLLM-backed managed model gateway is owned by the
+  [model_gateway system spec](../systems/product/model_gateway/README.md)
+  ([specs/FEATURE_DOCS/MODELS.md](../../FEATURE_DOCS/MODELS.md) is depth).
 
 Create a dedicated auth-gateway owner document only if the gateway becomes a
 separately deployed or separately owned codebase boundary. Until then, keep

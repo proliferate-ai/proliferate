@@ -24,7 +24,7 @@ records, and reports a QA pass.
   - support issue triage, tenant/session correlation, diagnostics, Sentry, and
     production/local investigation workflow
 - [../../guides/operating/analytics/README.md](../../guides/operating/analytics/README.md)
-  - Customer.io, Metabase, PostHog, Sentry, anonymous telemetry, and freshness
+  - Metabase, PostHog, Sentry, anonymous telemetry, and freshness
     expectations when QA changes analytics surfaces
 
 Read feature specs when the release touches their workflows:
@@ -43,7 +43,7 @@ Required tools and surfaces:
 - Local shell access in a clean worktree with Rust, Node 22+, pnpm, Python
   3.12, and `uv`.
 - Browser or Chrome access with the right logged-in profile for local Web,
-  Desktop renderer, GitHub, Stripe, PostHog, Sentry, Customer.io, Metabase,
+  Desktop renderer, GitHub, Stripe, PostHog, Sentry, Metabase,
   Vercel, Expo, Apple, or AWS dashboards.
 - Local dev profiles through `make setup PROFILE=<name>` and
   `make run PROFILE=<name>`.
@@ -68,7 +68,7 @@ Required permissions:
 - Stripe test-mode access for local or staging billing QA; production Stripe
   access only for read-only verification unless an explicit release operation
   requires more.
-- Sentry, PostHog, Customer.io, and Metabase access when the release changes
+- Sentry, PostHog, and Metabase access when the release changes
   events, replay, lifecycle messaging, dashboards, alerts, or support
   correlation.
 - AWS/Vercel/E2B/Expo/App Store Connect access only for the surfaces that the
