@@ -1,5 +1,12 @@
 # Integrations And Runtime Worker Authentication
 
+> Superseded for ownership by
+> [integration_gateway/README.md](../../systems/product/integration_gateway/README.md)
+> (connections + gateway). The *Runtime Worker Identity* and *Cloud And
+> Desktop Worker Startup* sections below belong to the seam and stay here
+> until the seam spec lands; the Slack tool policy, approvals, and the frozen
+> Slack delivery slice are referenced from the system spec's Current gaps.
+
 This platform owns connected third-party integration accounts, the Cloud-hosted
 integration MCP gateway, and the Worker identity that gives AnyHarness scoped
 access to that gateway. Provider credentials remain encrypted in Cloud;
