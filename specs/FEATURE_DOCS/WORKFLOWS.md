@@ -1,5 +1,11 @@
 # Workflows
 
+> Superseded as system authority by
+> [specs/codebase/systems/product/automations/README.md](../codebase/systems/product/automations/README.md)
+> (the `automations` system spec). This document is retained as the narrative
+> reference until its sections are folded in; where the two disagree, the
+> system spec wins.
+
 Read before touching: `apps/packages/product-client/src/**/*workflow*`,
 `server/proliferate/server/workflows/**`,
 `anyharness/crates/anyharness-lib/src/domains/workflows/**`,

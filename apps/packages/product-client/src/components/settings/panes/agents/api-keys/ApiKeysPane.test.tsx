@@ -8,7 +8,13 @@ import { ApiKeysPane } from "#product/components/settings/panes/agents/api-keys/
 import { AGENT_API_KEYS_COPY } from "#product/copy/settings/agent-api-keys-copy";
 
 const state = vi.hoisted(() => ({
-  cloudActive: true,
+  // Cloud COMPUTE is off for this entire suite, deliberately. The API key vault
+  // is a control-plane feature (ADR FM6/Q9), so the pane must render normally
+  // for a signed-in user on a reachable control plane even with cloud compute
+  // switched off. Re-couple the pane to `cloudActive` and the whole file fails.
+  cloudActive: false,
+  authStatus: "authenticated" as "authenticated" | "anonymous" | "loading",
+  controlPlaneReachable: true,
   keys: {
     data: [] as Array<Record<string, unknown>> | undefined,
     isLoading: false,
@@ -18,16 +24,24 @@ const state = vi.hoisted(() => ({
 const createMutate = vi.hoisted(() => vi.fn());
 const revokeMutate = vi.hoisted(() => vi.fn());
 const refetchKeys = vi.hoisted(() => vi.fn());
+const keysEnabled = vi.hoisted(() => vi.fn());
 const showToast = vi.hoisted(() => vi.fn());
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useAgentApiKeys: () => ({ ...state.keys, refetch: refetchKeys }),
+  useAgentApiKeys: (enabled: boolean) => {
+    keysEnabled(enabled);
+    return { ...state.keys, refetch: refetchKeys };
+  },
   useCreateAgentApiKey: () => ({ mutate: createMutate, isPending: false }),
   useRevokeAgentApiKey: () => ({ mutate: revokeMutate, isPending: false }),
 }));
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
-  useCloudAvailabilityState: () => ({ cloudActive: state.cloudActive }),
+  useCloudAvailabilityState: () => ({
+    cloudActive: state.cloudActive,
+    authStatus: state.authStatus,
+    controlPlaneReachable: state.controlPlaneReachable,
+  }),
 }));
 
 vi.mock("#product/stores/toast/toast-store", () => ({
@@ -86,7 +100,9 @@ vi.mock("#product/components/settings/panes/agent-auth/ApiKeyCreatorModal", () =
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  state.cloudActive = true;
+  state.cloudActive = false;
+  state.authStatus = "authenticated";
+  state.controlPlaneReachable = true;
   state.keys.data = [];
   state.keys.isLoading = false;
   state.keys.isError = false;
@@ -114,6 +130,37 @@ function deferred<T>() {
 }
 
 describe("ApiKeysPane", () => {
+  it("renders the vault with cloud compute disabled (launch posture)", () => {
+    state.cloudActive = false;
+    state.keys.data = [key()];
+    const { container } = render(<ApiKeysPane />);
+
+    expect(container.querySelector('[data-api-keys-state="ready"]')).not.toBeNull();
+    expect(screen.queryByText("Work key")).not.toBeNull();
+    expect(keysEnabled).toHaveBeenLastCalledWith(true);
+  });
+
+  it("prompts a signed-out user to sign in, without querying the vault", () => {
+    state.authStatus = "anonymous";
+    const { container } = render(<ApiKeysPane />);
+
+    expect(container.querySelector('[data-api-keys-state="gated"]')).not.toBeNull();
+    expect(screen.queryByText(AGENT_API_KEYS_COPY.signInRequiredTitle)).not.toBeNull();
+    expect(screen.queryByText(AGENT_API_KEYS_COPY.signInRequired)).not.toBeNull();
+    expect(keysEnabled).toHaveBeenLastCalledWith(false);
+  });
+
+  it("tells a signed-in user the server is unreachable, not to sign in", () => {
+    state.controlPlaneReachable = false;
+    const { container } = render(<ApiKeysPane />);
+
+    expect(container.querySelector('[data-api-keys-state="gated"]')).not.toBeNull();
+    expect(screen.queryByText(AGENT_API_KEYS_COPY.serverUnreachableTitle)).not.toBeNull();
+    expect(screen.queryByText(AGENT_API_KEYS_COPY.serverUnreachable)).not.toBeNull();
+    expect(screen.queryByText(AGENT_API_KEYS_COPY.signInRequiredTitle)).toBeNull();
+    expect(keysEnabled).toHaveBeenLastCalledWith(false);
+  });
+
   it("lists vault keys by title and redacted hint", () => {
     state.keys.data = [key(), key({ id: "key-2", title: "Backup", redactedHint: "sk-...wxyz" })];
     render(<ApiKeysPane />);

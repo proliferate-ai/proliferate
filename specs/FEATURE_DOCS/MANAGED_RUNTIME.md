@@ -28,6 +28,10 @@ The agent catalog rides inside the runtime binary, so binary convergence IS cata
 
 ### Enrollment and Identity
 
+> Owner: the control-plane side of enrollment, identity, and heartbeat is now
+> specified by [specs/codebase/systems/product/seam/README.md](../codebase/systems/product/seam/README.md); this section keeps
+> the worker-side mechanics.
+
 The worker has a one-time bootstrap credential and one durable Cloud identity:
 
 ```text
@@ -61,6 +65,10 @@ The integration-gateway authorization value is distinct from `worker_token`. On 
 Source: [`proliferate-worker/src/identity/`](../../anyharness/crates/proliferate-worker/src/identity/), [`store/identity.rs`](../../anyharness/crates/proliferate-worker/src/store/identity.rs), [`integration_gateway.rs`](../../anyharness/crates/proliferate-worker/src/integration_gateway.rs)
 
 ### Heartbeat and Version Divergence
+
+> Owner: the heartbeat contract (routes, verdicts, liveness thresholds) is
+> specified by [specs/codebase/systems/product/seam/README.md](../codebase/systems/product/seam/README.md); this section keeps
+> the convergence consequences.
 
 The worker heartbeat is both its liveness signal and the carrier for desired binary versions:
 

@@ -490,6 +490,9 @@ async def _complete_db_backed_report(
         },
     )
     if should_notify:
+        correlation = support_report_correlation_record(completed_report)
+        raw_session_ids = correlation.get("sessionIds")
+        raw_sentry_events = completed_report.telemetry_refs.get("sentryEvents")
         delivered = await notify_support_report(
             sender_email=sender_email,
             sender_display_name=sender_display_name,
@@ -503,7 +506,19 @@ async def _complete_db_backed_report(
             credit_name=completed_report.credit_name,
             urgent=completed_report.urgent,
             notify_me=completed_report.notify_me,
-            correlation=support_report_correlation_record(completed_report),
+            correlation=correlation,
+            client_release_id=completed_report.client_release_id,
+            session_ids=(
+                [str(item) for item in raw_session_ids]
+                if isinstance(raw_session_ids, list)
+                else None
+            ),
+            sentry_events=(
+                [item for item in raw_sentry_events if isinstance(item, dict)]
+                if isinstance(raw_sentry_events, list)
+                else None
+            ),
+            summary=completed_report.tracker_summary,
         )
         if delivered:
             await support_reports.mark_report_slack_notified(db, report_id=completed_report.id)

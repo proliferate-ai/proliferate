@@ -32,7 +32,7 @@ const LIBRARY_DIR = path.join(
 // per-tier expectedCounts used to be: a registry edit that adds or retires an
 // entry fails here until someone bumps this number ON PURPOSE (and re-syncs
 // the payload, which is what the number is really gating).
-const EXPECTED_TOTAL = 87;
+const EXPECTED_TOTAL = 91;
 
 // tierId -> the file that composes that tier. Entry demos themselves may live
 // in `entries/*.tsx` or a kit file; this is the tier's composition point, used

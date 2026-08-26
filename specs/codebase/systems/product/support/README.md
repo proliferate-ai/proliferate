@@ -5,6 +5,38 @@ support reporting and the consented Desktop diagnostic snapshot. The body is
 written in the ideal state. Every difference from `main` today is listed in
 [Current gaps](#current-gaps).
 
+## System contract
+
+Organization Standard anatomy for the `support` system; the body below is the
+laws-and-proof detail.
+
+- **Owned state:** `support_report` (the durable capture pivot) and the
+  private S3 object set under `SUPPORT_REPORT_S3_PREFIX`; the Desktop-side
+  support upload queue and staged snapshot artifacts
+  ([`db/models/support.py`](../../../../../server/proliferate/db/models/support.py),
+  [`db/store/support_reports.py`](../../../../../server/proliferate/db/store/support_reports.py),
+  [`db/store/support_session_diagnostics.py`](../../../../../server/proliferate/db/store/support_session_diagnostics.py)).
+- **Public surface:** `POST /v1/support/reports`, `.../upload-targets`,
+  `.../complete`, plus the `report-uploads` and `messages` compatibility
+  routes; Python `proliferate.server.support.{api,service,models}`; the
+  Desktop bridge's support commands.
+- **Consumes:** `accounts` (reporter identity, `outreach_email`); S3 and
+  Slack vendor leaves; the AnyHarness bounded session-window reads;
+  capability `notifications` (Slack receipt); the Desktop diagnostics
+  collector and export permit (owned by the desktop host seam).
+- **Emits:** Slack completion receipt (alerting projection only; carries
+  the field set the
+  [customer loop](../../engineering/customer-loop/README.md) requires:
+  report id, kind/urgent/notify, `client_release_id`, bound session ids,
+  Sentry project/event pairs, the `support_report_id:<id>` Sentry query, and
+  a prefilled file-an-issue link);
+  `desktop.support_snapshot.prepare|submit` lifecycles; `tracker_summary`
+  and `client_release_id` projections on the row.
+- **Fences:** no issue triage, repair, release tracking or outreach (the
+  issue-lifecycle loop was retired in the 2026-08 cull); support never
+  publishes report content anywhere; secret scrubbing obeys
+  [secret custody](../../../platforms/product/secret-custody.md).
+
 Support reporting captures private customer feedback and diagnostic evidence.
 It does not own issue triage, automated repair, release tracking, or reporter
 outreach. (The issue-lifecycle system that owned the downstream issue,

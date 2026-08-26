@@ -21,6 +21,8 @@
 
 ## Support and attribution (optional)
 
+<!-- If this PR fixes a `support:report` issue: `Closes #<N> · pinning test: <path>` -->
+
 - [ ] No report, user, or support IDs or private source data appear in this
   PR.
 

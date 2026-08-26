@@ -73,6 +73,32 @@ describe("deep-link raw source", () => {
     expect(receivedB).toEqual(["proliferate://live"])
   })
 
+  it("retries live-listener registration after a transient failure and delivers to both subscribers", async () => {
+    deepLinkMocks.getCurrent.mockResolvedValue(null)
+    let openUrlCallback: ((urls: string[]) => void) | undefined
+    deepLinkMocks.onOpenUrl
+      .mockRejectedValueOnce(new Error("no tauri"))
+      .mockImplementation(async (cb: (urls: string[]) => void) => {
+        openUrlCallback = cb
+        return () => {}
+      })
+
+    const { subscribeDeepLinkUrls } = await loadDeepLink()
+    const receivedA: string[] = []
+    const receivedB: string[] = []
+    subscribeDeepLinkUrls((url) => receivedA.push(url))
+    await vi.waitFor(() => expect(deepLinkMocks.onOpenUrl).toHaveBeenCalledTimes(1))
+
+    subscribeDeepLinkUrls((url) => receivedB.push(url))
+    await vi.waitFor(() => expect(deepLinkMocks.onOpenUrl).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(openUrlCallback).toBeDefined())
+
+    openUrlCallback?.(["proliferate://live"])
+
+    expect(receivedA).toEqual(["proliferate://live"])
+    expect(receivedB).toEqual(["proliferate://live"])
+  })
+
   it("is race-safe when unsubscribed before native registration and the initial snapshot settle", async () => {
     const current = deferred<string[]>()
     deepLinkMocks.getCurrent.mockReturnValue(current.promise)
@@ -217,6 +243,38 @@ describe("deep-link raw source", () => {
         expect(handler).toHaveBeenLastCalledWith("proliferate://live")
 
         // Give any escaped rejection two macrotask turns to reach the hook.
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(unhandled).toEqual([])
+      } finally {
+        process.off("unhandledRejection", onUnhandled)
+      }
+    })
+
+    it("drains every queued url when an earlier handler rejects", async () => {
+      deepLinkMocks.getCurrent.mockResolvedValue([
+        "proliferate://auth-callback",
+        "proliferate://workspace",
+      ])
+      deepLinkMocks.onOpenUrl.mockImplementation(async () => () => {})
+
+      const unhandled: unknown[] = []
+      const onUnhandled = (reason: unknown) => {
+        unhandled.push(reason)
+      }
+      process.on("unhandledRejection", onUnhandled)
+      try {
+        const { ensureDeepLinkBridge } = await loadDeepLink()
+        const handler = vi
+          .fn()
+          .mockRejectedValueOnce(new Error("first failed"))
+          .mockResolvedValueOnce(true)
+        await expect(ensureDeepLinkBridge(handler)).resolves.toBeUndefined()
+
+        expect(handler).toHaveBeenCalledTimes(2)
+        expect(handler).toHaveBeenNthCalledWith(1, "proliferate://auth-callback")
+        expect(handler).toHaveBeenNthCalledWith(2, "proliferate://workspace")
+
         await new Promise((resolve) => setTimeout(resolve, 0))
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(unhandled).toEqual([])

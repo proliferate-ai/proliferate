@@ -6,6 +6,11 @@ part 2): sandboxes, workspaces, materialization, secrets, the runtime gateway,
 and the billing reconciler are gone. Kept for the design record until the
 environments system spec replaces it; the code map below no longer resolves.
 
+> The GitHub App relationship (authorizations, installations, repository
+> authority, webhooks, the repo catalog) is owned by
+> [github/README.md](../../codebase/systems/product/github/README.md), which
+> is live and unaffected by this supersession.
+
 Status: target. This document describes the accepted destination for GitHub
 repository authority in cloud sandboxes: how a sandbox gets permission to
 clone, fetch, and push, and nothing else. The body is written in the ideal

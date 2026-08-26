@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "agent_auth"
-spec = "specs/FEATURE_DOCS/AGENT_AUTH.md"
+spec = "specs/codebase/systems/product/agent_auth/README.md"
 owns = "Agent credential selections, key vault, gateway enrollment, budgets and top-ups, and org agent-model policy: the agent-auth system's control-plane home."
 
 public_surface = [

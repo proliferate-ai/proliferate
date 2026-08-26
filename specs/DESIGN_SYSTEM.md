@@ -32,11 +32,129 @@ index, and the change-control model for moving a value or adding a component.
 - Per-surface product behavior (what a screen does, its flows and copy) — the
   owning [systems/product/**](codebase/systems/README.md) document.
 
+## System Contract
+
+The design system as a system: what it owns, what it exposes, who consumes
+it, and how it is proven. The sections that follow this one are its body.
+
+**Purpose.** One value system and one component vocabulary so every surface
+reads as the same product, and so a change to a value or a shape is made in
+one place and propagates mechanically.
+
+**Owned state.** No runtime state. Owned artifacts: the raw layer
+([palette.ts](../apps/packages/design/src/palette.ts) — physical colors by
+ramp and rung; [rungs.ts](../apps/packages/design/src/rungs.ts) — the
+density and radius rungs), the token record
+([tokens.ts](../apps/packages/design/src/tokens.ts) — `themeTokens`,
+`colors`, `spacing`, `radius`, `typography`, `shadows`, `timing`,
+`codeColors`, `themePreviewColors`), the motion and cadence primitives
+([motion.ts](../apps/packages/design/src/motion.ts),
+[cadence.ts](../apps/packages/design/src/cadence.ts)), the generated
+stylesheet (`dist/theme.css`, projected by `scripts/generate-theme.mjs`,
+not checked in), the shared CSS entrypoints
+([product.css](../apps/packages/design/src/css/product.css),
+[desktop.css](../apps/packages/design/src/css/desktop.css)), the React
+Native bridge ([react-native.ts](../apps/packages/design/src/react-native.ts)),
+and the component library under
+`apps/packages/product-client/src/primitives/**` (root primitives, the six
+kits under `patterns/` — composer, panel, settings, sidebar, tabs, toast —
+plus `icons/`, `overlays/`, `utils/`).
+
+**Public surface.** `@proliferate/design/{tokens,palette,rungs,motion,cadence,react-native}`
+and the CSS entrypoints (39 product-client files import the package: 37
+`motion`, 12 `cadence`, 5 `tokens`); `#product/primitives/*` for Desktop/Web
+product code; `design/react-native` for Mobile. Nothing else in the package
+is importable.
+
+**Consumes.** Tailwind and Radix as vendors; nothing of ours. Dependency
+direction is `desktop/web → product-client connected tier → primitives →
+design` and never backwards
+([frontend/packages.md](frontend/packages.md)).
+
+**Laws.** Stated in the sections below and enforced as listed in
+[Changing The Design](#changing-the-design): `tokens.ts` is the number
+authority; tokens are layered raw → semantic → component and never reach
+backwards ([Token Layers](#token-layers)); the type ramp is closed; Radix is contained inside primitives;
+primitives are defined only in the library (FE-STRUCT-1/2); the appearance
+gate bans literal sizes; contrast floors are measured on the built
+stylesheet (PROD-THEME); our styles are never attributed to another product
+(PROD-ATTR); the library's rule of two and at-least-one-call-site rule
+(check_component_library).
+
+**Emits.** The generated theme, the component index, and the lint records
+under [lints/product](../lints/product/theme.toml) /
+[lints/frontend](../lints/frontend/structure.toml) that other surfaces are
+checked against.
+
+**Fences.** Per-surface behavior belongs to the owning
+[systems/product](codebase/systems/product/README.md) document; class
+authoring rules to [frontend/styling.md](frontend/styling.md); the
+appearance-scaling gate's own contract to
+[appearance-scaling.md](codebase/systems/product/settings/appearance-scaling.md);
+package direction to [frontend/packages.md](frontend/packages.md).
+
+**Proof.** `apps/packages/design/scripts/check-theme.mjs` (byte-equal
+re-projection + real Tailwind compile), `scripts/check_theme_contrast.py`,
+`scripts/check_frontend_boundaries.py`, `scripts/report_frontend_structure.py`,
+`scripts/check_component_library.py`, `scripts/check_appearance_scaling.py`,
+`scripts/check_design_attribution.py` — all in the CI "Repo shape checks" and
+"Shared frontend packages" jobs; `primitives/__tests__` (21 files); the
+Tier-2 composer perimeter rendered spec. Current mechanical-gap census is
+the [Current Gaps](#current-gaps) list.
+
+### Decisions reserved for the founder
+
+The structure above is current and mechanical. The *taste* of the system —
+what it should look and feel like next — is not a spec-writer's call. Each
+item names the options so a ruling can be recorded without re-deriving the
+structure.
+
+> [!decision] RULED 2026-08-25 (Pablo): both restyle and re-architect.
+> The design system gets a re-architecture *and* a restyle, in that order.
+> The re-architecture landed first as a pure structural change with zero
+> visual delta — the raw layer, the layer tags, and the rung mechanism in
+> [Token Layers](#token-layers), proven by a byte-identical generated theme
+> and identical library screenshots. The restyle follows as a values-only
+> change (palette ramps, rung values, type faces) once the five taste
+> decisions below are ruled; nothing structural moves again for it.
+
+> [!decision] PABLO DECIDES: type identity.
+> Keep Inter (UI) + Manrope (display) + the current closed ramp; or replace
+> the display face; or collapse to one family. The ramp mechanism and the
+> gate are unaffected by any answer; `tokens.ts` `typography` changes.
+
+> [!decision] PABLO DECIDES: color direction.
+> Keep the neutral-first role model with the current accent; shift the
+> accent; or introduce a second brand hue. Contrast floors (body ≥ 7.0:1,
+> secondary/faint ≥ 4.5:1) are a constraint on any answer, not a choice.
+
+> [!decision] PABLO DECIDES: density and radius.
+> The spacing/radius scales are closed; the question is which rung the
+> product sits on by default (tighter/looser, squarer/rounder). The rung is
+> a record in [rungs.ts](../apps/packages/design/src/rungs.ts): populate an
+> alternate and every surface follows, selectable at runtime by
+> `data-density` / `data-radius` on the document element. Today only
+> `default` is populated; the alternates' values are this decision.
+
+> [!decision] PABLO DECIDES: motion character.
+> Current motion is functional (durations/easings/cadence for feedback).
+> Whether the product wants expressive motion (hero reveals, transitions
+> between surfaces) is a taste call that adds `motion.ts` primitives; it
+> does not change the cadence scale.
+
+> [!decision] PABLO DECIDES: the "ugly" list.
+> Which surfaces are visually below the bar today (candidates named in the
+> cull and product reviews: settings panes, the home target picker, the
+> workflows main view, the sidebar roster rows). Ordering this list is what
+> turns the design-system rebuild into a sweep plan.
+
 ## Where The System Lives
 
 ```text
 apps/packages/design/
-├── src/tokens.ts               the value authority: every color/type/radius/size/layering token
+├── src/palette.ts              the raw layer: physical colors by ramp and rung, no roles, never emitted
+├── src/rungs.ts                density + radius rungs; `default` IS the token value, alternates project as data-attribute blocks
+├── src/tokens.ts               the value authority: every color/type/radius/size/layering token, each tagged semantic | component
 ├── src/motion.ts               duration, easing, activity-cadence and delay primitives tokens.ts composes
 ├── src/react-native.ts         the native bridge: RN-safe projections + hand-authored shadow objects
 ├── src/css/product.css         shared Desktop/Web entrypoint: Tailwind setup, @source list, font loading, base type, component-scoped rules
@@ -66,6 +184,50 @@ Makefile                              git-hooks target wires core.hooksPath scri
 plus the five support directories above. That closure is enforced by
 `PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES` in
 [check_frontend_boundaries.py](../scripts/check_frontend_boundaries.py).
+
+## Token Layers
+
+The authority is three layers with one direction of reference, so a restyle
+changes the bottom layer and everything above inherits:
+
+| Layer | Lives in | What it names | May reference |
+| --- | --- | --- | --- |
+| **Raw** | [palette.ts](../apps/packages/design/src/palette.ts), [rungs.ts](../apps/packages/design/src/rungs.ts) | Physical colors by ramp and rung (`neutral.dark[3]`, `blue.deep`, `ink` at an alpha); the geometry rung the product sits on (`radiusRungs.default`, `densityRungs.default`). Never emitted as a custom property. | Nothing. |
+| **Semantic** | `themeTokens` entries tagged `layer: "semantic"` | Roles every surface composes from: `--color-border`, `--color-surface-under`, `--radius-md`, `--height-control`, `--duration-enter`, the closed type ramp. | Raw values, and other semantic tokens. |
+| **Component** | `themeTokens` entries tagged `layer: "component"` | One component's anatomy: `--color-composer-*`, `--diff-view-*`, `--workspace-shell-*`, `--color-sidebar-status-*`, the terminal/compute-target/delegated-agent special-purpose palettes. | Semantic tokens, raw values, and its own literals. |
+
+Two laws follow, both enforced by
+[check-theme.mjs](../apps/packages/design/scripts/check-theme.mjs) on the
+*rendered* values (so they hold however an entry is authored):
+
+- **A semantic token paints only with raw-layer colors.** Every hex or
+  `rgb()`/`rgba()` triple in a semantic value must be a member of the palette.
+  Special-purpose hues are legal only on component tokens, which is what keeps
+  the palette a system and not an inventory.
+- **Semantic never reaches down.** A `var(--x)` inside a semantic token must
+  resolve to another semantic token; only component tokens may reference
+  component tokens. (`var()` fallbacks consumers supply, such as
+  `--markdown-font-size`, are not tokens and are exempt.)
+
+**Rungs.** Density and radius are the two geometry axes the product selects
+as a whole. A rung is a complete value set for its axis; the `default` rung
+*is* the token value (the checker pins `--radius-*`, `--height-control`, the
+icon-button boxes and the transcript-turn gaps to it, so there is one record
+rather than two numbers kept in step). Any other rung is projected by the
+generator as an attribute-scoped override block — `:root[data-radius="…"]`,
+`:root[data-density="…"]` — that re-points the same tokens, the geometry twin
+of `:root[data-mode="light"]`. No alternate rung is populated and nothing sets
+either attribute today; populating one is a values-only edit in `rungs.ts`
+that the generator, checker and every consumer already understand.
+
+**Motion** is already layered: every duration, ease and cadence is a named
+token projected from [motion.ts](../apps/packages/design/src/motion.ts)
+(see [Motion](#motion)). An expressive motion vocabulary, if the founder wants
+one, is an *additive* namespace there; it does not change this structure.
+
+The special-purpose palettes stay literal by design (see
+[Special-purpose palettes](#special-purpose-palettes)); they are tagged
+`component` so the semantic law leaves them alone.
 
 ## Type
 
@@ -1068,10 +1230,12 @@ above are not migration debt); click-only popovers use
 
 ### Moving a value
 
-1. Edit the token in
-   [tokens.ts](../apps/packages/design/src/tokens.ts) (or
-   [motion.ts](../apps/packages/design/src/motion.ts) for a duration,
-   ease, cadence or delay).
+1. Edit the value where its layer lives: a physical color or a geometry rung
+   in [palette.ts](../apps/packages/design/src/palette.ts) /
+   [rungs.ts](../apps/packages/design/src/rungs.ts); a role's *choice* of
+   raw value, or a component token, in
+   [tokens.ts](../apps/packages/design/src/tokens.ts); a duration, ease,
+   cadence or delay in [motion.ts](../apps/packages/design/src/motion.ts).
 2. Run the canonical build: `pnpm --filter @proliferate/design build`, which is
    `tsc -p tsconfig.json && node scripts/generate-theme.mjs && node
    scripts/copy-css.mjs && node scripts/check-theme.mjs`.
@@ -1118,6 +1282,13 @@ independent code path and then asserts, in order:
 - **The closed ramp:** the 13-role key order of
   `typography.size`/`lineHeight`/`letterSpacing`, and the chat/composer
   line-height invariant.
+- **The layer law:** every token carries `layer: "semantic" | "component"`;
+  a semantic token's rendered values paint only with palette members and
+  reference only semantic tokens ([Token Layers](#token-layers)).
+- **The rung record:** the `--radius-*`, `--height-control`,
+  `--size-icon-button-*` and `--spacing-transcript-turn*` tokens equal the
+  `default` rung, every rung is complete, and non-default rungs re-project
+  independently as attribute-scoped blocks.
 - **Ownership:** `product.css` never declares a global token value in a
   `:root`/`@theme` block; it imports Tailwind, then the generated theme, then
   its `@source` list, in that order; named motion declarations are still

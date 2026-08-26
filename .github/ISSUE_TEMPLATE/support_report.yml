@@ -1,0 +1,84 @@
+name: Support Report
+description: Triage a customer support report (opened from the Slack receipt's "File issue" link)
+title: "[Support]: "
+labels: ["support:report", "release:fix"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Pointers only, never content. Do not paste the report body, diagnostics,
+        attachments, prompts, tool output, S3 keys, or presigned URLs here. Read
+        the private bundle through `guides/debugging/support-reports.md`; run the
+        loop through `guides/operating/support-loop.md`.
+  - type: input
+    id: report_id
+    attributes:
+      label: Report ID
+      description: The `support_report` id from the Slack receipt.
+    validations:
+      required: true
+  - type: input
+    id: release
+    attributes:
+      label: Client release
+      description: The `client_release_id` from the receipt (blank if the client did not send one).
+    validations:
+      required: false
+  - type: input
+    id: sessions
+    attributes:
+      label: Session IDs
+      description: Session ids the reporter bound, comma-separated (the join key for replay, Sentry, and Honeycomb).
+    validations:
+      required: false
+  - type: input
+    id: sentry_query
+    attributes:
+      label: Sentry query
+      description: Paste into Sentry search to find every server event tagged with this report.
+      placeholder: support_report_id:<report id>
+    validations:
+      required: false
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary (redacted)
+      description: The receipt's redacted one-line summary, at most. No verbatim report text.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - bug
+        - feature
+    validations:
+      required: true
+  - type: dropdown
+    id: urgent
+    attributes:
+      label: Urgent
+      options:
+        - "no"
+        - "yes"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Owning system
+      description: The system whose law is broken (file against the owner, not the surface the reporter saw). Matches `area:*` labels.
+      options:
+        - not sure yet
+        - desktop
+        - anyharness
+        - sdk
+        - server
+        - cloud
+        - product
+        - website
+        - docs
+        - release
+    validations:
+      required: true

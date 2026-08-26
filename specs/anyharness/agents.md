@@ -1,5 +1,7 @@
 # Agents
 
+> Ownership: this document is the depth reference for the **harnesses** system spec ([README.md](../codebase/systems/runtime/harnesses/README.md)). Laws, owned state, fences and the checked code map are authoritative there; flow-level detail stays here.
+
 `anyharness-lib/src/domains/agents/**` owns supported-agent metadata, installation,
 credential detection, readiness, and the final resolved launch surface handed to
 the live ACP runtime.

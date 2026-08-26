@@ -2,9 +2,11 @@
 
 Status: superseded. The legacy cloud sandbox stack this document describes
 was deleted by the cull sweep (delivery/cull-sweep/delivery-spec-delete-dark-cloud.md,
-part 2): sandboxes, workspaces, materialization, secrets, the runtime gateway,
-and the billing reconciler are gone. Kept for the design record until the
-environments system spec replaces it; the code map below no longer resolves.
+parts 1 and 2): sandboxes, workspaces, materialization, secrets, the runtime
+gateway, and the billing reconciler are gone. The environments system spec
+replaces this document:
+[specs/codebase/systems/product/environments/README.md](../../codebase/systems/product/environments/README.md).
+Kept for the design record; the code map below no longer resolves.
 
 Status: target. This document describes the accepted destination for the
 cloud sandbox container. The body is written in the ideal state. Every

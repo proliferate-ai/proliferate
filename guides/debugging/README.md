@@ -59,7 +59,7 @@ Use only the tools needed for the failing seam:
   support correlation tags.
 - Approved support tooling for support reports and retained diagnostics; do
   not make report objects public.
-- AWS, Vercel, E2B, Stripe, PostHog, Metabase, Customer.io, Expo/EAS, or App
+- AWS, Vercel, E2B, Stripe, PostHog, Metabase, Expo/EAS, or App
   Store Connect only when that provider owns evidence for the failing seam.
 - An isolated local profile for reproduction:
 

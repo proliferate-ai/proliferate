@@ -10,7 +10,7 @@ linked document is the authority.
 | Document | One-line ownership | Status |
 | --- | --- | --- |
 | [agent-distribution.md](../../../platforms/product/agent-distribution.md) | What a harness *is* and how it gets onto a machine: the registry/catalog document pair, pinned auto-installs, binary-carried catalog convergence, supervisor-owned runtime swaps, the probe pipeline, readiness projection. | target |
-| [AGENT_AUTH.md](../../../../FEATURE_DOCS/AGENT_AUTH.md) | How a harness gets *credentials* at launch: auth source selections, the key vault, `state.json` delivery, per-harness application recipes, fail-closed launch. | target |
+| [agent_auth/README.md](../agent_auth/README.md) | How a harness gets *credentials* at launch: auth source selections, the key vault, `state.json` delivery, per-harness application recipes, fail-closed launch. Detail reference: [AGENT_AUTH.md](../../../../FEATURE_DOCS/AGENT_AUTH.md). | current (system spec) |
 | [MODELS.md](../../../../FEATURE_DOCS/MODELS.md) | The managed inference proxy: LiteLLM artifact and deployment, enrollment/teams/virtual keys, access-group model gating, budgets, usage import. | current |
 | [MODELS.md](../../../../FEATURE_DOCS/MODELS.md) | Which models and generic controls one execution target currently advertises before launch, plus the session-local live authority after launch. | current |
 

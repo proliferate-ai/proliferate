@@ -12,13 +12,14 @@ under [`../deploying/`](../deploying/).
 
 | Task | Procedure |
 | --- | --- |
-| Discover and verify current Customer.io, Metabase, PostHog, and Sentry state | [Analytics and observability](analytics/README.md) |
+| Discover and verify current Metabase, PostHog, and Sentry state | [Analytics and observability](analytics/README.md) |
 | Grant a user free or discounted Pro access through Stripe | [Pro early-access promo codes](billing-pro-promo-codes.md) |
 | Triage Stripe webhook delivery or billing-mirror failures | [Stripe webhook failure](stripe-webhook-failure.md) |
 | Build, publish, promote, or roll back the E2B runtime template | [E2B template operations](e2b-template-operations.md) |
 | Triage Worker enrollment, heartbeat, or version convergence after checking AnyHarness independently | [Worker enrollment failure](worker-enrollment-failure.md) |
 | Prepare for break-glass access, secret rotation, support-bundle handling, or audit closeout | [Operator security posture](operator-security-posture.md) |
 | Understand, reproduce, or roll back the six production Grafana alert-rule identities | [Production alerts](production-alerts.md) |
+| Run a customer support report from Slack receipt to fixed, tested, and reporter-notified | [Support loop](support-loop.md) |
 | Provision, rotate, revoke, audit, or manually verify the scheduled agent catalog probe | [Catalog Probe](catalog-probe.md) |
 | Add/change gateway models, add a provider, bump the LiteLLM image pin, or rotate gateway provider keys | [Gateway Models](gateway-models.md) |
 | Bump a harness version, review the nightly probe PR, change a harness definition, or roll back a catalog update | [Agent Catalog Update](agent-catalog-update.md) |

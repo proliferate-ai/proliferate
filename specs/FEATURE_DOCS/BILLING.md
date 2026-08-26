@@ -1,5 +1,14 @@
 # Billing
 
+> **Superseded (2026-08-25).** The billing system spec now lives at
+> [`specs/codebase/systems/product/billing/README.md`](../codebase/systems/product/billing/README.md)
+> (Organization Standard anatomy; laws A/M/N/T and the corridor IDs carried
+> over verbatim and re-verified after the cull). This file is retained for
+> its inbound links and the historical corridor narrative; do not extend it.
+> Sections referencing `reconciler.py`, `cloud/materialization`,
+> `cloud/cloud_sandboxes` and the E2B webhook lane describe code deleted by
+> the cull (PR #2222 and PR-Ab).
+
 Status: target. This document describes the accepted destination for
 billing. The body is written in the ideal state. Every difference from
 `main` today is listed in [Current gaps](#current-gaps); the list shrinks as
