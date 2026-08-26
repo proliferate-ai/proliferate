@@ -57,7 +57,7 @@ Native harness login is not a method: it is an onboarding detection that offers 
 
 ### server `agent_auth` — the choices half
 
-- **Owns:** the vault (every stored credential, seats included), each person's selections, org policy, the renderer that produces the desired-state document, seat rotation state, and seat usage samples.
+- **Owns:** the vault (every stored credential, seats included), each person's selections, org policy, the renderer that produces the desired-state document, and seat usage samples. (Seat *rotation* state is the runtime's — it lives where limit errors are observed.)
 - **Doors:**
     - The selections API — read and set the method choice per harness.
         - The settings pane writes choices through it; org admins set policy through the sibling policy routes, enforced at write time.
@@ -67,7 +67,7 @@ Native harness login is not a method: it is an onboarding detection that offers 
         - The courier pulls and acks; the ack is what lets the pane say "applied" truthfully.
     - The seat-usage read — the latest window samples per seat.
         - The settings meters render it.
-    - Four importable functions — `render_state`, `resolve_headless`, `seat_usage_probe`, `pick_seat`.
+    - Three importable functions — `render_state`, `resolve_headless`, `seat_usage_probe`.
         - `render_state` is called only by this system's own routes; `resolve_headless` by automations at run placement; nothing else imports anything else.
 - **Consumes:** ai_gateway (`gateway_profile`, `is_gateway_budget_available`, `verify_key`) · the registry mirror constants · encryption at rest · org membership for policy routes.
 
@@ -293,7 +293,7 @@ launch_facts(harness, ws):
   entry = applied doc[harness]                 # origin guard checked at load
   no entry            → Err(NoConfiguredSource)      # "Claude Code isn't set up — pick a method in Settings"
   sources empty       → Err(SourceUnsatisfied{why})  # "out of LLM credits — top up" / "key revoked"
-  method == seat      → seat = pick_seat(…)          # round-robin, skip cooling
+  method == seat      → seat = next active seat, round-robin, skipping cooling   # runtime-local decision
                         all cooling → Err(AllSeatsCooling{earliest_reset})
   headless subject    → run override → subject selection → org default → refuse loudly
   build env_set + env_remove (per-method strip list) + files
@@ -320,7 +320,7 @@ sequenceDiagram
 
 ### Flow 5 — Detecting the status of a plan
 
-Two signals, one picture. The **usage probe** is the soft signal: on a cadence, the server makes a one-token request with each active seat's token and parses the response's rate-limit headers — live 5-hour and 7-day utilization plus reset times, account-global — into `seat_usage_sample`, feeding the settings meters. **Advisory only, never a launch gate**: the surface is undocumented, so control never depends on it. Observed **limit errors** are the hard signal: a seat that hits its limit mid-session is marked cooling until the reset time the error carries, the scheduler rotates the next launch to the next active seat or falls back to the gateway, and the user is offered a relaunch.
+Two signals, one picture. The **usage probe** is the soft signal: on a cadence, the server makes a one-token request with each active seat's token and parses the response's rate-limit headers — live 5-hour and 7-day utilization plus reset times, account-global — into `seat_usage_sample`, feeding the settings meters. **Advisory only, never a launch gate**: the surface is undocumented, so control never depends on it. Observed **limit errors** are the hard signal: a seat that hits its limit mid-session is marked cooling (runtime-local, until the reset time the error carries), the next launch rotates to the next active seat or falls back to the gateway, the user is offered a relaunch, and the hit is reported upward through the courier as `agent_seat_limit_hit` so the meters and any future cross-machine reconciliation see it.
 
 ```mermaid
 sequenceDiagram
@@ -409,7 +409,6 @@ Importable functions (nothing else is):
 render_state(user_id, surface) -> StateDocument   # pure over rows; full desired state; content-hash revision
 resolve_headless(subject, harness) -> Source      # the flow-3 ladder for automations
 seat_usage_probe(api_key_id) -> UsageSample       # flow 5's soft signal
-pick_seat(user_id, harness) -> api_key_id         # round-robin over active minus cooling; raises AllSeatsCooling
 ```
 
 Events (via `log_cloud_event`; ids carried: user, org, harness kind, key/seat id): `agent_api_key_created` · `agent_provider_config_created` · `agent_api_key_revoked` · `agent_auth_selections_put` · `agent_auth_delivery_acked` · `org_agent_policy_updated` · `agent_seat_minted` · `agent_seat_limit_hit` · `agent_seat_rotated`.
@@ -490,6 +489,12 @@ The per-harness recipe table — the one place "every harness has its own way of
 
 A recipe never chooses a model. Ambient sanitization applies to every routed launch: the rerouting flags (`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`, `AWS_BEARER_TOKEN_BEDROCK`) are always stripped, and every provider selector the route did not itself set is removed — removal wins over inherited values, applied last at spawn. Adding a harness means: declare its auth vocabulary in the registry, add its cardinality row, write its recipe. Nothing else changes.
 
+**Rotation ownership.** The rendered document carries **every active seat** for a harness as sources, in vault order; the runtime owns the rotation decision, because the runtime is where limit errors are observed. It keeps a per-seat cooling record (seat id, cooling_until) beside the status documents, picks the next non-cooling seat round-robin at each launch, and reports every limit hit upward through the courier as an `agent_seat_limit_hit` event so the server's meters and any future cross-machine reconciliation see it. The server never picks seats; it only supplies the pool.
+
+**Method availability**, as `methods(harness)` computes it: a method row is available when the catalog declares the method for the harness AND org policy allows it AND its material exists — for gateway, the org's enrollment is synced; for api_key, a usable vault row is selected; for seat, at least one active seat row exists. `applied` comes from the applied document, never from detection. Native appears as a detection row (`detected`, with the mint offer), never as an available launch method.
+
+**Probe targeting**, per event: `Startup` probes every eligible harness once; `AuthApplied{changed}` probes only the harnesses whose document content changed; `InstallCompleted` and `FirstDetected` probe that harness; `LoginExit` probes the harness whose terminal closed; `BackoffExpired` retries exactly the harness whose backoff lapsed. Cursor is excluded from every unattended probe (its keychain prompts) and probes only on manual refresh.
+
 Typed runtime errors, each with its status and the flow that raises it: `AGENT_ROUTE_SELECTION_MISSING` (409, flow 3 — rendered in plain words per the refusal variants) · `AGENT_ROUTE_SELECTION_INCOMPLETE` (409, flow 3) · `AGENT_ROUTE_UNSUPPORTED` (409, flow 3 — e.g. cursor gateway) · `AGENT_ROUTE_UNKNOWN_HARNESS` (409, flow 3) · `AGENT_ROUTE_STATE_MALFORMED` (500, flows 1 and 3) · `AGENT_ROUTE_STATE_STALE` (409, flow 1) · `AGENT_ROUTE_MATERIALIZE_FAILED` (500, flow 3).
 
 Cell-local invariants: the origin guard (a document from another server reads as absent); the revision guard (out-of-order pushes rejected, equal revisions content-authoritative); the pure-render/atomic-materialize split (recipes are pure functions; materialize is atomic writes; no commands); the probe engine's brakes (single-flight per harness, exponential backoff, one probe machine-wide); native credentials are read, never written; green needs dated evidence.
@@ -509,7 +514,20 @@ pullStateAndApply()   // GET /state → fingerprint-compare → stamp origin →
 uploadSeatToken()     // mint flow: POST /keys; held in memory, never persisted client-side
 ```
 
-Cell-local invariants: latest-wins coalescing (rapid switches deliver only the newest document); rider stripping before the runtime push; runs on sign-in with a healthy local runtime — cloud compute is never a precondition.
+**When the loop runs** — the complete trigger set:
+
+- On app start, once signed in and the local runtime reports healthy. Sign-in plus a healthy runtime are the only preconditions; cloud compute is never one.
+- On every auth-relevant invalidation: a selection PUT, a vault create or revoke, a seat mint upload, and an enrollment reaching synced (a document pulled before sync completed dropped the gateway source as unsatisfiable, and must not persist until an unrelated mutation).
+- Never on a timer. The loop is event-driven; a healthy idle app does not poll.
+
+**The push semantics, exactly:**
+
+- Runs are serialized through one operation queue; rapid switches coalesce and only the newest rendered document is ever pushed (latest-wins — no intermediate document is observable after a later one).
+- The push skips when the served fingerprint equals the last pushed fingerprint (no-op renders move nothing).
+- An empty document (zero harness entries) is delivered as `DELETE /v1/agent-auth/state`, not a push of `{}`.
+- The ack echoes the **served** fingerprint, never a client-computed one, and only after the runtime PUT succeeded.
+- A rejected push (`AGENT_ROUTE_STATE_STALE`) refetches `/state` and re-pushes; a failed push leaves the selection visibly **pending** — never a silently stale runtime — and the next invalidation retries. There is no client-side backoff loop; the pending badge plus the next trigger is the retry policy.
+- `uploadSeatToken` holds the token in memory only, POSTs once, and surfaces failure to the mint flow (which tells the user to re-run the mint); it never retries silently and never persists the token anywhere client-side.
 
 ### Cell 4 · the frontend
 
@@ -528,12 +546,23 @@ apps/packages/product-client/src/
 ```
 
 ```ts
-useHarnessStatus(kind)   // subscribes the status document
-useMethods(kind)         // the method picker's truth
-useSeatUsage()           // the meters
+useHarnessStatus(kind)   // subscribes the status document; returns { methods, applied, probe: {verdict, at, stale}, coolingUntil }
+useMethods(kind)         // the method picker's truth; returns MethodRow[] straight from door 2
+useSeatUsage()           // the meters; returns the latest sample per seat
 ```
 
-Cell-local invariants: the status document renders verbatim; green only with an evidence age ("verified 2m ago"); every refusal renders its plain-words copy.
+**When the frontend re-reads and re-probes** — the complete boundary set. The frontend never derives and never probes on its own; it re-reads the status document and, at defined boundaries, asks the runtime to re-check via door 3's poke or the manual-refresh route:
+
+- **Subscription is the default.** `useHarnessStatus` subscribes on mount (settings pane, onboarding card, composer badge) and renders every push; there is no client polling loop. Where the stream is unavailable, the hook falls back to re-reading on the invalidation boundaries below.
+- **Opening the agents settings pane** re-reads status and methods, and forces a fresh usage sample for visible seats (the pane-open probe).
+- **After a login terminal closes**, the runtime has already poked itself (`LoginExit`); the frontend just re-reads — it never issues its own poke here.
+- **After a selection or vault mutation acks**, the query set invalidates and re-reads: selection PUT → selections + state + status; key create/revoke → keys + selections + status; seat mint → keys + status + usage.
+- **Manual refresh** is the one user-facing poke: the refresh affordance calls the runtime's refresh route, renders `queued`/`running` inline, and — on failure — shows the backoff line with the next-attempt countdown, never an eternal spinner.
+- **A stale status renders as stale**, not as loading: the last observation stays visible with a "re-checking" marker while the runtime re-probes (the dims-never-extinguishes rule, rendered).
+
+**The onboarding card is state-bound, never timed.** It completes when every adopted harness reaches a terminal state (usable, authenticated, or installed-with-next-action), each badge carrying its next-action affordance; a stuck probe shows its backoff countdown. No timer advances it.
+
+Cell-local invariants: the status document renders verbatim (no local fallback, no readiness-based green); green only with an evidence age ("verified 2m ago"); every refusal renders its plain-words copy from the copy module (do-not-reword markers respected); attribution and badges never gate anything — an unknown state renders neutrally and changes nothing about what is clickable.
 
 ---
 
