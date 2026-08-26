@@ -19,6 +19,8 @@ import { fileURLToPath } from "node:url";
 import { compile } from "tailwindcss";
 
 import { motion } from "../dist/motion.js";
+import { palette, paletteHexes } from "../dist/palette.js";
+import { densityRungs, radiusRungs, rungAttributes, rungTokens } from "../dist/rungs.js";
 import {
   colors,
   radius,
@@ -91,11 +93,28 @@ const expectedUtilities = [
   ),
 ];
 
+// Non-default geometry rungs project as attribute-scoped override blocks that
+// re-point the rung's tokens; the default rung is the token value itself and
+// emits nothing. Re-projected here independently of the generator.
+const expectedRungBlocks = [];
+for (const [family, rungs] of [
+  ["radius", radiusRungs],
+  ["density", densityRungs],
+]) {
+  for (const [rungName, values] of Object.entries(rungs)) {
+    if (rungName === "default") continue;
+    const body = Object.entries(rungTokens[family])
+      .map(([key, tokenName]) => `  ${tokenName}: ${values[key]};`)
+      .join("\n");
+    expectedRungBlocks.push(`:root[${rungAttributes[family]}="${rungName}"] {\n${body}\n}`);
+  }
+}
+
 const expectedCss = [
   `@theme {\n  --color-*: initial;\n  --text-*: initial;\n\n${project("theme")}\n}`,
   `:root {\n${project("dark")}\n}`,
   `:root[data-mode="light"] {\n${project("light")}\n}`,
-  expectedUtilities.join("\n\n"),
+  [...expectedRungBlocks, ...expectedUtilities].join("\n\n"),
   `@keyframes proliferate-spinner-rotate {
   to {
     transform: rotate(360deg);
@@ -265,6 +284,78 @@ for (const [name, expected] of Object.entries({
     `${name} drifted from its single-ink light palette rung`,
   );
 }
+
+/* ------------------------------------------------------------------ *
+ * 2b. Layers: raw -> semantic -> component, never backwards
+ * ------------------------------------------------------------------ */
+
+const PALETTE_HEXES = paletteHexes();
+const TOKEN_LAYERS = new Set(["semantic", "component"]);
+
+/** Every color literal in a value, normalised to lowercase 6-digit hex. */
+function colorLiterals(value) {
+  const found = [];
+  for (const hex of value.matchAll(/#([0-9a-f]{6})\b/gi)) found.push(`#${hex[1].toLowerCase()}`);
+  for (const rgb of value.matchAll(/rgba?\(\s*(\d+)\s*,?\s*(\d+)\s*,?\s*(\d+)/g)) {
+    found.push(
+      "#" + [rgb[1], rgb[2], rgb[3]].map((n) => Number(n).toString(16).padStart(2, "0")).join(""),
+    );
+  }
+  return found;
+}
+
+for (const [name, value] of tokenEntries) {
+  assert(TOKEN_LAYERS.has(value.layer), `${name} has no layer (semantic | component)`);
+  if (value.layer !== "semantic") continue;
+  for (const field of ["dark", "light", "themeFallback"]) {
+    const rendered = value[field];
+    if (!rendered) continue;
+    for (const hex of colorLiterals(rendered)) {
+      assert(
+        PALETTE_HEXES.has(hex),
+        `${name} (semantic) paints ${hex} in ${field}, which the raw layer (palette.ts) does not own`,
+      );
+    }
+    for (const ref of rendered.matchAll(/var\((--[a-z0-9-]+)/g)) {
+      const target = themeTokens[ref[1]];
+      if (!target) continue; // consumer-provided fallbacks such as --markdown-font-size
+      assert(
+        target.layer === "semantic",
+        `${name} (semantic) reaches down into component token ${ref[1]}; only component tokens may reference component tokens`,
+      );
+    }
+  }
+}
+
+assert(palette.ink === "#1a1c1f" && palette.paper === "#ffffff", "raw layer anchors drifted");
+assert(
+  palette.inkAlpha(0.65) === "rgba(26, 28, 31, 0.65)" &&
+    palette.paperAlpha(0.7) === "rgba(255, 255, 255, 0.7)" &&
+    palette.paperMix(70) === "color-mix(in oklab, #ffffff 70%, transparent)",
+  "raw-layer alpha helpers must render the exact shipped literal forms",
+);
+
+// The default rung IS the token value: one record, not two numbers kept in step.
+for (const [family, rungs] of [
+  ["radius", radiusRungs],
+  ["density", densityRungs],
+]) {
+  assert(rungs.default, `${family} rungs must carry a default rung`);
+  for (const [key, tokenName] of Object.entries(rungTokens[family])) {
+    const token = themeTokens[tokenName];
+    assert(token, `${family} rung key ${key} points at unknown token ${tokenName}`);
+    assert(
+      token.dark === rungs.default[key] && token.light === rungs.default[key],
+      `${tokenName} drifted from the default ${family} rung (${rungs.default[key]})`,
+    );
+  }
+  for (const [rungName, values] of Object.entries(rungs)) {
+    for (const key of Object.keys(rungTokens[family])) {
+      assert(typeof values[key] === "string" && values[key].length > 0, `${family} rung ${rungName} is missing ${key}`);
+    }
+  }
+}
+assert(themeTokens["--radius"].dark === radiusRungs.default.md, "--radius must stay the md rung");
 
 /* ------------------------------------------------------------------ *
  * 3. Motion authority
@@ -667,4 +758,7 @@ assert(
   `manifest entry count (${seen.size}) does not match themeTokens (${tokenEntries.length})`,
 );
 
-console.log(`check-theme: ok (${tokenEntries.length} live tokens)`);
+const semanticCount = tokenEntries.filter(([, value]) => value.layer === "semantic").length;
+console.log(
+  `check-theme: ok (${tokenEntries.length} live tokens: ${semanticCount} semantic, ${tokenEntries.length - semanticCount} component; ${PALETTE_HEXES.size} raw colors)`,
+);

@@ -11,6 +11,14 @@
       "types": "./dist/tokens.d.ts",
       "import": "./dist/tokens.js"
     },
+    "./palette": {
+      "types": "./dist/palette.d.ts",
+      "import": "./dist/palette.js"
+    },
+    "./rungs": {
+      "types": "./dist/rungs.d.ts",
+      "import": "./dist/rungs.js"
+    },
     "./motion": {
       "types": "./dist/motion.d.ts",
       "import": "./dist/motion.js"
