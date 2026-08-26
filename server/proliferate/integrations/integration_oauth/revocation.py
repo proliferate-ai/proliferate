@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 import ipaddress
-import socket
 from urllib.parse import urlsplit
 
 import httpx
 
 from proliferate.integrations.integration_oauth.errors import IntegrationOAuthProviderError
+from proliferate.integrations.integration_oauth.netsafety import (
+    parse_public_https_origin,
+    resolve_host_addresses,
+)
 
 
 def _invalid_endpoint() -> IntegrationOAuthProviderError:
@@ -21,24 +23,9 @@ def _invalid_endpoint() -> IntegrationOAuthProviderError:
 
 def _https_origin(value: str) -> tuple[str, int]:
     try:
-        parsed = urlsplit(value)
-        port = parsed.port or 443
+        return parse_public_https_origin(value)
     except ValueError as exc:
         raise _invalid_endpoint() from exc
-    if (
-        parsed.scheme.lower() != "https"
-        or not parsed.hostname
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.fragment
-    ):
-        raise _invalid_endpoint()
-    hostname = parsed.hostname.rstrip(".").lower()
-    try:
-        normalized_hostname = hostname.encode("idna").decode("ascii")
-    except UnicodeError as exc:
-        raise _invalid_endpoint() from exc
-    return normalized_hostname, port
 
 
 def validate_revocation_endpoint_origin(
@@ -64,15 +51,9 @@ def validate_revocation_endpoint_origin(
 
 async def _resolve_host_addresses(hostname: str, port: int) -> tuple[str, ...]:
     try:
-        results = await asyncio.to_thread(
-            socket.getaddrinfo,
-            hostname,
-            port,
-            type=socket.SOCK_STREAM,
-        )
-    except socket.gaierror as exc:
+        return await resolve_host_addresses(hostname, port)
+    except ValueError as exc:
         raise _invalid_endpoint() from exc
-    return tuple(str(result[4][0]) for result in results)
 
 
 async def _public_destination_addresses(revocation_endpoint: str) -> tuple[str, ...]:

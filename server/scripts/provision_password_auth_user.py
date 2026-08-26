@@ -55,7 +55,16 @@ async def provision_user(
             user.is_verified = True
         await db.commit()
     action = "created" if created else "updated"
-    print(f"{action} password user {normalized_email}")
+    print(f"{action} password user {_mask_email(normalized_email)}")
+
+
+def _mask_email(email: str) -> str:
+    """The operator already knows the address; the terminal log need not."""
+
+    local, _, domain = email.partition("@")
+    if not domain:
+        return "***"
+    return f"{local[:1]}***@{domain}"
 
 
 def main() -> None:

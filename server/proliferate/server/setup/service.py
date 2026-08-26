@@ -158,10 +158,19 @@ async def claim_first_run(
 
     logger.info(
         "Instance claimed: owner %s, organization %r.",
-        normalized_email,
+        _mask_email(normalized_email),
         organization.name,
     )
     return FirstRunClaim(email=normalized_email, organization_name=organization.name)
+
+
+def _mask_email(email: str) -> str:
+    """``p***@example.com`` — enough to recognize the owner, not to harvest."""
+
+    local, _, domain = email.partition("@")
+    if not domain:
+        return "***"
+    return f"{local[:1]}***@{domain}"
 
 
 def _token_file_path() -> Path:
