@@ -21,7 +21,6 @@ import {
   repositoriesKey,
   githubAppRootKey,
   repoEnvironmentKey,
-  workspaceCloudSecretsKey,
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 
@@ -89,11 +88,6 @@ export function useSaveRepoEnvironment() {
         queryClient.invalidateQueries({ queryKey: cloudGitRepositoriesRootKey() }),
         queryClient.invalidateQueries({ queryKey: githubAppRootKey(client.baseUrl) }),
       ];
-      if (response.kind === "cloud") {
-        invalidations.push(queryClient.invalidateQueries({
-          queryKey: workspaceCloudSecretsKey(gitOwner, gitRepoName),
-        }));
-      }
       // Mutation completion is the ordering boundary used by setup-and-continue:
       // do not let workspace creation (or a retry) observe stale repository
       // configuration after the environment save has succeeded.
@@ -116,9 +110,6 @@ export function invalidateCloudRepoEnvironmentRemoval(
     queryClient.invalidateQueries({ queryKey: repositoriesKey() }),
     queryClient.invalidateQueries({ queryKey: cloudGitRepositoriesRootKey() }),
     queryClient.invalidateQueries({ queryKey: githubAppRootKey(clientBaseUrl) }),
-    queryClient.invalidateQueries({
-      queryKey: workspaceCloudSecretsKey(input.gitOwner, input.gitRepoName),
-    }),
   ]);
 }
 

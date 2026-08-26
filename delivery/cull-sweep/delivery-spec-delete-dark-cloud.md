@@ -157,3 +157,28 @@ unrecoverable; only the schema round-trips.
 - Migration up/down round-trips on a dev database.
 - Docs: `specs/FEATURE_DOCS/SANDBOX/*` get supersession banners pointing at
   the environments spec-to-come; `python3 scripts/check_docs.py` green.
+
+## Amendment (2026-08-26, part-2 implementation findings)
+
+- **`repositories/` is desktop-live and survives.** Its local-environment
+  lane is the repo-settings persistence the desktop edits (PRO-350 landed
+  on it during launch week). Restored from the pre-deletion main into its
+  own system folder `server/proliferate/server/repositories/` (wire paths
+  `/v1/cloud/repositories*` unchanged, MANIFEST added) with the cloud-only
+  lanes severed: the materialization-ledger response fields, the
+  ensure-sandbox push on cloud-environment save, and the
+  workspaces-in-use delete guard.
+- **`harness_launch_options` (deferred from part 1) dies here** along with
+  its client surface; the dual-lane components keep their local lane.
+- **Approval-gated integration tools now fail closed**
+  (`integration_tool_not_allowed`): the approval surface left with the
+  sandbox stack, and a gated action that cannot be approved must deny,
+  not execute.
+- **Materialization engine salvage** (coordinator ruling): the frozen spec
+  governs over the Cull Plan's earlier reuse note — the engine is deleted,
+  with its invariants recorded in
+  `delivery/cull-sweep/notes-materialization-engine.md` against the
+  pre-deletion main SHA, and the desktop-live agent-auth state renderer
+  extracted to `server/agent_auth/state_render.py` before the deletion.
+- The billing reconciler's invariants are recorded in
+  `delivery/cull-sweep/notes-billing-reconciler.md` per the earlier ruling.

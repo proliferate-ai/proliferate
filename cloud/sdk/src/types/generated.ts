@@ -56,9 +56,26 @@ export interface CloudWorkspaceExecutionTargetSummary {
   online?: boolean | null;
 }
 
-// Derived from the generated OpenAPI schema — the wire contract is the source of
-// truth. Do not hand-copy fields here.
-export type CloudWorkspaceMaterializationSummary = Schema<"WorkspaceMaterializationSummary">;
+// TODO(cull-trail): the server's cloud workspace surface is deleted, so the
+// ``WorkspaceMaterializationSummary`` wire schema no longer exists. The shape
+// is pinned by hand (from the last generated contract) because the shared
+// workspace domain model (logical workspaces, inventory, reconciliation) still
+// compiles against it; the data sources are gone, so these only describe
+// cached/derived values that are now always absent at runtime.
+export interface CloudWorkspaceMaterializationSummary {
+  id: string;
+  targetKind: "managed_cloud" | "local_desktop";
+  desktopInstallId: string | null;
+  anyharnessWorkspaceId: string | null;
+  worktreePath: string | null;
+  state: "pending" | "hydrating" | "hydrated" | "missing" | "inconsistent" | "failed";
+  generation: number;
+  expectedHeadSha: string | null;
+  observedHeadSha: string | null;
+  observedBranch: string | null;
+  failureCode: string | null;
+  lastReportedAt: string | null;
+}
 export type CloudWorkspaceMaterializationState =
   CloudWorkspaceMaterializationSummary["state"];
 export type CloudWorkspaceMaterializationTargetKind =
@@ -120,8 +137,16 @@ export function isCloudAgentKind(value: string): value is CloudAgentKind {
 }
 
 // Generated type aliases — names preserved so all existing import sites are unchanged.
-export type RepoRef                   = Schema<"RepoRef">;
-export type CloudSandboxResponse    = Schema<"CloudSandboxResponse">;
+// TODO(cull-trail): ``RepoRef`` left the wire contract with the cloud workspace
+// surface; pinned by hand because the workspace domain model still names repos
+// with this shape.
+export interface RepoRef {
+  provider: string;
+  owner: string;
+  name: string;
+  branch: string;
+  baseBranch: string;
+}
 export type BillingPlanInfo           = Schema<"CloudPlanInfo">;
 export type BillingUrlResponse        = Schema<"BillingUrlResponse">;
 export type OverageSettingsResponse   = Schema<"OverageSettingsResponse">;
@@ -214,45 +239,49 @@ interface CloudWorkspaceSummaryAppExtras {
   billing?: Schema<"WorkspaceBillingSummary"> | null;
 }
 
-// Derived from the generated OpenAPI ``WorkspaceSummary`` — the wire contract is
-// the source of truth. We override only the SDK's normalized display fields,
-// which product surfaces consume as their full domain unions rather than the
-// narrow subset this one server emits: the two status enums (SDK client
-// normalizes into ``CloudWorkspaceStatus`` — adds ``needs_rematerialization``/
-// ``pending``), and ``visibility``/``sandboxType``/``exposureState`` (workspaces
-// arrive from multiple scopes — exposed/org-all/claimable — so the client treats
-// these as the richer product unions). This is exactly the "existing normalized
-// status fields" overlay the PR spec's conformance section permits; no unrelated
-// wire field (materializations, runtime, cloudAccess, executionTarget, …) is
-// duplicated here.
-// ``Required<>`` over the wire base: the generated schema marks most fields
-// optional because they carry Pydantic defaults, but the server always
-// serializes them, and product consumers rely on their present-but-nullable
-// shape (matching the prior hand-written mirror). Off-wire app extras stay
-// optional via the separate intersection below.
-export type CloudWorkspaceSummary = Required<
-  Omit<
-    Schema<"WorkspaceSummary">,
-    | "status"
-    | "workspaceStatus"
-    | "visibility"
-    | "sandboxType"
-    | "exposureState"
-    | "runtime"
-    | "executionTarget"
-  >
-> & {
+// TODO(cull-trail): the server's cloud workspace surface is deleted, so the
+// ``WorkspaceSummary`` wire schema this type derived from no longer exists.
+// The wire base is pinned by hand from the last generated contract (with the
+// prior ``Required<>`` normalization applied): the shared workspace domain
+// model — logical workspaces, inventory, recent-work items, reconciliation —
+// still compiles against this shape, while every data source that produced
+// values of it is gone.
+interface CloudWorkspaceSummaryWireBase {
+  id: string;
+  targetId: string | null;
+  workspaceKind: CloudWorkspaceBackingKind;
+  repoEnvironmentId: string | null;
+  displayName: string;
+  repo: RepoRef | null;
+  productLifecycle: "active" | "archived";
+  selectedMaterializationId: string | null;
+  primaryMaterialization: CloudWorkspaceMaterializationSummary | null;
+  materializations: CloudWorkspaceMaterializationSummary[];
+  cloudAccess: CloudWorkspaceCloudAccessSummary;
+  statusDetail: string | null;
+  lastError: string | null;
+  templateVersion: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+  readyAt: string | null;
+  postReadyPhase: "idle";
+  postReadyFilesTotal: number;
+  postReadyFilesApplied: number;
+  postReadyStartedAt: string | null;
+  postReadyCompletedAt: string | null;
+  lastActivityAt: string | null;
+  allowedAgentKinds: string[];
+  readyAgentKinds: string[];
+  anyharnessWorkspaceId: string | null;
+}
+
+export type CloudWorkspaceSummary = CloudWorkspaceSummaryWireBase & {
   status: CloudWorkspaceStatus;
   workspaceStatus: CloudWorkspaceStatus;
   visibility: CloudWorkspaceVisibility;
   sandboxType?: CloudWorkspaceSandboxType;
   exposureState?: CloudWorkspaceExposureState;
-  // Runtime status is the SDK's normalized ``CloudRuntimeStatus`` (adds
-  // ``provisioning``), the same normalized-status overlay as ``status``.
   runtime?: CloudWorkspaceRuntimeSummary;
-  // executionTarget.kind is the full target-kind union the product consumes
-  // (local_desktop | managed_cloud | self_hosted); this one server only
-  // ever emits the managed_cloud constant, so keep the richer SDK shape.
   executionTarget?: CloudWorkspaceExecutionTargetSummary;
 } & CloudWorkspaceSummaryAppExtras;
 
