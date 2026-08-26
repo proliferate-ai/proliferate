@@ -158,9 +158,14 @@ function HarnessAuthMethods({
     }
   }
 
-  const gatewayFailureReason = editor.gatewayLocked
-    ? gatewaySubtitle(capabilities, enrollment)
-    : null;
+  // Credits exhaustion is a failure reason even though the gateway is not
+  // "locked": the state renderer is withholding the virtual key, so a launch
+  // will fail closed. Naming it here is the honest surface for AA-3 — the
+  // runtime's own refusal is the generic AGENT_ROUTE_SELECTION_MISSING.
+  const gatewayFailureReason =
+    editor.gatewayLocked || capabilities?.creditsExhausted
+      ? gatewaySubtitle(capabilities, enrollment)
+      : null;
   const cardCount = gatewayCapable ? 3 : 2;
 
   // Flag-ON path (ADR agent-auth rung 6): render the runtime's DERIVED
