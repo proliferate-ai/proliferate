@@ -47,7 +47,6 @@ import {
 const mocks = vi.hoisted(() => {
   const createThreadFromSelection = vi.fn();
   return {
-    createCloudWorkspaceAndEnterWithResult: vi.fn(),
     createEmptySessionWithResolvedConfig: vi.fn(),
     createLocalWorkspaceAndEnterWithResult: vi.fn(),
     createSessionWithResolvedConfig: vi.fn(),
@@ -75,12 +74,6 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
 vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ show: mocks.showToast, showError: mocks.showErrorToast }),
-}));
-
-vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
-  useCreateCloudWorkspace: () => ({
-    createCloudWorkspaceAndEnterWithResult: mocks.createCloudWorkspaceAndEnterWithResult,
-  }),
 }));
 
 vi.mock("#product/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
@@ -322,56 +315,6 @@ describe("useHomeNextLaunch concurrent launches", () => {
   // cloud failure then bound this launch's intent to the attended launch's
   // attempt and workspace, which is how one launch's failure pane surfaced over
   // another launch's shell.
-  it("scopes a failed cloud launch to its own attempt, not the attended one (PRO-230)", async () => {
-    // The attended launch is another cloud launch, which is what makes the
-    // fallback dangerous: any cloud-created entry matches a cloud target, so
-    // "the attended attempt" resolves to it.
-    const attended = cloudPendingEntry("attended-other-launch");
-    const attendedWithWorkspace = { ...attended, workspaceId: "workspace-attended" };
-    let cloudAttemptId: string | null = null;
-
-    mocks.createCloudWorkspaceAndEnterWithResult.mockImplementation(
-      async (_target: unknown, options: { attemptId: string }) => {
-        cloudAttemptId = options.attemptId;
-        // The cloud attempt registers itself, exactly as beginPendingWorkspace
-        // does inside the real create flow's synchronous prefix.
-        registerPendingEntry(cloudPendingEntry(options.attemptId));
-        // Meanwhile the user is attending a different launch entirely.
-        registerPendingEntry(attendedWithWorkspace);
-        useSessionSelectionStore.getState().enterPendingWorkspaceShell(attendedWithWorkspace, {
-          initialActiveSessionId: null,
-        });
-        return { status: "interrupted", failureMessage: "Billing gate" };
-      },
-    );
-
-    const { result } = renderHomeNextLaunch();
-    let outcome: HomeNextLaunchOutcome = "launched";
-    await act(async () => {
-      outcome = await result.current.launch({
-        text: "launch in cloud",
-        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        launchControlValues: {},
-        target: {
-          kind: "cloud",
-          gitOwner: "proliferate-ai",
-          gitRepoName: "proliferate",
-          baseBranch: "main",
-        },
-      });
-    });
-
-    expect(outcome).toBe("not-started");
-    expect(cloudAttemptId).not.toBeNull();
-    const failedIntent = launchIntents(useChatLaunchIntentStore.getState())[0];
-    expect(failedIntent?.attemptId).toBe(cloudAttemptId);
-    expect(failedIntent?.attemptId).not.toBe(attended.attemptId);
-    // Nor may it inherit the attended launch's workspace, which is what made
-    // Back and dismiss act on the wrong launch.
-    expect(failedIntent?.materializedWorkspaceId).toBeNull();
-    expect(failedIntent?.failure?.retryMode).toBe("safe");
-  });
-
   // PR #1870 review finding 5: the per-attempt notice and the launch-level
   // toast both fired for one unattended failure, the second one telling the
   // user their prompt was back in a composer they were not looking at.

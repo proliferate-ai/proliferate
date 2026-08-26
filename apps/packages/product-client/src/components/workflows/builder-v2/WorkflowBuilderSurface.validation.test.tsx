@@ -63,10 +63,12 @@ vi.mock("#product/hooks/access/cloud/workflows/use-workflow-definitions-v2-acces
   }),
 }));
 
-vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useCloudSandbox: () => ({ data: { id: "sandbox-1" }, isError: false }),
-  useCloudHarnessLaunchOptions: ({ harnessKind }: { harnessKind: string }) => ({
-    data: harnessKind === "claude" ? {
+vi.mock("@anyharness/sdk-react", () => ({
+  useRepoRootsQuery: () => mocks.repoRootsQuery,
+  useAgentLaunchOptionsListQuery: ({ harnessKinds }: { harnessKinds: readonly string[] }) =>
+    harnessKinds.map((harnessKind) => ({
+      harnessKind,
+      data: harnessKind === "claude" ? {
       harnessKind: "claude",
       basisRevision: "basis-1",
       revision: 1,
@@ -84,13 +86,10 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
       probeAttemptedAt: "2026-08-19T00:00:00Z",
       probeFailureCode: null,
       readiness: "ready",
-    } : undefined,
-    isError: false,
-  }),
-}));
-
-vi.mock("@anyharness/sdk-react", () => ({
-  useRepoRootsQuery: () => mocks.repoRootsQuery,
+    } : null,
+      isPending: false,
+      isError: false,
+    })),
 }));
 
 // Hand placements are persisted through the product host, which this surface

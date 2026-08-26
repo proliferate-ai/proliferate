@@ -143,7 +143,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Account",
       "General",
       "Appearance",
-      "Personal secrets",
       "Support",
       "Desktop updates",
     ];

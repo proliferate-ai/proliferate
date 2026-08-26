@@ -32,8 +32,6 @@ const state = vi.hoisted(() => ({
   // one probe interval, with no user action in between.
   nextLaunchOptions: undefined as LaunchOptionsFixture,
   // Cloud-surface fixtures (E-R5), stateful like `launchOptions` above.
-  cloudSandbox: null as Record<string, unknown> | null,
-  cloudLaunchOptions: undefined as LaunchOptionsFixture,
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
@@ -64,14 +62,6 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
 }));
 
-vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useCloudSandbox: () => ({ data: state.cloudSandbox, isLoading: false, isError: false, isPending: false, fetchStatus: "idle", refetch: vi.fn() }),
-  // Disabled without a sandbox id, exactly like the real dependent query.
-  useCloudHarnessLaunchOptions: ({ cloudSandboxId }: { cloudSandboxId?: string | null }) => {
-    const data = cloudSandboxId ? state.cloudLaunchOptions : undefined;
-    return { data, isLoading: false, isError: false, isPending: data === undefined, fetchStatus: "idle", refetch: vi.fn() };
-  },
-}));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   // Desktop: the surface this whole matrix describes.
@@ -80,10 +70,6 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
 
 vi.mock("#product/lib/access/anyharness/runtime-bootstrap", () => ({
   restartHarnessRuntime: vi.fn(),
-}));
-
-vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
-  useCloudAvailabilityState: () => ({ cloudActive: true }),
 }));
 
 vi.mock("#product/stores/toast/toast-store", () => ({
@@ -103,8 +89,6 @@ beforeEach(() => {
   state.isLoading = false;
   state.isError = false;
   state.nextLaunchOptions = undefined;
-  state.cloudSandbox = null;
-  state.cloudLaunchOptions = undefined;
   state.launchOptions = {
     harnessKind: "claude",
     basisRevision: "basis-1",
@@ -479,53 +463,12 @@ describe("HarnessAllModelsSection — queued counts as live (E-R2)", () => {
   });
 });
 
-describe("HarnessAllModelsSection — cloud surface (E-R5)", () => {
-  it("idle-unobserved drops the Refresh-only sentence and renders no Refresh control", () => {
-    state.cloudSandbox = { id: "sandbox-1" };
-    state.cloudLaunchOptions = {
-      harnessKind: "claude",
-      basisRevision: "cloud-b1",
-      revision: 1,
-      state: "detecting",
-      options: null,
-      observedAt: null,
-      probeAttemptedAt: isoAgo(0),
-      probeFailureCode: null,
-      readiness: "ready",
-    };
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
-
-    expect(screen.getByText("Models haven't been detected yet")).toBeTruthy();
-    expect(screen.getByText("· Claude reports models after its first launch.")).toBeTruthy();
-    expect(screen.queryByText(/Refresh checks now/)).toBeNull();
-    expect(screen.queryByRole("button", { name: /^refresh$/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Refreshing…" })).toBeNull();
-  });
-
-  it("failed_without_observation offers a re-read, not a re-probe (E-R37)", () => {
-    state.cloudSandbox = { id: "sandbox-1" };
-    state.cloudLaunchOptions = {
-      harnessKind: "claude",
-      basisRevision: "cloud-b1",
-      revision: 2,
-      state: "failed_without_observation",
-      options: null,
-      observedAt: null,
-      probeAttemptedAt: isoAgo(0),
-      probeFailureCode: "harness_probe_failed",
-      readiness: "ready",
-    };
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
-
-    expect(screen.getByText("Couldn't check models")).toBeTruthy();
-    // E-R37: cloud has no probe route, but this state is never polled either
-    // (`resolveAgentLaunchOptionsRefetchInterval` returns false for it), so
-    // with no Retry it was the pane's one permanent dead end. The cure offered
-    // is a re-READ of the snapshot the owning runtime keeps re-probing, which
-    // is why the copy says "checks for a newer result" and not "Refresh".
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
-    expect(screen.getByText(/Retry checks for a newer result\./)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^refresh$/i })).toBeNull();
+describe("HarnessAllModelsSection — cloud surface", () => {
+  it("renders nothing: the copied cloud launch-options store died with the sandbox stack", () => {
+    const { container } = render(
+      <HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />,
+    );
+    expect(container.innerHTML).toBe("");
   });
 });
 
@@ -572,24 +515,4 @@ describe("HarnessAllModelsSection — round 2 review fixes", () => {
     expect(screen.queryByRole("button", { name: "Refreshing…" })).toBeNull();
   });
 
-  it("E-R12: a copied cloud snapshot in refreshing shows last-good count + freshness, not checking", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(FIXED_NOW);
-    state.cloudSandbox = { id: "sandbox-1" };
-    state.cloudLaunchOptions = {
-      harnessKind: "claude",
-      basisRevision: "cloud-b1",
-      revision: 3,
-      state: "refreshing",
-      options: { models: [{ id: "m-1", observedName: "Model 1", observedDescription: null }], controls: [], defaults: { modelId: null, controlValues: {} } },
-      observedAt: isoAgo(120_000),
-      probeAttemptedAt: isoAgo(0),
-      probeFailureCode: null,
-      readiness: "ready",
-    };
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
-    expect(screen.getByText("1 model")).toBeTruthy();
-    expect(screen.getByText("· refreshed 2m ago")).toBeTruthy();
-    expect(screen.queryByText("Checking available models…")).toBeNull();
-  });
 });

@@ -31,15 +31,6 @@ const runtimeQuery = vi.hoisted(() => ({
   refetch: vi.fn(),
 }));
 
-const cloudState = vi.hoisted(() => ({
-  // 200-with-a-null-body: the account simply has no cloud workspace.
-  sandbox: null as Record<string, unknown> | null,
-  sandboxError: null as Error | null,
-  sandboxFetchStatus: "idle" as "idle" | "fetching",
-  launchOptions: undefined as Record<string, unknown> | undefined,
-  launchOptionsError: null as Error | null,
-}));
-
 /** The refresh mutation, whose parked-vs-running distinction is E-R28. */
 const refreshMutation = vi.hoisted(() => ({
   mutate: vi.fn(),
@@ -70,36 +61,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   useRefreshHarnessLaunchOptionsMutation: () => refreshMutation,
 }));
 
-vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useCloudSandbox: () => ({
-    data: cloudState.sandboxError ? undefined : cloudState.sandbox,
-    error: cloudState.sandboxError,
-    isLoading: false,
-    isError: cloudState.sandboxError !== null,
-    isPending: false,
-    fetchStatus: cloudState.sandboxFetchStatus,
-    refetch: vi.fn(),
-  }),
-  // The real hook is disabled without a non-empty target, so a null sandbox
-  // leaves it pending-and-idle forever.
-  useCloudHarnessLaunchOptions: ({ cloudSandboxId }: { cloudSandboxId?: string | null }) => {
-    const error = cloudSandboxId ? cloudState.launchOptionsError : null;
-    const data = cloudSandboxId && !error ? cloudState.launchOptions : undefined;
-    return {
-      data,
-      error,
-      isLoading: false,
-      isError: error !== null,
-      isPending: data === undefined && error === null,
-      fetchStatus: "idle",
-      refetch: vi.fn(),
-    };
-  },
-}));
 
-vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
-  useCloudAvailabilityState: () => ({ cloudActive: true }),
-}));
 
 vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (value: { show: () => void }) => unknown) =>
@@ -117,11 +79,6 @@ beforeEach(() => {
   runtimeQuery.isPending = true;
   runtimeQuery.fetchStatus = "idle";
   runtimeQuery.refetch.mockReset();
-  cloudState.sandbox = null;
-  cloudState.sandboxError = null;
-  cloudState.sandboxFetchStatus = "idle";
-  cloudState.launchOptions = undefined;
-  cloudState.launchOptionsError = null;
   refreshMutation.mutate.mockReset();
   refreshMutation.isPending = false;
   refreshMutation.isPaused = false;
@@ -184,19 +141,6 @@ describe("HarnessAllModelsSection — no payload, nothing in flight (round 3)", 
       .toBe(false);
   });
 
-  it("E-R18: a cloud account with no workspace never shows a permanent spinner", () => {
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
-
-    expect(screen.getByText("No cloud workspace yet")).toBeTruthy();
-    expect(screen.getByText("· Claude models are listed once a cloud workspace exists."))
-      .toBeTruthy();
-    // The bug this replaces: a forever "Loading models…" with no Refresh and
-    // no Retry anywhere in the view.
-    expect(screen.queryByText("Loading models…")).toBeNull();
-    expect(screen.queryByText("Models couldn't be loaded")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^refresh$/i })).toBeNull();
-  });
 
   it("E-R22/E-R33: a runtime that gave up offers the restart that actually cures it", () => {
     useHarnessConnectionStore.setState({ connectionState: "failed" });
@@ -251,102 +195,11 @@ describe("HarnessAllModelsSection — no payload, nothing in flight (round 3)", 
       .toBe(true);
   });
 
-  it("E-R24: a not-observed 404 is the cloud first-run screen, not a failure", () => {
-    cloudState.sandbox = { id: "sandbox-1" };
-    cloudState.launchOptionsError = new ProliferateClientError(
-      "Harness launch options have not been observed on this target.",
-      404,
-      "harness_launch_options_not_observed",
-    );
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
 
-    expect(screen.getByText("Models haven't been detected yet")).toBeTruthy();
-    expect(screen.getByText("· Claude reports models after its first run in this workspace."))
-      .toBeTruthy();
-    // The server DID respond, with a structured code.
-    expect(screen.queryByText("Models couldn't be loaded")).toBeNull();
-    expect(screen.queryByText("· The runtime didn't respond.")).toBeNull();
-    // Retrying re-issues the same GET and 404s forever.
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
-  });
 
-  it("E-R24: an unstructured cloud failure still gets the error arm and a Retry", () => {
-    cloudState.sandbox = { id: "sandbox-1" };
-    cloudState.launchOptionsError = new ProliferateClientError("Bad Gateway", 502, null);
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
 
-    expect(screen.getByText("Models couldn't be loaded")).toBeTruthy();
-    // E-R30: a 502 IS a response. The round-4 line claimed silence here.
-    expect(screen.getByText("· Proliferate Cloud returned an error.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
-  });
 
-  it("E-R30: a stale sandbox id gets the workspace answer, not a silence claim", () => {
-    cloudState.sandbox = { id: "sb-stale" };
-    cloudState.launchOptionsError = new ProliferateClientError(
-      "Cloud sandbox not found.",
-      404,
-      "cloud_sandbox_not_found",
-    );
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
 
-    // The cloud DID respond, with a structured code the pane can read.
-    expect(screen.queryByText("· Proliferate Cloud didn't respond.")).toBeNull();
-    expect(screen.getByText("No cloud workspace yet")).toBeTruthy();
-    expect(screen.getByText("· Claude models are listed once a cloud workspace exists."))
-      .toBeTruthy();
-    // Unlike the never-had-one arm, re-reading the sandbox can return a
-    // different id, so this one carries a cure.
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
-  });
-
-  it("E-R30: an answered error is not silence, and silence is not an answer", () => {
-    cloudState.sandbox = { id: "sandbox-1" };
-    cloudState.launchOptionsError = new ProliferateClientError("Bad Gateway", 502, null);
-    const { unmount } = render(
-      <HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />,
-    );
-    expect(screen.getByText("· Proliferate Cloud returned an error.")).toBeTruthy();
-    expect(screen.queryByText("· Proliferate Cloud didn't respond.")).toBeNull();
-    unmount();
-
-    // A rejected fetch carries no status at all: nothing came back, and that
-    // is the one failure where claiming silence is established fact.
-    cloudState.launchOptionsError = new TypeError("Failed to fetch");
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
-    expect(screen.getByText("· Proliferate Cloud didn't respond.")).toBeTruthy();
-    expect(screen.queryByText("· Proliferate Cloud returned an error.")).toBeNull();
-  });
-
-  it("E-R35: a background sandbox refetch does not reopen a settled 404", () => {
-    cloudState.sandbox = { id: "sandbox-1" };
-    cloudState.sandboxFetchStatus = "fetching";
-    cloudState.launchOptionsError = new ProliferateClientError(
-      "Harness launch options have not been observed on this target.",
-      404,
-      "harness_launch_options_not_observed",
-    );
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
-
-    // The settled answer outranks the other query's fetch status.
-    expect(screen.getByText("Models haven't been detected yet")).toBeTruthy();
-    expect(screen.queryByText("Loading models…")).toBeNull();
-  });
-
-  it("E-R19: neither new arm prints a body that contradicts its own header", () => {
-    const { unmount } = render(
-      <HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Models" }));
-    expect(screen.getByText("Connecting to the local runtime")).toBeTruthy();
-    expect(screen.queryByText("No models detected yet.")).toBeNull();
-    unmount();
-
-    render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="cloud" />);
-    fireEvent.click(screen.getByRole("button", { name: "Models" }));
-    expect(screen.getByText("No cloud workspace yet")).toBeTruthy();
-    expect(screen.queryByText("No models detected yet.")).toBeNull();
-  });
 
   it("E-R13/E-R17: a disabled local query neither loads forever nor claims failure", () => {
     render(<HarnessAllModelsSection harnessKind="claude" displayName="Claude" surface="local" />);
