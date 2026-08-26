@@ -32,6 +32,106 @@ index, and the change-control model for moving a value or adding a component.
 - Per-surface product behavior (what a screen does, its flows and copy) — the
   owning [systems/product/**](codebase/systems/README.md) document.
 
+## System Contract
+
+The design system as a system: what it owns, what it exposes, who consumes
+it, and how it is proven. The sections that follow this one are its body.
+
+**Purpose.** One value system and one component vocabulary so every surface
+reads as the same product, and so a change to a value or a shape is made in
+one place and propagates mechanically.
+
+**Owned state.** No runtime state. Owned artifacts: the token record
+([tokens.ts](../apps/packages/design/src/tokens.ts) — `themeTokens`,
+`colors`, `spacing`, `radius`, `typography`, `shadows`, `timing`,
+`codeColors`, `themePreviewColors`), the motion and cadence primitives
+([motion.ts](../apps/packages/design/src/motion.ts),
+[cadence.ts](../apps/packages/design/src/cadence.ts)), the generated
+stylesheet (`dist/theme.css`, projected by `scripts/generate-theme.mjs`,
+not checked in), the shared CSS entrypoints
+([product.css](../apps/packages/design/src/css/product.css),
+[desktop.css](../apps/packages/design/src/css/desktop.css)), the React
+Native bridge ([react-native.ts](../apps/packages/design/src/react-native.ts)),
+and the component library under
+`apps/packages/product-client/src/primitives/**` (root primitives, the six
+kits under `patterns/` — composer, panel, settings, sidebar, tabs, toast —
+plus `icons/`, `overlays/`, `utils/`).
+
+**Public surface.** `@proliferate/design/{tokens,motion,cadence,react-native}`
+and the CSS entrypoints (39 product-client files import the package: 37
+`motion`, 12 `cadence`, 5 `tokens`); `#product/primitives/*` for Desktop/Web
+product code; `design/react-native` for Mobile. Nothing else in the package
+is importable.
+
+**Consumes.** Tailwind and Radix as vendors; nothing of ours. Dependency
+direction is `desktop/web → product-client connected tier → primitives →
+design` and never backwards
+([frontend/packages.md](frontend/packages.md)).
+
+**Laws.** Stated in the sections below and enforced as listed in
+[Changing The Design](#changing-the-design): `tokens.ts` is the number
+authority; the type ramp is closed; Radix is contained inside primitives;
+primitives are defined only in the library (FE-STRUCT-1/2); the appearance
+gate bans literal sizes; contrast floors are measured on the built
+stylesheet (PROD-THEME); our styles are never attributed to another product
+(PROD-ATTR); the library's rule of two and at-least-one-call-site rule
+(check_component_library).
+
+**Emits.** The generated theme, the component index, and the lint records
+under [lints/product](../lints/product/theme.toml) /
+[lints/frontend](../lints/frontend/structure.toml) that other surfaces are
+checked against.
+
+**Fences.** Per-surface behavior belongs to the owning
+[systems/product](codebase/systems/product/README.md) document; class
+authoring rules to [frontend/styling.md](frontend/styling.md); the
+appearance-scaling gate's own contract to
+[appearance-scaling.md](codebase/systems/product/settings/appearance-scaling.md);
+package direction to [frontend/packages.md](frontend/packages.md).
+
+**Proof.** `apps/packages/design/scripts/check-theme.mjs` (byte-equal
+re-projection + real Tailwind compile), `scripts/check_theme_contrast.py`,
+`scripts/check_frontend_boundaries.py`, `scripts/report_frontend_structure.py`,
+`scripts/check_component_library.py`, `scripts/check_appearance_scaling.py`,
+`scripts/check_design_attribution.py` — all in the CI "Repo shape checks" and
+"Shared frontend packages" jobs; `primitives/__tests__` (21 files); the
+Tier-2 composer perimeter rendered spec. Current mechanical-gap census is
+the [Current Gaps](#current-gaps) list.
+
+### Decisions reserved for the founder
+
+The structure above is current and mechanical. The *taste* of the system —
+what it should look and feel like next — is not a spec-writer's call. Each
+item names the options so a ruling can be recorded without re-deriving the
+structure.
+
+> [!decision] PABLO DECIDES: type identity.
+> Keep Inter (UI) + Manrope (display) + the current closed ramp; or replace
+> the display face; or collapse to one family. The ramp mechanism and the
+> gate are unaffected by any answer; `tokens.ts` `typography` changes.
+
+> [!decision] PABLO DECIDES: color direction.
+> Keep the neutral-first role model with the current accent; shift the
+> accent; or introduce a second brand hue. Contrast floors (body ≥ 7.0:1,
+> secondary/faint ≥ 4.5:1) are a constraint on any answer, not a choice.
+
+> [!decision] PABLO DECIDES: density and radius.
+> The spacing/radius scales are closed; the question is which rung the
+> product sits on by default (tighter/looser, squarer/rounder). One token
+> pair moves; every surface follows.
+
+> [!decision] PABLO DECIDES: motion character.
+> Current motion is functional (durations/easings/cadence for feedback).
+> Whether the product wants expressive motion (hero reveals, transitions
+> between surfaces) is a taste call that adds `motion.ts` primitives; it
+> does not change the cadence scale.
+
+> [!decision] PABLO DECIDES: the "ugly" list.
+> Which surfaces are visually below the bar today (candidates named in the
+> cull and product reviews: settings panes, the home target picker, the
+> workflows main view, the sidebar roster rows). Ordering this list is what
+> turns the design-system rebuild into a sweep plan.
+
 ## Where The System Lives
 
 ```text

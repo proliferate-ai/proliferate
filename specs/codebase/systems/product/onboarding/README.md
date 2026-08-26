@@ -1,154 +1,176 @@
 # Onboarding
 
-Onboarding is the path from a signed-out person to a product-ready account that
-can create or join useful work. It is not one component or one server route.
-It spans product auth, provider readiness, billing/credits, agent auth, settings
-handoff, and first workspace creation.
+The path from a signed-out person to commandable work: sign-in, product
+readiness, harness install and agent-auth setup, and the first workspace.
+A **client composition surface** spanning the login page, the Home screen's
+onboarding cards, and the readiness gates other surfaces mount; it owns no
+account, credential, or workspace record.
 
-## Scope
-
-Use this spec when changing:
-
-- signed-out to signed-in handoff for Desktop, Web, or Mobile
-- GitHub-required/product-readiness gates
-- first-run account, team, billing, or provider setup states
-- managed-credit or BYOK onboarding shown to a new user
-- the transition from onboarding into first cloud workspace creation
-- onboarding copy, analytics, QA, or support behavior
-
-Out of scope:
-
-- low-level account auth routes and password/provider semantics, owned by
-  [Product Auth](../auth/README.md)
-- server auth/resource-access structure, owned by
-  [specs/server/auth.md](../../../../server/auth.md)
-- managed-credit and LiteLLM gateway contracts, owned by
-  [specs/FEATURE_DOCS/MODELS.md](../../../../FEATURE_DOCS/MODELS.md)
-  (auth selections and key delivery:
-  [specs/FEATURE_DOCS/AGENT_AUTH.md](../../../../FEATURE_DOCS/AGENT_AUTH.md))
-- billing authorization and Stripe subscription/refill behavior, owned by
-  [specs/FEATURE_DOCS/BILLING.md](../../../../FEATURE_DOCS/BILLING.md)
-- managed workspace creation, owned by
-  [../../../platforms/product/workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md)
-
-## Read Order
-
-1. This spec for the end-to-end onboarding sequence and boundaries.
-2. [Product Auth](../auth/README.md) for sign-in methods, linked providers,
-   password accounts, reviewer accounts, and GitHub readiness.
-3. [Settings and Admin Information Architecture](../settings/information-architecture.md) for where account, provider,
-   billing, team, and configuration states appear.
-4. The managed model gateway platform (document removed; rewrite planned) for
-   managed credits, virtual keys, and gateway QA.
-5. [specs/FEATURE_DOCS/BILLING.md](../../../../FEATURE_DOCS/BILLING.md) for credit budgets,
-   free allocations, Stripe checkout, refill, and billing state.
-6. [../../../platforms/product/workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md)
-   and [Pending Workspace Shell](../workspaces/pending-shell.md) for first
-   workspace creation and pending-shell handoff.
-
-## Mental Model
-
-Onboarding has four readiness layers:
-
-```text
-identity readiness
-  user has an authenticated Proliferate account
-provider readiness
-  user has the required linked provider state, currently GitHub
-run readiness
-  billing/credits and agent auth can authorize and launch cloud work
-workspace readiness
-  user can create, claim, or open a workspace and send the first useful prompt
-```
-
-These layers are separate. A user may be signed in but not product-ready. A
-user may be product-ready but blocked from managed cloud work by billing,
-credits, agent auth, target configuration, or provider state. UI should name the
-blocked layer instead of hiding the action or pretending the account is ready.
-
-## Current Flow
-
-The normal onboarding path is:
-
-```text
-1. User signs in through Desktop, Web, or Mobile.
-2. Product auth creates or restores the Proliferate session.
-3. Product readiness checks linked provider state.
-4. If GitHub readiness is missing, the surface shows the GitHub-required path.
-5. After provider readiness, account/settings surfaces show billing, team, and
-   agent auth readiness.
-6. Managed-credit or BYOK setup establishes cloud run readiness.
-7. User starts first work through New Chat, Continue remotely, claim, Slack,
-   automation, cowork, or API entrypoint.
-8. Workspace creation uses the managed workspace provisioning path.
-9. Pending shell remaps to durable workspace/session ids after creation.
-10. First command or prompt proves onboarding by producing commandable work.
-```
-
-## Surface Ownership
-
-| Surface | Onboarding responsibility |
+| Section | Document |
 | --- | --- |
-| Desktop | Start GitHub-first sign-in, restore account state, show account/password/provider settings, expose Continue remotely/New Chat only through real readiness gates, and route first work through workspace provisioning. |
-| Web | Support signed-out/sign-in handoff, provider readiness, cloud workspace creation/open/claim paths, billing/account settings, and staging/production smoke for first cloud work. |
-| Mobile | Support mobile auth session restore, GitHub-required state, mobile cloud chat creation/opening, settings state, and native/mobile-web smoke for first work. |
-| Server | Own account identity, linked provider state, billing/account readiness responses, agent auth/gateway capability state, and managed workspace launch services. |
-| AnyHarness/Worker | Do not own onboarding UI; they surface runtime/commandability failures that onboarding surfaces must represent accurately. |
+| Account sign-in, linked providers, reviewer accounts | [../auth/README.md](../auth/README.md) |
+| Agent auth setup and the ack-gated "setting up" step | [AGENT_AUTH.md](../../../../FEATURE_DOCS/AGENT_AUTH.md) |
+| Harness distribution and install | [MODELS.md](../../../../FEATURE_DOCS/MODELS.md) |
+| Billing / credit readiness | [BILLING.md](../../../../FEATURE_DOCS/BILLING.md) |
+| First workspace creation | [workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md) |
+| Organization join by invitation | [../organizations/invitations.md](../organizations/invitations.md) |
 
-## Invariants
+## Purpose
 
-- GitHub remains the product-readiness provider until an explicit product-auth
-  spec change says otherwise.
-- A password-only user may be signed in but remains limited until GitHub
-  readiness succeeds. Do not add hidden readiness bypasses for normal users.
-- Onboarding surfaces must use server/account readiness and capability state;
-  they must not infer readiness from local UI state alone.
-- Managed-credit free allocations must be deduped through the billing/gateway
-  primitives. UI copy must not promise credits that the server cannot grant.
-- BYOK and managed-credit setup are cloud run readiness, not account identity.
-- First workspace creation must go through
-  [../../../platforms/product/workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md);
-  do not hand-roll first-workspace creation in an onboarding component.
-- Billing, provider, and agent-auth blockers should preserve the user's typed
-  prompt or intent when practical, then resume through the normal pending-shell
-  or workspace creation path after readiness changes.
-
-## Analytics And Support
-
-Onboarding analytics must follow the
-[Engineering Analytics contract](../../engineering/analytics/README.md):
-
-- Use stable event names and scrubbed properties.
-- Do not send prompts, repo names, raw file paths, request bodies, auth
-  material, cookies, or secret values.
-- Track readiness layer and blocker codes, not free-form user content.
-
-Support reports and debugging should include stable ids when available: user
-id, organization id, linked provider state, billing subject id, workspace id,
-session id, command id, and support report id. Use
-[../../../../../guides/debugging/README.md](../../../../../guides/debugging/README.md)
-for the operator path.
-
-## Verification
-
-For onboarding changes, choose the narrowest useful matrix from
-[specs/TESTING/manual-release-qa.md](../../../../TESTING/manual-release-qa.md) and include the
-touched surfaces.
-
-Minimum local smoke for end-to-end onboarding changes:
+Get a person from install to their first useful prompt with every blocked
+layer named. Readiness is layered and each layer is owned elsewhere; this
+surface sequences them and preserves the person's intent (typed prompt,
+chosen repo) across blockers.
 
 ```text
-1. Start a clean dev profile.
-2. Sign in through the changed surface.
-3. Verify the GitHub-required state appears when provider readiness is missing.
-4. Link or use a product-ready GitHub identity.
-5. Verify account/settings readiness state.
-6. Verify managed-credit or BYOK setup state when cloud run readiness changed.
-7. Create or open first work through the changed entrypoint.
-8. Confirm the pending shell remaps to durable workspace/session ids.
-9. Send a prompt or command and confirm transcript/commandability updates.
+account identity      signed in (GitHub-first; password limited until GitHub readiness)
+product readiness     linked provider state says the account may use the product
+runtime readiness     a harness is installed and reconciled on this machine
+agent auth readiness  the harness can authenticate (local CLI login, BYOK, or managed gateway)
+cloud run readiness   billing/credits or BYOK permit managed cloud work (gated dark today)
+workspace readiness   a workspace exists and the first prompt is commandable
 ```
 
-Use `STRIPE=1` and [../../../../../guides/local/stripe-local-testing.md](../../../../../guides/local/stripe-local-testing.md)
-when billing checkout, portal, subscription, refill, webhook, or credit behavior
-is part of the onboarding change.
+## Owned state
+
+| State | Holds | Code |
+| --- | --- | --- |
+| Auth-setup onboarding | Adopted harness kinds, the latched outcome of the ack-gated step | [auth-setup-onboarding-store.ts](../../../../../apps/packages/product-client/src/stores/agents/auth-setup-onboarding-store.ts) |
+| Home draft + deferred launch | The first prompt draft and a launch deferred behind readiness | [home-draft-handoff-store.ts](../../../../../apps/packages/product-client/src/stores/home/home-draft-handoff-store.ts), [deferred-home-launch-store.ts](../../../../../apps/packages/product-client/src/stores/home/deferred-home-launch-store.ts) |
+| Login redirect target | Where to land after sign-in | [login-redirect](../../../../../apps/packages/product-client/src/lib/domain/auth/login-redirect.ts) via `location.state` |
+
+Auth session state itself is host-owned (`ProductHost.auth`); the product
+reads it and never holds the credential
+([product-host.ts](../../../../../apps/packages/product-client/src/host/product-host.ts)).
+
+## Public surface
+
+- [`LoginPage`](../../../../../apps/packages/product-client/src/pages/LoginPage.tsx)
+  → [`LoginScreen`](../../../../../apps/packages/product-client/src/components/auth/LoginScreen.tsx)
+  with GitHub and password sign-in, "connect to server" (Desktop
+  self-hosting), and the redirect callback screen.
+- Gates other surfaces mount:
+  [`AuthGate`](../../../../../apps/packages/product-client/src/components/auth/AuthGate.tsx),
+  [`MinDesktopVersionGate`](../../../../../apps/packages/product-client/src/components/auth/MinDesktopVersionGate.tsx),
+  [`UserPreferencesGate`](../../../../../apps/packages/product-client/src/components/app/UserPreferencesGate.tsx),
+  and the Home screen's
+  [`HomeOnboardingCards`](../../../../../apps/packages/product-client/src/components/home/screen/HomeOnboardingCards.tsx)
+  (max three: auth-setup step, setup cards, readiness card).
+- Entry routing:
+  [use-product-entry-routing.ts](../../../../../apps/packages/product-client/src/hooks/app/lifecycle/use-product-entry-routing.ts)
+  decides login vs. product on boot.
+
+## Consumes
+
+| Owning system | Contract | Where |
+| --- | --- | --- |
+| Host auth (Desktop/Web) | `ProductHost.auth` state, GitHub and password sign-in transports | [use-login-page.ts](../../../../../apps/packages/product-client/src/hooks/auth/facade/use-login-page.ts), [use-github-sign-in.ts](../../../../../apps/packages/product-client/src/hooks/auth/workflows/use-github-sign-in.ts), [use-password-sign-in.ts](../../../../../apps/packages/product-client/src/hooks/auth/workflows/use-password-sign-in.ts) |
+| Product auth (Cloud) | readiness, linked providers, min-version | [use-product-auth.ts](../../../../../apps/packages/product-client/src/hooks/auth/facade/use-product-auth.ts), [auth-probes.ts](../../../../../apps/packages/product-client/src/lib/access/cloud/auth-probes.ts) |
+| Runtime agent catalog (`agents`) | install state, reconcile job snapshot (the live install source for the readiness card) | [use-home-installation-readiness.ts](../../../../../apps/packages/product-client/src/hooks/home/derived/use-home-installation-readiness.ts), `useAgentReconcileStatusQuery` |
+| Agent auth + gateway (Cloud `auth`, `agent-gateway`) | first-run adoption posts selections; the setting-up step polls `applied` acks at 3 s for a ~20 s grace window, then auto-advances | [use-first-run-auth-adoption.ts](../../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-first-run-auth-adoption.ts), [use-auth-setup-onboarding-step.ts](../../../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-auth-setup-onboarding-step.ts) |
+| Desktop worker enrollment (Cloud `desktop-workers`) | on every authenticated Desktop boot, enroll a dispatch worker for this install under the active organization, with a bounded retry guard; the enrollment carries the integration-gateway identity dotfile that local sessions use | [use-desktop-worker-enrollment.ts](../../../../../apps/packages/product-client/src/hooks/cloud/lifecycle/use-desktop-worker-enrollment.ts), [ensure-desktop-worker.ts](../../../../../apps/packages/product-client/src/lib/workflows/cloud/ensure-desktop-worker.ts) |
+| Launch options (runtime-observed) | Home target picker and model selection before any session exists | [use-home-target-agent-launch-options.ts](../../../../../apps/packages/product-client/src/hooks/home/derived/use-home-target-agent-launch-options.ts) |
+| Workspace surface | first workspace creation and the pending shell | [use-home-next-launch.ts](../../../../../apps/packages/product-client/src/hooks/home/workflows/use-home-next-launch.ts) → [../workspaces/README.md](../workspaces/README.md) |
+
+## Laws
+
+- **GitHub is the product-readiness provider.** A password-only user is
+  signed in but limited until GitHub readiness succeeds; no hidden bypass
+  ([../auth/README.md](../auth/README.md)).
+- **Readiness is server state, never inferred locally.** Every gate reads
+  account/capability state from the host or Cloud; the install card reads
+  the runtime's reconcile snapshot, not a stale agent list
+  ([use-home-installation-readiness.ts](../../../../../apps/packages/product-client/src/hooks/home/derived/use-home-installation-readiness.ts)).
+- **Setup never hard-blocks the first prompt.** The auth-setup step
+  auto-advances after its grace window and the harness pane's ordinary
+  pending indicator carries on; both outcomes latch so the card never
+  resurrects on a later manual edit.
+- **Intent survives blockers.** The Home draft and deferred launch persist
+  across a readiness change and resume through the normal launch path
+  ([use-home-deferred-launch-runner.ts](../../../../../apps/packages/product-client/src/hooks/home/lifecycle/use-home-deferred-launch-runner.ts)).
+- **First workspace goes through provisioning.** Onboarding components
+  never hand-roll creation
+  ([workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md)).
+- **Managed-credit copy promises nothing the server cannot grant.**
+  Allocations dedupe through billing/gateway primitives
+  ([BILLING.md](../../../../FEATURE_DOCS/BILLING.md)).
+
+## Emits
+
+- Sign-in success → navigation to the redirect target.
+- Adopted selections → agent gateway (first-run adoption).
+- Analytics per the [analytics contract](../../engineering/analytics/README.md):
+  readiness layer and blocker codes only — never prompts, repo names, paths,
+  auth material.
+- Support-report ids (user, organization, provider state, workspace,
+  session) per [guides/debugging](../../../../../guides/debugging/README.md).
+
+## Fences
+
+- **Product auth** owns identity, providers, reviewer accounts, and the
+  auth surfaces' UX ([../auth/README.md](../auth/README.md)).
+- **Settings** owns where the person returns to change what onboarding set
+  ([../settings/README.md](../settings/README.md)).
+- **Agent auth / models** owns selections, enrollment, install semantics.
+- **Workspace surface** owns the Home target picker's launch into a
+  workspace and everything after ([../workspaces/README.md](../workspaces/README.md)).
+- **Hosts** (Desktop/Web) own auth transport, storage, and vendor bootstrap
+  ([web-desktop-unification](../clients/web-desktop-unification/README.md)).
+
+## Code map
+
+```text
+apps/packages/product-client/src/
+├── host/product-host.ts                     auth state + storage contract the surface reads
+├── lib/access/cloud/auth-probes.ts · auth-transport.ts
+├── domain/auth/{model,rules,presentation}.ts     PURE (shared with Mobile)
+├── lib/domain/auth/                         login redirect, auth mode
+├── lib/workflows/auth/apply-auth-state.ts · lib/workflows/agents/first-run-auth-adoption.ts
+├── lib/workflows/cloud/ensure-desktop-worker.ts
+├── hooks/auth/{facade,workflows}/           login page, product auth, sign-in flows
+├── hooks/app/lifecycle/use-product-entry-routing.ts
+├── hooks/agents/lifecycle/                  first-run adoption, auth-setup step + evidence
+├── hooks/home/{derived,ui,workflows,lifecycle}/   readiness card, target picker, launch, deferred launch
+├── stores/agents/auth-setup-onboarding-store.ts · stores/home/
+├── components/auth/                         LoginScreen, gates, callback, connect-server
+├── components/home/screen/                  HomeNextScreen, onboarding cards, target picker
+├── copy/auth/ · copy/home/
+└── pages/LoginPage.tsx · pages/MainPage.tsx (Home)
+```
+
+## Proof
+
+- Unit: `lib/domain/auth` (8), `hooks/agents` lifecycle tests, and
+  [HomeNextScreen.test.tsx](../../../../../apps/packages/product-client/src/components/home/screen/HomeNextScreen.test.tsx)
+  (home composer, target persistence, attachment battery).
+- Login budget: CI "Login first-load budget (phase-6)" runs
+  `scripts/measure-login-runtime-budget.mjs` against a real build.
+- Server: auth-flow integration suite (`tests/integration/test_auth_flow*`).
+- Manual smoke, minimum for end-to-end onboarding changes:
+
+  ```text
+  1. Start a clean dev profile.
+  2. Sign in through the changed surface.
+  3. Verify the GitHub-required state appears when provider readiness is missing.
+  4. Link or use a product-ready GitHub identity.
+  5. Verify the harness install / auth-setup cards resolve on Home.
+  6. Create or open first work through the changed entrypoint.
+  7. Confirm the pending shell remaps to durable workspace/session ids.
+  8. Send a prompt and confirm the transcript updates.
+  ```
+
+  Use `STRIPE=1` and
+  [stripe-local-testing.md](../../../../../guides/local/stripe-local-testing.md)
+  when billing checkout, portal, refill, or credit behavior is part of the
+  change; the fuller matrix is in
+  [manual-release-qa.md](../../../../TESTING/manual-release-qa.md).
+
+## Known gaps / follow-ups
+
+- Cloud run readiness (managed credits / BYOK for cloud work) is gated dark
+  with the cloud lane; the layer stays in the ladder because the
+  environments rebuild reintroduces it.
+- Desktop worker enrollment runs unconditionally on every authenticated
+  boot; it is the seam that will carry the future runtime worker identity
+  and should move to the seam client system when that lands.
+- Mobile onboarding shares only `domain/auth` and has no client spec.
