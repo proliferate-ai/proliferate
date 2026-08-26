@@ -14,9 +14,6 @@ import {
   loadSessionsWithBoundedRecovery,
 } from "#product/lib/workflows/workspaces/bounded-session-list-recovery";
 import {
-  getCloudWorkspaceBillingBlockFromError,
-} from "#product/lib/access/cloud/workspace-connection-retry";
-import {
   handleEmptyWorkspaceBootstrapWithRecovery,
 } from "#product/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
 import { enterWorkspaceSessionRecovery } from "#product/hooks/workspaces/workflows/workspace-session-recovery-state";
@@ -92,7 +89,9 @@ export async function loadWorkspaceSessionDirectory(
       forceRefresh,
       timeoutMs: input.timeoutMs,
     }),
-    shouldRetry: (error) => getCloudWorkspaceBillingBlockFromError(error) === null,
+    // Billing-block errors came from the deleted cloud gateway; every failure
+    // is retryable within the bounded recovery now.
+    shouldRetry: () => true,
   });
   if (result.kind === "stale") {
     return result;

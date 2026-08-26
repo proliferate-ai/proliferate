@@ -1,12 +1,7 @@
 import { useCallback } from "react";
 import type { Workspace } from "@anyharness/sdk";
-import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
-import { useWebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
-import { logicalWorkspaceMatchesId } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   failLatencyFlow,
   startLatencyFlow,
@@ -33,10 +28,6 @@ export function useWorkspaceNavigationWorkflow() {
     (state) => state.selectedLogicalWorkspaceId,
   );
   const { selectWorkspace } = useWorkspaceSelection();
-  const { logicalWorkspaces } = useLogicalWorkspaces();
-  const { openExternal } = useProductHost().links;
-  const webApp = useWebAppTarget();
-  const showToast = useToastStore((state) => state.show);
   const showErrorToast = useToastStore((state) => state.showError);
 
   const navigateToWorkspaceShell = useCallback(() => {
@@ -66,24 +57,8 @@ export function useWorkspaceNavigationWorkflow() {
     // directly instead of hard-failing "Workspace not found."
     options?: { knownWorkspace?: Workspace | null },
   ) {
-    const unclaimedCloudWorkspace = logicalWorkspaces.find((workspace) =>
-      logicalWorkspaceMatchesId(workspace, workspaceId) &&
-      workspace.cloudWorkspace?.visibility === "shared_unclaimed"
-    )?.cloudWorkspace;
-    // Unclaimed shared-cloud workspaces are claimed from the web app. Only hand
-    // off to web when this deployment actually has one; otherwise fall through
-    // to normal in-desktop selection rather than opening a dead vendor link.
-    if (unclaimedCloudWorkspace && webApp.available && webApp.baseUrl) {
-      const url = webWorkspaceDeepLink(
-        unclaimedCloudWorkspace.id,
-        webApp.baseUrl,
-      );
-      void openExternal(url).catch(() => {
-        showToast("Failed to open the web workspace.");
-      });
-      return;
-    }
-
+    // Unclaimed shared-cloud workspaces used to hand off to the web app; the
+    // cloud workspace stack is deleted, so every selection stays in-desktop.
     navigateToWorkspaceShell();
     if (workspaceId === selectedLogicalWorkspaceId) {
       markWorkspaceViewed(workspaceId);
@@ -106,15 +81,10 @@ export function useWorkspaceNavigationWorkflow() {
       });
     });
   }, [
-    logicalWorkspaces,
     navigateToWorkspaceShell,
-    openExternal,
     selectedLogicalWorkspaceId,
     selectWorkspace,
     showErrorToast,
-    showToast,
-    webApp.available,
-    webApp.baseUrl,
   ]);
 
   return {

@@ -11,7 +11,6 @@ import { useHarnessConnectionStore } from "#product/stores/sessions/harness-conn
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import type { AuthClientStatus } from "#product/lib/domain/auth/auth-state-mapping";
 import { buildAnyHarnessCacheScopeKey } from "#product/lib/domain/auth/anyharness-cache-scope";
-import { useCloudWorkspaceMaterializationCacheBoundary } from "#product/hooks/workspaces/cache/use-cloud-workspace-materialization-cache-boundary";
 import { TelemetryProvider } from "#product/providers/TelemetryProvider";
 import {
   ProductWorkspaceConnectionProvider,
@@ -75,23 +74,16 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
 
   return (
     <AnyHarnessRuntime runtimeUrl={readyRuntimeUrl || null} cacheScopeKey={cacheScopeKey}>
-      <CloudWorkspaceMaterializationCacheBoundary>
-        <ProductWorkspaceConnectionProvider
-          resolveConnection={resolveProductConnection}
+      <ProductWorkspaceConnectionProvider
+        resolveConnection={resolveProductConnection}
+      >
+        <AnyHarnessWorkspace
+          workspaceId={providerWorkspaceId}
+          resolveConnection={resolveAnyHarnessConnection}
         >
-          <AnyHarnessWorkspace
-            workspaceId={providerWorkspaceId}
-            resolveConnection={resolveAnyHarnessConnection}
-          >
-            <WorkspacePathProvider>{children}</WorkspacePathProvider>
-          </AnyHarnessWorkspace>
-        </ProductWorkspaceConnectionProvider>
-      </CloudWorkspaceMaterializationCacheBoundary>
+          <WorkspacePathProvider>{children}</WorkspacePathProvider>
+        </AnyHarnessWorkspace>
+      </ProductWorkspaceConnectionProvider>
     </AnyHarnessRuntime>
   );
-}
-
-function CloudWorkspaceMaterializationCacheBoundary({ children }: { children: ReactNode }) {
-  useCloudWorkspaceMaterializationCacheBoundary();
-  return children;
 }

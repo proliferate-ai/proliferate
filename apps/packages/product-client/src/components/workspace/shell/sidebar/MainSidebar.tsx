@@ -42,7 +42,6 @@ import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/deri
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "#product/hooks/workspaces/workflows/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-actions";
-import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useSidebarRepoGroupState } from "#product/hooks/workspaces/facade/use-sidebar-repo-group-state";
 import { useWorkspaceSidebarState } from "#product/hooks/workspaces/derived/use-workspace-sidebar-state";
 import { useSessionActivityReconciler } from "#product/hooks/sessions/lifecycle/use-session-activity-reconciler";
@@ -134,10 +133,6 @@ export const MainSidebar = memo(function MainSidebar({
   });
   const navigate = useNavigate();
   const location = useLocation();
-  const {
-    archiveCloudWorkspace: archiveCloudWorkspaceRequest,
-    restoreCloudWorkspace: restoreCloudWorkspaceRequest,
-  } = useCloudWorkspaceActions();
   const {
     archive: archiveWorkspaceLocal,
     unarchive: unarchiveWorkspaceLocal,
@@ -286,11 +281,9 @@ export const MainSidebar = memo(function MainSidebar({
       actions.handleGoHome();
     }
     if (cloudWorkspaceId) {
-      void archiveCloudWorkspaceRequest(cloudWorkspaceId)
-        .catch((error) => {
-          const message = error instanceof Error ? error.message : "Failed to archive workspace.";
-          showToast(message);
-        });
+      // The cloud workspace stack is deleted; a stale cloud row has no
+      // archive request left to send.
+      showToast("Cloud workspaces are no longer available.");
       return;
     }
     if (runtimeWorkspaceId) {
@@ -298,7 +291,6 @@ export const MainSidebar = memo(function MainSidebar({
     }
   }, [
     actions,
-    archiveCloudWorkspaceRequest,
     archiveWorkspaceLocal,
     resolveArchiveTargetForSidebarItem,
     selectedLogicalWorkspaceId,
@@ -310,10 +302,9 @@ export const MainSidebar = memo(function MainSidebar({
     const target = resolveArchiveTargetForSidebarItem(workspaceId);
     const { cloudWorkspaceId, runtimeWorkspaceId } = target;
     if (cloudWorkspaceId) {
-      void restoreCloudWorkspaceRequest(cloudWorkspaceId).catch((error) => {
-        const message = error instanceof Error ? error.message : "Failed to restore workspace.";
-        showToast(message);
-      });
+      // The cloud workspace stack is deleted; a stale cloud row has no
+      // restore request left to send.
+      showToast("Cloud workspaces are no longer available.");
       return;
     }
     // Same id-space rule as archive: /unarchive addresses the runtime id.
@@ -324,7 +315,6 @@ export const MainSidebar = memo(function MainSidebar({
     unarchiveWorkspaceLocal(runtimeWorkspaceId, target.name);
   }, [
     resolveArchiveTargetForSidebarItem,
-    restoreCloudWorkspaceRequest,
     showToast,
     unarchiveWorkspaceLocal,
   ]);

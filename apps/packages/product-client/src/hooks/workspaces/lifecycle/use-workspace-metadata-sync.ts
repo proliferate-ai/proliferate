@@ -1,163 +1,19 @@
-import { useEffect, useRef } from "react";
 import { useGitStatusQuery } from "@anyharness/sdk-react";
-import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
-import { resolveSessionViewState } from "#product/domain/sessions/activity";
-import { updateCloudWorkspaceDisplayName } from "@proliferate/cloud-sdk/client/workspaces";
-import {
-  CLOUD_DISPLAY_NAME_SYNC_RETRY_INTERVAL_MS,
-  markCloudDisplayNameSyncCompleted,
-  resolveCloudDisplayNameSyncAttempt,
-  shouldBackfillCloudDisplayNameFromRuntime,
-  type CloudDisplayNameSyncState,
-} from "#product/lib/domain/workspaces/cloud/cloud-display-name-sync";
-import { isCloudDisplayNameBackfillSuppressed } from "#product/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
-import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
-import { getWorkspace } from "#product/lib/access/anyharness/workspaces";
-import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
-import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
-import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
-
-// Named exception (does not sit on the `cadence` scale, and is well below
-// `cadence.fastMs`): the ADR ruling on this poll is that it "must either
-// justify itself as a named exception or move to sync-layer push." It is
-// justified here rather than snapped: this is a tight foreground loop, gated
-// to only run while the selected workspace's active session is `working` and
-// the runtime is ready, driving live git-status feedback (diff stat, file
-// tree) during an active turn. Loosening it to `cadence.fastMs` (1s) would be
-// user-visible staleness during the exact moment the user is watching a
-// session work. The real fix is moving this to a sync-layer push instead of
-// polling at all; that is out of scope for this PR and is tracked as a
-// follow-up (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
-const WORKSPACE_METADATA_POLL_INTERVAL_MS = 250;
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 // Owns mounted metadata synchronization for the selected workspace.
-// Display state and user-triggered workspace actions live in sibling hook folders.
+// Display state and user-triggered workspace actions live in sibling hook
+// folders. The tight cloud-workspace git-status poll and the cloud
+// display-name backfill died with the cloud sandbox stack — the local
+// runtime's own git status query is the whole surface now.
 export function useWorkspaceMetadataSync() {
-  const syncingCloudDisplayNameRef = useRef<string | null>(null);
-  const cloudDisplayNameSyncStateRef = useRef<CloudDisplayNameSyncState | null>(null);
-  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
-  const { upsertCloudWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
-  const selectedCloudRuntime = useSelectedCloudRuntimeState();
-  const { data: workspaceCollections } = useWorkspaces();
-  const selectedCloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
-    (workspace) => workspace.id === selectedCloudRuntime.cloudWorkspaceId,
-  ) ?? null;
-  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
-  const activeSession = useSessionDirectoryStore((state) => (
-    activeSessionId ? state.entriesById[activeSessionId] ?? null : null
-  ));
-  const isRuntimeReadyForWorkspace =
-    !selectedCloudRuntime.cloudWorkspaceId
-    || selectedCloudRuntime.workspaceId !== selectedWorkspaceId
-    || selectedCloudRuntime.state?.phase === "ready";
 
-  const shouldPoll = !!selectedWorkspaceId
-    && activeSession?.workspaceId === selectedWorkspaceId
-    && isRuntimeReadyForWorkspace
-    && resolveSessionViewState(activitySnapshotFromDirectoryEntry(activeSession)) === "working"
-    && !!selectedCloudWorkspace;
-
-  const gitStatusQuery = useGitStatusQuery({
-    enabled: !!selectedWorkspaceId && isRuntimeReadyForWorkspace && !hotPaintPending,
-    refetchInterval: shouldPoll ? WORKSPACE_METADATA_POLL_INTERVAL_MS : false,
-    refetchIntervalInBackground: shouldPoll,
+  return useGitStatusQuery({
+    enabled: !!selectedWorkspaceId && !hotPaintPending,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   });
-
-  useEffect(() => {
-    if (!shouldPoll) {
-      return;
-    }
-
-    void gitStatusQuery.refetch();
-  }, [gitStatusQuery.refetch, shouldPoll]);
-
-  useEffect(() => {
-    if (
-      !selectedCloudWorkspace
-      || selectedCloudWorkspace.displayName?.trim()
-      || selectedCloudRuntime.state?.phase !== "ready"
-      || !selectedCloudRuntime.connectionInfo
-      || isCloudDisplayNameBackfillSuppressed(selectedCloudWorkspace.id)
-    ) {
-      return;
-    }
-
-    const connectionInfo = selectedCloudRuntime.connectionInfo;
-    const { anyharnessWorkspaceId } = connectionInfo;
-    if (!anyharnessWorkspaceId) {
-      return;
-    }
-    const selectedCloudWorkspaceId = selectedCloudWorkspace.id;
-    const runtimeWorkspaceId = anyharnessWorkspaceId;
-
-    async function attemptDisplayNameSync() {
-      const syncKey = `${selectedCloudWorkspaceId}:${runtimeWorkspaceId}`;
-      const decision = resolveCloudDisplayNameSyncAttempt({
-        state: cloudDisplayNameSyncStateRef.current,
-        syncKey,
-        nowMs: Date.now(),
-        inFlight: syncingCloudDisplayNameRef.current === syncKey,
-      });
-      cloudDisplayNameSyncStateRef.current = decision.state;
-      if (!decision.shouldAttempt) {
-        return;
-      }
-
-      syncingCloudDisplayNameRef.current = syncKey;
-      try {
-        const { runtimeUrl: cloudRuntimeUrl, accessToken } =
-          await withFreshCloudSandboxGatewayAccessToken(connectionInfo);
-        const runtimeWorkspace = await getWorkspace({
-          runtimeUrl: cloudRuntimeUrl,
-          authToken: accessToken,
-        }, runtimeWorkspaceId);
-        const backfill = shouldBackfillCloudDisplayNameFromRuntime({
-          runtimeDisplayName: runtimeWorkspace.displayName,
-          runtimeWorkspaceId,
-          backfillSuppressed: isCloudDisplayNameBackfillSuppressed(selectedCloudWorkspaceId),
-        });
-        if (!backfill.shouldBackfill || !backfill.displayName) {
-          return;
-        }
-        const cloudWorkspace = await updateCloudWorkspaceDisplayName(
-          selectedCloudWorkspaceId,
-          backfill.displayName,
-        );
-        cloudDisplayNameSyncStateRef.current = markCloudDisplayNameSyncCompleted(
-          decision.state,
-          syncKey,
-        );
-        upsertCloudWorkspace(cloudWorkspace);
-        await invalidateWorkspaceCollections();
-      } catch {
-        // Retry on the next interval while this blank cloud workspace remains selected.
-      } finally {
-        syncingCloudDisplayNameRef.current = null;
-      }
-    }
-
-    void attemptDisplayNameSync();
-    const intervalId = window.setInterval(
-      () => void attemptDisplayNameSync(),
-      CLOUD_DISPLAY_NAME_SYNC_RETRY_INTERVAL_MS,
-    );
-    return () => window.clearInterval(intervalId);
-  }, [
-    invalidateWorkspaceCollections,
-    runtimeUrl,
-    selectedCloudRuntime.connectionInfo,
-    selectedCloudRuntime.state?.phase,
-    selectedCloudWorkspace,
-    upsertCloudWorkspace,
-  ]);
-
-  return gitStatusQuery;
 }

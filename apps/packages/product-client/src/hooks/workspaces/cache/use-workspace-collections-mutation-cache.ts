@@ -1,21 +1,14 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import type { CloudMobilityWorkspaceSummary, CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
-import { cloudMobilityWorkspacesKey } from "#product/hooks/access/cloud/query-keys";
 import {
-  buildWorkspaceCollections,
   type WorkspaceCollections,
-  upsertCloudWorkspaceCollections,
   upsertLocalWorkspaceCollections,
   upsertRepoRootCollections,
 } from "#product/lib/domain/workspaces/cloud/collections";
 import {
-  getWorkspaceCollectionsFromCache,
-  workspaceCollectionsKey,
   workspaceCollectionsScopeKey,
 } from "#product/hooks/workspaces/cache/query-keys";
-import { useProductAuthUserId } from "#product/hooks/auth/facade/use-product-auth";
 
 export interface WorkspaceCollectionsLocalUpsertSummary {
   previousLocalCount: number;
@@ -64,26 +57,8 @@ function upsertRepoRootForRuntime(
   );
 }
 
-export function upsertCloudWorkspaceForRuntime(
-  queryClient: QueryClient,
-  runtimeUrl: string,
-  workspace: CloudWorkspaceDetail,
-  authUserId: string | null = null,
-): void {
-  const nextCollections = upsertCloudWorkspaceCollections(
-    getWorkspaceCollectionsFromCache(queryClient, runtimeUrl, authUserId),
-    workspace,
-  ) ?? buildWorkspaceCollections([], [], [workspace]);
-
-  queryClient.setQueryData(
-    workspaceCollectionsKey(runtimeUrl, true, authUserId),
-    nextCollections,
-  );
-}
-
 export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
   const queryClient = useQueryClient();
-  const authUserId = useProductAuthUserId();
 
   const upsertLocalWorkspace = useCallback(
     (
@@ -98,28 +73,7 @@ export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
     upsertRepoRootForRuntime(queryClient, runtimeUrl, repoRoot);
   }, [queryClient, runtimeUrl]);
 
-  const upsertCloudWorkspace = useCallback((workspace: CloudWorkspaceDetail) => {
-    upsertCloudWorkspaceForRuntime(queryClient, runtimeUrl, workspace, authUserId);
-    queryClient.setQueryData<CloudMobilityWorkspaceSummary[] | undefined>(
-      cloudMobilityWorkspacesKey(),
-      (workspaces) => workspaces?.map((candidate) => (
-        candidate.cloudWorkspaceId === workspace.id
-          ? {
-            ...candidate,
-            displayName: workspace.displayName,
-            repo: {
-              ...candidate.repo,
-              branch: workspace.repo?.branch ?? candidate.repo.branch,
-            },
-            updatedAt: workspace.updatedAt,
-          }
-          : candidate
-      )),
-    );
-  }, [authUserId, queryClient, runtimeUrl]);
-
   return {
-    upsertCloudWorkspace,
     upsertLocalWorkspace,
     upsertRepoRoot,
   };

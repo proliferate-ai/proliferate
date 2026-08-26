@@ -1,64 +1,29 @@
-import { useCallback, useMemo } from "react";
-import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useCallback } from "react";
 import { useWebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
-import { useSelectedLogicalWorkspace } from "#product/hooks/workspaces/derived/use-selected-logical-workspace";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
+/**
+ * The cloud workspace stack is deleted, so there is no cloud workspace id to
+ * build a web deep link from: the open-in-web affordance is permanently
+ * disabled, with the reason preserved for the menu copy.
+ */
 export function useWorkspaceOpenInWebActions() {
-  const { selectedLogicalWorkspace } = useSelectedLogicalWorkspace();
-  const { links, clipboard } = useProductHost();
   const webApp = useWebAppTarget();
   const showToast = useToastStore((state) => state.show);
-  const cloudWorkspaceId = selectedLogicalWorkspace?.cloudWorkspace?.id
-    ?? selectedLogicalWorkspace?.mobilityWorkspace?.cloudWorkspaceId
-    ?? null;
-  const webBaseUrl = webApp.baseUrl;
-  const url = useMemo(() => (
-    cloudWorkspaceId && webBaseUrl
-      ? webWorkspaceDeepLink(cloudWorkspaceId, webBaseUrl)
-      : null
-  ), [cloudWorkspaceId, webBaseUrl]);
-  const disabledReason = url
-    ? null
-    : !webApp.available
-      ? "The web app is not available for this server."
-      : "Enable remote access first.";
-  const title = url
-    ? "Open this workspace in the web app."
-    : "Enable remote access first to open this workspace from web and mobile.";
+  const disabledReason = !webApp.available
+    ? "The web app is not available for this server."
+    : "Enable remote access first.";
+  const title = "Enable remote access first to open this workspace from web and mobile.";
 
   const openCurrentWorkspaceInWeb = useCallback(() => {
-    if (disabledReason) {
-      showToast(disabledReason);
-      return;
-    }
-    if (!url) {
-      showToast("Enable remote access first.");
-      return;
-    }
-
-    void (async () => {
-      try {
-        await clipboard.writeText(url);
-        showToast("Workspace link copied. Opening in web...", "info");
-      } catch {
-        showToast("Opening workspace in web. Failed to copy link.");
-      }
-
-      try {
-        await links.openExternal(url);
-      } catch {
-        showToast("Failed to open the web workspace.");
-      }
-    })();
-  }, [clipboard, disabledReason, links, showToast, url]);
+    showToast(disabledReason);
+  }, [disabledReason, showToast]);
 
   return {
-    disabled: disabledReason !== null,
+    disabled: true,
     disabledReason,
     openCurrentWorkspaceInWeb,
     title,
-    url,
+    url: null,
   };
 }

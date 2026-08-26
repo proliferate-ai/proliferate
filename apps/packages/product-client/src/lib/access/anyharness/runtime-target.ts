@@ -1,16 +1,9 @@
-import type { CloudAgentKind, CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
+import type { CloudAgentKind } from "@proliferate/cloud-sdk/types";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import {
   type CloudSandboxGatewayUrlSource,
-  resolveCloudSandboxGatewayConnectionForWorkspace,
 } from "#product/lib/access/cloud/cloud-sandbox-gateway";
-import { getCloudWorkspaceWithRetry } from "#product/lib/access/cloud/workspace-connection-retry";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
-
-type CloudWorkspaceCommandMetadata = CloudWorkspaceDetail & {
-  targetId?: string | null;
-};
 
 export interface RuntimeTarget {
   location: "local" | "cloud";
@@ -29,52 +22,19 @@ export interface RuntimeTarget {
 export async function resolveRuntimeTargetForWorkspace(
   runtimeUrl: string,
   workspaceId: string,
-  cloudClient: CloudSandboxGatewayUrlSource | null,
+  _cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<RuntimeTarget> {
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
-  if (!cloudWorkspaceId) {
-    return {
-      location: "local",
-      baseUrl: runtimeUrl,
-      anyharnessWorkspaceId: workspaceId,
-      runtimeGeneration: 0,
-    };
+  if (cloudWorkspaceId) {
+    // The cloud workspace stack is deleted; a synthetic cloud id can only be
+    // a stale remnant with no runtime behind it.
+    throw new Error("Cloud workspaces are no longer available.");
   }
 
-  const cloudWorkspace: CloudWorkspaceDetail | undefined =
-    await getCloudWorkspaceWithRetry(cloudWorkspaceId);
-  if (!cloudWorkspace) throw new Error("Cloud workspace not found.");
-  const cloudWorkspaceCommandMetadata = cloudWorkspace as CloudWorkspaceCommandMetadata;
-  if (resolveCloudWorkspaceStatus(cloudWorkspace) !== "ready") {
-    throw new Error("Cloud workspace is not ready yet.");
-  }
-
-  if (cloudWorkspace.visibility === "shared_unclaimed") {
-    throw new Error("Claim this workspace before opening it directly in Desktop.");
-  }
-
-  const connection = await resolveCloudSandboxGatewayConnectionForWorkspace(
-    cloudWorkspace,
-    cloudClient,
-  );
   return {
-    location: "cloud",
-    baseUrl: connection.runtimeUrl,
-    authToken: connection.accessToken,
-    webSocketAuthTransport: connection.webSocketAuthTransport,
-    anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
-    runtimeGeneration: connection.runtimeGeneration,
-    runtimeAccessKind: "proliferate-gateway",
-    cloudWorkspaceId: cloudWorkspace.id,
-    targetId: cloudWorkspaceCommandMetadata.targetId ?? undefined,
-    allowedAgentKinds: connection.allowedAgentKinds.filter(isCloudAgentRuntimeKind),
-    readyAgentKinds: connection.readyAgentKinds.filter(isCloudAgentRuntimeKind),
+    location: "local",
+    baseUrl: runtimeUrl,
+    anyharnessWorkspaceId: workspaceId,
+    runtimeGeneration: 0,
   };
-}
-
-function isCloudAgentRuntimeKind(value: string): value is CloudAgentKind {
-  return value === "claude"
-    || value === "codex"
-    || value === "opencode"
-    || value === "grok";
 }

@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { APP_ROUTES } from "#product/config/app-routes";
-import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
@@ -30,10 +29,6 @@ export function useWorkspaceSidebarActions() {
     createWorktreeAndEnter,
     isCreatingWorktreeWorkspace,
   } = useWorkspaceEntryActions();
-  const {
-    createCloudWorkspaceAndEnter,
-    isCreatingCloudWorkspace,
-  } = useCreateCloudWorkspace();
   const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
   const showToast = useToastStore((state) => state.show);
   const showErrorToast = useToastStore((state) => state.showError);
@@ -197,23 +192,16 @@ export function useWorkspaceSidebarActions() {
 
   const handleCreateCloudWorkspace = useCallback((
     target: CloudWorkspaceRepoTarget | null,
-    repoGroupKeyToExpand?: string | null,
+    _repoGroupKeyToExpand?: string | null,
   ) => {
-    if (!target || isCreatingCloudWorkspace) {
+    if (!target) {
       return;
     }
-
-    navigateToWorkspaceShell();
-    const latencyFlowId = startLatencyFlow({
-      flowKind: "cloud_workspace_create",
-      source: "sidebar",
-    });
-    void createCloudWorkspaceAndEnter(target, { latencyFlowId, repoGroupKeyToExpand });
-  }, [
-    createCloudWorkspaceAndEnter,
-    isCreatingCloudWorkspace,
-    navigateToWorkspaceShell,
-  ]);
+    // The cloud sandbox stack is deleted; the affordance ends in the shared
+    // unavailability toast (same copy as the command-surface gate) instead of
+    // a create flow.
+    showToast("Cloud workspaces are temporarily unavailable.");
+  }, [showToast]);
 
   return {
     handleAddRepo,
