@@ -11,15 +11,15 @@ It changes only when a plane is added or a seam moves.
 ```
    clients                    control plane              execution plane
 ┌────────────┐            ┌─────────────────┐        ┌──────────────────────┐
-│  Desktop   │            │                 │        │  sandbox (E2B) or    │
-│  Web       │ ─────────► │     Server      │ ─────► │  personal target     │
-│  Mobile    │   HTTP/SSE │   (FastAPI)     │        │ ┌──────────────────┐ │
-└────────────┘            │                 │        │ │ supervisor       │ │
-      │                   └─────────────────┘        │ │  ├─ worker       │ │
-      │  desktop only:              │                │ │  └─ anyharness   │ │
-      │  local sidecar              │                │ │     runtime      │ │
-      ▼                             ▼                │ └──────────────────┘ │
-┌────────────┐            ┌─────────────────┐        └──────────────────────┘
+│  Desktop   │            │                 │        │  cloud sandbox (E2B) │
+│  Web       │ ─────────► │     Server      │ ─────► │ ┌──────────────────┐ │
+│  Mobile    │   HTTP/SSE │   (FastAPI)     │        │ │ supervisor       │ │
+└────────────┘            │                 │        │ │  ├─ worker       │ │
+      │                   └─────────────────┘        │ │  └─ anyharness   │ │
+      │  desktop only:              │                │ │     runtime      │ │
+      │  local sidecar              │                │ └──────────────────┘ │
+      ▼                             ▼                └──────────────────────┘
+┌────────────┐            ┌─────────────────┐                  │
 │ anyharness │            │  model gateway  │                  │
 │  sidecar   │            │   (LiteLLM)     │ ◄────────────────┘
 └────────────┘            └─────────────────┘   agent LLM traffic
@@ -29,9 +29,12 @@ It changes only when a plane is added or a seam moves.
   `apps/packages/product-client`) render and interact. They are clients of the
   server's contracts and, on desktop, of a locally-spawned AnyHarness sidecar.
 - **Server** (`server/`) is the hosted control plane: durable product state,
-  policy, orchestration, auth, integrations, billing, background work.
-- **Execution plane** runs coding-agent sessions: a supervisor process manages a
-  worker and the AnyHarness runtime inside a sandbox or on a personal target.
+  policy, orchestration, auth, integrations, billing, background work. It
+  governs; it never executes an agent session.
+- **Execution plane** runs coding-agent sessions: one execution bundle — a
+  supervisor managing a worker and the AnyHarness runtime — inside a cloud
+  sandbox. The desktop app runs the same runtime binary as a local sidecar;
+  desktop is a deployment mode, not a fork.
 - **AnyHarness runtime** (`anyharness/crates/anyharness*`) is the
   harness-agnostic engine: session/workspace execution, adapter and protocol
   contracts, runtime-side product domains.
@@ -60,13 +63,19 @@ It changes only when a plane is added or a seam moves.
 - **SDKs** (`anyharness/sdk*`, `cloud/sdk*`) are generated contract consumers;
   the contract owns them, not the reverse.
 
+Behavior is owned by **system specs**, one per system, each with a checked
+code map: every source file belongs to exactly one spec. The index is
+[`specs/README.md`](specs/README.md#system-index).
+
 ## The seams and why they sit there
 
 - **Server ↔ runtime.** The server never executes agent sessions and the
   runtime never holds product policy. Everything crossing this seam is an
-  explicit contract (runtime HTTP/SSE API, mailbox messages). Why: sessions
-  must run identically in a cloud sandbox, on a personal target, and under the
-  desktop app — a policy dependency in the runtime would fork those worlds.
+  explicit contract — worker enrollment and heartbeat today, courier and event
+  shipping as the target — owned by
+  [`specs/codebase/systems/product/seam/README.md`](specs/codebase/systems/product/seam/README.md).
+  Why: sessions must run identically in a cloud sandbox and under the desktop
+  app — a policy dependency in the runtime would fork those worlds.
 - **Client ↔ server.** Clients speak the generated SDK contracts only. Why:
   three clients share one behavior surface; contract drift is caught at
   generation time instead of at runtime.
@@ -80,15 +89,43 @@ It changes only when a plane is added or a seam moves.
 - **Agent LLM traffic ↔ gateway.** Agent model calls go through the gateway
   rather than provider SDKs in the runtime. Why: managed credentials, metering
   for billing, and provider swaps must not require touching the runtime.
+- **Agent ↔ company systems ↔ integration gateway.** An agent reaches Linear,
+  Slack, GitHub-as-tool, or any MCP provider only through the integration
+  gateway; credentials never enter the environment. Why: capability is
+  resolved per call from what *this run* may do, and revocation must not
+  require touching a sandbox.
+
+## Cross-cutting engineering systems
+
+Testing, observability, alerting, the building loop, and the customer loop are
+systems too, but they own no product state. Each consumes every product
+spec's `Emits` section (the named events and signals a system produces) and
+`Proof` section (the tests that pin it). A product system with an empty
+`Emits` section is invisible in production; the observability spec lists those
+gaps per system.
+
+The one property they all serve is **legibility by session id**: every user
+action, agent turn, gateway call, and failure is one readable story keyed by
+the session it belongs to — readable by a person, and machine-legible (stable
+names, ids, links across Sentry, Grafana, and Honeycomb) for the agents that
+triage and fix from it.
+
+Their specs live at `specs/codebase/systems/engineering/<name>/README.md` —
+`observability`, `alerting`, `testing`, `building-loop`, `customer-loop` —
+landing tonight alongside the existing `analytics` and `delivery` specs. Until
+then [`specs/TESTING.md`](specs/TESTING.md) and
+[`specs/OBSERVABILITY.md`](specs/OBSERVABILITY.md) are the per-PR law.
 
 ## Read order for grokking the repo
 
-1. [`specs/server/README.md`](specs/server/README.md) — the control plane and
+1. [`specs/README.md`](specs/README.md#system-index) — the system index; pick
+   the system you are touching and read its spec.
+2. [`specs/server/README.md`](specs/server/README.md) — the control plane and
    the grid ownership model.
-2. [`specs/anyharness/README.md`](specs/anyharness/README.md) — the runtime's
+3. [`specs/anyharness/README.md`](specs/anyharness/README.md) — the runtime's
    mental model.
-3. [`specs/frontend/README.md`](specs/frontend/README.md) — how the clients
+4. [`specs/frontend/README.md`](specs/frontend/README.md) — how the clients
    are put together.
 
-Then the feature doc for whichever cross-plane system you are touching
-([`specs/FEATURE_DOCS/`](specs/FEATURE_DOCS/)).
+Then the depth reference under [`specs/FEATURE_DOCS/`](specs/FEATURE_DOCS/)
+that the system spec links into, if it has one.

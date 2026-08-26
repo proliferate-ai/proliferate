@@ -12,7 +12,7 @@ under [`../deploying/`](../deploying/).
 
 | Task | Procedure |
 | --- | --- |
-| Discover and verify current Customer.io, Metabase, PostHog, and Sentry state | [Analytics and observability](analytics/README.md) |
+| Discover and verify current Metabase, PostHog, and Sentry state | [Analytics and observability](analytics/README.md) |
 | Grant a user free or discounted Pro access through Stripe | [Pro early-access promo codes](billing-pro-promo-codes.md) |
 | Triage Stripe webhook delivery or billing-mirror failures | [Stripe webhook failure](stripe-webhook-failure.md) |
 | Build, publish, promote, or roll back the E2B runtime template | [E2B template operations](e2b-template-operations.md) |
