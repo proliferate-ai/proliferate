@@ -40,10 +40,8 @@ from proliferate.db.store.billing import list_entitlements
 from proliferate.db.store.billing_subscriptions import list_subscriptions
 from proliferate.db.store.organizations import list_organizations_for_user
 from proliferate.lib.infra.time.wall_clock import utcnow
-from proliferate.server.agent_auth.budget import (
-    get_gateway_enrollment_for_user,
-    is_gateway_budget_available,
-)
+from proliferate.server.agent_auth import budget
+from proliferate.server.agent_auth.budget import get_gateway_enrollment_for_user
 from proliferate.server.agent_auth.selection_rules import (
     SelectionRuleError,
     validate_auth_selection_set,
@@ -503,26 +501,16 @@ async def get_capabilities(
 ) -> tuple[bool, str | None, str, bool]:
     """Return (gateway_enabled, public_base_url, enrollment_status, credits_exhausted).
 
-    Reports the status of the enrollment that actually governs this user's
-    gateway sessions (``get_gateway_enrollment_for_user``). Reading the
-    personal enrollment unconditionally would show "synced" to a user whose
-    governing org enrollment is still pending (or the reverse), so the UI's
-    readiness signal and the key the renderer hands out would disagree.
-
-    ``credits_exhausted`` is the negation of the exact predicate the state
-    renderer withholds gateway keys on (:func:`is_gateway_budget_available`),
-    so the settings surface names the true reason for a refused gateway
-    launch instead of the runtime's generic
-    ``AGENT_ROUTE_SELECTION_MISSING`` (AA-3,
-    delivery/triage/2026-08-25-integrations-agent-auth.md). Sharing the
-    predicate is the point: the flag and the withheld key can never disagree.
+    Status comes from the GOVERNING (never personal) enrollment, and
+    ``credits_exhausted`` negates the renderer's key-withholding predicate
+    (``is_gateway_budget_available``) — UI and render never disagree (AA-3).
     """
     enrollment = await get_gateway_enrollment_for_user(db, user_id)
     return (
         settings.agent_gateway_enabled,
         settings.agent_gateway_litellm_public_base_url or None,
         enrollment.sync_status if enrollment is not None else _ENROLLMENT_STATUS_NONE,
-        not await is_gateway_budget_available(db, user_id),
+        not await budget.is_gateway_budget_available(db, user_id),
     )
 
 
