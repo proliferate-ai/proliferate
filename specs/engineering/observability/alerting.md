@@ -1,32 +1,14 @@
 # Alerting and Fix Loop
 
-Status: current for the six checked-in Grafana rules, their delivery, and the
-operator tooling; target for the non-noisy severity contract (§5), the
-machine-legible alert shape, and the alert → issue → fix → test loop. Grade
-C — see [Known gaps](#known-gaps).
+Status: current for the six checked-in Grafana rules, their delivery, and the operator tooling; target for the non-noisy severity contract (§5), the machine-legible alert shape, and the alert → issue → fix → test loop. Grade C — see [Known gaps](#known-gaps).
 
-Read before touching:
-[`guides/operating/production-alerts.md`](../../../guides/operating/production-alerts.md)
-(the runbook and the two-workspace reality), `server/infra/observability/grafana/*.json`
-(rule identity, checksummed), `scripts/ops/grafana-{alerting,rebuild-bootstrap,sli-alerts}.mjs`
-(the only sanctioned writers), [observability](../observability/README.md)
-(the markers and ids this system selects on), [testing](../testing/README.md)
-(the proof-trailer convention that closes the loop), and the customer-loop
-spec, `specs/engineering/customer-loop/README.md` (the
-human-report leg of the same loop; landing in parallel, PR #2231).
+Read before touching: [`guides/operating/production-alerts.md`](../../../guides/operating/production-alerts.md) (the runbook and the two-workspace reality), `server/infra/observability/grafana/*.json` (rule identity, checksummed), `scripts/ops/grafana-{alerting,rebuild-bootstrap,sli-alerts}.mjs` (the only sanctioned writers), [observability](../observability/README.md) (the markers and ids this system selects on), [testing](../testing/README.md) (the proof-trailer convention that closes the loop), and the customer-loop spec, `specs/engineering/customer-loop/README.md` (the human-report leg of the same loop; landing in parallel, PR #2231).
 
-Engineering systems are cross-cutting. This one owns **no product state**: it
-consumes every product and runtime spec's *Emits* (the markers a rule can
-select) and *Proof* (the tests a fix must extend), and it owns exactly two
-decisions — **when a person is interrupted**, and **what happens between the
-interruption and the test that proves it cannot recur.**
+Engineering systems are cross-cutting. This one owns **no product state**: it consumes every product and runtime spec's *Emits* (the markers a rule can select) and *Proof* (the tests a fix must extend), and it owns exactly two decisions — **when a person is interrupted**, and **what happens between the interruption and the test that proves it cannot recur.**
 
 ## 1. Purpose
 
-Interrupt a person only when something is actually quite broken, or when
-something we did not expect to break has broken — and make every
-interruption legible enough that a person *or an agent* can go from the
-alert to the session, the fix, and the pinning test without asking anyone.
+Interrupt a person only when something is actually quite broken, or when something we did not expect to break has broken — and make every interruption legible enough that a person *or an agent* can go from the alert to the session, the fix, and the pinning test without asking anyone.
 
 Two consumers, one contract:
 
@@ -39,10 +21,7 @@ Two consumers, one contract:
   rule names, ids it can join on, and links it can follow. It cannot use a
   paragraph.
 
-Rulings encoded here (2026-08-25, not re-litigated in this document):
-non-noisy by law; Slack for production, phone only for production-down; a
-small fixed severity set; the tracker is culled, GitHub Issues is interim
-intake; every fixed issue leaves a test.
+Rulings encoded here (2026-08-25, not re-litigated in this document): non-noisy by law; Slack for production, phone only for production-down; a small fixed severity set; the tracker is culled, GitHub Issues is interim intake; every fixed issue leaves a test.
 
 ## 2. Owned state
 
@@ -56,18 +35,9 @@ guides/operating/production-alerts.md                              per-rule runb
 scripts/ops/grafana-alerting.mjs · grafana-rebuild-bootstrap.mjs · grafana-sli-alerts.mjs   check / export / apply / restore / verify — target-locked, live-gated
 ```
 
-Ownership of the rule JSON files transfers from the observability tree to this
-system by this spec; they stay where they are on disk (no folder moves this
-pass) and are listed here as owned.
+Ownership of the rule JSON files transfers from the observability tree to this system by this spec; they stay where they are on disk (no folder moves this pass) and are listed here as owned.
 
-Live provider state — the Alertmanager config (receivers, routes), the SNS
-topic and its subscriptions, Slack webhooks, Sentry alert rules — is
-**mutable and discovered**, never owned. As of 2026-08-25 the OLD workspace's
-Alertmanager carries exactly three receivers, `grafana-default-sns`,
-`slack-ops-alerts`, `slack-eng-triage`; the root route delivers to
-`slack-eng-triage`, with one child route `severity=critical` →
-`slack-ops-alerts`. The issue-tracker receiver and its routes were removed by
-hand during the cull ([record](../../../guides/operating/production-alerts.md#retired-the-issue-tracker-webhook-contact-point)).
+Live provider state — the Alertmanager config (receivers, routes), the SNS topic and its subscriptions, Slack webhooks, Sentry alert rules — is **mutable and discovered**, never owned. As of 2026-08-25 the OLD workspace's Alertmanager carries exactly three receivers, `grafana-default-sns`, `slack-ops-alerts`, `slack-eng-triage`; the root route delivers to `slack-eng-triage`, with one child route `severity=critical` → `slack-ops-alerts`. The issue-tracker receiver and its routes were removed by hand during the cull ([record](../../../guides/operating/production-alerts.md#retired-the-issue-tracker-webhook-contact-point)).
 
 ## 3. Public surface
 
@@ -83,9 +53,7 @@ What the rest of the codebase calls or reads:
 | `Surfaced-by: alert:<rule_uid> · sentry:<issue> · session:<id>` | test docstring trailer (testing spec §5 law 6) | how a fix points back at what surfaced it |
 | GitHub issue labels `alert:<severity>` and `support:report` (customer loop) | GitHub Issues (interim intake) | the fix-loop work item; carries ids and links, never content |
 
-Operator surface: `node scripts/ops/grafana-alerting.mjs check` (offline, in
-CI's repo-shape lane); live `export/apply/restore` and the rebuild/SLI tools,
-all gated on `GRAFANA_ALERTING_LIVE=1`.
+Operator surface: `node scripts/ops/grafana-alerting.mjs check` (offline, in CI's repo-shape lane); live `export/apply/restore` and the rebuild/SLI tools, all gated on `GRAFANA_ALERTING_LIVE=1`.
 
 ## 4. Consumes
 
@@ -120,16 +88,9 @@ all gated on `GRAFANA_ALERTING_LIVE=1`.
 
 ## 5. Laws
 
-**L1 — Non-noisy.** An alert fires only when (a) something is actually quite
-broken — a user-facing promise is failing now — or (b) something we did not
-expect to break has broken. Normal occurrences never alert: a single
-exception, a retried provider call, a slow request, a test-account failure,
-a cron that ran. The test for a proposed rule is the sentence *"if this fires
-at 3am and nobody looks, what is lost?"* — if the answer is "nothing", it is
-a dashboard panel, not an alert.
+**L1 — Non-noisy.** An alert fires only when (a) something is actually quite broken — a user-facing promise is failing now — or (b) something we did not expect to break has broken. Normal occurrences never alert: a single exception, a retried provider call, a slow request, a test-account failure, a cron that ran. The test for a proposed rule is the sentence *"if this fires at 3am and nobody looks, what is lost?"* — if the answer is "nothing", it is a dashboard panel, not an alert.
 
-**L2 — Small fixed severity set.** Exactly two severities, and one
-out-of-band condition:
+**L2 — Small fixed severity set.** Exactly two severities, and one out-of-band condition:
 
 | Severity | Meaning | Destination | Expectation |
 | --- | --- | --- | --- |
@@ -137,61 +98,23 @@ out-of-band condition:
 | `warning` | something unexpected broke; users may not feel it yet | Slack `#eng-triage` | looked at in the next working session |
 | *production-down* | the API or the app is unreachable — not a rule label, a condition | **phone** (PABLO DECIDES the channel) | immediate |
 
-No `info`. No per-team channels. A rule that does not fit one of these rows
-is not a rule.
+No `info`. No per-team channels. A rule that does not fit one of these rows is not a rule.
 
-**L3 — Rules select markers; code owns thresholds.** A rule matches a
-stable log marker or a metric derived from one (`CRITICAL_FAILURE`,
-`SignInFailureCount`). Business thresholds ("more than N failures per
-session") are computed in code and emit one marker when exceeded
-(observability L6), because a threshold that lives only in a rule is
-invisible to tests.
+**L3 — Rules select markers; code owns thresholds.** A rule matches a stable log marker or a metric derived from one (`CRITICAL_FAILURE`, `SignInFailureCount`). Business thresholds ("more than N failures per session") are computed in code and emit one marker when exceeded (observability L6), because a threshold that lives only in a rule is invisible to tests.
 
-**L4 — Machine-legible or not at all.** Every firing alert carries: the rule
-uid, `severity`, `release_id`, the runbook anchor, and — where the rule has
-one exact log identity — the correlation ids of the triggering record
-(`session_id`, `organization_id`, `user_id`). Links are built from ids by a
-fixed scheme (observability L5). A human-written alert body with no ids is
-a defect of the rule, not of the reader.
+**L4 — Machine-legible or not at all.** Every firing alert carries: the rule uid, `severity`, `release_id`, the runbook anchor, and — where the rule has one exact log identity — the correlation ids of the triggering record (`session_id`, `organization_id`, `user_id`). Links are built from ids by a fixed scheme (observability L5). A human-written alert body with no ids is a defect of the rule, not of the reader.
 
-**L5 — One route tree, checked in.** The Alertmanager route tree is the
-two-row table in L2 and nothing else. Receivers are never added to route
-around a problem; a new destination is a spec change. Live state is
-verified against the checked-in intent by the operator scripts, never
-assumed from it.
+**L5 — One route tree, checked in.** The Alertmanager route tree is the two-row table in L2 and nothing else. Receivers are never added to route around a problem; a new destination is a spec change. Live state is verified against the checked-in intent by the operator scripts, never assumed from it.
 
-**L6 — Every alert is attributable.** A rule without a `runbook_url`
-annotation and an owner section in the runbook is invalid (`grafana-alerting.mjs check`
-already enforces the annotation); a rule nobody has looked at in 30 days of
-firing is noise by definition and is removed or re-thresholded (ratchet, §9).
+**L6 — Every alert is attributable.** A rule without a `runbook_url` annotation and an owner section in the runbook is invalid (`grafana-alerting.mjs check` already enforces the annotation); a rule nobody has looked at in 30 days of firing is noise by definition and is removed or re-thresholded (ratchet, §9).
 
-**L7 — Alert → issue → fix → test, one path.** A real alert becomes a GitHub
-issue labelled `alert:<severity>` carrying ids and links (never log bodies);
-the PR that closes it adds or extends a test whose docstring trailer says
-`Surfaced-by: alert:<rule_uid>` (plus `sentry:` / `session:` when known) and
-`Spec: <owning spec>#<law>`. The issue is closed by the PR, never by hand.
-Recurrence of the same rule for the same cause after the PR merges is a
-broken fix, not a new incident. This is the same path the customer-loop
-spec uses for `support:report`; the two differ only in the first label.
+**L7 — Alert → issue → fix → test, one path.** A real alert becomes a GitHub issue labelled `alert:<severity>` carrying ids and links (never log bodies); the PR that closes it adds or extends a test whose docstring trailer says `Surfaced-by: alert:<rule_uid>` (plus `sentry:` / `session:` when known) and `Spec: <owning spec>#<law>`. The issue is closed by the PR, never by hand. Recurrence of the same rule for the same cause after the PR merges is a broken fix, not a new incident. This is the same path the customer-loop spec uses for `support:report`; the two differ only in the first label.
 
-**L8 — Contain before diagnosing; diagnose before cleaning.** First response
-is read-only (open the session story, the Sentry issue, the runbook
-section). Containment verbs are the owning product system's (cancel a run
-tree, pause a definition, hold a billing subject — runs / automations /
-billing specs); this system names *when* to use them, never re-implements
-them. Cleanup that destroys evidence (reaping an environment, rotating a
-key) waits for the issue to exist.
+**L8 — Contain before diagnosing; diagnose before cleaning.** First response is read-only (open the session story, the Sentry issue, the runbook section). Containment verbs are the owning product system's (cancel a run tree, pause a definition, hold a billing subject — runs / automations / billing specs); this system names *when* to use them, never re-implements them. Cleanup that destroys evidence (reaping an environment, rotating a key) waits for the issue to exist.
 
-**L9 — Delivery is proven, not assumed.** A route that has not delivered a
-synthetic alert in the last 30 days is unproven. The Alertmanager
-`receivers/test` endpoint is the proof; the result (status + timestamp,
-never the webhook) is recorded in the runbook. A silent channel is the
-worst failure this system can have, and it is silent by construction.
+**L9 — Delivery is proven, not assumed.** A route that has not delivered a synthetic alert in the last 30 days is unproven. The Alertmanager `receivers/test` endpoint is the proof; the result (status + timestamp, never the webhook) is recorded in the runbook. A silent channel is the worst failure this system can have, and it is silent by construction.
 
-**L10 — Signals die with their surfaces.** A culled feature's rules, routes,
-and runbook sections are deleted in the same PR as the feature
-(deletion-completeness; display names grep-gated). The tracker's receiver
-outliving the tracker by two days is the precedent this law comes from.
+**L10 — Signals die with their surfaces.** A culled feature's rules, routes, and runbook sections are deleted in the same PR as the feature (deletion-completeness; display names grep-gated). The tracker's receiver outliving the tracker by two days is the precedent this law comes from.
 
 ### Ruling on the rules that exist (2026-08-25)
 
@@ -205,8 +128,7 @@ outliving the tracker by two days is the precedent this law comes from.
 | `Sign-in failures > 5 in 10m` (`ffvtx33lbo5c0e`, NEW workspace) | warning | **keep**, promote to `critical` when it becomes a rate (failures / attempts > X%) | a raw count of 5 is a fine "unexpected" signal; a rate is a promise |
 | `ECS CPU > 90% for 15m` (`cfrmh7d7od8g0c`) | retired 2026-08-21 | **stays retired** | infra symptom, not a product promise — the precedent for L1 |
 
-**Missing** (each blocked on an Emits gap in §4, none constructible tonight
-without touching `cloud/`):
+**Missing** (each blocked on an Emits gap in §4, none constructible tonight without touching `cloud/`):
 
 | Missing rule | Selects | Severity | Blocked on |
 | --- | --- | --- | --- |
@@ -300,22 +222,11 @@ Sentry issues ──► (no routing to Slack from Sentry; discovered in the Sent
 tracker receiver ──► removed 2026-08-25 (route had continue=true; Slack delivery was never interrupted)
 ```
 
-Honest inventory: six rules, all server-infra shaped, evaluated from
-CloudWatch. **Not present:** paging/on-call of any kind (no phone path, no
-ack, no escalation), SLOs, an incident process, a delivery-health canary,
-any runtime/fleet alert, any cost-anomaly alert, anything about runs or
-automations. Jank: the five rules exist twice (OLD + NEW workspace) with
-checksum tooling keeping them identical; `CRITICAL_FAILURE` is one marker
-carrying the whole application-level story; alert → human urgency is a
-Slack channel and nothing else.
+Honest inventory: six rules, all server-infra shaped, evaluated from CloudWatch. **Not present:** paging/on-call of any kind (no phone path, no ack, no escalation), SLOs, an incident process, a delivery-health canary, any runtime/fleet alert, any cost-anomaly alert, anything about runs or automations. Jank: the five rules exist twice (OLD + NEW workspace) with checksum tooling keeping them identical; `CRITICAL_FAILURE` is one marker carrying the whole application-level story; alert → human urgency is a Slack channel and nothing else.
 
 ## Minimum tonight
 
-Goal: tomorrow morning Pablo opens `#ops-alerts` and `#eng-triage` and sees
-only real breakage, each alert linking to its runbook section and — once
-observability W1 is in — to the session. Each PR is config or docs; none
-changes product state; none touches `server/proliferate/server/cloud/**`.
-Live Grafana mutations are **ops steps listed here, not executed by a PR.**
+Goal: tomorrow morning Pablo opens `#ops-alerts` and `#eng-triage` and sees only real breakage, each alert linking to its runbook section and — once observability W1 is in — to the session. Each PR is config or docs; none changes product state; none touches `server/proliferate/server/cloud/**`. Live Grafana mutations are **ops steps listed here, not executed by a PR.**
 
 | PR | Files | Change | Proof |
 | --- | --- | --- | --- |
@@ -332,9 +243,7 @@ Live Grafana mutations are **ops steps listed here, not executed by a PR.**
 3. Decide the production-down channel (PABLO DECIDES 1) and, if it is a
    phone, wire the uptime probe to it — outside Grafana.
 
-Queued for the morning after PR-Ab merges (each one file + one test, then a
-rule): `WORKER_DEGRADED` marker → *Worker fleet degraded* rule; provisioning
-failure edge marker → *Provisioning failure rate* rule.
+Queued for the morning after PR-Ab merges (each one file + one test, then a rule): `WORKER_DEGRADED` marker → *Worker fleet degraded* rule; provisioning failure edge marker → *Provisioning failure rate* rule.
 
 ## Target
 

@@ -1,10 +1,6 @@
 # Product Sense
 
-Things that require *taste* and judgment: copy, design, architectural
-positioning. Enforced by review. System-specific taste lives with that system
-(design tokens → the
-[design system doc](DESIGN_SYSTEM.md), area
-judgment → the owner README).
+Things that require *taste* and judgment: copy, design, architectural positioning. Enforced by review. System-specific taste lives with that system (design tokens → the [design system doc](DESIGN_SYSTEM.md), area judgment → the owner README).
 
 ## Broadly we like
 
@@ -50,7 +46,4 @@ judgment → the owner README).
 
 ## Amending this doc
 
-Grows from real misses: a taste call rejected in review becomes an entry in
-the same PR, with the rejected thing named. Add a good/bad example only when
-agents keep not grokking the rule. Entries that stop being violated get cut.
-Founder review on every change.
+Grows from real misses: a taste call rejected in review becomes an entry in the same PR, with the rejected thing named. Add a good/bad example only when agents keep not grokking the rule. Entries that stop being violated get cut. Founder review on every change.

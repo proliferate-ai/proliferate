@@ -1,13 +1,8 @@
 # Integration gateway
 
-Status: target. Grade B system spec: the mechanism sections below are
-verified against `main`; the laws are written in the accepted destination
-(Core Architecture §7) and every difference from `main` is listed in
-[Current gaps](#current-gaps). Decisions still owed are marked
-`PABLO DECIDES`.
+Status: target. Grade B system spec: the mechanism sections below are verified against `main`; the laws are written in the accepted destination (Core Architecture §7) and every difference from `main` is listed in [Current gaps](#current-gaps). Decisions still owed are marked `PABLO DECIDES`.
 
-The integration gateway is **the only path from an agent to a company
-system**. It owns two halves that share one MANIFEST and one spec:
+The integration gateway is **the only path from an agent to a company system**. It owns two halves that share one MANIFEST and one spec:
 
 - **connections** — the auth relationship between an organization (or one of
   its members) and a provider: definitions, OAuth, credentials at rest,
@@ -16,26 +11,15 @@ system**. It owns two halves that share one MANIFEST and one spec:
   its ready connections and proxies tool calls with control-plane-held
   credentials.
 
-The one-line split it must never lose: **connection ≠ grant ≠ tool-call
-event.** A connection is a converging row about a credential; a grant is what
-a subject may do with it on a given run; a tool-call event is the audited fact
-that it did.
+The one-line split it must never lose: **connection ≠ grant ≠ tool-call event.** A connection is a converging row about a credential; a grant is what a subject may do with it on a given run; a tool-call event is the audited fact that it did.
 
 ## 1. Purpose
 
-An agent inside any environment (desktop or cloud) can act on Linear, Slack,
-GitHub-as-tool, or any MCP-speaking provider without a credential ever
-entering the environment, and a human can see, repair, approve, and revoke
-that access from one place. Failure is typed and names the repair verb;
-nothing is repaired lazily inside a tool call.
+An agent inside any environment (desktop or cloud) can act on Linear, Slack, GitHub-as-tool, or any MCP-speaking provider without a credential ever entering the environment, and a human can see, repair, approve, and revoke that access from one place. Failure is typed and names the repair verb; nothing is repaired lazily inside a tool call.
 
 ## 2. Owned state
 
-Tables, all written only by this system
-([db/models/integrations.py](../../../server/proliferate/db/models/integrations.py),
-[integration_authorization.py](../../../server/proliferate/db/models/integration_authorization.py),
-[integration_revocation.py](../../../server/proliferate/db/models/integration_revocation.py),
-`cloud/integration_approvals.py`):
+Tables, all written only by this system ([db/models/integrations.py](../../../server/proliferate/db/models/integrations.py), [integration_authorization.py](../../../server/proliferate/db/models/integration_authorization.py), [integration_revocation.py](../../../server/proliferate/db/models/integration_revocation.py), `cloud/integration_approvals.py`):
 
 | Table | Row meaning |
 | --- | --- |
@@ -51,17 +35,13 @@ Tables, all written only by this system
 | `cloud_integration_tool_call_event` | **The tool-call event.** One audit row per proxied call, success or failure. |
 | `cloud_integration_action_approval` / `_event` | One exact external-action request with immutable actor/account/worker/session snapshots (deliberately not FKs) and its append-only evidence. |
 
-Runtime worker identity, enrollment, heartbeat and the gateway bearer token
-(`cloud_runtime_worker*`, `cloud_integration_gateway_token`) are **not**
-owned here — see Fences.
+Runtime worker identity, enrollment, heartbeat and the gateway bearer token (`cloud_runtime_worker*`, `cloud_integration_gateway_token`) are **not** owned here — see Fences.
 
 ## 3. Public surface
 
-All routes mount under `/v1/cloud` via
-`cloud/api.py`.
+All routes mount under `/v1/cloud` via `cloud/api.py`.
 
-Connections, user-authenticated
-([connections/api.py](../../../server/proliferate/server/integration_gateway/connections/api.py)):
+Connections, user-authenticated ([connections/api.py](../../../server/proliferate/server/integration_gateway/connections/api.py)):
 
 | Route | Serves |
 | --- | --- |
@@ -74,25 +54,13 @@ Connections, user-authenticated
 | `GET /integrations/oauth/callback` | Provider callback; completes the attempt, swaps credentials, renders the desktop deep-link or web completion page ([pages.py](../../../server/proliferate/server/integration_gateway/connections/pages.py)). |
 | `GET/POST /integrations/admin/organizations/{org}/definitions`, `POST …/definitions/{id}/enabled` | Org-admin custom definitions and enable/disable policy. |
 
-Approvals, user-authenticated
-(`action_approvals/api.py`):
-`GET /integrations/action-approvals`, `GET …/{id}`, `POST …/{id}/approve|reject|revoke`.
-A worker, gateway bearer, or MCP session can never call these.
+Approvals, user-authenticated (`action_approvals/api.py`): `GET /integrations/action-approvals`, `GET …/{id}`, `POST …/{id}/approve|reject|revoke`. A worker, gateway bearer, or MCP session can never call these.
 
-Gateway, worker-authenticated
-([gateway/api.py](../../../server/proliferate/server/integration_gateway/gateway/api.py)):
-`GET|POST /integration-gateway/mcp` — JSON-RPC exposing exactly three virtual
-tools ([virtual_tools.py](../../../server/proliferate/server/integration_gateway/gateway/domain/virtual_tools.py)):
-`integrations.list_providers`, `integrations.list_tools`,
-`integrations.call_tool`.
+Gateway, worker-authenticated ([gateway/api.py](../../../server/proliferate/server/integration_gateway/gateway/api.py)): `GET|POST /integration-gateway/mcp` — JSON-RPC exposing exactly three virtual tools ([virtual_tools.py](../../../server/proliferate/server/integration_gateway/gateway/domain/virtual_tools.py)): `integrations.list_providers`, `integrations.list_tools`, `integrations.call_tool`.
 
-Python surface for other systems (per the MANIFEST): `connections.api`,
-`connections.service`, `connections.models`, `connections.access`,
-`gateway.api`, `gateway.service`, `gateway.models`. Measured importers today:
-`background` (revocation task), `cloud` (router shell), `main.py` (seed sync).
+Python surface for other systems (per the MANIFEST): `connections.api`, `connections.service`, `connections.models`, `connections.access`, `gateway.api`, `gateway.service`, `gateway.models`. Measured importers today: `background` (revocation task), `cloud` (router shell), `main.py` (seed sync).
 
-SDK: [integrations.ts](../../../cloud/sdk/src/client/integrations.ts),
-`integration-action-approvals.ts`.
+SDK: [integrations.ts](../../../cloud/sdk/src/client/integrations.ts), `integration-action-approvals.ts`.
 
 ## 4. Consumes
 
@@ -115,90 +83,29 @@ SDK: [integrations.ts](../../../cloud/sdk/src/client/integrations.ts),
 
 ## 5. Laws
 
-**Credentials never enter the environment.** The runtime holds only a gateway
-bearer; `integrations.call_tool` decrypts, renders headers, and calls the
-provider inside the control plane
-([`resolve_launch`](../../../server/proliferate/server/integration_gateway/connections/access.py),
-[`call_provider_tool`](../../../server/proliferate/server/integration_gateway/gateway/service.py)).
-Closes: a compromised sandbox exfiltrating a provider token.
+**Credentials never enter the environment.** The runtime holds only a gateway bearer; `integrations.call_tool` decrypts, renders headers, and calls the provider inside the control plane ([`resolve_launch`](../../../server/proliferate/server/integration_gateway/connections/access.py), [`call_provider_tool`](../../../server/proliferate/server/integration_gateway/gateway/service.py)). Closes: a compromised sandbox exfiltrating a provider token.
 
-**Identity is materialized once; capability is resolved per call.** Worker
-enrollment (seam) proves *who*; every tool call re-derives *what* from the
-current committed connection and policy:
-[`admit_provider_operation`](../../../server/proliferate/server/integration_gateway/connections/admission.py)
-locks the ready account row, checks org policy and active membership,
-validates the pinned security revision, and issues a lease before any
-provider I/O. Changing what a run may do is a row update effective on the
-next call — no re-materialization. Closes: stale capability surviving a
-revoke.
+**Identity is materialized once; capability is resolved per call.** Worker enrollment (seam) proves *who*; every tool call re-derives *what* from the current committed connection and policy: [`admit_provider_operation`](../../../server/proliferate/server/integration_gateway/connections/admission.py) locks the ready account row, checks org policy and active membership, validates the pinned security revision, and issues a lease before any provider I/O. Changing what a run may do is a row update effective on the next call — no re-materialization. Closes: stale capability surviving a revoke.
 
-**The connection is a converging row.** A connection is
-`(org, provider, subject)` with `subject ∈ {org-install, user, bot}`, a
-status vocabulary `{connected, degraded, needs_reauth, revoked}`, and a
-receipt-style `last_error`. It converges through three legs — provider
-webhooks (passive), a scheduled probe (active: a cheap call proving the token
-works), and fail-closed usage (the gateway never lazily repairs mid-call; it
-returns a typed error naming the repair verb). Closes: the one row nobody
-owned converging, which was the historical source of integration pain.
+**The connection is a converging row.** A connection is `(org, provider, subject)` with `subject ∈ {org-install, user, bot}`, a status vocabulary `{connected, degraded, needs_reauth, revoked}`, and a receipt-style `last_error`. It converges through three legs — provider webhooks (passive), a scheduled probe (active: a cheap call proving the token works), and fail-closed usage (the gateway never lazily repairs mid-call; it returns a typed error naming the repair verb). Closes: the one row nobody owned converging, which was the historical source of integration pain.
 
-**Provisioning is user-present and never inline in the usage path.** Connect
-and reconnect are attempt-owned, stage-and-swap
-([oauth/service.py](../../../server/proliferate/server/integration_gateway/connections/oauth/service.py),
-delivery [PR2](../../../delivery/integration-lifecycle/delivery-spec-integration-lifecycle-pr2.md)):
-failed, cancelled, expired, superseded or stale work can neither create a
-first connection nor damage a working one. A token refresh inside
-[`ensure_provider_access`](../../../server/proliferate/server/integration_gateway/connections/access.py)
-is the single sanctioned in-path mutation and is compare-and-swap on
-`auth_version`. Closes: two concurrent refreshes clobbering each other.
+**Provisioning is user-present and never inline in the usage path.** Connect and reconnect are attempt-owned, stage-and-swap ([oauth/service.py](../../../server/proliferate/server/integration_gateway/connections/oauth/service.py), delivery [PR2](../../../delivery/integration-lifecycle/delivery-spec-integration-lifecycle-pr2.md)): failed, cancelled, expired, superseded or stale work can neither create a first connection nor damage a working one. A token refresh inside [`ensure_provider_access`](../../../server/proliferate/server/integration_gateway/connections/access.py) is the single sanctioned in-path mutation and is compare-and-swap on `auth_version`. Closes: two concurrent refreshes clobbering each other.
 
-**Authority and credential rotations are independently monotonic.** A
-credential write bumps `auth_version`; a definition security change bumps its
-revision; an approval or cache bound to an older version cannot be consumed
-or served. Closes: an approval granted for yesterday's workspace being
-delivered with today's.
+**Authority and credential rotations are independently monotonic.** A credential write bumps `auth_version`; a definition security change bumps its revision; an approval or cache bound to an older version cannot be consumed or served. Closes: an approval granted for yesterday's workspace being delivered with today's.
 
-**Health rolls up into readiness.** A definition whose connection is
-`needs_reauth` shows blocked *before* anything runs on it — the management
-projection's `primary=reconnect` today; the automation-definition readiness
-roll-up in the destination. Closes: the silent 3 a.m. failure.
+**Health rolls up into readiness.** A definition whose connection is `needs_reauth` shows blocked *before* anything runs on it — the management projection's `primary=reconnect` today; the automation-definition readiness roll-up in the destination. Closes: the silent 3 a.m. failure.
 
-**Tool policy is exact, argument-blind, and data-only.**
-[`decide_tool_call`](../../../server/proliferate/server/integration_gateway/gateway/domain/tool_policy.py)
-classifies the canonical `(provider, tool)` pair before account resolution:
-Slack reads execute, Slack external actions require approval, unknown Slack
-tools fail closed; other providers pass through. Agent arguments never
-participate in the decision. Closes: prompt-injected tool names bypassing
-approval.
+**Tool policy is exact, argument-blind, and data-only.** [`decide_tool_call`](../../../server/proliferate/server/integration_gateway/gateway/domain/tool_policy.py) classifies the canonical `(provider, tool)` pair before account resolution: Slack reads execute, Slack external actions require approval, unknown Slack tools fail closed; other providers pass through. Agent arguments never participate in the decision. Closes: prompt-injected tool names bypassing approval.
 
-**Approvals are born at the control plane and are exact, one-time, and
-clock-bounded.** A gated action creates (or converges on) one durable
-`pending` request bound to user, org, account `auth_version`, worker, signed
-gateway session, workspace, session, provider, tool, and the SHA-256 of the
-canonical arguments; 600 s TTL on the database clock; every transition is
-compare-and-set; consumption succeeds once
-(`action_approvals/service.py`).
-Approvals work even when the event pipe is degraded because they never ride
-it. Closes: replayed or double-consumed approvals.
+**Approvals are born at the control plane and are exact, one-time, and clock-bounded.** A gated action creates (or converges on) one durable `pending` request bound to user, org, account `auth_version`, worker, signed gateway session, workspace, session, provider, tool, and the SHA-256 of the canonical arguments; 600 s TTL on the database clock; every transition is compare-and-set; consumption succeeds once (`action_approvals/service.py`). Approvals work even when the event pipe is degraded because they never ride it. Closes: replayed or double-consumed approvals.
 
-**Every call is an audited event.** Success, provider failure, policy denial
-and transport failure all write `cloud_integration_tool_call_event`. Closes:
-an unexplained external side effect.
+**Every call is an audited event.** Success, provider failure, policy denial and transport failure all write `cloud_integration_tool_call_event`. Closes: an unexplained external side effect.
 
-**Disconnect is one transaction plus a bounded job.**
-[`stage_revocation_for_disconnect`](../../../server/proliferate/server/integration_gateway/connections/revocation.py)
-makes local use impossible and enqueues provider revocation through the
-background outbox with a retry ceiling and a deadline sweep. Closes: a
-"disconnected" token that still works at the provider.
+**Disconnect is one transaction plus a bounded job.** [`stage_revocation_for_disconnect`](../../../server/proliferate/server/integration_gateway/connections/revocation.py) makes local use impossible and enqueues provider revocation through the background outbox with a retry ceiling and a deadline sweep. Closes: a "disconnected" token that still works at the provider.
 
-**Expose generously at list time, enforce at call time.** Some harnesses
-cache MCP tool listings per session, so the listing is the account's cached
-schema and the call is where policy and admission bite; a session restart is
-accepted on grant *broadening*. Closes: a harness holding a stale, narrower
-tool list forever.
+**Expose generously at list time, enforce at call time.** Some harnesses cache MCP tool listings per session, so the listing is the account's cached schema and the call is where policy and admission bite; a session restart is accepted on grant *broadening*. Closes: a harness holding a stale, narrower tool list forever.
 
-**Two Slack relationships, never conflated.** Slack-as-tool (this system:
-gateway-held connection, agent speaks, audited per call) is not the product
-Slack app ([slack.md](../slack/README.md): trigger + client, server speaks).
+**Two Slack relationships, never conflated.** Slack-as-tool (this system: gateway-held connection, agent speaks, audited per call) is not the product Slack app ([slack.md](../slack/README.md): trigger + client, server speaks).
 
 ## 6. Emits
 
@@ -279,32 +186,9 @@ apps/packages/product-client/src/
 
 ## 9. Proof
 
-Integration: [test_cloud_integrations_api.py](../../../server/tests/integration/test_cloud_integrations_api.py),
-[test_cloud_integration_catalog_api.py](../../../server/tests/integration/test_cloud_integration_catalog_api.py),
-[test_cloud_integration_health_api.py](../../../server/tests/integration/test_cloud_integration_health_api.py),
-[test_integration_management_api.py](../../../server/tests/integration/test_integration_management_api.py),
-[test_integration_authorization_lifecycle.py](../../../server/tests/integration/test_integration_authorization_lifecycle.py),
-[test_integration_admission_cutoff.py](../../../server/tests/integration/test_integration_admission_cutoff.py),
-[test_integration_refresh_races.py](../../../server/tests/integration/test_integration_refresh_races.py),
-[test_integration_provider_access.py](../../../server/tests/integration/test_integration_provider_access.py),
-[test_integration_oauth_scope_policy.py](../../../server/tests/integration/test_integration_oauth_scope_policy.py),
-[test_integration_revocation_lifecycle.py](../../../server/tests/integration/test_integration_revocation_lifecycle.py),
-[test_integration_revocation_redelivery.py](../../../server/tests/integration/test_integration_revocation_redelivery.py),
-[test_cloud_integration_gateway_api.py](../../../server/tests/integration/test_cloud_integration_gateway_api.py),
-[test_cloud_integration_gateway_audit.py](../../../server/tests/integration/test_cloud_integration_gateway_audit.py),
-[test_cloud_integration_gateway_policy_api.py](../../../server/tests/integration/test_cloud_integration_gateway_policy_api.py),
-[test_cloud_integration_gateway_tool_policy_api.py](../../../server/tests/integration/test_cloud_integration_gateway_tool_policy_api.py),
-`test_cloud_integration_action_approvals_api.py`,
-[test_cloud_integrations_admin_api.py](../../../server/tests/integration/test_cloud_integrations_admin_api.py).
+Integration: [test_cloud_integrations_api.py](../../../server/tests/integration/test_cloud_integrations_api.py), [test_cloud_integration_catalog_api.py](../../../server/tests/integration/test_cloud_integration_catalog_api.py), [test_cloud_integration_health_api.py](../../../server/tests/integration/test_cloud_integration_health_api.py), [test_integration_management_api.py](../../../server/tests/integration/test_integration_management_api.py), [test_integration_authorization_lifecycle.py](../../../server/tests/integration/test_integration_authorization_lifecycle.py), [test_integration_admission_cutoff.py](../../../server/tests/integration/test_integration_admission_cutoff.py), [test_integration_refresh_races.py](../../../server/tests/integration/test_integration_refresh_races.py), [test_integration_provider_access.py](../../../server/tests/integration/test_integration_provider_access.py), [test_integration_oauth_scope_policy.py](../../../server/tests/integration/test_integration_oauth_scope_policy.py), [test_integration_revocation_lifecycle.py](../../../server/tests/integration/test_integration_revocation_lifecycle.py), [test_integration_revocation_redelivery.py](../../../server/tests/integration/test_integration_revocation_redelivery.py), [test_cloud_integration_gateway_api.py](../../../server/tests/integration/test_cloud_integration_gateway_api.py), [test_cloud_integration_gateway_audit.py](../../../server/tests/integration/test_cloud_integration_gateway_audit.py), [test_cloud_integration_gateway_policy_api.py](../../../server/tests/integration/test_cloud_integration_gateway_policy_api.py), [test_cloud_integration_gateway_tool_policy_api.py](../../../server/tests/integration/test_cloud_integration_gateway_tool_policy_api.py), `test_cloud_integration_action_approvals_api.py`, [test_cloud_integrations_admin_api.py](../../../server/tests/integration/test_cloud_integrations_admin_api.py).
 
-Unit: [test_integration_config.py](../../../server/tests/unit/test_integration_config.py),
-[test_integration_lifecycle_contracts.py](../../../server/tests/unit/test_integration_lifecycle_contracts.py),
-[test_cloud_integration_oauth.py](../../../server/tests/unit/test_cloud_integration_oauth.py),
-[test_cloud_integration_oauth_clients.py](../../../server/tests/unit/test_cloud_integration_oauth_clients.py),
-[test_cloud_integration_oauth_scope_policy.py](../../../server/tests/unit/test_cloud_integration_oauth_scope_policy.py),
-[test_cloud_integration_oauth_surfaces.py](../../../server/tests/unit/test_cloud_integration_oauth_surfaces.py),
-[test_cloud_integration_gateway_tool_policy.py](../../../server/tests/unit/test_cloud_integration_gateway_tool_policy.py),
-[test_integration_gateway_execution_session.py](../../../server/tests/unit/test_integration_gateway_execution_session.py).
+Unit: [test_integration_config.py](../../../server/tests/unit/test_integration_config.py), [test_integration_lifecycle_contracts.py](../../../server/tests/unit/test_integration_lifecycle_contracts.py), [test_cloud_integration_oauth.py](../../../server/tests/unit/test_cloud_integration_oauth.py), [test_cloud_integration_oauth_clients.py](../../../server/tests/unit/test_cloud_integration_oauth_clients.py), [test_cloud_integration_oauth_scope_policy.py](../../../server/tests/unit/test_cloud_integration_oauth_scope_policy.py), [test_cloud_integration_oauth_surfaces.py](../../../server/tests/unit/test_cloud_integration_oauth_surfaces.py), [test_cloud_integration_gateway_tool_policy.py](../../../server/tests/unit/test_cloud_integration_gateway_tool_policy.py), [test_integration_gateway_execution_session.py](../../../server/tests/unit/test_integration_gateway_execution_session.py).
 
 ## Failure modes
 

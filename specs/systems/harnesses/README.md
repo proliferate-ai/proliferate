@@ -1,32 +1,12 @@
 # Harnesses
 
-Status: current (grade B). System spec in the Organization Standard anatomy.
-The runtime system that owns *which coding agents exist and whether they can
-launch*: the supported-kind registry, the distribution catalog compiled into the
-binary, install/seed/reconcile of agent artifacts, credential detection and
-readiness, target-observed launch options and the probe that observes them, and
-the per-provider adapters (ACP extensions, live controls, transcript quirks).
-It hands the session engine a **resolved launch surface**; it never runs a
-session.
+Status: current (grade B). System spec in the Organization Standard anatomy. The runtime system that owns *which coding agents exist and whether they can launch*: the supported-kind registry, the distribution catalog compiled into the binary, install/seed/reconcile of agent artifacts, credential detection and readiness, target-observed launch options and the probe that observes them, and the per-provider adapters (ACP extensions, live controls, transcript quirks). It hands the session engine a **resolved launch surface**; it never runs a session.
 
-Today the code lives in `domains/agents/` and the docs call it "agents". The
-Organization Standard names the system **harnesses** (a harness is the thing
-you run; an agent is the thing a user talks to), and the target tree renames
-the folder. Depth references: [agents.md](agents-domain.md),
-[agent-distribution.md](distribution.md),
-[harnesses.md](harness-integrations.md) and the per-provider docs under
-[harnesses/](claude.md), [acp.md](../../areas/anyharness.md),
-[agent-mode-matrix.md](agent-mode-matrix.md), [MODELS.md](../agent_auth/models.md).
+Today the code lives in `domains/agents/` and the docs call it "agents". The Organization Standard names the system **harnesses** (a harness is the thing you run; an agent is the thing a user talks to), and the target tree renames the folder. Depth references: [agents.md](agents-domain.md), [agent-distribution.md](distribution.md), [harnesses.md](harness-integrations.md) and the per-provider docs under [harnesses/](claude.md), [acp.md](../../areas/anyharness.md), [agent-mode-matrix.md](agent-mode-matrix.md), [MODELS.md](../agent_auth/models.md).
 
 ## 1. Purpose
 
-Make "is Claude ready on this machine, and with which exact model and
-controls may I launch it?" a pure, side-effect-free question with one answer,
-and make "get it ready" a fenced, sha-verified, idempotent operation. The
-product outcome: a user installs the app and every supported harness converges
-to the catalog pin without a manual step; a cloud task environment does the
-same from a seed; session create can only ever launch an executable surface the
-target has actually observed.
+Make "is Claude ready on this machine, and with which exact model and controls may I launch it?" a pure, side-effect-free question with one answer, and make "get it ready" a fenced, sha-verified, idempotent operation. The product outcome: a user installs the app and every supported harness converges to the catalog pin without a manual step; a cloud task environment does the same from a seed; session create can only ever launch an executable surface the target has actually observed.
 
 ## 2. Owned state
 
@@ -39,14 +19,11 @@ target has actually observed.
 | `harness_launch_option_states` — target-observed model ids and control values per kind | [launch_options/store.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_options/store.rs) | the launch probe only |
 | Readiness overrides, path resolution, version facts | [readiness/](../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs) | derived, not stored |
 
-Not owned though co-located (see Fences): `auth/`, `auth_state.rs`,
-`route_auth/` — the runtime half of **agent_auth**.
+Not owned though co-located (see Fences): `auth/`, `auth_state.rs`, `route_auth/` — the runtime half of **agent_auth**.
 
 ## 3. Public surface
 
-HTTP ([agents.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agents.rs),
-[agent_launch_options.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agent_launch_options.rs),
-[catalogs.rs](../../../anyharness/crates/anyharness-lib/src/api/http/catalogs.rs)):
+HTTP ([agents.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agents.rs), [agent_launch_options.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agent_launch_options.rs), [catalogs.rs](../../../anyharness/crates/anyharness-lib/src/api/http/catalogs.rs)):
 
 | Route | Meaning |
 | --- | --- |
@@ -57,15 +34,9 @@ HTTP ([agents.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agents.
 | `GET /v1/agents/{kind}/launch-options`, `POST …/launch-options/refresh` | target-observed launch options; refresh pokes the probe |
 | `GET /v1/catalogs/agents/version` | the compiled catalog version — binary convergence *is* catalog convergence |
 
-Wire shapes: [agents.rs](../../../anyharness/crates/anyharness-contract/src/v1/agents.rs),
-[launch_options.rs](../../../anyharness/crates/anyharness-contract/src/v1/launch_options.rs),
-[catalogs.rs](../../../anyharness/crates/anyharness-contract/src/v1/catalogs.rs).
+Wire shapes: [agents.rs](../../../anyharness/crates/anyharness-contract/src/v1/agents.rs), [launch_options.rs](../../../anyharness/crates/anyharness-contract/src/v1/launch_options.rs), [catalogs.rs](../../../anyharness/crates/anyharness-contract/src/v1/catalogs.rs).
 
-In-process: `AgentRuntime` ([runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs))
-is the facade — it sequences concern services and owns no mechanism. Sessions
-obtain the resolved executable surface (`ResolvedAgent`) and the exact-validated
-`ResolvedLaunchIntent` inputs through it; the cloud surface flag
-`ANYHARNESS_RUNTIME_SURFACE` selects `RuntimeSurface::{Local,Cloud}`.
+In-process: `AgentRuntime` ([runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)) is the facade — it sequences concern services and owns no mechanism. Sessions obtain the resolved executable surface (`ResolvedAgent`) and the exact-validated `ResolvedLaunchIntent` inputs through it; the cloud surface flag `ANYHARNESS_RUNTIME_SURFACE` selects `RuntimeSurface::{Local,Cloud}`.
 
 ## 4. Consumes
 
@@ -84,35 +55,19 @@ obtain the resolved executable surface (`ResolvedAgent`) and the exact-validated
 
 ## 5. Laws
 
-**The bundled registry is the source of truth for supported kinds.** Catalog
-modules are distribution, presentation and compatibility only and cannot
-authorize executable values ([README.md](../../areas/anyharness.md), launch-option authority).
+**The bundled registry is the source of truth for supported kinds.** Catalog modules are distribution, presentation and compatibility only and cannot authorize executable values ([README.md](../../areas/anyharness.md), launch-option authority).
 
-**Resolution never mutates.** `resolve_agent(...)` reports installed,
-compatible, credentialed state and nothing else; installation is a separate,
-fenced operation ([readiness/service.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs)).
+**Resolution never mutates.** `resolve_agent(...)` reports installed, compatible, credentialed state and nothing else; installation is a separate, fenced operation ([readiness/service.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs)).
 
-**Managed install materializes exactly the catalog pin, sha-verified.**
-ACP-registry resolution is probe-time only; a drifted or unsigned artifact never
-reaches `Ready` ([installer/pinned.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/pinned.rs)).
+**Managed install materializes exactly the catalog pin, sha-verified.** ACP-registry resolution is probe-time only; a drifted or unsigned artifact never reaches `Ready` ([installer/pinned.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/pinned.rs)).
 
-**Launch options are observed, never defaulted.** Session create reloads the
-target observation, exact-validates the caller's opaque selection and stores
-`ResolvedLaunchIntent` atomically; omitted values stay omitted — no catalog
-default, alias, or first option fills them
-([launch_options/validation.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_options/validation.rs)).
+**Launch options are observed, never defaulted.** Session create reloads the target observation, exact-validates the caller's opaque selection and stores `ResolvedLaunchIntent` atomically; omitted values stay omitted — no catalog default, alias, or first option fills them ([launch_options/validation.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_options/validation.rs)).
 
-**The probe is override-free.** [launch_probe/](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_probe/mod.rs)
-detects what the installed binary reports, under a lock, with backoff; it
-records contradictions rather than resolving them.
+**The probe is override-free.** [launch_probe/](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_probe/mod.rs) detects what the installed binary reports, under a lock, with backoff; it records contradictions rather than resolving them.
 
-**Cursor never installs in cloud.** It is login-only with no headless
-credential path, so a cloud install could never reach `Ready`
-(`RuntimeSurface::Cloud` carve-out in [runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)).
+**Cursor never installs in cloud.** It is login-only with no headless credential path, so a cloud install could never reach `Ready` (`RuntimeSurface::Cloud` carve-out in [runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)).
 
-**Binary convergence is catalog convergence.** The active catalog is immutable
-for the runtime process lifetime; there is no document push or faster lane
-([MANAGED_RUNTIME.md](managed-runtime.md)).
+**Binary convergence is catalog convergence.** The active catalog is immutable for the runtime process lifetime; there is no document push or faster lane ([MANAGED_RUNTIME.md](managed-runtime.md)).
 
 ## 6. Emits
 
@@ -137,9 +92,7 @@ for the runtime process lifetime; there is no document push or faster lane
 | Supervisor binary swaps, worker mailbox | managed_runtime ([MANAGED_RUNTIME.md](managed-runtime.md)) |
 | Cowork/review/workflow session policy | their owning domains |
 
-Declared edge: `agents → sessions` (baseline; the reverse `sessions → agents`
-is the intended direction and also present). Every other domain reaches
-harnesses through `AgentRuntime` or the readiness facade.
+Declared edge: `agents → sessions` (baseline; the reverse `sessions → agents` is the intended direction and also present). Every other domain reaches harnesses through `AgentRuntime` or the readiness facade.
 
 > [!decision] PABLO DECIDES: harness kinds. `AgentKind::all()` is
 > `[Claude, Codex, Cursor, OpenCode, Grok]`; Cursor is login-only and
@@ -185,11 +138,7 @@ specs/areas/harnesses/{claude,codex,grok}.md               per-provider adapter 
 catalogs/agents/**                                              registry + catalog data (build input)
 ```
 
-Client-plane presentation: [components/agents](../../../apps/packages/product-client/src/components/agents),
-[hooks/agents](../../../apps/packages/product-client/src/hooks/agents),
-[lib/domain/agents](../../../apps/packages/product-client/src/lib/domain/agents),
-[stores/agents](../../../apps/packages/product-client/src/stores/agents) (agent
-picker, install/login prompts, readiness badges).
+Client-plane presentation: [components/agents](../../../apps/packages/product-client/src/components/agents), [hooks/agents](../../../apps/packages/product-client/src/hooks/agents), [lib/domain/agents](../../../apps/packages/product-client/src/lib/domain/agents), [stores/agents](../../../apps/packages/product-client/src/stores/agents) (agent picker, install/login prompts, readiness badges).
 
 ## 9. Proof
 

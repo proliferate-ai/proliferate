@@ -1,10 +1,6 @@
 # Engineering Analytics
 
-Engineering Analytics owns product and adoption measurement. It owns the
-first-party daily-activity and anonymous-telemetry records, the PostHog client
-adapters, and the durable Postgres analytics objects that Metabase may read.
-It does not own operational error handling, issue triage, or lifecycle
-messaging.
+Engineering Analytics owns product and adoption measurement. It owns the first-party daily-activity and anonymous-telemetry records, the PostHog client adapters, and the durable Postgres analytics objects that Metabase may read. It does not own operational error handling, issue triage, or lifecycle messaging.
 
 ## Boundaries
 
@@ -21,12 +17,7 @@ messaging.
 
 ## First-Party Daily Activity
 
-`POST /v1/analytics/client-daily-activity` records one deduplicated row per
-actor or anonymous install, UTC day, and surface. Web and Mobile send an
-authenticated user request with a low-cardinality route or screen and
-platform. Desktop sends an anonymous install UUID, telemetry mode, app
-version, and platform. The API derives authenticated identity from the bearer
-token; clients do not put a user id in the request body.
+`POST /v1/analytics/client-daily-activity` records one deduplicated row per actor or anonymous install, UTC day, and surface. Web and Mobile send an authenticated user request with a low-cardinality route or screen and platform. Desktop sends an anonymous install UUID, telemetry mode, app version, and platform. The API derives authenticated identity from the bearer token; clients do not put a user id in the request body.
 
 Source ownership:
 
@@ -37,10 +28,7 @@ Source ownership:
 - Storage: `server/proliferate/db/models/analytics.py` and
   `server/proliferate/db/store/analytics.py`
 
-The route/screen validator accepts only a 128-character low-cardinality token
-containing letters, digits, `_`, or `-`; other values become `unknown`.
-Client-local daily throttling is best effort and the database upsert is the
-deduplication boundary.
+The route/screen validator accepts only a 128-character low-cardinality token containing letters, digits, `_`, or `-`; other values become `unknown`. Client-local daily throttling is best effort and the database upsert is the deduplication boundary.
 
 ## Applicability And Data Contract
 

@@ -1,11 +1,8 @@
 # Chat Transcript
 
-Read this doc when a change touches session streams, transcript replay,
-transcript row models, pending/outbox prompt rows, long-history loading, or
-chat transcript rendering performance.
+Read this doc when a change touches session streams, transcript replay, transcript row models, pending/outbox prompt rows, long-history loading, or chat transcript rendering performance.
 
-In-app find (Cmd+F) over transcript prose is documented separately in
-[`../../../features/content-search.md`](../workspace-surface/content-search.md).
+In-app find (Cmd+F) over transcript prose is documented separately in [`../../../features/content-search.md`](../workspace-surface/content-search.md).
 
 ## Stream And Transcript Rules
 
@@ -29,29 +26,13 @@ In-app find (Cmd+F) over transcript prose is documented separately in
 
 ### Embedded Non-Active Transcripts
 
-The Agents right-pane detail renders a child transcript without making that
-child the active main chat. It must reuse the mapped ProductClient session's
-existing directory entry, transcript store, history hydration, transcript row
-model, and send-or-queue intent path. Do not create a pane-specific transcript
-cache or reducer, and do not write the child's ID into the main
-`activeSessionId` as a rendering shortcut.
+The Agents right-pane detail renders a child transcript without making that child the active main chat. It must reuse the mapped ProductClient session's existing directory entry, transcript store, history hydration, transcript row model, and send-or-queue intent path. Do not create a pane-specific transcript cache or reducer, and do not write the child's ID into the main `activeSessionId` as a rendering shortcut.
 
-A non-Closed detail explicitly requests an arbitrary-session stream through the
-shared stream lifecycle. The pane releases only the handle it opened; it must
-not tear down a pre-existing handle or one owned by hot-session ingestion.
-Closed detail hydrates persisted history read-only and opens no stream. The
-embedded `MessageList` uses the same transcript-session target resolver as the
-main transcript so cowork, linked-child, and ordinary-session navigation keeps
-its existing workspace semantics.
+A non-Closed detail explicitly requests an arbitrary-session stream through the shared stream lifecycle. The pane releases only the handle it opened; it must not tear down a pre-existing handle or one owned by hot-session ingestion. Closed detail hydrates persisted history read-only and opens no stream. The embedded `MessageList` uses the same transcript-session target resolver as the main transcript so cowork, linked-child, and ordinary-session navigation keeps its existing workspace semantics.
 
-This embedded transcript opts out of transcript content search
-(`contentSearchEnabled={false}`). It must not register or paint matches for the
-workspace Cmd+F surface while the active main transcript remains the search
-owner.
+This embedded transcript opts out of transcript content search (`contentSearchEnabled={false}`). It must not register or paint matches for the workspace Cmd+F surface while the active main transcript remains the search owner.
 
-Before merging transcript or stream-runtime changes, run focused coverage for
-stream flushing, session runtime/history loading, transcript row modeling, SDK
-transcript reducer immutability, plus:
+Before merging transcript or stream-runtime changes, run focused coverage for stream flushing, session runtime/history loading, transcript row modeling, SDK transcript reducer immutability, plus:
 
 ```bash
 pnpm --filter @proliferate/product-client typecheck
@@ -59,9 +40,7 @@ pnpm --filter @proliferate/product-client typecheck
 
 ## Tool Result Rendering
 
-Tool call rows should prefer product-specific renderers before the generic JSON
-result row. The generic renderer is the fallback for unknown tools, malformed
-payloads, and tool results that have no durable product display contract.
+Tool call rows should prefer product-specific renderers before the generic JSON result row. The generic renderer is the fallback for unknown tools, malformed payloads, and tool results that have no durable product display contract.
 
 Product-specific result rendering must stay split by ownership:
 
@@ -91,23 +70,13 @@ mcp__proliferate_skills__get_skill_resource
   otherwise as preformatted text
 ```
 
-Do not render successful skills MCP results as raw JSON in the normal transcript
-path.
+Do not render successful skills MCP results as raw JSON in the normal transcript path.
 
 ## Markdown File Mentions And Code Blocks
 
-Committed user-message prose renders through the shared `MarkdownBody` GFM
-surface rather than as plain pre-wrapped text. Bold, italic, lists, links, and
-other supported Markdown therefore render after submission. Raw HTML remains
-text and unsafe URL protocols remain blocked. Product-client injects the same
-workspace-aware link renderer used by assistant prose, so serialized workspace
-file links continue to open in the file viewer while external links retain the
-shared web-link presentation. User prose opts into transcript content-search
-painting and removes only the outer first/last Markdown margins so the existing
-message-bubble rhythm remains authoritative.
+Committed user-message prose renders through the shared `MarkdownBody` GFM surface rather than as plain pre-wrapped text. Bold, italic, lists, links, and other supported Markdown therefore render after submission. Raw HTML remains text and unsafe URL protocols remain blocked. Product-client injects the same workspace-aware link renderer used by assistant prose, so serialized workspace file links continue to open in the file viewer while external links retain the shared web-link presentation. User prose opts into transcript content-search painting and removes only the outer first/last Markdown margins so the existing message-bubble rhythm remains authoritative.
 
-Assistant markdown renders file references as clickable file mentions and code
-blocks as bordered highlighted cards. Ownership is split by package law:
+Assistant markdown renders file references as clickable file mentions and code blocks as bordered highlighted cards. Ownership is split by package law:
 
 ```text
 apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx
@@ -146,14 +115,7 @@ anyharness .../domains/sessions/response_formatting.rs
   file links with the complete workspace-root path, never abbreviated
 ```
 
-`transcript-markdown.tsx`'s `renderTranscriptLink`/`renderTranscriptInlineCode`
-pair is injected across every current transcript-owned Markdown surface, with
-the injection matched to whether the surface's text is assistant/skill-authored
-or user-authored. Assistant/skill-authored bodies wire both renderers, so
-path-like inline code becomes a file reference the same as an explicit link.
-User-authored bodies wire `renderLink` only, so a link a user actually typed
-still opens the file but a backticked path a user typed stays inert code —
-never reinterpreted without a separate product decision:
+`transcript-markdown.tsx`'s `renderTranscriptLink`/`renderTranscriptInlineCode` pair is injected across every current transcript-owned Markdown surface, with the injection matched to whether the surface's text is assistant/skill-authored or user-authored. Assistant/skill-authored bodies wire both renderers, so path-like inline code becomes a file reference the same as an explicit link. User-authored bodies wire `renderLink` only, so a link a user actually typed still opens the file but a backticked path a user typed stays inert code — never reinterpreted without a separate product decision:
 
 ```text
 apps/packages/product-client/src/components/workspace/chat/tool-calls/SkillsToolResultRow.tsx
@@ -264,21 +226,9 @@ Rules:
 
 ## Contextual Assistant-Text Actions
 
-A non-empty native text selection wholly contained by one assistant prose
-block opens the selected-response action menu. The transcript selection hook
-owns detection and dismissal; the menu owns only presentation and keyboard
-navigation.
+A non-empty native text selection wholly contained by one assistant prose block opens the selected-response action menu. The transcript selection hook owns detection and dismissal; the menu owns only presentation and keyboard navigation.
 
-Transcript-wide selection uses the same native selection surface. When the
-active chat surface owns the command, primary Select All (`Cmd+A` on macOS,
-`Ctrl+A` elsewhere) must create a visible, non-collapsed range across every
-rendered transcript row whether the command arrives from a WebView keydown or
-the Desktop native Edit menu. It must not require an earlier pointer selection.
-Transcript prose keeps the WebView's native selection paint; the chat surface
-must not replace it with the text-entry/editor selection token.
-Composer text entries, terminal zones, and browser zones keep command ownership.
-Copying an exact transcript-root selection serializes the complete loaded
-semantic transcript so DOM virtualization cannot truncate the clipboard text.
+Transcript-wide selection uses the same native selection surface. When the active chat surface owns the command, primary Select All (`Cmd+A` on macOS, `Ctrl+A` elsewhere) must create a visible, non-collapsed range across every rendered transcript row whether the command arrives from a WebView keydown or the Desktop native Edit menu. It must not require an earlier pointer selection. Transcript prose keeps the WebView's native selection paint; the chat surface must not replace it with the text-entry/editor selection token. Composer text entries, terminal zones, and browser zones keep command ownership. Copying an exact transcript-root selection serializes the complete loaded semantic transcript so DOM virtualization cannot truncate the clipboard text.
 
 Rules:
 
@@ -303,15 +253,11 @@ Rules:
   already in the composer and surface the existing availability reason when a
   send is blocked.
 
-The selected text is serialized as one quoted context section. Transport text,
-prompt blocks, and optimistic content are parallel representations of that one
-prompt, not separate context inserts.
+The selected text is serialized as one quoted context section. Transport text, prompt blocks, and optimistic content are parallel representations of that one prompt, not separate context inserts.
 
 ## Delegated-Work Receipts
 
-Agent creation, lifecycle changes, messages, and completion notifications are
-durable transcript events. They render as Agent Operations product receipts,
-not as raw MCP mechanics or ordinary user-message bubbles.
+Agent creation, lifecycle changes, messages, and completion notifications are durable transcript events. They render as Agent Operations product receipts, not as raw MCP mechanics or ordinary user-message bubbles.
 
 The pure Workspace MCP parser owns the wire-to-presentation boundary:
 
@@ -329,41 +275,11 @@ apps/packages/product-client/src/components/workspace/chat/transcript/AgentMessa
   shared left/right agent-message grammar
 ```
 
-Workspace reads (`whoami`, list/get/options calls, and `get_task_output`) remain
-generic foldable work. A structured-only read result is formatted into the
-existing expandable generic result row with the Proliferate mark; malformed or
-absent output keeps the non-expandable Proliferate-mark fallback. Workspace
-reads that name one durable `agentId` (`get_agent`, configuration options, and
-task output) keep the same foldable row but replace the product mark with that
-agent's Solid Seal. Workspace
-mutations (`create_workspace`, agent create,
-configure, resume, message, interrupt, Close, Open, and Promote) bypass generic
-history folding so their receipts remain visible after turn completion. The
-MCP parser consumes direct `AgentView` lifecycle outputs, the configure
-`{agent, applyState}` wrapper, the send `{target, queueSeq, status}` wrapper,
-and the workspace `{workspace, creationMode}` wrapper. It must not accept the
-HTTP lifecycle `{agent, relationship}` envelope.
+Workspace reads (`whoami`, list/get/options calls, and `get_task_output`) remain generic foldable work. A structured-only read result is formatted into the existing expandable generic result row with the Proliferate mark; malformed or absent output keeps the non-expandable Proliferate-mark fallback. Workspace reads that name one durable `agentId` (`get_agent`, configuration options, and task output) keep the same foldable row but replace the product mark with that agent's Solid Seal. Workspace mutations (`create_workspace`, agent create, configure, resume, message, interrupt, Close, Open, and Promote) bypass generic history folding so their receipts remain visible after turn completion. The MCP parser consumes direct `AgentView` lifecycle outputs, the configure `{agent, applyState}` wrapper, the send `{target, queueSeq, status}` wrapper, and the workspace `{workspace, creationMode}` wrapper. It must not accept the HTTP lifecycle `{agent, relationship}` envelope.
 
-The presentation boundary accepts either the exact flat native name
-`mcp__proliferate_workspace__<tool>` or the provider-neutral Codex MCP envelope
-`{server, tool, arguments}` when `server` is `proliferate_workspace` or the
-historical transport id `workspace`. It canonicalizes the latter's
-`arguments` and `rawOutput.structuredContent` before presentation and strict
-authority checks. This does not restore `mcp__workspace__*` as a native-name
-alias.
+The presentation boundary accepts either the exact flat native name `mcp__proliferate_workspace__<tool>` or the provider-neutral Codex MCP envelope `{server, tool, arguments}` when `server` is `proliferate_workspace` or the historical transport id `workspace`. It canonicalizes the latter's `arguments` and `rawOutput.structuredContent` before presentation and strict authority checks. This does not restore `mcp__workspace__*` as a native-name alias.
 
-Agent identity follows one rule on every surface: only a durable runtime
-session ID mints the Solid Seal glyph. Existing-target mutations may use their
-`agentId` input while running or failed because that field is the durable
-address; a create call waits for its output `identity.sessionId`. Relationship,
-tool-call, prompt, and ProductClient session IDs never mint a glyph. When a
-directory entry maps a durable ID to a ProductClient client-session ID, the
-durable ID continues to seed the glyph while navigation uses the mapped client
-ID. Cross-workspace navigation also requires the directory or direct
-`AgentView.workspace.workspaceId`; an unresolved location stays non-clickable.
-An in-progress or failed create uses the Proliferate product mark because no
-durable created-session identity exists. A successful create replaces that
-product-level attribution with the returned agent's Solid Seal.
+Agent identity follows one rule on every surface: only a durable runtime session ID mints the Solid Seal glyph. Existing-target mutations may use their `agentId` input while running or failed because that field is the durable address; a create call waits for its output `identity.sessionId`. Relationship, tool-call, prompt, and ProductClient session IDs never mint a glyph. When a directory entry maps a durable ID to a ProductClient client-session ID, the durable ID continues to seed the glyph while navigation uses the mapped client ID. Cross-workspace navigation also requires the directory or direct `AgentView.workspace.workspaceId`; an unresolved location stays non-clickable. An in-progress or failed create uses the Proliferate product mark because no durable created-session identity exists. A successful create replaces that product-level attribution with the returned agent's Solid Seal.
 
 Creation grouping belongs in the transcript presentation layer:
 
@@ -439,25 +355,9 @@ Communication receipts:
   as `knownWorkspace`, because the collections cache may not contain a newly
   created workspace yet.
 
-Pending agent-origin prompts are hidden from the ordinary editable queue and
-reduced to one final `From subagents` aggregate after user/review rows. The
-aggregate shows one deterministic 14px glyph per resolved durable sender in a
-20px overlapping shell, the total update count, and no edit/delete/reorder
-controls. Unresolved wake prompts count toward the total without creating a
-glyph. An authoritative same-workspace subagent glyph opens the Agents-pane
-detail; a promoted or otherwise non-subagent target uses its current session
-route. Reordering replaces only eligible runtime-owned plain-message slots;
-review, local-outbox, and hidden-agent slots retain their exact positions in
-both optimistic rendering and the compare-and-swap payload. A pending glyph
-is clickable only when directory metadata supplies an authoritative workspace,
-and navigation uses its mapped client-session ID.
+Pending agent-origin prompts are hidden from the ordinary editable queue and reduced to one final `From subagents` aggregate after user/review rows. The aggregate shows one deterministic 14px glyph per resolved durable sender in a 20px overlapping shell, the total update count, and no edit/delete/reorder controls. Unresolved wake prompts count toward the total without creating a glyph. An authoritative same-workspace subagent glyph opens the Agents-pane detail; a promoted or otherwise non-subagent target uses its current session route. Reordering replaces only eligible runtime-owned plain-message slots; review, local-outbox, and hidden-agent slots retain their exact positions in both optimistic rendering and the compare-and-swap payload. A pending glyph is clickable only when directory metadata supplies an authoritative workspace, and navigation uses its mapped client-session ID.
 
-`mcp__proliferate_workspace__*` is the only native-name Product MCP input to
-these Agent Operations renderers; the trusted Codex transport envelope above
-canonicalizes to that namespace. Removed `mcp__subagents__*` names have no
-compatibility classification or navigation fallback, and
-`mcp__workspace__*` is not a native-name alias. Unrecognized historical tool
-records use generic tool rendering.
+`mcp__proliferate_workspace__*` is the only native-name Product MCP input to these Agent Operations renderers; the trusted Codex transport envelope above canonicalizes to that namespace. Removed `mcp__subagents__*` names have no compatibility classification or navigation fallback, and `mcp__workspace__*` is not a native-name alias. Unrecognized historical tool records use generic tool rendering.
 
 Native harness subagents use the same durable item stream as the parent turn:
 
@@ -481,235 +381,43 @@ Native harness subagents use the same durable item stream as the parent turn:
 
 ## Layout Invariants
 
-Some layout dimensions are load-bearing. They are tuned together so specific
-UI transitions stay visually smooth. Changing one without the others can
-reintroduce scroll/layout bumps.
+Some layout dimensions are load-bearing. They are tuned together so specific UI transitions stay visually smooth. Changing one without the others can reintroduce scroll/layout bumps.
 
 ### Spacing Rhythm
 
-Sibling spacing inside a turn comes solely from the shared turn-container
-`gap-4` (16px conversation-item rhythm), and turn rows are
-separated by `TurnShell`'s `pt-2 pb-2` (`pt-0` for the first row). Pending
-prompt rows use the same shared gap so materialization is layout-stable. Blocks
-must not carry external vertical padding of their own
-(`TranscriptActivityBlock` is a zero-padding marker wrapper), and spacing must
-not vary with streaming state: a turn completing is a zero-delta layout change
-for everything already rendered.
+Sibling spacing inside a turn comes solely from the shared turn-container `gap-4` (16px conversation-item rhythm), and turn rows are separated by `TurnShell`'s `pt-2 pb-2` (`pt-0` for the first row). Pending prompt rows use the same shared gap so materialization is layout-stable. Blocks must not carry external vertical padding of their own (`TranscriptActivityBlock` is a zero-padding marker wrapper), and spacing must not vary with streaming state: a turn completing is a zero-delta layout change for everything already rendered.
 
-Completed tool/reasoning history uses one left-aligned disclosure labelled
-`Worked for {duration}`. Its expanded ledger remains underneath that row, and a
-single full-width `border-border` hairline separates the work block from the
-final answer. Do not render centered labels with rules on both sides, a
-separate `Final message` separator, or hairlines between assistant prose
-items. Top-level prose and activity blocks inside the expanded history restore
-the same `gap-4` conversation-item rhythm; the tighter `gap-1` (4px) grouped
-rhythm is reserved for detail rows within one expanded activity. The reveal
-gap between the `Worked for…` disclosure and its body is also 4px (`mt-1`). If
-the user stopped the turn, the same disclosure is labelled
-`You stopped after {duration}` instead; do not add a duplicate stopped footer
-beneath it. A stopped turn with no completed-history disclosure may use the
-standalone notice as a fallback.
+Completed tool/reasoning history uses one left-aligned disclosure labelled `Worked for {duration}`. Its expanded ledger remains underneath that row, and a single full-width `border-border` hairline separates the work block from the final answer. Do not render centered labels with rules on both sides, a separate `Final message` separator, or hairlines between assistant prose items. Top-level prose and activity blocks inside the expanded history restore the same `gap-4` conversation-item rhythm; the tighter `gap-1` (4px) grouped rhythm is reserved for detail rows within one expanded activity. The reveal gap between the `Worked for…` disclosure and its body is also 4px (`mt-1`). If the user stopped the turn, the same disclosure is labelled `You stopped after {duration}` instead; do not add a duplicate stopped footer beneath it. A stopped turn with no completed-history disclosure may use the standalone notice as a fallback.
 
-While work is live, the collapsed activity header represents exactly one
-current action and its matching icon (`Reading file.ts`, `Running command`,
-`Searching files`, and so on). It must never turn completed ledger history into
-a cumulative live status such as `Running 4 commands`; prior work stays
-available only inside the disclosure. A trailing exploration batch retains
-that one live header between adjacent completed search/read events while the
-turn remains in progress. Prose, a different trailing block, or turn completion
-ends the phase immediately; a generic tail status must not flash between those
-events.
+While work is live, the collapsed activity header represents exactly one current action and its matching icon (`Reading file.ts`, `Running command`, `Searching files`, and so on). It must never turn completed ledger history into a cumulative live status such as `Running 4 commands`; prior work stays available only inside the disclosure. A trailing exploration batch retains that one live header between adjacent completed search/read events while the turn remains in progress. Prose, a different trailing block, or turn completion ends the phase immediately; a generic tail status must not flash between those events.
 
-Completed activity headers use short, count-free verb phrases such as
-`Edited files, read files, ran a command`; exact counts stay in the expanded
-ledger. One representative phrase summarizes exploration work so mixed
-read/search/list/fetch batches stay concise. The dominant semantic icon follows
-an `edit > search/list > read/fetch > command` hierarchy (so a mixed
-search/read row may say `Read files` while using the search glyph). Semantic
-icons and labels share the same 60%-foreground ink, and the icon box scales
-with transcript text instead of using a fixed pixel size. The disclosure
-chevron remains layout-reserved but hidden until hover/focus or expansion.
-Clicking the completed activity summary, including a summary containing edits,
-toggles its ledger; the summary does not route to the Changes pane.
-Every row revealed inside an activity ledger repeats its own semantic glyph
-(including mixed parsed shell operations), at the same text-relative size and
-inherited ink as its label. Completed command details use `Ran …`; only the
-active command uses `Running …`. A read target with missing nullable workspace
-metadata is classified from its raw path against the current workspace root.
-An openable file target uses the semantic blue link color even though the
-surrounding activity row is muted: a workspace file opens in the viewer, while
-an external Desktop file uses the configured external target. It remains
-pointer- and keyboard-activatable while retrying path resolution or a failed
-external launch. A read target with no available primary action remains muted
-plain text without link or file-menu semantics rather than a disabled control.
-An edit detail shows one pen glyph followed by an inherited-color,
-dotted-underlined filename, not a second file-type glyph.
-When a transcript patch is available, clicking the edit row outside its
-filename toggles the inline diff. Clicking either the filename or the trailing
-open-file arrow opens the file without changing the row's expanded state. The
-row retains the file-reference context menu. Edit
-counts remain neutral beside the filename until row hover or focus within the
-row gives additions and deletions their semantic colors.
+Completed activity headers use short, count-free verb phrases such as `Edited files, read files, ran a command`; exact counts stay in the expanded ledger. One representative phrase summarizes exploration work so mixed read/search/list/fetch batches stay concise. The dominant semantic icon follows an `edit > search/list > read/fetch > command` hierarchy (so a mixed search/read row may say `Read files` while using the search glyph). Semantic icons and labels share the same 60%-foreground ink, and the icon box scales with transcript text instead of using a fixed pixel size. The disclosure chevron remains layout-reserved but hidden until hover/focus or expansion. Clicking the completed activity summary, including a summary containing edits, toggles its ledger; the summary does not route to the Changes pane. Every row revealed inside an activity ledger repeats its own semantic glyph (including mixed parsed shell operations), at the same text-relative size and inherited ink as its label. Completed command details use `Ran …`; only the active command uses `Running …`. A read target with missing nullable workspace metadata is classified from its raw path against the current workspace root. An openable file target uses the semantic blue link color even though the surrounding activity row is muted: a workspace file opens in the viewer, while an external Desktop file uses the configured external target. It remains pointer- and keyboard-activatable while retrying path resolution or a failed external launch. A read target with no available primary action remains muted plain text without link or file-menu semantics rather than a disabled control. An edit detail shows one pen glyph followed by an inherited-color, dotted-underlined filename, not a second file-type glyph. When a transcript patch is available, clicking the edit row outside its filename toggles the inline diff. Clicking either the filename or the trailing open-file arrow opens the file without changing the row's expanded state. The row retains the file-reference context menu. Edit counts remain neutral beside the filename until row hover or focus within the row gives additions and deletions their semantic colors.
 
-The completed-turn changed-files card uses one aggregate header and flat file
-rows. Multi-file cards show the first three paths, then a `Show N more files`
-row; each path splits muted directories from the foreground basename and keeps
-its `+`/`-` totals right-aligned. Do not add a per-file disclosure chevron or a
-second visible disclosure control: clicking the file row itself toggles its
-inline diff, while the trailing arrow opens that file without toggling. The
-aggregate `Edited N files` header opens Changes and immediately swaps aggregate
-stats for `Review changes` on hover/focus. File headers retain the shared diff
-line-wrap context menu. Aggregate and file-row stats use the semantic dark-theme
-green/red tokens (`#40c977` and `#fa423e`) and roll changed digits over 300ms
-with the standard enter curve; reduced-motion users receive no digit transition.
-Right-clicking a transcript file reference, edit filename, or diff line-wrap
-trigger clears any WebKit contextual word selection synchronously in the
-`contextmenu` handler before the replacement menu opens, since macOS WebKit
-selects the word under the pointer inside its own context-menu path and
-`preventDefault` cannot stop it. The clear only fires when both the
-selection's anchor and focus nodes are contained by the right-clicked
-element; a selection made elsewhere, or one with an endpoint outside that
-element, is left untouched. This is chrome behavior; it does not apply to
-selecting or right-clicking transcript prose or code-block text itself.
+The completed-turn changed-files card uses one aggregate header and flat file rows. Multi-file cards show the first three paths, then a `Show N more files` row; each path splits muted directories from the foreground basename and keeps its `+`/`-` totals right-aligned. Do not add a per-file disclosure chevron or a second visible disclosure control: clicking the file row itself toggles its inline diff, while the trailing arrow opens that file without toggling. The aggregate `Edited N files` header opens Changes and immediately swaps aggregate stats for `Review changes` on hover/focus. File headers retain the shared diff line-wrap context menu. Aggregate and file-row stats use the semantic dark-theme green/red tokens (`#40c977` and `#fa423e`) and roll changed digits over 300ms with the standard enter curve; reduced-motion users receive no digit transition. Right-clicking a transcript file reference, edit filename, or diff line-wrap trigger clears any WebKit contextual word selection synchronously in the `contextmenu` handler before the replacement menu opens, since macOS WebKit selects the word under the pointer inside its own context-menu path and `preventDefault` cannot stop it. The clear only fires when both the selection's anchor and focus nodes are contained by the right-clicked element; a selection made elsewhere, or one with an endpoint outside that element, is left untouched. This is chrome behavior; it does not apply to selecting or right-clicking transcript prose or code-block text itself.
 
-Single-file cards put the filename in the header and do not duplicate a file
-row underneath. Expanded multi-file cards collapse through `Collapse files`.
-The shell follows a restrained three-level surface hierarchy: its header
-and show-more row share a low-contrast raised surface, the file rows use the
-main transcript surface at partial opacity, and one standard hairline separates
-the header from the rows. Do not substitute higher-contrast stacked bands.
-Only the row under hover or keyboard focus gains the stronger list tint.
-The header's 40px secondary tile uses the filled plus/minus file glyph at 24px,
-matching the completed-diff summary rather than the pen glyph used by live edit
-activity.
+Single-file cards put the filename in the header and do not duplicate a file row underneath. Expanded multi-file cards collapse through `Collapse files`. The shell follows a restrained three-level surface hierarchy: its header and show-more row share a low-contrast raised surface, the file rows use the main transcript surface at partial opacity, and one standard hairline separates the header from the rows. Do not substitute higher-contrast stacked bands. Only the row under hover or keyboard focus gains the stronger list tint. The header's 40px secondary tile uses the filled plus/minus file glyph at 24px, matching the completed-diff summary rather than the pen glyph used by live edit activity.
 
-New activity blocks may use one compositor-only opacity/short horizontal
-entrance. The motion is claimed once by stable item identity in the latest
-in-progress turn. Hydrated history, completed-history expansion,
-virtualization remounts, and session revisits must render statically, and
-reduced-motion preferences disable the entrance.
+New activity blocks may use one compositor-only opacity/short horizontal entrance. The motion is claimed once by stable item identity in the latest in-progress turn. Hydrated history, completed-history expansion, virtualization remounts, and session revisits must render statically, and reduced-motion preferences disable the entrance.
 
 ### Stick-to-bottom engine
 
-Bottom pinning is owned by one shared engine,
-`apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts`,
-consumed by both `FullTranscriptRowList` and `VirtualizedTranscriptRowList`. It
-distinguishes user scrolls from its own programmatic snaps (`notifyProgrammaticScroll`
-tags every `scrollTop`/`scrollToOffset` write the engine or its callers make) so
-a streaming snap can never fight a user scrolling up. Intent to leave is detected
-pre-emptively via passive `wheel`/`keydown`/`touch` listeners on the viewport,
-flipping the pin state *before* the next snap layout effect reads it. Re-pinning
-happens only when a user scroll lands within a tight bottom band
-(`REPIN_BOTTOM_THRESHOLD_PX`), not the retired 96px `STICKY_BOTTOM_THRESHOLD_PX`
-window — that loose window kept small upward scrolls "pinned" and let the snap
-yank the user back.
+Bottom pinning is owned by one shared engine, `apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts`, consumed by both `FullTranscriptRowList` and `VirtualizedTranscriptRowList`. It distinguishes user scrolls from its own programmatic snaps (`notifyProgrammaticScroll` tags every `scrollTop`/`scrollToOffset` write the engine or its callers make) so a streaming snap can never fight a user scrolling up. Intent to leave is detected pre-emptively via passive `wheel`/`keydown`/`touch` listeners on the viewport, flipping the pin state *before* the next snap layout effect reads it. Re-pinning happens only when a user scroll lands within a tight bottom band (`REPIN_BOTTOM_THRESHOLD_PX`), not the retired 96px `STICKY_BOTTOM_THRESHOLD_PX` window — that loose window kept small upward scrolls "pinned" and let the snap yank the user back.
 
-Positive, direction-aware user intent also owns transcript rendering while the
-gesture is active. A wheel, scroll key, touch move, or custom-thumb drag that
-can actually move the viewport opens a 150ms priority window; a no-op gesture
-at either scroll boundary does not. Opening the window synchronously cancels
-the paced prose reveal frame, then renders from the last committed transcript
-snapshot so stream batches, row derivation, Markdown work, and measurement do
-not compete with native scroll paints. Unclassified native scroll events may
-extend an already-open window for momentum, but cannot open one; tagged
-programmatic follow and anchor writes never open or extend it. The newest
-snapshot publishes after the final sample settles, and prose reveal resumes
-from the exact visible prefix at its normal bounded rate rather than jumping to
-the buffered target. Snapshot authority updates only after a committed layout,
-so an interrupted concurrent render cannot leak state or scope into the hold.
+Positive, direction-aware user intent also owns transcript rendering while the gesture is active. A wheel, scroll key, touch move, or custom-thumb drag that can actually move the viewport opens a 150ms priority window; a no-op gesture at either scroll boundary does not. Opening the window synchronously cancels the paced prose reveal frame, then renders from the last committed transcript snapshot so stream batches, row derivation, Markdown work, and measurement do not compete with native scroll paints. Unclassified native scroll events may extend an already-open window for momentum, but cannot open one; tagged programmatic follow and anchor writes never open or extend it. The newest snapshot publishes after the final sample settles, and prose reveal resumes from the exact visible prefix at its normal bounded rate rather than jumping to the buffered target. Snapshot authority updates only after a committed layout, so an interrupted concurrent render cannot leak state or scope into the hold.
 
-While pinned, content growth re-sticks the viewport: the non-virtualized list
-via a `ResizeObserver` on the scroll content plus a per-commit layout effect, the
-virtualized list via measured `totalContentHeight`; both call the engine's
-`scrollToBottom`, which writes `scrollTop = scrollHeight` (never
-`virtualizer.scrollToIndex`, which bounces on unmeasured rows). On tab/window
-re-show while pinned, a short pre-paint rAF "glue" loop holds the viewport at the
-true bottom until row measurement settles, collapsing the resume backlog into one
-jump instead of a visible crawl.
+While pinned, content growth re-sticks the viewport: the non-virtualized list via a `ResizeObserver` on the scroll content plus a per-commit layout effect, the virtualized list via measured `totalContentHeight`; both call the engine's `scrollToBottom`, which writes `scrollTop = scrollHeight` (never `virtualizer.scrollToIndex`, which bounces on unmeasured rows). On tab/window re-show while pinned, a short pre-paint rAF "glue" loop holds the viewport at the true bottom until row measurement settles, collapsing the resume backlog into one jump instead of a visible crawl.
 
-Submitting a prompt is an explicit return-to-bottom intent. The engine itself
-detects the submit through its `lastPromptSubmittedAtMs` option: the newest
-creation stamp across the session's prompt outbox plus the session-level
-optimistic prompt (`lastPromptSubmittedAtMs` in the intent selectors, wired
-down from the transcript view model). Every prompt send enqueues an outbox
-intent — including queue-placed sends, which never render as transcript rows —
-so the stamp rises exactly once per send, and a monotonic increase re-pins,
-snaps, and runs the same glue loop so the composer collapse and new-row
-measurement settle land as one silent jump, even when the pin was silently
-lost earlier. Entries leaving the outbox (materialization, delivery,
-dismissal) can only lower the stamp and must not re-pin. Unlike the
-scroll-to-bottom button, a submit does not consume the manual-only overlay
-range: auto-follow keeps targeting the soft bottom above any dock-slot card
-(a range the user already consumed stays consumed until they scroll away).
-Interaction resolutions (answering an inline question or permission request)
-are `resolve_interaction` intents, not sends, and do not re-pin today.
+Submitting a prompt is an explicit return-to-bottom intent. The engine itself detects the submit through its `lastPromptSubmittedAtMs` option: the newest creation stamp across the session's prompt outbox plus the session-level optimistic prompt (`lastPromptSubmittedAtMs` in the intent selectors, wired down from the transcript view model). Every prompt send enqueues an outbox intent — including queue-placed sends, which never render as transcript rows — so the stamp rises exactly once per send, and a monotonic increase re-pins, snaps, and runs the same glue loop so the composer collapse and new-row measurement settle land as one silent jump, even when the pin was silently lost earlier. Entries leaving the outbox (materialization, delivery, dismissal) can only lower the stamp and must not re-pin. Unlike the scroll-to-bottom button, a submit does not consume the manual-only overlay range: auto-follow keeps targeting the soft bottom above any dock-slot card (a range the user already consumed stays consumed until they scroll away). Interaction resolutions (answering an inline question or permission request) are `resolve_interaction` intents, not sends, and do not re-pin today.
 
-When the transcript is shorter than the viewport, both row-list paths
-top-align the conversation (no `mt-auto` bottom anchor): a fresh conversation
-reads from the top, and unused viewport height sits below it,
-between the last row and the composer. Content grows downward until it fills
-the viewport; only from that point on does the composer-relative frontier
-contract above take over (pinning, re-stick, stable frontier coordinates).
+When the transcript is shorter than the viewport, both row-list paths top-align the conversation (no `mt-auto` bottom anchor): a fresh conversation reads from the top, and unused viewport height sits below it, between the last row and the composer. Content grows downward until it fills the viewport; only from that point on does the composer-relative frontier contract above take over (pinning, re-stick, stable frontier coordinates).
 
-When the user is unpinned, a completing turn that splits one row into
-`completed-history` + `content` (a new, unmeasured row inserted above the anchor)
-would bump the viewport as the 360px estimate corrects. The virtualized list
-holds the anchored content with the measured `scrollHeight` delta in a
-stability-gated loop; the non-virtualized list relies on native browser scroll
-anchoring (`overflow-anchor`, left at its default) for the small seam.
+When the user is unpinned, a completing turn that splits one row into `completed-history` + `content` (a new, unmeasured row inserted above the anchor) would bump the viewport as the 360px estimate corrects. The virtualized list holds the anchored content with the measured `scrollHeight` delta in a stability-gated loop; the non-virtualized list relies on native browser scroll anchoring (`overflow-anchor`, left at its default) for the small seam.
 
-An older-history prepend installs the same kind of anchor, but as a
-non-cancelable owner: it holds the reading row's seat against upward intent and
-against the frame scheduler draining. That seat is acknowledged, and the owner
-released, only when a writer pass observes the seat held in a frame that saw no
-native scroll activity. A seated read taken while a native scroll is still
-delivering proves only the main-thread `scrollTop` at that callback — a wheel or
-momentum continuation queued before the prepend can keep eroding the position
-afterwards, and releasing on that read both stops the writer and drops the
-protection that would have re-armed it, stranding the reader at the top. Erosion
-is re-corrected through the same single writer; the retention is bounded by the
-existing quiet-extension and absolute compensation deadlines, which release the
-anchor regardless.
+An older-history prepend installs the same kind of anchor, but as a non-cancelable owner: it holds the reading row's seat against upward intent and against the frame scheduler draining. That seat is acknowledged, and the owner released, only when a writer pass observes the seat held in a frame that saw no native scroll activity. A seated read taken while a native scroll is still delivering proves only the main-thread `scrollTop` at that callback — a wheel or momentum continuation queued before the prepend can keep eroding the position afterwards, and releasing on that read both stops the writer and drops the protection that would have re-armed it, stranding the reader at the top. Erosion is re-corrected through the same single writer; the retention is bounded by the existing quiet-extension and absolute compensation deadlines, which release the anchor regardless.
 
-Cards mounted above the composer (permission/question panels, slash-command
-trays, queued messages, goals, and similar dock slots) are overlays, not a
-reason to reposition existing transcript pixels. Their measured height is the
-`nonDisplacingBottomInsetPx` portion of the full bottom inset: it is rendered as
-absolutely positioned overflow beyond the bottom-anchor frame, adding scroll
-range without participating in its layout. The user can manually bring the
-transcript end above the obstruction, but changes to that portion alone must
-not trigger a pinned snap or a content `ResizeObserver`/visibility-glue snap.
-Normal auto-follow targets the soft bottom before this range. Once the user
-deliberately reaches the hard bottom, auto-follow preserves the consumed range;
-if another card stacks, only its newly added height remains manual-only. If a
-consumed overlay shrinks or disappears, the browser's upward clamp to the new
-hard bottom is layout movement, not user intent, and must preserve the pinned
-state. Composer-surface height remains structural and continues to re-stick
-promptly when the input itself grows. A shrink of the derived structural
-inset (the stable dock reserve minus the non-displacing offset-top share,
-recomputed from fresh rects inside the ResizeObserver callback by the same
-code path a measure commits, and compared against the widest of the last
-committed structural inset and the last measure-read one — a measure whose
-commit is still pending must be able to raise the shrink baseline but never
-lower it) flushes the inset re-measure synchronously —
-still pre-paint — instead of deferring a frame, so the collapse frame never
-paints against the stale taller inset and then drops the whole transcript a
-notch. This covers any structural collapse (submit, Escape-clear, deleting
-across a line wrap), and only structural collapse: a queued send mounts its
-outbound card in the very commit that collapses the surface, so the dock rect
-can net-grow while the structural inset shrinks (sync flush), while a
-dock-slot card dismissal shrinks the dock rect without touching the
-structural inset (stays on the deferred path — that movement is the
-non-displacing overlay share). Growth keeps the rAF-coalesced next-frame
-path.
+Cards mounted above the composer (permission/question panels, slash-command trays, queued messages, goals, and similar dock slots) are overlays, not a reason to reposition existing transcript pixels. Their measured height is the `nonDisplacingBottomInsetPx` portion of the full bottom inset: it is rendered as absolutely positioned overflow beyond the bottom-anchor frame, adding scroll range without participating in its layout. The user can manually bring the transcript end above the obstruction, but changes to that portion alone must not trigger a pinned snap or a content `ResizeObserver`/visibility-glue snap. Normal auto-follow targets the soft bottom before this range. Once the user deliberately reaches the hard bottom, auto-follow preserves the consumed range; if another card stacks, only its newly added height remains manual-only. If a consumed overlay shrinks or disappears, the browser's upward clamp to the new hard bottom is layout movement, not user intent, and must preserve the pinned state. Composer-surface height remains structural and continues to re-stick promptly when the input itself grows. A shrink of the derived structural inset (the stable dock reserve minus the non-displacing offset-top share, recomputed from fresh rects inside the ResizeObserver callback by the same code path a measure commits, and compared against the widest of the last committed structural inset and the last measure-read one — a measure whose commit is still pending must be able to raise the shrink baseline but never lower it) flushes the inset re-measure synchronously — still pre-paint — instead of deferring a frame, so the collapse frame never paints against the stale taller inset and then drops the whole transcript a notch. This covers any structural collapse (submit, Escape-clear, deleting across a line wrap), and only structural collapse: a queued send mounts its outbound card in the very commit that collapses the surface, so the dock rect can net-grow while the structural inset shrinks (sync flush), while a dock-slot card dismissal shrinks the dock rect without touching the structural inset (stays on the deferred path — that movement is the non-displacing overlay share). Growth keeps the rAF-coalesced next-frame path.
 
-A send intent with `placement: "queue"` is represented by the composer's
-outbound queue and must not also produce a transcript row. A queued send that
-fails before dispatch remains eligible for transcript error presentation. A
-`pending_prompts_reordered` event is a complete queue replacement, including
-the same immutable runtime-owned sequence identities in their committed array
-order; consumers must not treat it as an incremental move event. Sequence
-numbers never change during reorder and are never reused for a later entry.
+A send intent with `placement: "queue"` is represented by the composer's outbound queue and must not also produce a transcript row. A queued send that fails before dispatch remains eligible for transcript error presentation. A `pending_prompts_reordered` event is a complete queue replacement, including the same immutable runtime-owned sequence identities in their committed array order; consumers must not treat it as an incremental move event. Sequence numbers never change during reorder and are never reused for a later entry.
 
 ### Streaming Handoff
 
@@ -722,10 +430,7 @@ The transcript has two distinct bottom concepts:
    controls when final prose exists, and stays empty for a tool-only, stopped,
    or errored completion.
 
-The frontier must remain at one composer-relative coordinate through pending
-prompt ownership, materialization, live tool work, streamed prose, and
-completion. The footer belongs below it and must never cause final prose to
-move upward when its controls appear.
+The frontier must remain at one composer-relative coordinate through pending prompt ownership, materialization, live tool work, streamed prose, and completion. The footer belongs below it and must never cause final prose to move upward when its controls appear.
 
 | Piece | Location | Value |
 | --- | --- | --- |
@@ -820,7 +525,4 @@ Additional dependencies:
   prose the latest non-final work seq for slicing so it stays in the last turn
   row without crossing a goal event that occurs after all turn work.
 
-If you change any pinned value, update every file in the table at the same time
-and verify the full sequence: submit -> immediate Thinking -> materialized
-Thinking -> live command -> streamed final prose -> copy/timestamp. The
-frontier must not move at any handoff.
+If you change any pinned value, update every file in the table at the same time and verify the full sequence: submit -> immediate Thinking -> materialized Thinking -> live command -> streamed final prose -> copy/timestamp. The frontier must not move at any handoff.

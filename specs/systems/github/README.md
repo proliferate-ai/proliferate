@@ -1,25 +1,12 @@
 # GitHub
 
-Status: target. Grade B system spec: mechanisms verified on `main`; the
-identity-of-work laws are written in the accepted destination (Core
-Architecture §11) and every delta from `main` is in
-[Current gaps](#current-gaps).
+Status: target. Grade B system spec: mechanisms verified on `main`; the identity-of-work laws are written in the accepted destination (Core Architecture §11) and every delta from `main` is in [Current gaps](#current-gaps).
 
-The GitHub system owns Proliferate's relationship with GitHub as **the
-identity of work**: the GitHub App a user authorizes, the App installations an
-organization (or user account) grants, which repositories those installations
-cover, and therefore *under whose name and authority* a run may read, clone,
-and push. Boundary law, repeated on both sides: **authority says who may
-push; identity says who the commit is by; the sandbox credential helper only
-serves what this system leased.**
+The GitHub system owns Proliferate's relationship with GitHub as **the identity of work**: the GitHub App a user authorizes, the App installations an organization (or user account) grants, which repositories those installations cover, and therefore *under whose name and authority* a run may read, clone, and push. Boundary law, repeated on both sides: **authority says who may push; identity says who the commit is by; the sandbox credential helper only serves what this system leased.**
 
 ## 1. Purpose
 
-A repository is usable in Proliferate exactly when a current App
-authorization for the acting user meets an active installation covering that
-repository; both facts stay fresh without a user-visible refresh, and both
-failures are typed with the one action that repairs them (`reconnect` the
-App, or `install` it for that owner).
+A repository is usable in Proliferate exactly when a current App authorization for the acting user meets an active installation covering that repository; both facts stay fresh without a user-visible refresh, and both failures are typed with the one action that repairs them (`reconnect` the App, or `install` it for that owner).
 
 ## 2. Owned state
 
@@ -35,10 +22,7 @@ Store: [db/store/github_app.py](../../../server/proliferate/db/store/github_app.
 
 ## 3. Public surface
 
-Routes (user-authenticated unless noted), mounted from
-[github/api.py](../../../server/proliferate/server/github/api.py) via
-`cloud/api.py` and
-[main.py](../../../server/proliferate/main.py):
+Routes (user-authenticated unless noted), mounted from [github/api.py](../../../server/proliferate/server/github/api.py) via `cloud/api.py` and [main.py](../../../server/proliferate/main.py):
 
 | Route | Serves |
 | --- | --- |
@@ -51,17 +35,9 @@ Routes (user-authenticated unless noted), mounted from
 | `POST /v1/cloud/webhooks/github-app` (GitHub-signed) | Installation lifecycle intake ([webhooks.py](../../../server/proliferate/server/github/webhooks.py)): `installation`, `installation_repositories`. |
 | `GET /v1/cloud/repos`, `GET /v1/cloud/repos/{owner}/{name}/branches` | The repo catalog and branch listing ([repos/api.py](../../../server/proliferate/server/github/repos/api.py)). |
 
-Python surface for other systems: `github.api`, `github.service`,
-`github.models`, plus the authority gate
-[`require_github_cloud_repo_authority`](../../../server/proliferate/server/github/repo_authority.py)
-→ `GitHubCloudRepoAuthority` (actor login, GitHub user id, installation id,
-repository id, and the short-lived access token the caller may lease onward).
-Measured importers today: `cloud`, `cloud/materialization`,
-`cloud/repositories`, `cloud/workspaces`, `main.py` — all but `main.py` die
-with PR-Ab; the environments rebuild becomes the sole consumer of the gate.
+Python surface for other systems: `github.api`, `github.service`, `github.models`, plus the authority gate [`require_github_cloud_repo_authority`](../../../server/proliferate/server/github/repo_authority.py) → `GitHubCloudRepoAuthority` (actor login, GitHub user id, installation id, repository id, and the short-lived access token the caller may lease onward). Measured importers today: `cloud`, `cloud/materialization`, `cloud/repositories`, `cloud/workspaces`, `main.py` — all but `main.py` die with PR-Ab; the environments rebuild becomes the sole consumer of the gate.
 
-SDK: [github-app.ts](../../../cloud/sdk/src/client/github-app.ts),
-[repos.ts](../../../cloud/sdk/src/client/repos.ts).
+SDK: [github-app.ts](../../../cloud/sdk/src/client/github-app.ts), [repos.ts](../../../cloud/sdk/src/client/repos.ts).
 
 ## 4. Consumes
 
@@ -76,48 +52,17 @@ SDK: [github-app.ts](../../../cloud/sdk/src/client/github-app.ts),
 
 ## 5. Laws
 
-**Authority = current authorization ∧ covering installation.**
-[`require_github_cloud_repo_authority`](../../../server/proliferate/server/github/repo_authority.py)
-first ensures a fresh user authorization (refreshing under a per-user lock
-via [`ensure_fresh_github_app_authorization`](../../../server/proliferate/server/github/repo_authority.py)),
-then finds an active installation for the owner — `repository_selection=all`
-wins outright; `selected` consults the coverage cache and, on a miss, fetches
-coverage from GitHub and caches it. Missing installation →
-`github_app_installation_required` (409). Closes: cloning with a token that
-GitHub will reject.
+**Authority = current authorization ∧ covering installation.** [`require_github_cloud_repo_authority`](../../../server/proliferate/server/github/repo_authority.py) first ensures a fresh user authorization (refreshing under a per-user lock via [`ensure_fresh_github_app_authorization`](../../../server/proliferate/server/github/repo_authority.py)), then finds an active installation for the owner — `repository_selection=all` wins outright; `selected` consults the coverage cache and, on a miss, fetches coverage from GitHub and caches it. Missing installation → `github_app_installation_required` (409). Closes: cloning with a token that GitHub will reject.
 
-**Reauthorization failures commit with the error.** A permanent refresh
-failure raises
-[`GitHubAppReauthorizationRequired`](../../../server/proliferate/server/github/errors.py)
-(`github_app_authorization_expired`, 409) and the router dependency
-[`commit_github_app_reauthorization_on_error`](../../../server/proliferate/server/github/transactions.py)
-commits the staged revoked state instead of rolling it back. Closes: an
-authorization that looks `ready` after GitHub has rejected it, retrying
-forever.
+**Reauthorization failures commit with the error.** A permanent refresh failure raises [`GitHubAppReauthorizationRequired`](../../../server/proliferate/server/github/errors.py) (`github_app_authorization_expired`, 409) and the router dependency [`commit_github_app_reauthorization_on_error`](../../../server/proliferate/server/github/transactions.py) commits the staged revoked state instead of rolling it back. Closes: an authorization that looks `ready` after GitHub has rejected it, retrying forever.
 
-**Installation truth converges from webhooks and on-demand refresh.**
-`installation` and `installation_repositories` events update the rows; the
-callback and the authority gate refresh the installation cache from the App
-JWT when a lookup misses. Closes: a stale "not installed" after the user just
-installed.
+**Installation truth converges from webhooks and on-demand refresh.** `installation` and `installation_repositories` events update the rows; the callback and the authority gate refresh the installation cache from the App JWT when a lookup misses. Closes: a stale "not installed" after the user just installed.
 
-**Callbacks are state-signed and actor-verified.** Every start mints a signed
-state (`_state_for_user_authorization`, `_state_for_installation`) with a
-validated `return_to` allow-list; the installation callback verifies the
-actor controls the installation before binding it to an organization
-([`_verify_actor_controls_installation`](../../../server/proliferate/server/github/service.py)).
-Closes: binding someone else's installation to your org.
+**Callbacks are state-signed and actor-verified.** Every start mints a signed state (`_state_for_user_authorization`, `_state_for_installation`) with a validated `return_to` allow-list; the installation callback verifies the actor controls the installation before binding it to an organization ([`_verify_actor_controls_installation`](../../../server/proliferate/server/github/service.py)). Closes: binding someone else's installation to your org.
 
-**Human-triggered runs act as the user; headless runs use bot identity with
-a required human approver.** PR authorship is review integrity: a person
-asked for the change, the person's name is on it. An automation with no
-human in the loop commits as the App's bot and needs an approver before
-merge. Closes: "who wrote this?" on an unattended PR.
+**Human-triggered runs act as the user; headless runs use bot identity with a required human approver.** PR authorship is review integrity: a person asked for the change, the person's name is on it. An automation with no human in the loop commits as the App's bot and needs an approver before merge. Closes: "who wrote this?" on an unattended PR.
 
-**Task-environment GitHub auth derives from the organization installation,
-not a user's authorization leg.** A sandbox's credential lease is minted from
-this system's authority verdict for the run's subject; the lease is the only
-thing that leaves. Closes: a headless run holding a human's token.
+**Task-environment GitHub auth derives from the organization installation, not a user's authorization leg.** A sandbox's credential lease is minted from this system's authority verdict for the run's subject; the lease is the only thing that leaves. Closes: a headless run holding a human's token.
 
 ## 6. Emits
 
@@ -172,13 +117,7 @@ apps/packages/product-client/src/
 
 ## 9. Proof
 
-Unit: [test_github_app_service.py](../../../server/tests/unit/test_github_app_service.py),
-[test_github_app_repo_authority.py](../../../server/tests/unit/test_github_app_repo_authority.py),
-[test_github_repo_authority_gate.py](../../../server/tests/unit/test_github_repo_authority_gate.py),
-[test_github_app_callback_return.py](../../../server/tests/unit/test_github_app_callback_return.py),
-[test_repos_service.py](../../../server/tests/unit/test_repos_service.py).
-Integration: [test_github_app_reauthorization.py](../../../server/tests/integration/test_github_app_reauthorization.py).
-E2E helper: `tests/e2e/cloud/helpers/github.py`.
+Unit: [test_github_app_service.py](../../../server/tests/unit/test_github_app_service.py), [test_github_app_repo_authority.py](../../../server/tests/unit/test_github_app_repo_authority.py), [test_github_repo_authority_gate.py](../../../server/tests/unit/test_github_repo_authority_gate.py), [test_github_app_callback_return.py](../../../server/tests/unit/test_github_app_callback_return.py), [test_repos_service.py](../../../server/tests/unit/test_repos_service.py). Integration: [test_github_app_reauthorization.py](../../../server/tests/integration/test_github_app_reauthorization.py). E2E helper: `tests/e2e/cloud/helpers/github.py`.
 
 ## Failure modes
 

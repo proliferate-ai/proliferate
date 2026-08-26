@@ -1,11 +1,6 @@
 # Chat
 
-The chat surface: one session's transcript plus the composer that writes to
-it, mounted inside a workspace shell. Chat is a **client composition
-surface**, not a system of record — every fact it shows is projected from a
-runtime session stream or a Cloud record, and every write it makes is a
-request to a system that owns the outcome. This document is the surface's
-contract; the focused documents below are its sections.
+The chat surface: one session's transcript plus the composer that writes to it, mounted inside a workspace shell. Chat is a **client composition surface**, not a system of record — every fact it shows is projected from a runtime session stream or a Cloud record, and every write it makes is a request to a system that owns the outcome. This document is the surface's contract; the focused documents below are its sections.
 
 | Section | Document |
 | --- | --- |
@@ -17,11 +12,7 @@ contract; the focused documents below are its sections.
 
 ## Purpose
 
-Let a person read what an agent did and say what it should do next, for one
-session at a time, with the runtime as the only authority on what happened.
-Chat renders the runtime's append-only session log and turns keystrokes into
-prompt, config, permission, and interaction requests; it never invents
-session state.
+Let a person read what an agent did and say what it should do next, for one session at a time, with the runtime as the only authority on what happened. Chat renders the runtime's append-only session log and turns keystrokes into prompt, config, permission, and interaction requests; it never invents session state.
 
 ## Owned state
 
@@ -36,10 +27,7 @@ UI state only. Chat owns no durable record.
 | Transcript projection | The batched, reduced session stream per session (ingest → transcript → rows) | [session-ingest-store.ts](../../../apps/packages/product-client/src/stores/sessions/session-ingest-store.ts), [session-transcript-store.ts](../../../apps/packages/product-client/src/stores/sessions/session-transcript-store.ts) |
 | Session intents | Optimistic prompt/config/interaction intents awaiting runtime settlement | [session-intent-store.ts](../../../apps/packages/product-client/src/stores/sessions/session-intent-store.ts) |
 
-The session stores are shared with the workspace surface (which selects
-sessions and renders tabs) — chat is their primary writer for transcript
-content, the workspace surface for selection. See
-[Fences](#fences).
+The session stores are shared with the workspace surface (which selects sessions and renders tabs) — chat is their primary writer for transcript content, the workspace surface for selection. See [Fences](#fences).
 
 ## Public surface
 
@@ -58,8 +46,7 @@ What other surfaces may mount or call:
   are the read API for chrome outside the chat column (header tabs, activity
   bar) that needs the active session's live config or subagent strip.
 
-Nothing else is public. Transcript row components, scroll physics, and
-composer plugins are internal.
+Nothing else is public. Transcript row components, scroll physics, and composer plugins are internal.
 
 ## Consumes
 
@@ -88,12 +75,7 @@ Chat is a client of three systems, in this order of authority:
    [use-session-title-actions.ts](../../../apps/packages/product-client/src/hooks/sessions/workflows/use-session-title-actions.ts).
    Chat never calls a Cloud endpoint for transcript content.
 
-Presence and multiplayer today are **claiming only**: team-kind chats
-(`slack`, `shared-auto`, `shared-chat`) derive a claim state in
-[domain/chats/claiming.ts](../../../apps/packages/product-client/src/domain/chats/claiming.ts)
-and render [ClaimBanner](../../../apps/packages/product-client/src/components/workspace/chat/ClaimBanner.tsx).
-There is no live cursor or co-editing; a second client of the same session is
-a second reader of the same runtime stream.
+Presence and multiplayer today are **claiming only**: team-kind chats (`slack`, `shared-auto`, `shared-chat`) derive a claim state in [domain/chats/claiming.ts](../../../apps/packages/product-client/src/domain/chats/claiming.ts) and render [ClaimBanner](../../../apps/packages/product-client/src/components/workspace/chat/ClaimBanner.tsx). There is no live cursor or co-editing; a second client of the same session is a second reader of the same runtime stream.
 
 ## Laws
 
@@ -166,8 +148,7 @@ a second reader of the same runtime stream.
 
 ## Code map
 
-Ordered by data flow: runtime stream → stores → domain projection → hooks →
-components.
+Ordered by data flow: runtime stream → stores → domain projection → hooks → components.
 
 ```text
 apps/packages/product-client/src/
@@ -205,8 +186,7 @@ apps/packages/product-client/src/
 
 Target moves (later sweep wave, not this document's scope): `hooks/sessions`
 + `stores/sessions` + `domain/sessions` become a `sessions` client system
-that chat and the workspace surface both consume; `components/workspace/chat`
-→ `systems/chat/`.
+that chat and the workspace surface both consume; `components/workspace/chat` → `systems/chat/`.
 
 ## Proof
 

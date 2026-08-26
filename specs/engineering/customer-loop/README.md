@@ -1,44 +1,22 @@
 # Customer Loop
 
-Status: target. The capture half describes `main`; everything after the Slack
-receipt is the build. Grade C — see [Known gaps](#known-gaps).
+Status: target. The capture half describes `main`; everything after the Slack receipt is the build. Grade C — see [Known gaps](#known-gaps).
 
-Read before touching:
-[product support](../../systems/support/README.md) (the capture system this
-loop consumes — never re-spec it here),
-[observability](../observability/README.md),
-[`guides/debugging/support-reports.md`](../../../guides/debugging/support-reports.md),
-`server/proliferate/server/support/domain/message.py`,
-`server/proliferate/server/support/notifications.py`.
+Read before touching: [product support](../../systems/support/README.md) (the capture system this loop consumes — never re-spec it here), [observability](../observability/README.md), [`guides/debugging/support-reports.md`](../../../guides/debugging/support-reports.md), `server/proliferate/server/support/domain/message.py`, `server/proliferate/server/support/notifications.py`.
 
 ## 1. Purpose
 
-The customer loop is the engineering system that turns a customer-reported
-problem into a shipped, proven fix and closes the loop with the person who
-reported it:
+The customer loop is the engineering system that turns a customer-reported problem into a shipped, proven fix and closes the loop with the person who reported it:
 
 ```text
 report → triage → fix → test → notify-the-reporter
 ```
 
-It is cross-cutting: it owns no product state and no product surface. The
-product `support` system ends at durable capture plus a Slack receipt; this
-system starts at that receipt. It rides two sibling engineering systems
-rather than duplicating them — the alerting/fix loop (a support report is
-one more signal on the same triage board as a Sentry alert) and the testing
-convention *any issue found → a test case for it*.
+It is cross-cutting: it owns no product state and no product surface. The product `support` system ends at durable capture plus a Slack receipt; this system starts at that receipt. It rides two sibling engineering systems rather than duplicating them — the alerting/fix loop (a support report is one more signal on the same triage board as a Sentry alert) and the testing convention *any issue found → a test case for it*.
 
-The property that governs every design choice below is **legibility keyed
-by session id**: a report must land in the same one-story-per-session view
-(runtime replay, Sentry, Honeycomb) that an engineer or a triage agent
-already reads for a failing run. A report that cannot be joined to its
-session is a message, not evidence.
+The property that governs every design choice below is **legibility keyed by session id**: a report must land in the same one-story-per-session view (runtime replay, Sentry, Honeycomb) that an engineer or a triage agent already reads for a failing run. A report that cannot be joined to its session is a message, not evidence.
 
-The 2026-08 cull retired the prior issue tracker (`issues.proliferate.com`,
-`scripts/issues.py`, the support feed, the Grafana receiver). Nothing in
-this spec resurrects it. GitHub Issues in this repository is the interim
-intake; the parked `proliferate-ai/support-ops` repo is a reference
-prototype only, never a dependency.
+The 2026-08 cull retired the prior issue tracker (`issues.proliferate.com`, `scripts/issues.py`, the support feed, the Grafana receiver). Nothing in this spec resurrects it. GitHub Issues in this repository is the interim intake; the parked `proliferate-ai/support-ops` repo is a reference prototype only, never a dependency.
 
 ## 2. Owned state
 
@@ -53,9 +31,7 @@ None inside the product. Deliberately:
 - The fix's proof lives with the owning system as a pinning test (§9 and
   the testing spec), not with this loop.
 
-The only artifact this system writes is documentation and glue: the issue
-template, the receipt field plan it asks support to emit, and the triage
-runbook.
+The only artifact this system writes is documentation and glue: the issue template, the receipt field plan it asks support to emit, and the triage runbook.
 
 > [!decision] PABLO DECIDES: where triage state lives past the interim.
 > Options: (a) GitHub Issues stays the intake indefinitely — one place for
@@ -83,8 +59,7 @@ There is no API. The loop's surface is three human/agent-facing contracts:
   (`Closes #N`), names the pinning test it added, and the merge is the
   trigger for reporter notification (§5, law 5).
 
-Operators read `guides/operating/support-loop.md` (※ new, lands with the
-minimum-tonight PR) for the step-by-step; this document is the contract.
+Operators read `guides/operating/support-loop.md` (※ new, lands with the minimum-tonight PR) for the step-by-step; this document is the contract.
 
 ## 4. Consumes
 
@@ -218,9 +193,7 @@ Everything else this loop touches belongs to a fence above.
 
 ## Minimum tonight
 
-The smallest set that lets Pablo triage what is actually broken tomorrow
-morning, each a separate small PR, none touching
-`server/proliferate/server/cloud/`:
+The smallest set that lets Pablo triage what is actually broken tomorrow morning, each a separate small PR, none touching `server/proliferate/server/cloud/`:
 
 1. **Receipt enrichment** — extend `build_support_report_plan` with:
    `Release` (`client_release_id`), `Sessions` (bound session ids, first 5),
@@ -239,9 +212,7 @@ morning, each a separate small PR, none touching
    loop form: `Closes #N · pinning test: <path>` (E5 removed the tracker
    version).
 
-Explicitly not tonight: reporter email automation, a server-side GitHub
-credential, any new table or endpoint, Sentry session tagging (observability
-spec owns it), dashboards.
+Explicitly not tonight: reporter email automation, a server-side GitHub credential, any new table or endpoint, Sentry session tagging (observability spec owns it), dashboards.
 
 ## Target
 

@@ -14,8 +14,7 @@ Scope:
 - `anyharness/sdk/**` and `anyharness/sdk-react/**` for cowork artifact client access
 - desktop consumers of cowork artifact HTTP endpoints
 
-Use this doc to answer the cowork artifact questions that the general workspace
-and session docs do not answer:
+Use this doc to answer the cowork artifact questions that the general workspace and session docs do not answer:
 
 - where artifact truth lives
 - how artifacts are created and updated
@@ -95,9 +94,7 @@ Keep ownership split the same way the rest of the runtime is split:
   - generic file operations consult artifact-owned write protection for
     manifest and artifact-backed paths
 
-Artifact tools and delegation tools share the cowork MCP server but are
-separate contracts: artifact tools must not be used for delegated-agent
-lifecycle.
+Artifact tools and delegation tools share the cowork MCP server but are separate contracts: artifact tools must not be used for delegated-agent lifecycle.
 
 Do not put artifact lifecycle logic in HTTP handlers or desktop hooks.
 

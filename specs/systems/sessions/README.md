@@ -1,35 +1,18 @@
 # Sessions
 
-Status: target for the control-plane registry half; the runtime event log
-and its API describe `main`. Grade B / C — see [Known gaps](#known-gaps).
+Status: target for the control-plane registry half; the runtime event log and its API describe `main`. Grade B / C — see [Known gaps](#known-gaps).
 
-Read before touching: `anyharness/crates/anyharness-lib/src/domains/sessions/**`,
-`anyharness/crates/anyharness-lib/src/live/sessions/**`,
-`anyharness/crates/anyharness-lib/src/api/http/sessions_*.rs`,
-`anyharness/crates/anyharness-lib/src/api/sse/sessions.rs`,
-`anyharness/crates/anyharness-contract/src/v1/events.rs`.
+Read before touching: `anyharness/crates/anyharness-lib/src/domains/sessions/**`, `anyharness/crates/anyharness-lib/src/live/sessions/**`, `anyharness/crates/anyharness-lib/src/api/http/sessions_*.rs`, `anyharness/crates/anyharness-lib/src/api/sse/sessions.rs`, `anyharness/crates/anyharness-contract/src/v1/events.rs`.
 
 ## 1. Purpose
 
-A session is the product object a person or an agent talks to: one ordered,
-durable conversation with one harness in one workspace. This system owns
-the session as *two objects with one name*: the runtime's execution-side
-record — the append-only event log and the durable session row beside it —
-and the control plane's registry row, which exists before any compute and
-outlives the environment. The record is what a reader sees; the process
-state is what a resumed harness needs; they are different objects, and
-this spec keeps them different.
+A session is the product object a person or an agent talks to: one ordered, durable conversation with one harness in one workspace. This system owns the session as *two objects with one name*: the runtime's execution-side record — the append-only event log and the durable session row beside it — and the control plane's registry row, which exists before any compute and outlives the environment. The record is what a reader sees; the process state is what a resumed harness needs; they are different objects, and this spec keeps them different.
 
-The runtime half is converged and proven. The control-plane half is the
-build that makes sessions durable, addressable from Slack and the API, and
-readable without waking a VM.
+The runtime half is converged and proven. The control-plane half is the build that makes sessions durable, addressable from Slack and the API, and readable without waking a VM.
 
 ## 2. Owned state
 
-Runtime (SQLite per runtime, schema in
-[0001_initial.sql](../../../anyharness/crates/anyharness-lib/src/persistence/sql/0001_initial.sql)
-and successors under
-[persistence/sql/](../../../anyharness/crates/anyharness-lib/src/persistence/sql/0001_initial.sql)):
+Runtime (SQLite per runtime, schema in [0001_initial.sql](../../../anyharness/crates/anyharness-lib/src/persistence/sql/0001_initial.sql) and successors under [persistence/sql/](../../../anyharness/crates/anyharness-lib/src/persistence/sql/0001_initial.sql)):
 
 ```text
 sessions                       id, workspace_id, agent_kind, native_session_id, status, timestamps
@@ -43,18 +26,9 @@ session links / fork operations / launch intents / pending prompts /
 completion deliveries / support windows / attachments / titles
 ```
 
-Written only through
-[domains/sessions/store/](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/mod.rs).
-The durable session row (`SessionRecord`,
-[model.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/model.rs))
-and the event record (`SessionEventRecord`) are this system's two core
-models.
+Written only through [domains/sessions/store/](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/mod.rs). The durable session row (`SessionRecord`, [model.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/model.rs)) and the event record (`SessionEventRecord`) are this system's two core models.
 
-Control plane (※ new): the **session registry row** — id, subject,
-environment binding, status, external bindings
-(`{kind: "slack", team_id, channel_id, thread_ts}` and later Linear/GitHub/
-email), and the queued-prompt content the seam's outbox delivers — plus the
-**checkpointed record**: the shipped event log, with retention tiers.
+Control plane (※ new): the **session registry row** — id, subject, environment binding, status, external bindings (`{kind: "slack", team_id, channel_id, thread_ts}` and later Linear/GitHub/ email), and the queued-prompt content the seam's outbox delivers — plus the **checkpointed record**: the shipped event log, with retention tiers.
 
 > [!decision] PABLO DECIDES: session identity across planes.
 > Options: (a) the registry row's id *is* the runtime session id (the
@@ -66,9 +40,7 @@ email), and the queued-prompt content the seam's outbox delivers — plus the
 
 ## 3. Public surface
 
-Runtime HTTP (route modules under
-[api/http/](../../../anyharness/crates/anyharness-lib/src/api/http/sessions_lifecycle.rs);
-full operation contract in [api.md](../../areas/anyharness.md)):
+Runtime HTTP (route modules under [api/http/](../../../anyharness/crates/anyharness-lib/src/api/http/sessions_lifecycle.rs); full operation contract in [api.md](../../areas/anyharness.md)):
 
 | Route | Purpose |
 | --- | --- |
@@ -81,17 +53,11 @@ full operation contract in [api.md](../../areas/anyharness.md)):
 | `…/live-config` · `…/config-options` · `…/title` · `…/goal` · `…/loops` · `…/reviews` | live configuration and session-scoped features |
 | `…/subagents` · `…/subagents/{child}/open|close|promote` | in-environment subagent fan-out (surface here; laws in the subagents spec) |
 
-Runtime SSE: `GET /v1/sessions/{id}/stream`
-([api/sse/sessions.rs](../../../anyharness/crates/anyharness-lib/src/api/sse/sessions.rs))
-— the loopback source the seam's shipper subscribes to.
+Runtime SSE: `GET /v1/sessions/{id}/stream` ([api/sse/sessions.rs](../../../anyharness/crates/anyharness-lib/src/api/sse/sessions.rs)) — the loopback source the seam's shipper subscribes to.
 
-Contract types: `SessionEvent`, `SessionEventEnvelope`
-([events.rs](../../../anyharness/crates/anyharness-contract/src/v1/events.rs))
-— the one canonical envelope every plane speaks.
+Contract types: `SessionEvent`, `SessionEventEnvelope` ([events.rs](../../../anyharness/crates/anyharness-contract/src/v1/events.rs)) — the one canonical envelope every plane speaks.
 
-Control plane (※ new): registry create/read/list, external-binding
-attach/detach, checkpoint read — exposed through the API system's `/v1`
-verbs, not as a second front door.
+Control plane (※ new): registry create/read/list, external-binding attach/detach, checkpoint read — exposed through the API system's `/v1` verbs, not as a second front door.
 
 ## 4. Consumes
 
@@ -113,79 +79,35 @@ verbs, not as a second front door.
 
 ## 5. Laws
 
-The five event-log invariants (architecture Law 10), each with its
-enforcing path:
+The five event-log invariants (architecture Law 10), each with its enforcing path:
 
-**Append-only.** There is no UPDATE path on `session_events`; the only
-DELETE is whole-session deletion
-([store/sessions.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/sessions.rs)).
-Repairs write new events, never rewrite old ones.
+**Append-only.** There is no UPDATE path on `session_events`; the only DELETE is whole-session deletion ([store/sessions.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/sessions.rs)). Repairs write new events, never rewrite old ones.
 
-**Per-session monotonic seq.** Durable appends take
-`COALESCE(MAX(seq), 0) + 1` inside the transaction
-([store/events.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/events.rs)
-`append_event_with_next_seq`); a live actor assigns seq from memory through
-its `SessionEventSink`, and the two never run concurrently — the ACP
-start/inject critical section in [acp.md](../../areas/anyharness.md) is the
-guard. `UNIQUE (session_id, seq)` is the backstop.
+**Per-session monotonic seq.** Durable appends take `COALESCE(MAX(seq), 0) + 1` inside the transaction ([store/events.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/events.rs) `append_event_with_next_seq`); a live actor assigns seq from memory through its `SessionEventSink`, and the two never run concurrently — the ACP start/inject critical section in [acp.md](../../areas/anyharness.md) is the guard. `UNIQUE (session_id, seq)` is the backstop.
 
-**One canonical envelope.** `SessionEventEnvelope { session_id, seq,
-timestamp, turn_id?, item_id?, event }` from the contract crate is the
-only shape the log, the SSE stream, the SDKs, and (target) the shipped
-record use. Persisted payloads are sanitized copies
-([persisted_payloads.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/persisted_payloads.rs));
-the original is what the stream emits.
+**One canonical envelope.** `SessionEventEnvelope { session_id, seq, timestamp, turn_id?, item_id?, event }` from the contract crate is the only shape the log, the SSE stream, the SDKs, and (target) the shipped record use. Persisted payloads are sanitized copies ([persisted_payloads.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/persisted_payloads.rs)); the original is what the stream emits.
 
-**Classed.** `event_type` is the class key. Ship policy on top of it is
-structural (turn-level and lifecycle = ship now; intra-turn = checkpoint;
-deltas = never persist) and lives in the seam; the runtime never learns who
-is watching.
+**Classed.** `event_type` is the class key. Ship policy on top of it is structural (turn-level and lifecycle = ship now; intra-turn = checkpoint; deltas = never persist) and lives in the seam; the runtime never learns who is watching.
 
-**Cursor-replayable.** `list_events` reads `ORDER BY seq`; support windows
-and fork anchors are seq ranges
-([support_windows.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/support_windows.rs),
-[fork_anchor.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork_anchor.rs)).
-A client that stops at the first sequence hole (PRO-352) is correct by this
-law, not by convention.
+**Cursor-replayable.** `list_events` reads `ORDER BY seq`; support windows and fork anchors are seq ranges ([support_windows.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/support_windows.rs), [fork_anchor.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork_anchor.rs)). A client that stops at the first sequence hole (PRO-352) is correct by this law, not by convention.
 
 Session-object laws:
 
-**The record and the process state are different objects.** The record is
-the log; process state is harness-native (`native_session_id`, adapter
-markers, the harness's own files). *Resume* is environment-bound; when the
-environment is gone the product offers *fork with context* and never calls
-it resume. The environment binding state drives the verb: live → open,
-paused → wake, reaped or lost → fork.
+**The record and the process state are different objects.** The record is the log; process state is harness-native (`native_session_id`, adapter markers, the harness's own files). *Resume* is environment-bound; when the environment is gone the product offers *fork with context* and never calls it resume. The environment binding state drives the verb: live → open, paused → wake, reaped or lost → fork.
 
-**Prompt queue admission is durable and ordered.** Prompts persist before
-dispatch ([prompt_queue.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt_queue.rs),
-[pending_prompts.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/pending_prompts.rs));
-creation is idempotent
-([idempotent_create.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/idempotent_create.rs)).
-This is the runtime half of the seam's "ack means persisted" law.
+**Prompt queue admission is durable and ordered.** Prompts persist before dispatch ([prompt_queue.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt_queue.rs), [pending_prompts.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/pending_prompts.rs)); creation is idempotent ([idempotent_create.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/idempotent_create.rs)). This is the runtime half of the seam's "ack means persisted" law.
 
-**Completion deliveries are exactly-once by removal key.** A child's
-terminal turn wakes its parent through a durable record keyed by
-`completion_wake_removal_key`
-([completion_deliveries/](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/completion_deliveries.rs)),
-so a wake is never delivered twice and never lost across a restart.
+**Completion deliveries are exactly-once by removal key.** A child's terminal turn wakes its parent through a durable record keyed by `completion_wake_removal_key` ([completion_deliveries/](../../../anyharness/crates/anyharness-lib/src/domains/sessions/store/completion_deliveries.rs)), so a wake is never delivered twice and never lost across a restart.
 
-**One session, one runtime, one ordered log; every client is a replica.**
-The server relays prompts *as a client* and is never a second writer to the
-log. Multiplayer is fan-out of one stream, not merge of two.
+**One session, one runtime, one ordered log; every client is a replica.** The server relays prompts *as a client* and is never a second writer to the log. Multiplayer is fan-out of one stream, not merge of two.
 
 Target laws (※ new):
 
-**Session before compute.** The registry row, its bindings, and the first
-queued prompt are created in one transaction and acknowledged instantly;
-the environment catches up through the courier.
+**Session before compute.** The registry row, its bindings, and the first queued prompt are created in one transaction and acknowledged instantly; the environment catches up through the courier.
 
-**Reads never wake a VM.** Bound surfaces (Slack, mobile, triage) read the
-checkpointed record at the control plane.
+**Reads never wake a VM.** Bound surfaces (Slack, mobile, triage) read the checkpointed record at the control plane.
 
-**Deletion orders after checkpoint.** A session is deletable at the runtime
-only once its terminal checkpoint is acknowledged by the control plane;
-otherwise the record is lost with the VM.
+**Deletion orders after checkpoint.** A session is deletable at the runtime only once its terminal checkpoint is acknowledged by the control plane; otherwise the record is lost with the VM.
 
 > [!decision] PABLO DECIDES: collaboration default. The settled architecture
 > says org-open sessions (Ramp's forced-multiplayer lesson). Options:

@@ -1,35 +1,16 @@
 # Model gateway
 
-Grade B system spec (code-verified on `main`, decisions marked). Owns all
-agent LLM traffic that Proliferate pays for or meters: the LiteLLM data plane,
-the enrollment that mints scoped virtual keys, the credit ledger that funds
-them, usage import, exhaustion enforcement, top-ups, and configuration
-verification. The harness remains the execution client; this system decides
-*whether* and *under whose budget* it may call a model.
+Grade B system spec (code-verified on `main`, decisions marked). Owns all agent LLM traffic that Proliferate pays for or meters: the LiteLLM data plane, the enrollment that mints scoped virtual keys, the credit ledger that funds them, usage import, exhaustion enforcement, top-ups, and configuration verification. The harness remains the execution client; this system decides *whether* and *under whose budget* it may call a model.
 
-Sibling specs, one owner per concern: [agent_auth](deep-dive.md)
-picks *which* credential a harness launches with and delivers it;
-[integration_gateway](../integration_gateway/README.md) is the analogous gateway for
-company systems (MCP tools), not models; [billing](../billing/deep-dive.md)
-owns compute segments, plans, credits for compute, and the Stripe
-relationship; [harness launch options](models.md) owns which
-models a target *advertises* — the gateway's model list is observed through
-the harness before any surface may offer it.
+Sibling specs, one owner per concern: [agent_auth](deep-dive.md) picks *which* credential a harness launches with and delivers it; [integration_gateway](../integration_gateway/README.md) is the analogous gateway for company systems (MCP tools), not models; [billing](../billing/deep-dive.md) owns compute segments, plans, credits for compute, and the Stripe relationship; [harness launch options](models.md) owns which models a target *advertises* — the gateway's model list is observed through the harness before any surface may offer it.
 
 ## 1. Purpose
 
-A deployment can pay for and control inference on behalf of every
-organization member without any client, worker, or sandbox ever holding a
-provider credential. The outcome in one sentence: **every gateway request is
-made with a per-(org member, harness) virtual key whose access group limits
-the models it can see, whose team budget mirrors the org's remaining LLM
-credit, and whose spend is imported back into that org's ledger; unfunded
-means no key.**
+A deployment can pay for and control inference on behalf of every organization member without any client, worker, or sandbox ever holding a provider credential. The outcome in one sentence: **every gateway request is made with a per-(org member, harness) virtual key whose access group limits the models it can see, whose team budget mirrors the org's remaining LLM credit, and whose spend is imported back into that org's ledger; unfunded means no key.**
 
 ## 2. Owned state
 
-Only this system writes these rows
-([db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py)):
+Only this system writes these rows ([db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py)):
 
 | Table | Row meaning | Notable invariants |
 | --- | --- | --- |
@@ -39,21 +20,13 @@ Only this system writes these rows
 | `llm_credit_grant` | One credit-side ledger entry (`amount_usd`) on a billing subject: signup free credit or a purchased top-up. | Remaining credit = active grants − imported usage cost. |
 | `agent_llm_usage_import_cursor` | Single-row poll cursor for the spend-log importer. | Advances only after the batch commits. |
 
-Also owned: the data-plane configuration
-[server/litellm/config.yaml](../../../server/litellm/config.yaml) and its image
-[Dockerfile](../../../server/litellm/Dockerfile) — the reviewed source of truth for
-model names, upstream providers, and `model_info.access_groups`.
+Also owned: the data-plane configuration [server/litellm/config.yaml](../../../server/litellm/config.yaml) and its image [Dockerfile](../../../server/litellm/Dockerfile) — the reviewed source of truth for model names, upstream providers, and `model_info.access_groups`.
 
-Not owned (agent_auth's rows, same package today): `agent_api_key`,
-`agent_auth_selection`, `agent_auth_delivery_ack`,
-`agent_auth_harness_settings`, `org_agent_policy`.
+Not owned (agent_auth's rows, same package today): `agent_api_key`, `agent_auth_selection`, `agent_auth_delivery_ack`, `agent_auth_harness_settings`, `org_agent_policy`.
 
 ## 3. Public surface
 
-HTTP, mounted under `/v1/cloud/agent-gateway` by
-`cloud/api.py` from
-[agent_auth/api.py](../../../server/proliferate/server/agent_auth/api.py)
-(`gateway_account_router`):
+HTTP, mounted under `/v1/cloud/agent-gateway` by `cloud/api.py` from [agent_auth/api.py](../../../server/proliferate/server/agent_auth/api.py) (`gateway_account_router`):
 
 | Route | Serves |
 | --- | --- |
@@ -89,63 +62,21 @@ SDK: [cloud/sdk/src/client/agent-gateway.ts](../../../cloud/sdk/src/client/agent
 
 ## 5. Laws
 
-**Organizations are the only gateway and billing subject.** One LiteLLM team
-per org (`org-<uuid>`), one LiteLLM user per (org, member)
-(`org-<org>-user-<uuid>`), never one global user spanning orgs. A personal
-experience is a one-member default org, not a separate payer. Closes: a
-client-supplied user-only key selecting a different payer. Enforced in
-[enrollment.py](../../../server/proliferate/server/agent_auth/enrollment.py);
-pre-cut residue is converged by
-[migration.py](../../../server/proliferate/server/agent_auth/migration.py) on
-every backfill tick, never inline in alembic.
+**Organizations are the only gateway and billing subject.** One LiteLLM team per org (`org-<uuid>`), one LiteLLM user per (org, member) (`org-<org>-user-<uuid>`), never one global user spanning orgs. A personal experience is a one-member default org, not a separate payer. Closes: a client-supplied user-only key selecting a different payer. Enforced in [enrollment.py](../../../server/proliferate/server/agent_auth/enrollment.py); pre-cut residue is converged by [migration.py](../../../server/proliferate/server/agent_auth/migration.py) on every backfill tick, never inline in alembic.
 
-**One virtual key per (member, gateway-capable harness), scoped to that
-harness's access group.** `GET /v1/models` through that key returns only its
-group; out-of-group inference is denied proxy-side. Closes: a harness seeing a
-model it cannot bill for. Enforced by the key mint in
-[`_sync_one_harness_key`](../../../server/proliferate/server/agent_auth/enrollment.py)
-and the access groups in [config.yaml](../../../server/litellm/config.yaml).
-Which harnesses are gateway-capable is the constant tuple in
-[constants/agent_gateway.py](../../../server/proliferate/constants/agent_gateway.py),
-consumed by agent_auth's selection rules.
+**One virtual key per (member, gateway-capable harness), scoped to that harness's access group.** `GET /v1/models` through that key returns only its group; out-of-group inference is denied proxy-side. Closes: a harness seeing a model it cannot bill for. Enforced by the key mint in [`_sync_one_harness_key`](../../../server/proliferate/server/agent_auth/enrollment.py) and the access groups in [config.yaml](../../../server/litellm/config.yaml). Which harnesses are gateway-capable is the constant tuple in [constants/agent_gateway.py](../../../server/proliferate/constants/agent_gateway.py), consumed by agent_auth's selection rules.
 
-**Unfunded fails closed.** The team budget mirrors remaining credit
-([`_remaining_credit_budget_raw`](../../../server/proliferate/server/agent_auth/enrollment.py));
-zero credit withholds key material and
-[`is_gateway_budget_available`](../../../server/proliferate/server/agent_auth/budget.py)
-refuses the launch with a typed reason rather than letting the harness run on
-different credentials. Closes: silent fallback to native credentials.
+**Unfunded fails closed.** The team budget mirrors remaining credit ([`_remaining_credit_budget_raw`](../../../server/proliferate/server/agent_auth/enrollment.py)); zero credit withholds key material and [`is_gateway_budget_available`](../../../server/proliferate/server/agent_auth/budget.py) refuses the launch with a typed reason rather than letting the harness run on different credentials. Closes: silent fallback to native credentials.
 
-**Usage import is idempotent and cursor-driven.** Each importer tick reads
-LiteLLM spend logs from `last_seen − overlap`, inserts by
-`litellm_request_id` once, marks up provider spend by the configured margin
-([`apply_llm_margin`](../../../server/proliferate/server/agent_auth/usage_import.py)),
-and advances the cursor only after commit. Closes: double-billing on
-importer restart.
+**Usage import is idempotent and cursor-driven.** Each importer tick reads LiteLLM spend logs from `last_seen − overlap`, inserts by `litellm_request_id` once, marks up provider spend by the configured margin ([`apply_llm_margin`](../../../server/proliferate/server/agent_auth/usage_import.py)), and advances the cursor only after commit. Closes: double-billing on importer restart.
 
-**Exhaustion disables keys; credit reactivates them.** When a subject's
-imported cost reaches its grants,
-[`_enforce_subject_exhaustion`](../../../server/proliferate/server/agent_auth/usage_import.py)
-disables every child key and flips `budget_status=exhausted`; an org LLM cap
-does the same as `limit_reached`. A top-up grant
-([topups.py](../../../server/proliferate/server/agent_auth/topups.py)) re-mints or
-unblocks the keys and rewrites the team budget. Closes: a spent org continuing
-to accrue provider cost.
+**Exhaustion disables keys; credit reactivates them.** When a subject's imported cost reaches its grants, [`_enforce_subject_exhaustion`](../../../server/proliferate/server/agent_auth/usage_import.py) disables every child key and flips `budget_status=exhausted`; an org LLM cap does the same as `limit_reached`. A top-up grant ([topups.py](../../../server/proliferate/server/agent_auth/topups.py)) re-mints or unblocks the keys and rewrites the team budget. Closes: a spent org continuing to accrue provider cost.
 
-**Master credentials never leave the server.** Product clients and workers
-receive only a scoped virtual key, and only through agent_auth's
-materialization path. Closes: master-key exfiltration via a sandbox.
+**Master credentials never leave the server.** Product clients and workers receive only a scoped virtual key, and only through agent_auth's materialization path. Closes: master-key exfiltration via a sandbox.
 
-**Verification never overwrites a last-known-good on error.** The
-verification loop
-([verification.py](../../../server/proliferate/server/agent_auth/verification.py))
-diffs each key's observed model set against the access group declared in
-`config.yaml`; a transient LiteLLM error records no verdict. Closes: a blip
-flapping the settings surface to "misconfigured".
+**Verification never overwrites a last-known-good on error.** The verification loop ([verification.py](../../../server/proliferate/server/agent_auth/verification.py)) diffs each key's observed model set against the access group declared in `config.yaml`; a transient LiteLLM error records no verdict. Closes: a blip flapping the settings surface to "misconfigured".
 
-**Free credit is one grant per human, ever.** Deduped through
-`free_cloud_allocation` on the linked GitHub identity; a joining member never
-brings a grant into another org. Closes: invite-farming for credit.
+**Free credit is one grant per human, ever.** Deduped through `free_cloud_allocation` on the linked GitHub identity; a joining member never brings a grant into another org. Closes: invite-farming for credit.
 
 ## 6. Emits
 
@@ -174,15 +105,7 @@ brings a grant into another org. Closes: invite-farming for credit.
 
 ### Control-plane inference (`ai_magic`) — a section, not a system
 
-[server/ai_magic](../../../server/proliferate/server/ai_magic/service.py) serves
-three prompted conveniences (`POST /v1/ai_magic/session-titles/generate`,
-`/workspace-names/generate`, `/commit-messages/generate`) with rate limits
-from [constants/ai_magic.py](../../../server/proliferate/constants/ai_magic.py).
-It owns no durable state and calls
-[integrations/anthropic.py](../../../server/proliferate/integrations/anthropic.py)
-directly, bypassing the gateway — so its spend is deployment-paid and
-unattributed. It fails the granularity test (no owned state, no laws of its
-own) and is therefore fenced here as the gateway's control-plane consumer.
+[server/ai_magic](../../../server/proliferate/server/ai_magic/service.py) serves three prompted conveniences (`POST /v1/ai_magic/session-titles/generate`, `/workspace-names/generate`, `/commit-messages/generate`) with rate limits from [constants/ai_magic.py](../../../server/proliferate/constants/ai_magic.py). It owns no durable state and calls [integrations/anthropic.py](../../../server/proliferate/integrations/anthropic.py) directly, bypassing the gateway — so its spend is deployment-paid and unattributed. It fails the granularity test (no owned state, no laws of its own) and is therefore fenced here as the gateway's control-plane consumer.
 
 > [!decision] PABLO DECIDES: route `ai_magic` through the gateway (a
 > deployment-owned virtual key, spend attributed to the org that asked) or
@@ -192,8 +115,7 @@ own) and is therefore fenced here as the gateway's control-plane consumer.
 
 ## 8. Code map
 
-The gateway lives inside the `agent_auth` package today (one MANIFEST, one
-folder, two specs). Ordered by the path a credit travels:
+The gateway lives inside the `agent_auth` package today (one MANIFEST, one folder, two specs). Ordered by the path a credit travels:
 
 ```text
 server/proliferate/
@@ -242,23 +164,9 @@ cloud/sdk/src/client/agent-gateway.ts           SDK client
 
 ## 9. Proof
 
-Unit: [test_agent_gateway_enrollment.py](../../../server/tests/unit/test_agent_gateway_enrollment.py),
-[test_agent_gateway_usage_import.py](../../../server/tests/unit/test_agent_gateway_usage_import.py),
-[test_agent_gateway_topups.py](../../../server/tests/unit/test_agent_gateway_topups.py),
-[test_litellm_integration.py](../../../server/tests/unit/test_litellm_integration.py),
-[test_litellm_config_access_groups.py](../../../server/tests/unit/test_litellm_config_access_groups.py)
-(the reviewed `config.yaml` is pinned here).
+Unit: [test_agent_gateway_enrollment.py](../../../server/tests/unit/test_agent_gateway_enrollment.py), [test_agent_gateway_usage_import.py](../../../server/tests/unit/test_agent_gateway_usage_import.py), [test_agent_gateway_topups.py](../../../server/tests/unit/test_agent_gateway_topups.py), [test_litellm_integration.py](../../../server/tests/unit/test_litellm_integration.py), [test_litellm_config_access_groups.py](../../../server/tests/unit/test_litellm_config_access_groups.py) (the reviewed `config.yaml` is pinned here).
 
-Integration: [test_agent_gateway_enrollment.py](../../../server/tests/integration/test_agent_gateway_enrollment.py),
-[test_agent_gateway_enrollment_keys.py](../../../server/tests/integration/test_agent_gateway_enrollment_keys.py),
-[test_agent_gateway_key_lifecycle.py](../../../server/tests/integration/test_agent_gateway_key_lifecycle.py),
-[test_agent_gateway_migration.py](../../../server/tests/integration/test_agent_gateway_migration.py),
-[test_agent_gateway_usage_credits.py](../../../server/tests/integration/test_agent_gateway_usage_credits.py),
-[test_agent_gateway_topups.py](../../../server/tests/integration/test_agent_gateway_topups.py),
-[test_agent_gateway_topup_fixes.py](../../../server/tests/integration/test_agent_gateway_topup_fixes.py),
-[test_agent_gateway_verification.py](../../../server/tests/integration/test_agent_gateway_verification.py),
-[test_agent_auth_org_member_gateway.py](../../../server/tests/integration/test_agent_auth_org_member_gateway.py),
-[test_billing_limit_enforcement_llm.py](../../../server/tests/integration/test_billing_limit_enforcement_llm.py).
+Integration: [test_agent_gateway_enrollment.py](../../../server/tests/integration/test_agent_gateway_enrollment.py), [test_agent_gateway_enrollment_keys.py](../../../server/tests/integration/test_agent_gateway_enrollment_keys.py), [test_agent_gateway_key_lifecycle.py](../../../server/tests/integration/test_agent_gateway_key_lifecycle.py), [test_agent_gateway_migration.py](../../../server/tests/integration/test_agent_gateway_migration.py), [test_agent_gateway_usage_credits.py](../../../server/tests/integration/test_agent_gateway_usage_credits.py), [test_agent_gateway_topups.py](../../../server/tests/integration/test_agent_gateway_topups.py), [test_agent_gateway_topup_fixes.py](../../../server/tests/integration/test_agent_gateway_topup_fixes.py), [test_agent_gateway_verification.py](../../../server/tests/integration/test_agent_gateway_verification.py), [test_agent_auth_org_member_gateway.py](../../../server/tests/integration/test_agent_auth_org_member_gateway.py), [test_billing_limit_enforcement_llm.py](../../../server/tests/integration/test_billing_limit_enforcement_llm.py).
 
 ## Failure modes
 

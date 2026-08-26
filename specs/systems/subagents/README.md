@@ -1,30 +1,12 @@
 # Subagents
 
-Status: current (grade B). System spec in the Organization Standard anatomy.
-The runtime system that owns **in-environment delegation**: an agent creating,
-configuring, messaging and closing other agents in the *same* workspace,
-through the product MCP the runtime attaches to every eligible session. This is
-tier one of the two-tier orchestration ruling — fan-out inside one environment,
-owned by AnyHarness. Tier two (spawning a new run in a new environment through
-the public API) is a control-plane system and is not here.
+Status: current (grade B). System spec in the Organization Standard anatomy. The runtime system that owns **in-environment delegation**: an agent creating, configuring, messaging and closing other agents in the *same* workspace, through the product MCP the runtime attaches to every eligible session. This is tier one of the two-tier orchestration ruling — fan-out inside one environment, owned by AnyHarness. Tier two (spawning a new run in a new environment through the public API) is a control-plane system and is not here.
 
-Today the code is `domains/agent_operations/` (policy, orchestration, the
-Workspace MCP) plus the session-owned subdomain `domains/sessions/subagents/`
-(durable relationship mechanics and completion delivery). Depth references:
-[Workspace Product MCP](workspace-mcp.md)
-(the 20-tool contract), the delegated-agents section of
-[sessions.md](../sessions/anyharness-sessions.md), [servers.md](product-mcp-servers.md)
-(the product-MCP pattern), and the client-side
-[delegated-work.md](delegated-work.md).
+Today the code is `domains/agent_operations/` (policy, orchestration, the Workspace MCP) plus the session-owned subdomain `domains/sessions/subagents/` (durable relationship mechanics and completion delivery). Depth references: [Workspace Product MCP](workspace-mcp.md) (the 20-tool contract), the delegated-agents section of [sessions.md](../sessions/anyharness-sessions.md), [servers.md](product-mcp-servers.md) (the product-MCP pattern), and the client-side [delegated-work.md](delegated-work.md).
 
 ## 1. Purpose
 
-Let a parent agent run a bounded roster of child agents on the same checkout —
-each a normal durable session with its own harness and model — and be woken
-exactly once with each child's result, without any of it forking the session
-engine. Product outcome: a replay-triage agent fans out eight analysis
-subagents, each on a different harness/model, and reads their completions as
-ordinary transcript turns.
+Let a parent agent run a bounded roster of child agents on the same checkout — each a normal durable session with its own harness and model — and be woken exactly once with each child's result, without any of it forking the session engine. Product outcome: a replay-triage agent fans out eight analysis subagents, each on a different harness/model, and reads their completions as ordinary transcript turns.
 
 ## 2. Owned state
 
@@ -36,36 +18,15 @@ ordinary transcript turns.
 | `activity_subagents` — roster projection for the activity feed | activity domain (consumer) | — |
 | Workspace pin requests and per-turn product context | [product_context.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/product_context.rs) | this system |
 
-The roster cap is a product constant: `MAX_SUBAGENTS_PER_PARENT = 8`
-([service.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/subagents/service.rs)),
-counting reversibly-Closed relationships.
+The roster cap is a product constant: `MAX_SUBAGENTS_PER_PARENT = 8` ([service.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/subagents/service.rs)), counting reversibly-Closed relationships.
 
 ## 3. Public surface
 
-**The Workspace product MCP** — id `workspace`, ACP server name
-`proliferate_workspace`, tool namespace `mcp__proliferate_workspace__<tool>`
-([mcp/definition.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/mcp/definition.rs)).
-Exactly 20 tools ([mcp/tools.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/mcp/tools.rs)):
-`whoami`, `list_workspaces`, `list_workspace_options`, `list_agents`,
-`get_agent`, `list_subagents`, `list_agent_launch_options`,
-`list_agent_config_options`, `get_task_output`, `create_workspace`,
-`pin_workspace`, `unpin_workspace`, `create_agent`, `configure_agent`,
-`resume_agent`, `send_message`, `interrupt_agent`, `close_subagent`,
-`open_subagent`, `promote_subagent`. Served over HTTP by
-[product_mcp.rs](../../../anyharness/crates/anyharness-lib/src/api/http/product_mcp.rs)
-with a capability token scoped to runtime × workspace × session × MCP
-([mcp/auth.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/mcp/auth.rs)).
+**The Workspace product MCP** — id `workspace`, ACP server name `proliferate_workspace`, tool namespace `mcp__proliferate_workspace__<tool>` ([mcp/definition.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/mcp/definition.rs)). Exactly 20 tools ([mcp/tools.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/mcp/tools.rs)): `whoami`, `list_workspaces`, `list_workspace_options`, `list_agents`, `get_agent`, `list_subagents`, `list_agent_launch_options`, `list_agent_config_options`, `get_task_output`, `create_workspace`, `pin_workspace`, `unpin_workspace`, `create_agent`, `configure_agent`, `resume_agent`, `send_message`, `interrupt_agent`, `close_subagent`, `open_subagent`, `promote_subagent`. Served over HTTP by [product_mcp.rs](../../../anyharness/crates/anyharness-lib/src/api/http/product_mcp.rs) with a capability token scoped to runtime × workspace × session × MCP ([mcp/auth.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/mcp/auth.rs)).
 
-**HTTP for humans/clients** ([subagents.rs](../../../anyharness/crates/anyharness-lib/src/api/http/subagents.rs)):
-`GET /v1/workspaces/{id}/subagents` (roster), `GET /v1/sessions/{parent}/subagents`,
-`POST /v1/sessions/{parent}/subagents/{child}/close|open|promote`. Wire shapes:
-[subagents.rs](../../../anyharness/crates/anyharness-contract/src/v1/subagents.rs).
+**HTTP for humans/clients** ([subagents.rs](../../../anyharness/crates/anyharness-lib/src/api/http/subagents.rs)): `GET /v1/workspaces/{id}/subagents` (roster), `GET /v1/sessions/{parent}/subagents`, `POST /v1/sessions/{parent}/subagents/{child}/close|open|promote`. Wire shapes: [subagents.rs](../../../anyharness/crates/anyharness-contract/src/v1/subagents.rs).
 
-**In-process**: `AgentOperations` ([runtime/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/runtime/mod.rs))
-is the single application boundary both adapters enter; it is built from
-ports ([runtime/ports.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/runtime/ports.rs))
-that sessions, workspaces, harnesses and terminals implement, so this system
-never touches a sibling's store.
+**In-process**: `AgentOperations` ([runtime/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/runtime/mod.rs)) is the single application boundary both adapters enter; it is built from ports ([runtime/ports.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/runtime/ports.rs)) that sessions, workspaces, harnesses and terminals implement, so this system never touches a sibling's store.
 
 ## 4. Consumes
 
@@ -85,48 +46,19 @@ never touches a sibling's store.
 
 ## 5. Laws
 
-**A child is a normal session; the relationship is the authority.**
-`session_links(relation=subagent)` is the authorization check for every
-relationship-targeting operation, and the child session plus capped
-relationship insert atomically so an in-progress creation is never observable
-as an ordinary session ([service.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/subagents/service.rs)).
+**A child is a normal session; the relationship is the authority.** `session_links(relation=subagent)` is the authorization check for every relationship-targeting operation, and the child session plus capped relationship insert atomically so an in-progress creation is never observable as an ordinary session ([service.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/subagents/service.rs)).
 
-**Authority is resolved per call, never at token mint.** Every `tools/call`
-re-resolves caller role, parent ownership, relationship, workspace and target
-truth ([runtime/authorization_policy.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/runtime/authorization_policy.rs));
-a committed promotion changes authority for the next call without a new
-identity. This is the runtime instance of Law 5 (identity once, capability per
-call).
+**Authority is resolved per call, never at token mint.** Every `tools/call` re-resolves caller role, parent ownership, relationship, workspace and target truth ([runtime/authorization_policy.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/runtime/authorization_policy.rs)); a committed promotion changes authority for the next call without a new identity. This is the runtime instance of Law 5 (identity once, capability per call).
 
-**Delegated agents cannot delegate.** A child receives Workspace for identity,
-reads, messaging and parent-authorized operations, but `create_agent` is denied
-by role ([runtime/subagent_lifecycle.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/runtime/subagent_lifecycle.rs)).
-Fan-out depth is one; tree-shaped work is tier two (spawned runs).
+**Delegated agents cannot delegate.** A child receives Workspace for identity, reads, messaging and parent-authorized operations, but `create_agent` is denied by role ([runtime/subagent_lifecycle.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_operations/runtime/subagent_lifecycle.rs)). Fan-out depth is one; tree-shaped work is tier two (spawned runs).
 
-**Eight children per parent, Closed included.** The cap is enforced in the
-same transaction as the insert; Closed relationships count so a parent cannot
-churn through unbounded children.
+**Eight children per parent, Closed included.** The cap is enforced in the same transaction as the insert; Closed relationships count so a parent cannot churn through unbounded children.
 
-**Close purges prompts, keeps everything else.** Close sets
-`subagent_closed_at`, purges durable pending prompts, then non-terminally
-unloads the actor; transcript, config, native session id and row survive.
-Open restarts the same conversation; failure leaves it Closed and purged
-prompts are not replayed. Promotion is allowed only while Open and deletes only
-the relationship.
+**Close purges prompts, keeps everything else.** Close sets `subagent_closed_at`, purges durable pending prompts, then non-terminally unloads the actor; transcript, config, native session id and row survive. Open restarts the same conversation; failure leaves it Closed and purged prompts are not replayed. Promotion is allowed only while Open and deletes only the relationship.
 
-**Completion wake is durable admission, exactly once.** Terminal persistence
-captures the child completion and delivery intent in the same transaction as
-the event batch; the delivery worker admits at most one parent prompt with
-`PromptProvenance::SubagentWake` per child, coalescing a still-queued wake in
-place and suppressing a redundant one when the child's own message already
-reached the parent — with a durable removal intent persisted as exactly one
-`pending_prompt_removed` ([delivery/runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/subagents/delivery/runtime.rs)).
-Restart and mobility preserve exactly-once visibility.
+**Completion wake is durable admission, exactly once.** Terminal persistence captures the child completion and delivery intent in the same transaction as the event batch; the delivery worker admits at most one parent prompt with `PromptProvenance::SubagentWake` per child, coalescing a still-queued wake in place and suppressing a redundant one when the child's own message already reached the parent — with a durable removal intent persisted as exactly one `pending_prompt_removed` ([delivery/runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/subagents/delivery/runtime.rs)). Restart and mobility preserve exactly-once visibility.
 
-**Attachment is structural.** Workspace attaches iff
-`workspace.surface == Standard && session.mcp_binding_policy != InternalOnly`;
-selection happens before actor start and never consults the legacy
-`subagents_enabled` flag ([product_catalog.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/product_catalog.rs)).
+**Attachment is structural.** Workspace attaches iff `workspace.surface == Standard && session.mcp_binding_policy != InternalOnly`; selection happens before actor start and never consults the legacy `subagents_enabled` flag ([product_catalog.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/product_catalog.rs)).
 
 ## 6. Emits
 
@@ -152,9 +84,7 @@ selection happens before actor start and never consults the legacy
 | Cowork delegation (`domains/cowork/delegation`), cowork threads and roots | cowork — pending the decision below |
 | Client Agents pane, tab strip, composer popover | client chat/workspace surfaces ([delegated-work.md](delegated-work.md)) |
 
-Declared edges: `agent_operations → agents, sessions, workspaces` and
-`sessions → agent_operations` (the extension/port direction). Zero grandfathered
-store-reach sites — this domain already obeys AH-FENCE-002 by construction.
+Declared edges: `agent_operations → agents, sessions, workspaces` and `sessions → agent_operations` (the extension/port direction). Zero grandfathered store-reach sites — this domain already obeys AH-FENCE-002 by construction.
 
 > [!decision] PABLO DECIDES: cowork → two-tier orchestration. Cowork
 > (`domains/cowork`, 5K lines; managed workspaces, threads, delegation,
@@ -195,10 +125,7 @@ anyharness/crates/anyharness-lib/src/app/agent_operations.rs · app/product_mcp.
 anyharness/crates/anyharness-contract/src/v1/{subagents,mcp}.rs
 ```
 
-Client-plane presentation:
-[components/workspace/delegated-work](../../../apps/packages/product-client/src/components/workspace/delegated-work),
-[domain/chats/subagents](../../../apps/packages/product-client/src/domain/chats/subagents),
-[components/playground/subagents-ux](../../../apps/packages/product-client/src/components/playground/subagents-ux).
+Client-plane presentation: [components/workspace/delegated-work](../../../apps/packages/product-client/src/components/workspace/delegated-work), [domain/chats/subagents](../../../apps/packages/product-client/src/domain/chats/subagents), [components/playground/subagents-ux](../../../apps/packages/product-client/src/components/playground/subagents-ux).
 
 ## 9. Proof
 

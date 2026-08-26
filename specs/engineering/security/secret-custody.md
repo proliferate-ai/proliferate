@@ -1,15 +1,10 @@
 # Secret custody
 
-Status: current (grade C, capability page). Answers "who holds which secret,
-encrypted how, and who may read it" across the control plane after the
-2026-08 cull. There is no `secrets` *system*: custody is a law each owning
-system obeys, backed by one crypto capability.
+Status: current (grade C, capability page). Answers "who holds which secret, encrypted how, and who may read it" across the control plane after the 2026-08 cull. There is no `secrets` *system*: custody is a law each owning system obeys, backed by one crypto capability.
 
 ## The capability
 
-[`server/proliferate/lib/infra/encryption`](../../../server/proliferate/lib/infra/encryption)
-is the only place ciphertext is produced or opened. Systems store ciphertext
-columns; they never roll their own crypto and never log plaintext.
+[`server/proliferate/lib/infra/encryption`](../../../server/proliferate/lib/infra/encryption) is the only place ciphertext is produced or opened. Systems store ciphertext columns; they never roll their own crypto and never log plaintext.
 
 ## Custody map (one owner per secret class)
 

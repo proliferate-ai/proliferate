@@ -1,14 +1,10 @@
 # Support reporting
 
-Status: target. This document describes the accepted destination for private
-support reporting and the consented Desktop diagnostic snapshot. The body is
-written in the ideal state. Every difference from `main` today is listed in
-[Current gaps](#current-gaps).
+Status: target. This document describes the accepted destination for private support reporting and the consented Desktop diagnostic snapshot. The body is written in the ideal state. Every difference from `main` today is listed in [Current gaps](#current-gaps).
 
 ## System contract
 
-Organization Standard anatomy for the `support` system; the body below is the
-laws-and-proof detail.
+Organization Standard anatomy for the `support` system; the body below is the laws-and-proof detail.
 
 - **Owned state:** `support_report` (the durable capture pivot) and the
   private S3 object set under `SUPPORT_REPORT_S3_PREFIX`; the Desktop-side
@@ -37,11 +33,7 @@ laws-and-proof detail.
   publishes report content anywhere; secret scrubbing obeys
   [secret custody](../../engineering/security/secret-custody.md).
 
-Support reporting captures private customer feedback and diagnostic evidence.
-It does not own issue triage, automated repair, release tracking, or reporter
-outreach. (The issue-lifecycle system that owned the downstream issue,
-attribution, release, and changelog contract was retired in the 2026-08
-engineering cull; there is no downstream consumer today.)
+Support reporting captures private customer feedback and diagnostic evidence. It does not own issue triage, automated repair, release tracking, or reporter outreach. (The issue-lifecycle system that owned the downstream issue, attribution, release, and changelog contract was retired in the 2026-08 engineering cull; there is no downstream consumer today.)
 
 ## Product boundary
 
@@ -55,10 +47,7 @@ Hosted Desktop explicit snapshot consent
                                                   -> best-effort Slack receipt
 ```
 
-Capture ends the system: there is no downstream handoff. Public issue
-projection, issue-queue state, resolution state, and notification-on-fix are
-outside this system. Legacy tracker columns and historical S3 objects do not
-grant authority to publish current report content.
+Capture ends the system: there is no downstream handoff. Public issue projection, issue-queue state, resolution state, and notification-on-fix are outside this system. Legacy tracker columns and historical S3 objects do not grant authority to publish current report content.
 
 ## Availability and entry points
 
@@ -70,26 +59,16 @@ operator  self-managed operator configured a URL or email; open that destination
 none      no support destination; render no support action
 ```
 
-Every support entry point must use that capability. Product UI must never route
-a self-managed user to vendor support. The sidebar and command/menu action use
-`deriveSupportMenuAction`; any direct modal opening outside that boundary is a
-migration exception.
+Every support entry point must use that capability. Product UI must never route a self-managed user to vendor support. The sidebar and command/menu action use `deriveSupportMenuAction`; any direct modal opening outside that boundary is a migration exception.
 
-The root render-crash recovery surface also derives this capability. Because a
-root crash makes the ordinary in-app vendor feedback subtree unavailable, its
-`Contact support` action uses a narrow hosted-vendor email fallback. Operator
-deployments keep their configured URL or email, and `none` renders no support
-action. The recovery surface never substitutes Proliferate vendor support for a
-self-managed deployment.
+The root render-crash recovery surface also derives this capability. Because a root crash makes the ordinary in-app vendor feedback subtree unavailable, its `Contact support` action uses a narrow hosted-vendor email fallback. Operator deployments keep their configured URL or email, and `none` renders no support action. The recovery surface never substitutes Proliferate vendor support for a self-managed deployment.
 
 Hosted Desktop has two private in-app modals:
 
 - **Send feedback** for bugs and operational feedback.
 - **Submit a prompt** for feature ideas expressed as an agent prompt.
 
-The modals are rendered inside the main app. There is no dedicated Tauri
-support webview window. Web retains its ordinary support path; neither Web nor
-Mobile can prepare a Desktop snapshot.
+The modals are rendered inside the main app. There is no dedicated Tauri support webview window. Web retains its ordinary support path; neither Web nor Mobile can prepare a Desktop snapshot.
 
 ## Consent and scope
 
@@ -102,12 +81,7 @@ output, file paths, and provider errors. Detected secrets are removed before
 upload.
 ```
 
-The choice is unchecked every time either modal opens. It is specific to one
-report, one selected scope, and one consent epoch. It is not remembered and is
-not granted by credit, outreach, urgency, notification, public-content,
-Sentry, PostHog, or anonymous-telemetry settings. Merely opening the modal,
-rendering or checking the choice, or changing scope performs no customer-detail
-read, collector export, native staging, or upload-intent mutation.
+The choice is unchecked every time either modal opens. It is specific to one report, one selected scope, and one consent epoch. It is not remembered and is not granted by credit, outreach, urgency, notification, public-content, Sentry, PostHog, or anonymous-telemetry settings. Merely opening the modal, rendering or checking the choice, or changing scope performs no customer-detail read, collector export, native staging, or upload-intent mutation.
 
 The scope control appears only after consent:
 
@@ -119,79 +93,27 @@ The scope control appears only after consent:
   collects native collector, fallback, and status evidence only and records
   that the session ledger was omitted.
 
-There is no arbitrary date or workspace picker. Cloud, standalone,
-Supervisor-owned, remote, and merely most-recent alternate runtimes are never
-substituted. A binding or scope change supersedes the consent epoch and cancels
-in-flight preparation. Consent becomes durable only after the exact staged
-artifact and job are acknowledged by the queue.
+There is no arbitrary date or workspace picker. Cloud, standalone, Supervisor-owned, remote, and merely most-recent alternate runtimes are never substituted. A binding or scope change supersedes the consent epoch and cancels in-flight preparation. Consent becomes durable only after the exact staged artifact and job are acknowledged by the queue.
 
-The existing report fields remain unchanged. **Send feedback** accepts message
-or attachment content plus urgency, notification, and credit intent. **Submit
-a prompt** uses `kind=feature`, never sets urgency, and has no implied
-notify-on-merge promise. A report without snapshot consent declares diagnostics
-false and can complete with zero uploads. Urgency and notification remain
-capture intent, not an enforced response SLA or automatic fix notification.
-Client workspace references remain claims; the server derives trusted cloud
-correlation only from resources the reporter is authorized to access.
+The existing report fields remain unchanged. **Send feedback** accepts message or attachment content plus urgency, notification, and credit intent. **Submit a prompt** uses `kind=feature`, never sets urgency, and has no implied notify-on-merge promise. A report without snapshot consent declares diagnostics false and can complete with zero uploads. Urgency and notification remain capture intent, not an enforced response SLA or automatic fix notification. Client workspace references remain claims; the server derives trusted cloud correlation only from resources the reporter is authorized to access.
 
 ## Preparation and artifact
 
-Only an explicit **Send** or **Save a copy…** action while consent remains true
-can start preparation. The main-window Desktop bridge passes the immutable
-consent epoch and exact workspace/session binding to a narrow native
-coordinator. Native validates caller, consent, disclosure version, identifiers,
-and binding before reading customer-detail sources.
+Only an explicit **Send** or **Save a copy…** action while consent remains true can start preparation. The main-window Desktop bridge passes the immutable consent epoch and exact workspace/session binding to a narrow native coordinator. Native validates caller, consent, disclosure version, identifiers, and binding before reading customer-detail sources.
 
-One preparation fixes a native capture time and the preceding fifteen-minute
-window. It uses a move-only, native-only support permit and the same
-capacity-one export admission owner as internal diagnostic export. The permit
-is not a collector credential, cannot cross the bridge, and cannot authorize
-the internal-dogfood artifact purpose. The collector request covers renderer,
-Tauri, collector, bundled AnyHarness, and Desktop Worker detailed and lifecycle
-records without a session filter. Collector output remains accepted-order
-evidence; when the accepted collector cap returns only an oldest matching
-prefix, the manifest says coverage is uncertain and never claims the unseen
-newest edge.
+One preparation fixes a native capture time and the preceding fifteen-minute window. It uses a move-only, native-only support permit and the same capacity-one export admission owner as internal diagnostic export. The permit is not a collector credential, cannot cross the bridge, and cannot authorize the internal-dogfood artifact purpose. The collector request covers renderer, Tauri, collector, bundled AnyHarness, and Desktop Worker detailed and lifecycle records without a session filter. Collector output remains accepted-order evidence; when the accepted collector cap returns only an oldest matching prefix, the manifest says coverage is uncertain and never claims the unseen newest edge.
 
-Selected session evidence is collected separately through bounded,
-cancellable, local-only AnyHarness windows: one exact active summary even when
-that session predates the window, or at most three recent summaries updated
-inside it, plus at most 200 normalized events and 100 raw notifications per
-session inside the fixed window. It is never converted into collector records
-or lifecycle conclusions. Native also samples collector/supervisor health,
-bundled child-producer status, the finite active fallback families, and finite
-read-only legacy compatibility tails. It never globs, walks customer
-directories, follows symlinks, or accepts a renderer-supplied path.
+Selected session evidence is collected separately through bounded, cancellable, local-only AnyHarness windows: one exact active summary even when that session predates the window, or at most three recent summaries updated inside it, plus at most 200 normalized events and 100 raw notifications per session inside the fixed window. It is never converted into collector records or lifecycle conclusions. Native also samples collector/supervisor health, bundled child-producer status, the finite active fallback families, and finite read-only legacy compatibility tails. It never globs, walks customer directories, follows symlinks, or accepts a renderer-supplied path.
 
-Native assembles canonical `schemaVersion: 3` JSON with an explicit source,
-gap, omission, truncation, scrub, and degradation manifest. Optional evidence
-degrades in a deterministic fixed priority until the exact uncompressed bytes
-fit the existing 26,214,400-byte diagnostics cap. A valid no-evidence skeleton
-still succeeds. The artifact is atomically staged under an owner-only root with
-a durable job-bound opaque ID, exact size, and SHA-256; no path or capability is
-returned to JavaScript.
+Native assembles canonical `schemaVersion: 3` JSON with an explicit source, gap, omission, truncation, scrub, and degradation manifest. Optional evidence degrades in a deterministic fixed priority until the exact uncompressed bytes fit the existing 26,214,400-byte diagnostics cap. A valid no-evidence skeleton still succeeds. The artifact is atomically staged under an owner-only root with a durable job-bound opaque ID, exact size, and SHA-256; no path or capability is returned to JavaScript.
 
-One serialized **Save a copy…** action owns preparation, the native archive,
-and settlement of exact staged-artifact deletion. Save and Send remain
-unavailable for that whole action. The user-chosen ZIP and cleanup confirmation
-are independent: cancelling the native save dialog is not an error, a written
-ZIP remains successful when deletion rejects, and deletion rejection means
-durable cleanup is unconfirmed rather than proving bytes remain. The archive is
-never enqueued as an attachment and is not removed by queue cleanup.
+One serialized **Save a copy…** action owns preparation, the native archive, and settlement of exact staged-artifact deletion. Save and Send remain unavailable for that whole action. The user-chosen ZIP and cleanup confirmation are independent: cancelling the native save dialog is not an error, a written ZIP remains successful when deletion rejects, and deletion rejection means durable cleanup is unconfirmed rather than proving bytes remain. The archive is never enqueued as an attachment and is not removed by queue cleanup.
 
-Cleanup-unconfirmed and an admitted preparation cancellation conservatively
-block further consented snapshot work for the same modal and client job. This
-does not add an in-session cleanup retry or guarantee later reconciliation.
-Clearing consent still permits the existing text-only Send path. Cleanup truth
-is internal-only here: it adds no user message, log, lifecycle record, metric,
-Sentry event, PostHog event, or other telemetry signal.
+Cleanup-unconfirmed and an admitted preparation cancellation conservatively block further consented snapshot work for the same modal and client job. This does not add an in-session cleanup retry or guarantee later reconciliation. Clearing consent still permits the existing text-only Send path. Cleanup truth is internal-only here: it adds no user message, log, lifecycle record, metric, Sentry event, PostHog event, or other telemetry signal.
 
 ## Artifact contents at a glance
 
-`diagnostics.json` is one canonical JSON document (`SupportSnapshotV3`). Read
-top to bottom it answers: what build produced this, what the user agreed to,
-what the evidence is, how healthy the pipeline was, and what is not in the
-file and why.
+`diagnostics.json` is one canonical JSON document (`SupportSnapshotV3`). Read top to bottom it answers: what build produced this, what the user agreed to, what the evidence is, how healthy the pipeline was, and what is not in the file and why.
 
 - Identity and build context: `schema_version` (3), `snapshot_id`,
   `generated_at`, and `app` (version, release, platform, runtime version and
@@ -227,9 +149,7 @@ The permit does not normalize. `SupportExportPermit::issue` refuses any window t
 
 Fixing the producer is not the same as the window being release-complete: it guarantees the spelling the coordinator itself creates, while any other component that stamps a support timestamp remains its own source of truth, so a released build is only correct once every such producer emits this same canonical spelling.
 
-Degradation removes candidate groups from tier 8 upward until the exact
-uncompressed bytes fit the cap, oldest first within a tier, and a lifecycle
-started/terminal pair is admitted or removed atomically. The fixed tiers:
+Degradation removes candidate groups from tier 8 upward until the exact uncompressed bytes fit the cap, oldest first within a tier, and a lifecycle started/terminal pair is admitted or removed atomically. The fixed tiers:
 
 | Tier | Contents |
 | --- | --- |
@@ -244,105 +164,40 @@ started/terminal pair is admitted or removed atomically. The fixed tiers:
 
 ## Privacy
 
-Support reports, diagnostics, and attachments are private by default.
-`publicContentConsent` remains false. A diagnostic snapshot deliberately
-preserves selected bounded non-secret prompts, transcript, tool and terminal
-output, file content and paths, ordinary URLs, provider responses and errors,
-and correlation metadata because those are the evidence the disclosure names.
+Support reports, diagnostics, and attachments are private by default. `publicContentConsent` remains false. A diagnostic snapshot deliberately preserves selected bounded non-secret prompts, transcript, tool and terminal output, file content and paths, ordinary URLs, provider responses and errors, and correlation metadata because those are the evidence the disclosure names.
 
-A purpose-specific Rust scrub runs over every collector, fallback, legacy, and
-session value before staging. Structural rules remove secret keys and
-credential containers; bounded regex rules remove authorization and cookie
-values, access/refresh/identity tokens, API keys and provider credentials,
-passwords, private keys, secret environment values, signed-URL secrets, URL
-userinfo, and high-confidence opaque credentials. Matches become typed
-redaction markers without retaining a secret prefix, suffix, length, or hash.
-Home-directory prefixes normalize to `~`; non-secret paths and URL detail
-remain useful.
+A purpose-specific Rust scrub runs over every collector, fallback, legacy, and session value before staging. Structural rules remove secret keys and credential containers; bounded regex rules remove authorization and cookie values, access/refresh/identity tokens, API keys and provider credentials, passwords, private keys, secret environment values, signed-URL secrets, URL userinfo, and high-confidence opaque credentials. Matches become typed redaction markers without retaining a secret prefix, suffix, length, or hash. Home-directory prefixes normalize to `~`; non-secret paths and URL detail remain useful.
 
-The artifact excludes the report message, email, account name, tenant/device
-identity, hostname, username, environment maps, keychain material, collector
-connection material, support permits, staging paths, presigned URLs, and
-Sentry/PostHog payloads. It is never copied into public issues, product
-telemetry, ordinary logs, or the local collector/fallback stores. A scrub or
-mandatory-manifest invariant that cannot prove all candidate values were
-bounded fails preparation closed.
+The artifact excludes the report message, email, account name, tenant/device identity, hostname, username, environment maps, keychain material, collector connection material, support permits, staging paths, presigned URLs, and Sentry/PostHog payloads. It is never copied into public issues, product telemetry, ordinary logs, or the local collector/fallback stores. A scrub or mandatory-manifest invariant that cannot prove all candidate values were bounded fails preparation closed.
 
 ## Durable job and queue
 
-Both modals create the same `SupportReportJob` shape and dispatch it to the
-single upload queue owner. Snapshot intent is explicit:
+Both modals create the same `SupportReportJob` shape and dispatch it to the single upload queue owner. Snapshot intent is explicit:
 
 ```text
 none
 prepared(consent, opaque artifact ID, snapshot ID, size, SHA-256, manifest summary)
 ```
 
-Missing or truthy legacy `includeLogs` is never new consent. Legacy jobs migrate
-to no snapshot and diagnostics false; an already-created server report whose
-immutable intent expected old diagnostics ends terminally with resubmit
-guidance rather than capturing new customer evidence.
+Missing or truthy legacy `includeLogs` is never new consent. Legacy jobs migrate to no snapshot and diagnostics false; an already-created server report whose immutable intent expected old diagnostics ends terminally with resubmit guidance rather than capturing new customer evidence.
 
-Queue persistence is a checksummed, revisioned document plus write-ahead
-journal, serialized by one in-process owner. Each mutation writes the journal,
-writes the full target document, reads and verifies the target, and only then
-acknowledges. Hydration reconciles both documents before listening or draining.
-The queue keeps at most ten jobs and 2,097,152 canonical document bytes. A full
-queue rejects the new job visibly; it never uses truncating array operations or
-silently evicts old work. Existing message, attachment-count, filename,
-credit-name, and byte limits are validated before enqueue.
+Queue persistence is a checksummed, revisioned document plus write-ahead journal, serialized by one in-process owner. Each mutation writes the journal, writes the full target document, reads and verifies the target, and only then acknowledges. Hydration reconciles both documents before listening or draining. The queue keeps at most ten jobs and 2,097,152 canonical document bytes. A full queue rejects the new job visibly; it never uses truncating array operations or silently evicts old work. Existing message, attachment-count, filename, credit-name, and byte limits are validated before enqueue.
 
-At startup, settled queue hydration supplies the complete bounded artifact and
-attachment reference set to native reconciliation. Verified references survive;
-missing or mismatched artifacts become visible terminal resubmit states; stale
-partials and proven-unreferenced staged files are removed. A corrupt or
-ambiguous queue blocks readiness rather than pretending it is empty. The modal
-closes only after `queued` or byte-identical `duplicate`; full, conflicting, or
-failed persistence keeps the report visible.
+At startup, settled queue hydration supplies the complete bounded artifact and attachment reference set to native reconciliation. Verified references survive; missing or mismatched artifacts become visible terminal resubmit states; stale partials and proven-unreferenced staged files are removed. A corrupt or ambiguous queue blocks readiness rather than pretending it is empty. The modal closes only after `queued` or byte-identical `duplicate`; full, conflicting, or failed persistence keeps the report visible.
 
 ## Upload and stable retry
 
-A prepared snapshot is staged before the first server create call. Every
-attempt rereads it by opaque ID, verifies native metadata, Blob size, and
-SHA-256, and holds that same bounded Blob through create, upload-target, PUT,
-and complete. The existing API receives one optional `application/json`
-`diagnostics.json` object; it is not a user attachment and does not change
-attachment counts. Target URLs may be refreshed, but the Desktop job's artifact
-bytes, size, checksum, snapshot ID, and preparation parent remain stable for
-all retries. A retry never recollects or silently substitutes newer evidence.
+A prepared snapshot is staged before the first server create call. Every attempt rereads it by opaque ID, verifies native metadata, Blob size, and SHA-256, and holds that same bounded Blob through create, upload-target, PUT, and complete. The existing API receives one optional `application/json` `diagnostics.json` object; it is not a user attachment and does not change attachment counts. Target URLs may be refreshed, but the Desktop job's artifact bytes, size, checksum, snapshot ID, and preparation parent remain stable for all retries. A retry never recollects or silently substitutes newer evidence.
 
-Report creation remains idempotent by authenticated user and `clientJobId`.
-Already-completed is successful cleanup. Auth/configuration and transient
-failures retain the exact queued bytes for a later attempt; invalid local
-payloads, upload conflicts, and rejected payloads are terminal. Queue removal
-is journalled before idempotent deletion of the artifact and attachments, so a
-cleanup failure cannot replay a completed upload or delete another job's data.
+Report creation remains idempotent by authenticated user and `clientJobId`. Already-completed is successful cleanup. Auth/configuration and transient failures retain the exact queued bytes for a later attempt; invalid local payloads, upload conflicts, and rejected payloads are terminal. Queue removal is journalled before idempotent deletion of the artifact and attachments, so a cleanup failure cannot replay a completed upload or delete another job's data.
 
 ## Failure and lifecycle behavior
 
-Unavailable collectors or child processes, capped or unreadable optional
-sources, malformed optional records, and session endpoint failures produce
-typed omissions or truncations while other evidence continues. They do not
-affect the active session, runtime, Worker, collector, support draft,
-attachments, or telemetry. Fatal consent, scrub, manifest, staging, or artifact
-verification failure keeps the modal open and lets the user retry or explicitly
-send without a snapshot; it never changes intent silently.
+Unavailable collectors or child processes, capped or unreadable optional sources, malformed optional records, and session endpoint failures produce typed omissions or truncations while other evidence continues. They do not affect the active session, runtime, Worker, collector, support draft, attachments, or telemetry. Fatal consent, scrub, manifest, staging, or artifact verification failure keeps the modal open and lets the user retry or explicitly send without a snapshot; it never changes intent silently.
 
-Native emits one `desktop.support_snapshot.prepare` lifecycle for each admitted
-preparation and one child `desktop.support_snapshot.submit` lifecycle for each
-admitted upload attempt. Every admitted operation has exactly one closed,
-typed terminal. Snapshot-missing, snapshot-mismatch, and legacy-consent-required
-paths happen before submit admission and emit no synthetic submit pair.
-Snapshot-missing and snapshot-mismatch make no server call. A migrated legacy
-job still attempts ordinary report creation with diagnostics false; only a
-server-side immutable-intent conflict concludes
-`consent_required_for_legacy_job`. Cancellation, timeout, window/app teardown,
-and retry are bounded; late results from a superseded consent epoch cannot
-enqueue.
+Native emits one `desktop.support_snapshot.prepare` lifecycle for each admitted preparation and one child `desktop.support_snapshot.submit` lifecycle for each admitted upload attempt. Every admitted operation has exactly one closed, typed terminal. Snapshot-missing, snapshot-mismatch, and legacy-consent-required paths happen before submit admission and emit no synthetic submit pair. Snapshot-missing and snapshot-mismatch make no server call. A migrated legacy job still attempts ordinary report creation with diagnostics false; only a server-side immutable-intent conflict concludes `consent_required_for_legacy_job`. Cancellation, timeout, window/app teardown, and retry are bounded; late results from a superseded consent epoch cannot enqueue.
 
-Server-side `cloud-diagnostics.json` collection remains disabled and reports
-`cloudDiagnosticsStatus=not_applicable`. Session SQLite remains replay truth;
-the snapshot neither mutates it nor restores cloud diagnostics.
+Server-side `cloud-diagnostics.json` collection remains disabled and reports `cloudDiagnosticsStatus=not_applicable`. Session SQLite remains replay truth; the snapshot neither mutates it nor restores cloud diagnostics.
 
 ## HTTP contract
 
@@ -358,14 +213,11 @@ POST /v1/support/report-uploads                 legacy compatibility wrapper
 POST /v1/support/messages                       zero-upload compatibility shim
 ```
 
-There is no `/tracker` endpoint, and the private completed-report feed
-(`GET /internal/support/reports`) was removed with the issue-tracker loop in
-the 2026-08 engineering cull.
+There is no `/tracker` endpoint, and the private completed-report feed (`GET /internal/support/reports`) was removed with the issue-tracker loop in the 2026-08 engineering cull.
 
 ### Create
 
-`POST /v1/support/reports` creates or returns the durable case file for the
-authenticated user and `clientJobId`.
+`POST /v1/support/reports` creates or returns the durable case file for the authenticated user and `clientJobId`.
 
 The immutable create intent includes:
 
@@ -379,12 +231,9 @@ creditConsent, creditName
 private content-consent state
 ```
 
-An idempotent retry returns the existing report without replacing the original
-message, intent, or object set.
+An idempotent retry returns the existing report without replacing the original message, intent, or object set.
 
-After inserting the row, the server writes private `request.json`. It contains
-the message, capture intent, references, and server-derived correlation. It
-must not contain a presigned URL.
+After inserting the row, the server writes private `request.json`. It contains the message, capture intent, references, and server-derived correlation. It must not contain a presigned URL.
 
 ### Upload targets
 
@@ -397,9 +246,7 @@ must not contain a presigned URL.
 - may be called again to refresh expired URLs and refreshed content metadata;
 - rejects a changed object set, diagnostics intent, or attachment count.
 
-The generic endpoint can accept refreshed content metadata on a re-issue. A
-consented Desktop snapshot always reissues its original staged size and SHA-256;
-it does not recapture. The latest target manifest is the completion contract.
+The generic endpoint can accept refreshed content metadata on a re-issue. A consented Desktop snapshot always reissues its original staged size and SHA-256; it does not recapture. The latest target manifest is the completion contract.
 
 ### Complete
 
@@ -414,22 +261,15 @@ it does not recapture. The latest target manifest is the completion contract.
 - attempts one Slack completion receipt during the first successful completion
   transition.
 
-The S3 `HEAD` response does not prove object SHA-256; the checksum comparison is
-client-claim consistency, while object size is independently verified.
+The S3 `HEAD` response does not prove object SHA-256; the checksum comparison is client-claim consistency, while object size is independently verified.
 
-Slack failure does not roll back a completed report. `slack_notified_at` is
-written only after the webhook call succeeds. A missing webhook or provider
-error is logged and leaves the timestamp null for later recovery.
+Slack failure does not roll back a completed report. `slack_notified_at` is written only after the webhook call succeeds. A missing webhook or provider error is logged and leaves the timestamp null for later recovery.
 
 ## Persistence and private objects
 
-The `support_report` row is the durable capture pivot. Current capture columns
-include owner/client identity, lifecycle, S3 location, source/scope/reference
-JSON, expected and actual object manifests, kind/credit/urgent/notify intent,
-request IDs, timestamps, and Slack receipt state.
+The `support_report` row is the durable capture pivot. Current capture columns include owner/client identity, lifecycle, S3 location, source/scope/reference JSON, expected and actual object manifests, kind/credit/urgent/notify intent, request IDs, timestamps, and Slack receipt state.
 
-Two immutable capture columns record the report's release and summary
-projection:
+Two immutable capture columns record the report's release and summary projection:
 
 - `client_release_id` — the canonical `<component>@<semver>+<12-char-sha>`
   release the client was running. A missing or malformed value stores NULL and
@@ -450,11 +290,9 @@ Default object layout:
   complete.json
 ```
 
-The bucket is private, blocks public access, uses server-side encryption,
-applies retention/lifecycle policy, and grants least-privilege server access.
+The bucket is private, blocks public access, uses server-side encryption, applies retention/lifecycle policy, and grants least-privilege server access.
 
-Historical `tracker.json` and `cloud-diagnostics.json` objects may exist. The
-current server does not create them.
+Historical `tracker.json` and `cloud-diagnostics.json` objects may exist. The current server does not create them.
 
 ## Slack receipt
 
@@ -465,33 +303,23 @@ The Slack completion receipt contains operational metadata:
 - kind, urgent, notify, credit, diagnostics, and attachment summaries;
 - safe context and correlation IDs.
 
-It must not include S3 keys/prefixes, presigned URLs, diagnostic or attachment
-bodies, raw prompts/tool output, or secret values.
+It must not include S3 keys/prefixes, presigned URLs, diagnostic or attachment bodies, raw prompts/tool output, or secret values.
 
 Slack is an alerting projection, not the queue or the source of delivery truth.
 
 ## Outreach address
 
-Users may set `outreach_email` through `PATCH /v1/users/me`. An empty value
-clears it. The support contact rule is:
+Users may set `outreach_email` through `PATCH /v1/users/me`. An empty value clears it. The support contact rule is:
 
 ```text
 outreach_email ?? account_email
 ```
 
-Capture stores reporter identity and notify intent; it does not send an email.
-Only an authorized future outreach step may resolve and snapshot the address.
+Capture stores reporter identity and notify intent; it does not send an email. Only an authorized future outreach step may resolve and snapshot the address.
 
 ## Current gaps
 
-These are the differences from the target state above that remain in the tree.
-The consented-capture pipeline is built and now has its consent surface:
-schema-3 snapshot assembly, the manifest, the second scrub, opaque staging, the
-checksummed v2 queue with its verified one-way migration, the shared native
-export permit with fixed support prepare/submit lifecycle operations, the
-SQL-bounded AnyHarness support windows with their generated SDK reads, and both
-modals' unchecked consent epoch, scope control, and **Save a copy…** action all
-exist. What remains is the legacy export that sits beside the pipeline.
+These are the differences from the target state above that remain in the tree. The consented-capture pipeline is built and now has its consent surface: schema-3 snapshot assembly, the manifest, the second scrub, opaque staging, the checksummed v2 queue with its verified one-way migration, the shared native export permit with fixed support prepare/submit lifecycle operations, the SQL-bounded AnyHarness support windows with their generated SDK reads, and both modals' unchecked consent epoch, scope control, and **Save a copy…** action all exist. What remains is the legacy export that sits beside the pipeline.
 
 - [ ] The legacy debug-bundle export is untouched by the snapshot work. It is
       no longer on the Desktop bridge and the upload path never calls it, but
@@ -580,5 +408,4 @@ Changes to this feature require focused proof for the guarantee they alter:
 - a staging smoke must create a real report, inspect safe DB/S3 summaries, and
   visibly confirm the Slack message.
 
-Operator investigation is documented in
-[`../../../../../guides/debugging/support-reports.md`](../../../guides/debugging/support-reports.md).
+Operator investigation is documented in [`../../../../../guides/debugging/support-reports.md`](../../../guides/debugging/support-reports.md).

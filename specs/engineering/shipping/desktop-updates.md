@@ -1,16 +1,10 @@
 # Desktop Updates And Release Notices
 
-Read this spec with
-[`releases.md`](../../../guides/deploying/releases.md) and
-[`desktop-update-testing.md`](../testing/desktop-update-testing.md).
-The Releases procedure owns packaging, signing, publishing, and operator procedure; the
-testing spec owns the real N−1 to N updater mechanism; this feature spec owns
-user-visible update and release-notice behavior.
+Read this spec with [`releases.md`](../../../guides/deploying/releases.md) and [`desktop-update-testing.md`](../testing/desktop-update-testing.md). The Releases procedure owns packaging, signing, publishing, and operator procedure; the testing spec owns the real N−1 to N updater mechanism; this feature spec owns user-visible update and release-notice behavior.
 
 ## Product Contract
 
-The Desktop updater manifest is the release-notice source consumed by the app.
-It keeps the standard Tauri updater shape and may add one optional field:
+The Desktop updater manifest is the release-notice source consumed by the app. It keeps the standard Tauri updater shape and may add one optional field:
 
 ```json
 {
@@ -36,9 +30,7 @@ The downloads CDN publishes the same manifest at two identities:
 - `desktop/stable/<version>/latest.json` is the immutable installed-version
   record.
 
-The rolling feed answers which version is available. The immutable record
-answers which titled release is currently installed, including after an
-in-app upgrade, a manual DMG upgrade, or a fresh install.
+The rolling feed answers which version is available. The immutable record answers which titled release is currently installed, including after an in-app upgrade, a manual DMG upgrade, or a fresh install.
 
 ## Notice Selection
 
@@ -49,28 +41,13 @@ The sidebar derives notices from the running version only:
 3. Show its valid title unless that installed version was acknowledged.
 4. Otherwise, show no release notice.
 
-The rolling updater feed exposes its valid `notes` value through updater state.
-The morphing update toast uses `UPDATE` plus that authored headline throughout
-available, downloading, and ready phases while its operational status and
-Download/progress/Restart controls change. An untitled manifest retains the
-generic updater copy. An available target never produces a sidebar
-release-notice card; the updater toast is its single announcement surface.
+The rolling updater feed exposes its valid `notes` value through updater state. The morphing update toast uses `UPDATE` plus that authored headline throughout available, downloading, and ready phases while its operational status and Download/progress/Restart controls change. An untitled manifest retains the generic updater copy. An available target never produces a sidebar release-notice card; the updater toast is its single announcement surface.
 
-Installed versions are compared as exact strings after transport
-normalization. A response fetched from a versioned manifest path is rejected
-when its `version` does not match the requested version.
+Installed versions are compared as exact strings after transport normalization. A response fetched from a versioned manifest path is rejected when its `version` does not match the requested version.
 
-Release-notice persistence stores `acknowledgedReleaseVersion` for the
-currently installed release. Closing the installed card or successfully
-opening its changelog records that exact version. Update checking, downloading,
-installation, restart, and available-target changes do not modify this
-acknowledgment, so an acknowledged installed notice cannot be resurrected by
-later updater activity.
+Release-notice persistence stores `acknowledgedReleaseVersion` for the currently installed release. Closing the installed card or successfully opening its changelog records that exact version. Update checking, downloading, installation, restart, and available-target changes do not modify this acknowledgment, so an acknowledged installed notice cannot be resurrected by later updater activity.
 
-The app caches the current valid version/title pair as an offline fallback.
-Transport failure, malformed JSON, a mismatched version, or a missing title
-must fail quiet and must never block update checking, installation, relaunch,
-or the rest of the sidebar.
+The app caches the current valid version/title pair as an offline fallback. Transport failure, malformed JSON, a mismatched version, or a missing title must fail quiet and must never block update checking, installation, relaunch, or the rest of the sidebar.
 
 ## Updater UX Boundary
 
@@ -88,9 +65,7 @@ The packaged Desktop updater remains a user-gated flow:
   supplies changelog context and never duplicates availability, download,
   progress, restart, or error controls.
 
-The headless T4 scenario proves manifest selection, signature verification,
-and bundle replacement. Focused renderer tests and a packaged-WebView smoke
-prove the user-visible notice states and interactions.
+The headless T4 scenario proves manifest selection, signature verification, and bundle replacement. Focused renderer tests and a packaged-WebView smoke prove the user-visible notice states and interactions.
 
 ## Sidebar Presentation
 
@@ -102,22 +77,13 @@ The release-notice card renders immediately above the sidebar account footer.
 - A close affordance is keyboard accessible and has an explicit accessible
   label.
 
-The card uses sidebar semantic tokens, tolerates an 80-character title without
-overflow, and is absent when the sidebar is collapsed.
+The card uses sidebar semantic tokens, tolerates an 80-character title without overflow, and is absent when the sidebar is collapsed.
 
 ## Release Operation
 
-`release_title` is an optional Desktop release input. Named launches provide
-it; unattended and routine releases may omit it. Manifest generation validates
-the title before any updater asset is published. The same generated JSON is
-then uploaded to both rolling and immutable manifest keys.
+`release_title` is an optional Desktop release input. Named launches provide it; unattended and routine releases may omit it. Manifest generation validates the title before any updater asset is published. The same generated JSON is then uploaded to both rolling and immutable manifest keys.
 
-The rolling and immutable records for a version must carry the same authored
-title. The packaged WebView must be able to fetch the immutable record from the
-public downloads CDN. Direct tag-push releases without an authored input remain
-valid and publish without `notes`. Atomic publication order, collision handling,
-same-version reruns, CORS configuration, and partial-publish recovery are owned
-by [`releases.md`](../../../guides/deploying/releases.md).
+The rolling and immutable records for a version must carry the same authored title. The packaged WebView must be able to fetch the immutable record from the public downloads CDN. Direct tag-push releases without an authored input remain valid and publish without `notes`. Atomic publication order, collision handling, same-version reruns, CORS configuration, and partial-publish recovery are owned by [`releases.md`](../../../guides/deploying/releases.md).
 
 ## Acceptance Matrix
 
@@ -137,12 +103,7 @@ by [`releases.md`](../../../guides/deploying/releases.md).
 
 ## Owned Download, Staging, And Verification
 
-The download is owned Rust-side rather than delegated to the updater plugin.
-The plugin cannot abort or resume, holds the whole download in memory,
-persists nothing, has no default timeout, and its `Update::install(bytes)`
-seam performs no signature verification. The owned path (default on) addresses
-each of these; the plugin path stays wired underneath and is restored by
-turning the flag off.
+The download is owned Rust-side rather than delegated to the updater plugin. The plugin cannot abort or resume, holds the whole download in memory, persists nothing, has no default timeout, and its `Update::install(bytes)` seam performs no signature verification. The owned path (default on) addresses each of these; the plugin path stays wired underneath and is restored by turning the flag off.
 
 Native commands live in `apps/desktop/src-tauri/src/updater_owned.rs`:
 
@@ -167,67 +128,21 @@ Native commands live in `apps/desktop/src-tauri/src/updater_owned.rs`:
 - `updater_owned_install` re-verifies the staged bytes and installs them; the
   Worker teardown ordering runs first, in the renderer wrapper, before install.
 
-The renderer state machine (`hooks/access/tauri/updater-*.ts`, driving
-`stores/updater/updater-store.ts`) adds `verifying` (bytes staged, sha256 and
-minisign being re-checked) and `reusingStaged` (a verified artifact for the
-offered version was found at check time, so nothing is downloaded). In the
-owned path `ready` means staged and verified, and the install runs at restart;
-the legacy path installs during download and `ready` means installed.
+The renderer state machine (`hooks/access/tauri/updater-*.ts`, driving `stores/updater/updater-store.ts`) adds `verifying` (bytes staged, sha256 and minisign being re-checked) and `reusingStaged` (a verified artifact for the offered version was found at check time, so nothing is downloaded). In the owned path `ready` means staged and verified, and the install runs at restart; the legacy path installs during download and `ready` means installed.
 
-Persistence uses the existing `updater_metadata` key additively:
-`{lastCheckedAt, skippedVersions, availableVersion?, staged?}`. The skip list is
-hydrated on boot so a skipped version is never re-announced after relaunch, and
-a persisted staged pointer that no longer matches the offered version is
-dropped.
+Persistence uses the existing `updater_metadata` key additively: `{lastCheckedAt, skippedVersions, availableVersion?, staged?}`. The skip list is hydrated on boot so a skipped version is never re-announced after relaunch, and a persisted staged pointer that no longer matches the offered version is dropped.
 
-Two client-local flags gate the behavior (`hooks/access/tauri/updater-flags.ts`,
-persisted under `updater_flags`): `ownedUpdaterEnabled` defaults on and
-`updaterServerRedirectEnabled` defaults off. When the redirect flag is on and a
-non-official server is connected, the owned check points at that server's
-`/desktop/updater/latest.json`; any failure falls back to the baked feed. The
-server may additively supply cadence overrides on `/meta` under `desktopUpdater`
-(`checkIntervalMs`, `stallThresholdMs`), consumed tolerantly.
+Two client-local flags gate the behavior (`hooks/access/tauri/updater-flags.ts`, persisted under `updater_flags`): `ownedUpdaterEnabled` defaults on and `updaterServerRedirectEnabled` defaults off. When the redirect flag is on and a non-official server is connected, the owned check points at that server's `/desktop/updater/latest.json`; any failure falls back to the baked feed. The server may additively supply cadence overrides on `/meta` under `desktopUpdater` (`checkIntervalMs`, `stallThresholdMs`), consumed tolerantly.
 
-Typed native errors are `UPDATER_CHECK_FAILED`, `UPDATER_DOWNLOAD_STALLED`,
-`UPDATER_DOWNLOAD_ABORTED`, `UPDATER_ARTIFACT_HASH_MISMATCH`,
-`UPDATER_INSTALL_FAILED`, and `UPDATER_DISK_FULL`.
+Typed native errors are `UPDATER_CHECK_FAILED`, `UPDATER_DOWNLOAD_STALLED`, `UPDATER_DOWNLOAD_ABORTED`, `UPDATER_ARTIFACT_HASH_MISMATCH`, `UPDATER_INSTALL_FAILED`, and `UPDATER_DISK_FULL`.
 
 ## Version-Skew Enforcement
 
-`GET /meta` (`server/proliferate/server/meta.py`) reports `minDesktopVersion`
-(the floor the operator's server accepts) alongside a separate
-`minDesktopVersionEnforced` boolean. `minDesktopVersion` defaults to the
-server's own stamped desktop version — so its mere presence can never be the
-block signal, or every slightly-stale client would be locked out the moment
-enforcement shipped. Blocking requires the operator to explicitly set
-`ENFORCE_MIN_DESKTOP_VERSION=true` (`server/proliferate/server/version.py`);
-default is permissive (warn-only), matching this ADR's "server-config-driven,
-defaults permissive" gate.
+`GET /meta` (`server/proliferate/server/meta.py`) reports `minDesktopVersion` (the floor the operator's server accepts) alongside a separate `minDesktopVersionEnforced` boolean. `minDesktopVersion` defaults to the server's own stamped desktop version — so its mere presence can never be the block signal, or every slightly-stale client would be locked out the moment enforcement shipped. Blocking requires the operator to explicitly set `ENFORCE_MIN_DESKTOP_VERSION=true` (`server/proliferate/server/version.py`); default is permissive (warn-only), matching this ADR's "server-config-driven, defaults permissive" gate.
 
-On the desktop, `useMinDesktopVersionGate`
-(`apps/packages/product-client/src/hooks/access/cloud/server-capabilities/use-min-desktop-version-gate.ts`)
-polls `/meta` for the currently connected server (boot-time and every 60s, not
-just the one-shot check the manual connect-server flow already ran) and
-renders `MinDesktopVersionGate` — a full-screen takeover cloned from
-`BootstrappedRoute`'s gating pattern, mounted above the workspace outlet in
-`App.tsx` — only when all of: the server explicitly enforces, the desktop's own
-version is confidently older
-(`isDesktopVersionSupported`, which fails open on dev/unstamped sentinels and
-unparseable strings), and the server actually declared a well-formed `/meta`.
-A self-hosted server that fails the structural shape check, or omits the
-fields entirely (older server), never blocks. The takeover blocks the *user*,
-not the runtime: background sessions keep executing beneath it. It never
-covers the sign-in/connect surface, and it carries a "Sign out and switch
-server" escape hatch, so a misconfigured self-hosted floor (one no published
-desktop build can satisfy) can strand a session but never the app. A `desktop_minversion_block`
-telemetry event fires once per transition into the blocked state; a
-`desktop.minversion.block_rate` server-side dashboard is a follow-up, not built
-here.
+On the desktop, `useMinDesktopVersionGate` (`apps/packages/product-client/src/hooks/access/cloud/server-capabilities/use-min-desktop-version-gate.ts`) polls `/meta` for the currently connected server (boot-time and every 60s, not just the one-shot check the manual connect-server flow already ran) and renders `MinDesktopVersionGate` — a full-screen takeover cloned from `BootstrappedRoute`'s gating pattern, mounted above the workspace outlet in `App.tsx` — only when all of: the server explicitly enforces, the desktop's own version is confidently older (`isDesktopVersionSupported`, which fails open on dev/unstamped sentinels and unparseable strings), and the server actually declared a well-formed `/meta`. A self-hosted server that fails the structural shape check, or omits the fields entirely (older server), never blocks. The takeover blocks the *user*, not the runtime: background sessions keep executing beneath it. It never covers the sign-in/connect surface, and it carries a "Sign out and switch server" escape hatch, so a misconfigured self-hosted floor (one no published desktop build can satisfy) can strand a session but never the app. A `desktop_minversion_block` telemetry event fires once per transition into the blocked state; a `desktop.minversion.block_rate` server-side dashboard is a follow-up, not built here.
 
-Separately, the native shell asserts the AnyHarness sidecar's own version at
-boot — see [`desktop-native.md`](../../systems/desktop-host/desktop-native.md#boot-flow) for
-`runtime_version_assert` and `PROLIFERATE_RUNTIME_VERSION_ASSERT`. That is an
-app-shell-to-sidecar check; this section is the desktop-app-to-server check.
+Separately, the native shell asserts the AnyHarness sidecar's own version at boot — see [`desktop-native.md`](../../systems/desktop-host/desktop-native.md#boot-flow) for `runtime_version_assert` and `PROLIFERATE_RUNTIME_VERSION_ASSERT`. That is an app-shell-to-sidecar check; this section is the desktop-app-to-server check.
 
 ## Implementation Ownership
 

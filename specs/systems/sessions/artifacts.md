@@ -1,27 +1,12 @@
 # Artifacts
 
-Status: current (grade B). System spec in the Organization Standard anatomy.
-The runtime system that owns **file-backed artifacts a workspace declares**:
-a per-workspace manifest (`.proliferate/artifacts.json`), the create / update /
-delete / read / list lifecycle over it, and write protection that stops generic
-file operations from clobbering manifest-tracked paths. There is no artifact
-table; git history is the version history.
+Status: current (grade B). System spec in the Organization Standard anatomy. The runtime system that owns **file-backed artifacts a workspace declares**: a per-workspace manifest (`.proliferate/artifacts.json`), the create / update / delete / read / list lifecycle over it, and write protection that stops generic file operations from clobbering manifest-tracked paths. There is no artifact table; git history is the version history.
 
-Honesty about scope: on `main` this domain is **Cowork's artifact machinery**
-— every entry point is gated on `WorkspaceSurface::Cowork` and the only tools
-that call it are the Cowork MCP's. The Organization Standard's coverage audit
-recorded exactly that, and the roster's *artifacts/evidence* system (screenshots,
-files and run outputs captured as evidence for any run) is greenfield. This
-spec describes what exists and marks the graduation path. Depth reference:
-[cowork-artifacts.md](cowork-artifacts.md).
+Honesty about scope: on `main` this domain is **Cowork's artifact machinery** — every entry point is gated on `WorkspaceSurface::Cowork` and the only tools that call it are the Cowork MCP's. The Organization Standard's coverage audit recorded exactly that, and the roster's *artifacts/evidence* system (screenshots, files and run outputs captured as evidence for any run) is greenfield. This spec describes what exists and marks the graduation path. Depth reference: [cowork-artifacts.md](cowork-artifacts.md).
 
 ## 1. Purpose
 
-Let an agent produce renderable, durable outputs (markdown, HTML, SVG, React)
-that the product treats as first-class objects rather than loose files: listed,
-titled, protected from accidental overwrite, and readable over HTTP by the
-client. The future purpose (evidence) is the same mechanism with the Cowork
-gate lifted and a run/session attribution added.
+Let an agent produce renderable, durable outputs (markdown, HTML, SVG, React) that the product treats as first-class objects rather than loose files: listed, titled, protected from accidental overwrite, and readable over HTTP by the client. The future purpose (evidence) is the same mechanism with the Cowork gate lifted and a run/session attribution added.
 
 ## 2. Owned state
 
@@ -31,8 +16,7 @@ gate lifted and a run/session attribution added.
 | The artifact files themselves, at manifest-declared relative paths inside the workspace | written only through [runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/artifacts/runtime.rs) (temp-file + atomic commit) |
 | Per-workspace in-process lock serializing manifest mutations | `ArtifactRuntime.workspace_locks` |
 
-Supported types ([model.rs](../../../anyharness/crates/anyharness-lib/src/domains/artifacts/model.rs)):
-`text/markdown`, `text/html`, `image/svg+xml`, `application/vnd.proliferate.react`.
+Supported types ([model.rs](../../../anyharness/crates/anyharness-lib/src/domains/artifacts/model.rs)): `text/markdown`, `text/html`, `image/svg+xml`, `application/vnd.proliferate.react`.
 
 ## 3. Public surface
 
@@ -61,24 +45,15 @@ Supported types ([model.rs](../../../anyharness/crates/anyharness-lib/src/domain
 
 ## 5. Laws
 
-**The manifest is the truth; only listed files are artifacts.** A renderable
-extension without a manifest entry is an ordinary file; a manifest entry whose
-file is missing reports `exists: false` rather than disappearing.
+**The manifest is the truth; only listed files are artifacts.** A renderable extension without a manifest entry is an ordinary file; a manifest entry whose file is missing reports `exists: false` rather than disappearing.
 
-**Paths are immutable.** `create_artifact` chooses the path; `update_artifact`
-may change content, title, description only; there is no rename/move. Renames
-would break the git-history-is-version-history contract.
+**Paths are immutable.** `create_artifact` chooses the path; `update_artifact` may change content, title, description only; there is no rename/move. Renames would break the git-history-is-version-history contract.
 
-**Writes are atomic and serialized per workspace.** Content and manifest are
-written to temp files and committed together under the workspace lock; a
-failed commit rolls back both ([runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/artifacts/runtime.rs)).
+**Writes are atomic and serialized per workspace.** Content and manifest are written to temp files and committed together under the workspace lock; a failed commit rolls back both ([runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/artifacts/runtime.rs)).
 
-**Protected paths fail closed.** The manifest path and every manifest-declared
-artifact path are refused by generic file writes/renames/deletes for a
-protected workspace; only the artifact tools may touch them.
+**Protected paths fail closed.** The manifest path and every manifest-declared artifact path are refused by generic file writes/renames/deletes for a protected workspace; only the artifact tools may touch them.
 
-**Policy is pure.** `plan_create` / `plan_update` take `(manifest, input)` and
-return a plan; identity and clock are minted in the runtime step.
+**Policy is pure.** `plan_create` / `plan_update` take `(manifest, input)` and return a plan; identity and clock are minted in the runtime step.
 
 ## 6. Emits
 

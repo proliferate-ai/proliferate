@@ -1,14 +1,8 @@
 # Workspace Migration And Mobility
 
-There is no current user-facing local-to-cloud, cloud-to-local, or
-cloud-to-cloud workspace move workflow. The old Cloud mobility tables, Desktop
-move UI, handoff state machine, cleanup tracker, and cross-runtime cutover
-service were removed. AnyHarness still has a narrow target-local mobility
-substrate, but raw runtime operations are not a supported user or founder
-procedure by themselves.
+There is no current user-facing local-to-cloud, cloud-to-local, or cloud-to-cloud workspace move workflow. The old Cloud mobility tables, Desktop move UI, handoff state machine, cleanup tracker, and cross-runtime cutover service were removed. AnyHarness still has a narrow target-local mobility substrate, but raw runtime operations are not a supported user or founder procedure by themselves.
 
-Use [AnyHarness mobility](../workspaces/mobility.md) for
-the retained runtime mechanics.
+Use [AnyHarness mobility](../workspaces/mobility.md) for the retained runtime mechanics.
 
 ## Current Product Boundary
 
@@ -22,11 +16,7 @@ The current product does not provide:
 - a supported manual procedure that stitches the raw AnyHarness endpoints
   together.
 
-AnyHarness SDK methods and narrow Server wrappers expose runtime operations.
-They do not create a product flow. A future product migration workflow would
-need a separate orchestrator that establishes authority over both sides,
-chooses and prepares the destination, records the canonical result, handles
-interruption, and owns cleanup.
+AnyHarness SDK methods and narrow Server wrappers expose runtime operations. They do not create a product flow. A future product migration workflow would need a separate orchestrator that establishes authority over both sides, chooses and prepares the destination, records the canonical result, handles interruption, and owns cleanup.
 
 There is no active external orchestrator for this today.
 
@@ -44,8 +34,7 @@ preflight source
   -> destroy old source
 ```
 
-That sequence is not self-authorizing. A caller must already know that the
-destination is correct and that destroying the source is safe.
+That sequence is not self-authorizing. A caller must already know that the destination is correct and that destroying the source is safe.
 
 ## Contributor Rules
 

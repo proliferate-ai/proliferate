@@ -1,22 +1,12 @@
 # Testing and Linting
 
-Status: describes `main` for the tiers, the checkers, and the ratchets; the
-issue→test loop and the proof-coverage gate are target (※). Grade B — see
-[Known gaps](#known-gaps).
+Status: describes `main` for the tiers, the checkers, and the ratchets; the issue→test loop and the proof-coverage gate are target (※). Grade B — see [Known gaps](#known-gaps).
 
-Read before touching: [`specs/engineering/testing/standard.md`](standard.md) (the per-PR
-standard — this spec does not restate it), [`lints/README.md`](../../../lints/README.md)
-(rules as data), `scripts/check_*.py`, `server/scripts/check_mypy_baseline.py`,
-`tests/intent/**`, `tests/release/**`, `fixtures/contracts/**`.
+Read before touching: [`specs/engineering/testing/standard.md`](standard.md) (the per-PR standard — this spec does not restate it), [`lints/README.md`](../../../lints/README.md) (rules as data), `scripts/check_*.py`, `server/scripts/check_mypy_baseline.py`, `tests/intent/**`, `tests/release/**`, `fixtures/contracts/**`.
 
 ## 1. Purpose
 
-Testing and linting is the cross-cutting system that decides **what a change
-must prove before it merges or ships, and proves it mechanically**. It owns no
-product state. It consumes every product and runtime spec's Proof section
-(the tests that pin that system's laws) and turns them into gates: the four
-tiers of [`TESTING.md`](standard.md), the rule records under
-`lints/`, the ratchets, and the checkers that read them.
+Testing and linting is the cross-cutting system that decides **what a change must prove before it merges or ships, and proves it mechanically**. It owns no product state. It consumes every product and runtime spec's Proof section (the tests that pin that system's laws) and turns them into gates: the four tiers of [`TESTING.md`](standard.md), the rule records under `lints/`, the ratchets, and the checkers that read them.
 
 Two outcomes it exists for:
 
@@ -29,9 +19,7 @@ Two outcomes it exists for:
   demo agent that triages production can close the loop without a human
   deciding structure each time.
 
-Everything else (tiers, worlds, evidence) already exists and is better than
-its reputation; this spec names it, fences it, and adds the two missing
-links.
+Everything else (tiers, worlds, evidence) already exists and is better than its reputation; this spec names it, fences it, and adds the two missing links.
 
 ## 2. Owned state
 
@@ -54,10 +42,7 @@ scripts/check_*.py (22) · scripts/lint_records.py
 ※ the proof trailer in test files                the issue→test link (section 5, law 6)
 ```
 
-Written only through ordinary PRs; the ledgers and baselines have one
-reader each (`lints/README.md` names it per record), and the constitution
-(founder review on net-new exceptions, on ratchet growth, on removing a
-pinning test) governs the writes.
+Written only through ordinary PRs; the ledgers and baselines have one reader each (`lints/README.md` names it per record), and the constitution (founder review on net-new exceptions, on ratchet growth, on removing a pinning test) governs the writes.
 
 ## 3. Public surface
 
@@ -250,8 +235,7 @@ anyharness/tests/                                runtime standalone suite (13 fi
 
 ## Minimum tonight
 
-Small, cull-grade PRs that make the system legible for tomorrow's triage.
-Each is independently revertible.
+Small, cull-grade PRs that make the system legible for tomorrow's triage. Each is independently revertible.
 
 1. **Flip the three fence checkers from warn to enforce.** All three already
    pass in enforce mode on `main` (verified 2026-08-25: manifests,
@@ -269,9 +253,7 @@ Each is independently revertible.
    artifacts) get a `> [!warning] unpinned` callout naming the laws without
    tests — visible debt, not silent.
 
-Deliberately **not** tonight: change detection, re-gating the demoted lanes,
-`nightly-checks.yml`, Tier E machinery, the mypy identity change. Those are
-the building-loop spec's and this spec's Target.
+Deliberately **not** tonight: change detection, re-gating the demoted lanes, `nightly-checks.yml`, Tier E machinery, the mypy identity change. Those are the building-loop spec's and this spec's Target.
 
 ## Target
 

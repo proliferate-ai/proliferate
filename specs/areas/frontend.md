@@ -10,32 +10,17 @@ These standards apply to all frontend app logic and shared frontend packages:
 - `apps/packages/design/**`
 - `apps/packages/product-client/**`
 
-ProductClient and Mobile use the layered folder logic below. Desktop and Web
-are thin hosts: Desktop keeps Tauri and local-runtime adapters, Web keeps
-browser adapters, and both mount the connected product owned by ProductClient.
+ProductClient and Mobile use the layered folder logic below. Desktop and Web are thin hosts: Desktop keeps Tauri and local-runtime adapters, Web keeps browser adapters, and both mount the connected product owned by ProductClient.
 
 ## Launch configuration authority
 
-Every pre-launch surface reads the selected target's
-`HarnessLaunchOptionsResponse` and may only decorate exact keys. It must not
-import static executable membership, seed missing values, filter unknown IDs,
-or apply a first-model fallback. When the response carries a `modelControls`
-row for the selected model, that exact row replaces the flat control statement;
-a present empty row means no controls. Pickers submit the raw `modelId` plus
-one `controlValues` entry for each selected rendered control and discard stale
-control selections when the model changes.
+Every pre-launch surface reads the selected target's `HarnessLaunchOptionsResponse` and may only decorate exact keys. It must not import static executable membership, seed missing values, filter unknown IDs, or apply a first-model fallback. When the response carries a `modelControls` row for the selected model, that exact row replaces the flat control statement; a present empty row means no controls. Pickers submit the raw `modelId` plus one `controlValues` entry for each selected rendered control and discard stale control selections when the model changes.
 
-Once a session exists, all model/control rendering and mutation reads that
-session's `SessionLiveConfigSnapshot` only. Target launch options and catalog
-state may not add to, remove from, or invalidate active-session choices.
-Mobile keeps native navigation, native styling, and React Native UI while
-sharing only concrete ProductClient domain modules.
+Once a session exists, all model/control rendering and mutation reads that session's `SessionLiveConfigSnapshot` only. Target launch options and catalog state may not add to, remove from, or invalidate active-session choices. Mobile keeps native navigation, native styling, and React Native UI while sharing only concrete ProductClient domain modules.
 
 ## Goal
 
-The frontend is organized into distinct folders and subfolders for UI, state,
-long-lived client state, access, reusable product logic, workflows, providers,
-and shared packages.
+The frontend is organized into distinct folders and subfolders for UI, state, long-lived client state, access, reusable product logic, workflows, providers, and shared packages.
 
 The explicit goals are:
 
@@ -43,21 +28,16 @@ The explicit goals are:
 - make complicated product work legible, decomposed, and reviewable
 - make it easy to build broadly without re-learning the app structure per app
 
-A file path should tell a developer what kind of code is allowed there before
-they open the file. If understanding a feature requires following imports
-through unrelated layers, the structure is wrong.
+A file path should tell a developer what kind of code is allowed there before they open the file. If understanding a feature requires following imports through unrelated layers, the structure is wrong.
 
 ## Target Shape
 
-The layered product tree is relative to ProductClient or a native app source
-root. Desktop and Web are thin hosts and keep only bootstrap plus their genuine
-native/browser adapters:
+The layered product tree is relative to ProductClient or a native app source root. Desktop and Web are thin hosts and keep only bootstrap plus their genuine native/browser adapters:
 
 - `apps/packages/product-client/src/`
 - `apps/mobile/src/`
 
-ProductClient and Mobile start from this shape and omit folders they do not
-need. A host does not recreate this tree around the shared product.
+ProductClient and Mobile start from this shape and omit folders they do not need. A host does not recreate this tree around the shared product.
 
 ```text
 <app>/src/
@@ -185,8 +165,7 @@ Use the lowest layer that can own the logic cleanly.
 
 ## Read Order
 
-Always start with this file. Then read the focused guide or package doc for the
-layer you are changing:
+Always start with this file. Then read the focused guide or package doc for the layer you are changing:
 
 - [components.md](frontend.md)
 - [hooks.md](frontend.md)
@@ -250,9 +229,7 @@ hooks -> lib/workflows -> lib/domain/lib/infra
 hooks -> stores/providers
 ```
 
-Stores are read by hooks. `lib/**` files do not call hooks or read stores
-directly. Product workflows receive access calls, store setters, navigation,
-telemetry, and cache callbacks through dependency arguments.
+Stores are read by hooks. `lib/**` files do not call hooks or read stores directly. Product workflows receive access calls, store setters, navigation, telemetry, and cache callbacks through dependency arguments.
 
 Shared package dependency direction:
 
@@ -272,31 +249,15 @@ product-client connected layers
   -> product-client/src/primitives
 ```
 
-ProductClient's `domain/**` subtree is pure. It does not import React, DOM,
-React Native, SDK clients, access helpers, stores, query clients, primitives, or
-higher ProductClient layers. ProductClient's connected tier owns both
-presentational DOM UI and connected behavior, but Cloud SDK React hooks belong
-under `hooks/access/cloud/**`; components and product workflow hooks consume
-those access seams rather than importing query hooks directly. ProductClient
-code imports the nested owner through `#product/domain/<file>`; host and Mobile
-code use the concrete package-internal form above.
+ProductClient's `domain/**` subtree is pure. It does not import React, DOM, React Native, SDK clients, access helpers, stores, query clients, primitives, or higher ProductClient layers. ProductClient's connected tier owns both presentational DOM UI and connected behavior, but Cloud SDK React hooks belong under `hooks/access/cloud/**`; components and product workflow hooks consume those access seams rather than importing query hooks directly. ProductClient code imports the nested owner through `#product/domain/<file>`; host and Mobile code use the concrete package-internal form above.
 
-Within ProductClient, `primitives/**` remains a lower, DOM-safe component
-library. It may import `design`, React, DOM-safe libraries, and other files in
-the same primitives subtree; it must not import `#product/domain/*`, SDK/query
-clients, host code, or any higher ProductClient layer.
+Within ProductClient, `primitives/**` remains a lower, DOM-safe component library. It may import `design`, React, DOM-safe libraries, and other files in the same primitives subtree; it must not import `#product/domain/*`, SDK/query clients, host code, or any higher ProductClient layer.
 
 ## CI-Enforced Repo Shape
 
-Frontend ownership boundaries are enforced by
-`scripts/check_frontend_boundaries.py` in CI. The repo-shape job should enforce
-the ownership rules in this document.
+Frontend ownership boundaries are enforced by `scripts/check_frontend_boundaries.py` in CI. The repo-shape job should enforce the ownership rules in this document.
 
-React Query cache shape is owned by access hooks by default. The only
-product-composition exception is a cache under
-`hooks/<domain>/cache/**`; ordinary workflow, lifecycle, derived, and component
-files should call access/cache callbacks instead of importing `useQueryClient`
-or hand-editing query keys.
+React Query cache shape is owned by access hooks by default. The only product-composition exception is a cache under `hooks/<domain>/cache/**`; ordinary workflow, lifecycle, derived, and component files should call access/cache callbacks instead of importing `useQueryClient` or hand-editing query keys.
 
 ## Change Discipline
 
@@ -350,9 +311,7 @@ Three rules generate the entire structure. Everything else is a consequence.
 
    `lib/**` never calls hooks or reads stores. Packages never import app code.
 
-The corollary that makes placement easy: anything **pure** is reachable by
-`import`; anything **live** (stores, access, effects) must be **handed in** as a
-dependency. That single split decides where most code goes.
+The corollary that makes placement easy: anything **pure** is reachable by `import`; anything **live** (stores, access, effects) must be **handed in** as a dependency. That single split decides where most code goes.
 
 ## The Four Substances
 
@@ -367,8 +326,7 @@ Every file is one of four things. Hooks are the only layer allowed to mix them.
 
 ## State: Place By Source Of Truth
 
-The axis is not "external vs product." Remote data is also product data. The
-question is **who owns the truth**.
+The axis is not "external vs product." Remote data is also product data. The question is **who owns the truth**.
 
 - **A system owns it** (Cloud, AnyHarness, native) -> **remote state** ->
   TanStack Query, reached only through the access layer. Do not mirror it into a
@@ -382,9 +340,7 @@ question is **who owns the truth**.
   - **Provider** (`providers/**`): scoped *dependencies* and subtree boundaries
     (query client, auth, theme, runtime context), not mutable data.
 
-Two boundary laws: derived values never live in a store (use a `derived` hook),
-and persistence never lives in the store file (a `lifecycle` hook owns the
-disk/store bridge - load once, subscribe-and-write, tear down).
+Two boundary laws: derived values never live in a store (use a `derived` hook), and persistence never lives in the store file (a `lifecycle` hook owns the disk/store bridge - load once, subscribe-and-write, tear down).
 
 ## Access: A Small, Fixed Set Of Addresses
 
@@ -396,10 +352,7 @@ Three external systems, two stages each. You never construct a client elsewhere.
 | AnyHarness | `@anyharness/sdk` | `@anyharness/sdk-react`, `hooks/access/anyharness/**` |
 | Tauri | `lib/access/tauri/**` (only place `invoke` is allowed) | `hooks/access/tauri/**` |
 
-Query keys live beside the access hook that owns the resource, never in
-`lib/access` and never in a product hook folder. CI enforces that raw client
-verbs stay under `lib/access/cloud/**` and that `useQueryClient` stays out of
-product hooks.
+Query keys live beside the access hook that owns the resource, never in `lib/access` and never in a product hook folder. CI enforces that raw client verbs stay under `lib/access/cloud/**` and that `useQueryClient` stays out of product hooks.
 
 ## Work: Decide, Sequence, Plumb
 
@@ -411,16 +364,9 @@ Three stages of pure work, none of which touch React.
 | **Workflow** | `lib/workflows/**` | `async (input, deps)` | ordered sequences, branching on fetched data, retries, rollback, recovery |
 | **Infra** | `lib/infra/**` | generic fn | persistence, scheduling, ids, batching, measurement |
 
-The `(input, deps)` contract is the heart of the system. **`input`** is values
-that change per call. **`deps`** is live capabilities handed in: access calls,
-store setters, cache invalidation, navigation, toasts, telemetry, clocks, ids.
-Pure helpers and constants are imported directly, never passed as deps. A fat
-`EverythingDeps` type means the boundary is drawn too wide.
+The `(input, deps)` contract is the heart of the system. **`input`** is values that change per call. **`deps`** is live capabilities handed in: access calls, store setters, cache invalidation, navigation, toasts, telemetry, clocks, ids. Pure helpers and constants are imported directly, never passed as deps. A fat `EverythingDeps` type means the boundary is drawn too wide.
 
-The highest-leverage pattern is the **side-effect planner**: a pure
-`lib/domain` function that decides *what effects should happen* and returns a
-typed plan, executing nothing. The executor lives in a hook. This turns the
-hardest-to-test logic (effect orchestration) into a pure, tested function.
+The highest-leverage pattern is the **side-effect planner**: a pure `lib/domain` function that decides *what effects should happen* and returns a typed plan, executing nothing. The executor lives in a hook. This turns the hardest-to-test logic (effect orchestration) into a pure, tested function.
 
 ### When To Extract
 
@@ -436,8 +382,7 @@ These are two separate decisions, governed by different triggers:
 
 ## Composition: Hook Types
 
-Hooks own React behavior. Each type gathers a fixed set of substances and
-returns a fixed kind of output.
+Hooks own React behavior. Each type gathers a fixed set of substances and returns a fixed kind of output.
 
 | Type | Address | Gathers | Returns | Verb |
 | --- | --- | --- | --- | --- |
@@ -449,10 +394,7 @@ returns a fixed kind of output.
 | cache | `hooks/<domain>/cache/**` | multiple sources | one product-composed cache | compose |
 | facade | `hooks/<domain>/facade/**` | several hooks above | renamed/grouped bundle, no new behavior | bundle |
 
-The one word that separates **derived** from **workflow** is *capabilities* -
-the power to cause effects (toast, navigate, invalidate, mutate). Read-only
-ingredients can only describe state (`derived`). Read + capabilities can also
-cause actions (`workflow`).
+The one word that separates **derived** from **workflow** is *capabilities* - the power to cause effects (toast, navigate, invalidate, mutate). Read-only ingredients can only describe state (`derived`). Read + capabilities can also cause actions (`workflow`).
 
 Two composition recipes cover most work:
 
@@ -461,9 +403,7 @@ Two composition recipes cover most work:
   fallible sequence. The hook gathers deps, the runner sequences, the domain
   function makes the hard branching call.
 
-You cannot fully judge a workflow hook in isolation. The most common smell -
-the same product rule decided in two places - is only visible by following the
-usages. Always ask: is this decision made anywhere else?
+You cannot fully judge a workflow hook in isolation. The most common smell - the same product rule decided in two places - is only visible by following the usages. Always ask: is this decision made anywhere else?
 
 ## Render And Content Layers
 
@@ -491,8 +431,7 @@ usages. Always ask: is this decision made anywhere else?
 
 ## Shared Packages And Nested Owners
 
-One connected app over two nested lower layers plus the Design package. See
-[packages.md](frontend.md) for the authoritative table.
+One connected app over two nested lower layers plus the Design package. See [packages.md](frontend.md) for the authoritative table.
 
 ```text
 product-client/src/
@@ -515,11 +454,7 @@ design/         tokens + CSS; React Native-safe token values
   connected `lib/domain`, and the primary sharing point for Mobile. No React,
   DOM, SDK clients, stores, primitives, or higher ProductClient layers.
 
-Platform matrix: Desktop/Web mount ProductClient and may use concrete domain
-subpaths from host adapters. Mobile uses only `design` React Native tokens, SDK
-packages, and concrete
-`@proliferate/product-client/internal/domain/<file>` modules—never the package
-root or its DOM layers.
+Platform matrix: Desktop/Web mount ProductClient and may use concrete domain subpaths from host adapters. Mobile uses only `design` React Native tokens, SDK packages, and concrete `@proliferate/product-client/internal/domain/<file>` modules—never the package root or its DOM layers.
 
 ## The Placement Algorithm
 
@@ -549,9 +484,7 @@ Most bugs map to one concept. Reach for it before reading more code.
 
 ## What To Grok First
 
-The structure is essentially **React + TanStack Query + Zustand, disciplined by
-TypeScript unions and dependency injection, over a Tauri/SSE substrate**. The
-four forces that carry most organizing and debugging decisions:
+The structure is essentially **React + TanStack Query + Zustand, disciplined by TypeScript unions and dependency injection, over a Tauri/SSE substrate**. The four forces that carry most organizing and debugging decisions:
 
 1. **React render/effect model and reference stability** - dependency arrays,
    `useCallback`/`useMemo`, why object/array literals are new each render.
@@ -562,11 +495,7 @@ four forces that carry most organizing and debugging decisions:
 4. **TypeScript discriminated unions and generics** - the language the planners,
    workflow steps, and `(input, deps)` contracts are written in.
 
-Then: async/concurrency (races, cancellation, `Promise.allSettled`), dependency
-injection and purity, event-driven/streaming patterns, the module/monorepo
-graph, and the product domain vocabulary (sessions, workspaces, runtimes,
-agents, mobility). Grok the four forces and the folder structure stops being
-rules to memorize and becomes the obvious consequence of them.
+Then: async/concurrency (races, cancellation, `Promise.allSettled`), dependency injection and purity, event-driven/streaming patterns, the module/monorepo graph, and the product domain vocabulary (sessions, workspaces, runtimes, agents, mobility). Grok the four forces and the folder structure stops being rules to memorize and becomes the obvious consequence of them.
 
 ---
 
@@ -576,9 +505,7 @@ rules to memorize and becomes the obvious consequence of them.
 
 ## 1. Purpose / Ownership
 
-The frontend is split into distinct folders for UI, state, long-lived client
-state, access, reusable logic, workflows, providers, and shared packages. The
-goals:
+The frontend is split into distinct folders for UI, state, long-lived client state, access, reusable logic, workflows, providers, and shared packages. The goals:
 
 - **Predictable placement** — a file path tells you what kind of code is allowed
   there *before you open it*.
@@ -589,12 +516,7 @@ goals:
   ProductClient and native product roots, with Desktop/Web reduced to thin
   platform hosts.
 
-**Scope:** `apps/desktop/src/**`, `apps/web/src/**`, `apps/mobile/src/**`, and
-`apps/packages/**`. ProductClient and Mobile use the layered folder logic;
-Desktop and Web are thin hosts that keep only genuine platform differences
-(Tauri + local AnyHarness on Desktop and browser adapters on Web). Mobile owns
-native navigation and React Native UI and imports only concrete ProductClient
-domain modules.
+**Scope:** `apps/desktop/src/**`, `apps/web/src/**`, `apps/mobile/src/**`, and `apps/packages/**`. ProductClient and Mobile use the layered folder logic; Desktop and Web are thin hosts that keep only genuine platform differences (Tauri + local AnyHarness on Desktop and browser adapters on Web). Mobile owns native navigation and React Native UI and imports only concrete ProductClient domain modules.
 
 **The three rules that generate everything:**
 
@@ -610,15 +532,13 @@ domain modules.
    ```
    `lib/**` never calls hooks or reads stores. Packages never import app code.
 
-The corollary that decides placement: **pure code is reachable by `import`;
-live code (stores, access, effects) must be handed in as a dependency.**
+The corollary that decides placement: **pure code is reachable by `import`; live code (stores, access, effects) must be handed in as a dependency.**
 
 ---
 
 ## 2. 20k-Foot Detailed View
 
-Every file is one of **four substances**. Hooks are the only layer allowed to
-mix them.
+Every file is one of **four substances**. Hooks are the only layer allowed to mix them.
 
 | Substance | What it is | Lives in |
 | --- | --- | --- |
@@ -642,14 +562,11 @@ The axis is **who owns the truth**, not "external vs product."
   - **Provider** (`providers/**`): scoped *dependencies* and subtree boundaries
     (query client, auth, theme, runtime context), not mutable data.
 
-Two laws: **derived values never live in a store** (use a `derived` hook), and
-**persistence never lives in the store file** (a `lifecycle` hook owns the
-disk↔store bridge).
+Two laws: **derived values never live in a store** (use a `derived` hook), and **persistence never lives in the store file** (a `lifecycle` hook owns the disk↔store bridge).
 
 ### Access — a fixed grid
 
-Three systems × two stages. Construction and React-facing ownership stay in
-the named boundary, even when the two stages cross the host contract.
+Three systems × two stages. Construction and React-facing ownership stay in the named boundary, even when the two stages cross the host contract.
 
 | System | Raw transport / host implementation | React-facing ProductClient owner |
 | --- | --- | --- |
@@ -657,9 +574,7 @@ the named boundary, even when the two stages cross the host contract.
 | AnyHarness | `@anyharness/sdk`, ProductClient `lib/access/anyharness/**`; Desktop supplies local-runtime capability through `DesktopBridge` | `@anyharness/sdk-react`, ProductClient `hooks/access/anyharness/**` |
 | Tauri | Desktop `lib/access/tauri/**` (the only raw `invoke` owner) | ProductClient `hooks/access/tauri/**`, using the typed bridge rather than Tauri imports |
 
-Query keys live beside the access hook that owns the resource — never in
-`lib/access`, never in a product folder. CI enforces raw client verbs stay under
-`lib/access/cloud/**` and `useQueryClient` stays out of product hooks.
+Query keys live beside the access hook that owns the resource — never in `lib/access`, never in a product folder. CI enforces raw client verbs stay under `lib/access/cloud/**` and `useQueryClient` stays out of product hooks.
 
 ### Work — decide / sequence / plumb
 
@@ -669,10 +584,7 @@ Query keys live beside the access hook that owns the resource — never in
 | **Workflow** | `lib/workflows/**` | `async (input, deps)` | ordered sequences, branching on fetched data, retries, rollback, recovery |
 | **Infra** | `lib/infra/**` | generic fn | persistence, scheduling, ids, batching, measurement |
 
-The `(input, deps)` contract: **`input`** = per-call values; **`deps`** = live
-capabilities (access calls, store setters, invalidation, navigation, toasts,
-telemetry, clocks, ids). Pure helpers/constants are imported, never passed as
-deps. A fat `EverythingDeps` means the boundary is wrong.
+The `(input, deps)` contract: **`input`** = per-call values; **`deps`** = live capabilities (access calls, store setters, invalidation, navigation, toasts, telemetry, clocks, ids). Pure helpers/constants are imported, never passed as deps. A fat `EverythingDeps` means the boundary is wrong.
 
 ### Composition — the hook types
 
@@ -686,14 +598,11 @@ deps. A fat `EverythingDeps` means the boundary is wrong.
 | cache | `hooks/<domain>/cache/**` | multiple sources | one product-composed cache |
 | facade | `hooks/<domain>/facade/**` | several hooks above | renamed/grouped bundle (no new behavior) |
 
-The one word separating **derived** from **workflow** is *capabilities* — the
-power to cause effects. Read-only ingredients describe state (derived);
-read + capabilities cause actions (workflow).
+The one word separating **derived** from **workflow** is *capabilities* — the power to cause effects. Read-only ingredients describe state (derived); read + capabilities cause actions (workflow).
 
 ### The folder tree (per product source root)
 
-ProductClient and Mobile use this layered shape. Desktop and Web are thin hosts
-that keep only bootstrap and genuine native/browser adapters.
+ProductClient and Mobile use this layered shape. Desktop and Web are thin hosts that keep only bootstrap and genuine native/browser adapters.
 
 ```text
 <app>/src/
@@ -727,30 +636,19 @@ product-client/src/
 design/         tokens + CSS; react-native token values
 ```
 
-Connected ProductClient code imports pure rules through
-`#product/domain/<file>` and primitives through concrete `#product/primitives/*`
-paths. Desktop and Web mount public ProductClient host entries; host adapters may
-also use concrete `@proliferate/product-client/internal/domain/<file>` modules.
-They retain other explicitly named internal seams required by host assembly and
-authentication; those paths are not Mobile-safe and are not a general internal
-import license.
-Mobile uses only those concrete domain modules plus `design/react-native` and
-SDK packages—never the package root, DOM primitives, components, hooks, stores,
-CSS, or host code.
+Connected ProductClient code imports pure rules through `#product/domain/<file>` and primitives through concrete `#product/primitives/*` paths. Desktop and Web mount public ProductClient host entries; host adapters may also use concrete `@proliferate/product-client/internal/domain/<file>` modules. They retain other explicitly named internal seams required by host assembly and authentication; those paths are not Mobile-safe and are not a general internal import license. Mobile uses only those concrete domain modules plus `design/react-native` and SDK packages—never the package root, DOM primitives, components, hooks, stores, CSS, or host code.
 
 ---
 
 ## 3. Core Workflows
 
-**Recipe A — show + do (derived + workflow behind a facade).** A screen that
-must both display and act:
+**Recipe A — show + do (derived + workflow behind a facade).** A screen that must both display and act:
 ```text
 facade hook
   ├─ derived hook   → reads stores/query → returns view state   (no writes)
   └─ workflow hook  → gathers capabilities → returns callbacks  (no view logic)
 ```
-A derived hook must not return mutating callbacks; if the component needs both,
-compose a derived + workflow hook behind a facade.
+A derived hook must not return mutating callbacks; if the component needs both, compose a derived + workflow hook behind a facade.
 
 **Recipe B — fallible sequence (workflow hook → `lib/workflows` → `lib/domain`).**
 ```text
@@ -759,18 +657,11 @@ workflow hook        gathers React mutations/stores/capabilities into `deps`,
   └─ lib/workflows fn  runs the ordered sequence using injected deps
        └─ lib/domain fn  makes the hard branching decision, pure + tested
 ```
-Extract to `lib/workflows` only when the sequence has ordering invariants,
-branching on fetched data, rollback, retries, recovery, or a real test boundary.
-Otherwise keep the callback inline in the workflow hook.
+Extract to `lib/workflows` only when the sequence has ordering invariants, branching on fetched data, rollback, retries, recovery, or a real test boundary. Otherwise keep the callback inline in the workflow hook.
 
-**The side-effect planner.** A pure `lib/domain` function that *decides what
-effects should happen* and returns a typed plan, executing nothing. The executor
-lives in a hook. Turns the hardest-to-test logic (effect orchestration) into a
-pure, tested function.
+**The side-effect planner.** A pure `lib/domain` function that *decides what effects should happen* and returns a typed plan, executing nothing. The executor lives in a hook. Turns the hardest-to-test logic (effect orchestration) into a pure, tested function.
 
-**Persistence.** The store holds the shape + setters + `hydrate`. A `lifecycle`
-hook owns the disk↔store bridge: load once → subscribe-and-write → tear down.
-Never put disk I/O or subscriptions in the store file.
+**Persistence.** The store holds the shape + setters + `hydrate`. A `lifecycle` hook owns the disk↔store bridge: load once → subscribe-and-write → tear down. Never put disk I/O or subscriptions in the store file.
 
 **The placement algorithm — three questions in order:**
 1. What substance is this? (state / access / work / render / content)
@@ -909,11 +800,7 @@ Never put disk I/O or subscriptions in the store file.
 
 ## The Compression
 
-**Three questions place any file:** what substance · who owns the truth + who
-needs it · lowest layer that can own it. **Access transports, stores remember,
-domain decides, workflows sequence, infra plumbs, components render** — and hooks
-are the *only* place those mix. Pure code is imported; live code is injected.
-That single split, plus one-way dependencies, is the whole architecture.
+**Three questions place any file:** what substance · who owns the truth + who needs it · lowest layer that can own it. **Access transports, stores remember, domain decides, workflows sequence, infra plumbs, components render** — and hooks are the *only* place those mix. Pure code is imported; live code is injected. That single split, plus one-way dependencies, is the whole architecture.
 
 ---
 
@@ -921,9 +808,7 @@ That single split, plus one-way dependencies, is the whole architecture.
 
 Scope: `apps/packages/{design,product-client}/**`
 
-**Packages are the shared product tier, not a second frontend taxonomy.** Most
-are 1-1 with an app-local layer. `product-client` is the deliberate exception:
-it is the connected Desktop/Web application shared by two thin hosts.
+**Packages are the shared product tier, not a second frontend taxonomy.** Most are 1-1 with an app-local layer. `product-client` is the deliberate exception: it is the connected Desktop/Web application shared by two thin hosts.
 
 | Package | = the shared tier of |
 |---|---|
@@ -943,9 +828,7 @@ Everything else derives from these:
    `design/react-native` and SDK packages. It must never import ProductClient's
    root, another internal subtree, or its DOM primitives.
 
-ProductClient owns shared Desktop/Web components alongside routes, stores,
-hooks, and Cloud/AnyHarness wiring, while raw host implementation such as Tauri,
-browser auth transport, and vendor bootstrap stays in the thin hosts.
+ProductClient owns shared Desktop/Web components alongside routes, stores, hooks, and Cloud/AnyHarness wiring, while raw host implementation such as Tauri, browser auth transport, and vendor bootstrap stays in the thin hosts.
 
 ## Package map
 
@@ -985,9 +868,7 @@ product-client/primitives -> design + React/DOM-safe libraries
 product-client/domain     -> contract types + exact pure runtime helpers below
 ```
 
-Mobile: `design/react-native` + SDK packages + concrete
-`@proliferate/product-client/internal/domain/<file>` imports only. **Never** the
-ProductClient root or another internal subtree.
+Mobile: `design/react-native` + SDK packages + concrete `@proliferate/product-client/internal/domain/<file>` imports only. **Never** the ProductClient root or another internal subtree.
 
 ## Per package
 
@@ -1002,8 +883,7 @@ Must not hold product copy, product status colors, route concepts, or component 
 
 ### ProductClient `primitives/**`
 
-The **single DOM primitive system** for the shared Desktop/Web product. It is a
-nested lower layer inside ProductClient, not a second package.
+The **single DOM primitive system** for the shared Desktop/Web product. It is a nested lower layer inside ProductClient, not a second package.
 
 ```text
 product-client/src/primitives/*.tsx
@@ -1033,70 +913,31 @@ Rules:
 - Callsite classes may handle layout/spacing; the primitive owns color, border, radius, typography, focus, hover, disabled, and loading behavior.
 - Mobile has a separate **native** component layer and does not import DOM primitives.
 
-May import `design`, React, DOM-safe libraries, and files that resolve inside
-`src/primitives/**`. Must not escape through relative, `#product/*`, or
-internal ProductClient subpaths, or import `#product/domain/*`, Cloud/AnyHarness
-SDKs, React Query, hooks, stores, host/Tauri code, app aliases, or React Native.
-Patterns may depend on sibling primitive owners inside the same logical
-subtree.
+May import `design`, React, DOM-safe libraries, and files that resolve inside `src/primitives/**`. Must not escape through relative, `#product/*`, or internal ProductClient subpaths, or import `#product/domain/*`, Cloud/AnyHarness SDKs, React Query, hooks, stores, host/Tauri code, app aliases, or React Native. Patterns may depend on sibling primitive owners inside the same logical subtree.
 
 ### ProductClient `domain/**`
-The cross-client tier of `lib/domain` — same purity and shape (validation,
-vocabulary, projections, view models, **pure planners**), promoted for reuse by
-more than one client.
+The cross-client tier of `lib/domain` — same purity and shape (validation, vocabulary, projections, view models, **pure planners**), promoted for reuse by more than one client.
 
 ```text
 product-client/src/domain/<domain>/**
 ```
 
-This is **Mobile's primary sharing point**: if Mobile and Desktop/Web need the
-same behavior, share the rule here and render it separately in native and DOM
-UI. ProductClient-internal callers use `#product/domain/<file>`. Desktop, Web,
-and Mobile use the concrete package subpath
-`@proliferate/product-client/internal/domain/<file>`; no client may import a
-domain barrel. The subtree may import `@proliferate/cloud-sdk` as contract types
-only. From `@anyharness/sdk` it may import contract types plus exactly four pure
-runtime helpers: `createTranscriptState`, `deriveCanonicalPlan`,
-`parseToolBackgroundWork`, and `reduceEvents`. Every other SDK runtime value or
-client is forbidden, as are React, DOM/RN components, app code, stores, query
-clients, access helpers, primitives, and higher ProductClient layers. *Promote
-when:* ≥2 clients need the same decision or view model.
+This is **Mobile's primary sharing point**: if Mobile and Desktop/Web need the same behavior, share the rule here and render it separately in native and DOM UI. ProductClient-internal callers use `#product/domain/<file>`. Desktop, Web, and Mobile use the concrete package subpath `@proliferate/product-client/internal/domain/<file>`; no client may import a domain barrel. The subtree may import `@proliferate/cloud-sdk` as contract types only. From `@anyharness/sdk` it may import contract types plus exactly four pure runtime helpers: `createTranscriptState`, `deriveCanonicalPlan`, `parseToolBackgroundWork`, and `reduceEvents`. Every other SDK runtime value or client is forbidden, as are React, DOM/RN components, app code, stores, query clients, access helpers, primitives, and higher ProductClient layers. *Promote when:* ≥2 clients need the same decision or view model.
 
 ### `product-client`
-The shared connected Desktop/Web application, per
-[`../codebase/systems/product/clients/web-desktop-unification/README.md`](../systems/desktop-host/web-desktop-unification.md).
-Desktop is the baseline; Desktop and Web are thin hosts that each construct
-one typed `ProductHost` and mount the same product through `ProductHostProvider`.
-Like the other shared packages, it builds to `dist` and is consumed through
-`dist` export-map subpaths.
+The shared connected Desktop/Web application, per [`../codebase/systems/product/clients/web-desktop-unification/README.md`](../systems/desktop-host/web-desktop-unification.md). Desktop is the baseline; Desktop and Web are thin hosts that each construct one typed `ProductHost` and mount the same product through `ProductHostProvider`. Like the other shared packages, it builds to `dist` and is consumed through `dist` export-map subpaths.
 
 ```text
 product-client/src/host/**   # ProductHost + DesktopBridge types, ProductHostProvider
 ```
 
-It owns shared Desktop/Web product presentation and may depend in the correct
-direction on `#product/domain/*`, `design`, and the Cloud/AnyHarness SDKs.
-Connected surfaces use one ownership grid: components render, access hooks own
-SDK React/query state, workflow hooks sequence actions, and `lib/domain` owns
-pure projections.
+It owns shared Desktop/Web product presentation and may depend in the correct direction on `#product/domain/*`, `design`, and the Cloud/AnyHarness SDKs. Connected surfaces use one ownership grid: components render, access hooks own SDK React/query state, workflow hooks sequence actions, and `lib/domain` owns pure projections.
 
-Each thin host owns the infrastructure instances that mount the product: its
-React root, router transport, Query client, Cloud-client construction/provider,
-and `ProductHostProvider`. ProductClient owns product providers, routes, stores,
-lifecycles, and Cloud/AnyHarness product composition. Its build and host builds
-prove dynamic imports, generated inputs, CSS, fonts, assets, and both hosts.
+Each thin host owns the infrastructure instances that mount the product: its React root, router transport, Query client, Cloud-client construction/provider, and `ProductHostProvider`. ProductClient owns product providers, routes, stores, lifecycles, and Cloud/AnyHarness product composition. Its build and host builds prove dynamic imports, generated inputs, CSS, fonts, assets, and both hosts.
 
-It must **never** import either host (`apps/desktop/**`, `apps/web/**`), any
-`@tauri-apps/**` package, raw Tauri `invoke`, or Desktop-relative `@/` aliases;
-shared product code reaches native capability only through the optional
-`host.desktop` bridge. Mobile stays outside ProductClient's connected/DOM tier,
-but depends on the package for concrete `internal/domain/<file>` modules only.
+It must **never** import either host (`apps/desktop/**`, `apps/web/**`), any `@tauri-apps/**` package, raw Tauri `invoke`, or Desktop-relative `@/` aliases; shared product code reaches native capability only through the optional `host.desktop` bridge. Mobile stays outside ProductClient's connected/DOM tier, but depends on the package for concrete `internal/domain/<file>` modules only.
 
-Desktop and Web mount ProductClient through public host entries. Their existing
-host assembly and authentication adapters also retain explicitly named
-`internal/*` seams; this consolidation does not narrow or generalize those
-paths. Mobile has no such exception: its only ProductClient source imports are
-concrete `internal/domain/<file>` modules.
+Desktop and Web mount ProductClient through public host entries. Their existing host assembly and authentication adapters also retain explicitly named `internal/*` seams; this consolidation does not narrow or generalize those paths. Mobile has no such exception: its only ProductClient source imports are concrete `internal/domain/<file>` modules.
 
 ## Package rules
 
@@ -1113,8 +954,7 @@ concrete `internal/domain/<file>` modules.
 
 # Frontend Components
 
-Components render UI. Hooks own React behavior, `lib/**` owns reusable logic,
-and access layers own external systems.
+Components render UI. Hooks own React behavior, `lib/**` owns reusable logic, and access layers own external systems.
 
 This file owns the behavioral rules (what a component may do). The visual-vocabulary rules — the five jobs of UI code, the tier placement algorithm (primitives vs patterns vs domain patterns vs surfaces), area kits, the rule of two for promoting shapes into the library, and the UI-conformance review checklist — live in [DESIGN_SYSTEM.md § Component Library](../DESIGN_SYSTEM.md#component-library). Read that section before creating any component that renders something new.
 
@@ -1148,9 +988,7 @@ Organize app product components by domain, surface, then role:
 components/<domain>/<surface>/<role>/<Component>.tsx
 ```
 
-Use fewer levels only when the domain is small. Domain answers "what product
-area owns this?" Surface answers "where does this render?" Role answers "what
-part of the surface is this?"
+Use fewer levels only when the domain is small. Domain answers "what product area owns this?" Surface answers "where does this render?" Role answers "what part of the surface is this?"
 
 Rules:
 
@@ -1171,16 +1009,11 @@ Rules:
 
 ## Shared UI
 
-`apps/packages/product-client/src/primitives/**` is the only DOM primitive
-layer.
+`apps/packages/product-client/src/primitives/**` is the only DOM primitive layer.
 
 Hard invariant: do not define DOM primitive components anywhere else.
 
-A primitive component is any generic reusable control, shell, or low-level UI
-building block: `Button`, `IconButton`, `Input`, `Textarea`, `Label`, `Select`,
-`Checkbox`, `Switch`, `Tabs`, `Menu`, `Popover`, `Tooltip`, `Dialog`, `Modal`,
-`Badge`, `Pill`, `Separator`, `ScrollArea`, layout shell, or a differently
-named component that wraps/restyles the same raw DOM control.
+A primitive component is any generic reusable control, shell, or low-level UI building block: `Button`, `IconButton`, `Input`, `Textarea`, `Label`, `Select`, `Checkbox`, `Switch`, `Tabs`, `Menu`, `Popover`, `Tooltip`, `Dialog`, `Modal`, `Badge`, `Pill`, `Separator`, `ScrollArea`, layout shell, or a differently named component that wraps/restyles the same raw DOM control.
 
 New primitive definitions are forbidden in:
 
@@ -1188,11 +1021,7 @@ New primitive definitions are forbidden in:
 - `apps/web/src/**`
 - `apps/packages/product-client/src/**` outside `primitives/**`
 
-Primitive definitions outside
-`apps/packages/product-client/src/primitives/**` violate this standard. Do
-not add them, copy them, or create local variants beside them. Put the
-primitive in ProductClient's primitives subtree, add the needed variant/prop
-there, and update callsites to import it.
+Primitive definitions outside `apps/packages/product-client/src/primitives/**` violate this standard. Do not add them, copy them, or create local variants beside them. Put the primitive in ProductClient's primitives subtree, add the needed variant/prop there, and update callsites to import it.
 
 ### `apps/packages/product-client/src/primitives`
 
@@ -1243,10 +1072,7 @@ there, and update callsites to import it.
 - Must not import the ProductClient root, another internal subtree, or any DOM
   ProductClient component.
 
-Within ProductClient, use concrete subpaths such as
-`#product/primitives/Button` or
-`#product/components/settings/panes/account/AccountSettingsPane`; do not add
-barrels.
+Within ProductClient, use concrete subpaths such as `#product/primitives/Button` or `#product/components/settings/panes/account/AccountSettingsPane`; do not add barrels.
 
 ---
 
@@ -1256,9 +1082,7 @@ Use the smallest state owner that can solve the problem.
 
 ## Local State
 
-Use component state for local presentation state that only one subtree needs:
-menus, hover, temporary input, local measurement, drag state, and one-off
-visibility toggles.
+Use component state for local presentation state that only one subtree needs: menus, hover, temporary input, local measurement, drag state, and one-off visibility toggles.
 
 Lift state only when another component needs to read or write the same state.
 
@@ -1313,13 +1137,9 @@ stores/<domain>/<concern>-store.ts
 hooks/<domain>/lifecycle/use-<concern>-lifecycle.ts
 ```
 
-The lifecycle hook owns loading, hydration, subscriptions, writes, and teardown.
-The store may expose explicit hydration metadata such as `_hydrated` or
-`_persistedMetadata`, but UI code should use normal user-facing setters.
+The lifecycle hook owns loading, hydration, subscriptions, writes, and teardown. The store may expose explicit hydration metadata such as `_hydrated` or `_persistedMetadata`, but UI code should use normal user-facing setters.
 
-Keep read normalization and write eligibility separate. A loaded value may
-normalize to `null` without meaning live transient state should overwrite the
-last persisted stable value.
+Keep read normalization and write eligibility separate. A loaded value may normalize to `null` without meaning live transient state should overwrite the last persisted stable value.
 
 ## Store Facades
 
@@ -1339,13 +1159,11 @@ Not allowed:
 - timers, streams, subscriptions, or wait loops
 - raw client construction
 
-If a facade coordinates external work or product sequencing, move that logic to
-a workflow hook or `lib/workflows/**`.
+If a facade coordinates external work or product sequencing, move that logic to a workflow hook or `lib/workflows/**`.
 
 ## Remote State
 
-TanStack Query owns authoritative remote state from Cloud, AnyHarness, and
-other external systems.
+TanStack Query owns authoritative remote state from Cloud, AnyHarness, and other external systems.
 
 ```text
 hooks/access/<system>/**       # app-owned query/mutation hooks
@@ -1375,16 +1193,13 @@ providers/<ProviderName>.tsx
 providers/<domain>/<ProviderName>.tsx
 ```
 
-Use providers for query clients, auth, telemetry, theme, runtime context, and
-subtree-specific services. Do not use providers as a general mutable state
-store.
+Use providers for query clients, auth, telemetry, theme, runtime context, and subtree-specific services. Do not use providers as a general mutable state store.
 
 Provider values that are objects or callback bundles should be stable.
 
 ## Derived State
 
-Do not store derived values in Zustand. Use component expressions for trivial
-derived state and `hooks/<domain>/derived/**` for non-trivial composition.
+Do not store derived values in Zustand. Use component expressions for trivial derived state and `hooks/<domain>/derived/**` for non-trivial composition.
 
 Avoid inline fallback defaults in query destructuring:
 
@@ -1393,8 +1208,7 @@ const EMPTY_ITEMS: Item[] = [];
 const { data: items = EMPTY_ITEMS } = useItems();
 ```
 
-Inline object/array defaults create new references while loading and break
-`useMemo`, `React.memo`, and shallow comparisons.
+Inline object/array defaults create new references while loading and break `useMemo`, `React.memo`, and shallow comparisons.
 
 ---
 
@@ -1609,10 +1423,7 @@ lib/
 ## Per folder
 
 ### `lib/domain/**`
-Pure product decisions and models for **one app or the connected Desktop/Web
-client**. Keep them local first; promote a rule to
-`apps/packages/product-client/src/domain/**` when Mobile and another client need
-the same decision or view model.
+Pure product decisions and models for **one app or the connected Desktop/Web client**. Keep them local first; promote a rule to `apps/packages/product-client/src/domain/**` when Mobile and another client need the same decision or view model.
 
 **Owns:** validation/normalization · status labels, tones, icons, display metadata · workspace/session/chat projection (view) models · pure reducers · **pure side-effect planners**.
 
@@ -1695,8 +1506,7 @@ Generic technical machinery with **no product vocabulary and no vendor**.
 
 # Frontend Config
 
-`config/**` is for real static configuration: constants, limits, option sets,
-route ids, default ids, ordering, and runtime-independent knobs.
+`config/**` is for real static configuration: constants, limits, option sets, route ids, default ids, ordering, and runtime-independent knobs.
 
 Good examples:
 
@@ -1717,9 +1527,7 @@ config/runtime.ts
 config/shortcuts.ts
 ```
 
-Keep config values static. If a value depends on runtime state, user settings,
-remote data, or a selected workspace/session, it belongs in a hook, store,
-domain helper, or access layer instead.
+Keep config values static. If a value depends on runtime state, user settings, remote data, or a selected workspace/session, it belongs in a hook, store, domain helper, or access layer instead.
 
 ---
 
@@ -1735,9 +1543,7 @@ Examples:
 - onboarding text
 - user-facing prompt templates
 
-Prefer complete copy variants over tiny string shards. It is okay for copy to
-be conditional, but the condition should usually live in domain/presentation
-logic rather than in a component.
+Prefer complete copy variants over tiny string shards. It is okay for copy to be conditional, but the condition should usually live in domain/presentation logic rather than in a component.
 
 Target shape:
 
@@ -1747,20 +1553,13 @@ copy/cloud/cloud-status-copy.ts
 copy/plans/plan-prompts.ts
 ```
 
-Copy files should not import React, stores, query clients, access helpers, or
-platform APIs. They may export plain strings, string factories, and typed copy
-maps when the conditions are simple and already decided by the caller.
+Copy files should not import React, stores, query clients, access helpers, or platform APIs. They may export plain strings, string factories, and typed copy maps when the conditions are simple and already decided by the caller.
 
 ## Presentation Mappings
 
-Presentation mappings convert product state to display metadata: labels, tones,
-icons, descriptions, ordering, and visibility flags.
+Presentation mappings convert product state to display metadata: labels, tones, icons, descriptions, ordering, and visibility flags.
 
-Put reusable mappings in `lib/domain/<domain>/<subdomain>/presentation.ts`.
-Move them to `apps/packages/product-client/src/domain/<domain>/**` when the same
-mapping is shared with Mobile. Desktop/Web-only mappings remain in connected
-ProductClient `lib/domain/**`. Keep them component-local only when they are
-purely visual and not reused.
+Put reusable mappings in `lib/domain/<domain>/<subdomain>/presentation.ts`. Move them to `apps/packages/product-client/src/domain/<domain>/**` when the same mapping is shared with Mobile. Desktop/Web-only mappings remain in connected ProductClient `lib/domain/**`. Keep them component-local only when they are purely visual and not reused.
 
 Examples:
 
@@ -1782,11 +1581,7 @@ Scope:
 - shared styling under `apps/packages/design/**` and
   `apps/packages/product-client/**`
 
-This file covers styling-only rules. Read
-[README.md](../README.md) for structure, ownership, and data-flow guidance.
-ProductClient's `src/domain/**` subtree is included in the package path above
-but is headless: it imports no CSS, Tailwind vocabulary, Design package, DOM
-primitive, or visual component.
+This file covers styling-only rules. Read [README.md](../README.md) for structure, ownership, and data-flow guidance. ProductClient's `src/domain/**` subtree is included in the package path above but is headless: it imports no CSS, Tailwind vocabulary, Design package, DOM primitive, or visual component.
 
 For which layer may style what — the five jobs of UI code (paint/anatomy/state/layout/behavior) and the component placement algorithm — see [DESIGN_SYSTEM.md § Component Library](../DESIGN_SYSTEM.md#component-library).
 
@@ -1802,8 +1597,7 @@ Always use semantic theme tokens such as:
 - `bg-success`
 - `bg-destructive`
 
-If a new color meaning is truly needed, add a semantic token and update all
-supported themes instead of dropping palette classes into a component.
+If a new color meaning is truly needed, add a semantic token and update all supported themes instead of dropping palette classes into a component.
 
 Shared token ownership:
 
@@ -1845,27 +1639,18 @@ Theme decisions belong in tokens, not ad hoc callsite classes.
 
 ## Sidebar Tokens
 
-Components rendered inside the right panel or sidebar background
-(`bg-sidebar-background`) use the shared state tokens for interaction paint and
-sidebar-specific tokens for text:
+Components rendered inside the right panel or sidebar background (`bg-sidebar-background`) use the shared state tokens for interaction paint and sidebar-specific tokens for text:
 
 - `bg-hover` / `hover:bg-hover` for hover and active states, `bg-selected` for
   persistent selection — the same three state roles as everywhere else
 - `text-sidebar-foreground` / `text-sidebar-muted-foreground` for text
 - `border-border` for borders
 
-Do not use `hover:bg-muted` or ad-hoc overlays inside sidebar surfaces — the
-shared state tokens are what keep the shell, sidebar, lists and menus from
-drifting apart.
+Do not use `hover:bg-muted` or ad-hoc overlays inside sidebar surfaces — the shared state tokens are what keep the shell, sidebar, lists and menus from drifting apart.
 
 ## No Partial-Opacity Hover Transitions on Glyphs
 
-Never animate `opacity` between two visible values (e.g. `opacity-75` →
-`hover:opacity-100`) on always-visible text or icons. The opacity animation
-creates a compositing layer that collapses at 1.0, re-rasterizing the glyph's
-anti-aliasing on every hover — which reads as shimmer/jitter even though
-nothing moves. Express the same muted→prominent promotion as a **color**
-change instead:
+Never animate `opacity` between two visible values (e.g. `opacity-75` → `hover:opacity-100`) on always-visible text or icons. The opacity animation creates a compositing layer that collapses at 1.0, re-rasterizing the glyph's anti-aliasing on every hover — which reads as shimmer/jitter even though nothing moves. Express the same muted→prominent promotion as a **color** change instead:
 
 ```tsx
 {/* BAD: shimmer on every hover */}
@@ -1877,15 +1662,11 @@ change instead:
 <span className="text-muted-foreground/75 transition-colors group-hover:text-muted-foreground" />
 ```
 
-`text-current/75` (a color-mix on currentColor) preserves inheritance so
-tinted rows (`text-destructive`) still color their glyphs. This rule is only
-about *transitions between two visible states* — the 0→100 hover-reveal
-pattern below is fine because the element starts invisible.
+`text-current/75` (a color-mix on currentColor) preserves inheritance so tinted rows (`text-destructive`) still color their glyphs. This rule is only about *transitions between two visible states* — the 0→100 hover-reveal pattern below is fine because the element starts invisible.
 
 ## Hover Reveal Pattern
 
-Use `group` + `opacity-0 group-hover:opacity-100` for actions that should
-appear on hover. Name the group when nesting is possible:
+Use `group` + `opacity-0 group-hover:opacity-100` for actions that should appear on hover. Name the group when nesting is possible:
 
 ```tsx
 <div className="group/file-diff ...">
@@ -1896,17 +1677,11 @@ appear on hover. Name the group when nesting is possible:
 </div>
 ```
 
-Use `transition-opacity duration-200` for smooth reveal. Keep the always-
-visible element (like a chevron or status indicator) outside the hidden
-container.
+Use `transition-opacity duration-200` for smooth reveal. Keep the always- visible element (like a chevron or status indicator) outside the hidden container.
 
 ## Card Surfaces
 
-Reach for the `Card` pattern
-(`#product/primitives/patterns/Card`) before hand-rolling a card-like
-container (diff cards, file entries). It owns the whole recipe below.
-The recipe is documented here because it is what `Card` paints, not as a
-licence to re-assemble it.
+Reach for the `Card` pattern (`#product/primitives/patterns/Card`) before hand-rolling a card-like container (diff cards, file entries). It owns the whole recipe below. The recipe is documented here because it is what `Card` paints, not as a licence to re-assemble it.
 
 - Background: `bg-surface-elevated-secondary` for a subtle tint against
   any surface. This is the token form of the theme-stable card tint —
@@ -1932,13 +1707,11 @@ licence to re-assemble it.
   sticky header inside a box that never scrolls.
 - Spacing between cards: `gap-2`, owned by the container.
 
-Do not use `bg-hover/30` or similar opacity-based backgrounds that
-shift meaning across themes.
+Do not use `bg-hover/30` or similar opacity-based backgrounds that shift meaning across themes.
 
 ## RTL Truncation for File Paths
 
-Long file paths should truncate from the left (showing the filename end).
-Use the RTL direction trick:
+Long file paths should truncate from the left (showing the filename end). Use the RTL direction trick:
 
 ```tsx
 <span className="min-w-0 truncate text-start [direction:rtl]" title={fullPath}>
@@ -1948,8 +1721,7 @@ Use the RTL direction trick:
 </span>
 ```
 
-The outer span truncates from the left via `[direction:rtl]`. The inner span
-restores left-to-right rendering for the actual text.
+The outer span truncates from the left via `[direction:rtl]`. The inner span restores left-to-right rendering for the actual text.
 
 ## Syntax Highlighting
 
@@ -1962,14 +1734,11 @@ Use Shiki for syntax-highlighted code outside of the Monaco editor:
 - Use `highlightCode()` for full HTML blocks (code panels, previews)
 - Hooks own the async Shiki call; components render the result
 
-The `proliferate-dark` and `proliferate-light` Shiki themes live in
-`highlighting.ts`. When adding new token scopes, update both themes.
+The `proliferate-dark` and `proliferate-light` Shiki themes live in `highlighting.ts`. When adding new token scopes, update both themes.
 
 ## Monaco Editor
 
-Use the custom `proliferate-dark` / `proliferate-light` Monaco themes defined
-in `lib/infra/monaco-theme.ts`. Register both in `beforeMount` and select
-based on `useResolvedMode()`.
+Use the custom `proliferate-dark` / `proliferate-light` Monaco themes defined in `lib/infra/monaco-theme.ts`. Register both in `beforeMount` and select based on `useResolvedMode()`.
 
 Key options to preserve:
 - `useShadows: false` on scrollbar (no scroll shadow)
@@ -1986,16 +1755,11 @@ All themes define git-specific tokens:
   backgrounds
 - Border and highlight variants at different opacity levels
 
-These are defined per-theme in `index.css`. Do not hardcode green/red — use
-the tokens.
+These are defined per-theme in `index.css`. Do not hardcode green/red — use the tokens.
 
 ## UI Primitives First
 
-In DOM package code,
-`apps/packages/product-client/src/primitives/**` owns the primitive visual
-contract. Do not define primitive components outside that subtree.
-The sibling `product-client/src/domain/**` subtree is not a styling or primitive
-owner and cannot depend on this DOM layer.
+In DOM package code, `apps/packages/product-client/src/primitives/**` owns the primitive visual contract. Do not define primitive components outside that subtree. The sibling `product-client/src/domain/**` subtree is not a styling or primitive owner and cannot depend on this DOM layer.
 
 Forbidden outside `apps/packages/product-client/src/primitives/**`:
 
@@ -2011,17 +1775,11 @@ Forbidden outside `apps/packages/product-client/src/primitives/**`:
 - `<select>`
 - `<textarea>`
 
-If a visual treatment is missing, extend the primitive API or add a dedicated
-primitive in `apps/packages/product-client/src/primitives/**`. Callsite classes
-may handle layout, spacing, and sizing; primitives own color, border, radius,
-typography, focus, hover, disabled, and loading states.
+If a visual treatment is missing, extend the primitive API or add a dedicated primitive in `apps/packages/product-client/src/primitives/**`. Callsite classes may handle layout, spacing, and sizing; primitives own color, border, radius, typography, focus, hover, disabled, and loading states.
 
-When using ProductClient primitives or shared ProductClient components,
-import `@proliferate/design/product.css`;
-that shared entrypoint owns the Tailwind package source scanning.
+When using ProductClient primitives or shared ProductClient components, import `@proliferate/design/product.css`; that shared entrypoint owns the Tailwind package source scanning.
 
-Reusable icons belong in app/package primitive icon modules, not inline inside
-feature components.
+Reusable icons belong in app/package primitive icon modules, not inline inside feature components.
 
 ## Callsite Styling
 
@@ -2032,16 +1790,11 @@ Allowed at callsites:
 - sizing
 - composition
 
-Callsite styling means `className` at the callsite. Prefer utility classes for
-static layout, spacing, sizing, and composition.
+Callsite styling means `className` at the callsite. Prefer utility classes for static layout, spacing, sizing, and composition.
 
-Use inline `style={...}` only when the value is truly dynamic and cannot be
-expressed cleanly with existing utilities or CSS variables. Typical examples
-are runtime-calculated widths, heights, positions, or custom properties passed
-to a class-driven layout.
+Use inline `style={...}` only when the value is truly dynamic and cannot be expressed cleanly with existing utilities or CSS variables. Typical examples are runtime-calculated widths, heights, positions, or custom properties passed to a class-driven layout.
 
-Do not rebuild the product visual language at the callsite with ad hoc
-border/color/typography stacks that should come from the primitive contract.
+Do not rebuild the product visual language at the callsite with ad hoc border/color/typography stacks that should come from the primitive contract.
 
 ## Global CSS
 
@@ -2052,32 +1805,17 @@ Global CSS is for:
 - resets
 - third-party overrides
 
-Component-specific styling belongs with the component or primitive, not in
-`index.css`.
+Component-specific styling belongs with the component or primitive, not in `index.css`.
 
-Shared element resets in `product.css` (e.g. the `a` color/underline reset) must
-live in `@layer base`, never unlayered. Tailwind v4 puts utilities in
-`@layer utilities`, and unlayered CSS beats every layer regardless of
-specificity — an unlayered reset silently strips intentional utility classes
-(link color, underline, the file/provider mention styles) off the matching
-element, which then renders as plain inherited text. A `<button>`-based mention
-escapes an `a` reset and looks fine while the equivalent `<a>` does not, which is
-exactly how this hides.
+Shared element resets in `product.css` (e.g. the `a` color/underline reset) must live in `@layer base`, never unlayered. Tailwind v4 puts utilities in `@layer utilities`, and unlayered CSS beats every layer regardless of specificity — an unlayered reset silently strips intentional utility classes (link color, underline, the file/provider mention styles) off the matching element, which then renders as plain inherited text. A `<button>`-based mention escapes an `a` reset and looks fine while the equivalent `<a>` does not, which is exactly how this hides.
 
-App stylesheets should be import-only where possible. `apps/web/src/index.css`
-imports only `@proliferate/design/product.css`. Desktop imports
-`@proliferate/design/desktop.css` in `apps/desktop/src/main.tsx`; the shared
-product theme rides with the compiled ProductClient package entry, whose
-`index.css` imports `@proliferate/design/product.css`. Mobile uses
-`apps/mobile/src/styles/**` and `@proliferate/design/react-native`, not DOM
-CSS.
+App stylesheets should be import-only where possible. `apps/web/src/index.css` imports only `@proliferate/design/product.css`. Desktop imports `@proliferate/design/desktop.css` in `apps/desktop/src/main.tsx`; the shared product theme rides with the compiled ProductClient package entry, whose `index.css` imports `@proliferate/design/product.css`. Mobile uses `apps/mobile/src/styles/**` and `@proliferate/design/react-native`, not DOM CSS.
 
 ---
 
 # Frontend Telemetry Standards
 
-Use this doc for analytics events, exception capture, anonymous telemetry,
-session replay, and telemetry-related provider and hook ownership.
+Use this doc for analytics events, exception capture, anonymous telemetry, session replay, and telemetry-related provider and hook ownership.
 
 ## Ownership
 
@@ -2251,9 +1989,7 @@ session replay, and telemetry-related provider and hook ownership.
 
 # Frontend Access Boundaries
 
-External systems have one clear access boundary. Components and product hooks
-do not construct clients, call raw endpoint paths, or invoke platform APIs
-directly.
+External systems have one clear access boundary. Components and product hooks do not construct clients, call raw endpoint paths, or invoke platform APIs directly.
 
 ## Shape
 
@@ -2278,11 +2014,7 @@ Common external systems:
 - `browser`
 - `native`
 
-Folder names under `hooks/access/**` describe the external system or cached
-access capability, not the product screen that happens to render the data. A
-capability folder such as `mcp` is allowed when one React-facing access API
-intentionally coordinates more than one external boundary, such as cloud
-connector records plus local OAuth/native setup.
+Folder names under `hooks/access/**` describe the external system or cached access capability, not the product screen that happens to render the data. A capability folder such as `mcp` is allowed when one React-facing access API intentionally coordinates more than one external boundary, such as cloud connector records plus local OAuth/native setup.
 
 Illustrative examples only, not a complete inventory:
 
@@ -2299,8 +2031,7 @@ hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache.ts
 hooks/access/anyharness/sessions/use-workspace-session-cache.ts
 ```
 
-Do not create access folders just to mirror another client. Each owner keeps
-only the systems it actually uses:
+Do not create access folders just to mirror another client. Each owner keeps only the systems it actually uses:
 
 - ProductClient owns connected Desktop/Web `cloud` and `anyharness` hooks. It
   may own `tauri` capability hooks only when they call the typed Desktop bridge
@@ -2312,8 +2043,7 @@ only the systems it actually uses:
 
 ## Query Key Ownership
 
-Query keys are part of the React-facing access contract. They live beside the
-access hook that owns the same remote resource cache.
+Query keys are part of the React-facing access contract. They live beside the access hook that owns the same remote resource cache.
 
 ```text
 hooks/access/<system>/<resource>/query-keys.ts
@@ -2321,38 +2051,24 @@ hooks/access/<system>/<resource>/use-<resource>.ts
 hooks/access/<system>/<resource>/use-<action>-mutation.ts
 ```
 
-Do not put React Query key factories in `lib/access/**`; that layer owns raw
-transport, not React cache identity. Do not define remote-resource query keys
-inside product hook folders such as `hooks/workspaces/**` or
-`hooks/sessions/**`.
+Do not put React Query key factories in `lib/access/**`; that layer owns raw transport, not React cache identity. Do not define remote-resource query keys inside product hook folders such as `hooks/workspaces/**` or `hooks/sessions/**`.
 
-Product hook folders may keep key helpers only for product-composed caches
-that combine multiple sources into one product-owned projection.
+Product hook folders may keep key helpers only for product-composed caches that combine multiple sources into one product-owned projection.
 
 ```text
 hooks/workspaces/cache/workspace-collections-query.ts
 hooks/workspaces/cache/workspace-collections-cache.ts
 ```
 
-Access hooks own one external resource cache. Product cache folders own
-cross-boundary product projections.
+Access hooks own one external resource cache. Product cache folders own cross-boundary product projections.
 
 ## Cloud
 
-`@proliferate/cloud-sdk` owns shared raw Proliferate Cloud API helpers.
-`@proliferate/cloud-sdk-react` owns generic React Query hooks and providers for
-Cloud resources. App code imports reusable SDK helpers directly instead of
-adding app-local re-export wrappers.
+`@proliferate/cloud-sdk` owns shared raw Proliferate Cloud API helpers. `@proliferate/cloud-sdk-react` owns generic React Query hooks and providers for Cloud resources. App code imports reusable SDK helpers directly instead of adding app-local re-export wrappers.
 
-ProductClient `lib/access/cloud/**` owns connected helpers the shared SDK cannot
-know: auth probes and transport contracts, gateway access, owner-context
-headers, health/capability checks, request timing, and connection retry rules.
-Each host retains authenticated client construction, auth/session bootstrap,
-base-url resolution, storage integration, and environment-specific credential
-or vendor adapters.
+ProductClient `lib/access/cloud/**` owns connected helpers the shared SDK cannot know: auth probes and transport contracts, gateway access, owner-context headers, health/capability checks, request timing, and connection retry rules. Each host retains authenticated client construction, auth/session bootstrap, base-url resolution, storage integration, and environment-specific credential or vendor adapters.
 
-ProductClient `hooks/access/cloud/**` owns connected React-facing access that is
-not already generic enough for `@proliferate/cloud-sdk-react`:
+ProductClient `hooks/access/cloud/**` owns connected React-facing access that is not already generic enough for `@proliferate/cloud-sdk-react`:
 
 - query keys
 - `useQuery` and `useMutation`
@@ -2361,27 +2077,15 @@ not already generic enough for `@proliferate/cloud-sdk-react`:
 - request telemetry
 - UI-safe error handling
 
-If a hook wraps a Cloud endpoint with `useQuery` or `useMutation`, it belongs
-under `hooks/access/cloud/**` even when the resource is product-specific.
-Product hooks consume the access hook and derive product state in their own
-domain folder.
+If a hook wraps a Cloud endpoint with `useQuery` or `useMutation`, it belongs under `hooks/access/cloud/**` even when the resource is product-specific. Product hooks consume the access hook and derive product state in their own domain folder.
 
-Do not create ad hoc `openapi-fetch` clients outside the Cloud access layer.
-Do not call raw `client.GET`, `client.POST`, `client.PUT`, or `client.DELETE`
-from product hooks or components.
+Do not create ad hoc `openapi-fetch` clients outside the Cloud access layer. Do not call raw `client.GET`, `client.POST`, `client.PUT`, or `client.DELETE` from product hooks or components.
 
-Connected ProductClient code calls `@proliferate/cloud-sdk-react` only from
-`apps/packages/product-client/src/hooks/access/cloud/**`. Components and
-product workflow hooks consume those access-owned seams. Pure cross-client
-rules under `apps/packages/product-client/src/domain/**` may accept generated or
-SDK contract types as data, but they never import SDK clients, access hooks,
-query clients, providers, or raw transports.
+Connected ProductClient code calls `@proliferate/cloud-sdk-react` only from `apps/packages/product-client/src/hooks/access/cloud/**`. Components and product workflow hooks consume those access-owned seams. Pure cross-client rules under `apps/packages/product-client/src/domain/**` may accept generated or SDK contract types as data, but they never import SDK clients, access hooks, query clients, providers, or raw transports.
 
 ## AnyHarness
 
-Generic AnyHarness React access goes through `@anyharness/sdk-react`.
-Product hooks should not call `getAnyHarnessClient` directly for normal
-resource operations.
+Generic AnyHarness React access goes through `@anyharness/sdk-react`. Product hooks should not call `getAnyHarnessClient` directly for normal resource operations.
 
 Prefer direct SDK React imports for generic resources:
 
@@ -2389,34 +2093,22 @@ Prefer direct SDK React imports for generic resources:
 import { useAnyHarnessRuntimeWorkspaces } from "@anyharness/sdk-react";
 ```
 
-Create a ProductClient AnyHarness access hook only when the connected product
-adds connection/runtime selection, local/cloud bridging, or cache behavior the
-SDK cannot provide. Desktop-specific capability reaches that hook through
-`ProductHost.desktop`; the hook does not import the host.
+Create a ProductClient AnyHarness access hook only when the connected product adds connection/runtime selection, local/cloud bridging, or cache behavior the SDK cannot provide. Desktop-specific capability reaches that hook through `ProductHost.desktop`; the hook does not import the host.
 
-Low-level framework-agnostic primitives, such as streams, transcript reducers,
-and terminal connections, belong in `@anyharness/sdk`.
+Low-level framework-agnostic primitives, such as streams, transcript reducers, and terminal connections, belong in `@anyharness/sdk`.
 
-Desktop-capable AnyHarness access in ProductClient is only for product runtime
-wiring that the generic SDK cannot know:
+Desktop-capable AnyHarness access in ProductClient is only for product runtime wiring that the generic SDK cannot know:
 
 - resolving the selected workspace to the correct runtime target
 - local/cloud runtime connection mapping
 - runtime bootstrap and credentials
 - Desktop-specific compatibility adapters
 
-Do not add a parallel AnyHarness request/controller layer in either host. If the
-operation is a normal AnyHarness resource operation, ProductClient prefers the
-SDK or SDK React hook; Desktop supplies only the raw local-runtime capability
-required by the typed bridge.
+Do not add a parallel AnyHarness request/controller layer in either host. If the operation is a normal AnyHarness resource operation, ProductClient prefers the SDK or SDK React hook; Desktop supplies only the raw local-runtime capability required by the typed bridge.
 
 ## Tauri
 
-Raw Tauri access belongs behind the Desktop host boundary.
-`apps/desktop/src/lib/access/tauri/**` is the only frontend path that should
-import `@tauri-apps/api` or call native `invoke` directly. ProductClient
-`hooks/access/tauri/**` is the React-facing capability boundary and calls the
-typed `DesktopBridge`; it never imports Tauri.
+Raw Tauri access belongs behind the Desktop host boundary. `apps/desktop/src/lib/access/tauri/**` is the only frontend path that should import `@tauri-apps/api` or call native `invoke` directly. ProductClient `hooks/access/tauri/**` is the React-facing capability boundary and calls the typed `DesktopBridge`; it never imports Tauri.
 
 Use wrappers for native capabilities such as:
 
@@ -2427,10 +2119,7 @@ Use wrappers for native capabilities such as:
 - native window operations
 - shell/open-in-editor operations
 
-React-facing Tauri behavior belongs in ProductClient
-`hooks/access/tauri/**` or a product workflow hook that calls the bridge-backed
-wrapper. Raw native implementation stays in Desktop. Components should not
-call raw Tauri APIs directly.
+React-facing Tauri behavior belongs in ProductClient `hooks/access/tauri/**` or a product workflow hook that calls the bridge-backed wrapper. Raw native implementation stays in Desktop. Components should not call raw Tauri APIs directly.
 
 ## Product Usage Pattern
 
@@ -2444,16 +2133,9 @@ Component
     -> lib/workflows function receives access callbacks as dependencies
 ```
 
-App-local or connected-client business rules live in `lib/domain/**` or
-`lib/workflows/**`. Rules shared with Mobile live in
-`apps/packages/product-client/src/domain/**` and remain equally isolated from
-access. Transport details live in access. Rendering lives in components. Plain
-`lib/**` and nested-domain functions do not call React hooks.
+App-local or connected-client business rules live in `lib/domain/**` or `lib/workflows/**`. Rules shared with Mobile live in `apps/packages/product-client/src/domain/**` and remain equally isolated from access. Transport details live in access. Rendering lives in components. Plain `lib/**` and nested-domain functions do not call React hooks.
 
-Access hooks own query keys, cache object shape, invalidation, and
-`setQueryData` for remote resources. Product workflow hooks request refresh or
-update through access-owned callbacks instead of constructing query keys or
-writing cache objects inline.
+Access hooks own query keys, cache object shape, invalidation, and `setQueryData` for remote resources. Product workflow hooks request refresh or update through access-owned callbacks instead of constructing query keys or writing cache objects inline.
 
 ---
 
@@ -2466,24 +2148,13 @@ Scope:
 - `anyharness/sdk/**`
 - `anyharness/sdk-react/**`
 
-Use this document to choose the SDK family and layer that owns a change. The
-Cloud SDK speaks to the Proliferate control plane; the AnyHarness SDK speaks to
-an AnyHarness runtime. Neither SDK owns app-specific orchestration or product
-policy.
+Use this document to choose the SDK family and layer that owns a change. The Cloud SDK speaks to the Proliferate control plane; the AnyHarness SDK speaks to an AnyHarness runtime. Neither SDK owns app-specific orchestration or product policy.
 
 ## Harness launch options
 
-The AnyHarness SDK owns the local target contract and client methods for
-`HarnessLaunchOptionsResponse`, refresh, `LaunchSelection.controlValues`, and
-the full `SessionLiveConfigSnapshot`. `HarnessLaunchOptionsResponse` preserves
-the optional exact `modelControls` rows alongside its flat compatibility
-statement; it does not synthesize missing model rows. SDK React exposes
-query/mutation hooks and keys scoped by runtime, cache scope, and harness.
+The AnyHarness SDK owns the local target contract and client methods for `HarnessLaunchOptionsResponse`, refresh, `LaunchSelection.controlValues`, and the full `SessionLiveConfigSnapshot`. `HarnessLaunchOptionsResponse` preserves the optional exact `modelControls` rows alongside its flat compatibility statement; it does not synthesize missing model rows. SDK React exposes query/mutation hooks and keys scoped by runtime, cache scope, and harness.
 
-The Cloud SDK owns the copied target response and reads it by cloud sandbox ID
-plus harness kind. Cloud React keys include both values. Neither SDK composes,
-seeds, aliases, or filters executable membership; wire types and clients
-preserve exact ordered IDs and unknown values.
+The Cloud SDK owns the copied target response and reads it by cloud sandbox ID plus harness kind. Cloud React keys include both values. Neither SDK composes, seeds, aliases, or filters executable membership; wire types and clients preserve exact ordered IDs and unknown values.
 
 ## 1. File Tree
 
@@ -2557,9 +2228,7 @@ anyharness/
         query-keys.ts
 ```
 
-Each family has a framework-independent core package and a generic React and
-TanStack Query package. Apps and shared product packages compose them; they do
-not move product workflows into either SDK.
+Each family has a framework-independent core package and a generic React and TanStack Query package. Apps and shared product packages compose them; they do not move product workflows into either SDK.
 
 ## 2. Non-Negotiable Rules
 
@@ -2627,8 +2296,7 @@ Package split:
 
 ## 4. Folder Guide
 
-Use these folder notes after the ownership model above has already told you
-which package should own the behavior.
+Use these folder notes after the ownership model above has already told you which package should own the behavior.
 
 - `cloud/sdk/src/client/`: resource-grouped Proliferate control-plane client
   methods; no React or product workflow branching.

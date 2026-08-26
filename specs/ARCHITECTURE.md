@@ -1,10 +1,6 @@
 # Architecture
 
-How the components of Proliferate fit together and why the seams sit where they
-sit. This document is comprehension, not routing — [`AGENTS.md`](../AGENTS.md) says
-WHERE to read; this says how the pieces relate. It is deliberately starved: the
-moment a sentence explains an area's internals, it belongs in that area's doc.
-It changes only when a plane is added or a seam moves.
+How the components of Proliferate fit together and why the seams sit where they sit. This document is comprehension, not routing — [`AGENTS.md`](../AGENTS.md) says WHERE to read; this says how the pieces relate. It is deliberately starved: the moment a sentence explains an area's internals, it belongs in that area's doc. It changes only when a plane is added or a seam moves.
 
 ## The plane map
 
@@ -63,9 +59,7 @@ It changes only when a plane is added or a seam moves.
 - **SDKs** (`anyharness/sdk*`, `cloud/sdk*`) are generated contract consumers;
   the contract owns them, not the reverse.
 
-Behavior is owned by **system specs**, one per system, each with a checked
-code map: every source file belongs to exactly one spec. The index is
-[`specs/README.md`](README.md#system-index).
+Behavior is owned by **system specs**, one per system, each with a checked code map: every source file belongs to exactly one spec. The index is [`specs/README.md`](README.md#system-index).
 
 ## The seams and why they sit there
 
@@ -97,23 +91,11 @@ code map: every source file belongs to exactly one spec. The index is
 
 ## Cross-cutting engineering systems
 
-Testing, observability, alerting, the building loop, and the customer loop are
-systems too, but they own no product state. Each consumes every product
-spec's `Emits` section (the named events and signals a system produces) and
-`Proof` section (the tests that pin it). A product system with an empty
-`Emits` section is invisible in production; the observability spec lists those
-gaps per system.
+Testing, observability, alerting, the building loop, and the customer loop are systems too, but they own no product state. Each consumes every product spec's `Emits` section (the named events and signals a system produces) and `Proof` section (the tests that pin it). A product system with an empty `Emits` section is invisible in production; the observability spec lists those gaps per system.
 
-The one property they all serve is **legibility by session id**: every user
-action, agent turn, gateway call, and failure is one readable story keyed by
-the session it belongs to — readable by a person, and machine-legible (stable
-names, ids, links across Sentry, Grafana, and Honeycomb) for the agents that
-triage and fix from it.
+The one property they all serve is **legibility by session id**: every user action, agent turn, gateway call, and failure is one readable story keyed by the session it belongs to — readable by a person, and machine-legible (stable names, ids, links across Sentry, Grafana, and Honeycomb) for the agents that triage and fix from it.
 
-Their specs live at `specs/engineering/<name>/README.md` —
-`testing`, `observability`, `shipping`, `security`, `customer-loop`.
-Alongside them, [`specs/engineering/testing/standard.md`](engineering/testing/standard.md) and
-[`specs/engineering/observability/standard.md`](engineering/observability/standard.md) are the per-PR law.
+Their specs live at `specs/engineering/<name>/README.md` — `testing`, `observability`, `shipping`, `security`, `customer-loop`. Alongside them, [`specs/engineering/testing/standard.md`](engineering/testing/standard.md) and [`specs/engineering/observability/standard.md`](engineering/observability/standard.md) are the per-PR law.
 
 ## Read order for grokking the repo
 
@@ -126,5 +108,4 @@ Alongside them, [`specs/engineering/testing/standard.md`](engineering/testing/st
 4. [`specs/areas/frontend.md`](areas/frontend.md) — how the clients
    are put together.
 
-Then the depth files beside the owning spec's `README.md` under
-[`specs/systems/`](README.md#system-index), if it has any.
+Then the depth files beside the owning spec's `README.md` under [`specs/systems/`](README.md#system-index), if it has any.

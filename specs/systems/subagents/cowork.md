@@ -1,34 +1,18 @@
 # Cowork Product MCP
 
-Status: authoritative target definition for cowork workspace delegation,
-cowork agents, and cowork MCP cleanup.
+Status: authoritative target definition for cowork workspace delegation, cowork agents, and cowork MCP cleanup.
 
-A cowork agent is a delegated child session running in a managed workspace,
-using the same child-agent lifecycle as subagents plus one extra scope layer
-(the managed cowork workspace). Cowork should not have a second lifecycle
-vocabulary.
+A cowork agent is a delegated child session running in a managed workspace, using the same child-agent lifecycle as subagents plus one extra scope layer (the managed cowork workspace). Cowork should not have a second lifecycle vocabulary.
 
 ## Tool Contract
 
-Workspace tools: `get_cowork_workspace_launch_options`,
-`create_cowork_workspace`, `list_cowork_workspaces`,
-`get_cowork_workspace_status`, `close_cowork_workspace`. Agent tools:
-`get_cowork_agent_launch_options`, `create_cowork_agent`,
-`list_cowork_agents`, `send_cowork_agent_message`,
-`schedule_cowork_agent_wake`, `get_cowork_agent_status`,
-`read_cowork_agent_latest_turns`, `search_cowork_agent_transcript`,
-`read_cowork_agent_events`, `close_cowork_agent`.
+Workspace tools: `get_cowork_workspace_launch_options`, `create_cowork_workspace`, `list_cowork_workspaces`, `get_cowork_workspace_status`, `close_cowork_workspace`. Agent tools: `get_cowork_agent_launch_options`, `create_cowork_agent`, `list_cowork_agents`, `send_cowork_agent_message`, `schedule_cowork_agent_wake`, `get_cowork_agent_status`, `read_cowork_agent_latest_turns`, `search_cowork_agent_transcript`, `read_cowork_agent_events`, `close_cowork_agent`.
 
-There are no top-level `modelId` or `modeId` fields in cowork agent tools.
-Harness-specific launch configuration is carried through `harnessId` +
-`initialConfig`, and applied values come back as `appliedInitialConfig`.
+There are no top-level `modelId` or `modeId` fields in cowork agent tools. Harness-specific launch configuration is carried through `harnessId` + `initialConfig`, and applied values come back as `appliedInitialConfig`.
 
 ## Capability And Auth
 
-Every cowork MCP call is authorized against `workspace_id` +
-`parent_session_id` + `product_mcp_id: cowork`, and requires
-`workspace_delegation_enabled`. Workspace and agent access is checked by the
-cowork domain on every call:
+Every cowork MCP call is authorized against `workspace_id` + `parent_session_id` + `product_mcp_id: cowork`, and requires `workspace_delegation_enabled`. Workspace and agent access is checked by the cowork domain on every call:
 
 - a parent can only manage cowork workspaces it owns
 - a parent can only manage cowork agents linked to its owned cowork workspaces
@@ -47,11 +31,7 @@ cowork domain on every call:
 | `childSessionId` | Runtime session id for the delegated agent. | Internal/debug/details only |
 | `sessionLinkId` | Durable parent-child relationship row id. | Internal/debug/details only |
 
-The normal agent-facing API uses `coworkAgentId`. `codingSessionId` and
-`sessionLinkId` are compatibility aliases for older transcript parsers, SDKs,
-and in-flight agent sessions. New callers should treat those fields as
-compatibility aliases only. All examples and new code should prefer
-`coworkWorkspaceId`/`coworkAgentId` plus `label`.
+The normal agent-facing API uses `coworkAgentId`. `codingSessionId` and `sessionLinkId` are compatibility aliases for older transcript parsers, SDKs, and in-flight agent sessions. New callers should treat those fields as compatibility aliases only. All examples and new code should prefer `coworkWorkspaceId`/`coworkAgentId` plus `label`.
 
 Compatibility rule:
 
@@ -75,8 +55,7 @@ Compatibility response shape:
 - `read_cowork_agent_events` is a debug escape hatch and may return only raw
   event cursors plus compatibility child routing fields
 
-These compatibility fields are not the agent-facing handle. The agent-facing
-handle remains `coworkAgentId`.
+These compatibility fields are not the agent-facing handle. The agent-facing handle remains `coworkAgentId`.
 
 Old concept -> target concept naming:
 
@@ -92,13 +71,6 @@ Old concept -> target concept naming:
 
 ## Close Ordering
 
-Close ordering is intentionally retryable: the runtime closes the child
-session graph first, including any delegated descendants and product close
-hooks, then marks the cowork-agent link closed. If closing the live session
-fails, the active link remains discoverable so a later close call can retry
-rather than orphaning hidden work.
+Close ordering is intentionally retryable: the runtime closes the child session graph first, including any delegated descendants and product close hooks, then marks the cowork-agent link closed. If closing the live session fails, the active link remains discoverable so a later close call can retry rather than orphaning hidden work.
 
-Applies to `close_cowork_agent` (`close_cowork_workspace` is target-only and
-unimplemented today). Closing removes work from the active delegated-work
-context; it is not worktree directory or transcript deletion unless a future
-destructive action explicitly says so.
+Applies to `close_cowork_agent` (`close_cowork_workspace` is target-only and unimplemented today). Closing removes work from the active delegated-work context; it is not worktree directory or transcript deletion unless a future destructive action explicitly says so.

@@ -1,31 +1,14 @@
 # Observability
 
-Status: current for the signal sources, scrubbing law, and the checked-in
-Grafana/Honeycomb artifacts; target for the legibility contract (§5) and the
-cross-linked session story. Grade B — see [Known gaps](#known-gaps).
+Status: current for the signal sources, scrubbing law, and the checked-in Grafana/Honeycomb artifacts; target for the legibility contract (§5) and the cross-linked session story. Grade B — see [Known gaps](#known-gaps).
 
-Read before touching: [`specs/engineering/observability/standard.md`](standard.md)
-(the per-PR decision layer over this spec), [sentry.md](sentry.md) (component
-behavior, closed catalog, privacy), `server/proliferate/integrations/sentry/**`,
-`server/proliferate/middleware/{logging,request_context,request_telemetry}.py`,
-`server/infra/observability/**`, `scripts/ops/grafana-*.mjs`,
-[`specs/areas/observability.md`](../../areas/anyharness.md)
-(span doctrine), and the
-[rust-observability ADR](../../../adrs/2026-08-10-rust-observability.md)
-(diagnostics plane).
+Read before touching: [`specs/engineering/observability/standard.md`](standard.md) (the per-PR decision layer over this spec), [sentry.md](sentry.md) (component behavior, closed catalog, privacy), `server/proliferate/integrations/sentry/**`, `server/proliferate/middleware/{logging,request_context,request_telemetry}.py`, `server/infra/observability/**`, `scripts/ops/grafana-*.mjs`, [`specs/areas/observability.md`](../../areas/anyharness.md) (span doctrine), and the [rust-observability ADR](../../../adrs/2026-08-10-rust-observability.md) (diagnostics plane).
 
-Engineering systems are cross-cutting. This one owns **no product state**: it
-consumes every product and runtime spec's *Emits* section (the signals) and
-*Proof* section (the tests that pin them), and it turns those into one thing —
-a legible account of what happened. A product system whose Emits section is
-empty is invisible in production; §4 lists exactly which ones are.
+Engineering systems are cross-cutting. This one owns **no product state**: it consumes every product and runtime spec's *Emits* section (the signals) and *Proof* section (the tests that pin them), and it turns those into one thing — a legible account of what happened. A product system whose Emits section is empty is invisible in production; §4 lists exactly which ones are.
 
 ## 1. Purpose
 
-Answer, for any session, **what happened end to end** — user action → agent →
-gateways → provider → failure — from one identifier, readable by a person in
-under a minute and by an agent without a person. That is the only outcome;
-everything below serves it.
+Answer, for any session, **what happened end to end** — user action → agent → gateways → provider → failure — from one identifier, readable by a person in under a minute and by an agent without a person. That is the only outcome; everything below serves it.
 
 Two readers, one story:
 
@@ -37,16 +20,11 @@ Two readers, one story:
   join on, and links it can follow. Prose alerts and screenshots are not
   legible to it.
 
-Stack, ruled 2026-08-25: **Sentry** (exceptions, releases, environments,
-fingerprints) + **Grafana** (monitors over CloudWatch logs — the alert
-evaluation source) + **Honeycomb** (traces and SLIs) + the **support
-capture** path ([support](../../systems/support/README.md)), all cross-linked
-from one `session_id`. Not Sentry alone.
+Stack, ruled 2026-08-25: **Sentry** (exceptions, releases, environments, fingerprints) + **Grafana** (monitors over CloudWatch logs — the alert evaluation source) + **Honeycomb** (traces and SLIs) + the **support capture** path ([support](../../systems/support/README.md)), all cross-linked from one `session_id`. Not Sentry alone.
 
 ## 2. Owned state
 
-No product tables. Observability owns *contracts and artifacts*, all in-repo,
-plus the discipline that keeps them true:
+No product tables. Observability owns *contracts and artifacts*, all in-repo, plus the discipline that keeps them true:
 
 ```text
 server/proliferate/integrations/sentry/privacy.py       the closed catalog — every tag/extra/context key that may leave the server
@@ -58,17 +36,11 @@ proliferate-diagnostics-collector/src/export/policy.rs  EXPORT_POLICY — compil
 scrubbers on every emitter                              server catalog · product-client scrubTelemetryEvent · AnyHarness/Worker/Supervisor before-send
 ```
 
-Live provider state — Sentry projects, alert rules, Grafana contact points,
-Honeycomb keys, Slack destinations — is **mutable and discovered**, never
-owned: [operate Sentry](../../../guides/operating/analytics/sentry.md),
-[production alerts](../../../guides/operating/production-alerts.md).
-A checked-in JSON file is a *statement of intent* the operator scripts apply
-and verify; it is not evidence the live workspace matches.
+Live provider state — Sentry projects, alert rules, Grafana contact points, Honeycomb keys, Slack destinations — is **mutable and discovered**, never owned: [operate Sentry](../../../guides/operating/analytics/sentry.md), [production alerts](../../../guides/operating/production-alerts.md). A checked-in JSON file is a *statement of intent* the operator scripts apply and verify; it is not evidence the live workspace matches.
 
 ## 3. Public surface
 
-The instrumentation API every other system calls (the only way a signal
-enters):
+The instrumentation API every other system calls (the only way a signal enters):
 
 | Surface | Owner file | What it is |
 | --- | --- | --- |
@@ -82,24 +54,13 @@ enters):
 | `trackProductEvent(name, payload)` (126 typed names) | `product-client/src/lib/domain/telemetry/events.ts` | client product events → PostHog / anonymous telemetry (analytics owns routing) |
 | `GET /v1/health` exporter fields (`exporter.state`, `dropped_records`, `last_error_classification`) | diagnostics collector | export health, never a product result |
 
-Operator surface: `node scripts/ops/grafana-alerting.mjs <check|export|apply|restore>`
-(old workspace), `grafana-rebuild-bootstrap.mjs <check|apply|verify|slack-*>`
-and `grafana-sli-alerts.mjs` (rebuild workspace), both gated on
-`GRAFANA_ALERTING_LIVE=1`; `scripts/ops/grafana-metadata-inventory.mjs`
-(bounded read-only inventory).
+Operator surface: `node scripts/ops/grafana-alerting.mjs <check|export|apply|restore>` (old workspace), `grafana-rebuild-bootstrap.mjs <check|apply|verify|slack-*>` and `grafana-sli-alerts.mjs` (rebuild workspace), both gated on `GRAFANA_ALERTING_LIVE=1`; `scripts/ops/grafana-metadata-inventory.mjs` (bounded read-only inventory).
 
-Per-PR surface: every PR states its **observability delta** or an explicit
-"none" ([`specs/engineering/observability/standard.md`](standard.md) §"Deciding a
-change's observability delta").
+Per-PR surface: every PR states its **observability delta** or an explicit "none" ([`specs/engineering/observability/standard.md`](standard.md) §"Deciding a change's observability delta").
 
 ## 4. Consumes
 
-**Every system's Emits section.** Audited 2026-08-25 against the 30 product
-and runtime specs on `main`. "Telemetry-shaped" means the section names at
-least one stable, machine-consumable signal (a log marker, a tracing target,
-a typed event, a named ship-now event); "product-shaped" means it lists only
-UI/contract outputs; "empty" means no Emits section at all. Anything not
-telemetry-shaped is invisible to this system today.
+**Every system's Emits section.** Audited 2026-08-25 against the 30 product and runtime specs on `main`. "Telemetry-shaped" means the section names at least one stable, machine-consumable signal (a log marker, a tracing target, a typed event, a named ship-now event); "product-shaped" means it lists only UI/contract outputs; "empty" means no Emits section at all. Anything not telemetry-shaped is invisible to this system today.
 
 | System | Emits today | Verdict | What this system needs from it |
 | --- | --- | --- | --- |
@@ -118,17 +79,11 @@ telemetry-shaped is invisible to this system today.
 | runtime [harnesses](../../systems/harnesses/README.md), [terminals](../../systems/workspaces/terminals.md), [artifacts](../../systems/sessions/artifacts.md), [desktop-host](../../systems/desktop-host/README.md) | runtime contracts | product-shaped | lifecycle records already exist for harness start (`anyharness.agent.start`); terminals/artifacts have none |
 | [agents](../../README.md), [auth](../../systems/identity/accounts.md), [clients](../../areas/frontend.md), [support](../../systems/support/README.md), [workflows](../../systems/automations/README.md) | — | **empty** | an Emits section; support in particular must emit `support.report.captured` (report id, session id, release id) — it is the system that ties a human complaint to a session |
 
-Also consumed: **release identity** from
-[delivery](../shipping/release-delivery.md) (`release_id` on every log record and
-Sentry release), and the **analytics fence** from
-[analytics](analytics.md) (which typed events may reach PostHog).
+Also consumed: **release identity** from [delivery](../shipping/release-delivery.md) (`release_id` on every log record and Sentry release), and the **analytics fence** from [analytics](analytics.md) (which typed events may reach PostHog).
 
 ## 5. Laws
 
-**L1 — Legibility.** One session, one story. Every signal raised while doing
-work for a session carries that `session_id`; every signal raised for a run
-carries `run_id`; every signal carries `organization_id` and `release_id`.
-The full tuple:
+**L1 — Legibility.** One session, one story. Every signal raised while doing work for a session carries that `session_id`; every signal raised for a run carries `run_id`; every signal carries `organization_id` and `release_id`. The full tuple:
 
 ```text
 organization_id · user_id (id only) · session_id · run_id (target) · invocation_id (target)
@@ -136,62 +91,25 @@ cloud_target_id (logical environment) · cloud_sandbox_id (provider — must sta
 request_id · release_id · surface
 ```
 
-These are **bounded correlation identifiers**, never license to copy content.
-Server side the vocabulary is `request_context.py`; it must be *bound* (by the
-request path, the gateway proxy, or the background-job entry) and *admitted*
-(by the closed Sentry catalog) — both, or the id is silently absent. Before
-the minimum-tonight PR the ContextVars for `session_id`, `interaction_id`,
-`command_id`, `worker_id` existed and **nothing bound them, and the catalog
-rejected them** (`test_sentry_transport_privacy.py` pinned `session_id` →
-dropped). This law is target until W1 merges; it is the single most
-important gap in the system.
+These are **bounded correlation identifiers**, never license to copy content. Server side the vocabulary is `request_context.py`; it must be *bound* (by the request path, the gateway proxy, or the background-job entry) and *admitted* (by the closed Sentry catalog) — both, or the id is silently absent. Before the minimum-tonight PR the ContextVars for `session_id`, `interaction_id`, `command_id`, `worker_id` existed and **nothing bound them, and the catalog rejected them** (`test_sentry_transport_privacy.py` pinned `session_id` → dropped). This law is target until W1 merges; it is the single most important gap in the system.
 
-**L2 — Machine-legible names.** Signal names are stable identifiers in the
-form `<system>.<object>.<verb>` (`run.created`, `session.launch_selection.validated`,
-`anyharness.session.create`, `token.minted`) and never free text; outcomes
-are closed enums (`succeeded / rejected / failed / abandoned`); failures carry
-a bounded code, never an error body. A rename is a seam change.
+**L2 — Machine-legible names.** Signal names are stable identifiers in the form `<system>.<object>.<verb>` (`run.created`, `session.launch_selection.validated`, `anyharness.session.create`, `token.minted`) and never free text; outcomes are closed enums (`succeeded / rejected / failed / abandoned`); failures carry a bounded code, never an error body. A rename is a seam change.
 
-**L3 — Three surfaces, three jobs.** Structured logs → CloudWatch → Grafana is
-the **alert-evaluation source**. Sentry is the **exception and release
-surface**. Honeycomb is the **trace and SLI surface**. No surface is a
-success condition for a product request; each is best-effort and no-ops when
-unconfigured.
+**L3 — Three surfaces, three jobs.** Structured logs → CloudWatch → Grafana is the **alert-evaluation source**. Sentry is the **exception and release surface**. Honeycomb is the **trace and SLI surface**. No surface is a success condition for a product request; each is best-effort and no-ops when unconfigured.
 
-**L4 — Closed catalog, never-suspend scrubbing.** The server builds outbound
-Sentry events from an allowlist, not by deletion; clients, AnyHarness,
-Worker, and Supervisor install explicit before-send scrubbers; child-agent
-stderr never reaches Sentry; anonymous telemetry is the strictest tier.
-Nothing here relaxes for a demo. Full law in [sentry.md](sentry.md) and
-[`specs/engineering/observability/standard.md`](standard.md) §Scrubbing.
+**L4 — Closed catalog, never-suspend scrubbing.** The server builds outbound Sentry events from an allowlist, not by deletion; clients, AnyHarness, Worker, and Supervisor install explicit before-send scrubbers; child-agent stderr never reaches Sentry; anonymous telemetry is the strictest tier. Nothing here relaxes for a demo. Full law in [sentry.md](sentry.md) and [`specs/engineering/observability/standard.md`](standard.md) §Scrubbing.
 
-**L5 — Cross-linked from one id.** Given a `session_id`, a reader can reach
-the Sentry issues for it (tag search), the Honeycomb trace/lifecycle records
-for it (`session_id` column), the CloudWatch log lines for it (JSON field),
-and the product session page. Links are constructed from ids by a fixed
-scheme, never hand-pasted into alerts.
+**L5 — Cross-linked from one id.** Given a `session_id`, a reader can reach the Sentry issues for it (tag search), the Honeycomb trace/lifecycle records for it (`session_id` column), the CloudWatch log lines for it (JSON field), and the product session page. Links are constructed from ids by a fixed scheme, never hand-pasted into alerts.
 
-**L6 — Emit on threshold, in code.** Latency and count budgets live in code
-and emit one bounded record when exceeded; alert rules select markers, they
-do not compute business thresholds. (Why: a rule that encodes a threshold is
-invisible to tests.)
+**L6 — Emit on threshold, in code.** Latency and count budgets live in code and emit one bounded record when exceeded; alert rules select markers, they do not compute business thresholds. (Why: a rule that encodes a threshold is invisible to tests.)
 
-**L7 — One capture per failure.** A handled AnyHarness incident returns its
-`urn:proliferate:anyharness:incident:<uuid>` receipt; the client does not
-re-capture it. Propagate *or* capture *or* report-critical — never two.
+**L7 — One capture per failure.** A handled AnyHarness incident returns its `urn:proliferate:anyharness:incident:<uuid>` receipt; the client does not re-capture it. Propagate *or* capture *or* report-critical — never two.
 
-**L8 — Signals die with their surfaces.** A culled feature's markers, rules,
-SLIs, and typed events are deleted in the same PR (deletion-completeness),
-and display names are grep-gated, not just slugs.
+**L8 — Signals die with their surfaces.** A culled feature's markers, rules, SLIs, and typed events are deleted in the same PR (deletion-completeness), and display names are grep-gated, not just slugs.
 
-**L9 — The record is the replay.** The runtime session event log
-(`SessionEventEnvelope`, append-only, seq-ordered — sessions Law 10) is the
-canonical replay a fixing agent reads. Observability never builds a second
-transcript; it *links to* the record and *annotates* it with ids.
+**L9 — The record is the replay.** The runtime session event log (`SessionEventEnvelope`, append-only, seq-ordered — sessions Law 10) is the canonical replay a fixing agent reads. Observability never builds a second transcript; it *links to* the record and *annotates* it with ids.
 
-**L10 — Issue → test.** Every production issue that gets fixed leaves a test
-whose name or docstring cites the Sentry issue id or the event name that
-surfaced it (owner: the testing spec; this system supplies the stable id).
+**L10 — Issue → test.** Every production issue that gets fixed leaves a test whose name or docstring cites the Sentry issue id or the event name that surfaced it (owner: the testing spec; this system supplies the stable id).
 
 ## 6. Emits
 
@@ -295,21 +213,11 @@ client typed events ──► PostHog / anonymous telemetry                     
 support reports ──► S3 + Slack receipt                                      (support-owned; no session link surfaced)
 ```
 
-Jank carried honestly: two Grafana workspaces with the same five rules
-(OLD `proliferate-ops` delivers to Slack; NEW `proliferate-ops-rebuild`
-delivers to SNS email + Slack via `slack-apply`); `cloud/observability.py`
-has zero callers; `event_logging.py` is redaction/correlation logging, not
-event shipping; `workerDegraded` is computed and shown but never alerted;
-the 24K-LOC diagnostics plane is desktop-oriented; Desktop-native has no
-before-send scrubber.
+Jank carried honestly: two Grafana workspaces with the same five rules (OLD `proliferate-ops` delivers to Slack; NEW `proliferate-ops-rebuild` delivers to SNS email + Slack via `slack-apply`); `cloud/observability.py` has zero callers; `event_logging.py` is redaction/correlation logging, not event shipping; `workerDegraded` is computed and shown but never alerted; the 24K-LOC diagnostics plane is desktop-oriented; Desktop-native has no before-send scrubber.
 
 ## Minimum tonight
 
-Goal: by tomorrow morning a person can open a broken session and see its
-story across Sentry, logs, and Honeycomb from one id, and every server
-Sentry event raised for a session says which session. Each PR is glue or
-config; none changes product state; none touches
-`server/proliferate/server/cloud/**` (PR-Ab in flight).
+Goal: by tomorrow morning a person can open a broken session and see its story across Sentry, logs, and Honeycomb from one id, and every server Sentry event raised for a session says which session. Each PR is glue or config; none changes product state; none touches `server/proliferate/server/cloud/**` (PR-Ab in flight).
 
 | PR | Files | Change | Proof |
 | --- | --- | --- | --- |
@@ -317,8 +225,7 @@ config; none changes product state; none touches
 | **W2 — Honeycomb SLIs marked parked with named triggers** | `server/infra/observability/honeycomb/product-sli-queries.json` | Replace the narrative `status` strings with `status: PARKED` + `trigger` per SLI (session-create: "execute-capable key exists"; launch-selection: "first support burden from selection failures"; time-to-first-output: "latency becomes a sales objection"). | JSON validates; `grafana-alerting.mjs check` unaffected. |
 | **W3 — spec + standard aligned** | this README, `engineering/README.md` row | This document; the one-line index description; the standard's depth pointer already resolves. | `check_docs.py` green. |
 
-Blocked tonight by the `cloud/` freeze, queued for the morning after PR-Ab
-merges (each is one file and one test):
+Blocked tonight by the `cloud/` freeze, queued for the morning after PR-Ab merges (each is one file and one test):
 
 - **W4 — `WORKER_DEGRADED` marker.** `cloud/workspaces/service.py::_worker_degraded`
   logs a bounded marker (`cloud_target_id`, `cloud_sandbox_id`, `session_id`

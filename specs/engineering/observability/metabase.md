@@ -1,9 +1,6 @@
 # Metabase And Durable Analytics Views
 
-Metabase is an optional read-only presentation layer over durable analytics
-facts in Postgres. Repository law is the checked-in schema, views, ingestion
-code, and infrastructure inputs. A dashboard, card, connection, or freshness
-state visible in a live Metabase project is operator evidence, not code law.
+Metabase is an optional read-only presentation layer over durable analytics facts in Postgres. Repository law is the checked-in schema, views, ingestion code, and infrastructure inputs. A dashboard, card, connection, or freshness state visible in a live Metabase project is operator evidence, not code law.
 
 ## Applicability And Data Contract
 
@@ -34,8 +31,7 @@ analytics.daily_mcp_activity
 analytics.daily_mobility_activity
 ```
 
-`daily_automation_activity` is created only when the migration recognizes the
-current execution-target columns in both automation tables.
+`daily_automation_activity` is created only when the migration recognizes the current execution-target columns in both automation tables.
 
 Revision `15649bf2cf24` owns provider snapshot tables and derived views:
 
@@ -52,23 +48,13 @@ analytics.llm_cost_daily
 analytics.economics_daily
 ```
 
-`economics_daily` treats positive AWS `UnblendedCost` lines as gross cost,
-reports negative lines separately as credits, and retains AWS net cost as a
-separate value. This prevents credits from hiding cost of serving.
+`economics_daily` treats positive AWS `UnblendedCost` lines as gross cost, reports negative lines separately as credits, and retains AWS net cost as a separate value. This prevents credits from hiding cost of serving.
 
 ## Provider Ingestion
 
-`server/scripts/analytics_ingest.py` is hosted-company operations code. It
-fetches Stripe revenue/subscription facts, AWS Cost Explorer data, E2B usage,
-and Sentry daily error counts. Each provider is run and committed
-independently; an absent credential or provider failure is logged and does not
-stop later providers.
+`server/scripts/analytics_ingest.py` is hosted-company operations code. It fetches Stripe revenue/subscription facts, AWS Cost Explorer data, E2B usage, and Sentry daily error counts. Each provider is run and committed independently; an absent credential or provider failure is logged and does not stop later providers.
 
-The script writes aggregates only. Stripe aggregation is USD-only; non-USD
-invoices are skipped with a warning. Sentry storage is daily count by project
-and surface; its current query does not group by release and writes an empty
-release value. E2B storage contains aggregate resource use, sandbox count, and
-cost.
+The script writes aggregates only. Stripe aggregation is USD-only; non-USD invoices are skipped with a warning. Sentry storage is daily count by project and surface; its current query does not group by release and writes an empty release value. E2B storage contains aggregate resource use, sandbox count, and cost.
 
 ## Read-Only Boundary
 
@@ -80,9 +66,6 @@ SELECT on current tables/views in schema analytics
 default SELECT on later tables/views in schema analytics
 ```
 
-Do not grant the BI role access to raw application schemas merely to make a
-card convenient. Add or revise an analytics view when a durable question needs
-new data, and preserve the privacy rules above.
+Do not grant the BI role access to raw application schemas merely to make a card convenient. Add or revise an analytics view when a durable question needs new data, and preserve the privacy rules above.
 
-See the [Metabase operating procedure](../../../guides/operating/analytics/metabase.md)
-for read-only discovery and freshness verification.
+See the [Metabase operating procedure](../../../guides/operating/analytics/metabase.md) for read-only discovery and freshness verification.

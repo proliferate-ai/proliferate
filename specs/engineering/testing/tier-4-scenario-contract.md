@@ -1,22 +1,12 @@
 # Tier 4 Scenario Contract
 
-Status: target contract for the core Tier 4 packaged-install and upgrade
-guarantee. This document defines the retained production inputs, candidate
-artifacts, qualification stage, actions, observables, and current gaps for the
-clean Desktop install, Desktop N-1 to N, managed-cloud runtime N-1 to N, and
-change-triggered self-host N-1 to N target cells.
+Status: target contract for the core Tier 4 packaged-install and upgrade guarantee. This document defines the retained production inputs, candidate artifacts, qualification stage, actions, observables, and current gaps for the clean Desktop install, Desktop N-1 to N, managed-cloud runtime N-1 to N, and change-triggered self-host N-1 to N target cells.
 
-[`core-release-validation.md`](core-release-validation.md) owns the complete
-change-triggered compatibility inventory.
-[`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md) owns shared
-artifact preparation and infrastructure lifetimes. This document owns the four
-independently evidenced target cells beneath `T4-DESKTOP-1`, `T4-RUNTIME-1`,
-`T4-SELFHOST-1`, and their applicable embedded `T4-CATALOG-1` assertions.
+[`core-release-validation.md`](core-release-validation.md) owns the complete change-triggered compatibility inventory. [`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md) owns shared artifact preparation and infrastructure lifetimes. This document owns the four independently evidenced target cells beneath `T4-DESKTOP-1`, `T4-RUNTIME-1`, `T4-SELFHOST-1`, and their applicable embedded `T4-CATALOG-1` assertions.
 
 ## Core Guarantee
 
-Tier 4 does not rerun Tier 3 on an old installation. It owns the packaged/native
-boundary and proves the narrower, more dangerous install and transition paths:
+Tier 4 does not rerun Tier 3 on an old installation. It owns the packaged/native boundary and proves the narrower, more dangerous install and transition paths:
 
 ```text
 exact already-built candidate N Desktop -> clean packaged install -> one real turn
@@ -29,8 +19,7 @@ real retained production N-1 state
   -> one real post-update turn
 ```
 
-These are target cells inside one Tier 4 qualification stage, not separate
-worlds:
+These are target cells inside one Tier 4 qualification stage, not separate worlds:
 
 1. clean-install the exact packaged candidate Desktop N and prove its bundled
    AnyHarness plus managed agent artifacts;
@@ -40,37 +29,17 @@ worlds:
 4. when the self-host bundle changed, update a production N-1 self-host install
    to N through its shipped update mechanism.
 
-The broader Tier 4 manifest contains legitimate change-triggered migration and
-compatibility guarantees. It is not an instruction to create 27 always-on live
-upgrade worlds. Those rows reuse retained data or one of these targets only when
-their owning surface changed.
+The broader Tier 4 manifest contains legitimate change-triggered migration and compatibility guarantees. It is not an instruction to create 27 always-on live upgrade worlds. Those rows reuse retained data or one of these targets only when their owning surface changed.
 
-Self-host `update.sh` qualification is change-triggered when the self-host
-bundle, Compose topology, migrations, or update script changes. It is important
-release coverage but does not create another world. Public
-artifact-chain integrity remains an every-release gate without booting another
-upgrade world.
+Self-host `update.sh` qualification is change-triggered when the self-host bundle, Compose topology, migrations, or update script changes. It is important release coverage but does not create another world. Public artifact-chain integrity remains an every-release gate without booting another upgrade world.
 
 ## Artifact Identity
 
 ### N-1 means the last qualified production release
 
-N-1 is resolved from the retained-release receipt of the last production
-release qualified before N. Receipts are committed under
-`tests/release/retained-releases/` (append-only index + one immutable receipt
-per release; schema and validation in
-`tests/release/src/artifacts/retained-release-set.ts`), selected via
-`RELEASE_E2E_RETAINED_RELEASE_ID`, validated (shape, immutable/non-expiring
-locators, artifact-set digest recomputation, bootstrap policy) before any
-world side effect, and materialized with byte-hash verification on every use
-(`materialize-retained-release.ts`; `make qualification-retained-release`).
+N-1 is resolved from the retained-release receipt of the last production release qualified before N. Receipts are committed under `tests/release/retained-releases/` (append-only index + one immutable receipt per release; schema and validation in `tests/release/src/artifacts/retained-release-set.ts`), selected via `RELEASE_E2E_RETAINED_RELEASE_ID`, validated (shape, immutable/non-expiring locators, artifact-set digest recomputation, bootstrap policy) before any world side effect, and materialized with byte-hash verification on every use (`materialize-retained-release.ts`; `make qualification-retained-release`).
 
-One-time bootstrap exception (founder ruling 2026-07-16): production v0.3.38
-is retained as `bootstrap_unqualified` — explicitly not claiming historical
-qualification; evidence displays that state; the receipt's E2B `input_hash`
-is a disclosed-null historical gap; and its self-host target truthfully
-records `server-v0.3.35` (v0.3.38 shipped no server surface). Once any
-`qualified` receipt exists, selecting a bootstrap receipt fails closed.
+One-time bootstrap exception (founder ruling 2026-07-16): production v0.3.38 is retained as `bootstrap_unqualified` — explicitly not claiming historical qualification; evidence displays that state; the receipt's E2B `input_hash` is a disclosed-null historical gap; and its self-host target truthfully records `server-v0.3.35` (v0.3.38 shipped no server surface). Once any `qualified` receipt exists, selecting a bootstrap receipt fails closed.
 
 N-1 is never:
 
@@ -94,8 +63,7 @@ production self-host deployment bundle and server image digest
 
 ### N is built once
 
-Candidate preparation already builds and records N. Tier 4 consumes those
-artifacts; a scenario does not rebuild them:
+Candidate preparation already builds and records N. Tier 4 consumes those artifacts; a scenario does not rebuild them:
 
 ```text
 candidate source SHA and manifest hash
@@ -107,21 +75,13 @@ immutable E2B template N for Tier 3 new-sandbox qualification
 immutable self-host bundle N and server image digest
 ```
 
-The Desktop and cloud scenarios compare every activated artifact to this one
-candidate manifest.
+The Desktop and cloud scenarios compare every activated artifact to this one candidate manifest.
 
-Each selected target emits explicit results for installation or transition,
-preserved state where applicable, every applicable already-installed managed
-native CLI and ACP agent process, and the post-install/update turn. A
-healthy parent process cannot hide a skipped or failed reconciliation child
-cell.
+Each selected target emits explicit results for installation or transition, preserved state where applicable, every applicable already-installed managed native CLI and ACP agent process, and the post-install/update turn. A healthy parent process cannot hide a skipped or failed reconciliation child cell.
 
 ## One Stage, Target-Specific Controllers
 
-An old target remains connected to one controller throughout its scenario. The
-controller changes the desired version; the test does not replace files in the
-target itself. Clean installation starts from an empty target and consumes the
-same candidate package later used by the Desktop update cell.
+An old target remains connected to one controller throughout its scenario. The controller changes the desired version; the test does not replace files in the target itself. Clean installation starts from an empty target and consumes the same candidate package later used by the Desktop update cell.
 
 | Target | N-1 source | Controller | Upgrade signal | N source |
 | --- | --- | --- | --- | --- |
@@ -130,14 +90,11 @@ same candidate package later used by the Desktop update cell.
 | E2B sandbox | Retained immutable production N-1 template | Candidate qualification API written into Worker config at provisioning | This target's desired AnyHarness version changes N-1 to N | Run-scoped immutable AnyHarness artifact route |
 | Self-host | Retained production N-1 deployment bundle and data | Candidate release metadata/artifact endpoint consumed by shipped `update.sh` | Selected N release becomes available to the target | Immutable candidate self-host bundle and server image digest |
 
-The Desktop product API URL does not change during the update. The E2B Worker
-API URL also does not change after provisioning. Only the updater manifest or
-target desired version changes.
+The Desktop product API URL does not change during the update. The E2B Worker API URL also does not change after provisioning. Only the updater manifest or target desired version changes.
 
 ## Natural N-1 State
 
-Each update target creates only the ordinary state needed to prove that an
-upgrade preserves a working product:
+Each update target creates only the ordinary state needed to prove that an upgrade preserves a working product:
 
 - an authenticated actor;
 - a real repository and workspace;
@@ -147,28 +104,15 @@ upgrade preserves a working product:
 - recorded version, digest, catalog, agent, runtime-home, session, and event
   identities.
 
-The live world does not manufacture missing, corrupt, user-modified, or
-user-owned artifact permutations. `T2-UPDATER-1` owns signature, checksum,
-unsafe-input, partial-download, atomic-swap, retry, last-good, and rollback
-decision matrices for both updater mechanisms. The Tier 4 update targets prove
-the natural N-1 to valid-N success transition and do not claim a
-live corrupt-candidate rollback drill. When an updater mechanism itself
-changes, its triggered Tier 4 row adds the smallest real failure injection
-needed to prove activation remains fail-closed.
+The live world does not manufacture missing, corrupt, user-modified, or user-owned artifact permutations. `T2-UPDATER-1` owns signature, checksum, unsafe-input, partial-download, atomic-swap, retry, last-good, and rollback decision matrices for both updater mechanisms. The Tier 4 update targets prove the natural N-1 to valid-N success transition and do not claim a live corrupt-candidate rollback drill. When an updater mechanism itself changes, its triggered Tier 4 row adds the smallest real failure injection needed to prove activation remains fail-closed.
 
-MCP servers are not ACP agent processes. Product and third-party MCP runtime
-configuration upgrades belong to `T4-RUNTIMECFG-1`, not the catalog
-reconciliation assertions in the selected targets.
+MCP servers are not ACP agent processes. Product and third-party MCP runtime configuration upgrades belong to `T4-RUNTIMECFG-1`, not the catalog reconciliation assertions in the selected targets.
 
 ## Clean Candidate Desktop Install
 
 ### `T4-DESKTOP-CLEAN-1` — packaged candidate install
 
-This target starts from a disposable supported macOS machine with no existing
-Proliferate application data, keychain entry, runtime home, or installed
-application. It consumes the exact signed candidate N package recorded by the
-candidate manifest; a development renderer, placeholder sidecar, or separately
-launched AnyHarness process is not acceptable evidence.
+This target starts from a disposable supported macOS machine with no existing Proliferate application data, keychain entry, runtime home, or installed application. It consumes the exact signed candidate N package recorded by the candidate manifest; a development renderer, placeholder sidecar, or separately launched AnyHarness process is not acceptable evidence.
 
 Required actions and assertions:
 
@@ -188,53 +132,23 @@ Required actions and assertions:
    installed managed agent identities remain intact and both the self-host
    connection and local session remain commandable.
 
-Evidence includes the candidate manifest hash; signed package and installed
-application digests; application, AnyHarness, Worker, seed, catalog, registry,
-native CLI, and ACP agent-process versions; runtime-info and health; persisted
-workspace/session/auth identities; and the bounded-turn correlation id.
+Evidence includes the candidate manifest hash; signed package and installed application digests; application, AnyHarness, Worker, seed, catalog, registry, native CLI, and ACP agent-process versions; runtime-info and health; persisted workspace/session/auth identities; and the bounded-turn correlation id.
 
 ## Desktop N-1 To N
 
 ### World preparation
 
-The Desktop input is the actual retained production N-1 artifact whenever the
-shipped app can be directed safely to an isolated qualification feed. It must
-contain its real production AnyHarness/Worker sidecars and real agent seed.
-Placeholder sidecars are never qualification evidence.
+The Desktop input is the actual retained production N-1 artifact whenever the shipped app can be directed safely to an isolated qualification feed. It must contain its real production AnyHarness/Worker sidecars and real agent seed. Placeholder sidecars are never qualification evidence.
 
-The production Desktop currently bakes its updater endpoint and trusted public
-key into the app. Pre-promotion testing therefore needs a safe isolated-feed
-mechanism that preserves signature verification. An external native
-qualification driver may supply only the alternate endpoint to the real Tauri
-updater engine while targeting a disposable byte-identical copy of the retained
-N-1 application and retaining the production public key. It must compare
-against the application's actual N-1 version and consume the exact
-production-key-signed candidate archive. The composed scenario then launches
-the swapped N application and proves the product integration; the external
-transaction alone is only updater-engine evidence.
+The production Desktop currently bakes its updater endpoint and trusted public key into the app. Pre-promotion testing therefore needs a safe isolated-feed mechanism that preserves signature verification. An external native qualification driver may supply only the alternate endpoint to the real Tauri updater engine while targeting a disposable byte-identical copy of the retained N-1 application and retaining the production public key. It must compare against the application's actual N-1 version and consume the exact production-key-signed candidate archive. The composed scenario then launches the swapped N application and proves the product integration; the external transaction alone is only updater-engine evidence.
 
-A previously shipped endpoint-only qualification hook or isolated DNS/TLS
-interception on a disposable macOS runner are also acceptable. None may
-override the trusted public key, patch the retained N-1 payload, or move the
-public production stable feed.
+A previously shipped endpoint-only qualification hook or isolated DNS/TLS interception on a disposable macOS runner are also acceptable. None may override the trusted public key, patch the retained N-1 payload, or move the public production stable feed.
 
-If the exact production artifact cannot be driven safely, a retained
-qualification twin built from the exact N-1 production source is a bootstrap
-exception only. It must contain the exact production sidecar, seed, catalog,
-and registry payload hashes; its only permitted divergence is the updater
-endpoint, and it retains the production public key. A twin using a throwaway
-key is only updater-mechanism signal. Rebuilding current candidate source with
-an N-1 version is not permitted.
+If the exact production artifact cannot be driven safely, a retained qualification twin built from the exact N-1 production source is a bootstrap exception only. It must contain the exact production sidecar, seed, catalog, and registry payload hashes; its only permitted divergence is the updater endpoint, and it retains the production public key. A twin using a throwaway key is only updater-mechanism signal. Rebuilding current candidate source with an N-1 version is not permitted.
 
-The isolated feed initially reports no version newer than N-1. After the
-baseline turn, it exposes the already-built candidate N updater artifact and
-signature under the N-1 production trust chain. A throwaway trust chain may
-exercise the mechanism during development but cannot qualify production
-artifacts.
+The isolated feed initially reports no version newer than N-1. After the baseline turn, it exposes the already-built candidate N updater artifact and signature under the N-1 production trust chain. A throwaway trust chain may exercise the mechanism during development but cannot qualify production artifacts.
 
-The world runs on a supported disposable macOS runner with an isolated HOME,
-app data, keychain scope, runtime home, installation directory, updater feed,
-and cleanup ledger.
+The world runs on a supported disposable macOS runner with an isolated HOME, app data, keychain scope, runtime home, installation directory, updater feed, and cleanup ledger.
 
 ### `T4-DESKTOP-1` — real application update
 
@@ -299,20 +213,11 @@ Evidence includes:
 
 ### World preparation
 
-The candidate N qualification API is deployed first. Running candidate server
-code while holding an old target at N-1 is intentional: it matches the real
-rollout order and proves the supported N server to N-1 Worker protocol.
+The candidate N qualification API is deployed first. Running candidate server code while holding an old target at N-1 is intentional: it matches the real rollout order and proves the supported N server to N-1 Worker protocol.
 
-The qualification API is configured to provision the exact immutable
-production N-1 E2B template. After E2B creation, the server writes a fresh
-enrollment token and its own public Worker base URL into the sandbox Worker
-configuration. The API URL is a runtime provisioning input, not a value baked
-permanently into the E2B template.
+The qualification API is configured to provision the exact immutable production N-1 E2B template. After E2B creation, the server writes a fresh enrollment token and its own public Worker base URL into the sandbox Worker configuration. The API URL is a runtime provisioning input, not a value baked permanently into the E2B template.
 
-Before launching the Worker, the world creates a run/target-scoped desired
-version record set to N-1. The same API exposes exact candidate N artifacts
-through immutable manifest-bound routes, but it does not advertise N to that
-target until the baseline is complete.
+Before launching the Worker, the world creates a run/target-scoped desired version record set to N-1. The same API exposes exact candidate N artifacts through immutable manifest-bound routes, but it does not advertise N to that target until the baseline is complete.
 
 Required preparation:
 
@@ -325,23 +230,11 @@ candidate N qualification API
     and target
 ```
 
-The disposable actor uses the same qualification GitHub App authorization,
-installation coverage, and prepared-repository fixture as ordinary managed
-cloud provisioning. If the production path eagerly creates the personal
-sandbox when user authorization completes, the baseline drives that real path
-with the run scoped to the N-1 template. Tier 4 does not repeat the complete
-OAuth negative matrix; it proves that an ordinarily authorized user receives a
-working N-1 target that can later update in place.
+The disposable actor uses the same qualification GitHub App authorization, installation coverage, and prepared-repository fixture as ordinary managed cloud provisioning. If the production path eagerly creates the personal sandbox when user authorization completes, the baseline drives that real path with the run scoped to the N-1 template. Tier 4 does not repeat the complete OAuth negative matrix; it proves that an ordinarily authorized user receives a working N-1 target that can later update in place.
 
-The Desktop product renderer in Chromium drives the cloud product actions, but
-the product client is not upgraded in `T4-RUNTIME-1`. Desktop N-1 to N is
-exclusively `T4-DESKTOP-1`; combining the two transitions would make a failure
-impossible to attribute and would retest unrelated state. Hosted Web may reuse
-this path after the unification cutover, but is not required by this contract.
+The Desktop product renderer in Chromium drives the cloud product actions, but the product client is not upgraded in `T4-RUNTIME-1`. Desktop N-1 to N is exclusively `T4-DESKTOP-1`; combining the two transitions would make a failure impossible to attribute and would retest unrelated state. Hosted Web may reuse this path after the unification cutover, but is not required by this contract.
 
-The world must not mutate the API deployment's global version environment,
-roll a shared staging service, use a durable shared user, or fall back to a
-rolling artifact.
+The world must not mutate the API deployment's global version environment, roll a shared staging service, use a durable shared user, or fall back to a rolling artifact.
 
 ### `T4-RUNTIME-1` — heartbeat-driven runtime update
 
@@ -413,12 +306,7 @@ Evidence includes:
 
 ### `T4-SELFHOST-1` — shipped bundle update
 
-This target is selected when the self-host bundle, server image, Compose
-topology, migrations, Caddy configuration, bootstrap/update/preflight/health
-scripts, or environment contract changes. It begins with the exact retained
-production N-1 deployment bundle and persisted data on a disposable EC2 host
-behind real DNS/TLS. It then consumes the exact candidate N bundle and server
-image digest through the shipped `update.sh` path.
+This target is selected when the self-host bundle, server image, Compose topology, migrations, Caddy configuration, bootstrap/update/preflight/health scripts, or environment contract changes. It begins with the exact retained production N-1 deployment bundle and persisted data on a disposable EC2 host behind real DNS/TLS. It then consumes the exact candidate N bundle and server image digest through the shipped `update.sh` path.
 
 Required actions and assertions:
 
@@ -438,30 +326,15 @@ Required actions and assertions:
    reported healthy, and retry converges once without reopening setup or
    duplicating effects.
 
-Native Desktop updater behavior is not composed into this target: the browser
-renderer supplies product actions while the real remote deployment owns the
-self-host update boundary. Evidence includes retained and candidate bundle
-receipts, exact image digests, update/backup/migration/health logs, pre/post
-data identities, and both bounded-turn correlations.
+Native Desktop updater behavior is not composed into this target: the browser renderer supplies product actions while the real remote deployment owns the self-host update boundary. Evidence includes retained and candidate bundle receipts, exact image digests, update/backup/migration/health logs, pre/post data identities, and both bounded-turn correlations.
 
 ## First Supervisor-Ownership Transition
 
-The standing cloud scenario assumes the production N-1 installation already
-contains and runs a Supervisor that understands the durable request protocol.
-Candidate N code cannot retroactively give an older Worker/Supervisor that
-ability.
+The standing cloud scenario assumes the production N-1 installation already contains and runs a Supervisor that understands the durable request protocol. Candidate N code cannot retroactively give an older Worker/Supervisor that ability.
 
-The first release moving from today's direct-Worker activation to
-Worker-request/Supervisor-activation therefore requires a one-time bridge with
-its own strict transition proof. The implementation must declare how existing
-production sandboxes reach the new ownership model—for example, through a
-compatible legacy updater that installs and activates the bridge—without
-reprovisioning or losing user state. Once that bridge release is production
-N-1, subsequent releases use the ordinary standing scenario.
+The first release moving from today's direct-Worker activation to Worker-request/Supervisor-activation therefore requires a one-time bridge with its own strict transition proof. The implementation must declare how existing production sandboxes reach the new ownership model—for example, through a compatible legacy updater that installs and activates the bridge—without reprovisioning or losing user state. Once that bridge release is production N-1, subsequent releases use the ordinary standing scenario.
 
-This transition is an implementation prerequisite, not permission to keep two
-permanent activation paths. The legacy direct-Worker path is removed after the
-supported transition window.
+This transition is an implementation prerequisite, not permission to keep two permanent activation paths. The legacy direct-Worker path is removed after the supported transition window.
 
 ## Change-Triggered Tier 4 Inventory
 
@@ -478,9 +351,7 @@ The remaining `T4-*` rows are selected by changed artifacts and contracts:
   components converge.
 - Public artifact integrity is a release gate but not a third upgrade world.
 
-Change-triggered rows may share a prepared Desktop or sandbox when isolation is
-explicit. They do not cause the complete Tier 3 suite or all other Tier 4 rows
-to rerun for every permutation.
+Change-triggered rows may share a prepared Desktop or sandbox when isolation is explicit. They do not cause the complete Tier 3 suite or all other Tier 4 rows to rerun for every permutation.
 
 ## Local And GitHub Actions
 
@@ -576,15 +447,6 @@ The agreed contract is not implemented today:
   delete-worker-legacy track once the fleet was fully supervisor-owned —
   there is no legacy topology left to bridge from.
 
-None of the above closes a manifest row or this document's own scenario
-contract: `T4-RUNTIME-1`'s baseline/upgrade/assertions and the Cloud evidence
-list are unchanged, and the machine manifest rows stay `planned` until the
-live E2B proof runs post-PR2. The Supervisor update engine and the
-Worker/runtime.rs wiring are implemented and unit-tested in this PR (both crates
-build and pass their inline matrices); what remains for qualification is the
-live E2B N-1→N proof against real candidate binaries, not further
-implementation.
+None of the above closes a manifest row or this document's own scenario contract: `T4-RUNTIME-1`'s baseline/upgrade/assertions and the Cloud evidence list are unchanged, and the machine manifest rows stay `planned` until the live E2B proof runs post-PR2. The Supervisor update engine and the Worker/runtime.rs wiring are implemented and unit-tested in this PR (both crates build and pass their inline matrices); what remains for qualification is the live E2B N-1→N proof against real candidate binaries, not further implementation.
 
-No item above may become a skipped or expected-success release result. Machine
-manifest rows remain `planned` until exact collectors, lanes, candidate binding,
-evidence, and fail-closed aggregation are audited.
+No item above may become a skipped or expected-success release result. Machine manifest rows remain `planned` until exact collectors, lanes, candidate binding, evidence, and fail-closed aggregation are audited.

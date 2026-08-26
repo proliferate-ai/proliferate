@@ -1,35 +1,16 @@
 # Workspaces
 
-Status: current (grade B). System spec in the Organization Standard anatomy.
-The runtime system that owns *where execution happens*: the durable identity of
-a checkout (local clone or managed worktree), the repo root it belongs to, the
-per-workspace surfaces layered on that checkout (files, git, hosting, setup,
-process runs), and the lifecycle verbs that create, archive, checkpoint,
-restore, move, and purge it. Archiving, checkpoints, worktree restore, repo
-roots, and mobility are **sections of this spec**, not systems: each has code
-locality but no owned state or public surface that outlives a workspace
-([granularity test](../../README.md)).
+Status: current (grade B). System spec in the Organization Standard anatomy. The runtime system that owns *where execution happens*: the durable identity of a checkout (local clone or managed worktree), the repo root it belongs to, the per-workspace surfaces layered on that checkout (files, git, hosting, setup, process runs), and the lifecycle verbs that create, archive, checkpoint, restore, move, and purge it. Archiving, checkpoints, worktree restore, repo roots, and mobility are **sections of this spec**, not systems: each has code locality but no owned state or public surface that outlives a workspace ([granularity test](../../README.md)).
 
-Depth references (all banner-linked back here):
-[workspaces.md](anyharness-workspaces.md) (flows, archive, checkpoints),
-[files.md](files.md), [git.md](git.md),
-[mobility.md](mobility.md),
-[workspace-command-environment.md](command-environment.md),
-and the client-side [workspaces system docs](../workspace-surface/README.md).
+Depth references (all banner-linked back here): [workspaces.md](anyharness-workspaces.md) (flows, archive, checkpoints), [files.md](files.md), [git.md](git.md), [mobility.md](mobility.md), [workspace-command-environment.md](command-environment.md), and the client-side [workspaces system docs](../workspace-surface/README.md).
 
 ## 1. Purpose
 
-Give every session, terminal, subagent, review, and workflow one durable,
-canonical execution surface — a `WorkspaceRecord` pointing at exactly one repo
-root and one path — and guarantee that nothing destructive ever runs on a
-guess about that path. The product outcome: a user can open a repo, spin
-worktrees per task, archive them when done, undo cheaply, and never lose a
-checkout the runtime did not explicitly get permission to delete.
+Give every session, terminal, subagent, review, and workflow one durable, canonical execution surface — a `WorkspaceRecord` pointing at exactly one repo root and one path — and guarantee that nothing destructive ever runs on a guess about that path. The product outcome: a user can open a repo, spin worktrees per task, archive them when done, undo cheaply, and never lose a checkout the runtime did not explicitly get permission to delete.
 
 ## 2. Owned state
 
-All rows live in the AnyHarness SQLite database
-([schema](../../areas/anyharness-db-schema.sql)); only this system writes them.
+All rows live in the AnyHarness SQLite database ([schema](../../areas/anyharness-db-schema.sql)); only this system writes them.
 
 | Table | Meaning | Written by |
 | --- | --- | --- |
@@ -41,12 +22,7 @@ All rows live in the AnyHarness SQLite database
 | `worktree_retention_policy` | **vestigial**: table exists ([0040](../../../anyharness/crates/anyharness-lib/src/persistence/sql/0040_worktree_retention_policy.sql)) but no runtime code reads or writes it on `main` — its server-side twin died in the cull (Track A-a part 1); drop with the next migration | nobody |
 | `mobility_archive_installs` | replay ledger for idempotent mobility installs | [mobility/store.rs](../../../anyharness/crates/anyharness-lib/src/domains/mobility/store.rs) |
 
-Outside the database this system is the **sole writer** of two private git ref
-namespaces: `refs/proliferate/archive-*` ([archive/refs.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/archive/refs.rs))
-and `refs/proliferate/checkpoints/<workspace>/<checkpoint>/{head,worktree,index}`
-([checkpoints/refs.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/checkpoints/refs.rs)),
-plus the managed worktree directories it materializes under the runtime home
-and `<runtime-home>/mobility/destinations/<repo-root-id>/`.
+Outside the database this system is the **sole writer** of two private git ref namespaces: `refs/proliferate/archive-*` ([archive/refs.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/archive/refs.rs)) and `refs/proliferate/checkpoints/<workspace>/<checkpoint>/{head,worktree,index}` ([checkpoints/refs.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/checkpoints/refs.rs)), plus the managed worktree directories it materializes under the runtime home and `<runtime-home>/mobility/destinations/<repo-root-id>/`.
 
 ## 3. Public surface
 
@@ -68,26 +44,9 @@ HTTP, all under `/v1` ([api/http](../../../anyharness/crates/anyharness-lib/src/
 | `/repo-roots`, `/repo-roots/resolve`, `/repo-roots/{id}`, `/repo-roots/{id}/git/branches`, `/files/file`, `/detect-setup`, `/repo-roots/materializations`, `/repo-roots/{id}/workspace-materializations` | [repo_roots.rs](../../../anyharness/crates/anyharness-lib/src/api/http/repo_roots.rs) | repo-root registry + materialization listings |
 | `/workspaces/{id}/mobility/preflight`, `/runtime-state`, `/export`, `/install`, `/destroy-source`; `/repo-roots/{id}/mobility/prepare-destination` | [mobility.rs](../../../anyharness/crates/anyharness-lib/src/api/http/mobility.rs) | cross-runtime handoff |
 
-Wire shapes: [workspaces.rs](../../../anyharness/crates/anyharness-contract/src/v1/workspaces.rs),
-[workspaces_lifecycle.rs](../../../anyharness/crates/anyharness-contract/src/v1/workspaces_lifecycle.rs),
-[worktrees.rs](../../../anyharness/crates/anyharness-contract/src/v1/worktrees.rs),
-[repo_roots.rs](../../../anyharness/crates/anyharness-contract/src/v1/repo_roots.rs),
-[files.rs](../../../anyharness/crates/anyharness-contract/src/v1/files.rs),
-[git.rs](../../../anyharness/crates/anyharness-contract/src/v1/git.rs),
-[hosting.rs](../../../anyharness/crates/anyharness-contract/src/v1/hosting.rs),
-[processes.rs](../../../anyharness/crates/anyharness-contract/src/v1/processes.rs),
-[mobility.rs](../../../anyharness/crates/anyharness-contract/src/v1/mobility.rs).
+Wire shapes: [workspaces.rs](../../../anyharness/crates/anyharness-contract/src/v1/workspaces.rs), [workspaces_lifecycle.rs](../../../anyharness/crates/anyharness-contract/src/v1/workspaces_lifecycle.rs), [worktrees.rs](../../../anyharness/crates/anyharness-contract/src/v1/worktrees.rs), [repo_roots.rs](../../../anyharness/crates/anyharness-contract/src/v1/repo_roots.rs), [files.rs](../../../anyharness/crates/anyharness-contract/src/v1/files.rs), [git.rs](../../../anyharness/crates/anyharness-contract/src/v1/git.rs), [hosting.rs](../../../anyharness/crates/anyharness-contract/src/v1/hosting.rs), [processes.rs](../../../anyharness/crates/anyharness-contract/src/v1/processes.rs), [mobility.rs](../../../anyharness/crates/anyharness-contract/src/v1/mobility.rs).
 
-In-process surface for sibling domains (the only legal way in — see Fences):
-`WorkspaceRuntime` ([runtime/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/mod.rs))
-for resolution/creation/restore/materialization; `WorkspaceAccessGate`
-([access_gate.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs))
-as the single carrier of "is this workspace mutable right now";
-`WorkspaceOperationGate` ([operation_gate.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/operation_gate.rs))
-for per-workspace leases; `WorkspaceFileProtection` in
-[files_runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/files_runtime.rs)
-as the hook artifacts uses to protect paths; the derived env in
-[env.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/env.rs).
+In-process surface for sibling domains (the only legal way in — see Fences): `WorkspaceRuntime` ([runtime/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/mod.rs)) for resolution/creation/restore/materialization; `WorkspaceAccessGate` ([access_gate.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs)) as the single carrier of "is this workspace mutable right now"; `WorkspaceOperationGate` ([operation_gate.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/operation_gate.rs)) for per-workspace leases; `WorkspaceFileProtection` in [files_runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/files_runtime.rs) as the hook artifacts uses to protect paths; the derived env in [env.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/env.rs).
 
 ## 4. Consumes
 
@@ -109,56 +68,21 @@ as the hook artifacts uses to protect paths; the derived env in
 
 ## 5. Laws
 
-**One workspace, one repo root, one stable path.** `WorkspaceRecord.repo_root_id`
-is mandatory and `path` is reserved for the row's lifetime; creation refuses any
-path an archived row still claims for every kind
-([store/lookups.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/store/lookups.rs)).
-Without it native chat resume — keyed on the absolute worktree path — silently
-attaches to the wrong checkout.
+**One workspace, one repo root, one stable path.** `WorkspaceRecord.repo_root_id` is mandatory and `path` is reserved for the row's lifetime; creation refuses any path an archived row still claims for every kind ([store/lookups.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/store/lookups.rs)). Without it native chat resume — keyed on the absolute worktree path — silently attaches to the wrong checkout.
 
-**Nothing destructive runs on a guess.** Every path comparison resolves both
-sides through [path_identity.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/path_identity.rs)
-(`same_path` fails closed for claim gates, `same_path_strict` fails closed for
-"is this registration ours?"), and every destructive step re-reads its row
-under the workspace lease. The leftover predicate
-([archive/phase2.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/archive/phase2.rs))
-requires `Worktree ∧ Archived ∧ archived_head_sha ∧ dir present ∧ no other
-row claims the path`; drop any term and the sweep deletes a live checkout.
+**Nothing destructive runs on a guess.** Every path comparison resolves both sides through [path_identity.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/path_identity.rs) (`same_path` fails closed for claim gates, `same_path_strict` fails closed for "is this registration ours?"), and every destructive step re-reads its row under the workspace lease. The leftover predicate ([archive/phase2.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/archive/phase2.rs)) requires `Worktree ∧ Archived ∧ archived_head_sha ∧ dir present ∧ no other row claims the path`; drop any term and the sweep deletes a live checkout.
 
-**The runtime never deletes a checkout the user did not ask it to delete.**
-There is no backstop retention pass for local or worktree workspaces. Checkpoint
-refs are exempt: they are runtime-made copies, not the user's tree
-([checkpoints/retention.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/checkpoints/retention.rs)).
+**The runtime never deletes a checkout the user did not ask it to delete.** There is no backstop retention pass for local or worktree workspaces. Checkpoint refs are exempt: they are runtime-made copies, not the user's tree ([checkpoints/retention.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/checkpoints/retention.rs)).
 
-**Archive answers at the flip; undo is cheap.** Everything the user waits for
-precedes `mark_archived`; script, worktree removal, and branch delete run
-detached under a generation-tagged cancellation token registered *before* the
-flip ([archive/tokens.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/archive/tokens.rs)),
-so unarchive can cancel removal and restore in place. "Leftover" is a derived
-listing fact, never stored state — nothing needs repair, only convergence
-([archive/sweep.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/archive/sweep.rs)).
+**Archive answers at the flip; undo is cheap.** Everything the user waits for precedes `mark_archived`; script, worktree removal, and branch delete run detached under a generation-tagged cancellation token registered *before* the flip ([archive/tokens.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/archive/tokens.rs)), so unarchive can cancel removal and restore in place. "Leftover" is a derived listing fact, never stored state — nothing needs repair, only convergence ([archive/sweep.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/archive/sweep.rs)).
 
-**Archived means read-only, not gone.** `WorkspaceAccessGate` is the single
-predicate; every mutation returns `WORKSPACE_ARCHIVED`, every read succeeds, and
-chat history, file tree and git state keep rendering. An unarchive whose path is
-occupied is a scenario 409 ([archive/tiers.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/archive/tiers.rs)), never a relocation.
+**Archived means read-only, not gone.** `WorkspaceAccessGate` is the single predicate; every mutation returns `WORKSPACE_ARCHIVED`, every read succeeds, and chat history, file tree and git state keep rendering. An unarchive whose path is occupied is a scenario 409 ([archive/tiers.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/archive/tiers.rs)), never a relocation.
 
-**Refs before row on capture, row before refs on delete.** A checkpoint's bytes
-are durable and verified before its metadata exists; deletion marks
-`expired_at` first. A crash between the two leaves an orphan the sweep reaps
-by row-absence, never an unexpired row without bytes
-([checkpoints/capture.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/checkpoints/capture.rs)).
+**Refs before row on capture, row before refs on delete.** A checkpoint's bytes are durable and verified before its metadata exists; deletion marks `expired_at` first. A crash between the two leaves an orphan the sweep reaps by row-absence, never an unexpired row without bytes ([checkpoints/capture.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/checkpoints/capture.rs)).
 
-**One lease per prompt flow.** Prompt dispatch, checkpoint capture, actor
-dispatch and settlement share one `SessionPrompt` workspace-operation lease;
-under-lease entrypoints never reacquire it. This prevents the nested-read
-deadlock behind a queued exclusive writer and stops retention/purge/archive from
-observing the refs-before-row interval.
+**One lease per prompt flow.** Prompt dispatch, checkpoint capture, actor dispatch and settlement share one `SessionPrompt` workspace-operation lease; under-lease entrypoints never reacquire it. This prevents the nested-read deadlock behind a queued exclusive writer and stops retention/purge/archive from observing the refs-before-row interval.
 
-**Mobility moves nothing without external authority.** Export requires the exact
-frozen handoff id, base commit and branch; `destroy-source` requires
-`remote_owned`; the runtime cannot choose a destination or prove another runtime
-canonical ([mobility/runtime/mobility_policy.rs](../../../anyharness/crates/anyharness-lib/src/domains/mobility/runtime/mobility_policy.rs)).
+**Mobility moves nothing without external authority.** Export requires the exact frozen handoff id, base commit and branch; `destroy-source` requires `remote_owned`; the runtime cannot choose a destination or prove another runtime canonical ([mobility/runtime/mobility_policy.rs](../../../anyharness/crates/anyharness-lib/src/domains/mobility/runtime/mobility_policy.rs)).
 
 ## 6. Emits
 
@@ -185,15 +109,7 @@ canonical ([mobility/runtime/mobility_policy.rs](../../../anyharness/crates/anyh
 | Cloud-side workspace rows, materialization, sandbox placement | environments (control plane; formerly `server/cloud/workspaces`, culled) |
 | Client presentation: file tree, git pane, repo-setup flow, sidebar recency | client workspace surface ([workspaces/README.md](../workspace-surface/README.md)) |
 
-Declared domain edges (AH-FENCE-001 baseline in
-[fences.toml](../../../lints/anyharness/fences.toml)): `workspaces → agents,
-cowork, repo_roots, reviews, sessions, terminals`. The `workspaces → cowork`
-and `workspaces → reviews` edges are core-depends-on-surface inversions
-tolerated by the baseline; they shrink when the Cowork gate and review-active
-check become extension ports. Twenty-two of the forty-two grandfathered
-AH-FENCE-002 store-reach sites are inside this domain
-([exceptions.toml](../../../lints/anyharness/exceptions.toml)) — the largest
-ledger share in the runtime.
+Declared domain edges (AH-FENCE-001 baseline in [fences.toml](../../../lints/anyharness/fences.toml)): `workspaces → agents, cowork, repo_roots, reviews, sessions, terminals`. The `workspaces → cowork` and `workspaces → reviews` edges are core-depends-on-surface inversions tolerated by the baseline; they shrink when the Cowork gate and review-active check become extension ports. Twenty-two of the forty-two grandfathered AH-FENCE-002 store-reach sites are inside this domain ([exceptions.toml](../../../lints/anyharness/exceptions.toml)) — the largest ledger share in the runtime.
 
 > [!decision] PABLO DECIDES: repo roots. `domains/repo_roots` is a 260-line
 > single-concern domain with its own table and routes. Options: (a) keep it a
@@ -252,18 +168,9 @@ anyharness/crates/anyharness-contract/src/v1/{workspaces,workspaces_lifecycle,wo
     repo_roots,files,git,hosting,processes,mobility}.rs   wire shapes
 ```
 
-Target layout (Wave 3 rename, **not current**): `domains/` → `systems/`;
-`repo_roots/` folds into `workspaces/roots/`; `mobility/` deleted or folded per
-the decision above. Nothing in this PR moves.
+Target layout (Wave 3 rename, **not current**): `domains/` → `systems/`; `repo_roots/` folds into `workspaces/roots/`; `mobility/` deleted or folded per the decision above. Nothing in this PR moves.
 
-Client-plane presentation of this system's state (owned by the client
-workspace surface, listed here so the bijection closes):
-[components/workspace/files](../../../apps/packages/product-client/src/components/workspace/files),
-[components/workspace/git](../../../apps/packages/product-client/src/components/workspace/git),
-[components/workspace/repo-setup](../../../apps/packages/product-client/src/components/workspace/repo-setup),
-[hooks/workspaces](../../../apps/packages/product-client/src/hooks/workspaces),
-[lib/domain/workspaces](../../../apps/packages/product-client/src/lib/domain/workspaces),
-[stores/workspaces](../../../apps/packages/product-client/src/stores/workspaces).
+Client-plane presentation of this system's state (owned by the client workspace surface, listed here so the bijection closes): [components/workspace/files](../../../apps/packages/product-client/src/components/workspace/files), [components/workspace/git](../../../apps/packages/product-client/src/components/workspace/git), [components/workspace/repo-setup](../../../apps/packages/product-client/src/components/workspace/repo-setup), [hooks/workspaces](../../../apps/packages/product-client/src/hooks/workspaces), [lib/domain/workspaces](../../../apps/packages/product-client/src/lib/domain/workspaces), [stores/workspaces](../../../apps/packages/product-client/src/stores/workspaces).
 
 ## 9. Proof
 

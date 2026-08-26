@@ -1,7 +1,6 @@
 # Git
 
-`anyharness-lib/src/adapters/git/**` owns workspace-scoped git execution, status
-normalization, and action availability for repository operations.
+`anyharness-lib/src/adapters/git/**` owns workspace-scoped git execution, status normalization, and action availability for repository operations.
 
 ## Core Concepts
 
@@ -48,8 +47,7 @@ These are runtime-owned normalized summaries built from git CLI output.
 
 ### Status Flow
 
-`GitService::status(...)` delegates to
-`anyharness/crates/anyharness-lib/src/adapters/git/operations/status.rs`:
+`GitService::status(...)` delegates to `anyharness/crates/anyharness-lib/src/adapters/git/operations/status.rs`:
 
 1. resolves the repo root
 2. runs `git status --porcelain=v2 --branch -z`
@@ -66,9 +64,7 @@ This is the main “what state is the repo in?” path.
 
 ### Parsing and Normalization
 
-`parse_status.rs`
-(`anyharness/crates/anyharness-lib/src/adapters/git/parse_status.rs`)
-owns the porcelain-v2 parser.
+`parse_status.rs` (`anyharness/crates/anyharness-lib/src/adapters/git/parse_status.rs`) owns the porcelain-v2 parser.
 
 It turns raw entries into:
 
@@ -86,11 +82,9 @@ It turns raw entries into:
 
 ### Diff Flow
 
-`diff_for_path(...)` remains the compatibility entrypoint and delegates to
-`diff_for_path_with_scope(...)` with `GitDiffScope::WorkingTree`.
+`diff_for_path(...)` remains the compatibility entrypoint and delegates to `diff_for_path_with_scope(...)` with `GitDiffScope::WorkingTree`.
 
-`diff_for_path_with_scope(...)` delegates to
-`anyharness/crates/anyharness-lib/src/adapters/git/operations/diff.rs`:
+`diff_for_path_with_scope(...)` delegates to `anyharness/crates/anyharness-lib/src/adapters/git/operations/diff.rs`:
 
 1. resolves the repo root
 2. validates scope-specific arguments
@@ -110,23 +104,11 @@ Scopes are explicit:
   index-only, unstaged, deleted, renamed, and untracked changes in one current
   comparison.
 
-`branch_diff_files(...)` delegates to
-`anyharness/crates/anyharness-lib/src/adapters/git/operations/diff_files.rs`
-and lists committed files for the branch comparison using matching
-`--name-status -z` and `--numstat -z` commands. Rename/copy rows keep both
-`oldPath` and `path`; per-file branch diffs should pass both paths so git can
-preserve rename/copy detection.
+`branch_diff_files(...)` delegates to `anyharness/crates/anyharness-lib/src/adapters/git/operations/diff_files.rs` and lists committed files for the branch comparison using matching `--name-status -z` and `--numstat -z` commands. Rename/copy rows keep both `oldPath` and `path`; per-file branch diffs should pass both paths so git can preserve rename/copy detection.
 
-`base_worktree_diff_files(...)` delegates to the same diff-files operation and
-lists current workspace changes relative to the selected base merge-base. It
-combines git status with diff/name-status/numstat comparisons so index-only
-staged changes are not lost, and it handles untracked files with add-file
-diffs against `/dev/null` instead of relying on plain `git diff <base>`.
+`base_worktree_diff_files(...)` delegates to the same diff-files operation and lists current workspace changes relative to the selected base merge-base. It combines git status with diff/name-status/numstat comparisons so index-only staged changes are not lost, and it handles untracked files with add-file diffs against `/dev/null` instead of relying on plain `git diff <base>`.
 
-Branch base refs are intentionally concrete branch refs only. The resolver
-accepts local heads and remote-tracking refs, validates them to commit OIDs, and
-uses OIDs for merge-base and diff commands. It does not accept tags, raw OIDs,
-or revision expressions.
+Branch base refs are intentionally concrete branch refs only. The resolver accepts local heads and remote-tracking refs, validates them to commit OIDs, and uses OIDs for merge-base and diff commands. It does not accept tags, raw OIDs, or revision expressions.
 
 ### Mutating Flows
 
@@ -139,10 +121,7 @@ The git service also owns:
 - `push_current_branch`
 - `rename_branch`
 
-These delegate to named files under
-`anyharness/crates/anyharness-lib/src/adapters/git/operations/**` and remain
-git-boundary operations. They do not become higher-level workflow
-orchestration.
+These delegate to named files under `anyharness/crates/anyharness-lib/src/adapters/git/operations/**` and remain git-boundary operations. They do not become higher-level workflow orchestration.
 
 Command execution itself is kept in:
 
@@ -150,10 +129,7 @@ Command execution itself is kept in:
 
 ### Archive snapshot, restore, and refusal probes
 
-`operations/snapshot.rs`, `operations/snapshot_restore.rs`, and their shared
-sentinel table in `operations/status_operation.rs` implement the pure-git
-half of the archiving-workspaces feature (Archiving Workspaces ADR §3). They
-are dark by construction in this rung: nothing in the product calls them yet.
+`operations/snapshot.rs`, `operations/snapshot_restore.rs`, and their shared sentinel table in `operations/status_operation.rs` implement the pure-git half of the archiving-workspaces feature (Archiving Workspaces ADR §3). They are dark by construction in this rung: nothing in the product calls them yet.
 
 - `GitService::snapshot_workspace(workspace_path)` captures a workspace's
   exact git state into a `WorkspaceSnapshot`: `head_sha`, `branch` (`None`
@@ -186,14 +162,7 @@ are dark by construction in this rung: nothing in the product calls them yet.
   `index_tree_anchor`, `work_tree_ref_oid()` / `index_tree_ref_oid()`).
   Content consumers always peel `^{tree}`, which resolves both shapes.
 
-`status_operation.rs` gains `sequencer/`, `BISECT_LOG`, and a `git ls-files
--u` belt-and-braces check on top of its existing sentinel table, all
-resolved per-worktree via `git -C <worktree> rev-parse --git-path <name>`.
-The existing `detect_operation(repo_root) -> GitOperation` keeps its exact
-signature and five-variant mapping — its three live callers
-(`status.rs`, `status_summary.rs`, `revert_patches.rs`) see byte-identical
-behavior. `probe_refusals`/`snapshot_workspace`'s conflict detection is a
-second, richer projection over the same table, not a second detector.
+`status_operation.rs` gains `sequencer/`, `BISECT_LOG`, and a `git ls-files -u` belt-and-braces check on top of its existing sentinel table, all resolved per-worktree via `git -C <worktree> rev-parse --git-path <name>`. The existing `detect_operation(repo_root) -> GitOperation` keeps its exact signature and five-variant mapping — its three live callers (`status.rs`, `status_summary.rs`, `revert_patches.rs`) see byte-identical behavior. `probe_refusals`/`snapshot_workspace`'s conflict detection is a second, richer projection over the same table, not a second detector.
 
 ### Hardened worktree verbs
 
@@ -255,12 +224,10 @@ second, richer projection over the same table, not a second detector.
 
 ## Extension Points
 
-Add behavior here when it changes git normalization or git CLI operations, for
-example:
+Add behavior here when it changes git normalization or git CLI operations, for example:
 
 - new status metadata
 - richer diff behavior
 - additional branch operations
 
-Do not add behavior here when it belongs to workspaces or hosting-provider
-boundaries.
+Do not add behavior here when it belongs to workspaces or hosting-provider boundaries.

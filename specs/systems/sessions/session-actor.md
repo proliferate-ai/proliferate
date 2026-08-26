@@ -1,9 +1,6 @@
 # Session Actor
 
-This spec describes the current split live session actor. It is specific to
-the actor portion of the AnyHarness session engine and assumes the broader
-architecture in [README.md](README.md) and the session engine overview
-in [session-engine.md](session-engine.md).
+This spec describes the current split live session actor. It is specific to the actor portion of the AnyHarness session engine and assumes the broader architecture in [README.md](README.md) and the session engine overview in [session-engine.md](session-engine.md).
 
 Implementation:
 
@@ -15,8 +12,7 @@ anyharness-lib/src/live/sessions/handle.rs
 
 ## Scope
 
-The actor is not a giant `session_actor.rs` file with support modules around
-it. The split holds as:
+The actor is not a giant `session_actor.rs` file with support modules around it. The split holds as:
 
 ```text
 live/sessions/actor/ owns the actor command protocol, state, run loop, turn,
@@ -30,13 +26,11 @@ live/sessions/handle.rs owns the public command/subscription port into one
 actor.
 ```
 
-The old `acp/session_actor.rs` is gone. The top-level actor loop is readable
-from `live/sessions/actor/run.rs`.
+The old `acp/session_actor.rs` is gone. The top-level actor loop is readable from `live/sessions/actor/run.rs`.
 
 ## Purpose
 
-`SessionActor` is the serialized decision loop for one running ACP-backed
-session.
+`SessionActor` is the serialized decision loop for one running ACP-backed session.
 
 It owns ordering. It decides how these inputs interleave:
 
@@ -81,8 +75,7 @@ event stream replay
 provider CLI launch policy
 ```
 
-Those belong to `api/`, `domains/`, `integrations/`, `adapters/`, or sibling
-`live/sessions/**` collaborators.
+Those belong to `api/`, `domains/`, `integrations/`, `adapters/`, or sibling `live/sessions/**` collaborators.
 
 ## Collaborators
 
@@ -157,8 +150,7 @@ active pending interaction ids that must be cleaned up on shutdown
 diagnostic timers and stuck-turn bookkeeping
 ```
 
-The actor should not keep hidden product truth that is not reconstructable from
-domain state or provider state.
+The actor should not keep hidden product truth that is not reconstructable from domain state or provider state.
 
 ## Public Command Surface
 
@@ -213,8 +205,7 @@ Command definitions belong in:
 live/sessions/actor/command.rs
 ```
 
-Command handlers belong under the concern that owns their behavior, not in one
-giant command file.
+Command handlers belong under the concern that owns their behavior, not in one giant command file.
 
 ## Event Loops
 
@@ -233,9 +224,7 @@ loop:
   shutdown/error condition   -> shutdown handler
 ```
 
-The outer loop file should read as dispatch. It should not contain full prompt
-execution, config application, event normalization, or process startup
-mechanics.
+The outer loop file should read as dispatch. It should not contain full prompt execution, config application, event normalization, or process startup mechanics.
 
 ### Active Turn Loop
 
@@ -298,8 +287,7 @@ Fork              -> reject as busy
 Snapshot          -> return current snapshot
 ```
 
-This split should be explicit in code. Do not hide busy/idle behavior behind a
-single large command match.
+This split should be explicit in code. Do not hide busy/idle behavior behind a single large command match.
 
 ## Folder Shape
 
@@ -348,14 +336,9 @@ background_work.rs
   actor-side background work update handling
 ```
 
-The three receivers (commands, notifications, background work) deliberately
-stay OUT of the struct: they are threaded through `run`/`run_idle`/`run_turn`
-as parameters so the inner selects can borrow them alongside `&mut self`.
-There are no per-flow context structs — handlers are methods on the actor.
+The three receivers (commands, notifications, background work) deliberately stay OUT of the struct: they are threaded through `run`/`run_idle`/`run_turn` as parameters so the inner selects can borrow them alongside `&mut self`. There are no per-flow context structs — handlers are methods on the actor.
 
-No actor-owned file should become the new god module. If one concern file grows
-past the repo-shape hard limit, split it by the concern grammar below before
-the migration is considered complete.
+No actor-owned file should become the new god module. If one concern file grows past the repo-shape hard limit, split it by the concern grammar below before the migration is considered complete.
 
 Concern folders:
 
@@ -434,8 +417,7 @@ diagnostics.rs
   stuck turn and long-running prompt diagnostics
 ```
 
-The actor receives an already validated `PromptPayload`. Product prompt
-building remains in `domains/sessions/prompt`.
+The actor receives an already validated `PromptPayload`. Product prompt building remains in `domains/sessions/prompt`.
 
 ## Config Folder
 
@@ -471,8 +453,7 @@ selection.rs
   pure helpers for choosing/merging actor-side config values
 ```
 
-Config selection that is product-facing or launch-facing belongs in
-`domains/sessions/config`. Actor config code owns only live apply/queue timing.
+Config selection that is product-facing or launch-facing belongs in `domains/sessions/config`. Actor config code owns only live apply/queue timing.
 
 ## Notifications Folder
 
@@ -507,16 +488,11 @@ observations.rs
   feed-forward of earlier observers' envelopes (see live/sessions/model.rs)
 ```
 
-There is no actor-side plan code: plan sniffing lives in
-`domains/plans/session_observer.rs` (a `SessionEventObserver` wired in
-`app/sessions.rs`).
+There is no actor-side plan code: plan sniffing lives in `domains/plans/session_observer.rs` (a `SessionEventObserver` wired in `app/sessions.rs`).
 
-Notification handlers persist the raw ACP notification before normalized
-event handling.
+Notification handlers persist the raw ACP notification before normalized event handling.
 
-Tool calls are not a separate actor subsystem. They enter as ACP
-notifications, route through notification dispatch, and are normalized by
-`sink/tools.rs`.
+Tool calls are not a separate actor subsystem. They enter as ACP notifications, route through notification dispatch, and are normalized by `sink/tools.rs`.
 
 ## Interactions Folder
 
@@ -543,10 +519,7 @@ cleanup.rs
   cancel/dismiss/shutdown cleanup for pending waits
 ```
 
-There are no plan files here. Plan approve/reject is
-`domains/plans/decision_op.rs`, a `SessionDomainOp` submitted via
-`SessionCommand::RunDomainOp` (through `handle.run_domain_op`), not a bespoke
-actor arm.
+There are no plan files here. Plan approve/reject is `domains/plans/decision_op.rs`, a `SessionDomainOp` submitted via `SessionCommand::RunDomainOp` (through `handle.run_domain_op`), not a bespoke actor arm.
 
 The pending request broker itself belongs outside the actor:
 
@@ -554,9 +527,7 @@ The pending request broker itself belongs outside the actor:
 live/sessions/rendezvous/
 ```
 
-Reason: the driver's `InboundDoor` creates pending requests, API/runtime
-resolves them through commands, and the actor cleans them up. The broker
-(`InteractionRendezvous`) is a collaborator, not an actor-internal module.
+Reason: the driver's `InboundDoor` creates pending requests, API/runtime resolves them through commands, and the actor cleans them up. The broker (`InteractionRendezvous`) is a collaborator, not an actor-internal module.
 
 ## Shutdown Folder
 
@@ -585,15 +556,9 @@ persist.rs
   emit terminal session state through event sink and narrow stores
 ```
 
-Shutdown code owns finalization ordering. It should not format API errors or
-decide product retention/cleanup policy.
+Shutdown code owns finalization ordering. It should not format API errors or decide product retention/cleanup policy.
 
-`Unload` is intentionally non-terminal. It resolves pending interactions,
-bounds provider cancellation, preserves any assistant output already ingested,
-emits the active turn's `Cancelled` end when needed, and returns the durable
-session to `idle`. It emits no `session_ended` event and does not write
-`closed_at` or `dismissed_at`. The transcript, native ACP session id, and live
-configuration therefore remain the inputs to a later actor restart.
+`Unload` is intentionally non-terminal. It resolves pending interactions, bounds provider cancellation, preserves any assistant output already ingested, emits the active turn's `Cancelled` end when needed, and returns the durable session to `idle`. It emits no `session_ended` event and does not write `closed_at` or `dismissed_at`. The transcript, native ACP session id, and live configuration therefore remain the inputs to a later actor restart.
 
 ## Connection Boundary
 
@@ -644,12 +609,7 @@ shutdown.rs
   provider/process close behavior that is not actor state-machine policy
 ```
 
-The actor's constructor (`actor/startup.rs`) builds the actor by calling
-driver code in order — process spawn, `connection.rs`,
-`session_lifecycle.rs`, native session start — but driver code owns the
-process/protocol resource mechanics. The actor keeps policy decisions such as
-"start a new native session vs load an existing native session" only when
-that decision depends on actor phase or ordering.
+The actor's constructor (`actor/startup.rs`) builds the actor by calling driver code in order — process spawn, `connection.rs`, `session_lifecycle.rs`, native session start — but driver code owns the process/protocol resource mechanics. The actor keeps policy decisions such as "start a new native session vs load an existing native session" only when that decision depends on actor phase or ordering.
 
 Reusable ACP protocol or provider mechanics should move lower:
 
@@ -660,8 +620,7 @@ integrations/agent_cli/
 
 ## Event Sink Boundary
 
-The actor decides when something happened. The event sink decides how it becomes
-durable and streamable.
+The actor decides when something happened. The event sink decides how it becomes durable and streamable.
 
 Shape:
 
@@ -687,10 +646,7 @@ live/sessions/sink/
   tests/
 ```
 
-`ingest.rs` is the one ingestion entry: it takes one ACP notification, owns
-its transcript consequence, collects `SinkObservation`s for the observer pass,
-and returns `ActorBoundUpdate` for the arms it cannot finish (the sink is
-meaning-blind: no durable session-row state, no product reactors).
+`ingest.rs` is the one ingestion entry: it takes one ACP notification, owns its transcript consequence, collects `SinkObservation`s for the observer pass, and returns `ActorBoundUpdate` for the arms it cannot finish (the sink is meaning-blind: no durable session-row state, no product reactors).
 
 Actor may call methods such as:
 

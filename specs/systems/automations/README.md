@@ -1,23 +1,10 @@
 # Automations
 
-The gen-2 Workflow engine: a saved, validated **definition** on the control
-plane is frozen verbatim into an immutable **invocation** at trigger time,
-and a **run** executes it on the runtime as a linear chain of nodes, one
-ordinary session per node. This spec is the system's authority on `main`;
-the folders still carry the pre-inventory name `workflows` on every plane
-(see [Known gaps](#known-gaps--follow-ups)). It supersedes
-[FEATURE_DOCS/WORKFLOWS.md](deep-dive.md), which stays as
-the narrative reference until it is folded in.
+The gen-2 Workflow engine: a saved, validated **definition** on the control plane is frozen verbatim into an immutable **invocation** at trigger time, and a **run** executes it on the runtime as a linear chain of nodes, one ordinary session per node. This spec is the system's authority on `main`; the folders still carry the pre-inventory name `workflows` on every plane (see [Known gaps](#known-gaps--follow-ups)). It supersedes [FEATURE_DOCS/WORKFLOWS.md](deep-dive.md), which stays as the narrative reference until it is folded in.
 
 ## 1. Purpose
 
-Turn an authored chain of prompts into governed execution without the
-control plane ever contacting the runtime: the CP validates and freezes,
-the client couriers, the runtime places and executes. The gen-1 lane
-(one-prompt runs, managed cloud delivery) was deleted end to end by
-[delivery-spec-delete-gen1-workflows.md](../../../delivery/cull-sweep/delivery-spec-delete-gen1-workflows.md);
-its retry shape survives as courier starting material in
-[notes-gen1-delivery-retry-shape.md](../../../delivery/cull-sweep/notes-gen1-delivery-retry-shape.md).
+Turn an authored chain of prompts into governed execution without the control plane ever contacting the runtime: the CP validates and freezes, the client couriers, the runtime places and executes. The gen-1 lane (one-prompt runs, managed cloud delivery) was deleted end to end by [delivery-spec-delete-gen1-workflows.md](../../../delivery/cull-sweep/delivery-spec-delete-gen1-workflows.md); its retry shape survives as courier starting material in [notes-gen1-delivery-retry-shape.md](../../../delivery/cull-sweep/notes-gen1-delivery-retry-shape.md).
 
 ```text
 definition (CP, Postgres)         a saved, validated gen-2 document
@@ -38,12 +25,7 @@ Only this system writes these rows.
 | SQLite | `workflow_runs`, `workflow_run_nodes`, `workflow_run_docs` | [domains/workflows/store.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs) | the sole runtime truth for a run: status, effective node chain (`defined`/`replacement`/`adhoc`), per-node session stamps, rendered envelopes, materialized context docs. |
 | product storage (client) | `workflow_node_layout` | [use-workflow-node-layout.ts](../../../apps/packages/product-client/src/hooks/workflows/workflows/use-workflow-node-layout.ts) | per-machine card placements, keyed by workflow; never part of the definition. |
 
-Run and node states are the closed vocabularies in
-[model.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/model.rs):
-run `running | awaiting_human | interrupted | completed | failed | cancelled`;
-node `pending | running | needs_attention | awaiting_human | completed | failed | cancelled`;
-failure codes `node_launch_failed | turn_error | refusal | empty_turn | harness_cap | superseded`;
-interruption codes `user_cancel | app_shutdown | runtime_restarted`.
+Run and node states are the closed vocabularies in [model.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/model.rs): run `running | awaiting_human | interrupted | completed | failed | cancelled`; node `pending | running | needs_attention | awaiting_human | completed | failed | cancelled`; failure codes `node_launch_failed | turn_error | refusal | empty_turn | harness_cap | superseded`; interruption codes `user_cancel | app_shutdown | runtime_restarted`.
 
 ## 3. Public surface
 
@@ -51,8 +33,7 @@ The only ways in. Everything else is internal.
 
 ### Control plane (`/v1`, camelCase, product-user bearer auth)
 
-Served by [workflows/api.py](../../../server/proliferate/server/workflows/api.py),
-registered from [main.py](../../../server/proliferate/main.py).
+Served by [workflows/api.py](../../../server/proliferate/server/workflows/api.py), registered from [main.py](../../../server/proliferate/main.py).
 
 ```http
 GET    /v1/workflows                       list (v2 responses)
@@ -64,10 +45,7 @@ PUT    /v1/workflow-invocations/{id}       freeze (201) or replay (200)
 GET    /v1/workflow-invocations/{id}       the frozen record verbatim
 ```
 
-Python callers use exactly the modules the
-[MANIFEST.toml](../../../server/proliferate/server/workflows/MANIFEST.toml)
-declares: `workflows.api`, `.service`, `.models`, `.access`. The measured
-importer set is `main.py` alone.
+Python callers use exactly the modules the [MANIFEST.toml](../../../server/proliferate/server/workflows/MANIFEST.toml) declares: `workflows.api`, `.service`, `.models`, `.access`. The measured importer set is `main.py` alone.
 
 ### Runtime (`/v1`, runtime bearer auth)
 
@@ -88,16 +66,11 @@ POST /v1/workflow-runs/{run_id}/cancel
 
 ### Generated clients
 
-Control plane: [cloud/sdk/src/client/workflows-v2.ts](../../../cloud/sdk/src/client/workflows-v2.ts)
-and the `workflows-v2` hooks in [cloud/sdk-react](../../../cloud/sdk-react/src/hooks/workflows-v2.ts).
-Runtime: [anyharness/sdk/src/client/workflow-runs-v2.ts](../../../anyharness/sdk/src/client/workflow-runs-v2.ts)
-and `@anyharness/sdk-react`.
+Control plane: [cloud/sdk/src/client/workflows-v2.ts](../../../cloud/sdk/src/client/workflows-v2.ts) and the `workflows-v2` hooks in [cloud/sdk-react](../../../cloud/sdk-react/src/hooks/workflows-v2.ts). Runtime: [anyharness/sdk/src/client/workflow-runs-v2.ts](../../../anyharness/sdk/src/client/workflow-runs-v2.ts) and `@anyharness/sdk-react`.
 
 ### The document (`WorkflowDefinitionV2`)
 
-One camelCase JSON blob, validated identically on every plane and pinned by
-the shared fixtures in
-[fixtures/contracts/workflow-definition/](../../../fixtures/contracts/workflow-definition):
+One camelCase JSON blob, validated identically on every plane and pinned by the shared fixtures in [fixtures/contracts/workflow-definition/](../../../fixtures/contracts/workflow-definition):
 
 | Field | Shape | Rule |
 | --- | --- | --- |
@@ -123,74 +96,29 @@ Placement never appears in the document — it is a trigger-time binding.
 
 ## 5. Laws
 
-**Control plane governs, runtime executes (Ruling A).** The CP validates and
-stores documents and freezes invocations; it never resolves placement,
-models, or repo-root ids — those are runtime-plane meanings stored opaquely
-(`default_repo_config_id` is not an FK; `placement.repoConfigId` is frozen
-verbatim). Breaking this couples CP schema to a runtime's local id space.
+**Control plane governs, runtime executes (Ruling A).** The CP validates and stores documents and freezes invocations; it never resolves placement, models, or repo-root ids — those are runtime-plane meanings stored opaquely (`default_repo_config_id` is not an FK; `placement.repoConfigId` is frozen verbatim). Breaking this couples CP schema to a runtime's local id space.
 
-**Both ids are client-minted and both PUTs are idempotent.** The courier
-mints the invocation id and the run id before the first request and carries
-both across retries, so a partial failure replays rather than duplicates
-([trigger-courier.ts](../../../apps/packages/product-client/src/lib/workflows/trigger/trigger-courier.ts)).
+**Both ids are client-minted and both PUTs are idempotent.** The courier mints the invocation id and the run id before the first request and carries both across retries, so a partial failure replays rather than duplicates ([trigger-courier.ts](../../../apps/packages/product-client/src/lib/workflows/trigger/trigger-courier.ts)).
 
-**Replay identity is RFC 8785 canonical JSON of the creation request.**
-Same id + equal canonical request → `200` with the stored record; same id +
-different input → `409 workflow_invocation_conflict`; acceptance runs under
-a per-invocation advisory lock so racing writers serialize
-([service_v2.py](../../../server/proliferate/server/workflows/service_v2.py)).
-Canonicalization is also the portability gate: non-finite numbers and
-integers outside the I-JSON safe range are rejected.
+**Replay identity is RFC 8785 canonical JSON of the creation request.** Same id + equal canonical request → `200` with the stored record; same id + different input → `409 workflow_invocation_conflict`; acceptance runs under a per-invocation advisory lock so racing writers serialize ([service_v2.py](../../../server/proliferate/server/workflows/service_v2.py)). Canonicalization is also the portability gate: non-finite numbers and integers outside the I-JSON safe range are rejected.
 
-**Arguments are validated against the frozen definition.** Every argument
-names a declared input, every required input has an argument, and every
-input any prompt references has an argument (`_validate_v2_arguments`).
-Argument values are redacted from 422 bodies by `main.py`'s validation-error
-handler.
+**Arguments are validated against the frozen definition.** Every argument names a declared input, every required input has an argument, and every input any prompt references has an argument (`_validate_v2_arguments`). Argument values are redacted from 422 bodies by `main.py`'s validation-error handler.
 
-**Owner-only, non-enumerating.** A definition or invocation owned by someone
-else answers the same not-found as one that does not exist
-([access.py](../../../server/proliferate/server/workflows/access.py)).
+**Owner-only, non-enumerating.** A definition or invocation owned by someone else answers the same not-found as one that does not exist ([access.py](../../../server/proliferate/server/workflows/access.py)).
 
-**Optimistic revisions are one conditional UPDATE.** Update and delete carry
-`expectedRevision`; a stale value is a `409
-workflow_definition_revision_conflict` that changes nothing, enforced as
-`UPDATE ... WHERE revision = :expected` in
-[workflow_definitions.py](../../../server/proliferate/db/store/workflow_definitions.py).
+**Optimistic revisions are one conditional UPDATE.** Update and delete carry `expectedRevision`; a stale value is a `409 workflow_definition_revision_conflict` that changes nothing, enforced as `UPDATE ... WHERE revision = :expected` in [workflow_definitions.py](../../../server/proliferate/db/store/workflow_definitions.py).
 
-**Validation is identical on every plane.** The runtime re-validates the
-frozen document with no CP catalog available
-([definition.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs)
-mirrors [validation_v2.py](../../../server/proliferate/server/workflows/domain/validation_v2.py));
-lockstep is proven by the shared `v2-*` fixtures, each invalid one
-declaring how it must be rejected.
+**Validation is identical on every plane.** The runtime re-validates the frozen document with no CP catalog available ([definition.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs) mirrors [validation_v2.py](../../../server/proliferate/server/workflows/domain/validation_v2.py)); lockstep is proven by the shared `v2-*` fixtures, each invalid one declaring how it must be rejected.
 
-**SQLite rows are the sole runtime truth, advanced by a pure transition
-table with persist-before-act ordering.** Every state change is a guarded
-compare-and-set through `WorkflowStore::apply_transition`; the per-run actor
-only performs side effects a committed row already says
-([transition.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs),
-[actor.rs](../../../anyharness/crates/anyharness-lib/src/live/workflows/actor.rs)).
-An illegal command is `409 WORKFLOW_TRANSITION_ILLEGAL` naming the refused
-command and current state — never a fabricated success.
+**SQLite rows are the sole runtime truth, advanced by a pure transition table with persist-before-act ordering.** Every state change is a guarded compare-and-set through `WorkflowStore::apply_transition`; the per-run actor only performs side effects a committed row already says ([transition.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs), [actor.rs](../../../anyharness/crates/anyharness-lib/src/live/workflows/actor.rs)). An illegal command is `409 WORKFLOW_TRANSITION_ILLEGAL` naming the refused command and current state — never a fabricated success.
 
-**At most one effective chain node is active.** Ad-hoc nodes run alongside
-and are exempt. The invariant sweep
-([invariants.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/invariants.rs))
-panics in debug/tests and emits `workflow.invariant_violation` in release.
+**At most one effective chain node is active.** Ad-hoc nodes run alongside and are exempt. The invariant sweep ([invariants.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/invariants.rs)) panics in debug/tests and emits `workflow.invariant_violation` in release.
 
-**Boot fences nonterminal state.** Before serving HTTP, in-flight runs
-surface as `interrupted` with an `interruptionCode`; `resume` is the only
-way back. A silently resumed run would re-launch sessions nobody asked for.
+**Boot fences nonterminal state.** Before serving HTTP, in-flight runs surface as `interrupted` with an `interruptionCode`; `resume` is the only way back. A silently resumed run would re-launch sessions nobody asked for.
 
-**Terminal runs release their workspaces.** The destruction policy answers
-"which non-terminal run controls this session" from the rows; completed,
-failed, and cancelled runs are ordinary destruction candidates again
-([policy.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs)).
+**Terminal runs release their workspaces.** The destruction policy answers "which non-terminal run controls this session" from the rows; completed, failed, and cancelled runs are ordinary destruction candidates again ([policy.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs)).
 
-**A queued interjection holds the node open.** `on_turn_finished` peeks the
-durable pending-prompt queue at that instant and reports `queue_empty`; the
-table answers `Hold` for a clean end-turn with work still queued.
+**A queued interjection holds the node open.** `on_turn_finished` peeks the durable pending-prompt queue at that instant and reports `queue_empty`; the table answers `Hold` for a clean end-turn with work still queued.
 
 ### Behavior by stage
 
@@ -220,19 +148,9 @@ table answers `Hold` for a clean end-turn with work still queued.
 
 ## 6. Emits
 
-Runtime tracing targets, declared in
-[observability/mod.rs](../../../anyharness/crates/anyharness-lib/src/observability/mod.rs):
-`anyharness.workflow_run_accepted`, `workflow_run_started`,
-`workflow_workspace_materialized`, `workflow_transition`,
-`workflow_transition_illegal`, `workflow_node_launched`,
-`workflow_node_launch_failed`, `workflow_run_finished`,
-`workflow_boot_fence`, `workflow_invariant_violation`,
-`workflow_notification_stale`, `workflow_node_interaction_requested`,
-`workflow_node_interaction_resolved`, `workflow_interjection_held`.
+Runtime tracing targets, declared in [observability/mod.rs](../../../anyharness/crates/anyharness-lib/src/observability/mod.rs): `anyharness.workflow_run_accepted`, `workflow_run_started`, `workflow_workspace_materialized`, `workflow_transition`, `workflow_transition_illegal`, `workflow_node_launched`, `workflow_node_launch_failed`, `workflow_run_finished`, `workflow_boot_fence`, `workflow_invariant_violation`, `workflow_notification_stale`, `workflow_node_interaction_requested`, `workflow_node_interaction_resolved`, `workflow_interjection_held`.
 
-The control plane emits no named events for definitions or invocations
-today. The run projection (`GET /v1/workflow-runs/{id}`) is the contract
-the client run view and the auto-advance toast consume.
+The control plane emits no named events for definitions or invocations today. The run projection (`GET /v1/workflow-runs/{id}`) is the contract the client run view and the auto-advance toast consume.
 
 ## 7. Fences
 
@@ -304,8 +222,7 @@ anyharness/crates/anyharness-lib/src/
 └── domains/workspaces/workflow_placement.rs    ← owned by workspaces; consumed here
 ```
 
-Client folder-fence note: the `workflows_v2` gate defaults ON and
-`VITE_WORKFLOWS_V2=0` darkens the whole surface without a release.
+Client folder-fence note: the `workflows_v2` gate defaults ON and `VITE_WORKFLOWS_V2=0` darkens the whole surface without a release.
 
 ## 9. Proof
 
@@ -345,8 +262,7 @@ Client folder-fence note: the `workflows_v2` gate defaults ON and
 
 ## Known gaps / follow-ups
 
-Everything the settled architecture adds to this system is a target the
-code does not yet meet. None of it changes the current laws above.
+Everything the settled architecture adds to this system is a target the code does not yet meet. None of it changes the current laws above.
 
 - [ ] **Name.** The inventory calls this system `automations`; every plane's
       folder and the manifest are still `workflows`, and the client's

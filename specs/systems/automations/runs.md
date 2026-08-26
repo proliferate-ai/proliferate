@@ -1,19 +1,10 @@
 # Runs
 
-Status: target. Nothing in this document exists on `main`; the body is
-written in the ideal state and [Current gaps](#current-gaps) is the whole
-build. Source: the settled architecture (Core Architecture §6 triggers &
-automations, the primitives index, the canonical lane) and the two-tier
-orchestration ruling.
+Status: target. Nothing in this document exists on `main`; the body is written in the ideal state and [Current gaps](#current-gaps) is the whole build. Source: the settled architecture (Core Architecture §6 triggers & automations, the primitives index, the canonical lane) and the two-tier orchestration ruling.
 
 ## 1. Purpose
 
-A **run** is the control plane's durable record of one governed execution:
-who it runs as, what it was asked to do, what it may spend, where it is
-executing, what it produced. It is the object humans triage, agents wait on,
-budgets attach to, and cancellation walks. Compute is a lazily-bound resource
-of a run (Law 8), never the other way around; a run exists before any
-environment does (Law 2).
+A **run** is the control plane's durable record of one governed execution: who it runs as, what it was asked to do, what it may spend, where it is executing, what it produced. It is the object humans triage, agents wait on, budgets attach to, and cancellation walks. Compute is a lazily-bound resource of a run (Law 8), never the other way around; a run exists before any environment does (Law 2).
 
 Two tiers of orchestration, never conflated:
 
@@ -22,9 +13,7 @@ Two tiers of orchestration, never conflated:
 | **Subagents** | in-environment sessions via the runtime product MCP, per-subagent auth | runtime `subagents` |
 | **Spawned runs** | a *new* invocation → a *new* run in its own task environment, created through the public API | this system + [api.md](../api/README.md) |
 
-An agent that needs another machine hits the Proliferate API like any other
-client and gets a child run with `parent_run_id`; there is no privileged
-internal channel (Law 4).
+An agent that needs another machine hits the Proliferate API like any other client and gets a child run with `parent_run_id`; there is no privileged internal channel (Law 4).
 
 ## 2. Owned state
 
@@ -34,8 +23,7 @@ internal channel (Law 4).
 | `run_result` | the immutable structured output of a terminal run | `run_id`, `kind` (`completed \| failed \| cancelled`), `summary` (short text), `payload` (typed JSON: PRs, evidence refs, artifacts), `produced_at` |
 | `run_event` (or projection) | the triage-facing timeline: status transitions, spawn edges, budget checkpoints | `run_id`, `seq`, `kind`, `payload`, `ts` |
 
-Status vocabulary: `queued | placing | running | awaiting_human | completed | failed | cancelled`.
-A run is terminal exactly when `run_result` exists.
+Status vocabulary: `queued | placing | running | awaiting_human | completed | failed | cancelled`. A run is terminal exactly when `run_result` exists.
 
 > [!decision] PABLO DECIDES: is the gen-2 runtime run the *same object* as the
 > CP run? Recommended: yes, 1:1 — the CP run is the governing record and the
@@ -46,14 +34,9 @@ A run is terminal exactly when `run_result` exists.
 
 ## 3. Public surface
 
-Internal Python surface (consumed by [api.md](../api/README.md), automations intake,
-the Slack app): `create_run(invocation, subject, envelope, parent) → Run`,
-`get_run`, `list_runs(filters)`, `wait_run(id, timeout)`, `cancel_tree(id)`,
-`record_result(id, result)`, `attenuate(envelope, request) → envelope`.
-The HTTP verbs are the API's; this system exposes no routes of its own.
+Internal Python surface (consumed by [api.md](../api/README.md), automations intake, the Slack app): `create_run(invocation, subject, envelope, parent) → Run`, `get_run`, `list_runs(filters)`, `wait_run(id, timeout)`, `cancel_tree(id)`, `record_result(id, result)`, `attenuate(envelope, request) → envelope`. The HTTP verbs are the API's; this system exposes no routes of its own.
 
-Emitted projections: the triage list (per org, filter by subject /
-definition / status / parent), the spawn tree, and the result document.
+Emitted projections: the triage list (per org, filter by subject / definition / status / parent), the spawn tree, and the result document.
 
 ## 4. Consumes
 
@@ -69,44 +52,25 @@ definition / status / parent), the spawn tree, and the result document.
 
 ## 5. Laws
 
-**Every run has exactly one subject and one org.** Headless runs execute as
-the org's service subject and never hold human credentials (Law 6).
+**Every run has exactly one subject and one org.** Headless runs execute as the org's service subject and never hold human credentials (Law 6).
 
-**Session before compute.** `create_run` writes the run row and its session
-registry row in one transaction and returns; placement is asynchronous and
-may never happen (budget refused, limiter full) without the run being lost.
+**Session before compute.** `create_run` writes the run row and its session registry row in one transaction and returns; placement is asynchronous and may never happen (budget refused, limiter full) without the run being lost.
 
-**Budget envelopes only attenuate.** A child's envelope is `min(parent
-remaining, requested)` on every axis; `attenuate` is the single function
-that computes it, and it is applied at spawn, enforced at the billing gate
-and both gateways. A spawn tree can never spend more than its root.
+**Budget envelopes only attenuate.** A child's envelope is `min(parent remaining, requested)` on every axis; `attenuate` is the single function that computes it, and it is applied at spawn, enforced at the billing gate and both gateways. A spawn tree can never spend more than its root.
 
-**Depth is bounded.** `depth = parent.depth + 1`; creation beyond the cap is
-a typed refusal, so a runaway spawner cannot fork forever.
+**Depth is bounded.** `depth = parent.depth + 1`; creation beyond the cap is a typed refusal, so a runaway spawner cannot fork forever.
 
-**Cancel cancels the tree.** `cancel_tree` marks every non-terminal
-descendant cancelled in one pass before any environment is signalled; a
-child cannot outlive a cancelled parent.
+**Cancel cancels the tree.** `cancel_tree` marks every non-terminal descendant cancelled in one pass before any environment is signalled; a child cannot outlive a cancelled parent.
 
-**A result is written once and never updated.** `record_result` is
-insert-only; a second write is a conflict. Wake-on-completion delivers the
-result *into the parent's session* as a message through the courier — the
-parent does not poll.
+**A result is written once and never updated.** `record_result` is insert-only; a second write is a conflict. Wake-on-completion delivers the result *into the parent's session* as a message through the courier — the parent does not poll.
 
-**Idempotent creation.** Same idempotency key + same canonical request →
-the existing run; different request → conflict. (The invocation layer's RFC
-8785 identity is reused.)
+**Idempotent creation.** Same idempotency key + same canonical request → the existing run; different request → conflict. (The invocation layer's RFC 8785 identity is reused.)
 
-**Terminal means checkpointed.** A run does not become terminal until the
-session's terminal checkpoint has been ingested; the record survives the
-VM.
+**Terminal means checkpointed.** A run does not become terminal until the session's terminal checkpoint has been ingested; the record survives the VM.
 
 ## 6. Emits
 
-`run.created`, `run.placed`, `run.status_changed`, `run.spawned_child`,
-`run.result_recorded`, `run.cancelled_tree` — the ship-now class for
-binding fan-out (Slack thread posts, mobile push, registry projections).
-Named telemetry mirrors the same events.
+`run.created`, `run.placed`, `run.status_changed`, `run.spawned_child`, `run.result_recorded`, `run.cancelled_tree` — the ship-now class for binding fan-out (Slack thread posts, mobile push, registry projections). Named telemetry mirrors the same events.
 
 ## 7. Fences
 
@@ -130,30 +94,15 @@ server/proliferate/db/models/runs.py     ※ run · run_result · run_event
 apps/packages/product-client/src/systems/runs/   ※ triage view, spawn tree, inbox (client plane)
 ```
 
-Adjacent code the build reuses: the invocation freeze in
-[service_v2.py](../../../server/proliferate/server/workflows/service_v2.py)
-and canonical identity in
-[domain/invocation.py](../../../server/proliferate/server/workflows/domain/invocation.py);
-budget limits in [billing/budget_limits.py](../../../server/proliferate/server/billing/budget_limits.py)
-(to be replaced by the envelope primitive per the billing three-way
-ruling); the runtime run/nodes model in
-[domains/workflows/model.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/model.rs).
+Adjacent code the build reuses: the invocation freeze in [service_v2.py](../../../server/proliferate/server/workflows/service_v2.py) and canonical identity in [domain/invocation.py](../../../server/proliferate/server/workflows/domain/invocation.py); budget limits in [billing/budget_limits.py](../../../server/proliferate/server/billing/budget_limits.py) (to be replaced by the envelope primitive per the billing three-way ruling); the runtime run/nodes model in [domains/workflows/model.rs](../../../anyharness/crates/anyharness-lib/src/domains/workflows/model.rs).
 
 ## 9. Proof
 
-Pinning tests to write with the system: envelope attenuation is monotonic
-on every axis (property test); cancel-tree marks all descendants before any
-signal; result is insert-only; create is idempotent under concurrent
-identical requests (advisory lock, as invocations); depth cap refuses;
-create returns before placement (no environment provider call inside the
-transaction).
+Pinning tests to write with the system: envelope attenuation is monotonic on every axis (property test); cancel-tree marks all descendants before any signal; result is insert-only; create is idempotent under concurrent identical requests (advisory lock, as invocations); depth cap refuses; create returns before placement (no environment provider call inside the transaction).
 
 ## Current gaps
 
-The entire system is a gap. Build order per Core Architecture: seam contract
-→ task environment class → trigger→invocation → **API tokens + spawn + run
-result + wait** (this system with [api.md](../api/README.md)) → checkpoints and
-registry projections → per-(subject, run) grants.
+The entire system is a gap. Build order per Core Architecture: seam contract → task environment class → trigger→invocation → **API tokens + spawn + run result + wait** (this system with [api.md](../api/README.md)) → checkpoints and registry projections → per-(subject, run) grants.
 
 > [!decision] PABLO DECIDES: result payload shape — free-form JSON with a
 > required `summary` string (recommended for launch week: agents already

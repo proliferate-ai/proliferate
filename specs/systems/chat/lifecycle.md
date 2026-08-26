@@ -1,8 +1,6 @@
 # Chat Lifecycle
 
-This document answers whether a model selection creates, preserves, or
-replaces the visible chat identity. It does not own tab ordering, runtime
-process mechanics, model availability, or source organization.
+This document answers whether a model selection creates, preserves, or replaces the visible chat identity. It does not own tab ordering, runtime process mechanics, model availability, or source organization.
 
 ## Visible Transitions
 
@@ -22,11 +20,7 @@ open_new_chat + existing messages
   -> create and activate a new session tab
 ```
 
-A same-harness selection is `update_current_chat`, so it preserves the durable
-session even if AnyHarness must replace the live agent process. A
-different-harness selection is `open_new_chat`. The current shell determines
-whether that action replaces an unused backend session or adds another visible
-session tab; it does not guarantee the new tab's immediate-right placement.
+A same-harness selection is `update_current_chat`, so it preserves the durable session even if AnyHarness must replace the live agent process. A different-harness selection is `open_new_chat`. The current shell determines whether that action replaces an unused backend session or adds another visible session tab; it does not guarantee the new tab's immediate-right placement.
 
 ## Related Owners
 

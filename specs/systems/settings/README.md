@@ -1,11 +1,6 @@
 # Settings
 
-The settings surface: one route (`/settings?section=…`) hosting user-scope,
-organization-scope, repository-scope, and per-agent panes. A **client
-composition surface** — it renders and mutates records owned by accounts,
-organizations, billing, agent auth, integrations, the runtime's agent
-catalog, and the user's preferences; it owns only navigation state and
-drafts. The focused documents below are its sections.
+The settings surface: one route (`/settings?section=…`) hosting user-scope, organization-scope, repository-scope, and per-agent panes. A **client composition surface** — it renders and mutates records owned by accounts, organizations, billing, agent auth, integrations, the runtime's agent catalog, and the user's preferences; it owns only navigation state and drafts. The focused documents below are its sections.
 
 | Section | Document |
 | --- | --- |
@@ -17,10 +12,7 @@ drafts. The focused documents below are its sections.
 
 ## Purpose
 
-Let a person (or an org admin) configure their account, appearance, agents
-and their credentials, integrations, repositories, organization, and plan —
-each pane a thin editor over the owning system's contract, with the blocked
-layer named rather than hidden.
+Let a person (or an org admin) configure their account, appearance, agents and their credentials, integrations, repositories, organization, and plan — each pane a thin editor over the owning system's contract, with the blocked layer named rather than hidden.
 
 ## Owned state
 
@@ -63,9 +55,7 @@ layer named rather than hidden.
 | Archived workspaces (runtime `workspaces`) | list, unarchive scenarios | [use-archived-workspaces.ts](../../../apps/packages/product-client/src/hooks/workspaces/cache/use-archived-workspaces.ts) |
 | Host | preference persistence, zoom, theme | [ProductHost.storage](../../../apps/packages/product-client/src/host/product-host.ts) |
 
-The `environments` / `repo-environment` sections edit cloud environment
-records that belong to the dark cloud lane (deleted by the dark-cloud cull
-part 2); they render behind the cloud gate today.
+The `environments` / `repo-environment` sections edit cloud environment records that belong to the dark cloud lane (deleted by the dark-cloud cull part 2); they render behind the cloud gate today.
 
 ## Laws
 
@@ -145,10 +135,7 @@ apps/packages/product-client/src/
 └── pages/SettingsPage.tsx · pages/SettingsCloudRedirect.tsx
 ```
 
-Target moves (later sweep wave): `components/settings/panes/agents/**` +
-`hooks/agents` → `systems/agent_auth/` (client half), integrations panes →
-`systems/integrations/`, billing panes → `systems/billing/`; `settings`
-keeps the screen, sidebar, navigation, account, appearance, general.
+Target moves (later sweep wave): `components/settings/panes/agents/**` + `hooks/agents` → `systems/agent_auth/` (client half), integrations panes → `systems/integrations/`, billing panes → `systems/billing/`; `settings` keeps the screen, sidebar, navigation, account, appearance, general.
 
 ## Proof
 

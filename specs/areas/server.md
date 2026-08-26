@@ -4,29 +4,15 @@ What an engineer needs to know to reason about the server architecture.
 
 ## Scope
 
-This document owns the cross-layer ownership model for the Python control plane
-under [server/proliferate](../../server/proliferate). The current source
-router and enforced rules remain in [Server Standards](server.md); the
-focused [domain](server.md), [database](server.md), [auth](../systems/identity/auth-surface.md),
-[integration](server.md), [library](server.md), [error](server.md), and
-[background](server.md) guides own the detail for their rows. Product
-behavior remains in the owning platform or system document.
+This document owns the cross-layer ownership model for the Python control plane under [server/proliferate](../../server/proliferate). The current source router and enforced rules remain in [Server Standards](server.md); the focused [domain](server.md), [database](server.md), [auth](../systems/identity/auth-surface.md), [integration](server.md), [library](server.md), [error](server.md), and [background](server.md) guides own the detail for their rows. Product behavior remains in the owning platform or system document.
 
 ## Target-observed harness launch options
 
-Cloud launch-option state is a thin copied-state domain under
-`proliferate/server/cloud/harness_launch_options/`. It stores and reads one
-verbatim state by `(cloud_sandbox_id, harness_kind)` and rejects stale source
-revisions. Authorization is target-scoped. The server does not reconstruct
-membership, apply add/remove overrides, or seed missing state from static
-catalog data.
+Cloud launch-option state is a thin copied-state domain under `proliferate/server/cloud/harness_launch_options/`. It stores and reads one verbatim state by `(cloud_sandbox_id, harness_kind)` and rejects stale source revisions. Authorization is target-scoped. The server does not reconstruct membership, apply add/remove overrides, or seed missing state from static catalog data.
 
 ## Purpose And Ownership
 
-The server is the **control plane**: an HTTP API plus background workers over
-Postgres, integrating external vendors (AnyHarness runtime, Stripe, GitHub, AWS,
-Slack). It owns persistence, auth, billing, orgs, and orchestrating runtimes — it
-does **not** run agent sessions (AnyHarness does).
+The server is the **control plane**: an HTTP API plus background workers over Postgres, integrating external vendors (AnyHarness runtime, Stripe, GitHub, AWS, Slack). It owns persistence, auth, billing, orgs, and orchestrating runtimes — it does **not** run agent sessions (AnyHarness does).
 
 Three rules generate everything below:
 
@@ -38,34 +24,17 @@ Three rules generate everything below:
 3. **Domain folders answer "what product area?"** — never transport, UI shape, or
    deployment target.
 
-Plus the meta-rule: **lowest layer that can own it cleanly**, and dependencies
-point one way.
+Plus the meta-rule: **lowest layer that can own it cleanly**, and dependencies point one way.
 
-The ownership model is current operating truth, enforced by
-[check_server_boundaries.py](../../scripts/check_server_boundaries.py) from the
-rule records in [lints/server/](../../lints/server/), with its exact named
-exception sites in [exceptions.toml](../../lints/server/exceptions.toml).
-The rules listed under [Current gaps](#current-gaps) are the ones that remain
-unenforced; the reviewed exception ledger remains the operating tolerance until
-those gaps close.
+The ownership model is current operating truth, enforced by [check_server_boundaries.py](../../scripts/check_server_boundaries.py) from the rule records in [lints/server/](../../lints/server/), with its exact named exception sites in [exceptions.toml](../../lints/server/exceptions.toml). The rules listed under [Current gaps](#current-gaps) are the ones that remain unenforced; the reviewed exception ledger remains the operating tolerance until those gaps close.
 
-Every domain folder additionally carries a `MANIFEST.toml` — name, governing
-spec, owns, public surface, and its measured allowed importers — validated by
-[check_manifests.py](../../scripts/check_manifests.py) under the
-`PROD-MANIFEST-*` records in
-[lints/product/manifests.toml](../../lints/product/manifests.toml).
+Every domain folder additionally carries a `MANIFEST.toml` — name, governing spec, owns, public surface, and its measured allowed importers — validated by [check_manifests.py](../../scripts/check_manifests.py) under the `PROD-MANIFEST-*` records in [lints/product/manifests.toml](../../lints/product/manifests.toml).
 
 ## The Core Idea
 
-The server is a **grid**: columns are business domains such as Billing, Cloud,
-Workflows, Accounts, and Organizations; rows are technical layers such as API,
-service, domain, models, and stores. A piece of code lives at one coordinate.
+The server is a **grid**: columns are business domains such as Billing, Cloud, Workflows, Accounts, and Organizations; rows are technical layers such as API, service, domain, models, and stores. A piece of code lives at one coordinate.
 
-**Legality is a pure function of coordinates.** Whether code at `(service,
-billing)` can call code at `(store, cloud)` depends only on those coordinates
-and an explicit ownership declaration. It does not depend on review history or
-an undocumented exception. That makes the boundary searchable, testable, and
-enforceable in CI.
+**Legality is a pure function of coordinates.** Whether code at `(service, billing)` can call code at `(store, cloud)` depends only on those coordinates and an explicit ownership declaration. It does not depend on review history or an undocumented exception. That makes the boundary searchable, testable, and enforceable in CI.
 
 Three principles hold the grid stable:
 
@@ -80,26 +49,15 @@ Three principles hold the grid stable:
 
 ## The Layers
 
-**API** is the HTTP boundary. It parses requests, receives authentication and
-access dependencies, calls services, and shapes responses. It contains no
-business logic, authorization decisions, or database operations.
+**API** is the HTTP boundary. It parses requests, receives authentication and access dependencies, calls services, and shapes responses. It contains no business logic, authorization decisions, or database operations.
 
-**Service** is orchestration. It calls its own stores, foreign public services,
-declared foreign-read stores, integrations, and allowed libraries. It receives
-resolved access context and returns domain-typed data.
+**Service** is orchestration. It calls its own stores, foreign public services, declared foreign-read stores, integrations, and allowed libraries. It receives resolved access context and returns domain-typed data.
 
-**Domain** is pure product policy. It performs no I/O. Its rules could move to a
-different runtime without changing their inputs or outputs.
+**Domain** is pure product policy. It performs no I/O. Its rules could move to a different runtime without changing their inputs or outputs.
 
-**Models** have two distinct audiences. Public models in a domain's `models.py`
-are wire vocabulary; models under `db/models/**` are private ORM shapes. The
-pipeline is ORM → frozen dataclass → Pydantic. A service never receives an ORM
-object.
+**Models** have two distinct audiences. Public models in a domain's `models.py` are wire vocabulary; models under `db/models/**` are private ORM shapes. The pipeline is ORM → frozen dataclass → Pydantic. A service never receives an ORM object.
 
-**Stores** are the only layer that knows SQL. A store receives the caller's
-session, returns frozen dataclasses, and never opens, commits, or rolls back a
-session. Each store has one owning domain. Foreign reads require an exact ledger
-entry; foreign writes go through the owner's public service.
+**Stores** are the only layer that knows SQL. A store receives the caller's session, returns frozen dataclasses, and never opens, commits, or rolls back a session. Each store has one owning domain. Foreign reads require an exact ledger entry; foreign writes go through the owner's public service.
 
 ## The Type Pipeline — The Server's State Model
 
@@ -114,12 +72,7 @@ ORM (db/models)  ──store returns──►  @dataclass(frozen=True)  ──mo
 - Dataclasses carry **enums**; Pydantic maps to wire strings at the boundary.
 - Cross-domain service calls pass **dataclasses**, not Pydantic.
 
-The reason the boundary exists at the store and not somewhere more convenient:
-ORM objects are mutable, session-coupled, and lazy-loading. An ORM object that
-escapes the store carries an implicit dependency on a live session, so a read
-that looks pure can emit SQL — or fail — arbitrarily far from the query that
-produced it. A frozen dataclass is the safe travel format precisely because it
-cannot do either.
+The reason the boundary exists at the store and not somewhere more convenient: ORM objects are mutable, session-coupled, and lazy-loading. An ORM object that escapes the store carries an implicit dependency on a live session, so a read that looks pure can emit SQL — or fail — arbitrarily far from the query that produced it. A frozen dataclass is the safe travel format precisely because it cannot do either.
 
 ## Transactions, Sessions, And Connections
 
@@ -140,114 +93,67 @@ cannot do either.
   in a worker).
 - **No `db.commit()` outside session-management code.**
 
-The connection, not the session, is what runs out. A transaction left open
-across a vendor HTTP call holds a pooled connection for the duration of someone
-else's latency, so pool exhaustion arrives as an unrelated timeout somewhere
-across the server. Short transactions and the outbox are the two mechanics that
-keep foreign latency out of the pool.
+The connection, not the session, is what runs out. A transaction left open across a vendor HTTP call holds a pooled connection for the duration of someone else's latency, so pool exhaustion arrives as an unrelated timeout somewhere across the server. Short transactions and the outbox are the two mechanics that keep foreign latency out of the pool.
 
 ## Shared Coordinates
 
-**`lib/infra`** contains generic machinery: time, IDs, pagination, batching,
-strings, and cryptography. Every layer may import it because it knows nothing
-about products, vendors, or persistence.
+**`lib/infra`** contains generic machinery: time, IDs, pagination, batching, strings, and cryptography. Every layer may import it because it knows nothing about products, vendors, or persistence.
 
-**`lib/product`** contains cross-domain pure product logic. Its audience is the
-product-domain service, domain, and models coordinates, plus a domain's
-`worker/service.py`; API handlers, background task shims, stores, integrations,
-and other infrastructure do not import it.
+**`lib/product`** contains cross-domain pure product logic. Its audience is the product-domain service, domain, and models coordinates, plus a domain's `worker/service.py`; API handlers, background task shims, stores, integrations, and other infrastructure do not import it.
 
-**`lib/capabilities`** contains reusable orchestration over integrations. Each
-capability has an explicit domain-consumer map. A concern enters `lib/**` only
-after a second real consumer exists.
+**`lib/capabilities`** contains reusable orchestration over integrations. Each capability has an explicit domain-consumer map. A concern enters `lib/**` only after a second real consumer exists.
 
-**Integrations** contain vendor mechanics: raw SDKs, HTTP, protocol models, and
-vendor errors. They are leaves below product domains. Services translate vendor
-failures into product meaning.
+**Integrations** contain vendor mechanics: raw SDKs, HTTP, protocol models, and vendor errors. They are leaves below product domains. Services translate vendor failures into product meaning.
 
-**Seams** own cross-cutting request lifecycle. Authentication and
-dependency-free authorization vocabulary sit below product domains; request
-owner/org resolution composes at the endpoint; resource access remains in each
-owning domain; one global error handler translates product errors.
+**Seams** own cross-cutting request lifecycle. Authentication and dependency-free authorization vocabulary sit below product domains; request owner/org resolution composes at the endpoint; resource access remains in each owning domain; one global error handler translates product errors.
 
-**Background** has one durable execution model: thin Celery tasks fired by Beat
-or the transactional outbox. Domain worker services own the work. There are no
-domain schedulers, process-owned periodic loops, or `worker.py` entry points.
-Only the outbox relay below `background/**` reads a store directly.
+**Background** has one durable execution model: thin Celery tasks fired by Beat or the transactional outbox. Domain worker services own the work. There are no domain schedulers, process-owned periodic loops, or `worker.py` entry points. Only the outbox relay below `background/**` reads a store directly.
 
 ## Why Each Rule Exists
 
 ### Store ownership (`SRV-STORE`)
 
-**Problem:** unrestricted foreign writes make responsibility and schema-change
-impact unknowable.
+**Problem:** unrestricted foreign writes make responsibility and schema-change impact unknowable.
 
-**Rule:** writes cross domains only through the owner's public service. Reads
-cross only through an exact, reviewable consumer ledger.
+**Rule:** writes cross domains only through the owner's public service. Reads cross only through an exact, reviewable consumer ledger.
 
-**Result:** a store owner can query every consumer before changing its contract,
-and invariant enforcement has one write boundary.
+**Result:** a store owner can query every consumer before changing its contract, and invariant enforcement has one write boundary.
 
 ### Error ownership (`SRV-ERR`)
 
-**Problem:** protocol-shaped errors scattered through services make response
-translation inconsistent and hard to test.
+**Problem:** protocol-shaped errors scattered through services make response translation inconsistent and hard to test.
 
-**Rule:** services raise product errors; the global handler translates them to
-HTTP. `HTTPException` is legal only at authentication, org/resource-access, and
-explicitly declared non-JSON transport boundaries. Error codes are globally
-unique by convention; that uniqueness is not yet mechanically checked (gap 6).
+**Rule:** services raise product errors; the global handler translates them to HTTP. `HTTPException` is legal only at authentication, org/resource-access, and explicitly declared non-JSON transport boundaries. Error codes are globally unique by convention; that uniqueness is not yet mechanically checked (gap 6).
 
-**Result:** the HTTP format changes once, while product failures remain typed
-and independently testable.
+**Result:** the HTTP format changes once, while product failures remain typed and independently testable.
 
 ### Library purity (`SRV-LIB`)
 
-**Problem:** a shared folder that imports everything becomes a junk drawer and
-pulls single-domain policy out of its owner prematurely.
+**Problem:** a shared folder that imports everything becomes a junk drawer and pulls single-domain policy out of its owner prematurely.
 
-**Rule:** Infra is universal and product-blind; Product is pure and restricted
-to product-domain `service.py`, `domain/**`, `models.py`, and
-`worker/service.py`; Capabilities are consumer-mapped. Reuse requires at least
-two real consumers.
+**Rule:** Infra is universal and product-blind; Product is pure and restricted to product-domain `service.py`, `domain/**`, `models.py`, and `worker/service.py`; Capabilities are consumer-mapped. Reuse requires at least two real consumers.
 
-**Result:** a library's import audience and allowed knowledge are obvious from
-its coordinate.
+**Result:** a library's import audience and allowed knowledge are obvious from its coordinate.
 
 ### Background unification (`SRV-BG`)
 
-**Problem:** domain-owned loops and schedulers create multiple restart,
-observability, and failure models.
+**Problem:** domain-owned loops and schedulers create multiple restart, observability, and failure models.
 
-**Rule:** scheduled work is a Beat-fired Celery task; durable follow-up work is
-an outbox-fired Celery task. Tasks are thin and process state is disposable.
+**Rule:** scheduled work is a Beat-fired Celery task; durable follow-up work is an outbox-fired Celery task. Tasks are thin and process state is disposable.
 
 **Result:** work is restartable, observable, and scalable through one runtime.
 
 ### Auth as a seam (`SRV-SEAM`)
 
-**Problem:** authorization scattered through services hides access decisions
-and makes authentication changes cross domain boundaries.
+**Problem:** authorization scattered through services hides access decisions and makes authentication changes cross domain boundaries.
 
-**Rule:** endpoints compose four orthogonal boundaries: actor authentication in
-[auth/dependencies.py](../../server/proliferate/auth/dependencies.py),
-org standing through
-[permissions.py](../../server/proliferate/permissions.py), concrete
-resource access in the owning domain's `access.py`, and pure product policy in
-the owning domain's `domain/policy.py`. Services receive the resolved result.
+**Rule:** endpoints compose four orthogonal boundaries: actor authentication in [auth/dependencies.py](../../server/proliferate/auth/dependencies.py), org standing through [permissions.py](../../server/proliferate/permissions.py), concrete resource access in the owning domain's `access.py`, and pure product policy in the owning domain's `domain/policy.py`. Services receive the resolved result.
 
-**Result:** access is visible in route signatures, product policy is testable
-without FastAPI, and authentication mechanisms remain below product domains.
+**Result:** access is visible in route signatures, product policy is testable without FastAPI, and authentication mechanisms remain below product domains.
 
 ## The Architecture in One Breath
 
-Columns are domains and rows are layers. Within a column, API calls service,
-service orchestrates, domain decides, and store persists. Public `models.py` is
-the wire handshake. Stores have one owner; writes cross through that owner's
-service and reads cross only when ledgered. Shared code has an explicit import
-audience. Integrations isolate vendors. Auth and errors are seams. Background
-work is a Celery task. Anything importable by every coordinate knows no product
-or persistence detail.
+Columns are domains and rows are layers. Within a column, API calls service, service orchestrates, domain decides, and store persists. Public `models.py` is the wire handshake. Stores have one owner; writes cross through that owner's service and reads cross only when ledgered. Shared code has an explicit import audience. Integrations isolate vendors. Auth and errors are seams. Background work is a Celery task. Anything importable by every coordinate knows no product or persistence detail.
 
 ## What the Grid Prevents
 
@@ -264,16 +170,9 @@ or persistence detail.
 
 ## Foreign-Read Doctrine
 
-Foreign reads are legal only when the exact consumer and store operation appear
-in the ownership ledger. A ledger row grants no module-wide permission, and
-stale rows are meant to be pruned. The ledger is maintained by review rather
-than by the checker: `check_server_boundaries.py` has no ledger table, so
-neither the declarations nor their staleness are mechanically enforced (gap 2).
-If a required read is not declared, the caller must either add the reviewed read
-edge or consume an owner service contract.
+Foreign reads are legal only when the exact consumer and store operation appear in the ownership ledger. A ledger row grants no module-wide permission, and stale rows are meant to be pruned. The ledger is maintained by review rather than by the checker: `check_server_boundaries.py` has no ledger table, so neither the declarations nor their staleness are mechanically enforced (gap 2). If a required read is not declared, the caller must either add the reviewed read edge or consume an owner service contract.
 
-The small declaration cost makes schema-change blast radius queryable: the
-owner can answer “who reads this store?” without reconstructing history.
+The small declaration cost makes schema-change blast radius queryable: the owner can answer “who reads this store?” without reconstructing history.
 
 ## How to Reason About a Change
 
@@ -304,10 +203,7 @@ If every answer is yes or not applicable, the change aligns with the grid.
 
 ## Current gaps
 
-Everything above this section is the current operating model, with each rule's
-enforcement status stated inline where it is not mechanically checked. Each item
-below is a named rule the model asserts that no checker holds yet — public debt,
-not a softer version of the rule.
+Everything above this section is the current operating model, with each rule's enforcement status stated inline where it is not mechanically checked. Each item below is a named rule the model asserts that no checker holds yet — public debt, not a softer version of the rule.
 
 - [ ] **Coordinate enforcement is not present.** Current CI runs the bounded,
   path-classified
@@ -397,17 +293,11 @@ These standards apply to backend/control-plane code under:
 
 - `server/**`
 
-The Python control plane lives under `server/proliferate/**`. The hosted
-artifact viewer under `server/artifact-runtime/**` has its own contract; when a
-change touches that tree, also read
-[../../server/artifact-runtime/README.md](../../server/artifact-runtime/README.md).
+The Python control plane lives under `server/proliferate/**`. The hosted artifact viewer under `server/artifact-runtime/**` has its own contract; when a change touches that tree, also read [../../server/artifact-runtime/README.md](../../server/artifact-runtime/README.md).
 
 ## Goals
 
-The server is organized into distinct homes for HTTP transport, business
-orchestration, persistence, pure product rules, auth, integration adapters,
-reusable cross-domain logic, background work, errors, config, and shared
-constants.
+The server is organized into distinct homes for HTTP transport, business orchestration, persistence, pure product rules, auth, integration adapters, reusable cross-domain logic, background work, errors, config, and shared constants.
 
 The explicit goals are:
 
@@ -416,14 +306,11 @@ The explicit goals are:
 - make large control-plane flows reviewable by moving logic to the owner layer
 - preserve current behavior while keeping structure aligned with ownership rules
 
-A file path should tell a developer what kind of code is allowed there. If a
-server feature requires chasing imports through helpers, raw clients, route
-handlers, and store calls to understand ownership, the structure is wrong.
+A file path should tell a developer what kind of code is allowed there. If a server feature requires chasing imports through helpers, raw clients, route handlers, and store calls to understand ownership, the structure is wrong.
 
 ## Target Shape
 
-The server tree is relative to `server/proliferate/`. Folders are omitted when
-they are not needed.
+The server tree is relative to `server/proliferate/`. Folders are omitted when they are not needed.
 
 ```text
 server/proliferate/
@@ -500,8 +387,7 @@ server/proliferate/
         domain/
 ```
 
-Do not add new top-level folders under `server/proliferate/` without updating
-this doc and the focused guide that owns the layer.
+Do not add new top-level folders under `server/proliferate/` without updating this doc and the focused guide that owns the layer.
 
 ## What Goes Where
 
@@ -613,8 +499,7 @@ Persistence rule:
 
 ## Read Order
 
-Always start with this file. Then read the focused guide for the layer you are
-changing:
+Always start with this file. Then read the focused guide for the layer you are changing:
 
 - [README.md](server.md) — the cross-layer ownership model and its explicit
   current gaps
@@ -627,11 +512,7 @@ changing:
 - [config.md](server.md)
 - [background.md](server.md)
 
-Product and surface contracts live outside this structure folder. For
-cross-cutting backend behavior such as billing, sandbox/workspace provisioning,
-runtime-worker enrollment, MCP, claiming, workspace lifecycle, or product auth,
-also read the relevant spec under `specs/product/**` or
-`specs/systems/**`.
+Product and surface contracts live outside this structure folder. For cross-cutting backend behavior such as billing, sandbox/workspace provisioning, runtime-worker enrollment, MCP, claiming, workspace lifecycle, or product auth, also read the relevant spec under `specs/product/**` or `specs/systems/**`.
 
 ## Dependency Direction
 
@@ -650,41 +531,13 @@ lib/capabilities -> integrations, lib/product, lib/infra
 lib/product -> lib/infra
 ```
 
-`server/<domain>/domain/**` is pure and does not depend on services, stores,
-integrations, SQLAlchemy, FastAPI, or async I/O libraries. `db/store/**` is the
-only layer that imports SQLAlchemy query APIs. `integrations/**` is a leaf and
-does not import server domain code. `lib/**` is a leaf below the domains: it
-never imports `server/<domain>/**` or `db/store`, `lib/product/` never imports
-`integrations/`, and a concern enters `lib/` only at its second domain consumer.
-The dependency-free authorization types in
-[auth/authorization.py](../../server/proliferate/auth/authorization.py)
-sit below request composition. Domain code imports the public authorization
-seam from [permissions.py](../../server/proliferate/permissions.py), which
-is not an import-free leaf: it composes actor deps, stores, billing services,
-and request/RLS context. The rest of `auth/**` remains below product domains;
-product account-entry orchestration belongs to
-[server/accounts/**](../../server/proliferate/server/accounts). Background
-tasks call domain services. The relay owns outbox mutations and reads only
-bounded, fixed-cardinality operational snapshots; current background-store
-exceptions are recorded in the [Background guide](server.md).
+`server/<domain>/domain/**` is pure and does not depend on services, stores, integrations, SQLAlchemy, FastAPI, or async I/O libraries. `db/store/**` is the only layer that imports SQLAlchemy query APIs. `integrations/**` is a leaf and does not import server domain code. `lib/**` is a leaf below the domains: it never imports `server/<domain>/**` or `db/store`, `lib/product/` never imports `integrations/`, and a concern enters `lib/` only at its second domain consumer. The dependency-free authorization types in [auth/authorization.py](../../server/proliferate/auth/authorization.py) sit below request composition. Domain code imports the public authorization seam from [permissions.py](../../server/proliferate/permissions.py), which is not an import-free leaf: it composes actor deps, stores, billing services, and request/RLS context. The rest of `auth/**` remains below product domains; product account-entry orchestration belongs to [server/accounts/**](../../server/proliferate/server/accounts). Background tasks call domain services. The relay owns outbox mutations and reads only bounded, fixed-cardinality operational snapshots; current background-store exceptions are recorded in the [Background guide](server.md).
 
 ## CI-Enforced Repo Shape
 
-`scripts/check_max_lines.py` enforces the hard column for server layers and
-falls back to the repo-wide 600-line ceiling for server files without a
-server-specific hard threshold.
+`scripts/check_max_lines.py` enforces the hard column for server layers and falls back to the repo-wide 600-line ceiling for server files without a server-specific hard threshold.
 
-The Server CI lint job installs the exact `server/uv.lock` development
-environment on Python 3.12, runs Ruff, and runs strict mypy through
-`server/scripts/check_mypy_baseline.py`. Existing mypy debt is recorded by
-file, error code, normalized message, and multiplicity in a shrink-only
-baseline. A new diagnostic, a baseline increase relative to the comparison Git
-revision, or a stale entry after a fix fails the check. `make lint-server` uses
-the same frozen environment. Pull requests compare with their base SHA, pushes
-compare with the event's pre-push SHA, and reusable/manual calls must provide an
-explicit trusted comparison SHA; a newly created release tag rechecks against
-its commit parent after the main-push gate. After fixing existing diagnostics,
-ratchet the baseline down with:
+The Server CI lint job installs the exact `server/uv.lock` development environment on Python 3.12, runs Ruff, and runs strict mypy through `server/scripts/check_mypy_baseline.py`. Existing mypy debt is recorded by file, error code, normalized message, and multiplicity in a shrink-only baseline. A new diagnostic, a baseline increase relative to the comparison Git revision, or a stale entry after a fix fails the check. `make lint-server` uses the same frozen environment. Pull requests compare with their base SHA, pushes compare with the event's pre-push SHA, and reusable/manual calls must provide an explicit trusted comparison SHA; a newly created release tag rechecks against its commit parent after the main-push gate. After fixing existing diagnostics, ratchet the baseline down with:
 
 ```bash
 cd server
@@ -702,8 +555,7 @@ uv run --python 3.12 --frozen --extra dev python scripts/check_mypy_baseline.py 
 | `db/models/*.py` | 300 | 500 |
 | `integrations/<vendor>/*.py` | 300 | repo-wide ceiling |
 
-Soft is a PR-review prompt. Hard requires a justification in the PR
-description, typically a tracking issue plus the reason it cannot split now.
+Soft is a PR-review prompt. Hard requires a justification in the PR description, typically a tracking issue plus the reason it cannot split now.
 
 ## Change Discipline
 
@@ -722,13 +574,9 @@ description, typically a tracking issue plus the reason it cannot split now.
 
 # Server Domains
 
-Backend product domains keep transport, orchestration, wire models, pure rules,
-authorization deps, errors, and non-HTTP entry points in predictable homes. A
-domain folder answers "what product area owns this?"
+Backend product domains keep transport, orchestration, wire models, pure rules, authorization deps, errors, and non-HTTP entry points in predictable homes. A domain folder answers "what product area owns this?"
 
-The placements below are the rule for new and refactored code. Remaining
-inline authorization and boundary exceptions are migration debt, not alternate
-patterns that new code may copy.
+The placements below are the rule for new and refactored code. Remaining inline authorization and boundary exceptions are migration debt, not alternate patterns that new code may copy.
 
 ## Ownership
 
@@ -744,8 +592,7 @@ A `server/<domain>/` folder is one product area's home. It owns:
   background work a Celery task calls)
 - Promoted subdomains via `<subdomain>/` (when earned)
 
-A domain folder must answer "what product area?" — not transport, not UI shape,
-not deployment target.
+A domain folder must answer "what product area?" — not transport, not UI shape, not deployment target.
 
 ## Shape
 
@@ -791,8 +638,7 @@ The hierarchy answers three questions, in order:
 
 ### `api.py`
 
-Transport only. Parses requests, calls services, returns responses. Stays
-thin. Long handler bodies are a smell.
+Transport only. Parses requests, calls services, returns responses. Stays thin. Long handler bodies are a smell.
 
 Allowed:
 
@@ -821,8 +667,7 @@ Banned:
 
 ### `service.py`
 
-Business logic, orchestration, invariants, validation. The middle layer
-between handlers and stores.
+Business logic, orchestration, invariants, validation. The middle layer between handlers and stores.
 
 Allowed:
 
@@ -925,8 +770,7 @@ Banned:
 
 ### `access.py`
 
-Resource-access route dependencies. Looks up a resource, checks the user can
-touch it, returns the resource (or raises 403/404).
+Resource-access route dependencies. Looks up a resource, checks the user can touch it, returns the resource (or raises 403/404).
 
 Allowed:
 
@@ -967,13 +811,11 @@ Banned:
 
 ## Service Decomposition
 
-When `service.py` grows past comfortable, you have exactly five legal moves.
-Sibling helper files at the parent level are not one of them.
+When `service.py` grows past comfortable, you have exactly five legal moves. Sibling helper files at the parent level are not one of them.
 
 ### 1. Stay in `service.py` with internal sectioning
 
-For growth that's more orchestration of the same product concept. Up to
-~700–800 lines.
+For growth that's more orchestration of the same product concept. Up to ~700–800 lines.
 
 ```python
 # ──────────────────────────────────────
@@ -988,51 +830,29 @@ async def cancel_subscription(...): ...
 async def report_usage(...): ...
 ```
 
-Beyond ~800 lines, the decomposition pressure is real and one of the next
-options applies.
+Beyond ~800 lines, the decomposition pressure is real and one of the next options applies.
 
 ### 2. Extract pure logic to `domain/<concern>.py`
 
-When part of the service is a meaningful pure rule — pricing, policy,
-validation, calculation, state transition, or mapping — move it. The domain
-file imports nothing from `db/`, `integrations/`, or `service.py`. Service
-imports the pure function, calls it, raises on the verdict.
+When part of the service is a meaningful pure rule — pricing, policy, validation, calculation, state transition, or mapping — move it. The domain file imports nothing from `db/`, `integrations/`, or `service.py`. Service imports the pure function, calls it, raises on the verdict.
 
-Do not extract every pure private helper. A tiny one-path helper may stay in
-`service.py` when it only supports one orchestration path and moving it would
-create a one-function domain file. Extract to `domain/` when the rule is
-product policy, reusable, directly testable, or materially clarifies the
-service flow.
+Do not extract every pure private helper. A tiny one-path helper may stay in `service.py` when it only supports one orchestration path and moving it would create a one-function domain file. Extract to `domain/` when the rule is product policy, reusable, directly testable, or materially clarifies the service flow.
 
 ### 3. Promote a subdomain
 
-When the spillover has its own product concept *and* its own orchestration
-mass — typically (but not always) signaled by its own API endpoints. New
-`<subdomain>/api.py + service.py + models.py`.
+When the spillover has its own product concept *and* its own orchestration mass — typically (but not always) signaled by its own API endpoints. New `<subdomain>/api.py + service.py + models.py`.
 
-A subdomain earns the folder when all three files would have meaningful
-content. If `models.py` would be three lines and `api.py` would have one
-route, you're over-engineering — keep it in the parent.
+A subdomain earns the folder when all three files would have meaningful content. If `models.py` would be three lines and `api.py` would have one route, you're over-engineering — keep it in the parent.
 
-Internal-only subdomains may have no `api.py` if the work is all background
-(e.g., a multi-step reconciliation flow). Still need `service.py` + `models.py`
-to count as a subdomain.
+Internal-only subdomains may have no `api.py` if the work is all background (e.g., a multi-step reconciliation flow). Still need `service.py` + `models.py` to count as a subdomain.
 
 ### 4. Move vendor specifics to `integrations/<vendor>/`
 
-If the spillover is a vendor adapter — auth flow, payload normalization,
-webhook parsing — it leaves the product folder. See
-[integrations.md](server.md). No exceptions for "but only this domain
-uses it."
+If the spillover is a vendor adapter — auth flow, payload normalization, webhook parsing — it leaves the product folder. See [integrations.md](server.md). No exceptions for "but only this domain uses it."
 
 ### 5. Add a worker-facing background service
 
-`worker/service.py` for background work a Celery task calls. See
-[background.md](server.md). Same layer law: no ORM imports, calls service or
-store functions. It normally receives `db`; when foreign I/O separates bounded
-database phases, it may receive a task-created session factory and must close
-each store-only session before the external call. The task itself is substrate
-in `background/**`, not a file in the domain.
+`worker/service.py` for background work a Celery task calls. See [background.md](server.md). Same layer law: no ORM imports, calls service or store functions. It normally receives `db`; when foreign I/O separates bounded database phases, it may receive a task-created session factory and must close each store-only session before the external call. The task itself is substrate in `background/**`, not a file in the domain.
 
 ### Forbidden
 
@@ -1071,16 +891,14 @@ Examples that don't qualify:
   domain's `worker/service.py`.
 - A two-function helper — keep inline.
 
-Internal-only subdomains exist when there's enough orchestration mass without
-external endpoints (e.g., a multi-step worker-driven flow). Same `service.py`
+Internal-only subdomains exist when there's enough orchestration mass without external endpoints (e.g., a multi-step worker-driven flow). Same `service.py`
 + `models.py` requirement; `api.py` may be absent.
 
 ## Cross-Domain Coordination
 
 Domains coordinate via two legal patterns:
 
-**Reads cross via store.** A service may import another domain's store to read
-data:
+**Reads cross via store.** A service may import another domain's store to read data:
 
 ```python
 # billing/service.py
@@ -1093,8 +911,7 @@ async def compute_subject_usage(db: AsyncSession, subject_id: UUID):
 
 The store boundary is safe — it returns frozen dataclasses, no behavior leaks.
 
-**Writes cross via service.** A service must go through another domain's public
-service functions to mutate that domain's resources:
+**Writes cross via service.** A service must go through another domain's public service functions to mutate that domain's resources:
 
 ```python
 # billing/service.py
@@ -1121,16 +938,11 @@ The owning service runs its own policy, invariants, and audit.
 - Two domains both writing the same ORM resource. The resource has one
   owning domain whose service is the write boundary.
 
-The same pattern applies to subdomains within a parent: read via store, write
-via service.
+The same pattern applies to subdomains within a parent: read via store, write via service.
 
 ## Worker-Side Logic
 
-When a domain has substantial worker-side logic that's distinct from HTTP-side
-work, promote it to a `worker/` subfolder holding a worker-facing
-`service.py` — the orchestration a Celery task calls to do the domain's
-background work. The domain owns no process entry, scheduler, or reconciliation
-loop: the task is substrate in `background/**`, and Beat owns scheduling.
+When a domain has substantial worker-side logic that's distinct from HTTP-side work, promote it to a `worker/` subfolder holding a worker-facing `service.py` — the orchestration a Celery task calls to do the domain's background work. The domain owns no process entry, scheduler, or reconciliation loop: the task is substrate in `background/**`, and Beat owns scheduling.
 
 ```text
 server/proliferate/server/workflows/
@@ -1144,14 +956,9 @@ server/proliferate/server/workflows/
     service.py          # worker-facing service: cancel, deliver, observe
 ```
 
-Two `service.py` files coexist only when surfaces are genuinely distinct; they
-share `domain/` and the store. Request-driven external-executor surfaces — where
-an outside process claims, heartbeats, or reports against a Postgres lease — are
-APIs, not worker code, and stay near `api.py`/`service.py`. See
-[background.md](server.md) for the full background-work organization.
+Two `service.py` files coexist only when surfaces are genuinely distinct; they share `domain/` and the store. Request-driven external-executor surfaces — where an outside process claims, heartbeats, or reports against a Postgres lease — are APIs, not worker code, and stay near `api.py`/`service.py`. See [background.md](server.md) for the full background-work organization.
 
-A `worker/` folder containing only its canonical `service.py` is the narrow
-worker exception to the single-file-folder rule.
+A `worker/` folder containing only its canonical `service.py` is the narrow worker exception to the single-file-folder rule.
 
 ## Patterns
 
@@ -1175,9 +982,7 @@ worker exception to the single-file-folder rule.
 
 # Database
 
-The database layer owns persistence schema, query execution, transaction
-boundaries, and the type boundary between persistence, internal logic, and wire
-format. Service code sees frozen dataclasses, not ORM rows.
+The database layer owns persistence schema, query execution, transaction boundaries, and the type boundary between persistence, internal logic, and wire format. Service code sees frozen dataclasses, not ORM rows.
 
 ## Ownership
 
@@ -1190,8 +995,7 @@ The database layer has three concerns:
   (mutable, session-coupled) → dataclass (frozen, internal) → Pydantic (wire
   format).
 
-Transactions, dataclass conventions, and DB column conventions all live in
-this guide because they're all aspects of the database layer.
+Transactions, dataclass conventions, and DB column conventions all live in this guide because they're all aspects of the database layer.
 
 ## `db/models/`
 
@@ -1206,9 +1010,7 @@ db/models/
   <resource>.py        # one ORM file per resource cluster
 ```
 
-Examples: `cloud.py`, `billing.py`, `auth.py`,
-`organizations.py`. A single ORM file may declare multiple related table
-classes (a primary entity plus its junction tables).
+Examples: `cloud.py`, `billing.py`, `auth.py`, `organizations.py`. A single ORM file may declare multiple related table classes (a primary entity plus its junction tables).
 
 ### Allowed
 
@@ -1245,9 +1047,7 @@ classes (a primary entity plus its junction tables).
 - **Billing, orgs, auth, and other product domains**: each retains its own
   `db/models/**` and `db/store/**` owner.
 
-Target, command-queue, exposure, and Cloud session-projection tables were
-removed. Runtime session/event truth remains in AnyHarness rather than a Cloud
-projection ledger.
+Target, command-queue, exposure, and Cloud session-projection tables were removed. Runtime session/event truth remains in AnyHarness rather than a Cloud projection ledger.
 
 ## `db/store/`
 
@@ -1263,9 +1063,7 @@ db/store/
   <resource>.py
 ```
 
-Each store file owns DB access for **one ORM resource** (and its tightly-related
-supporting tables — e.g., a junction table for many-to-many). The boundary is
-the ORM model, not the product concept.
+Each store file owns DB access for **one ORM resource** (and its tightly-related supporting tables — e.g., a junction table for many-to-many). The boundary is the ORM model, not the product concept.
 
 When ≥4 closely-related stores cluster, use a folder:
 
@@ -1275,12 +1073,9 @@ db/store/<area>/
   <resource>.py        # un-prefixed inside the folder
 ```
 
-Inside the folder, file names drop the area prefix because context lives in
-the folder name. Example: `db/store/cloud_mcp/connections.py`, not
-`db/store/cloud_mcp/cloud_mcp_connections.py`.
+Inside the folder, file names drop the area prefix because context lives in the folder name. Example: `db/store/cloud_mcp/connections.py`, not `db/store/cloud_mcp/cloud_mcp_connections.py`.
 
-Pick one shape per area. A folder either has all of its area's stores inside,
-or none.
+Pick one shape per area. A folder either has all of its area's stores inside, or none.
 
 ### Allowed
 
@@ -1342,14 +1137,11 @@ async def list_workspaces_for_owner(
     )
 ```
 
-Reads return dataclasses or tuples of dataclasses. Writes return primitive
-result types (`UUID`, `bool`, `None`) or a small frozen dataclass when more
-information is needed.
+Reads return dataclasses or tuples of dataclasses. Writes return primitive result types (`UUID`, `bool`, `None`) or a small frozen dataclass when more information is needed.
 
 ### Eager loading
 
-Stores explicitly load relationships needed for the snapshot. No lazy
-attribute access leaks past the store boundary.
+Stores explicitly load relationships needed for the snapshot. No lazy attribute access leaks past the store boundary.
 
 ```python
 # Good
@@ -1363,14 +1155,11 @@ rows = await db.execute(
 rows = await db.execute(select(CloudWorkspace).where(...))
 ```
 
-If the dataclass needs a relationship's data, the store eager-loads it. If
-the relationship is only needed sometimes, define a separate read function
-that loads it.
+If the dataclass needs a relationship's data, the store eager-loads it. If the relationship is only needed sometimes, define a separate read function that loads it.
 
 ### Locking
 
-Row-level locks live in stores, named `acquire_<resource>_<purpose>_lock`.
-They require an open transaction.
+Row-level locks live in stores, named `acquire_<resource>_<purpose>_lock`. They require an open transaction.
 
 ```python
 async def acquire_billing_subject_repo_limit_lock(
@@ -1383,13 +1172,11 @@ async def acquire_billing_subject_repo_limit_lock(
     )
 ```
 
-Callers must wrap in a transaction (request session or
-`async with db.begin():`).
+Callers must wrap in a transaction (request session or `async with db.begin():`).
 
 ### Pagination
 
-Default to cursor pagination. The store returns a tuple
-`(items, next_cursor)`:
+Default to cursor pagination. The store returns a tuple `(items, next_cursor)`:
 
 ```python
 @dataclass(frozen=True)
@@ -1403,8 +1190,7 @@ async def list_workspaces_page(
     ...
 ```
 
-Cursor encoding is a store concern. Services and handlers pass cursors as
-opaque strings.
+Cursor encoding is a store concern. Services and handlers pass cursors as opaque strings.
 
 ## The Type Pipeline
 
@@ -1423,11 +1209,7 @@ opaque strings.
 
 ### Why three layers
 
-ORM models are mutable, session-coupled, and lazy-loading. Service code that
-operates on them accidentally triggers DB calls and can corrupt persistence
-state. Pydantic models carry wire-format concerns (validation, serialization)
-that don't belong inside services. The dataclass is the isolation layer:
-immutable, no behavior, no I/O, easy to test.
+ORM models are mutable, session-coupled, and lazy-loading. Service code that operates on them accidentally triggers DB calls and can corrupt persistence state. Pydantic models carry wire-format concerns (validation, serialization) that don't belong inside services. The dataclass is the isolation layer: immutable, no behavior, no I/O, easy to test.
 
 ### Where dataclasses live
 
@@ -1473,8 +1255,7 @@ def workspace_response(snapshot: WorkspaceSnapshot) -> WorkspaceResponse:
     )
 ```
 
-The constructor is the only place enum-to-string conversion happens. Service
-code stays on the enum side; wire stays on the string side.
+The constructor is the only place enum-to-string conversion happens. Service code stays on the enum side; wire stays on the string side.
 
 ### Forbidden type patterns
 
@@ -1487,13 +1268,11 @@ code stays on the enum side; wire stays on the string side.
 
 ## Transactions
 
-One pattern: **store functions take `db: AsyncSession` and never commit**.
-Callers own transactions.
+One pattern: **store functions take `db: AsyncSession` and never commit**. Callers own transactions.
 
 ### HTTP handlers
 
-The request session is provided by the FastAPI dep. The dep commits on
-success and rolls back on exception:
+The request session is provided by the FastAPI dep. The dep commits on success and rolls back on exception:
 
 ```python
 async def get_async_session() -> AsyncIterator[AsyncSession]:
@@ -1506,8 +1285,7 @@ async def get_async_session() -> AsyncIterator[AsyncSession]:
             raise
 ```
 
-Multi-step writes within one request commit together because they share the
-session.
+Multi-step writes within one request commit together because they share the session.
 
 ### Workers and reconcilers
 
@@ -1522,19 +1300,11 @@ async def run_billing_reconcile_pass() -> None:
         # commits on context exit, rolls back on exception
 ```
 
-A worker service that must alternate repeated read-only database phases with
-foreign I/O may instead receive an `async_sessionmaker[AsyncSession]` created by
-the task. The task creates and disposes the engine within the current
-`asyncio.run()` lifecycle. The worker service opens one bounded session around
-direct store calls, materializes frozen values, closes the session, and only
-then performs foreign I/O. This exception does not permit the service to import
-settings or global engine helpers, construct an engine, issue SQL, call session
-query methods, commit, or roll back.
+A worker service that must alternate repeated read-only database phases with foreign I/O may instead receive an `async_sessionmaker[AsyncSession]` created by the task. The task creates and disposes the engine within the current `asyncio.run()` lifecycle. The worker service opens one bounded session around direct store calls, materializes frozen values, closes the session, and only then performs foreign I/O. This exception does not permit the service to import settings or global engine helpers, construct an engine, issue SQL, call session query methods, commit, or roll back.
 
 ### Narrower atomicity within a request
 
-When a service needs an inner transaction smaller than the request, use
-`db.begin_nested()`:
+When a service needs an inner transaction smaller than the request, use `db.begin_nested()`:
 
 ```python
 async def cancel_subscription_with_seat_reconcile(
@@ -1566,8 +1336,7 @@ created_at   TIMESTAMPTZ  NOT NULL     DEFAULT now()
 updated_at   TIMESTAMPTZ  NOT NULL     DEFAULT now()
 ```
 
-`updated_at` auto-bumps on row update. Use SQLAlchemy
-`onupdate=func.now()` consistently across models.
+`updated_at` auto-bumps on row update. Use SQLAlchemy `onupdate=func.now()` consistently across models.
 
 ### Timestamps
 
@@ -1625,10 +1394,7 @@ Configure SQLAlchemy's metadata naming convention once so this is automatic:
 
 ## Migrations
 
-All schema changes go through alembic. Each schema migration is its own
-revision. Data migrations and schema migrations are not mixed in one
-revision unless the data migration is required for the schema change to land
-safely.
+All schema changes go through alembic. Each schema migration is its own revision. Data migrations and schema migrations are not mixed in one revision unless the data migration is required for the schema change to land safely.
 
 Conventions:
 
@@ -1644,34 +1410,20 @@ Conventions:
 
 # Background Work
 
-Background work is everything the product does outside the request lifecycle:
-periodic polls, drift reconciliation, and durable jobs triggered by a state
-change. There is **one execution model** for all of it — a Celery task — and the
-only thing that differs is the trigger.
+Background work is everything the product does outside the request lifecycle: periodic polls, drift reconciliation, and durable jobs triggered by a state change. There is **one execution model** for all of it — a Celery task — and the only thing that differs is the trigger.
 
 ## One unit, two triggers
 
-Celery is the framework, RabbitMQ is the broker that delivers tasks to the
-worker fleet, Postgres is the truth, and Redis holds the `redbeat` lock that
-makes Beat highly available (Redis is a lock, never the broker). Every piece of
-background work is the same unit — a **task** — and only the trigger differs:
+Celery is the framework, RabbitMQ is the broker that delivers tasks to the worker fleet, Postgres is the truth, and Redis holds the `redbeat` lock that makes Beat highly available (Redis is a lock, never the broker). Every piece of background work is the same unit — a **task** — and only the trigger differs:
 
 | Trigger | Fires | For |
 | --- | --- | --- |
 | **Beat** (periodic) | on a clock, via `redbeat` | scheduler polls, surviving reconciler passes, batched telemetry |
 | **Outbox relay** (on-demand) | when a committed state change demands follow-up work | execution jobs that must not be lost |
 
-There are no bespoke `while True` loops and no per-domain worker processes. A
-scheduler is a Beat-fired task that polls due work and writes run
-rows plus outbox rows; it does not execute. A reconciler is a Beat-fired task
-that survives only for **external-truth drift** and enqueues heavy corrective
-work as on-demand tasks. A durable job is a task delivered by the relay,
-idempotent on a job id, retried by the broker, and observable.
+There are no bespoke `while True` loops and no per-domain worker processes. A scheduler is a Beat-fired task that polls due work and writes run rows plus outbox rows; it does not execute. A reconciler is a Beat-fired task that survives only for **external-truth drift** and enqueues heavy corrective work as on-demand tasks. A durable job is a task delivered by the relay, idempotent on a job id, retried by the broker, and observable.
 
-Work that is request-driven HTTP — an *external* process claiming, heartbeating,
-or reporting against a Postgres-backed lease — is **not background work**. It is
-an API. It stays near `api.py`/`service.py` in its domain and is never moved
-behind Celery.
+Work that is request-driven HTTP — an *external* process claiming, heartbeating, or reporting against a Postgres-backed lease — is **not background work**. It is an API. It stays near `api.py`/`service.py` in its domain and is never moved behind Celery.
 
 ## Ownership
 
@@ -1682,20 +1434,9 @@ Two homes, split by a single boundary: substrate versus product logic.
 | **Substrate** | `server/proliferate/background/**` | the Celery app, broker/queue/redbeat config, the Beat schedule registry, the outbox relay, and thin task modules |
 | **Worker-facing logic** | `server/<domain>/**` | the service a task calls to do the domain's work, and the pure `domain/` logic it shares with HTTP paths |
 
-`background/**` is plumbing. It knows how to run a task, when to fire periodic
-ones, and how to turn a committed outbox row into a dispatched task. It owns no
-business logic. A task module is a thin wrapper: it owns the database
-engine/session boundary, calls the owning domain's public service, and maps
-failures to retries.
+`background/**` is plumbing. It knows how to run a task, when to fire periodic ones, and how to turn a committed outbox row into a dispatched task. It owns no business logic. A task module is a thin wrapper: it owns the database engine/session boundary, calls the owning domain's public service, and maps failures to retries.
 
-`server/<domain>/**` owns the work itself. A task for a domain calls that
-domain's service. The service follows the same layer law as API-facing code:
-it never commits, imports SQLAlchemy query APIs, or constructs vendor clients,
-and it calls store functions for data and integrations through their public
-API. It normally takes `db: AsyncSession`. A worker service that alternates
-bounded database phases with foreign I/O may instead take a task-created
-session factory, open sessions only around store calls, and release them before
-the external call.
+`server/<domain>/**` owns the work itself. A task for a domain calls that domain's service. The service follows the same layer law as API-facing code: it never commits, imports SQLAlchemy query APIs, or constructs vendor clients, and it calls store functions for data and integrations through their public API. It normally takes `db: AsyncSession`. A worker service that alternates bounded database phases with foreign I/O may instead take a task-created session factory, open sessions only around store calls, and release them before the external call.
 
 ## Axes
 
@@ -1715,9 +1456,7 @@ worker-facing orchestration (pick due, dispatch, record) -> server/<domain>/work
 pure computation shared with HTTP paths                  -> server/<domain>/domain/
 ```
 
-A domain promotes `worker/` only when its worker-facing orchestration is
-substantial and distinct from the API-facing service. Until then the task calls
-the domain's ordinary `service.py`.
+A domain promotes `worker/` only when its worker-facing orchestration is substantial and distinct from the API-facing service. Until then the task calls the domain's ordinary `service.py`.
 
 ## Shape
 
@@ -1738,44 +1477,23 @@ server/<domain>/
     service.py         # pick due work, dispatch, record results, handle failures
 ```
 
-A domain that runs background work owns at most a `worker/service.py` and shared
-`domain/` logic. It does not own a process entry point, a scheduler, or a
-reconciliation loop — those are the substrate's job (Beat) or do not exist (one
-process is the Celery worker fleet).
+A domain that runs background work owns at most a `worker/service.py` and shared `domain/` logic. It does not own a process entry point, a scheduler, or a reconciliation loop — those are the substrate's job (Beat) or do not exist (one process is the Celery worker fleet).
 
-The Cloud orphan-sandbox reaper is the concrete periodic example: Beat owns its
-five-minute schedule, `background/tasks/cloud_sandboxes.py` only opens a session
-and calls the domain, and `server/cloud/worker/` owns the advisory singleton,
-provider attribution, grace window, and cleanup decisions.
+The Cloud orphan-sandbox reaper is the concrete periodic example: Beat owns its five-minute schedule, `background/tasks/cloud_sandboxes.py` only opens a session and calls the domain, and `server/cloud/worker/` owns the advisory singleton, provider attribution, grace window, and cleanup decisions.
 
 ## The outbox
 
-On-demand jobs that must survive a restart use the **transactional outbox**. The
-caller writes the state change and an outbox row in the **same caller-owned
-transaction**; once that transaction commits, the job is guaranteed. The relay
-reads committed outbox rows, dispatches the matching task, and marks the row
-relayed. The broker then delivers, retries, and dead-letters.
+On-demand jobs that must survive a restart use the **transactional outbox**. The caller writes the state change and an outbox row in the **same caller-owned transaction**; once that transaction commits, the job is guaranteed. The relay reads committed outbox rows, dispatches the matching task, and marks the row relayed. The broker then delivers, retries, and dead-letters.
 
 ```text
 caller txn { state change + outbox row }  ->  commit  ->  relay  ->  broker  ->  task
 ```
 
-This is the only correct way to enqueue work that must be consistent with a
-state change. `asyncio.create_task(...)` and after-commit `loop.create_task(...)`
-are not durable — they are lost on restart with no retry and no backpressure —
-and are forbidden for work whose loss is a correctness bug. Loose,
-fire-and-forget notifications with explicit at-most-once tolerance may enqueue a
-task directly without the outbox, but the looseness must be deliberate.
+This is the only correct way to enqueue work that must be consistent with a state change. `asyncio.create_task(...)` and after-commit `loop.create_task(...)` are not durable — they are lost on restart with no retry and no backpressure — and are forbidden for work whose loss is a correctness bug. Loose, fire-and-forget notifications with explicit at-most-once tolerance may enqueue a task directly without the outbox, but the looseness must be deliberate.
 
-**External-side-effect pattern (outbox):** a named orchestration function owns an
-explicit multi-transaction sequence — write "pending" + commit → external call
-(no open txn) → write result + commit — *or*, preferably, write the intent + an
-outbox row and let a worker do the call.
+**External-side-effect pattern (outbox):** a named orchestration function owns an explicit multi-transaction sequence — write "pending" + commit → external call (no open txn) → write result + commit — *or*, preferably, write the intent + an outbox row and let a worker do the call.
 
-Integration credential revocation is a current outbox consumer
-(`integrations.revocation.process`): the revocation job row is written with the
-intent, the outbox row rides the same transaction, and the worker's operation
-is idempotent under broker redelivery.
+Integration credential revocation is a current outbox consumer (`integrations.revocation.process`): the revocation job row is written with the intent, the outbox row rides the same transaction, and the worker's operation is idempotent under broker redelivery.
 
 ## `background/celery_app.py`
 
@@ -1850,8 +1568,7 @@ async def _run_orphan_reap() -> None:
 
 ## `server/<domain>/worker/service.py`
 
-The worker-facing orchestration a task calls — present only when it is
-substantial and distinct from the API-facing service.
+The worker-facing orchestration a task calls — present only when it is substantial and distinct from the API-facing service.
 
 - Owns: picking due work, dispatching to the right execution, recording results,
   and handling failures, as ordinary service functions.
@@ -1865,11 +1582,7 @@ substantial and distinct from the API-facing service.
   or global engine helpers, construct an engine, issue SQL, or call session
   query/commit/rollback methods.
 
-When the worker-facing surface is modest, these functions live in the domain's
-ordinary `service.py` and there is no `worker/` subfolder. Two `service.py`
-files at the same nesting are forbidden; promote to `worker/service.py` only when
-worker-facing logic is genuinely separate from API-facing logic, and let both
-share `domain/` and the stores.
+When the worker-facing surface is modest, these functions live in the domain's ordinary `service.py` and there is no `worker/` subfolder. Two `service.py` files at the same nesting are forbidden; promote to `worker/service.py` only when worker-facing logic is genuinely separate from API-facing logic, and let both share `domain/` and the stores.
 
 ## Rules
 
@@ -1910,10 +1623,7 @@ share `domain/` and the stores.
 
 ## Current gaps
 
-Everything above this section is the current operating model, with each rule's
-enforcement status stated inline where it is not mechanically checked. Each
-unchecked item below is a concrete path that still departs from it — public debt,
-not a softer version of the rule.
+Everything above this section is the current operating model, with each rule's enforcement status stated inline where it is not mechanically checked. Each unchecked item below is a concrete path that still departs from it — public debt, not a softer version of the rule.
 
 - [ ] **Billing reconciliation.**
       ``_billing_reconciler_loop`` (deleted, cull part 2)
@@ -1983,23 +1693,13 @@ not a softer version of the rule.
       documentation slice does not decide whether the utility moves or the
       target law later gains a narrow deployment exception.
 
-Deployment evidence: the ordinary production self-host
-[`docker-compose.production.yml`](../../server/deploy/docker-compose.production.yml)
-defines the base API stack but no RabbitMQ, Celery worker, or Beat service. The
-development [`docker-compose.yml`](../../server/docker-compose.yml)
-makes `worker` and `beat` opt-in through the `background` profile.
-[`run_background_workers`](../../server/proliferate/config.py) defaults
-to true, and the current [`main.py` lifespan](../../server/proliferate/main.py)
-keeps periodic work in the API process unless each starter's own gates disable
-it.
+Deployment evidence: the ordinary production self-host [`docker-compose.production.yml`](../../server/deploy/docker-compose.production.yml) defines the base API stack but no RabbitMQ, Celery worker, or Beat service. The development [`docker-compose.yml`](../../server/docker-compose.yml) makes `worker` and `beat` opt-in through the `background` profile. [`run_background_workers`](../../server/proliferate/config.py) defaults to true, and the current [`main.py` lifespan](../../server/proliferate/main.py) keeps periodic work in the API process unless each starter's own gates disable it.
 
 ---
 
 # Config And Constants
 
-Server values have three homes: deployment-derived settings, shared product or
-protocol constants, and private file-local implementation details. Put each
-value in the narrowest home that makes its ownership obvious.
+Server values have three homes: deployment-derived settings, shared product or protocol constants, and private file-local implementation details. Put each value in the narrowest home that makes its ownership obvious.
 
 ## Ownership
 
@@ -2011,13 +1711,11 @@ The server has three homes for values:
 | Shared hardcoded policy value | `constants/<area>.py` | Is this a product/protocol rule reused or meaningful outside one file? |
 | File-local mechanical value | the owning file | Is this only an implementation detail of one function/module? |
 
-Do not leave product policy values scattered through `api.py`, `service.py`,
-`db/store/**`, worker files, or integrations.
+Do not leave product policy values scattered through `api.py`, `service.py`, `db/store/**`, worker files, or integrations.
 
 ## `config.py`
 
-`config.py` owns runtime settings derived from environment or deployment
-configuration.
+`config.py` owns runtime settings derived from environment or deployment configuration.
 
 Put it here when the value is:
 
@@ -2047,8 +1745,7 @@ Rules:
 
 ## `constants/<area>.py`
 
-`constants/**` owns hardcoded shared values that are part of product behavior,
-protocol behavior, or validation policy.
+`constants/**` owns hardcoded shared values that are part of product behavior, protocol behavior, or validation policy.
 
 Put it here when the value is:
 
@@ -2086,11 +1783,7 @@ Rules:
 
 ## File-Local Constants
 
-File-local constants are allowed only when they are mechanical implementation
-details with no broader product meaning. Do not keep a value local just
-because it has one caller; if changing it changes product behavior, API
-behavior, billing behavior, security behavior, or runtime protocol behavior,
-put it in `constants/<area>.py` or `config.py`.
+File-local constants are allowed only when they are mechanical implementation details with no broader product meaning. Do not keep a value local just because it has one caller; if changing it changes product behavior, API behavior, billing behavior, security behavior, or runtime protocol behavior, put it in `constants/<area>.py` or `config.py`.
 
 Allowed examples:
 
@@ -2113,8 +1806,7 @@ SUPPORTED_RUNTIME_VERSION = "..."
 SUPPORTED_PROTOCOL_OPTIONS = {"mode", "interval", "timeout"}
 ```
 
-Those carry product or protocol policy and belong in `constants/<area>.py` or
-`config.py`.
+Those carry product or protocol policy and belong in `constants/<area>.py` or `config.py`.
 
 ## Placement Test
 
@@ -2132,9 +1824,7 @@ If unsure, prefer `constants/<area>.py` over scattering the value inline.
 
 # Errors
 
-Server errors have three homes: shared product error bases, domain-specific
-product errors, and integration-local vendor errors. Product services raise
-product/domain errors; one HTTP translation boundary turns them into responses.
+Server errors have three homes: shared product error bases, domain-specific product errors, and integration-local vendor errors. Product services raise product/domain errors; one HTTP translation boundary turns them into responses.
 
 ## Ownership
 
@@ -2146,8 +1836,7 @@ The server has three error layers:
 | Domain errors | `server/<domain>/errors.py` | Product/domain failures with stable error codes. |
 | Integration errors | `integrations/<vendor>/errors.py` or the integration file | Vendor/protocol failures. |
 
-HTTP translation is centralized. Product services raise product/domain errors;
-the FastAPI exception handler maps those errors to the JSON response shape.
+HTTP translation is centralized. Product services raise product/domain errors; the FastAPI exception handler maps those errors to the JSON response shape.
 
 ## Shared Product Errors
 
@@ -2204,8 +1893,7 @@ class ResourceNotReady(Conflict):
         super().__init__(message=message)
 ```
 
-Services raise domain errors. APIs do not catch and translate them in each
-route; the global handler owns translation.
+Services raise domain errors. APIs do not catch and translate them in each route; the global handler owns translation.
 
 ## Integration Errors
 
@@ -2217,11 +1905,9 @@ integrations/<vendor>/
   client.py
 ```
 
-Integration errors should describe vendor/protocol failures, not product
-meaning. They do not inherit from `ProliferateError`.
+Integration errors should describe vendor/protocol failures, not product meaning. They do not inherit from `ProliferateError`.
 
-Product services catch integration errors and translate them into domain
-errors:
+Product services catch integration errors and translate them into domain errors:
 
 ```python
 try:
@@ -2267,12 +1953,7 @@ Use the global handler instead:
 await service.do_work(...)
 ```
 
-`AuthFlowError` is a legacy Auth protocol compatibility exception translated by
-that same global handler. It preserves the already-shipped raw string
-`{"detail": "Client-facing message."}` response while keeping its stable
-internal code out of the public response. This exception exists only for
-compatibility with existing Auth clients; it is not a general shortcut for new
-product errors, which use the structured envelope above.
+`AuthFlowError` is a legacy Auth protocol compatibility exception translated by that same global handler. It preserves the already-shipped raw string `{"detail": "Client-facing message."}` response while keeping its stable internal code out of the public response. This exception exists only for compatibility with existing Auth clients; it is not a general shortcut for new product errors, which use the structured envelope above.
 
 ## Direct `HTTPException`
 
@@ -2433,15 +2114,11 @@ server/ai_magic/service.py         generate_and_save_title(): builds the prompt,
 
 # Integrations
 
-Integrations are the server's raw external access boundary. Product domains
-call integration public APIs; integrations own vendor clients, vendor wire
-types, authentication, retries, and protocol translation.
+Integrations are the server's raw external access boundary. Product domains call integration public APIs; integrations own vendor clients, vendor wire types, authentication, retries, and protocol translation.
 
 ## Ownership
 
-`integrations/` owns all third-party SDK and API access. Every external
-network call originates here. Product code calls integrations through their
-public API only; integration internals stay vendor-local.
+`integrations/` owns all third-party SDK and API access. Every external network call originates here. Product code calls integrations through their public API only; integration internals stay vendor-local.
 
 Integration code owns:
 
@@ -2458,11 +2135,7 @@ Integration code does not own:
 - Database access (no `db/store/**` imports).
 - Service-layer orchestration.
 
-Hosted product state that controls whether an external action may proceed is
-therefore not an integration concern. The durable action-approval state
-machine lives under
-`server/integration_gateway/connections/action_approvals/`, with persistence in the hosted
-Cloud database. Raw MCP/provider clients remain leaves beneath that boundary.
+Hosted product state that controls whether an external action may proceed is therefore not an integration concern. The durable action-approval state machine lives under `server/integration_gateway/connections/action_approvals/`, with persistence in the hosted Cloud database. Raw MCP/provider clients remain leaves beneath that boundary.
 
 ## Shape
 
@@ -2483,8 +2156,7 @@ Inside the file:
 - Payload dataclasses (when the integration parses structured responses).
 - Public functions exported to product code.
 
-Examples: `anthropic.py`, `github.py`, `resend.py`,
-`anonymous_telemetry.py`.
+Examples: `anthropic.py`, `github.py`, `resend.py`, `anonymous_telemetry.py`.
 
 ### Shape 2: Folder, single provider
 
@@ -2497,8 +2169,7 @@ integrations/<vendor>/
   <concern>.py
 ```
 
-For a vendor with multiple distinct concerns: auth + webhooks + OAuth flows,
-or any set of features that don't fit cleanly in one file.
+For a vendor with multiple distinct concerns: auth + webhooks + OAuth flows, or any set of features that don't fit cleanly in one file.
 
 - `client.py` — base client, authentication, low-level calls.
 - `models.py` — typed payload dataclasses (or Pydantic if parsing untrusted
@@ -2510,16 +2181,9 @@ or any set of features that don't fit cleanly in one file.
   This is the explicit Python-package exception to the repo-wide no-barrel
   rule; use it only for integration package public APIs.
 
-Examples: `slack/` with `webhooks.py` + `errors.py`; `sentry/` with `client.py`
-(SDK lifecycle and validated public ingress) + `privacy.py` (the closed
-catalogs and outbound projection), where `__init__.py` is the export boundary.
+Examples: `slack/` with `webhooks.py` + `errors.py`; `sentry/` with `client.py` (SDK lifecycle and validated public ingress) + `privacy.py` (the closed catalogs and outbound projection), where `__init__.py` is the export boundary.
 
-Concern files should be coarse and meaningful. Do not mechanically mirror
-every endpoint, REST resource, or SDK method into its own file. Start with the
-operational seams that product code naturally cares about: auth, webhooks,
-OAuth, sessions, provisioning, file operations, notifications, etc. Split
-further only when a concern file grows large, has a distinct consumer set, or
-contains multiple independent policies.
+Concern files should be coarse and meaningful. Do not mechanically mirror every endpoint, REST resource, or SDK method into its own file. Start with the operational seams that product code naturally cares about: auth, webhooks, OAuth, sessions, provisioning, file operations, notifications, etc. Split further only when a concern file grows large, has a distinct consumer set, or contains multiple independent policies.
 
 ### Shape 3: Folder, polymorphic
 
@@ -2533,8 +2197,7 @@ integrations/<protocol>/
   errors.py
 ```
 
-For multiple vendors implementing the same protocol where product code
-selects an implementation at runtime.
+For multiple vendors implementing the same protocol where product code selects an implementation at runtime.
 
 - `base.py` — abstract interface or protocol that all providers implement.
 - `<provider>.py` — each implementation when multiple providers exist.
@@ -2574,28 +2237,19 @@ class StripeIntegrationError(Exception):
     """Raised on failures talking to Stripe."""
 ```
 
-For folder integrations, the error class lives in `errors.py`. For
-single-file integrations, it's defined at the top of the file.
+For folder integrations, the error class lives in `errors.py`. For single-file integrations, it's defined at the top of the file.
 
-Integration error types do **not** inherit from the shared
-`server/proliferate/errors.py` base (`ProliferateError`). The product
-service catches integration errors and translates to domain errors as
-needed.
+Integration error types do **not** inherit from the shared `server/proliferate/errors.py` base (`ProliferateError`). The product service catches integration errors and translates to domain errors as needed.
 
 ### Public API
 
 The functions exported to product code. These are what services call.
 
-For single-file integrations, the public API is whatever the file exports
-(non-underscore-prefixed names).
+For single-file integrations, the public API is whatever the file exports (non-underscore-prefixed names).
 
-For folder integrations, the public API is what `__init__.py` exports.
-Everything else stays vendor-local.
+For folder integrations, the public API is what `__init__.py` exports. Everything else stays vendor-local.
 
-This `__init__.py` export surface is intentional for integration packages:
-services import the vendor API from one stable package boundary while
-integration internals remain private. Do not use this pattern as a general
-convenience re-export elsewhere in the server tree.
+This `__init__.py` export surface is intentional for integration packages: services import the vendor API from one stable package boundary while integration internals remain private. Do not use this pattern as a general convenience re-export elsewhere in the server tree.
 
 ```python
 # integrations/stripe/__init__.py
@@ -2613,16 +2267,13 @@ __all__ = [
 
 ### Models
 
-Vendor-specific request/response shapes. Use dataclasses by default;
-Pydantic when parsing structured untrusted input (webhook payloads).
+Vendor-specific request/response shapes. Use dataclasses by default; Pydantic when parsing structured untrusted input (webhook payloads).
 
-For folder integrations, models live in `models.py`. For single-file
-integrations, they're inline.
+For folder integrations, models live in `models.py`. For single-file integrations, they're inline.
 
 ### Vendor-specific configuration
 
-Integration files read from `config.py` for credentials and endpoints. They
-do not hardcode URLs or secrets.
+Integration files read from `config.py` for credentials and endpoints. They do not hardcode URLs or secrets.
 
 ## Allowed in Integrations
 
@@ -2658,59 +2309,21 @@ from integrations.stripe.client import _internal_helper
 from integrations.stripe.client import _StripeRequestBuilder
 ```
 
-Integration internals (private functions, internal classes) are not part of
-the contract.
+Integration internals (private functions, internal classes) are not part of the contract.
 
 ## External-Action Admission Boundary
 
-An external-action approval is hosted product authorization, not vendor
-protocol state. The gateway must classify an action with its pure typed policy
-before credential resolution or any provider call. An approval request is
-bound server-side to the authenticated product user and organization scope,
-integration account UUID plus `auth_version`, runtime Worker, signed
-Worker/workspace/AnyHarness-session launch identity, exact verdict
-provider/tool, and canonical payload digest. Prompt text, provider arguments,
-gateway bearers, Worker credentials, and process memory are not approval
-sources.
+An external-action approval is hosted product authorization, not vendor protocol state. The gateway must classify an action with its pure typed policy before credential resolution or any provider call. An approval request is bound server-side to the authenticated product user and organization scope, integration account UUID plus `auth_version`, runtime Worker, signed Worker/workspace/AnyHarness-session launch identity, exact verdict provider/tool, and canonical payload digest. Prompt text, provider arguments, gateway bearers, Worker credentials, and process memory are not approval sources.
 
-The hosted state machine has `pending`, `approved`, `rejected`, `revoked`,
-`expired`, and `consumed` states with a 600-second TTL. `expires_at` is the
-authoritative boundary even before observation materializes the `expired`
-state and system audit event. TTL creation, predicates, transition timestamps,
-and audit timestamps use PostgreSQL `clock_timestamp()`; transition code locks
-the row before evaluating expiry. Request creation is committed before the gateway
-returns its typed approval-required result. Execution admission is an atomic,
-one-time, exact-binding `approved -> consumed` compare-and-set in a separate
-short transaction; its audit event must commit before credential decryption,
-auth-header rendering, or vendor network I/O.
+The hosted state machine has `pending`, `approved`, `rejected`, `revoked`, `expired`, and `consumed` states with a 600-second TTL. `expires_at` is the authoritative boundary even before observation materializes the `expired` state and system audit event. TTL creation, predicates, transition timestamps, and audit timestamps use PostgreSQL `clock_timestamp()`; transition code locks the row before evaluating expiry. Request creation is committed before the gateway returns its typed approval-required result. Execution admission is an atomic, one-time, exact-binding `approved -> consumed` compare-and-set in a separate short transaction; its audit event must commit before credential decryption, auth-header rendering, or vendor network I/O.
 
-The approval and event tables retain immutable identity snapshots so deletion
-of a user, organization, account, or Worker cannot erase historical evidence.
-First-party list/get/approve/reject/revoke routes require product-user auth,
-recheck ownership and active organization membership, and expose only typed
-metadata, the payload digest, and fixed action/account/source labels. Reserved
-target/content fields remain null until a delivery slice owns one canonical
-typed action parser; provider arguments are never stored or returned. These
-routes must never return credentials, rendered auth, or raw provider payloads.
+The approval and event tables retain immutable identity snapshots so deletion of a user, organization, account, or Worker cannot erase historical evidence. First-party list/get/approve/reject/revoke routes require product-user auth, recheck ownership and active organization membership, and expose only typed metadata, the payload digest, and fixed action/account/source labels. Reserved target/content fields remain null until a delivery slice owns one canonical typed action parser; provider arguments are never stored or returned. These routes must never return credentials, rendered auth, or raw provider payloads.
 
-The current Slack boundary executes only the exact read/search allowlist.
-Known Slack external actions can create durable requests but are not delivered;
-unknown Slack tools fail closed. The next delivery slice is limited to
-`slack_send_message`, a separate wrapper-level `approvalId`, and an explicit
-reauthorization that adds only `chat:write` to the existing exact six scopes.
-It must accept only the frozen `channel_id` plus `message` action shape, reject
-aliases and extra or rich fields, and derive binding, UI summary, and provider
-arguments from that one typed object. It must re-evaluate the verdict and full
-binding, require the current account revision, and commit one-time consumption
-before entering this raw integration layer. After the commit it must load and
-copy only the exact `(account_id, auth_version)` credential/config snapshot or
-fail, never refetch a newer revision through a generic launch resolver. Every
-other Slack mutation remains denied from delivery.
+The current Slack boundary executes only the exact read/search allowlist. Known Slack external actions can create durable requests but are not delivered; unknown Slack tools fail closed. The next delivery slice is limited to `slack_send_message`, a separate wrapper-level `approvalId`, and an explicit reauthorization that adds only `chat:write` to the existing exact six scopes. It must accept only the frozen `channel_id` plus `message` action shape, reject aliases and extra or rich fields, and derive binding, UI summary, and provider arguments from that one typed object. It must re-evaluate the verdict and full binding, require the current account revision, and commit one-time consumption before entering this raw integration layer. After the commit it must load and copy only the exact `(account_id, auth_version)` credential/config snapshot or fail, never refetch a newer revision through a generic launch resolver. Every other Slack mutation remains denied from delivery.
 
 ## Webhooks
 
-Webhook routes belong to the relevant product domain's `api.py`, not to
-integrations:
+Webhook routes belong to the relevant product domain's `api.py`, not to integrations:
 
 ```python
 # server/billing/api.py
@@ -2726,8 +2339,7 @@ async def stripe_webhook(
     return {"received": True}
 ```
 
-The integration owns signature verification and event parsing. The product
-service owns "what to do when the event arrives."
+The integration owns signature verification and event parsing. The product service owns "what to do when the event arrives."
 
 ## Forbidden Patterns
 
