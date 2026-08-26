@@ -161,7 +161,7 @@ cap and an org month cap are different rates over different windows and
 neither dominates. Both compute paths
 (``reconciler.py`` (deleted, cull part 2)'s
 `_resolve_compute_limit_pause`,
-[`authorization.py`](../../server/proliferate/server/billing/authorization.py)'s
+``authorization.py`` (deleted in #2243, dark cloud-billing authorizer)'s
 `_compute_budget_cap_breach`) and the LLM import path
 ([`usage_import.py`](../../server/proliferate/server/agent_auth/usage_import.py)'s
 `_enforce_org_llm_limits`) check every enabled row before deciding.
@@ -322,7 +322,7 @@ pass so per-seat grants land before that pass's usage is walked.
 **N1 — a held/exhausted subject cannot START compute; typed 402 before any
 provider I/O.** In enforce mode, `assert_cloud_sandbox_resume_allowed`/
 `_for_owner`
-([`authorization.py`](../../server/proliferate/server/billing/authorization.py))
+(``authorization.py`` — deleted in #2243, dark cloud-billing authorizer)
 runs at the top of `connect_ready_sandbox`
 (``connect.py`` (deleted, cull part 2))
 and `ensure_cloud_sandbox_ready`
@@ -590,7 +590,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] **E5/E6.** No dedicated test asserts a 402 is never cached (E5), and
       `assert_cloud_sandbox_resume_allowed`/
       `assert_cloud_sandbox_resume_allowed_for_owner`
-      ([`authorization.py`](../../server/proliferate/server/billing/authorization.py))
+      (``authorization.py`` — deleted in #2243, dark cloud-billing authorizer)
       have no explicit `except` around the billing-snapshot read: an
       unhandled exception propagates uncaught (the request fails; it is
       not an implicit allow) but with no durable receipt and no alert

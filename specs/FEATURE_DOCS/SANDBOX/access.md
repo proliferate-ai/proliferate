@@ -53,7 +53,7 @@ through an existing layer, not a new field.
 | Layer | Question | Wire representation | Where |
 | --- | --- | --- | --- |
 | Deployment | Does this server offer managed cloud at all? | `capabilities.managedCloud.status` in `GET /meta` — an absence, never an error | [meta.py](../../../server/proliferate/server/meta.py) |
-| Subject | May this user spend right now? | HTTP 402, code `billing_credits_exhausted` \| `billing_start_blocked` | [billing/authorization.py](../../../server/proliferate/server/billing/authorization.py) |
+| Subject | May this user spend right now? | HTTP 402, code `billing_credits_exhausted` \| `billing_start_blocked` | ``billing/authorization.py`` (deleted in #2243, dark cloud-billing authorizer) |
 | Sandbox | Is the runtime reachable right now? | HTTP 409, code `cloud_sandbox_runtime_not_ready` | `cloud_sandboxes/service.py` (deleted, cull part 2) |
 
 ### The deployment layer

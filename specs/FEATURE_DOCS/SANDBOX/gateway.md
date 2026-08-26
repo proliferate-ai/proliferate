@@ -129,7 +129,7 @@ else's sandbox is unrepresentable on this wire, not merely forbidden.
 1. Billing gate: an exhausted owner is refused before any row is staged
    (402, `billing_credits_exhausted` | `billing_start_blocked`, with
    `decision_type`/`reason` detail —
-   [billing/authorization.py](../../../server/proliferate/server/billing/authorization.py)).
+   ``billing/authorization.py`` — deleted in #2243, dark cloud-billing authorizer).
    Successful decisions are cached for at most 5 seconds because the
    authorizer builds the full billing snapshot and evaluates compute
    budgets; denials are never cached.
