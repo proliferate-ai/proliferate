@@ -5,7 +5,8 @@ dissolving the legacy cloud sandbox stack: the E2B webhook lane, orphan
 reaper, worktree policy, and agent run configs are
 already deleted (delivery/cull-sweep/delivery-spec-delete-dark-cloud.md,
 part 1); the remaining provisioning/workspace machinery follows in part 2.
-The environments system spec replaces this document.
+The environments system spec replaces this document:
+[specs/codebase/systems/product/environments/README.md](../../codebase/systems/product/environments/README.md).
 
 Status: target. This document describes the accepted destination for the
 cloud sandbox container. The body is written in the ideal state. Every
