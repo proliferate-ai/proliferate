@@ -6,7 +6,7 @@ name: Build Server Artifacts
 # THERE ARE DELIBERATELY NO TEST OR LINT JOBS HERE.
 #
 # Per the delivery state machine
-# (specs/codebase/systems/engineering/delivery/README.md), tests gate the
+# (specs/engineering/shipping/release-delivery.md), tests gate the
 # PR -> main transition; the main -> production transition builds artifacts and
 # deploys them. Every SHA this workflow can be called with has already reached
 # `main`, which means `server-ci-ok` -- the required rollup covering `lint`,

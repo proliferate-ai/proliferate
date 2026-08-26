@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "artifact_runtime"
-spec = "specs/codebase/systems/product/agents/cowork-artifacts.md"
+spec = "specs/systems/sessions/cowork-artifacts.md"
 owns = "Serving runtime for agent-produced artifacts (static bundle and file responses)."
 
 public_surface = [

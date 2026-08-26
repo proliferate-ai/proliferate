@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "support"
-spec = "specs/codebase/systems/product/support/README.md"
+spec = "specs/systems/support/README.md"
 owns = "In-product support requests and their delivery to the support loop."
 
 public_surface = [

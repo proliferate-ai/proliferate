@@ -79,7 +79,7 @@ function cell(scenarioId: string): PlannedCellV1 {
   return {
     cell_id: `${scenarioId}/local`,
     scenario_id: scenarioId,
-    registry_flow_ref: "specs/TESTING/tier-3-scenario-contract.md#local-1",
+    registry_flow_ref: "specs/engineering/testing/tier-3-scenario-contract.md#local-1",
     runtime_lane: "local",
     dimensions: {},
     required_env: [],
@@ -292,7 +292,7 @@ test("runLocal1WorkspaceLeaf: green outcome resolves without throwing", async ()
   const { driver } = fakeDriver();
   await runLocal1WorkspaceLeaf(
     fakeCtx(),
-    { scenarioId: "T3-REPO-1", registryFlowRef: "specs/TESTING/tier-3-scenario-contract.md#local-1" },
+    { scenarioId: "T3-REPO-1", registryFlowRef: "specs/engineering/testing/tier-3-scenario-contract.md#local-1" },
     driver,
   );
 });

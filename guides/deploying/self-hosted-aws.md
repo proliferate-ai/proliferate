@@ -147,7 +147,7 @@ Environment-boundary note:
   [template.yaml](../../server/infra/self-hosted-aws/template.yaml)
   or add host-local overrides in `/opt/proliferate/server/deploy/.env.local`
 - the curated supported application/runtime input catalog is
-  [env-vars.yaml](../../specs/developing/reference/env-vars.yaml)
+  [env-vars.yaml](../../specs/areas/env-vars.yaml)
 
 ## Desktop Configuration
 

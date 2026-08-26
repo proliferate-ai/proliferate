@@ -2,7 +2,7 @@
 //!
 //! Every live agent session costs a fixed, measured amount of memory for as
 //! long as its processes exist, and it never gives any of that memory back on
-//! its own (see `specs/anyharness/live-runtime.md`). Retiring the actor is the
+//! its own (see `specs/areas/live-runtime.md`). Retiring the actor is the
 //! only reclaim mechanism this runtime has, so the reaper sweeps the live map
 //! and non-terminally unloads any session that has been continuously
 //! quiescent for the configured threshold.

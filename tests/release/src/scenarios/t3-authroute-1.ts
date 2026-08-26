@@ -31,7 +31,7 @@ export const ROUTE_CHANGE_DIMENSION = { route: "change" } as const;
 export const t3Authroute1: MatrixScenarioDefinition = {
   id: "T3-AUTHROUTE-1",
   title: "user API-key route per harness (LOCAL-3) + route-change semantics (LOCAL-6)",
-  registryFlowRef: "specs/TESTING/tier-3-scenario-contract.md#local-3",
+  registryFlowRef: "specs/engineering/testing/tier-3-scenario-contract.md#local-3",
   lanes: ["local"],
   requiredEnv: [
     // LOCAL-6 (route-change) enrolls the gateway route and correlates spend.

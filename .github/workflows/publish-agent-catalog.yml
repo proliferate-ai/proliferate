@@ -7,8 +7,7 @@ name: Publish Agent Catalog
 # floor, and every already-running runtime keeps whatever it activated at its
 # own boot. Only a FUTURE boot can pick up what this job publishes.
 #
-# Rollback (see the runbook in specs/codebase/platforms/product/agent-
-# distribution.md): every version this job publishes is immutable and stays
+# Rollback (see the runbook in specs/systems/harnesses/distribution.md): every version this job publishes is immutable and stays
 # in S3 forever, so rollback is a manual `aws s3 cp` of an OLDER version's
 # `manifest.json` back onto the rolling `catalogs/agents/stable/manifest.json`
 # pointer plus a CloudFront invalidation — this job is not involved in a

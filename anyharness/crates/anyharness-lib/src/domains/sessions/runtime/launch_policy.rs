@@ -78,7 +78,7 @@ pub(super) fn choose_startup_strategy(
 /// - adapters with durable fork ids (e.g. Codex) get a reloadable native id at
 ///   fork time, so a recorded id always loads with no fallback.
 /// - adapters whose fork ids are process-local until first prompt (Claude — see
-///   `specs/anyharness/sessions.md` fork invariants) cannot safely recover a
+///   `specs/systems/sessions/anyharness-sessions.md` fork invariants) cannot safely recover a
 ///   zero-turn child on a cold process. Re-forking without the R1 replay proof
 ///   could silently select the wrong parent prefix, while loading the recorded
 ///   process-local id is known to fail.

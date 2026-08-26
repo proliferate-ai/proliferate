@@ -1,6 +1,6 @@
 name: Release E2E (tier 3)
 
-# Tier-3 live end-to-end runner (specs/TESTING.md "Tier 3 —
+# Tier-3 live end-to-end runner (specs/engineering/testing/standard.md "Tier 3 —
 # live end-to-end"). Drives real agents on cheap models through real flows:
 # provision/pause/resume/connect, chat per cataloged agent, config apply,
 # secrets materialization, billing metering, repo settings.
@@ -523,7 +523,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Local functional — "Complete Local Workspace Qualification (Functional)"
   # (~/Vault/Vault/Workspace/Testing/Complete Local Workspace Qualification
-  # (Functional).md; specs/TESTING/tier-3-scenario-contract.md
+  # (Functional).md; specs/engineering/testing/tier-3-scenario-contract.md
   # §"Local cases" LOCAL-1..7, billing carve-out excepted — see LOCAL-BILL-1..7,
   # out of scope until PR 4). This one job builds the three exact candidates,
   # runs LOCAL-WORLD-SMOKE-1, then materializes and re-hashes that exact map for

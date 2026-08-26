@@ -114,7 +114,7 @@ profile database selection; otherwise the launcher resolves and exports the
 profile database after composition. Keep real local secrets in ignored env
 files, not `profile.env`, `launch.env`, chat, issues, or committed
 documentation. The environment-variable ownership reference is
-[`env-vars.yaml`](../../specs/developing/reference/env-vars.yaml).
+[`env-vars.yaml`](../../specs/areas/env-vars.yaml).
 
 ## Ports And App Identity
 
@@ -211,7 +211,7 @@ Shipping records to a shared destination additionally needs
 `PROLIFERATE_DIAGNOSTICS_DEV_TAG` to identify whose machine produced a record.
 Keep the headers value, which carries an ingest key, in a mode-600 file outside
 the repository. All five inputs are catalogued in
-[`env-vars.yaml`](../../specs/developing/reference/env-vars.yaml).
+[`env-vars.yaml`](../../specs/areas/env-vars.yaml).
 
 An unreachable or misconfigured destination never fails the app by design, so
 "the app works but no records arrive" is a configuration symptom rather than a
@@ -222,7 +222,7 @@ code defect.
 This document routes operators and developers to the files or systems that
 supply environment configuration. It describes locations and precedence, not
 secret values. The curated catalog of supported product inputs is
-[`env-vars.yaml`](../../specs/developing/reference/env-vars.yaml); deployment/bootstrap-only inputs and
+[`env-vars.yaml`](../../specs/areas/env-vars.yaml); deployment/bootstrap-only inputs and
 workflow/release controls remain with their owning procedures.
 
 ### Direct Local Server
@@ -362,4 +362,4 @@ outside the application/runtime input catalog.
 AnyHarness owns the environment assembled for workspace process runs,
 terminals, setup commands, and live agent launches. Its file layers and
 protected metadata are documented in
-[`workspace-command-environment.md`](../../specs/anyharness/workspace-command-environment.md).
+[`workspace-command-environment.md`](../../specs/systems/workspaces/command-environment.md).

@@ -23,7 +23,7 @@ why = """The manifest is the machine-readable ownership claim the Organization S
 
 [rule.example]
 bad = """server/proliferate/server/billing/ with no MANIFEST.toml, or one whose spec names a deleted doc"""
-good = """server/proliferate/server/billing/MANIFEST.toml with spec = "specs/FEATURE_DOCS/BILLING.md" and all five fields present"""
+good = """server/proliferate/server/billing/MANIFEST.toml with spec = "specs/systems/billing/deep-dive.md" and all five fields present"""
 
 [[rule]]
 id = "PROD-MANIFEST-002"

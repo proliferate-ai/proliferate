@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "anonymous_telemetry"
-spec = "specs/codebase/systems/engineering/analytics/anonymous-telemetry.md"
+spec = "specs/engineering/observability/anonymous-telemetry.md"
 owns = "Anonymous telemetry ingestion for installs without identified analytics."
 
 public_surface = [

@@ -3,7 +3,7 @@
 //! Python produces `fixtures/contracts/agent-auth-state/v2.json`
 //! (`materialize/agent_auth.py::render_agent_auth_state`); this side asserts we
 //! parse it and resolve it to the profiles the fixture's README claims. Per
-//! `specs/TESTING.md`, changing the shape means changing the
+//! `specs/engineering/testing/standard.md`, changing the shape means changing the
 //! fixture, which breaks whichever side has not caught up — the point is that the
 //! break is mechanical rather than a runtime surprise in a sandbox.
 //!

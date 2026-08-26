@@ -10,10 +10,10 @@ provider configuration part of repository law.
 
 ## System Owners
 
-- [Engineering Analytics](../../../specs/codebase/systems/engineering/analytics/README.md)
+- [Engineering Analytics](../../../specs/engineering/observability/analytics.md)
   owns anonymous telemetry, PostHog capture and replay routing, and Metabase
   durable facts and views.
-- [Engineering Observability](../../../specs/codebase/systems/engineering/observability/README.md)
+- [Engineering Observability](../../../specs/engineering/observability/README.md)
   owns event production, scrubbing, correlation, structured logs, and Sentry.
 
 ## Provider Procedures

@@ -6,11 +6,11 @@ enrollment, heartbeat, and version convergence failures.
 Use this runbook after an E2B sandbox and AnyHarness are reachable but the
 optional Worker sidecar does not enroll, heartbeat, or converge
 Worker/AnyHarness versions. Worker ownership is documented in
-[`specs/worker.md`](../../specs/worker.md);
+[`specs/areas/anyharness.md`](../../specs/areas/anyharness.md);
 on a supervisor-owned target the swap itself belongs to
-[`specs/supervisor.md`](../../specs/supervisor.md).
+[`specs/areas/anyharness.md`](../../specs/areas/anyharness.md).
 The agent catalog is not a separate convergence axis: it ships inside the
-runtime binary ([agent-distribution.md](../../specs/codebase/platforms/product/agent-distribution.md)),
+runtime binary ([agent-distribution.md](../../specs/systems/harnesses/distribution.md)),
 so a catalog complaint is a binary-version complaint. (The legacy heartbeat
 catalog sync still runs until its deletion lands; its evidence path is kept
 below, marked legacy.)

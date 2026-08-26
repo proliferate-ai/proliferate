@@ -59,7 +59,7 @@ INLINE_CODE = re.compile(r"(`+)(.+?)\1")
 REFERENCE_DEFINITION = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(.+?)\s*$")
 HTML_ANCHOR = re.compile(r"<(?:a|[A-Za-z][^>]*)\s+(?:[^>]*?\s)?(?:id|name)=[\"']([^\"']+)[\"']")
 EXTERNAL_PREFIXES = ("http://", "https://", "mailto:", "tel:", "data:")
-ENV_VAR_CATALOG = Path("specs/developing/reference/env-vars.yaml")
+ENV_VAR_CATALOG = Path("specs/areas/env-vars.yaml")
 ENV_VAR_FIELDS = {"name", "secret", "default", "description", "tags"}
 ENV_VAR_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 ENV_VAR_TAGS = {
@@ -71,14 +71,17 @@ ENV_VAR_TAGS = {
     "self-hosted",
     "web",
 }
-DEVELOPING_ROOTS = {
-    "process",
-    "local",
-    "testing",
-    "debugging",
-    "deploying",
-    "operating",
-    "reference",
+SPECS_ROOTS = {
+    "areas",
+    "systems",
+    "engineering",
+}
+SPECS_ROOT_FILES = {
+    "README.md",
+    "ARCHITECTURE.md",
+    "DESIGN_SYSTEM.md",
+    "product-sense.md",
+    "authoring.md",
 }
 SAFE_YAML_TO_JSON = r"""
 require "yaml"
@@ -95,44 +98,49 @@ STDOUT.write(JSON.generate(data))
 """
 REQUIRED_READMES = (
     "specs/README.md",
-    "specs/codebase/README.md",
-    "specs/codebase/structures/README.md",
-    "specs/codebase/platforms/README.md",
-    "specs/codebase/platforms/product/README.md",
-    "specs/codebase/platforms/product/agent-features/README.md",
-    "specs/codebase/platforms/product/agent-features/definitions/README.md",
-    "specs/codebase/systems/README.md",
-    "specs/codebase/systems/product/README.md",
-    "specs/codebase/systems/product/agents/README.md",
-    "specs/codebase/systems/product/auth/README.md",
-    "specs/codebase/systems/product/chat/README.md",
-    "specs/codebase/systems/product/clients/README.md",
-    "specs/codebase/systems/product/clients/web-desktop-unification/README.md",
-    "specs/codebase/systems/product/onboarding/README.md",
-    "specs/codebase/systems/product/organizations/README.md",
-    "specs/codebase/systems/product/settings/README.md",
-    "specs/codebase/systems/product/support/README.md",
-    "specs/codebase/systems/product/workflows/README.md",
-    "specs/codebase/systems/product/workspaces/README.md",
-    "specs/codebase/systems/engineering/README.md",
-    "specs/codebase/systems/engineering/analytics/README.md",
-    "specs/codebase/systems/engineering/customer-loop/README.md",
-    "specs/codebase/systems/engineering/delivery/README.md",
-    "specs/codebase/systems/engineering/observability/README.md",
-    "specs/codebase/systems/engineering/testing/README.md",
-    "specs/codebase/systems/engineering/alerting/README.md",
+    "specs/ARCHITECTURE.md",
+    "specs/DESIGN_SYSTEM.md",
+    "specs/product-sense.md",
+    "specs/authoring.md",
+    "specs/areas/server.md",
+    "specs/areas/anyharness.md",
+    "specs/areas/frontend.md",
+    "specs/areas/infra.md",
+    "specs/systems/agent_auth/README.md",
+    "specs/systems/api/README.md",
+    "specs/systems/automations/README.md",
+    "specs/systems/billing/README.md",
+    "specs/systems/chat/README.md",
+    "specs/systems/desktop-host/README.md",
+    "specs/systems/environments/README.md",
+    "specs/systems/github/README.md",
+    "specs/systems/harnesses/README.md",
+    "specs/systems/identity/README.md",
+    "specs/systems/integration_gateway/README.md",
+    "specs/systems/onboarding/README.md",
+    "specs/systems/runs-triage/README.md",
+    "specs/systems/sessions/README.md",
+    "specs/systems/settings/README.md",
+    "specs/systems/slack/README.md",
+    "specs/systems/subagents/README.md",
+    "specs/systems/support/README.md",
+    "specs/systems/workspace-surface/README.md",
+    "specs/systems/workspaces/README.md",
+    "specs/engineering/testing/README.md",
+    "specs/engineering/observability/README.md",
+    "specs/engineering/shipping/README.md",
+    "specs/engineering/security/README.md",
+    "specs/engineering/customer-loop/README.md",
+    "specs/engineering/testing/standard.md",
+    "specs/engineering/testing/manual-release-qa.md",
+    "specs/engineering/observability/standard.md",
     "guides/README.md",
     "guides/process/README.md",
     "guides/local/README.md",
-    "specs/TESTING.md",
     "guides/debugging/README.md",
     "guides/deploying/README.md",
     "guides/operating/README.md",
     "guides/operating/analytics/README.md",
-    "specs/TESTING/manual-release-qa.md",
-    "specs/developing/reference/README.md",
-    "specs/anyharness/README.md",
-    "specs/GENERATED/README.md",
 )
 
 
@@ -460,23 +468,26 @@ def check_routing_roots() -> list[Finding]:
     ]
 
 
-def check_developing_roots() -> list[Finding]:
-    prefix = Path("specs/developing")
+def check_specs_roots() -> list[Finding]:
+    """The specs/ tree has exactly four groups plus the five root docs."""
+    prefix = Path("specs")
     unexpected: set[str] = set()
     for path in tracked_paths(str(prefix)):
         try:
             relative = path.relative_to(prefix)
         except ValueError:
             continue
-        if len(relative.parts) >= 2 and relative.parts[0] not in DEVELOPING_ROOTS:
+        if len(relative.parts) >= 2 and relative.parts[0] not in SPECS_ROOTS:
+            unexpected.add(relative.parts[0])
+        elif len(relative.parts) == 1 and relative.parts[0] not in SPECS_ROOT_FILES:
             unexpected.add(relative.parts[0])
 
-    allowed = ", ".join(sorted(DEVELOPING_ROOTS))
+    allowed = ", ".join(sorted(SPECS_ROOTS) + sorted(SPECS_ROOT_FILES))
     return [
         Finding(
             "PROD-DOCS-2",
             str(prefix / root),
-            f"unexpected Developing documentation root (allowed roots: {allowed})",
+            f"unexpected specs/ root (allowed: {allowed})",
         )
         for root in sorted(unexpected)
     ]
@@ -485,7 +496,7 @@ def check_developing_roots() -> list[Finding]:
 def main() -> int:
     findings = (
         check_routing_roots()
-        + check_developing_roots()
+        + check_specs_roots()
         + check_markdown()
         + check_structured_data()
     )

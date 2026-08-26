@@ -3,7 +3,7 @@
 // Boots real FastAPI, Vite, and Postgres on profile-isolated ports. It reuses
 // the profile allocator and migrations behind `make run`, but launches Vite
 // directly because Tier 2 needs the Desktop web build, not the Tauri shell.
-// Network neighbors remain fake or absent per specs/TESTING.md.
+// Network neighbors remain fake or absent per specs/engineering/testing/standard.md.
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";

@@ -1,4 +1,4 @@
-"""Customer-loop receipt contract (specs/codebase/systems/engineering/customer-loop, §9).
+"""Customer-loop receipt contract (specs/engineering/customer-loop, §9).
 
 The Slack receipt must be one step from triage: release id, bound session ids,
 Sentry pairs, the Sentry query, and a prefilled file-an-issue link — and never

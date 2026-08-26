@@ -1,6 +1,6 @@
 /**
  * Integration fixture for T3-INT-1
- * (specs/TESTING/scenarios.md#T3-INT-1).
+ * (specs/engineering/testing/scenarios.md#T3-INT-1).
  *
  * The contract calls for "a real cataloged api_key-kind integration
  * definition" authenticated with a real key, then used by every harness

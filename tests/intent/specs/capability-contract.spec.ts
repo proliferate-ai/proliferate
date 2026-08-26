@@ -1,4 +1,4 @@
-// T2-SH-5 (specs/TESTING/self-hosting.md): the /meta capability
+// T2-SH-5 (specs/engineering/testing/self-hosting.md): the /meta capability
 // contract, asserted against REAL running servers.
 //
 // server/tests/unit/test_meta_endpoint.py already owns the pure

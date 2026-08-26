@@ -1,5 +1,5 @@
 /**
- * Two distinct notions of "lane" show up in specs/TESTING.md and specs/TESTING/scenarios.md,
+ * Two distinct notions of "lane" show up in specs/engineering/testing/standard.md and specs/engineering/testing/scenarios.md,
  * spelled the same way in prose but meaning different things. We keep them as
  * separate types so the CLI and the scenario registry never conflate them.
  */

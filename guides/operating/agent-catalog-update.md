@@ -3,7 +3,7 @@
 How to update the agent catalog: bump a harness to a new upstream version,
 review the nightly probe PR, add or change a harness definition, and roll
 back a bad update. Architecture and document contract:
-[agent-distribution.md](../../specs/codebase/platforms/product/agent-distribution.md).
+[agent-distribution.md](../../specs/systems/harnesses/distribution.md).
 Credential lifecycle for the scheduled run (provision, rotate, revoke,
 audit): [catalog-probe.md](catalog-probe.md).
 

@@ -261,7 +261,7 @@ fn reset_restart_budget_after_health(inner: &mut SupervisorInner, now: Instant) 
 }
 
 fn validate_renderer_ingest_batch(batch: &IngestBatchV1) -> Result<(), SupervisorUnavailable> {
-    // `specs/desktop-native.md` promises *exact* schema-v1.1 for renderer batches, but
+    // `specs/systems/desktop-host/desktop-native.md` promises *exact* schema-v1.1 for renderer batches, but
     // `parse_ingest_batch_value` only enforces the compatible producer-minor window, so it
     // admits 1.0 as well. Until now the exactness check lived solely in the renderer
     // (`apps/desktop/src/lib/access/tauri/diagnostics.ts`) — the party `require_main_window`

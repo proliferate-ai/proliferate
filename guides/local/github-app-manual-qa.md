@@ -4,7 +4,7 @@ Manual smoke procedure for any PR that wires the GitHub App credential
 path. Required because the critical behavior spans GitHub App OAuth, local
 profile env, PAPI, E2B, the credential materialization step, git, gateway
 access, and AnyHarness. The platform contract this proves is
-[sandbox-github-auth.md](../../specs/FEATURE_DOCS/SANDBOX/github-auth.md).
+[sandbox-github-auth.md](../../specs/systems/github/sandbox-github-auth.md).
 
 ## Local secret setup
 

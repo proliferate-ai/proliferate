@@ -12,7 +12,7 @@ import { createContext, useContext, type ReactNode } from "react";
  * from a separate data-level index (see the desktop
  * use-chat-transcript-content-search hook), so painting only decorates what it
  * can reach. Everything here is inert (context null → zero work) when search is
- * closed. See specs/codebase/features/content-search.md.
+ * closed. See specs/systems/workspace-surface/content-search.md.
  */
 
 export const ChatContentSearchQueryContext = createContext<string | null>(null);

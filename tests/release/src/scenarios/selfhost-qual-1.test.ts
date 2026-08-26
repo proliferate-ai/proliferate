@@ -155,7 +155,7 @@ function cellFor(cellName: string): PlannedCellV1 {
   return {
     cell_id: canonicalCellId(SELFHOST_QUAL_1_ID, "selfhost", { cell: cellName, harness: REPRESENTATIVE_HARNESS }),
     scenario_id: SELFHOST_QUAL_1_ID,
-    registry_flow_ref: "specs/TESTING/tier-3-scenario-contract.md#sh-gateway",
+    registry_flow_ref: "specs/engineering/testing/tier-3-scenario-contract.md#sh-gateway",
     runtime_lane: "selfhost",
     dimensions: { cell: cellName, harness: "claude" },
     required_env: [],

@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-// Tier-2 mocked-intent suite (specs/TESTING.md §Tier 2).
+// Tier-2 mocked-intent suite (specs/engineering/testing/standard.md §Tier 2).
 // One stack boot per run (globalSetup), spec files run serially within a
 // single worker: the suite shares one claimed single-org instance and one
 // Postgres DB, so parallel workers would race on org/invitation state.

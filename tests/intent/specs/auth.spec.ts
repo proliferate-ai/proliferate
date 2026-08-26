@@ -1,4 +1,4 @@
-// T2-AUTH-1 + T2-AUTH-2 (specs/TESTING/scenarios.md).
+// T2-AUTH-1 + T2-AUTH-2 (specs/engineering/testing/scenarios.md).
 //
 // T2-AUTH-1: setup claim + password login lifecycle.
 //   Fresh DB, SINGLE_ORG_MODE=true. Visit /setup → claim instance, set

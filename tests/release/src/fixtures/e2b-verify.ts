@@ -1,6 +1,6 @@
 /**
  * Direct E2B verification/action backdoor for T3-PROV-2 and T3-SEC-MAT-1
- * (specs/TESTING/scenarios.md). Thin spawn wrapper around
+ * (specs/engineering/testing/scenarios.md). Thin spawn wrapper around
  * `../../scripts/e2b_sandbox_probe.py` -- mirrors the shape of
  * `github-app-seed.ts` / t3-prov-1's `runFallbackScript`.
  *

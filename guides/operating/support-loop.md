@@ -1,7 +1,7 @@
 # Support loop
 
 Status: authoritative operator procedure for the
-[customer loop](../../specs/codebase/systems/engineering/customer-loop/README.md).
+[customer loop](../../specs/engineering/customer-loop/README.md).
 The contract lives in that spec; this page is the step-by-step.
 
 ```text
@@ -37,7 +37,7 @@ against their own tracker.
    [`../debugging/support-reports.md`](../debugging/support-reports.md).
    Paste pointers (ids, links) into the issue; never content.
 4. **Find the owning spec.** Locate the broken law under
-   `specs/codebase/systems/`. Set the issue's `area:*` label to the owner,
+   `specs/systems/`. Set the issue's `area:*` label to the owner,
    not the surface the reporter saw.
 5. **Fix + pinning test.** The fix PR body's "Support and attribution" line
    reads `Closes #<N> · pinning test: <path>`. The test's name or docstring

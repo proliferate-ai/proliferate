@@ -4,13 +4,13 @@
 
 ## Testing
 
-<!-- State the tier(s) exercised per specs/TESTING.md, or why none is feasible. -->
+<!-- State the tier(s) exercised per specs/engineering/testing/standard.md, or why none is feasible. -->
 
 -
 
 ## Observability
 
-<!-- State the observability delta per specs/OBSERVABILITY.md, or "none". -->
+<!-- State the observability delta per specs/engineering/observability/standard.md, or "none". -->
 
 -
 

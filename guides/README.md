@@ -3,7 +3,7 @@
 Status: current procedure index
 
 Use this area to perform and verify work. System architecture, code ownership,
-and product behavior belong under [`../specs/codebase/`](../specs/codebase/).
+and product behavior belong under [`../specs/`](../specs/).
 
 ## Read Map
 
@@ -11,11 +11,11 @@ and product behavior belong under [`../specs/codebase/`](../specs/codebase/).
 | --- | --- |
 | Prepare, open, or mark a pull request ready for review | [`process/README.md`](process/README.md) |
 | Set up or run a local worktree, profile, Stripe, Web, Desktop, or Mobile | [`local/README.md`](local/README.md) |
-| Write or run automated tests and release qualification | [`../specs/TESTING.md`](../specs/TESTING.md) |
+| Write or run automated tests and release qualification | [`../specs/engineering/testing/standard.md`](../specs/engineering/testing/standard.md) |
 | Investigate a local or production defect | [`debugging/README.md`](debugging/README.md) |
 | Change CI, package, release, deploy, or promote | [`deploying/README.md`](deploying/README.md) |
 | Follow a focused production or provider operation | [`operating/README.md`](operating/README.md) |
-| Find environment and command reference data | [`../specs/developing/reference/README.md`](../specs/developing/reference/README.md) |
+| Find environment and command reference data | [`../specs/areas/server.md`](../specs/areas/server.md) |
 
 Pull-request preparation, title and label selection, readiness, support
 linkage, and proof records are owned by

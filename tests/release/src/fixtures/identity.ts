@@ -1,5 +1,5 @@
 /**
- * T3-FIXTURE (specs/TESTING/scenarios.md): shared identity fixture
+ * T3-FIXTURE (specs/engineering/testing/scenarios.md): shared identity fixture
  * so no scenario reimplements auth.
  *
  * Two identities:

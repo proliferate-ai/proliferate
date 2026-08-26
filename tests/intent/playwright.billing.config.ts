@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-// Tier-2 BILLING suite (specs/TESTING/scenarios.md T2-BILL-1..9).
+// Tier-2 BILLING suite (specs/engineering/testing/scenarios.md T2-BILL-1..9).
 // Separate config from the auth/org intent suite: it boots its own stack with
 // Stripe test mode + enforcement on (stack/billing-global-setup.ts), on the
 // dedicated `t2billing` profile. Serial, single worker, one stack per run —

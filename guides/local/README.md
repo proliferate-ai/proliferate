@@ -172,7 +172,7 @@ credentials.
 
 The launcher reads `.env`, `.env.local`, `server/.env`, and
 `server/.env.local`. Keep real local secrets only in ignored env files. Use
-[`../../specs/developing/reference/env-vars.yaml`](../../specs/developing/reference/env-vars.yaml) to find the owner of
+[`../../specs/areas/env-vars.yaml`](../../specs/areas/env-vars.yaml) to find the owner of
 an environment variable.
 
 The full state, port, database, identity, and gateway contract is in

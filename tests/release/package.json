@@ -2,7 +2,7 @@
   "name": "@proliferate/release-e2e",
   "private": true,
   "type": "module",
-  "description": "Tier-3 live end-to-end / tier-4 upgrade-path release runner (specs/TESTING.md).",
+  "description": "Tier-3 live end-to-end / tier-4 upgrade-path release runner (specs/engineering/testing/standard.md).",
   "scripts": {
     "release-e2e": "tsx src/cli/run.ts",
     "typecheck": "tsc --noEmit",

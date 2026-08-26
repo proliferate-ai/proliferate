@@ -44,91 +44,86 @@ class DocumentationIntegrityTest(unittest.TestCase):
         entry.update(overrides)
         return entry
 
-    def test_platform_and_system_indexes_are_required(self) -> None:
+    def test_system_and_engineering_indexes_are_required(self) -> None:
         required_indexes = {
-            "specs/codebase/platforms/README.md",
-            "specs/codebase/platforms/product/agent-features/README.md",
-            "specs/codebase/systems/README.md",
-            "specs/codebase/systems/product/agents/README.md",
-            "specs/codebase/systems/product/chat/README.md",
-            "specs/codebase/systems/product/clients/README.md",
-            "specs/codebase/systems/product/organizations/README.md",
-            "specs/codebase/systems/product/settings/README.md",
-            "specs/codebase/systems/product/workflows/README.md",
-            "specs/codebase/systems/product/workspaces/README.md",
-            "specs/codebase/systems/engineering/README.md",
-            "specs/codebase/systems/engineering/analytics/README.md",
-            "specs/codebase/systems/engineering/customer-loop/README.md",
-            "specs/codebase/systems/engineering/delivery/README.md",
-            "specs/codebase/systems/engineering/observability/README.md",
-            "specs/codebase/systems/engineering/testing/README.md",
-            "specs/codebase/systems/engineering/alerting/README.md",
+            "specs/README.md",
+            "specs/ARCHITECTURE.md",
+            "specs/areas/server.md",
+            "specs/areas/anyharness.md",
+            "specs/areas/frontend.md",
+            "specs/areas/infra.md",
+            "specs/systems/chat/README.md",
+            "specs/systems/identity/README.md",
+            "specs/systems/settings/README.md",
+            "specs/systems/automations/README.md",
+            "specs/systems/workspace-surface/README.md",
+            "specs/systems/workspaces/README.md",
+            "specs/engineering/testing/README.md",
+            "specs/engineering/observability/README.md",
+            "specs/engineering/shipping/README.md",
+            "specs/engineering/security/README.md",
+            "specs/engineering/customer-loop/README.md",
             "guides/operating/README.md",
             "guides/operating/analytics/README.md",
-            "specs/TESTING/manual-release-qa.md",
+            "specs/engineering/testing/manual-release-qa.md",
         }
 
         self.assertLessEqual(required_indexes, set(check_docs.REQUIRED_READMES))
-        legacy_capability_root = "specs/codebase/" + "primitives/README.md"
-        legacy_workflow_root = "specs/codebase/" + "features/README.md"
-        self.assertNotIn(legacy_capability_root, check_docs.REQUIRED_READMES)
-        self.assertNotIn(legacy_workflow_root, check_docs.REQUIRED_READMES)
-        self.assertNotIn(
-            "specs/developing/analytics/README.md", check_docs.REQUIRED_READMES
+        legacy_codebase_root = "specs/" + "codebase/" + "README.md"
+        legacy_feature_docs_root = "specs/" + "FEATURE_DOCS/" + "README.md"
+        self.assertNotIn(legacy_codebase_root, check_docs.REQUIRED_READMES)
+        self.assertNotIn(legacy_feature_docs_root, check_docs.REQUIRED_READMES)
+        legacy_reference_root = "specs/" + "developing/" + "reference/" + "README.md"
+        self.assertNotIn(legacy_reference_root, check_docs.REQUIRED_READMES)
+        legacy_testing_root = "specs/" + "TESTING/" + "manual-release-qa.md"
+        self.assertNotIn(legacy_testing_root, check_docs.REQUIRED_READMES)
+
+    def test_specs_roots_are_closed(self) -> None:
+        self.assertEqual(
+            check_docs.SPECS_ROOTS, {"areas", "systems", "engineering"}
         )
-        legacy_qa_root = "specs/developing/" + "qa/" + "README.md"
-        self.assertNotIn(legacy_qa_root, check_docs.REQUIRED_READMES)
-
-    def test_developing_root_indexes_are_required(self) -> None:
-        expected_roots = {
-            "process",
-            "local",
-            "testing",
-            "debugging",
-            "deploying",
-            "operating",
-            "reference",
-        }
-        expected_indexes = {
-            f"guides/{root}/README.md"
-            for root in expected_roots - {"testing", "reference"}
-        } | {
-            "specs/TESTING.md",
-            "specs/developing/reference/README.md",
-        }
-
-        self.assertEqual(check_docs.DEVELOPING_ROOTS, expected_roots)
-        self.assertLessEqual(expected_indexes, set(check_docs.REQUIRED_READMES))
-        legacy_runbook_index = (
-            "specs/developing/" + "runbooks/" + "README.md"
+        self.assertEqual(
+            check_docs.SPECS_ROOT_FILES,
+            {
+                "README.md",
+                "ARCHITECTURE.md",
+                "DESIGN_SYSTEM.md",
+                "product-sense.md",
+                "authoring.md",
+            },
         )
-        self.assertNotIn(legacy_runbook_index, check_docs.REQUIRED_READMES)
+        self.assertIn("specs/engineering/testing/standard.md", check_docs.REQUIRED_READMES)
+        legacy_testing_standard = "specs/" + "TESTING.md"
+        self.assertNotIn(legacy_testing_standard, check_docs.REQUIRED_READMES)
 
-    def test_developing_root_check_allows_root_readme_and_allowed_root(self) -> None:
+    def test_specs_root_check_allows_root_docs_and_allowed_roots(self) -> None:
         paths = [
-            Path("specs/developing/README.md"),
-            Path("specs/developing/operating/example.md"),
+            Path("specs/README.md"),
+            Path("specs/ARCHITECTURE.md"),
+            Path("specs/systems/chat/README.md"),
+            Path("specs/areas/server.md"),
+            Path("specs/engineering/testing/README.md"),
         ]
 
         with patch.object(check_docs, "tracked_paths", return_value=paths):
-            errors = check_docs.check_developing_roots()
+            errors = check_docs.check_specs_roots()
 
         self.assertEqual(errors, [])
 
-    def test_developing_root_check_rejects_unexpected_tracked_root(self) -> None:
+    def test_specs_root_check_rejects_unexpected_tracked_root(self) -> None:
         paths = [
-            Path("specs/developing/README.md"),
-            Path("specs/developing/notes/example.md"),
+            Path("specs/README.md"),
+            Path("specs/notes/example.md"),
         ]
 
         with patch.object(check_docs, "tracked_paths", return_value=paths):
-            errors = check_docs.check_developing_roots()
+            errors = check_docs.check_specs_roots()
 
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].rule_id, "PROD-DOCS-2")
         diagnostic = errors[0].format()
-        self.assertIn("specs/developing/notes: PROD-DOCS-2", diagnostic)
-        self.assertIn("unexpected Developing documentation root", diagnostic)
+        self.assertIn("specs/notes: PROD-DOCS-2", diagnostic)
+        self.assertIn("unexpected specs/ root", diagnostic)
         self.assertIn("lints/product/docs.toml", diagnostic)
 
     def markdown_errors(self, files: dict[str, str]) -> list[check_docs.Finding]:

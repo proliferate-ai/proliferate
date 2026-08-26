@@ -8,7 +8,7 @@ function failedResult(overrides: Partial<FinalCellResultV1> = {}): FinalCellResu
   return {
     cell_id: "T3-EXAMPLE/local",
     scenario_id: "T3-EXAMPLE",
-    registry_flow_ref: "specs/TESTING/scenarios.md#T3-EXAMPLE",
+    registry_flow_ref: "specs/engineering/testing/scenarios.md#T3-EXAMPLE",
     runtime_lane: "local",
     dimensions: {},
     status: "failed",
@@ -24,7 +24,7 @@ function failedResult(overrides: Partial<FinalCellResultV1> = {}): FinalCellResu
 test("toFailureReports maps a normalized failed result to the issue payload", () => {
   const [report] = toFailureReports([failedResult()]);
   assert.equal(report.scenario_id, "T3-EXAMPLE/local");
-  assert.equal(report.flow, "specs/TESTING/scenarios.md#T3-EXAMPLE");
+  assert.equal(report.flow, "specs/engineering/testing/scenarios.md#T3-EXAMPLE");
   assert.equal(report.lane, "local");
   assert.match(report.observed, /boom/);
   assert.equal(report.timestamp, "2026-07-13T00:00:01Z");

@@ -1,4 +1,4 @@
-// T2-INV-1 (specs/TESTING/scenarios.md): invitation happy path +
+// T2-INV-1 (specs/engineering/testing/scenarios.md): invitation happy path +
 // the four negatives (expired, revoked, wrong-email, duplicate-pending).
 //
 // Survey facts that shape this test (scenarios.md, verified against code):

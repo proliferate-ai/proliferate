@@ -72,7 +72,7 @@ function fakeCell(harness: string): PlannedCellV1 {
   return {
     cell_id: `T3-INT-1/local/harness=${harness}`,
     scenario_id: "T3-INT-1",
-    registry_flow_ref: "specs/TESTING/scenarios.md#T3-INT-1",
+    registry_flow_ref: "specs/engineering/testing/scenarios.md#T3-INT-1",
     runtime_lane: "local",
     dimensions: { harness },
     required_env: [],

@@ -6,7 +6,7 @@ Use this procedure to verify hosted-client analytics without changing project
 configuration. Session replay is source-disabled on Web and Mobile and
 internal-audience-only on Desktop, so the only replay that can appear belongs
 to an internal account. The system contract is
-[PostHog](../../../specs/codebase/systems/engineering/analytics/posthog.md).
+[PostHog](../../../specs/engineering/observability/posthog.md).
 
 ## Applicability
 

@@ -1,4 +1,4 @@
-// T2-SH-7 (specs/TESTING/self-hosting.md): gateway model
+// T2-SH-7 (specs/engineering/testing/self-hosting.md): gateway model
 // eligibility — a gateway-routed context (agent-auth state pushed with only
 // a `gateway` source, no native CLI login) REJECTS session creation with a
 // bare native model selector (e.g. "default") and ACCEPTS a real

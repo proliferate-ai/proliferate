@@ -1,4 +1,4 @@
-// T2-INT-1 (specs/TESTING/scenarios.md): real cataloged provider + org policy
+// T2-INT-1 (specs/engineering/testing/scenarios.md): real cataloged provider + org policy
 // toggle, stopping before any provider boundary.
 //
 // Scenario, per the 2026-07-08 ruling baked into scenarios.md: "no

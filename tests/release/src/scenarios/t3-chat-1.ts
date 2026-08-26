@@ -17,10 +17,10 @@ import type { PlannedCellV1 } from "../runner/result.js";
 
 /**
  * T3-CHAT-1 — every harness x its cheapest model, via the gateway.
- * specs/TESTING/scenarios.md#T3-CHAT-1
+ * specs/engineering/testing/scenarios.md#T3-CHAT-1
  *
  * First real matrix consumer of the exact-cell contract
- * (specs/TESTING/core-release-validation.md; historically the
+ * (specs/engineering/testing/core-release-validation.md; historically the
  * exact-test-matrix spec): each harness is its own
  * planned cell (`T3-CHAT-1/<lane>/harness=<kind>`), the workspace setup stays
  * batched in one `runCells()` invocation, and every assigned harness gets one
@@ -52,7 +52,7 @@ import type { PlannedCellV1 } from "../runner/result.js";
 export const t3Chat1: MatrixScenarioDefinition = {
   id: "T3-CHAT-1",
   title: "every harness x its cheapest model, via the gateway",
-  registryFlowRef: "specs/TESTING/scenarios.md#T3-CHAT-1",
+  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-CHAT-1",
   lanes: ["local", "sandbox"],
   requiredEnv: [],
   kind: "matrix",

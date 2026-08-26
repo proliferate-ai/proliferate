@@ -73,7 +73,7 @@ overrides remain in the server config layer; customize
 [template.yaml](template.yaml)
 if you need to promote more of them into CloudFormation parameters. The
 curated supported application/runtime input catalog is
-[specs/developing/reference/env-vars.yaml](../../../specs/developing/reference/env-vars.yaml).
+[specs/areas/env-vars.yaml](../../../specs/areas/env-vars.yaml).
 
 ## Versioned Release Assets
 

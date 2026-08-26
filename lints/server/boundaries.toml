@@ -1,7 +1,7 @@
 # Server layer-boundary rules (SRV-API / SRV-SVC / SRV-STORE / SRV-DOMAIN /
 # SRV-ERR / SRV-MODELS / SRV-INTEG). The grid coordinate a file sits at decides
 # what it may import and call; see
-# specs/codebase/structures/server/guides/grid-ownership-model.md for the model
+# specs/structures/server/guides/grid-ownership-model.md for the model
 # these records enforce.
 
 [[rule]]

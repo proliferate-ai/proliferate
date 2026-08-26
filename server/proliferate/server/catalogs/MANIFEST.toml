@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "catalogs"
-spec = "specs/FEATURE_DOCS/MODELS.md"
+spec = "specs/systems/agent_auth/models.md"
 owns = "Agent catalog serving: signed catalog documents and their distribution endpoints."
 
 public_surface = [

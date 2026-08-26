@@ -2,7 +2,7 @@
 
 The `agent-auth/state.json` document: **Python produces it, Rust consumes it.**
 
-Per `specs/TESTING.md` ("Contract fixtures"), a shared JSON
+Per `specs/engineering/testing/standard.md` ("Contract fixtures"), a shared JSON
 shape that crosses a language boundary gets a golden fixture here; the producing
 language asserts it produces this, each consuming language asserts it parses
 this, and a shape change is made by changing the fixture — which mechanically

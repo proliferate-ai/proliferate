@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "analytics"
-spec = "specs/codebase/systems/engineering/analytics/README.md"
+spec = "specs/engineering/observability/analytics.md"
 owns = "Product analytics event ingestion endpoints on the control plane."
 
 public_surface = [

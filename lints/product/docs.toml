@@ -26,7 +26,7 @@ root is unreachable: nothing links into it and nothing lists it, so it rots
 unread."""
 
 [rule.example]
-bad = "a new specs/codebase/systems/<x>/ directory with no README.md"
+bad = "a new specs/systems/<x>/ directory with no README.md"
 good = "the new tree ships its README.md and is named in REQUIRED_READMES"
 
 [[rule]]
@@ -36,19 +36,22 @@ owner = "product"
 status = "law"
 enforced_by = "scripts/check_docs.py"
 mode = "lint"
-scope = "specs/developing/**"
+scope = "specs/**"
 
-rule = """A tracked file under specs/developing/ may only sit beneath one of the
-roots named in DEVELOPING_ROOTS; a new second-level directory there is a
-violation."""
-alternative = """File the document under an existing Developing root."""
-why = """A closed root set keeps the developing IA from sprawling one folder per
+rule = """A tracked file under specs/ may only sit beneath one of the roots
+named in SPECS_ROOTS (areas/, systems/, engineering/) or be one of the root
+docs named in SPECS_ROOT_FILES; a new top-level directory or root file there
+is a violation."""
+alternative = """File the document under the owning system folder in
+specs/systems/, the owning engineering spec in specs/engineering/, or the
+area doc in specs/areas/."""
+why = """A closed root set keeps the specs IA from sprawling one folder per
 topic. Once anyone may add a root, the index stops being a map and becomes a
 list of whatever was written last."""
 
 [rule.example]
-bad = "specs/developing/notes/scratch.md created ad hoc"
-good = "specs/developing/process/scratch.md, under an existing root"
+bad = "specs/notes/scratch.md created ad hoc"
+good = "specs/systems/<owner>/scratch.md, inside the owning system folder"
 
 [[rule]]
 id = "PROD-DOCS-3"
@@ -66,7 +69,7 @@ why = """Relative links survive moves and work in every viewer, including a
 plain checkout on disk. An absolute path only resolves on one host."""
 
 [rule.example]
-bad = "[x](/specs/codebase/README.md)"
+bad = "[x](/specs/README.md)"
 good = "[x](../codebase/README.md)"
 
 [[rule]]
@@ -177,7 +180,7 @@ owner = "product"
 status = "law"
 enforced_by = "scripts/check_docs.py"
 mode = "lint"
-scope = "specs/developing/reference/env-vars.yaml"
+scope = "specs/areas/env-vars.yaml"
 
 rule = """The environment-variable catalog must be a list of entries carrying
 exactly the fields name, secret, default, description, and tags: a

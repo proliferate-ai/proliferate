@@ -53,7 +53,7 @@ const rowSegmentCache = new WeakMap<TranscriptVirtualRow, string[]>();
  * best-effort). Registers one store unit per transcript row that contains
  * matches, keyed `chatrow:<rowKey>` so the jump-to-match layer can recover the
  * row from an active match id. Entirely inert unless chat search is open with a
- * non-empty query. See specs/codebase/features/content-search.md.
+ * non-empty query. See specs/systems/workspace-surface/content-search.md.
  */
 export function useChatTranscriptContentSearch({
   transcript,

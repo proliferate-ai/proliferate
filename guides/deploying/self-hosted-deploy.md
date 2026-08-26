@@ -249,7 +249,7 @@ bundle-only download. Working from a monorepo checkout instead?
    - the LiteLLM gateway or invitation email independently.
    The complete keys and pairing rules are in
    [.env.production.example](../../server/deploy/.env.production.example)
-   and [env-vars.yaml](../../specs/developing/reference/env-vars.yaml).
+   and [env-vars.yaml](../../specs/areas/env-vars.yaml).
    To enable the gateway, set `AGENT_GATEWAY_ENABLED=true`, use
    `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://api.company.com/llm`, set the
    paired LiteLLM secrets, and configure at least one provider key.

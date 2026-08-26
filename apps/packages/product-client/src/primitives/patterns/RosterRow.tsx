@@ -24,7 +24,7 @@ import { twMerge } from "#product/primitives/utils/tw-merge";
  * Trailing actions: the row is a hover group, and the sanctioned row-action
  * button (`RowActionIconButton`) already owns the `opacity-0` →
  * `group-hover:opacity-100` reveal contract taught in
- * `specs/frontend/styling.md`. The `actions` slot therefore only lays out — it
+ * `specs/areas/styling.md`. The `actions` slot therefore only lays out — it
  * does not restate the reveal, because a state contract has exactly one owner.
  */
 

@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
-# Interim intake for the customer loop (specs/codebase/systems/engineering/
+# Interim intake for the customer loop (specs/engineering/
 # customer-loop): a prefilled GitHub issue-form link on the Slack receipt.
 # Field ids must match .github/ISSUE_TEMPLATE/support_report.yml.
 SUPPORT_ISSUE_REPO = "proliferate-ai/proliferate"
