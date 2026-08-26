@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
     restoreError: null as string | null,
   },
   pendingEntryActions: { handleBack: vi.fn(), handleRetry: vi.fn() },
-  cloudStatusActions: { handlePrimaryAction: vi.fn(), isPrimaryActionPending: false },
 }));
 
 vi.mock("#product/hooks/workspaces/derived/use-workspace-status-panel-state", () => ({
@@ -29,9 +28,6 @@ vi.mock("#product/hooks/workspaces/workflows/use-worktree-missing-actions", () =
 }));
 vi.mock("#product/hooks/workspaces/workflows/use-pending-workspace-entry-actions", () => ({
   usePendingWorkspaceEntryActions: () => mocks.pendingEntryActions,
-}));
-vi.mock("#product/hooks/cloud/workflows/use-cloud-workspace-status-screen-actions", () => ({
-  useCloudWorkspaceStatusScreenActions: () => mocks.cloudStatusActions,
 }));
 
 function cloudStatusPanel(mode: string, overrides: Record<string, unknown> = {}) {
@@ -121,14 +117,11 @@ describe("useComposerBlockedState", () => {
     expect(result.current?.message).toBe("Restore failed: path occupied");
   });
 
-  it("requires confirmation on the lost-workspace delete action", () => {
+  it("renders the lost-workspace status without an action (the status-screen actions died with the cloud stack)", () => {
     mocks.panelState = cloudStatusPanel("lost");
     const { result } = renderHook(() => useComposerBlockedState());
-    const primary = result.current?.actions[0];
-    expect(primary?.confirmation).toMatchObject({
-      title: "Delete lost workspace?",
-      confirmLabel: "Delete",
-    });
+    expect(result.current).not.toBeNull();
+    expect(result.current?.actions).toEqual([]);
   });
 
   it("frames cloud-attention messages with the model title", () => {
@@ -139,7 +132,7 @@ describe("useComposerBlockedState", () => {
     });
     const { result } = renderHook(() => useComposerBlockedState());
     expect(result.current?.message).toBe("Provisioning failed. exit code 1");
-    expect(result.current?.actions[0]?.confirmation).toBeNull();
+    expect(result.current?.actions).toEqual([]);
   });
 
   it("maps a failed runtime to a retry takeover when no panel state is active", () => {

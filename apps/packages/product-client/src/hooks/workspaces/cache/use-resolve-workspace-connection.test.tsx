@@ -76,43 +76,31 @@ describe("useResolveWorkspaceConnection", () => {
     );
   });
 
-  it("treats only a successful cached Cloud gateway resolution as remote authority", async () => {
+  it("resolves a stale synthetic cloud id against the local runtime (the gateway cache is gone)", async () => {
     const queryClient = new QueryClient();
-    vi.spyOn(queryClient, "fetchQuery").mockResolvedValue({
-      runtimeUrl: "https://gateway.runtime.test",
-      accessToken: "cloud-token",
-      anyharnessWorkspaceId: "runtime-workspace",
-      runtimeGeneration: 9,
-      webSocketAuthTransport: "protocol",
-    });
-    const { result } = renderHook(
-      () => useResolveWorkspaceConnection(input),
-      { wrapper: wrapper(queryClient) },
-    );
-
-    await expect(result.current("cloud:cloud-1")).resolves.toEqual({
+    const fetchQuery = vi.spyOn(queryClient, "fetchQuery");
+    mocks.resolveWorkspaceConnection.mockResolvedValue({
       connection: {
-        runtimeUrl: "https://gateway.runtime.test",
-        authToken: "cloud-token",
-        anyharnessWorkspaceId: "runtime-workspace",
-        runtimeGeneration: 9,
-        runtimeAccessKind: "proliferate-gateway",
-        webSocketAuthTransport: "protocol",
+        runtimeUrl: "http://local.runtime.test",
+        anyharnessWorkspaceId: "cloud:cloud-1",
+        runtimeGeneration: 0,
+        runtimeAccessKind: "direct",
       },
-      filesystemOrigin: "remote",
+      filesystemOrigin: "desktop-local",
     });
-    expect(mocks.resolveWorkspaceConnection).not.toHaveBeenCalled();
-  });
-
-  it("rejects a failed cached Cloud fetch instead of synthesizing provenance", async () => {
-    const queryClient = new QueryClient();
-    vi.spyOn(queryClient, "fetchQuery").mockRejectedValue(new Error("connection unavailable"));
     const { result } = renderHook(
       () => useResolveWorkspaceConnection(input),
       { wrapper: wrapper(queryClient) },
     );
 
-    await expect(result.current("cloud:cloud-1")).rejects.toThrow("connection unavailable");
-    expect(mocks.resolveWorkspaceConnection).not.toHaveBeenCalled();
+    await expect(result.current("cloud:cloud-1")).resolves.toMatchObject({
+      filesystemOrigin: "desktop-local",
+    });
+    expect(mocks.resolveWorkspaceConnection).toHaveBeenCalledWith(
+      "http://local.runtime.test",
+      "cloud:cloud-1",
+      null,
+    );
+    expect(fetchQuery).not.toHaveBeenCalled();
   });
 });

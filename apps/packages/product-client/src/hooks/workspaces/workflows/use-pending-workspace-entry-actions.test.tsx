@@ -25,7 +25,6 @@ const mocks = vi.hoisted(() => ({
   showToast: vi.fn(),
   createLocalWorkspaceAndEnter: vi.fn(),
   createWorktreeAndEnter: vi.fn(),
-  retryCloudWorkspaceAndEnter: vi.fn(),
   cloudComputeEnabled: true,
 }));
 
@@ -35,12 +34,6 @@ vi.mock("react-router-dom", () => ({
 
 vi.mock("#product/stores/editor/workspace-editor-state", () => ({
   resetWorkspaceEditorState: vi.fn(),
-}));
-
-vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
-  useCreateCloudWorkspace: () => ({
-    retryCloudWorkspaceAndEnter: mocks.retryCloudWorkspaceAndEnter,
-  }),
 }));
 
 vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
@@ -168,42 +161,10 @@ describe("usePendingWorkspaceEntryActions", () => {
     expect(useChatLaunchIntentStore.getState().intentOrder).toEqual(["launch-other"]);
   });
 
-  it("replaces the retried attempt for cloud retries too", async () => {
-    const cloudEntry: PendingWorkspaceEntry = {
-      ...dismissed,
-      stage: "failed",
-      errorMessage: "boom",
-      request: {
-        kind: "cloud",
-        input: {
-          gitOwner: "proliferate-ai",
-          gitRepoName: "proliferate",
-          baseBranch: "main",
-          branchName: "pablo/retry",
-          generatedName: false,
-        },
-      },
-    };
-    mocks.retryCloudWorkspaceAndEnter.mockResolvedValue(undefined);
-
-    const { result } = renderHook(() => usePendingWorkspaceEntryActions());
-
-    await act(async () => {
-      await result.current.handleRetry(cloudEntry);
-    });
-
-    expect(mocks.retryCloudWorkspaceAndEnter).toHaveBeenCalledTimes(1);
-    expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
-      .toEqual([other.attemptId]);
-    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual(["launch-other"]);
-  });
-
-  // PRO-10 round-3 finding: the receipt's Retry path had no capability gate at
-  // all, so a disabled server could still create a cloud workspace via retry.
-  // This is the second of two gates (the flow itself also refuses); it should
-  // never even reach retryCloudWorkspaceAndEnter.
-  it("refuses the cloud retry and surfaces the unavailable toast when cloud compute is disabled", async () => {
-    mocks.cloudComputeEnabled = false;
+  // The cloud create flow is deleted with the sandbox stack: a stale cloud
+  // attempt's Retry always refuses with the shared unavailability toast and
+  // ends the attempt, same as the cowork "not wired up" case.
+  it("refuses the cloud retry and surfaces the unavailable toast", async () => {
     const cloudEntry: PendingWorkspaceEntry = {
       ...dismissed,
       stage: "failed",
@@ -226,7 +187,6 @@ describe("usePendingWorkspaceEntryActions", () => {
       await result.current.handleRetry(cloudEntry);
     });
 
-    expect(mocks.retryCloudWorkspaceAndEnter).not.toHaveBeenCalled();
     expect(mocks.showToast).toHaveBeenCalledWith("Cloud workspaces are temporarily unavailable.");
     // The dead attempt still gets ended, same as the cowork "not wired up" case.
     expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)

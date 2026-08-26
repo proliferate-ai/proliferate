@@ -34,7 +34,6 @@ const context = (workspaceId: string): WorkspaceSelectionContext => ({
 
 function deps(
   localRuntime: DesktopRuntimeBridge | null,
-  refreshCloudWorkspaceConnection = vi.fn(),
 ): WorkspaceSelectionDeps {
   return {
     localRuntime,
@@ -43,8 +42,6 @@ function deps(
     rawWorkspaces: [],
     cache: {
       cancelPreviousWorkspaceDisplayQueries: vi.fn(),
-      invalidateCloudWorkspaceStartState: vi.fn(),
-      refreshCloudWorkspaceConnection,
     },
     setSelectedLogicalWorkspaceId: vi.fn(),
     setSelectedWorkspace: vi.fn(),
@@ -102,30 +99,4 @@ describe("resolveSelectionConnection", () => {
     });
   });
 
-  it("does not discover a local runtime for a Cloud workspace", async () => {
-    const refreshCloudWorkspaceConnection = vi.fn().mockResolvedValue({
-      runtimeUrl: "https://cloud.test",
-      accessToken: "cloud-token",
-      anyharnessWorkspaceId: "workspace-runtime",
-      runtimeGeneration: 8,
-      webSocketAuthTransport: "protocol",
-    });
-
-    const result = await resolveSelectionConnection(
-      deps(null, refreshCloudWorkspaceConnection),
-      { ...context("cloud:cloud-1"), cloudWorkspaceId: "cloud-1" },
-      { kind: "cloud-ready", cloudWorkspaceId: "cloud-1" },
-    );
-
-    expect(mocks.ensureRuntimeReady).not.toHaveBeenCalled();
-    expect(mocks.resolveWorkspaceConnection).not.toHaveBeenCalled();
-    expect(result.workspaceConnection).toMatchObject({
-      runtimeUrl: "https://cloud.test",
-      authToken: "cloud-token",
-      anyharnessWorkspaceId: "workspace-runtime",
-      runtimeGeneration: 8,
-      runtimeAccessKind: "proliferate-gateway",
-      webSocketAuthTransport: "protocol",
-    });
-  });
 });

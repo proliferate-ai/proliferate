@@ -172,7 +172,7 @@ describe("useWorkspaceNavigationWorkflow", () => {
     });
   });
 
-  it("opens shared unclaimed cloud workspaces in the web app instead of selecting them in desktop", () => {
+  it("selects stale unclaimed cloud entries in-desktop (the web handoff died with the cloud stack)", () => {
     logicalWorkspaceMocks.logicalWorkspaces = [{
       id: "logical-unclaimed",
       localWorkspace: null,
@@ -186,30 +186,6 @@ describe("useWorkspaceNavigationWorkflow", () => {
 
     act(() => result.current.selectWorkspaceFromSurface("logical-unclaimed", "sidebar"));
 
-    expect(shellMocks.openExternal).toHaveBeenCalledWith(
-      "https://web.proliferate.com/cloud/workspaces/cloud-unclaimed-1",
-    );
-    expect(selectionMocks.selectWorkspace).not.toHaveBeenCalled();
-    expect(navigateMocks.navigateApp).not.toHaveBeenCalled();
-  });
-
-  it("falls through to normal in-desktop selection when this deployment has no web app", () => {
-    webAppMocks.webApp = { available: false, baseUrl: null };
-    logicalWorkspaceMocks.logicalWorkspaces = [{
-      id: "logical-unclaimed",
-      localWorkspace: null,
-      mobilityWorkspace: null,
-      cloudWorkspace: {
-        id: "cloud-unclaimed-1",
-        visibility: "shared_unclaimed",
-      },
-    }];
-    const { result } = renderHook(() => useWorkspaceNavigationWorkflow());
-
-    act(() => result.current.selectWorkspaceFromSurface("logical-unclaimed", "sidebar"));
-
-    // No dead vendor-web link when the deployment has no web app: normal
-    // desktop workspace selection runs instead.
     expect(shellMocks.openExternal).not.toHaveBeenCalled();
     expect(selectionMocks.selectWorkspace).toHaveBeenCalledWith("logical-unclaimed", {
       latencyFlowId: "flow-1",

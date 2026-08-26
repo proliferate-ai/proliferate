@@ -18,7 +18,6 @@ import {
   resetLatencyFlowsForTest,
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
-import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import { buildLocalSlotLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 import { runWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/run-workspace-selection";
@@ -32,9 +31,6 @@ vi.mock("./cloud-readiness", () => ({
 
 vi.mock("./connection", () => ({
   resolveSelectionConnection: vi.fn(),
-}));
-
-vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
 }));
 
 describe("runWorkspaceSelection", () => {
@@ -82,11 +78,6 @@ describe("runWorkspaceSelection", () => {
 
   it.each([
     { kind: "cloud-missing" as const, cloudWorkspaceId: "cloud-1" },
-    {
-      kind: "cloud-pending" as const,
-      cloudWorkspaceId: "cloud-1",
-      status: "starting",
-    },
   ])("cancels latency flows when readiness returns $kind", async (cloudReadiness) => {
     vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce(cloudReadiness);
     const bootstrapWorkspace = vi.fn();
@@ -230,44 +221,6 @@ describe("runWorkspaceSelection", () => {
     })).rejects.toThrow("Workspace is not materialized yet.");
 
     expect(resolveCloudWorkspaceReadiness).not.toHaveBeenCalled();
-  });
-
-  it("refreshes cloud workspace status when connection metadata is stale", async () => {
-    vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce({
-      kind: "cloud-ready",
-      cloudWorkspaceId: "cloud-1",
-    });
-    vi.mocked(resolveSelectionConnection).mockRejectedValueOnce(
-      new ProliferateClientError("not ready", 409, "workspace_not_ready"),
-    );
-    const bootstrapWorkspace = vi.fn();
-    const cache = selectionCache();
-    const flowId = startLatencyFlow({
-      flowKind: "workspace_switch",
-      source: "sidebar",
-      targetWorkspaceId: "workspace-1",
-    });
-
-    await runWorkspaceSelection({
-      localRuntime: null,
-      cloudClient: null,
-      cache,
-      logicalWorkspaces,
-      rawWorkspaces: [],
-      setSelectedLogicalWorkspaceId: vi.fn(),
-      setSelectedWorkspace,
-      removeWorkspaceSlots: vi.fn(),
-      clearSelection: vi.fn(),
-      bootstrapWorkspace,
-      reconcileHotWorkspace: vi.fn(),
-    }, {
-      workspaceId: "workspace-1",
-      options: { latencyFlowId: flowId },
-    });
-
-    expect(cache.invalidateCloudWorkspaceStartState).toHaveBeenCalledTimes(1);
-    expect(bootstrapWorkspace).not.toHaveBeenCalled();
-    expect(listActiveLatencyFlows()).toEqual([]);
   });
 
   it("opens a remembered session optimistically before bootstrap validates it", async () => {
@@ -547,8 +500,6 @@ describe("runWorkspaceSelection", () => {
 function selectionCache(): WorkspaceSelectionDeps["cache"] {
   return {
     cancelPreviousWorkspaceDisplayQueries: vi.fn(),
-    invalidateCloudWorkspaceStartState: vi.fn().mockResolvedValue(undefined),
-    refreshCloudWorkspaceConnection: vi.fn(),
   };
 }
 
