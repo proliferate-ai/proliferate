@@ -18,6 +18,9 @@ restating folder rules or low-level reusable contracts.
 | Workspace files, mobility boundary, and terminals | User-facing workspace file, shell, dispatch, and terminal behavior; current migration absence and retained runtime mobility boundary. | [workspaces/README.md](workspaces/README.md) |
 | Mobile client | Mobile auth, cloud chat, sessions, and settings on the mobile surface. | No current system spec. Mobile ships from `apps/mobile`; architecture boundary owned by [specs/frontend/README.md](../../../frontend/README.md), local/QA lanes by [guides/local/mobile.md](../../../../guides/local/mobile.md). |
 | Workflows | User-owned workflow definitions, ordered stages and prompt steps, opaque launch intent revalidated against the execution target, revisioning, optional default repository configuration, and definition-authoring UX. | [specs/FEATURE_DOCS/WORKFLOWS.md](../../../FEATURE_DOCS/WORKFLOWS.md) |
+| Seam | The CP ↔ runtime contract: worker enrollment, identity, heartbeat (current); courier and event shipping (target). Grade B/C. | [seam/README.md](seam/README.md) |
+| Sessions | The session as a product object: the runtime event log and its five invariants (current); the control-plane registry row, external bindings, checkpointed record (target). Grade B/C. | [sessions/README.md](sessions/README.md) |
+| Environments | The container: provisioning engine, lifecycle states and causes, usage fencing, template pipeline; personal and task classes (target). Grade C. | [environments/README.md](environments/README.md) |
 | Agents | The agent-systems overview map (distribution, auth, gateway, target-observed launch options), plus delegated-work UX and cowork artifact lifecycle. | [agents/README.md](agents/README.md) |
 | Settings and appearance | Settings/admin information architecture, Appearance scaling, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings/README.md](settings/README.md) |
 | Support reporting | Currently shipped private support capture. | [support/README.md](support/README.md) |
@@ -52,6 +55,11 @@ new system spec or Product MCP definition:
 | Plugins | No current platform document owns runtime/config expansion; create a system spec only for catalog/install/manage UX. |
 
 ## Adding A Product System Spec
+
+System specs written after 2026-08-25 follow the nine-section anatomy (Purpose,
+Owned state, Public surface, Consumes, Laws, Emits, Fences, Code map, Proof) with
+a `Known gaps` list and inline `PABLO DECIDES` callouts for founder rulings; see
+[seam/README.md](seam/README.md) for the form.
 
 Add a system spec when a workflow becomes durable enough that contributors
 need one place to learn:

@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "seam"
-spec = "specs/FEATURE_DOCS/MANAGED_RUNTIME.md"
+spec = "specs/codebase/systems/product/seam/README.md"
 owns = "Runtime worker enrollment, identity, and heartbeat endpoints: the CP↔runtime seam's worker registry."
 
 public_surface = [
