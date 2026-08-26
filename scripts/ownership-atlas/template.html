@@ -1,0 +1,372 @@
+<title>Ownership Atlas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#fbfaf8; --surface:#ffffff; --ink:#22242a; --ink-2:#5c6068; --ink-3:#8a8f98;
+  --line:#e4e2dc; --line-soft:#eeece7;
+  --atom:#B8461E; --doors:#3E7DBF; --keys:#B07D14; --windows:#8A63E8; --body:#63A02C;
+  --keepers:#C4508F; --engineering:#9A5B2E; --place:#159E8C; --areas:#4A5FC9;
+  --bad:#C03434; --warn:#9A6A00;
+  --tint:12%; --stripe-a:14%;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#191b20; --surface:#20232a; --ink:#e8e8e4; --ink-2:#a8acb4; --ink-3:#7c8089;
+    --line:#33363e; --line-soft:#2a2d34;
+    --bad:#e26a6a; --warn:#d9a94a; --tint:20%; --stripe-a:22%;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#191b20; --surface:#20232a; --ink:#e8e8e4; --ink-2:#a8acb4; --ink-3:#7c8089;
+  --line:#33363e; --line-soft:#2a2d34;
+  --bad:#e26a6a; --warn:#d9a94a; --tint:20%; --stripe-a:22%;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "IBM Plex Sans",system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:34px 28px 64px}
+header h1{font-size:26px;font-weight:600;margin:0;letter-spacing:-.01em;text-wrap:balance}
+header .sub{color:var(--ink-2);margin:6px 0 0;max-width:68ch}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.stamp{color:var(--ink-3);font-size:12.5px;margin-top:8px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:26px 0 8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.tile .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);font-weight:500}
+.tile .v{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+.tile .d{font-size:12.5px;color:var(--ink-2)}
+.tile.bad .v{color:var(--bad)} .tile.warn .v{color:var(--warn)}
+.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:16px 0 4px;border:1px solid var(--line)}
+.bar>i{display:block;height:100%}
+.barkey{display:flex;gap:18px;font-size:12.5px;color:var(--ink-2);flex-wrap:wrap}
+.barkey b{font-variant-numeric:tabular-nums;color:var(--ink)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:baseline}
+h2{font-size:15px;font-weight:600;margin:36px 0 4px;letter-spacing:.01em}
+h2 .loc{color:var(--ink-3);font-weight:400;font-size:13px;margin-left:8px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:18px 0 2px;font-size:12.5px;color:var(--ink-2)}
+.legend span{white-space:nowrap}
+.map{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--surface);margin-top:10px}
+.cell{position:absolute;overflow:hidden;border-radius:4px;padding:6px 8px 5px 11px;cursor:default;
+  transition:filter .12s}
+.cell:hover{filter:brightness(1.06);z-index:3}
+.cell .nm{font-size:12px;font-weight:500;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cell .sp{font-size:11px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cell .lc{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-3)}
+.cell.unowned{outline:1.5px dashed var(--bad);outline-offset:-2px}
+.cell.unowned .nm{color:var(--bad)}
+.chip{display:inline-block;font-size:9.5px;font-weight:600;letter-spacing:.05em;padding:0 5px;border-radius:3px;vertical-align:1px;margin-left:5px}
+.chip.sh{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.chip.un{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad)}
+#tip{position:fixed;z-index:10;pointer-events:none;background:var(--surface);border:1px solid var(--line);
+  border-radius:7px;padding:10px 12px;font-size:12.5px;max-width:340px;box-shadow:0 6px 24px rgba(0,0,0,.18);display:none}
+#tip .t{font-weight:600;font-size:13px}
+#tip .s{color:var(--ink-2);margin-top:2px}
+#tip .n{color:var(--ink-2);margin-top:6px;border-top:1px solid var(--line-soft);padding-top:6px}
+#tip .l{font-family:"IBM Plex Mono",monospace;color:var(--ink-3);margin-top:4px;font-size:11.5px}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13.5px}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);font-weight:500;text-align:left;padding:6px 10px;border-bottom:1px solid var(--line)}
+td{padding:7px 10px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+td.num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;color:var(--ink-2)}
+td .why{color:var(--ink-2);font-size:12.5px}
+.sect-note{color:var(--ink-2);font-size:13px;margin:2px 0 0;max-width:76ch}
+.tree{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin-top:12px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;line-height:1.9;overflow-x:auto}
+.tr-root{color:var(--ink);font-weight:600;font-family:"IBM Plex Sans",sans-serif;font-size:13px;margin-top:10px}
+.tr-root:first-child{margin-top:0}
+.tr{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
+.tr .guide{color:var(--line);user-select:none}
+.tr .nm{color:var(--ink)}
+.tr.unowned .nm{color:var(--bad)}
+.kind{font-family:"IBM Plex Sans",sans-serif;font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;
+  border:1px solid var(--line);border-radius:3px;padding:0 5px;color:var(--ink-2)}
+.tr .own{color:var(--ink-2);font-family:"IBM Plex Sans",sans-serif;font-size:12px}
+.tr .lc2{color:var(--ink-3);margin-left:auto;padding-left:16px}
+footer{margin-top:44px;color:var(--ink-3);font-size:12.5px;border-top:1px solid var(--line);padding-top:14px;max-width:76ch}
+a,.speclink{color:inherit}
+.speclink{cursor:pointer;border-bottom:1px dotted transparent}
+.speclink:hover{border-bottom-color:currentColor}
+.cell.dim{opacity:.13;pointer-events:none}
+.cell.dim .nm,.cell.dim .sp,.cell.dim .lc{visibility:hidden}
+#filterbar{display:none;margin:14px 0 0;font-size:13px}
+#filterbar.on{display:flex;align-items:center;gap:10px}
+#filterbar .pill{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:4px 12px}
+#filterbar .pill b{font-weight:600}
+#filterbar .clr{cursor:pointer;color:var(--ink-2);border:1px solid var(--line);border-radius:99px;padding:3px 10px;background:var(--surface)}
+#filterbar .clr:hover{color:var(--ink)}
+@media (prefers-reduced-motion: reduce){.cell{transition:none}}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Ownership Atlas</h1>
+  <p class="sub">Which spec system owns each region of the Proliferate codebase — sized by lines of code, colored by the six-role model. The instrument for watching coverage grow: unowned regions are the debt, shared regions are splits already ruled but not yet executed.</p>
+  <p class="stamp mono" id="stamp"></p>
+</header>
+
+<div class="tiles" id="tiles"></div>
+<div class="bar" id="covbar"></div>
+<div class="barkey" id="covkey"></div>
+
+<div class="legend" id="legend"></div>
+<div id="filterbar"></div>
+
+<div id="maps"></div>
+
+<h2>The tree — every folder, its kind, its owner</h2>
+<p class="sect-note">The same census as a file tree: each folder classified by its structural kind (a rust domain, the live engine, adapters, a server domain, vendor leaves, utils…) with its owning spec and weight. The kind says what shape the code is; the color says who owns it. Three kinds of cell: <b>system cells</b> own state and flows; <b>machinery cells</b> (integrations, adapters, lib, db, background) are contracts — opinion-free, consumed by many, their contents owned per-system; <b>conventions</b> are just doctrine.</p>
+<div class="tree" id="tree"></div>
+
+<h2 id="unowned-h">Unowned — the coverage debt</h2>
+<p class="sect-note">No spec claims these. Each is one ruling away from a home; together they are the whole gap.</p>
+<table id="unowned-t"><thead><tr><th>Region</th><th>Blocking ruling</th><th>LOC</th></tr></thead><tbody></tbody></table>
+
+<h2 id="shared-h">Overlaps — one region, more than one spec</h2>
+<p class="sect-note">Claimed by multiple specs at once. Each split is already ruled; the code move hasn't happened yet. When a row disappears from this table, a wave landed.</p>
+<table id="shared-t"><thead><tr><th>Region</th><th>Who claims it</th><th>The split it awaits</th><th>LOC</th></tr></thead><tbody></tbody></table>
+
+<footer>
+  LOC counts code files (py · rs · ts/tsx · js · toml · yaml · sql · sh), excluding node_modules, build output, and generated targets. Server ownership reads each domain's MANIFEST.toml; runtime and client ownership follow the ruled Code Map. To refresh after a wave lands, ask Claude to re-run the census and republish this page.
+</footer>
+</div>
+<div id="tip"></div>
+
+
+<script>
+const DATA = __DATA__;
+const ROLES = [
+  ["atom","sessions — the atom","--atom"],
+  ["doors","doors","--doors"],
+  ["keys","keys","--keys"],
+  ["windows","windows","--windows"],
+  ["body","body","--body"],
+  ["keepers","keepers","--keepers"],
+  ["engineering","engineering","--engineering"],
+  ["place","place","--place"],
+  ["areas","machinery & conventions","--areas"],
+];
+const roleVar = Object.fromEntries(ROLES.map(r=>[r[0],r[2]]));
+const fmt = n => n>=1000 ? (n/1000).toFixed(n>=100000?0:1)+"K" : String(n);
+const pct = n => (100*n/DATA.stats.total).toFixed(1)+"%";
+
+let FILTER = null;
+const matches = e => !FILTER || e.s === FILTER || (e.s && e.s.includes(FILTER));
+const keyOf = s => s.replace(/ \(.*$/,"").trim();
+// every real spec name, individually clickable — compounds and prose owners get one link per name
+const SPECNAMES = (()=>{
+  const names = new Set();
+  DATA.entries.forEach(e=>{
+    if(e.st==="unowned" || !e.s) return;
+    keyOf(e.s).split("∧").forEach(part=>{
+      const n = part.trim();
+      if(n && !n.startsWith("machinery:") && !n.startsWith("convention") && !n.startsWith("each route file") && !n.startsWith("shell") && !n.startsWith("five surface")) names.add(n);
+    });
+  });
+  ["sessions","harnesses","agent_auth","ai_gateway","chat","workspace-surface","runs-triage","settings","onboarding"].forEach(n=>names.add(n));
+  return [...names].sort((a,b)=>b.length-a.length);
+})();
+const link = (e) => {
+  if(e.st==="unowned") return "unowned";
+  let label = e.s;
+  SPECNAMES.forEach((n,i)=>{ label = label.split(n).join(`\u0001${i}\u0002`); });
+  SPECNAMES.forEach((n,i)=>{
+    label = label.split(`\u0001${i}\u0002`).join(`<span class="speclink" data-spec="${n}">${n}</span>`);
+  });
+  return label;
+};
+
+document.getElementById("stamp").textContent =
+  `census ${DATA.stats.date} · branch ${DATA.stats.branch} · ${fmt(DATA.stats.total)} LOC across ${DATA.entries.length} regions`;
+const T = [
+  ["Total code","", fmt(DATA.stats.total)+" LOC", DATA.entries.length+" regions"],
+  ["Owned outright","", pct(DATA.stats.owned), fmt(DATA.stats.owned)+" LOC"],
+  ["Shared — split pending","warn", pct(DATA.stats.shared), DATA.stats.shared_n+" regions · "+fmt(DATA.stats.shared)+" LOC"],
+  ["Unowned","bad", pct(DATA.stats.unowned), DATA.stats.unowned_n+" regions · "+fmt(DATA.stats.unowned)+" LOC"],
+];
+document.getElementById("tiles").innerHTML = T.map(([k,c,v,d])=>
+  `<div class="tile ${c}"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join("");
+
+const cb = document.getElementById("covbar"), ck = document.getElementById("covkey");
+const seg = [["owned","#63A02C",DATA.stats.owned],["shared","var(--warn)",DATA.stats.shared],["unowned","var(--bad)",DATA.stats.unowned]];
+cb.innerHTML = seg.map(([n,c,v],i)=>`<i style="width:${100*v/DATA.stats.total}%;background:${c};${i?"border-left:2px solid var(--surface)":""}" title="${n}"></i>`).join("");
+ck.innerHTML = `<span><i class="dot" style="background:#63A02C"></i>owned <b>${pct(DATA.stats.owned)}</b></span>
+<span><i class="dot" style="background:var(--warn)"></i>shared, split pending <b>${pct(DATA.stats.shared)}</b></span>
+<span><i class="dot" style="background:var(--bad)"></i>unowned <b>${pct(DATA.stats.unowned)}</b></span>`;
+
+document.getElementById("legend").innerHTML =
+  ROLES.map(([k,label])=>`<span><i class="dot" style="background:var(${roleVar[k]})"></i>${label}</span>`).join("") +
+  `<span><i class="dot" style="background:transparent;outline:1.5px dashed var(--bad);outline-offset:-1px"></i>unowned</span>` +
+  `<span><span class="chip sh">SHARED</span> split ruled, not yet executed</span>`;
+
+function squarify(items, x, y, w, h, out){
+  if(!items.length) return;
+  const total = items.reduce((a,b)=>a+b.l,0);
+  let rest=items.slice();
+  function worst(row, len){
+    const s = row.reduce((a,b)=>a+b._a,0);
+    let mx=0, mn=Infinity;
+    row.forEach(r=>{mx=Math.max(mx,r._a); mn=Math.min(mn,r._a);});
+    return Math.max(len*len*mx/(s*s), s*s/(len*len*mn));
+  }
+  const area = w*h;
+  rest.forEach(it=>it._a = it.l/total*area);
+  let cx=x, cy=y, cw=w, chh=h;
+  while(rest.length){
+    const len = Math.min(cw,chh);
+    let row=[rest[0]], i=1;
+    while(i<rest.length && worst(row.concat(rest[i]),len) <= worst(row,len)){ row.push(rest[i]); i++; }
+    rest = rest.slice(i);
+    const s = row.reduce((a,b)=>a+b._a,0);
+    if(cw>=chh){
+      const rw = s/chh; let oy=cy;
+      row.forEach(r=>{ const rh=r._a/rw; out.push({...r,x:cx,y:oy,w:rw,h:rh}); oy+=rh; });
+      cx+=rw; cw-=rw;
+    } else {
+      const rh = s/cw; let ox=cx;
+      row.forEach(r=>{ const rw2=r._a/rh; out.push({...r,x:ox,y:cy,w:rw2,h:rh}); ox+=rw2; });
+      cy+=rh; chh-=rh;
+    }
+  }
+}
+
+const tip = document.getElementById("tip");
+function showTip(e, d){
+  tip.style.display="block";
+  tip.innerHTML = `<div class="t">${d.p}${d.st==="shared"?' <span class="chip sh">SHARED</span>':d.st==="unowned"?' <span class="chip un">UNOWNED</span>':""}</div>
+  <div class="s">${d.st==="unowned" ? "no owning spec" : "owned by <b>"+d.s+"</b>"}</div>
+  ${d.n?`<div class="n">${d.n}</div>`:""}
+  <div class="l">${d.l.toLocaleString()} LOC · ${pct(d.l)} of the codebase</div>`;
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(e.clientX+14, innerWidth-r.width-12)+"px";
+  tip.style.top  = Math.min(e.clientY+14, innerHeight-r.height-12)+"px";
+}
+
+function render(){
+  const maps = document.getElementById("maps");
+  maps.innerHTML = "";
+  const legs = [...new Set(DATA.entries.map(e=>e.leg))];
+  const W = Math.min(1124, maps.clientWidth || 1124);
+  legs.forEach(leg=>{
+    const items = DATA.entries.filter(e=>e.leg===leg).sort((a,b)=>b.l-a.l);
+    if(FILTER && !items.some(matches)) return;
+    const locSum = items.reduce((a,b)=>a+b.l,0);
+    const H = Math.max(120, Math.min(420, Math.round(locSum/DATA.stats.total*1650)));
+    const h2 = document.createElement("h2");
+    h2.innerHTML = leg + `<span class="loc mono">${fmt(locSum)} LOC · ${pct(locSum)}</span>`;
+    maps.appendChild(h2);
+    const box = document.createElement("div");
+    box.className="map"; box.style.height=H+"px"; box.style.width=W+"px";
+    maps.appendChild(box);
+    const out=[];
+    squarify(items, 0, 0, W, H, out);
+    out.forEach(d=>{
+      const c = document.createElement("div");
+      const v = d.st==="unowned" ? null : roleVar[d.r] || "--areas";
+      const dim = FILTER && !matches(d);
+      c.className = "cell"+(d.st==="unowned"?" unowned":"")+(dim?" dim":"");
+      c.style.cssText = `left:${d.x+2}px;top:${d.y+2}px;width:${Math.max(d.w-4,2)}px;height:${Math.max(d.h-4,2)}px;`+
+        (d.st==="unowned"
+          ? `background:var(--surface);`
+          : `background:color-mix(in srgb, var(${v}) var(--tint), var(--surface));border-left:3px solid var(${v});`) +
+        (d.st==="shared" ? `background-image:repeating-linear-gradient(135deg, color-mix(in srgb,var(--warn) var(--stripe-a),transparent) 0 5px, transparent 5px 14px);` : "");
+      const showText = d.w>86 && d.h>34;
+      const showSpec = d.w>120 && d.h>52;
+      c.innerHTML = showText
+        ? `<div class="nm">${d.p}</div>${showSpec?`<div class="sp">${d.st==="unowned"?"unowned":link(d)}</div><div class="lc">${fmt(d.l)}</div>`:""}`
+        : "";
+      if(!dim){
+        c.addEventListener("mousemove", e=>showTip(e,d));
+        c.addEventListener("mouseleave", ()=>tip.style.display="none");
+      }
+      box.appendChild(c);
+    });
+  });
+}
+
+function kindOf(p){
+  if(p.startsWith("server/litellm")) return "data plane";
+  if(p.startsWith("server/infra")) return "infra";
+  if(p.startsWith("server/…/integrations")) return "vendor leaves";
+  if(/server\/…\/(lib|middleware|constants)/.test(p)) return "server utils";
+  if(/server\/…\/(db|background)/.test(p)) return "server machinery";
+  if(p.startsWith("server/")) return "server domain";
+  if(p.startsWith("domains/")) return "rust domain";
+  if(p.startsWith("live/")) return "rust live";
+  if(p.startsWith("adapters/")) return "rust adapters";
+  if(p.startsWith("api/")) return "rust api";
+  if(/^(app|persistence|observability|integrations)\//.test(p)) return "rust machinery";
+  if(p.startsWith("anyharness-contract")) return "rust contract";
+  if(/^(proliferate-worker|proliferate-supervisor|diagnostics-)/.test(p)) return "rust crate";
+  if(p.includes("product-client")) return "frontend surfaces";
+  if(p.includes("packages/design")) return "design system";
+  if(/apps\/(desktop|web)/.test(p)) return "app shell";
+  if(p.includes("mobile")) return "frontend app";
+  if(p.startsWith("cloud/sdk")) return "generated sdk";
+  if(p.startsWith("catalogs/")) return "data";
+  if(/^(scripts|lints)/.test(p)) return "engineering";
+  return "—";
+}
+
+function buildTree(){
+  const ROOTS = [
+    ["Server — control plane (Python)", e=>e.leg.startsWith("Server — ")],
+    ["Server plumbing · data · engineering", e=>e.leg.startsWith("Server plumbing")],
+    ["Runtime — AnyHarness (Rust)", e=>e.leg.startsWith("Runtime")],
+    ["Clients (TypeScript)", e=>e.leg.startsWith("Clients")],
+  ];
+  let th = "";
+  ROOTS.forEach(([label, pred])=>{
+    const items = DATA.entries.filter(e=>pred(e) && matches(e))
+      .sort((a,b)=> kindOf(a.p)===kindOf(b.p) ? b.l-a.l : kindOf(a.p)<kindOf(b.p)?-1:1);
+    if(!items.length) return;
+    th += `<div class="tr-root">${label}</div>`;
+    items.forEach((e,i)=>{
+      const v = e.st==="unowned" ? null : roleVar[e.r] || "--areas";
+      const dot = e.st==="unowned"
+        ? `<i class="dot" style="background:transparent;outline:1.5px dashed var(--bad);outline-offset:-1px"></i>`
+        : `<i class="dot" style="background:var(${v})"></i>`;
+      th += `<div class="tr${e.st==="unowned"?" unowned":""}">
+        <span class="guide">${i===items.length-1?"└─":"├─"}</span>
+        ${dot}<span class="nm">${e.p}</span>
+        <span class="kind">${kindOf(e.p)}</span>
+        <span class="own">${e.st==="unowned" ? "unowned" : "→ "+link(e)}${e.st==="shared"?' <span class="chip sh">SHARED</span>':""}</span>
+        <span class="lc2">${fmt(e.l)}</span>
+      </div>`;
+    });
+  });
+  document.getElementById("tree").innerHTML = th || '<span style="color:var(--ink-3)">nothing owned here</span>';
+}
+
+function buildTables(){
+  const un = DATA.entries.filter(e=>e.st==="unowned" && matches(e)).sort((a,b)=>b.l-a.l);
+  document.querySelector("#unowned-t tbody").innerHTML = un.map(e=>
+    `<tr><td class="mono">${e.p}</td><td class="why">${e.n}</td><td class="num">${e.l.toLocaleString()}</td></tr>`).join("") +
+    (FILTER ? "" : `<tr><td><b>total</b></td><td></td><td class="num"><b>${DATA.stats.unowned.toLocaleString()}</b></td></tr>`);
+  const sh = DATA.entries.filter(e=>e.st==="shared" && matches(e)).sort((a,b)=>b.l-a.l);
+  document.querySelector("#shared-t tbody").innerHTML = sh.map(e=>
+    `<tr><td class="mono">${e.p}</td><td>${link(e)}</td><td class="why">${e.n}</td><td class="num">${e.l.toLocaleString()}</td></tr>`).join("");
+}
+
+function setFilter(k){
+  FILTER = (FILTER === k) ? null : k;
+  const fb = document.getElementById("filterbar");
+  if(FILTER){
+    const owned = DATA.entries.filter(matches);
+    const s = owned.reduce((a,b)=>a+b.l,0);
+    fb.className = "on";
+    fb.innerHTML = `<span class="pill">showing <b>${FILTER}</b> — ${owned.length} region${owned.length>1?"s":""} · ${fmt(s)} LOC · ${pct(s)} of the codebase</span>
+      <button class="clr" id="clearf">clear ✕</button>`;
+    document.getElementById("clearf").onclick = ()=>setFilter(FILTER);
+  } else {
+    fb.className = ""; fb.innerHTML = "";
+  }
+  render(); buildTree(); buildTables();
+}
+
+document.addEventListener("click", e=>{
+  const t = e.target.closest(".speclink");
+  if(t){ e.stopPropagation(); setFilter(t.dataset.spec); }
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && FILTER) setFilter(FILTER); });
+
+render(); buildTree(); buildTables();
+addEventListener("resize", ()=>{ clearTimeout(window.__rt); window.__rt=setTimeout(render,150); });
+</script>
+

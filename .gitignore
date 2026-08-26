@@ -66,6 +66,9 @@ server/openapi.json
 anyharness/sdk/generated/.dev-build-key
 cloud/sdk/src/generated/.dev-build-key
 
+# Ownership Atlas output (regenerate with scripts/ownership-atlas/generate.py)
+scripts/ownership-atlas/ownership-atlas.html
+
 # Tauri build outputs and sidecar binaries
 apps/desktop/src-tauri/binaries/
 apps/desktop/src-tauri/gen/
