@@ -650,7 +650,7 @@ Carried, still true in prod (not deltas): the origin guard · only-forward acks 
 *Transitional — deleted at convergence. Seats are the spine (ruled 2026-08-26): the reconstruction happens through seats v1, which pulls refusals, the status document, and rotation in as its parts.*
 
 - [ ] Fund the founder org's billing subject (row 1) — clears the live gateway breakage; no code
-- [ ] **Seats v1 for claude, the spine** (rows 3, 11): vault kind, seat selection + wire source, mint capture, seat recipe + strip list, per-seat homes, verification probe — gated by three live tests (setup-token output format for the capture rule · one end-to-end seat session through the real adapter · a second interactive login under a per-seat config dir on macOS) — carrying with it:
+- [ ] **Seats v1 for claude, the spine** (rows 3, 11): vault kind, seat selection + wire source, mint capture, seat recipe + strip list, per-seat homes, verification probe — live-test gate **PASSED 2026-08-26** (real token matches the capture rule ✓ · end-to-end session through the installed adapter on seat env alone, ACP handshake to end_turn ✓ · per-seat keychain coexistence via config-dir-hash-suffixed services ✓) — carrying with it:
     - [ ] typed launch refusals with plain words end to end (rows 1, 4)
     - [ ] rotation: cooling on limit error, round-robin, gateway fallback (row 3)
     - [ ] the status module; frontend subscribe migration; delete the client derivation (row 7)
