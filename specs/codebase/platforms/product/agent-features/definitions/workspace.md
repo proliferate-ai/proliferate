@@ -1,5 +1,7 @@
 # Workspace Product MCP
 
+> Ownership: this document is the depth reference for the **subagents** system spec ([README.md](../../../../systems/runtime/subagents/README.md)). Laws, owned state, fences and the checked code map are authoritative there; flow-level detail stays here.
+
 Status: authoritative current definition for the Workspace product MCP,
 session attachment, current-role authorization, and agent product context.
 

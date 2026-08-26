@@ -1,5 +1,7 @@
 # Cowork Artifacts
 
+> Ownership: this document is the depth reference for the **artifacts** system spec ([README.md](../../runtime/artifacts/README.md)). Laws, owned state, fences and the checked code map are authoritative there; flow-level detail stays here.
+
 Scope:
 
 - `anyharness/crates/anyharness-contract/**` for cowork artifact wire shapes

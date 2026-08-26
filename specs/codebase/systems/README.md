@@ -7,6 +7,9 @@ state, behavior, and acceptance boundaries.
   workflows.
 - [Engineering Systems](engineering/README.md) — complete engineering and
   operational domains.
+- [Runtime Systems](runtime/README.md) — the AnyHarness plane's systems
+  (workspaces, harnesses, subagents, terminals, artifacts) and the desktop
+  host seam, in the Organization Standard anatomy.
 
 Use [Structures](../structures/README.md) for source-area organization and
 [Platforms](../platforms/README.md) for reusable capabilities shared across
