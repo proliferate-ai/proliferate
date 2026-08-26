@@ -2,7 +2,8 @@
 # may reference which (the layer order is boundaries.toml's job; this file owns
 # the domain→domain edge set). Enforced by scripts/check_anyharness_fences.py,
 # introduced in warn mode by the cull-sweep Wave 0
-# (delivery/cull-sweep/delivery-spec-wave0-manifests-and-checkers.md).
+# (delivery/cull-sweep/delivery-spec-wave0-manifests-and-checkers.md) and
+# enforcing since 2026-08-25 (testing system spec, minimum-tonight PR 1).
 #
 # The [[edge]] tables below are AH-FENCE-001's baseline: the measured
 # domain→domain reference graph at fence introduction — permissive by
