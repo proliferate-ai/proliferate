@@ -27,9 +27,7 @@ import { APP_ROUTES } from "#product/config/app-routes";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useSidebarRepoAvailabilityActions } from "#product/hooks/workspaces/workflows/use-sidebar-repo-availability-actions";
-import { useWorkspaceAvailabilityIntentStore } from "#product/stores/cloud/workspace-availability-intent-store";
 import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
-import { workspaceAvailabilityIntentForCommand } from "#product/lib/domain/workspaces/cloud/workspace-availability-intent-mapping";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
   filterOptimisticallyArchivedSidebarGroups,
@@ -346,24 +344,14 @@ export const MainSidebar = memo(function MainSidebar({
     handleSetUpCloud,
   } = useSidebarRepoAvailabilityActions();
 
-  const beginWorkspaceAvailabilityIntent = useWorkspaceAvailabilityIntentStore(
-    (state) => state.begin,
-  );
   const handleWorkspaceAvailabilityCommand = useCallback((
-    item: SidebarWorkspaceItemState,
-    kind: WorkspaceAvailabilityCommandKind,
+    _item: SidebarWorkspaceItemState,
+    _kind: WorkspaceAvailabilityCommandKind,
   ) => {
-    const intent = workspaceAvailabilityIntentForCommand(kind, {
-      localWorkspaceId: item.localWorkspaceId,
-      cloudWorkspaceId: item.cloudWorkspaceIdForActions,
-      linkedMaterializationId: item.linkedMaterializationId,
-      repoOwner: item.repoOwner,
-      repoName: item.repoName,
-    });
-    if (intent) {
-      beginWorkspaceAvailabilityIntent(intent);
-    }
-  }, [beginWorkspaceAvailabilityIntent]);
+    // The availability action host died with the cloud-copies feature (cull
+    // part 2) and the command resolver offers nothing, so this handler is
+    // unreachable; it stays only for the menu prop contract.
+  }, []);
 
   const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
   // A signed-in user on a compute-unconfigured deployment sees the operator

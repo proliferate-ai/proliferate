@@ -187,7 +187,7 @@ describe("usePendingWorkspaceEntryActions", () => {
       await result.current.handleRetry(cloudEntry);
     });
 
-    expect(mocks.showToast).toHaveBeenCalledWith("Cloud workspaces are temporarily unavailable.");
+    expect(mocks.showToast).toHaveBeenCalledWith("Cloud workspaces are no longer available.");
     // The dead attempt still gets ended, same as the cowork "not wired up" case.
     expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
       .toEqual([other.attemptId]);

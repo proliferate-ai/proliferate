@@ -28,8 +28,8 @@ from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
 
 _ZERO = Decimal("0")
 
-# The LLM-credit sibling of ``billing_credits_exhausted`` (the compute-side code
-# in ``server.billing.authorization``).
+# The LLM-credit sibling of ``billing_credits_exhausted`` (whose compute-side
+# producer died with the cloud sandbox stack, cull part 2).
 #
 # NO PRODUCT-SERVER ROUTE EMITS THIS TODAY. Its only producer was the 402 on the
 # server-side catalog prober, deleted in B4 (the server no longer generates

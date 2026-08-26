@@ -161,58 +161,12 @@ function localMaterializationForInstall(
  * so the DOM and native menus render identically.
  */
 export function resolveWorkspaceAvailabilityCommands(
-  input: WorkspaceAvailabilityInput,
+  _input: WorkspaceAvailabilityInput,
 ): WorkspaceAvailabilityCommand[] {
-  // PR 6: an unsupported Git state is no longer a dead-end blocker. It is a
-  // truthful, ACTIONABLE entry into the one reconciliation dialog, which diagnoses
-  // the cross-target relation and offers the ONE safe next action (Push, Open Git
-  // panel, Recreate, Relink, Unlink, Retry). Never a reset/merge/rebase to "fix".
-  if (input.unsupportedGitBlocker) {
-    return [
-      {
-        kind: "reconcile-git-state",
-        label: "Reconcile Git state…",
-        blocker: input.unsupportedGitBlocker,
-      },
-    ];
-  }
-
-  const linkedLocal = localMaterializationForInstall(input.cloudWorkspace, input.desktopInstallId);
-  const isExplicitlyLinked = linkedLocal !== null;
-
-  // Explicitly linked: the linked local copy may be healthy or need repair.
-  if (isExplicitlyLinked) {
-    if (input.localMaterializationNeedsRepair || !input.hasLocalWorkspace) {
-      return [
-        { kind: "relink-existing", label: "Relink existing…" },
-        { kind: "recreate-on-this-mac", label: "Recreate on this Mac…" },
-        { kind: "unlink-this-mac", label: "Unlink this Mac…" },
-      ];
-    }
-    return [{ kind: "unlink-this-mac", label: "Unlink this Mac…" }];
-  }
-
-  // An unlinked Cloud slot with an independently enumerated same-repo/branch
-  // local candidate offers association-only linking. Explicit ledger-backed
-  // projection keeps those copies in separate logical slots until confirmed,
-  // so this does not require `hasLocalWorkspace` on the Cloud slot itself.
-  if (input.cloudWorkspace && input.linkCandidate) {
-    return [{ kind: "link-copies", label: "Link copies…" }];
-  }
-
-  // Cloud-only: no local candidate and no explicit link → offer to materialize.
-  if (input.cloudWorkspace && !input.hasLocalWorkspace && !isExplicitlyLinked) {
-    return [{ kind: "open-on-this-mac", label: "Open on this Mac…" }];
-  }
-
-  // Local only (no Cloud copy) → offer to add a managed-Cloud copy, unless
-  // Cloud compute is disabled on this deployment (PRO-10): no affordance to
-  // start a flow that would only fail.
-  if (input.hasLocalWorkspace && !input.cloudWorkspace) {
-    return input.cloudComputeEnabled
-      ? [{ kind: "add-cloud-copy", label: "Add Cloud copy…" }]
-      : [];
-  }
-
+  // The cloud-copies feature (PR 5/6) died with the cloud workspace stack in
+  // cull part 2: the availability action host and the reconciliation dialog
+  // that executed every one of these commands are deleted. Offering a command
+  // with no executor would be a silent dead-end, so nothing is offered. The
+  // vocabulary and input derivation stay for the menus' prop contracts.
   return [];
 }

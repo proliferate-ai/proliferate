@@ -12,8 +12,8 @@ export function useWorkspaceOpenInWebActions() {
   const showToast = useToastStore((state) => state.show);
   const disabledReason = !webApp.available
     ? "The web app is not available for this server."
-    : "Enable remote access first.";
-  const title = "Enable remote access first to open this workspace from web and mobile.";
+    : "Opening workspaces on the web is no longer available.";
+  const title = "Opening workspaces on the web is no longer available.";
 
   const openCurrentWorkspaceInWeb = useCallback(() => {
     showToast(disabledReason);

@@ -73,7 +73,7 @@ describe("useWorkspaceOpenInWebActions", () => {
 
     expect(hookMocks.copyText).not.toHaveBeenCalled();
     expect(hookMocks.openExternal).not.toHaveBeenCalled();
-    expect(hookMocks.showToast).toHaveBeenCalledWith("Enable remote access first.");
+    expect(hookMocks.showToast).toHaveBeenCalledWith("Opening workspaces on the web is no longer available.");
   });
 
   it("disables the action and never opens anything when this deployment has no web app", () => {

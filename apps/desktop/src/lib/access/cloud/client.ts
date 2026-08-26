@@ -1,5 +1,4 @@
 import {
-  configureCloudRequestMeasurement,
   createProliferateClient as createSdkProliferateClient,
   getProliferateClient as getSdkProliferateClient,
   isCloudAgentKind,
@@ -19,9 +18,6 @@ import {
 import { isDevAuthBypassed } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
 import { getCurrentAuthSession } from "@proliferate/product-client/internal/lib/domain/auth/current-auth-session";
 import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
-import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement-catalog-types";
-import { isAnyHarnessTimingEnabled } from "@/lib/infra/measurement/debug-measurement-env";
 import {
   isDefinitiveAuthRejection,
   isSessionExpiring,
@@ -198,20 +194,8 @@ async function fetchDesktopCloudStream(
   }
 }
 
-configureCloudRequestMeasurement({
-  isEnabled: isAnyHarnessTimingEnabled,
-  record: (measurement) => {
-    recordMeasurementMetric({
-      type: "request",
-      transport: "cloud",
-      category: measurement.category,
-      operationId: measurement.operationId as MeasurementOperationId | undefined,
-      method: measurement.method,
-      status: measurement.status,
-      durationMs: measurement.durationMs,
-    });
-  },
-});
+// The SDK's cloud request measurement seam died with the cloud workspace
+// routes it measured (cull part 2); nothing is left to register.
 
 function createDesktopProliferateClient(): ProliferateCloudClient {
   return createSdkProliferateClient({

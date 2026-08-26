@@ -1,258 +1,44 @@
 import { describe, expect, it } from "vitest";
 import {
-  deriveWorkspaceAvailabilityInput,
   resolveWorkspaceAvailabilityCommands,
-  unsupportedGitBlockerForLocalWorkspace,
   type WorkspaceAvailabilityInput,
 } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
-import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
-const CLEAN_PUBLISHED: WorkspaceGitStatus = {
-  branch: "feat/x",
-  dirty: false,
-  conflicted: false,
-  ahead: 0,
-  behind: 0,
-  hasUpstream: true,
-  pr: null,
-  attention: "none",
-  capturedAt: "2026-07-16T00:00:00Z",
-  source: "live",
-};
-
-const HYDRATED_LOCAL = {
-  id: "m-local",
-  targetKind: "local_desktop" as const,
-  desktopInstallId: "mac-a",
-  anyharnessWorkspaceId: "ws-1",
-  worktreePath: "/a",
-  state: "hydrated" as const,
-  generation: 1,
-  expectedHeadSha: null,
-  observedHeadSha: null,
-  observedBranch: null,
-  failureCode: null,
-  lastReportedAt: null,
-};
-
-function kinds(input: Omit<WorkspaceAvailabilityInput, "cloudComputeEnabled"> & {
-  cloudComputeEnabled?: boolean;
-}): string[] {
-  return resolveWorkspaceAvailabilityCommands({
-    cloudComputeEnabled: true,
-    ...input,
-  }).map((c) => c.kind);
-}
-
+// The cloud-copies feature died with the cloud workspace stack (cull part 2):
+// the host that executed these commands is deleted, so the resolver must not
+// offer any of them — a command with no executor is a silent dead-end.
 describe("resolveWorkspaceAvailabilityCommands", () => {
-  it("offers Link copies from the separate ledger-backed Cloud slot", () => {
-    expect(resolveWorkspaceAvailabilityCommands({
-      hasLocalWorkspace: false,
-      cloudWorkspace: { materializations: [{
-        id: "managed",
-        targetKind: "managed_cloud",
-      }] as never },
-      desktopInstallId: "install-1",
-      linkCandidate: true,
-      localMaterializationNeedsRepair: false,
-      unsupportedGitBlocker: null,
-      cloudComputeEnabled: true,
-    }).map((command) => command.kind)).toEqual(["link-copies"]);
-  });
-  it("offers Add Cloud copy for a local-only workspace", () => {
-    expect(
-      kinds({ hasLocalWorkspace: true, cloudWorkspace: null, desktopInstallId: "mac-a" }),
-    ).toEqual(["add-cloud-copy"]);
-  });
+  const base: WorkspaceAvailabilityInput = {
+    hasLocalWorkspace: true,
+    cloudWorkspace: null,
+    desktopInstallId: "install-1",
+    cloudComputeEnabled: true,
+  };
 
-  it("offers Open on this Mac for a Cloud-only workspace", () => {
-    expect(
-      kinds({
-        hasLocalWorkspace: false,
-        cloudWorkspace: { materializations: [] },
-        desktopInstallId: "mac-a",
-      }),
-    ).toEqual(["open-on-this-mac"]);
-  });
-
-  it("offers Link copies for a heuristic local + Cloud exact-ref match", () => {
-    expect(
-      kinds({
-        hasLocalWorkspace: true,
-        cloudWorkspace: { materializations: [] },
-        desktopInstallId: "mac-a",
-        linkCandidate: true,
-      }),
-    ).toEqual(["link-copies"]);
-  });
-
-  it("offers only Unlink for a healthy explicit link", () => {
-    expect(
-      kinds({
-        hasLocalWorkspace: true,
-        cloudWorkspace: { materializations: [HYDRATED_LOCAL] },
-        desktopInstallId: "mac-a",
-      }),
-    ).toEqual(["unlink-this-mac"]);
-  });
-
-  it("offers relink/recreate/unlink when the linked local copy is missing", () => {
-    expect(
-      kinds({
-        hasLocalWorkspace: false,
+  it.each<[string, WorkspaceAvailabilityInput]>([
+    ["local-only workspace (previously: Add Cloud copy)", base],
+    [
+      "dirty local workspace (previously: Reconcile Git state)",
+      { ...base, unsupportedGitBlocker: "This workspace has uncommitted changes." },
+    ],
+    [
+      "stale cloud row with a linked local copy (previously: Unlink this Mac)",
+      {
+        ...base,
         cloudWorkspace: {
-          materializations: [{ ...HYDRATED_LOCAL, state: "missing" }],
-        },
-        desktopInstallId: "mac-a",
-        localMaterializationNeedsRepair: true,
-      }),
-    ).toEqual(["relink-existing", "recreate-on-this-mac", "unlink-this-mac"]);
-  });
-
-  it("offers an actionable reconcile-git-state entry for an unsupported Git state", () => {
-    // PR 6: no longer a dead-end blocker — it opens the reconciliation dialog,
-    // carrying the truthful note as context.
-    const commands = resolveWorkspaceAvailabilityCommands({
-      hasLocalWorkspace: true,
-      cloudWorkspace: null,
-      desktopInstallId: "mac-a",
-      unsupportedGitBlocker: "The workspace has uncommitted changes.",
-    });
-    expect(commands).toHaveLength(1);
-    expect(commands[0]!.kind).toBe("reconcile-git-state");
-    expect(commands[0]!.blocker).toBe("The workspace has uncommitted changes.");
-  });
-
-  it("does not un-redact another install's link (no explicit link matched)", () => {
-    // A local_desktop row for a different install must not count as this
-    // install's link; a local-only workspace still offers Add Cloud copy.
-    expect(
-      kinds({
-        hasLocalWorkspace: true,
-        cloudWorkspace: null,
-        desktopInstallId: "mac-a",
-      }),
-    ).toEqual(["add-cloud-copy"]);
-  });
-});
-
-describe("unsupportedGitBlockerForLocalWorkspace", () => {
-  it("accepts a clean, published, in-sync normal branch", () => {
-    expect(unsupportedGitBlockerForLocalWorkspace(CLEAN_PUBLISHED)).toBeNull();
-  });
-
-  it("blocks dirty / conflicted / unpublished / out-of-sync / unknown states", () => {
-    expect(unsupportedGitBlockerForLocalWorkspace({ ...CLEAN_PUBLISHED, dirty: true })).toMatch(/uncommitted/);
-    expect(unsupportedGitBlockerForLocalWorkspace({ ...CLEAN_PUBLISHED, conflicted: true })).toMatch(/conflict/);
-    expect(unsupportedGitBlockerForLocalWorkspace({ ...CLEAN_PUBLISHED, hasUpstream: false })).toMatch(/published/);
-    expect(unsupportedGitBlockerForLocalWorkspace({ ...CLEAN_PUBLISHED, ahead: 1 })).toMatch(/in sync/);
-    expect(unsupportedGitBlockerForLocalWorkspace({ ...CLEAN_PUBLISHED, dirty: null })).toMatch(/not available/);
-    expect(unsupportedGitBlockerForLocalWorkspace(null)).toMatch(/not available/);
-  });
-});
-
-describe("deriveWorkspaceAvailabilityInput", () => {
-  it("blocks Add Cloud copy on a dirty local source", () => {
-    const input = deriveWorkspaceAvailabilityInput({
-      localWorkspace: { id: "ws-1" },
-      cloudWorkspace: null,
-      desktopInstallId: "mac-a",
-      localGitStatus: { ...CLEAN_PUBLISHED, dirty: true },
-      cloudComputeEnabled: true,
-    });
-    expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([
-      "reconcile-git-state",
-    ]);
-  });
-
-  it("offers Add Cloud copy on a clean published local source", () => {
-    const input = deriveWorkspaceAvailabilityInput({
-      localWorkspace: { id: "ws-1" },
-      cloudWorkspace: null,
-      desktopInstallId: "mac-a",
-      localGitStatus: CLEAN_PUBLISHED,
-      cloudComputeEnabled: true,
-    });
-    expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([
-      "add-cloud-copy",
-    ]);
-  });
-
-  it("omits Add Cloud copy for a clean published local source when cloud compute is disabled", () => {
-    const input = deriveWorkspaceAvailabilityInput({
-      localWorkspace: { id: "ws-1" },
-      cloudWorkspace: null,
-      desktopInstallId: "mac-a",
-      localGitStatus: CLEAN_PUBLISHED,
-      cloudComputeEnabled: false,
-    });
-    expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([]);
-  });
-
-  it("never blocks a Cloud-only Open on this Mac on local git status", () => {
-    const input = deriveWorkspaceAvailabilityInput({
-      localWorkspace: null,
-      cloudWorkspace: { materializations: [] },
-      desktopInstallId: "mac-a",
-      localGitStatus: null,
-      cloudComputeEnabled: true,
-    });
-    expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([
-      "open-on-this-mac",
-    ]);
-  });
-
-  it("derives relink/recreate/unlink for a missing explicit link regardless of git status", () => {
-    const input = deriveWorkspaceAvailabilityInput({
-      localWorkspace: null,
-      cloudWorkspace: {
-        materializations: [{
-          id: "m",
-          targetKind: "local_desktop",
-          desktopInstallId: "mac-a",
-          anyharnessWorkspaceId: "ws-1",
-          worktreePath: "/a",
-          state: "missing",
-          generation: 3,
-          expectedHeadSha: null,
-          observedHeadSha: null,
-          observedBranch: null,
-          failureCode: null,
-          lastReportedAt: null,
-        }],
+          materializations: [{
+            targetKind: "local_desktop",
+            desktopInstallId: "install-1",
+            state: "hydrated",
+          }],
+        } as never,
       },
-      desktopInstallId: "mac-a",
-      localGitStatus: null,
-      cloudComputeEnabled: true,
-    });
-    expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([
-      "relink-existing",
-      "recreate-on-this-mac",
-      "unlink-this-mac",
-    ]);
-  });
-});
-
-describe("resolveWorkspaceAvailabilityCommands cloudComputeEnabled gate (PRO-10)", () => {
-  it("omits add-cloud-copy for a local-only workspace when cloud compute is disabled", () => {
-    expect(
-      kinds({
-        hasLocalWorkspace: true,
-        cloudWorkspace: null,
-        desktopInstallId: "mac-a",
-        cloudComputeEnabled: false,
-      }),
-    ).toEqual([]);
-  });
-
-  it("still offers add-cloud-copy for a local-only workspace when cloud compute is enabled", () => {
-    expect(
-      kinds({
-        hasLocalWorkspace: true,
-        cloudWorkspace: null,
-        desktopInstallId: "mac-a",
-        cloudComputeEnabled: true,
-      }),
-    ).toEqual(["add-cloud-copy"]);
+    ],
+    [
+      "stale cloud-only row (previously: Open on this Mac)",
+      { ...base, hasLocalWorkspace: false, cloudWorkspace: { materializations: [] } },
+    ],
+  ])("offers nothing for a %s", (_name, input) => {
+    expect(resolveWorkspaceAvailabilityCommands(input)).toEqual([]);
   });
 });

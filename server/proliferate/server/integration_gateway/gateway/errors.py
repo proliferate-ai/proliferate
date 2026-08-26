@@ -31,18 +31,6 @@ class IntegrationToolPolicyError(CloudApiError):
             "approval": self.approval,
         }
 
-
-class IntegrationGatewaySessionRequired(IntegrationToolPolicyError):
-    def __init__(self, *, provider: str, tool: str) -> None:
-        super().__init__(
-            "integration_gateway_session_required",
-            "Initialize the MCP connection before requesting approval for this action.",
-            provider=provider,
-            tool=tool,
-            approval={"required": False, "status": "session_required"},
-        )
-
-
 class IntegrationToolNotAllowed(IntegrationToolPolicyError):
     def __init__(self, *, provider: str, tool: str) -> None:
         super().__init__(

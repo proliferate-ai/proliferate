@@ -315,8 +315,9 @@ export function useHomeNextLaunch() {
       }
 
       // The cloud sandbox stack is deleted: a cloud target can no longer be
-      // launched. The target catalog no longer offers one, so this arm only
-      // guards a stale selection; the shared catch owns the failure toast.
+      // launched. Desktop targets never resolve to cloud, but Web Home still
+      // falls back to a cloud target when no desktop is attached — that launch
+      // lands here and fails honestly via the shared catch's failure toast.
       throw new Error("Cloud workspaces are no longer available.");
     } catch (error) {
       markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId, launchAttemptId);

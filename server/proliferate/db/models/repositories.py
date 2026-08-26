@@ -17,7 +17,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.constants.cloud import (
-    CloudMaterializationStatus,
     GitProvider,
     RepoEnvironmentKind,
 )
@@ -34,13 +33,6 @@ _GIT_PROVIDER_ENUM = Enum(
 _REPO_ENVIRONMENT_KIND_ENUM = Enum(
     RepoEnvironmentKind,
     name="repo_environment_kind",
-    native_enum=False,
-    values_callable=lambda values: [value.value for value in values],
-    validate_strings=True,
-)
-_CLOUD_MATERIALIZATION_STATUS_ENUM = Enum(
-    CloudMaterializationStatus,
-    name="cloud_materialization_status",
     native_enum=False,
     values_callable=lambda values: [value.value for value in values],
     validate_strings=True,

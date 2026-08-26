@@ -197,10 +197,9 @@ export function useWorkspaceSidebarActions() {
     if (!target) {
       return;
     }
-    // The cloud sandbox stack is deleted; the affordance ends in the shared
-    // unavailability toast (same copy as the command-surface gate) instead of
-    // a create flow.
-    showToast("Cloud workspaces are temporarily unavailable.");
+    // The cloud sandbox stack is deleted; the affordance ends in an honest
+    // unavailability toast instead of a create flow.
+    showToast("Cloud workspaces are no longer available.");
   }, [showToast]);
 
   return {

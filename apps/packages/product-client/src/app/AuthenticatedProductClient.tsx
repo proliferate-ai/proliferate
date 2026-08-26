@@ -1,6 +1,7 @@
 import type { ReactElement } from "react"
 
 import { AddRepoFlowHost } from "#product/components/workspace/repo-setup/AddRepoFlowHost"
+import { CloudRepoActionDialogHost } from "#product/components/workspace/repo-setup/CloudRepoActionDialogHost"
 import { KeyboardShortcutsDialog } from "#product/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { HarnessUpdateToastPresenter } from "#product/components/feedback/HarnessUpdateToastPresenter"
 import { WorkflowResumePopoverPresenter } from "#product/components/workflows/run-view/WorkflowResumePopoverPresenter"
@@ -24,6 +25,7 @@ export default function AuthenticatedProductClient(): ReactElement {
       <CoworkThreadLaunchProvider>
         <AuthenticatedAppHost />
         <AddRepoFlowHost />
+        <CloudRepoActionDialogHost />
         <HarnessUpdateToastPresenter />
         <WorkflowResumePopoverPresenter />
         <KeyboardShortcutsDialog />

@@ -32,10 +32,9 @@ import {
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
 
-// Matches the message used at the command-surface gate
-// (use-app-new-workspace-command-actions.ts) so every cloud unavailability
-// surface reads the same regardless of entry point.
-const CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE = "Cloud workspaces are temporarily unavailable.";
+// The cloud workspace stack is deleted for good; every cloud unavailability
+// surface reads the same permanent message.
+const CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE = "Cloud workspaces are no longer available.";
 
 export function usePendingWorkspaceEntryActions() {
   const navigate = useNavigate();
