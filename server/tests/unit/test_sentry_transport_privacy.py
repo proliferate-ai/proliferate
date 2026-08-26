@@ -205,8 +205,9 @@ VALID_UUID_HEX = "0f3c2a9d6b8e4f1aa7c25d3e9b64108f"
         ("label", f"materialize_sandbox:{VALID_UUID}", True), ("fn", "drop_database", False),
         ("label", f"materialize_other:{VALID_UUID}", False), ("worker_id", "worker-1", False),
         ("external_sandbox_id", "sbx-1", False), ("anyharness_workspace_id", "ws-1", False),
-        ("session_id", VALID_UUID, False), ("interaction_id", VALID_UUID, False),
-        ("command_id", VALID_UUID, False), ("anomaly", "slow", False),
+        ("anyharness_workspace_id", VALID_UUID, True), ("session_id", VALID_UUID, True),
+        ("session_id", "session-01", False), ("interaction_id", VALID_UUID, True),
+        ("command_id", VALID_UUID, True), ("anomaly", "slow", False),
         ("unknown_tag", "value", False),
     ],
 )
