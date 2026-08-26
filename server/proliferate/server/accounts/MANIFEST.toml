@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "accounts"
-spec = "specs/codebase/systems/product/auth/README.md"
+spec = "specs/codebase/systems/product/accounts/README.md"
 owns = "User accounts, authentication, and identity for the control plane."
 
 public_surface = [

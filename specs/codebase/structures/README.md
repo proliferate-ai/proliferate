@@ -16,14 +16,16 @@ and ownership boundaries. Nothing under `structures/` owns content anymore.
 | Proliferate Supervisor | Target process supervisor, worker/runtime spawn loops, install layout, service generation, update staging, rollback, and target smoke behavior. | [specs/supervisor.md](../../supervisor.md) |
 | Server | FastAPI/cloud control plane domains, API/service/store layering, auth/resource access boundaries, database access, workers, integrations, config, and error shape. | [specs/server/standards.md](../../server/standards.md), plus the focused files beside it (`auth.md`, `domains.md`, `database.md`, ...) |
 | SDKs | AnyHarness TypeScript SDK generation/build ownership, generated-code boundaries, React SDK ownership, and contract-consumer rules. | [specs/sdk.md](../../sdk.md) |
-| Auth Gateway (split-owned today) | Product account auth, server auth/resource access, and agent LLM gateway/managed-credit materialization. | [../systems/product/auth/README.md](../systems/product/auth/README.md), [specs/server/auth.md](../../server/auth.md); see note below |
+| Auth Gateway (split-owned today) | Product account auth, server auth/resource access, and agent LLM gateway/managed-credit materialization. | [../systems/product/accounts/README.md](../systems/product/accounts/README.md) (owner; surface rules in [auth/README.md](../systems/product/auth/README.md)), [specs/server/auth.md](../../server/auth.md); see note below |
 
 ## Auth Gateway Ownership
 
 There is no standalone `auth-gateway` structure spec today. Current ownership is
 split by boundary:
 
-- Product account authentication and readiness gates live in
+- Product account authentication and readiness gates live in the `accounts`
+  system spec, [../systems/product/accounts/README.md](../systems/product/accounts/README.md),
+  with the surface rules in its section
   [../systems/product/auth/README.md](../systems/product/auth/README.md).
 - Server authentication, resource access, authorization helpers, and product
   policy layering live in [specs/server/auth.md](../../server/auth.md).

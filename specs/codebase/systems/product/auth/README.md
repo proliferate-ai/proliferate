@@ -1,5 +1,10 @@
 # Product Auth
 
+> **Owner:** this document is the surface-rules section of the `accounts`
+> system spec, [`../accounts/README.md`](../accounts/README.md) (added
+> 2026-08-25). Owned state, public surface, fences and code map live there;
+> this file keeps the product-level sign-in rules and surface UX.
+
 Scope:
 
 - `server/proliferate/auth/**`
