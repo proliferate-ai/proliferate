@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "ai_magic"
-spec = "specs/server/README.md"
+spec = "specs/codebase/systems/product/model_gateway/README.md"
 owns = "LLM-assisted product conveniences served by the control plane (prompted generation endpoints)."
 
 public_surface = [

@@ -1,5 +1,10 @@
 # Sandbox GitHub Auth
 
+> The GitHub App relationship (authorizations, installations, repository
+> authority, webhooks, the repo catalog) is owned by
+> [github/README.md](../../codebase/systems/product/github/README.md). This document keeps only
+> the sandbox-side lease and credential helper.
+
 Status: target. This document describes the accepted destination for GitHub
 repository authority in cloud sandboxes: how a sandbox gets permission to
 clone, fetch, and push, and nothing else. The body is written in the ideal

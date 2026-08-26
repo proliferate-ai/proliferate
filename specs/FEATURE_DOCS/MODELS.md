@@ -362,6 +362,11 @@ tuning truth, and selection/projection services are not launch authorities.
 
 ## Model gateway
 
+> Superseded for ownership by
+> [model_gateway/README.md](../codebase/systems/product/model_gateway/README.md) (the system
+> spec: owned tables, public surface, laws, code map). This section stays as
+> the harness-facing contract only; do not extend it.
+
 The model gateway lets a deployment pay for and control inference while the
 harness remains the execution client. It is a distinct control/data plane; its
 configured model list is ultimately observed through the harness before any

@@ -86,6 +86,9 @@ source area you are in.
 | Managed runtime | supervisor/worker convergence, enrollment, runtime updates | [`specs/FEATURE_DOCS/MANAGED_RUNTIME.md`](specs/FEATURE_DOCS/MANAGED_RUNTIME.md) |
 | Agent auth | agent credentials, key vault, selections, `state.json` | [`specs/FEATURE_DOCS/AGENT_AUTH.md`](specs/FEATURE_DOCS/AGENT_AUTH.md) |
 | Models | `catalogs/**`, `scripts/agent-catalog/**`, model gateway, probes, LiteLLM | [`specs/FEATURE_DOCS/MODELS.md`](specs/FEATURE_DOCS/MODELS.md) |
+| Model gateway | `server/proliferate/server/agent_auth/{enrollment,usage_import,topups,budget,free_credits,worker,verification,migration}.py`, `server/litellm/**`, `server/proliferate/server/ai_magic/**` | [`specs/codebase/systems/product/model_gateway/README.md`](specs/codebase/systems/product/model_gateway/README.md) |
+| Integration gateway | `server/proliferate/server/integration_gateway/**`, `db/models/integration*.py`, `db/models/cloud/integration_approvals.py`, `db/store/integrations/**` | [`specs/codebase/systems/product/integration_gateway/README.md`](specs/codebase/systems/product/integration_gateway/README.md) |
+| GitHub | `server/proliferate/server/github/**`, `db/models/github_app.py`, `db/store/github_app.py`, `integrations/github/**` | [`specs/codebase/systems/product/github/README.md`](specs/codebase/systems/product/github/README.md) |
 | Workflows | workflow definitions, invocations, runs, workspace placement | [`specs/FEATURE_DOCS/WORKFLOWS.md`](specs/FEATURE_DOCS/WORKFLOWS.md) |
 | Desktop host | web bundle ↔ native shell ↔ sidecar seam | [`specs/FEATURE_DOCS/DESKTOP_HOST.md`](specs/FEATURE_DOCS/DESKTOP_HOST.md) |
 
