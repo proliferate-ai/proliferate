@@ -6,11 +6,11 @@ Current gap: the managed-Target UI described here is not implemented.
 
 Date: 2026-05-20.
 
-Depends on: [`lifecycle.md`](../environments/README.md), `mcp-skills.md` (document retired; no owning platform document replaces it), and [`AGENT_AUTH.md`](../agent_auth/deep-dive.md).
+Depends on: [`lifecycle.md`](../environments/README.md), `mcp-skills.md` (document retired; no owning platform document replaces it), and [`AGENT_AUTH.md`](../agent_auth/README.md).
 
 Staleness note (2026-08-25): the SSH target product surface (SSH compute targets, `AddSshTargetDialog`, the SSH rows of the compute pane, SSH target enrollment, and the Desktop SSH tunnel) was deleted by the cull-sweep `delete-ssh-surface` delivery. Every SSH-target block below describes a destination that no longer exists and must not be built as written.
 
-Staleness note (2026-07-25): this document predates the Bifrost removal. Its Agents-scope content (the `agent-authentication` pane, its panes, primitives, deep links, copy files, and smoke steps) describes removed UI; each such block below carries a correction to the shipped per-harness sections. The authoritative auth contract is [`AGENT_AUTH.md`](../agent_auth/deep-dive.md).
+Staleness note (2026-07-25): this document predates the Bifrost removal. Its Agents-scope content (the `agent-authentication` pane, its panes, primitives, deep links, copy files, and smoke steps) describes removed UI; each such block below carries a correction to the shipped per-harness sections. The authoritative auth contract is [`AGENT_AUTH.md`](../agent_auth/README.md).
 
 This spec defines the settings shell, sidebar navigation, page ownership, shared UI primitives, and shared vocabulary used by every other spec that ships UI. Feature specs own page *content*; this spec owns the *frame*.
 
@@ -126,7 +126,7 @@ Hard:
 - `mcp-skills.md` (document retired): Plugins page
   rows show `enabled`, `public_to_org`, `auth_status`,
   `runtime_apply_status`.
-- [`AGENT_AUTH.md`](../agent_auth/deep-dive.md): this spec's
+- [`AGENT_AUTH.md`](../agent_auth/README.md): this spec's
   Agent Authentication pane (`CloudAgentAuthLibrary` +
   `ComputeTargetAgentAuthCard`, `CredentialPicker`) described the removed
   Bifrost-era UI. The shipped UI is per-harness settings sections
@@ -261,7 +261,7 @@ subfolders:
 > as `panes/agents/harness/` (per-harness pane, auth method cards, CLI
 > login details) and `panes/agents/api-keys/` (the key pool), with
 > selection/vault contracts owned by
-> [`AGENT_AUTH.md`](../agent_auth/deep-dive.md).
+> [`AGENT_AUTH.md`](../agent_auth/README.md).
 
 **Existing shared primitives**: page chrome lives in the settings kit at `apps/packages/product-client/src/primitives/patterns/settings/`, plus `PageHeader.tsx` (`variant="flat"`) in `apps/packages/product-client/src/primitives/patterns/`:
 

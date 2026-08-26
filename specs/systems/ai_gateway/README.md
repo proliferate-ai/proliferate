@@ -1,8 +1,8 @@
-# Model gateway
+# AI gateway
 
-Grade B system spec (code-verified on `main`, decisions marked). Owns all agent LLM traffic that Proliferate pays for or meters: the LiteLLM data plane, the enrollment that mints scoped virtual keys, the credit ledger that funds them, usage import, exhaustion enforcement, top-ups, and configuration verification. The harness remains the execution client; this system decides *whether* and *under whose budget* it may call a model.
+Grade B system spec (code-verified on `main`, decisions marked; formerly `agent_auth/model-gateway.md` — split into its own system 2026-08-26; the code split out of `server/agent_auth/` rides the agent_auth build list). Owns all agent LLM traffic that Proliferate pays for or meters: the LiteLLM data plane, the enrollment that mints scoped virtual keys, the credit ledger that funds them, usage import, exhaustion enforcement, top-ups, and configuration verification. The harness remains the execution client; this system decides *whether* and *under whose budget* it may call a model.
 
-Sibling specs, one owner per concern: [agent_auth](deep-dive.md) picks *which* credential a harness launches with and delivers it; [integration_gateway](../integration_gateway/README.md) is the analogous gateway for company systems (MCP tools), not models; [billing](../billing/deep-dive.md) owns compute segments, plans, credits for compute, and the Stripe relationship; [harness launch options](models.md) owns which models a target *advertises* — the gateway's model list is observed through the harness before any surface may offer it.
+Sibling specs, one owner per concern: [agent_auth](../agent_auth/README.md) picks *which* credential a harness launches with and delivers it; [integration_gateway](../integration_gateway/README.md) is the analogous gateway for company systems (MCP tools), not models; [billing](../billing/deep-dive.md) owns compute segments, plans, credits for compute, and the Stripe relationship; [harness launch options](../agent_auth/models.md) owns which models a target *advertises* — the gateway's model list is observed through the harness before any surface may offer it.
 
 ## 1. Purpose
 
@@ -93,13 +93,13 @@ SDK: [cloud/sdk/src/client/agent-gateway.ts](../../../cloud/sdk/src/client/agent
 ## 7. Fences
 
 - Selections, the key vault, `state.json` delivery, per-harness application
-  and org agent-model policy: [agent_auth](deep-dive.md).
+  and org agent-model policy: [agent_auth](../agent_auth/README.md).
   This spec consumes the gateway-capable harness list; it never filters models
   client-side.
 - Compute segments, plans, Stripe customers, compute credits:
   [billing](../billing/deep-dive.md). Top-ups charge *through* billing.
 - Which models a harness advertises and session live configuration:
-  [MODELS.md](models.md).
+  [MODELS.md](../agent_auth/models.md).
 - Registry auth vocabulary and readiness projection:
   [agent-distribution.md](../harnesses/distribution.md).
 

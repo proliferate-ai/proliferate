@@ -5,7 +5,7 @@ The path from a signed-out person to commandable work: sign-in, product readines
 | Section | Document |
 | --- | --- |
 | Account sign-in, linked providers, reviewer accounts | [../auth/README.md](../identity/accounts.md) |
-| Agent auth setup and the ack-gated "setting up" step | [AGENT_AUTH.md](../agent_auth/deep-dive.md) |
+| Agent auth setup and the ack-gated "setting up" step | [AGENT_AUTH.md](../agent_auth/README.md) |
 | Harness distribution and install | [MODELS.md](../agent_auth/models.md) |
 | Billing / credit readiness | [BILLING.md](../billing/deep-dive.md) |
 | First workspace creation | `workspace-provisioning.md` (deleted with the cloud provisioning stack, cull part 2; successor: [environments/README.md](../environments/README.md)) |

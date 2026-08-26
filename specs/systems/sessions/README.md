@@ -68,7 +68,7 @@ Control plane (※ new): registry create/read/list, external-binding attach/deta
   ([acp.md](../../areas/anyharness.md), [adapters.md](../../areas/anyharness.md)).
 - **Agent auth** — launch environment and credential application
   ([launch_env.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/launch_env.rs);
-  owner: [AGENT_AUTH.md](../agent_auth/deep-dive.md)).
+  owner: [AGENT_AUTH.md](../agent_auth/README.md)).
 - **Integration gateway** — MCP bindings assembled per session
   ([mcp_bindings/](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/mod.rs)).
 - **Workflows (gen-2)** — durable workflow links

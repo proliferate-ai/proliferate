@@ -86,7 +86,7 @@ In-process: `AgentRuntime` ([runtime.rs](../../../anyharness/crates/anyharness-l
 | Not owned | Owner |
 | --- | --- |
 | Live session actors, ACP stdio connections, prompt execution | sessions ([session-engine.md](../sessions/session-engine.md)) |
-| Credential vault, selections, `state.json` delivery, route-auth rendering, gateway plans — `domains/agents/{auth,auth_state.rs,route_auth}` | **agent_auth** (control-plane spec with a runtime section; today [AGENT_AUTH.md](../agent_auth/deep-dive.md)) |
+| Credential vault, selections, `state.json` delivery, route-auth rendering, gateway plans — `domains/agents/{auth,auth_state.rs,route_auth}` | **agent_auth** (control-plane spec with a runtime section; today [AGENT_AUTH.md](../agent_auth/README.md)) |
 | Virtual keys, LiteLLM, model gateway enrollment | model_gateway ([MODELS.md](../agent_auth/models.md)) |
 | Catalog *generation* (`scripts/agent-catalog/**`) | release-delivery (engineering system) |
 | Supervisor binary swaps, worker mailbox | managed_runtime ([MANAGED_RUNTIME.md](managed-runtime.md)) |

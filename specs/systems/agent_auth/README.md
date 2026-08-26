@@ -1,273 +1,575 @@
 # Agent auth
 
-Which credentials a harness launches with. The control plane stores the user's **selections** (per harness, per surface) and **vault** entries, renders them into one `state.json` document per surface, and delivers it to whichever machine runs the harness; at every session launch the runtime reads that one file and materializes exactly the selected sources — or refuses the launch with a typed error. This spec is the system's authority on `main`. It supersedes [FEATURE_DOCS/AGENT_AUTH.md](deep-dive.md) as the owner; that document stays as the detailed target reference (per-harness recipes, the settings surface, the long gaps ledger) until it is folded in.
+How a harness gets working model credentials at launch. The server half owns the *choices* — the credential vault, each person's per-harness selection, org policy, and the renderer that turns choices into one desired-state document per surface. The runtime half owns the *machine truth* — applying that document, probing that it works, running login flows, and answering the launcher. Couriers move documents between the halves and never interpret them.
 
-The one-sentence contract: **at session launch, the runtime reads one local document, resolves the harness's selected sources, and materializes them; a selection that cannot be satisfied refuses the launch rather than silently running on different credentials.**
+The one-sentence contract: **at session launch, the runtime reads one local document, resolves the harness's selected sources, and materializes them; a selection that cannot be satisfied refuses the launch with a plain-words typed error rather than silently running on different credentials.**
 
-## 1. Purpose
+This spec reads as ground truth for the final system. Every difference from what `main` runs today is collected in the transitional [Delta vs prod](#delta-vs-prod) section at the end, which is deleted when spec and code converge.
 
-Own the answer to "which auth source does this user use for this harness on this surface", the storage of user-provided provider credentials, the delivery of resolved key material to the runtime, and the per-harness glue that turns a source into the files and environment the harness's own auth mechanism expects. Resolution order on `main` is *selection → native*; the settled architecture extends it to *run override → subject selection → org default* (see [Known gaps](#known-gaps--follow-ups)).
+## 0 · Scope
 
-## 2. Owned state
+**The folder census** — the code inside this system's boundary:
 
-All tables live in [db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py) (the file also hosts model-gateway tables — ownership is per table, below).
+| Leg | Code |
+| --- | --- |
+| server | `server/agent_auth/` (minus the ai_gateway files marked in §4) · the agent_auth tables in `db/models/agent_gateway.py` · `db/store/agent_gateway/` (minus gateway stores) · `constants/agent_gateway.py` |
+| runtime | `domains/agents/route_auth/` · `domains/agents/auth/` · `auth_state.rs` · `domains/agents/launch_probe/` · `status/` · `api/http/agent_auth.rs` — the four modules consolidate into `domains/agent_auth/` in Wave 3 |
+| client | the courier files (`use-local-auth-state-sync.ts`, `local-auth-state.ts`, the sidecar origin line) · the settings auth panes and onboarding auth surfaces (consumers) |
+| data | `fixtures/contracts/agent-auth-state/` (the wire pin) · the generated SDK clients |
 
-| Table | Rows mean | Key constraints |
+**Responsibilities:**
+
+- Know which auth methods exist for each harness, and hold each person's choice per (harness, surface).
+- Store credential material: API keys, typed provider configs, and seats (portable Max-plan subscriptions).
+- Render choices into one full-desired-state document per (user, surface) and deliver it to whichever machine runs the harness.
+- Apply the document on the machine, verify it works, and expose one truthful status per harness.
+- Answer the session-launch path with exactly what a launch needs — and refuse, in words, when it can't.
+- Meter and rotate seats.
+
+**Fences:**
+
+| Not owned here | Owner | The line |
 | --- | --- | --- |
-| `agent_api_key` | one vault entry: `kind ∈ {api_key, aws_bedrock, azure_openai}`, title, ciphertext, redacted hint, status `active \| revoked` | typed kinds decrypt to a JSON provider config; bare `api_key` is one opaque secret |
-| `agent_auth_selection` | one desired source for `(user, harness_kind, surface)`: `source_kind ∈ {gateway, api_key}`, optional `api_key_id`, `env_var_name`, `enabled` | scope UNIQUE; "at most one gateway per scope" index; an `api_key` row always references a vault entry; `env_var_name` presence follows the entry's kind (bare requires one, typed forbids one — enforced in the store write gate because a CHECK cannot join) |
-| `agent_auth_delivery_ack` | the last acknowledged `(revision, fingerprint)` per `(user, surface)` | revision is ms-epoch `max(updated_at)` over the surface's selection rows; only moves forward |
-| `agent_auth_harness_settings` | catalog-declared toggle values per `(user, harness_kind, surface)` — **not auth**, riding this surface as the delivery vehicle | one row per scope |
-| `org_agent_policy` | per-org allow-lists: `allowed_routes_json` (`gateway`, `api_key`, `native`) and `allowed_harnesses_json` | `native` is a policy value only — never a selection row |
+| Serving our models: the LiteLLM instance and config, virtual keys, the credit ledger, top-ups, usage import | [ai_gateway](../ai_gateway/README.md) | this system renders the minted key as an opaque value and consults the budget predicate at render |
+| Harness install, readiness, the registry, the catalog, model/launch-option observation | harnesses ([distribution](../harnesses/distribution.md), [models.md](models.md)) | the registry declares each harness's auth vocabulary; this system applies it; install events arrive as probe pokes |
+| Launching sessions | sessions | sessions applies this system's answer faithfully and never looks inside it — wrong answer is our bug, right answer misapplied is theirs |
+| User login, JWTs, org membership | identity | a different auth |
+| Pixels | the settings surface | panes render this system's documents and add nothing |
 
-Closed vocabularies live in [constants/agent_gateway.py](../../../server/proliferate/constants/agent_gateway.py): harness kinds `claude, codex, opencode, grok, cursor`; gateway-capable `claude, codex, opencode, grok` (cursor has no gateway recipe); surfaces `local | cloud`; `state.json` version `2`.
+**The three methods** — every way a harness authenticates is one of these, and all three are the same shape (a credential rendered into the launch):
 
-Runtime-side state: `<runtime_home>/agent-auth/state.json` (mode 0600), written by the delivery path and read fresh at every launch; per-revision materialized config directories with conservative GC ([route_auth/materialize.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/materialize.rs)).
+| Method | The user is saying | Rendered at launch as |
+| --- | --- | --- |
+| **gateway** | "bill my Proliferate org; use managed model access" | that harness's scoped virtual key + proxy base URL |
+| **api_key / provider config** | "use my own provider account" | the named env var, or the provider's full native env set |
+| **seat** | "run on this Max subscription" | `CLAUDE_CODE_OAUTH_TOKEN`, a long-lived `claude setup-token` credential from the vault |
 
-## 3. Public surface
+Native harness login is not a method: it is an onboarding detection that offers to become a seat, never a launch-time auth source. A harness with zero enabled selections is unconfigured, and launches refuse with words.
 
-### Control plane (`/v1/cloud/…`, product-user bearer auth)
+**Rules of the road:**
 
-Served by [agent_auth/api.py](../../../server/proliferate/server/agent_auth/api.py). The same module also hosts two model-gateway routes under `/agent-gateway` (`GET /capabilities`, `GET /enrollment`), which are that system's surface.
+- **One owner per fact.** The server owns what the user picked; the runtime owns what is true on the machine; the frontend derives nothing.
+- **Couriers carry, never interpret.** An opinion in transit is a bug.
+- **Refusals speak plain words.** Every typed error names its cause and what to do; a bare error code never reaches a human.
+- **Credential material exists in two places only** — the vault at rest, the launch materialization in flight. Never logs.
 
-```http
-GET    /v1/cloud/agent-auth/keys                          vault list
-POST   /v1/cloud/agent-auth/keys                          create bare key
-POST   /v1/cloud/agent-auth/keys/provider-config          create typed provider config
-DELETE /v1/cloud/agent-auth/keys/{key_id}                 revoke (selections cascade)
-GET    /v1/cloud/agent-auth/selections?surface=           selections + applied flag
-PUT    /v1/cloud/agent-auth/selections/{harness}?surface= full desired state (+ settings rider)
-GET    /v1/cloud/agent-auth/state?surface=                rendered state.json v2 + riders
-POST   /v1/cloud/agent-auth/state/ack?surface=            desktop delivery ack
-GET    /v1/cloud/organizations/{org}/agent-auth/policy    org policy (admin)
-PUT    /v1/cloud/organizations/{org}/agent-auth/policy
-GET    /v1/cloud/organizations/{org}/agent-auth/policy/violations
+## 1 · Cells
+
+### server `agent_auth` — the choices half
+
+- **Owns:** the vault (every stored credential, seats included), each person's selections, org policy, the renderer that produces the desired-state document, seat rotation state, and seat usage samples.
+- **Doors:**
+    - The selections API — read and set the method choice per harness.
+        - The settings pane writes choices through it; org admins set policy through the sibling policy routes, enforced at write time.
+    - The vault API — save, list, and delete credentials; seats are rows here.
+        - The settings pane and onboarding are the only writers; the mint flow's courier upload lands here too.
+    - The state document (`GET /state` + `POST /state/ack`) — the rendered full desired state, and the receipt that a machine applied it.
+        - The courier pulls and acks; the ack is what lets the pane say "applied" truthfully.
+    - The seat-usage read — the latest window samples per seat.
+        - The settings meters render it.
+    - Four importable functions — `render_state`, `resolve_headless`, `seat_usage_probe`, `pick_seat`.
+        - `render_state` is called only by this system's own routes; `resolve_headless` by automations at run placement; nothing else imports anything else.
+- **Consumes:** ai_gateway (`gateway_profile`, `is_gateway_budget_available`, `verify_key`) · the registry mirror constants · encryption at rest · org membership for policy routes.
+
+### runtime `agent_auth` — the machine-truth half
+
+- **Owns:** the applied state file, the per-harness status document, the isolated home directories, the login-terminal lifecycle, and the probe engine with every probe's meaning.
+- **Doors:**
+    - `launch_facts(harness, workspace)` — the launch answer: env to set, env to strip, files, ready to apply.
+        - **One consumer: the session-launch path.** Sessions initiates, harnesses assembles, subagents inherit — one caller wearing three names; the answer is applied last at spawn.
+    - `methods(harness)` — every method available and which is applied.
+        - The settings pane's method picker renders straight from it; no client-side guessing.
+    - The status document — read, subscribe, or poke to re-check.
+        - The local HTTP API serves it to the frontend; the courier reports the ack from it; readiness consumes it through one seam (`apply_launch_route_upgrade`).
+    - `start_login(harness, variant)` — the login terminal, including the `mint_seat` variant.
+        - The settings pane's "Authenticate" and the seat-minting affordance are its only callers.
+- **Consumes:** the applied document (from the courier) · the catalog surface (which harnesses exist, which auth contexts each declares) · the terminal machinery for login flows.
+
+### the courier — desktop TS
+
+- **Owns:** nothing. It moves documents.
+- **Doors:** `pullStateAndApply()` (pull from the server, fingerprint-compare, stamp the origin, push into the runtime, ack) and `uploadSeatToken()` (carry a captured mint token to the vault, held in memory only).
+    - Both are called by the desktop app's lifecycle — on sign-in, and on every auth-relevant invalidation. Cloud compute is never a precondition.
+- **Consumes:** the server's state/ack routes and the runtime's local state routes — opaquely, in both directions.
+
+### the frontend — consumers with zero owned truth
+
+- **Owns:** nothing. It renders the status document verbatim and pokes at the right moments.
+- **Doors:** none — this cell only consumes.
+- **Consumes:** `useHarnessStatus(kind)` · `useMethods(kind)` · `useSeatUsage()` · the selections and vault APIs for writes.
+
+## 2 · Data
+
+### Server tables ([db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py))
+
+```sql
+-- The vault: one titled secret per row. kind decides what value_ciphertext decrypts to:
+-- one opaque secret string (api_key, anthropic_subscription) or a provider-config JSON
+-- document (aws_bedrock: region+bearerToken; azure_openai: endpoint+apiKey — no deployment
+-- field: the render side cannot honor one, and a field the apply side cannot honor is not
+-- collected). Decryption happens in exactly two server-side places: the renderer and the
+-- authed GET /state.
+CREATE TABLE agent_api_key (
+    id                uuid PRIMARY KEY,
+    user_id           uuid NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    title             text NOT NULL,          -- "Max seat · ops@acme.com"
+    kind              text NOT NULL CHECK (kind IN
+                        ('api_key','aws_bedrock','azure_openai','anthropic_subscription')),
+    value_ciphertext  text NOT NULL,          -- Fernet, cloud-secret-v1
+    encryption_key_id text NOT NULL,
+    redacted_hint     text NOT NULL,          -- "sk-…abc4"
+    status            text NOT NULL CHECK (status IN ('active','revoked')),
+    created_at        timestamptz NOT NULL,
+    updated_at        timestamptz NOT NULL
+);
+
+-- Who-uses-what: one desired source per (user, harness, surface, source_kind, env_var_name).
+-- gateway rows reference nothing (the key resolves from the org's enrollment at render).
+-- api_key rows reference a vault entry; env_var_name is required for a bare key and
+-- forbidden for a typed one — enforced in the store write gate, since the rule spans tables.
+-- seat rows reference an anthropic_subscription vault row. Zero enabled rows for a scope
+-- means unconfigured. provider_hint is display-only; the renderer never puts it on the wire.
+CREATE TABLE agent_auth_selection (
+    id            uuid PRIMARY KEY,
+    user_id       uuid NOT NULL,
+    harness_kind  text NOT NULL,              -- claude | codex | opencode | grok | cursor
+    surface       text NOT NULL CHECK (surface IN ('local','cloud')),
+    source_kind   text NOT NULL CHECK (source_kind IN ('gateway','api_key','seat')),
+    api_key_id    uuid REFERENCES agent_api_key(id),
+    env_var_name  text,                       -- ^[A-Z][A-Z0-9_]{0,127}$
+    provider_hint text,
+    enabled       boolean NOT NULL,
+    UNIQUE (user_id, harness_kind, surface, source_kind, env_var_name)
+    -- + partial unique index: at most one gateway row per scope
+);
+
+-- Courier receipts: the last acknowledged (revision, fingerprint) per (user, surface).
+-- Only moves forward; an ack from the future is 400, because accepting it would wedge
+-- the only-forward store against every later legitimate ack.
+CREATE TABLE agent_auth_delivery_ack (
+    user_id      uuid NOT NULL,
+    surface      text NOT NULL,
+    revision     text NOT NULL,               -- the content hash it acknowledges
+    fingerprint  text NOT NULL,               -- sha256 of the canonical document
+    applied_at   timestamptz NOT NULL
+);
+
+-- Catalog-declared per-harness toggles. Not auth; rides this system's delivery as the vehicle.
+CREATE TABLE agent_auth_harness_settings (
+    user_id       uuid NOT NULL,
+    harness_kind  text NOT NULL,
+    surface       text NOT NULL,
+    settings      jsonb NOT NULL
+);
+
+-- Org guardrails: allow-lists per org. 'native' appears as a policy value only — it is never
+-- a selection row. Enforced when selections are written (403); violations of a later-tightened
+-- policy surface in the admin report, never as launch failures.
+CREATE TABLE org_agent_policy (
+    org_id                 uuid PRIMARY KEY,
+    allowed_routes_json    jsonb NOT NULL,    -- subset of {gateway, api_key, seat, native}
+    allowed_harnesses_json jsonb NOT NULL
+);
+
+-- Usage-probe samples per seat. Written only by the usage probe (flow 5). Advisory only:
+-- meters and rotation hints, never a launch gate.
+CREATE TABLE seat_usage_sample (
+    id             bigserial PRIMARY KEY,
+    api_key_id     uuid NOT NULL REFERENCES agent_api_key(id),
+    sampled_at     timestamptz NOT NULL,
+    util_5h        real,                      -- 0..1, from anthropic-ratelimit-unified-5h-utilization
+    util_7d        real,
+    reset_5h       timestamptz,
+    reset_7d       timestamptz,
+    binding_window text,                      -- five_hour | seven_day
+    status         text NOT NULL CHECK (status IN ('allowed','limited','probe_failed'))
+);
 ```
-
-Python callers use the modules the [MANIFEST.toml](../../../server/proliferate/server/agent_auth/MANIFEST.toml) declares: `agent_auth.api`, `.service`, `.models`. Measured importers: `accounts`, `billing`, `cloud`, `cloud/materialization`, `organizations`, `main.py`.
-
-### Runtime (`/v1`, runtime bearer auth)
-
-[api/http/agent_auth.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agent_auth.rs): `PUT /v1/agent-auth/state` (apply a document; revision-guarded) and `DELETE /v1/agent-auth/state` (clear). Both poke the launch-probe engine with `AuthApplied` so readiness re-observes.
 
 ### The wire document (`state.json` v2)
 
-Pinned by [fixtures/contracts/agent-auth-state/](../../../fixtures/contracts/agent-auth-state): the Python renderer asserts it produces it, the Rust reader asserts it consumes it; a shape change is made by changing the fixture.
+Full desired state for one (user, surface): **every harness with any enabled selection appears in every render.** Pinned by the [contract fixture](../../../fixtures/contracts/agent-auth-state) — the Python renderer asserts it produces it, the Rust reader asserts it consumes it, and a shape change is made by changing the fixture.
 
 ```text
-{ version: 2, revision, user_id?,
+{ version: 2, revision, user_id, issuing_server_origin,
   harnesses: [ { harness_kind, sources: [ source ], settings? } ] }
 source = { kind: "gateway",         base_url, key }
        | { kind: "api_key",         env_var_name, value }
        | { kind: "provider_config", config_kind, env: {NAME: value} }
+       | { kind: "seat",            env: {CLAUDE_CODE_OAUTH_TOKEN: value}, seat_id }
 ```
 
-`GET /state` adds two response-only riders the desktop strips before pushing: `fingerprint` (the renderer's sha256 of the canonical document) and `harness_settings` (the surface's full settings map, so a native-auth harness's toggles still render).
+`revision` is a content hash of the canonical harnesses array — a render that changes nothing changes nothing downstream; the runtime rejects an out-of-order push and accepts an equal-revision push as content-authoritative. `issuing_server_origin` is the server-switch guard: the courier stamps the origin it fetched from, and the runtime treats a document from any other origin as absent. A harness whose selected sources cannot be satisfied keeps its entry with the dead source omitted — present-but-empty fails closed at launch, with the refusal naming the actual reason. `GET /state` adds two response-only riders the courier strips before pushing: `fingerprint`, and `harness_settings` (the surface's full settings map, so an unconfigured harness's toggles still reach the pane).
 
-### Generated clients
+### Runtime persistent state (`<runtime_home>/`, mode 0600)
 
-[cloud/sdk/src/client/agent-gateway.ts](../../../cloud/sdk/src/client/agent-gateway.ts) (`listAgentApiKeys`, `createAgentApiKey`, `revokeAgentApiKey`, `listAuthSelections`, `putAuthSelections`, `getAgentAuthState`, `ackAgentAuthState`, `getOrgAgentPolicy`, `updateOrgAgentPolicy`, `listOrgAgentPolicyViolations`) and the matching `cloud/sdk-react` hooks; [anyharness/sdk/src/client/agent-auth.ts](../../../anyharness/sdk/src/client/agent-auth.ts) for the runtime push.
+- `agent-auth/state.json` — the applied document, read fresh at every launch, never watched. Absent means nothing configured.
+- The status document, one per harness — the machine's single source of auth truth, event-refreshed, served stale-marked while a re-probe runs, never withdrawn:
 
-## 4. Consumes
+```json
+{ "harness_kind": "claude",
+  "methods":  [ { "kind": "seat", "available": true, "seat_id": "…" },
+                { "kind": "gateway", "available": true },
+                { "kind": "native", "detected": true, "offer": "mint_seat" } ],
+  "applied":  { "kind": "seat", "seat_id": "…" },
+  "probe":    { "verdict": "verified", "at": "…", "stale": false },
+  "cooling_until": null }
+```
 
-| Dependency | Owner | Used for |
-| --- | --- | --- |
-| harness auth vocabulary (slots, env names, login policy, `providerConfig` kinds) | agent distribution ([agent-distribution.md](../harnesses/distribution.md), [registry.json](../../../catalogs/agents/registry.json)) | declare-vs-apply: this system applies what the registry declares |
-| the per-(subject, harness) gateway virtual key + budget status | model gateway ([MODELS.md](models.md) §Model gateway; code co-resident in `server/agent_auth/`) | rendered as an opaque `gateway` source; `budget.py`'s exhaustion predicate withholds key material at render |
-| `log_cloud_event` | server event logging | audit events (§6) |
-| encryption at rest | [db/store/agent_gateway/api_keys.py](../../../server/proliferate/db/store/agent_gateway/api_keys.py) over the secrets capability | vault ciphertext |
-| `current_path_org_admin` | organizations / permissions | org policy routes |
-| `PROLIFERATE_API_BASE_URL_ORIGIN` | desktop host ([sidecar.rs](../../../apps/desktop/src-tauri/src/sidecar.rs)) | the origin guard (§5) |
-| after-commit re-materialization | today: `cloud/materialization/service.py` (`schedule_materialize_agent_auth`) | pushes a fresh document to cloud surfaces after selection/key/enrollment changes — see the hazard in Known gaps |
+- Isolated homes per harness and per seat (`claude-config-<seat>/`, `codex-home-<rev>/`, grok's home, opencode's xdg-config) — revision-keyed where they embed credentials or models, so an in-flight session launched under revision N−1 keeps its files; GC retains current and previous only. Route-auth is the only writer of these homes, and it runs no commands: application is atomic file writes plus env composition, which is what makes a failed launch side-effect-free and a retry idempotent.
 
-## 5. Laws
+### Vocabularies
 
-**Native is the absence of rows.** There is no `native` source kind; zero enabled rows for a harness means the harness runs on its own login, and the rendered document omits the harness entirely. Enforced by the constants (`AGENT_AUTH_SOURCE_KINDS` has two values) and the renderer.
+`constants/agent_gateway.py` holds the closed sets (harness kinds, gateway-capable kinds, surfaces, source kinds, the state version) and mirrors [registry.json](../../../catalogs/agents/registry.json), the declared authority for the harness set, gateway capability, and per-harness cardinality. A drift test fails CI the moment a literal and its registry derivation disagree.
 
-**Present-but-empty fails closed.** A harness entry in the document whose sources cannot be satisfied is `AGENT_ROUTE_SELECTION_MISSING`, refused at session *create* (`409`, [service/create.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/service/create.rs)) and again at *launch* ([runtime/startup.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs)). Without this a harness would silently run on whatever ambient credentials it found.
+## 3 · Flows
 
-**One server validator decides legality.** [selection_rules.py](../../../server/proliferate/server/agent_auth/selection_rules.py) runs before every selection write: single-source harnesses (`claude`, `codex`, `grok`, `cursor`) allow at most one *enabled* source; `opencode` is additive; a `gateway` source needs a gateway-capable harness; `env_var_name` matches `^[A-Z][A-Z0-9_]{0,127}$`. The store's write gate owns cross-table shape (bare-requires-name / typed-forbids-name, key ownership, duplicates). The runtime deliberately has no cardinality check — the document cannot express a conflict the server would not have written.
+Five flows. Together they exercise every door in §1 and touch every table in §2.
 
-**Selections are full desired state.** `PUT /selections/{harness}` replaces the scope's rows; there is no per-row patch. Every write bumps the scope revision, which is what the runtime's stale-revision guard compares.
+### Flow 1 — Changing an agent's auth method, and having it actually apply
 
-**Rendering is pure and single-path.** `render_agent_auth_state` produces the document and its fingerprint from selection + vault + enrollment inputs; `GET /state` and the cloud materializer call the same function, so the two surfaces cannot disagree.
+Triggered by picking a method in settings. The write is validated (legality rules, org policy — a violating write gets a 403 at write time, never a launch failure later), stored as full desired state for the scope, and re-rendered; the courier delivers; the runtime applies and pokes the probe engine — **probing only the harnesses whose content changed**; the ack closes the loop, and a selection reads "applied" only when the ack carries the current revision and fingerprint. **A change isn't real until the machine has confirmed it.** Failure exits: `400` illegal selection set · `403 policy_violation` · `AGENT_ROUTE_STATE_STALE` on an out-of-order push.
 
-**Applied means acknowledged.** A selection reads `applied: true` only when the surface's delivery ack carries the current `(revision, fingerprint)`. The desktop acks after its runtime PUT succeeds, echoing the *served* fingerprint (never client-computed); an ack from the future (revision above the surface's current rendered revision) is `400` because accepting it would wedge the only-forward store against every later legitimate ack. Cloud acks are stamped server-side by the materialization worker.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as user (settings)
+    participant SV as server agent_auth
+    participant CO as courier
+    participant RT as runtime agent_auth
+    U->>SV: pick method for harness
+    SV->>SV: validate + store + render full desired state
+    CO->>SV: pull rendered document
+    CO->>RT: push document (origin-stamped)
+    RT->>RT: apply to machine + poke probe for changed harnesses
+    RT-->>CO: applied receipt
+    CO->>SV: ack (revision + fingerprint)
+    SV-->>U: selection shows applied
+```
 
-**`state.json` is the only transport, read fresh per launch.** No watch/refresh; absent file = native; a malformed or version-less file is `AGENT_ROUTE_STATE_MALFORMED`; a push with a lower revision than persisted is `AGENT_ROUTE_STATE_STALE` ([route_auth/state.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/state.rs)).
+### Flow 2 — Storing auth material: credentials and plans
 
-**The origin guard.** The desktop runtime ignores a state file issued by a server other than the one it currently points at (`matches_server_origin` against `PROLIFERATE_API_BASE_URL_ORIGIN`), so switching backends never launches with another environment's keys ([route_auth/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs)).
+Everything that puts a secret into the vault or takes one out. Saving a bare API key or a typed provider config is a settings write straight into the vault. Minting a seat is the one upward secret path: the runtime's login terminal runs `claude setup-token` in an isolated directory, captures the printed token **in memory only**, hands it to the courier, and the courier uploads it into the vault — if capture fails at any step, the buffer is wiped and nothing was persisted anywhere. Revoking a key that an enabled selection references refuses with `409 agent_api_key_referenced`, naming the harnesses using it — keys disable, they never dangle. Every change here ends in a re-render and re-delivery (flow 1's tail).
 
-**Removal wins over ambient.** Rendered removals are applied after every set layer and the inherited copies are stripped at spawn ([driver/process.rs](../../../anyharness/crates/anyharness-lib/src/live/sessions/driver/process.rs)); a selected route cannot be shadowed by a developer's shell.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as user (settings)
+    participant RT as runtime agent_auth
+    participant T as login terminal
+    participant CO as courier
+    participant SV as server agent_auth
+    U->>RT: start_login(claude, mint_seat)
+    RT->>T: run claude setup-token in an isolated dir
+    T-->>RT: token printed to terminal output
+    Note over RT: captured in MEMORY ONLY - never machine disk, never logs
+    RT->>CO: hand off token and wipe the buffer
+    CO->>SV: save to vault (kind anthropic_subscription)
+    SV->>SV: row created - re-render, re-deliver (flow 1)
+    RT->>RT: apply + verification probe on the seat
+    RT-->>U: status document shows the seat as verified
+```
 
-**Green display needs evidence.** `Usable`/`Authenticated` render only when `evidence_ref` names a probe observation, a key-scoped gateway check, or an acknowledged applied route with a non-null age; bare file/keychain presence is unverified ([auth_state.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/auth_state.rs)).
+### Flow 3 — Configuring an agent for launch with the proper auth
 
-**Org policy is enforced at write time.** `_enforce_org_selection_policy` rejects a selection outside the org's allowed routes/harnesses; existing violations are listable per org. Editing policy requires org admin.
+The heart of the system, triggered by every session create, resume, and fork. The runtime loads the applied document (checking the origin guard), resolves the harness's profile, and picks the source. For seats, the scheduler round-robins over active seats and skips cooling ones. For a headless run, the ladder is: run override → the subject's own selection → the org default → a loud refusal — and **no branch may resolve to another person's vault row**. The recipes render the world the harness runs in, and the spawn applies the answer **last**: env to set, env to strip, so a leftover `ANTHROPIC_API_KEY` on the machine can never outrank the chosen method. It refuses — always with words — when nothing is configured (`NoConfiguredSource`), when the selected source can't be satisfied (`SourceUnsatisfied`, naming why: out of credits, key revoked), when every seat is cooling (`AllSeatsCooling`, naming the earliest reset), or when the state file is malformed.
 
-**Settings are not auth.** Harness toggles ride the selection PUT and the state document, but the fail-closed law forbids a settings-only harness entry — which is why a native-auth harness's settings never reach the runtime today (gap below).
+```mermaid
+sequenceDiagram
+    autonumber
+    participant SESS as session-launch path
+    participant RT as runtime agent_auth
+    participant H as harness process
+    SESS->>RT: launch_facts(harness, workspace)
+    RT->>RT: load applied doc (origin guard) - resolve profile - pick source - render recipes
+    RT-->>SESS: env to set + env to strip + files (or a typed plain-words refusal)
+    SESS->>H: spawn with the answer applied LAST
+```
 
-## 6. Emits
+The decision logic, since this flow carries the most:
 
-Structured audit events via `log_cloud_event` ([service.py](../../../server/proliferate/server/agent_auth/service.py)): `agent_api_key_created`, `agent_provider_config_created`, `agent_api_key_revoked`, `agent_auth_selections_put`, `agent_auth_delivery_acked`, `org_agent_policy_updated`.
+```text
+launch_facts(harness, ws):
+  entry = applied doc[harness]                 # origin guard checked at load
+  no entry            → Err(NoConfiguredSource)      # "Claude Code isn't set up — pick a method in Settings"
+  sources empty       → Err(SourceUnsatisfied{why})  # "out of LLM credits — top up" / "key revoked"
+  method == seat      → seat = pick_seat(…)          # round-robin, skip cooling
+                        all cooling → Err(AllSeatsCooling{earliest_reset})
+  headless subject    → run override → subject selection → org default → refuse loudly
+  build env_set + env_remove (per-method strip list) + files
+```
 
-Runtime: the `AuthApplied` probe poke after state PUT/DELETE; typed `RouteAuthError` codes on the API/contract surface (`AGENT_ROUTE_STATE_MALFORMED`, `AGENT_ROUTE_STATE_STALE`, `AGENT_ROUTE_SELECTION_MISSING`, `AGENT_ROUTE_SELECTION_INCOMPLETE`, `AGENT_ROUTE_UNSUPPORTED`, `AGENT_ROUTE_UNKNOWN_HARNESS`, `AGENT_ROUTE_MATERIALIZE_FAILED`); the route signal that upgrades readiness ([readiness/service.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs)).
+### Flow 4 — Detecting the authentication status of a harness
 
-## 7. Fences
+Triggered by app start, an applied auth change, an install, a login-terminal exit, a backoff expiry, or a manual refresh — the probe engine's closed event set, which **includes its own recovery events**, so a missed probe heals without a human. Detection reads what exists (files, keychain, env — never writing any of it, and reading only the workspace's composed env for workspace checks, never the host's ambient one); the probe verifies what actually works; both land in the per-harness status document, which is also where a detected native login carries its "make this a seat" offer. **A harness reads green only on dated evidence** — a probe observation, a key-scoped gateway check, or an acknowledged applied route — never on bare file or keychain presence. A failed probe marks the document stale rather than dark: **a probe failure dims the light, it never turns it off.**
 
-| Not owned here | Owner | The line |
-| --- | --- | --- |
-| Enrollment, LiteLLM teams/users, virtual keys, access groups, budgets, top-ups, usage import, verification, free credits | model gateway ([MODELS.md](models.md) §Model gateway) | this system renders the minted key as an opaque value; which models the key can see is proxy-side. The code is co-resident in `server/agent_auth/` (see code map) |
-| Registry auth vocabulary, readiness *projection* | agent distribution ([agent-distribution.md](../harnesses/distribution.md)) | declare vs apply |
-| Native credential detection, interactive login terminals | runtime `agents/auth/` ([auth/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/mod.rs)) | native is the empty state of *this* system |
-| Model/launch-option observation, session live config | [MODELS.md](models.md) | this system never filters models |
-| The sandbox writer and after-commit scheduling | today `cloud/materialization` (dark; being deleted) | the renderer is this system's; the *transport into a sandbox* is the environments system's |
-| User login, JWTs, org membership | product auth ([auth/README.md](../identity/accounts.md)) | a different auth |
+```mermaid
+sequenceDiagram
+    autonumber
+    participant EV as event (startup, auth-apply, install, login-exit, backoff-expiry, refresh)
+    participant RT as runtime agent_auth
+    participant H as harness process
+    participant UI as settings UI
+    EV->>RT: poke(event)
+    RT->>H: probe (one at a time, backoff on failure)
+    H-->>RT: observation
+    RT->>RT: update status document (stale-marked while re-probing)
+    UI->>RT: read or subscribe status
+    RT-->>UI: methods + applied + probe verdict + evidence age
+```
 
-## 8. Code map
+### Flow 5 — Detecting the status of a plan
 
-Ordered the way a credential travels. Files marked `← model_gateway` are co-resident in this folder but owned by that spec (the three-domain split S1 deferred); they are listed so no file is unowned.
+Two signals, one picture. The **usage probe** is the soft signal: on a cadence, the server makes a one-token request with each active seat's token and parses the response's rate-limit headers — live 5-hour and 7-day utilization plus reset times, account-global — into `seat_usage_sample`, feeding the settings meters. **Advisory only, never a launch gate**: the surface is undocumented, so control never depends on it. Observed **limit errors** are the hard signal: a seat that hits its limit mid-session is marked cooling until the reset time the error carries, the scheduler rotates the next launch to the next active seat or falls back to the gateway, and the user is offered a relaunch.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant SV as server agent_auth
+    participant AP as provider API
+    participant UI as settings UI
+    participant RT as runtime agent_auth
+    SV->>AP: 1-token probe with seat token (per cadence)
+    AP-->>SV: rate-limit headers (5h and 7d windows, resets)
+    SV->>SV: store sample
+    UI->>SV: read seat usage
+    SV-->>UI: meters per seat
+    Note over RT: separately - a limit error observed in session output marks the seat cooling and rotates (flow 3 picks the next seat)
+```
+
+## 4 · Structure
+
+### Cell 1 · server `agent_auth`
+
+Full file tree (today's disk; `⇒` = ruled move, rides the build list):
 
 ```text
 server/proliferate/
-├── constants/agent_gateway.py                  source kinds, surfaces, harness allow-lists, STATE_VERSION
-├── db/models/agent_gateway.py                  agent_api_key · agent_auth_selection · agent_auth_delivery_ack
-│                                               · agent_auth_harness_settings · org_agent_policy
-│                                               (+ enrollment/usage/credit tables ← model_gateway)
+├── constants/agent_gateway.py            closed vocabularies, registry mirrors, STATE_VERSION
+├── db/models/agent_gateway.py            the tables (per-table ownership; enrollment/usage/credit tables ⇒ ai_gateway)
 ├── db/store/agent_gateway/
-│   ├── records.py · mappers.py                 typed records; DesiredAuthSource
-│   ├── api_keys.py                             vault CRUD, encryption at rest, decrypt for render
-│   ├── selections.py                           put (full desired state), _assert_keys_usable write gate,
-│   │                                           scope revision touch, enabled reads
-│   ├── delivery_acks.py                        only-forward ack stamp
-│   ├── harness_settings.py                     settings rows
-│   ├── policy.py                               org policy + member route listing
-│   └── enrollments.py · enrollment_keys.py · credits.py · usage.py   ← model_gateway
+│   ├── records.py · mappers.py           typed records; DesiredAuthSource
+│   ├── api_keys.py                       vault CRUD, encryption at rest, decrypt for render
+│   ├── selections.py                     full-desired-state put, the cross-table write gate, scope revision
+│   ├── delivery_acks.py                  only-forward ack stamp
+│   ├── harness_settings.py               settings rows
+│   ├── policy.py                         org policy + member route listing
+│   └── enrollments.py · enrollment_keys.py · credits.py · usage.py   ⇒ ai_gateway
 └── server/agent_auth/
-    ├── MANIFEST.toml
-    ├── api.py                                  /agent-auth + org policy routers
-    │                                           (hosts /agent-gateway capabilities+enrollment ← model_gateway)
-    ├── models.py                               wire models incl. the state document + riders
-    ├── selection_rules.py                      THE legality validator
-    ├── service.py                              vault + selections + state + ack + org policy orchestration
-    ├── harness_settings.py                     toggle validation + upsert (not auth)
-    ├── budget.py                               launch-gating exhaustion predicate ← model_gateway (consumed at render)
-    └── enrollment.py · free_credits.py · migration.py · signup_hook.py · topups.py
-        · usage_import.py · verification.py · worker.py                 ← model_gateway
+    ├── MANIFEST.toml                     → this spec
+    ├── api.py                            /agent-auth + org policy routers (hosts /agent-gateway capabilities+enrollment ⇒ ai_gateway)
+    ├── models.py                         wire models incl. the state document + riders
+    ├── selection_rules.py                THE legality validator
+    ├── state_render.py                   THE renderer (full desired state + fingerprint)
+    ├── service.py                        vault + selections + state + ack + org policy orchestration
+    ├── harness_settings.py               toggle validation + upsert (not auth)
+    ├── seats.py                          seat lifecycle, usage probe, rotation state   (arrives with seats v1)
+    ├── budget.py                         launch-gating exhaustion predicate ⇒ ai_gateway (consumed at render)
+    └── enrollment.py · free_credits.py · migration.py · signup_hook.py
+        · topups.py · usage_import.py · verification.py · worker.py     ⇒ ai_gateway
 
-server/proliferate/server/cloud/materialization/materialize/agent_auth.py
-                                                THE renderer: render_agent_auth_state, fingerprint,
-                                                build_agent_auth_state — owned HERE, mislocated (gap)
-
-fixtures/contracts/agent-auth-state/v2.json     the Python↔Rust wire pin
-
-apps/
-├── desktop/src-tauri/src/sidecar.rs            sets PROLIFERATE_API_BASE_URL_ORIGIN at spawn
-└── packages/product-client/src/
-    ├── hooks/agents/lifecycle/use-local-auth-state-sync.ts   desktop pull → stamp → push → ack loop
-    ├── lib/domain/agents/local-auth-state.ts   push planning, origin stamping
-    ├── lib/domain/settings/harness-auth-sources.ts · agent-auth-evidence.ts · provider-config-fields.ts
-    ├── components/settings/panes/agents/harness/  HarnessPane, HarnessAuthSection, provider rows/badges
-    ├── components/settings/panes/agents/api-keys/ ApiKeysPane
-    └── components/settings/panes/agent-auth/   ApiKeyCreatorModal
-
-cloud/sdk/src/client/agent-gateway.ts           generated CP client (+ sdk-react)
-anyharness/sdk/src/client/agent-auth.ts         runtime push client
-
-anyharness/crates/anyharness-lib/src/
-├── api/http/agent_auth.rs                      PUT/DELETE /v1/agent-auth/state, AuthApplied poke
-├── domains/agents/route_auth/
-│   ├── state.rs                                wire contract, tolerant read, revision guard
-│   ├── profile.rs                              sources[] → typed profile (pure)
-│   ├── plan.rs · gateway_plan.rs · gateway_probe.rs   live gateway model plan seam
-│   ├── render.rs                               per-harness recipes (pure env delta + file specs)
-│   ├── materialize.rs                          atomic writes, revision dirs, GC
-│   ├── probe_materialization.rs                scratch materialization for probes
-│   └── mod.rs                                  pipeline, origin guard, RouteAuthError
-├── domains/agents/auth_state.rs                the one evidence-based display derivation
-├── domains/agents/readiness/service.rs         route-aware readiness upgrade
-├── domains/sessions/service/create.rs          create-time fail-closed refusal
-├── domains/sessions/runtime/startup.rs         launch integration, fail-closed refusal
-└── live/sessions/driver/process.rs             env layering + ambient removal at spawn
+fixtures/contracts/agent-auth-state/      the Python↔Rust wire pin
+cloud/sdk/src/client/agent-gateway.ts     generated CP client (+ sdk-react hooks)
 ```
 
-## 9. Proof
+The full API, route by route (`/v1/cloud/agent-auth/…`, product-user bearer auth):
 
-- Server unit: [test_agent_gateway_domain.py](../../../server/tests/unit/test_agent_gateway_domain.py)
-  (selection rules), `test_agent_auth_materialization.py`
-  (renderer), [test_agent_auth_state_contract_fixture.py](../../../server/tests/unit/test_agent_auth_state_contract_fixture.py)
-  (wire pin), [test_agent_auth_body_redaction.py](../../../server/tests/unit/test_agent_auth_body_redaction.py),
-  [test_agent_auth_settings_rider.py](../../../server/tests/unit/test_agent_auth_settings_rider.py).
-- Server integration: [test_agent_gateway_selections.py](../../../server/tests/integration/test_agent_gateway_selections.py),
-  [test_agent_gateway_store.py](../../../server/tests/integration/test_agent_gateway_store.py),
-  [test_agent_gateway_key_lifecycle.py](../../../server/tests/integration/test_agent_gateway_key_lifecycle.py),
-  `test_agent_auth_delivery_ack.py`,
-  `test_agent_auth_materialization.py`,
-  [test_agent_gateway_policy_api.py](../../../server/tests/integration/test_agent_gateway_policy_api.py),
-  [test_agent_gateway_policy_enforcement.py](../../../server/tests/integration/test_agent_gateway_policy_enforcement.py),
-  [test_agent_gateway_api.py](../../../server/tests/integration/test_agent_gateway_api.py).
-- Runtime: `route_auth/{render,gateway_plan,origin_guard,contract_fixture,cursor_render,opencode_render,provider_config_render}_tests.rs`,
-  `probe_materialization_tests/`, `auth_state_tests.rs`.
-- Client: vitest beside `harness-auth-sources`, `agent-auth-evidence`,
-  `provider-config-fields`, `local-auth-state`, `use-local-auth-state-sync`,
-  and the harness/api-keys panes.
+```text
+GET  /keys
+  → [ { id, title, kind, redactedHint, status, createdAt, updatedAt } ]
+POST /keys                       { title, value }                          → the created key row
+POST /keys/provider-config       { title, kind, config: {…} }              → the created key row
+     (aws_bedrock: {region, bearerToken} · azure_openai: {endpoint, apiKey} — no deployment field)
+DELETE /keys/{key_id}
+  → 204 · 409 agent_api_key_referenced { harnesses: [kind] }   # in-use keys disable, never dangle
 
-## Failure modes
+GET  /selections?surface=
+  → [ { harnessKind, surface, sourceKind, apiKeyId?, envVarName?, providerHint?, enabled,
+        applied, createdAt, updatedAt } ]                      # applied = ack carries current (revision, fingerprint)
+PUT  /selections/{harness}?surface=
+     { sources: [ { sourceKind, apiKeyId?, envVarName?, enabled } ], settings?: {key: bool} }
+  → the scope's selections          # full desired state; the server diffs. 400 illegal · 403 policy_violation
 
-| Condition | Observed as | Recovery |
+GET  /state?surface=
+  → state.json v2 + riders { fingerprint, harness_settings }   # same renderer for every caller
+POST /state/ack?surface=          { revision, fingerprint }
+  → 204 · 400 invalid_agent_auth_delivery_ack                  # only-forward; future acks refused
+
+GET  /seats/usage
+  → [ { apiKeyId, util5h, util7d, reset5h, reset7d, bindingWindow, status, sampledAt } ]
+
+GET  /organizations/{org}/agent-auth/policy        → { allowedRoutes, allowedHarnesses }
+PUT  /organizations/{org}/agent-auth/policy        (admin) same shape
+GET  /organizations/{org}/agent-auth/policy/violations → existing out-of-policy selections, listed
+```
+
+Importable functions (nothing else is):
+
+```python
+render_state(user_id, surface) -> StateDocument   # pure over rows; full desired state; content-hash revision
+resolve_headless(subject, harness) -> Source      # the flow-3 ladder for automations
+seat_usage_probe(api_key_id) -> UsageSample       # flow 5's soft signal
+pick_seat(user_id, harness) -> api_key_id         # round-robin over active minus cooling; raises AllSeatsCooling
+```
+
+Events (via `log_cloud_event`; ids carried: user, org, harness kind, key/seat id): `agent_api_key_created` · `agent_provider_config_created` · `agent_api_key_revoked` · `agent_auth_selections_put` · `agent_auth_delivery_acked` · `org_agent_policy_updated` · `agent_seat_minted` · `agent_seat_limit_hit` · `agent_seat_rotated`.
+
+Cell-local invariants: single-source harnesses (claude, codex, grok, cursor) allow at most one enabled row — a radio — while opencode composes additively (gateway + N keys); a gateway source requires a gateway-capable harness (cursor is not); the cross-table write gate (a bare key requires an env var name, a typed one forbids it); at most one gateway row per scope (partial unique index); env var names match `^[A-Z][A-Z0-9_]{0,127}$`; acks only move forward. The runtime deliberately has no cardinality check — the document cannot express a conflict the server would not have written.
+
+### Cell 2 · runtime `agent_auth`
+
+Full file tree (today inside `domains/agents/`; `⇒ domains/agent_auth/` is the ruled Wave-3 consolidation):
+
+```text
+anyharness/crates/anyharness-lib/src/
+├── api/http/agent_auth.rs                PUT/DELETE /v1/agent-auth/state; both poke AuthApplied
+├── domains/agents/                       ⇒ domains/agent_auth/ (Wave 3)
+│   ├── route_auth/
+│   │   ├── state.rs                      wire contract, tolerant read, revision guard
+│   │   ├── profile.rs                    sources[] → typed profile (pure)
+│   │   ├── plan.rs · gateway_plan.rs     live gateway model-plan seam (opencode's provider block)
+│   │   ├── gateway_probe.rs              gateway reachability check
+│   │   ├── render.rs                     per-harness recipes (pure env delta + file specs)
+│   │   ├── materialize.rs                atomic writes, revision-keyed homes, GC
+│   │   ├── probe_materialization.rs      scratch materialization for probes
+│   │   ├── mod.rs                        the pipeline, origin guard, RouteAuthError
+│   │   └── *_render_tests.rs             cursor · opencode · provider_config · contract-fixture pins
+│   ├── auth/
+│   │   ├── credentials.rs                native detection (read-only; env reads scoped by law)
+│   │   ├── login.rs · login_terminal.rs  CLI login flows (+ mint_seat capture)
+│   │   ├── launch_facts.rs               what the launcher is told
+│   │   ├── context.rs                    auth context assembly
+│   │   └── credential_ladder_tests.rs · credentials_tests.rs
+│   ├── auth_state.rs                     evidence-based display derivation → absorbed by status/
+│   ├── launch_probe/
+│   │   ├── mod.rs                        reconciler: single-flight, pokes, the brakes
+│   │   ├── attempt.rs · probe.rs         one admitted attempt; the probe itself
+│   │   ├── backoff.rs · phase.rs         failure spreading; live-phase reading
+│   │   ├── targets.rs                    which harnesses may be probed (cursor manual-only)
+│   │   ├── live_state.rs · lock.rs       slot + one-engine-per-home lock
+│   │   └── config.rs
+│   └── status/                           the status document store   (arrives with the status module)
+└── consumers (not owned — the launch path and the readiness seam):
+    domains/sessions/service/create.rs · domains/sessions/runtime/startup.rs
+    · live/sessions/driver/process.rs (applies facts LAST)
+    · domains/agents/readiness/service.rs (apply_launch_route_upgrade, the one seam)
+
+anyharness/sdk/src/client/agent-auth.ts   runtime state-push client
+```
+
+The four doors, full types:
+
+```rust
+pub fn launch_facts(harness: &str, ws: &WorkspaceEnv) -> Result<LaunchFacts, LaunchRefusal>
+pub struct LaunchFacts { env_set: BTreeMap<String,String>, env_remove: Vec<String>,
+                         files: Vec<FileSpec>, method: AppliedMethod }
+pub enum LaunchRefusal { NoConfiguredSource { harness: String },
+                         SourceUnsatisfied  { harness: String, reason: PlainWords },
+                         SeatCooling { seat: SeatId, reset_at: DateTime },
+                         AllSeatsCooling { earliest_reset: DateTime } }
+
+pub fn methods(harness: &str) -> Vec<MethodRow>   // {kind, available, seat_id?, applied}
+
+pub fn status(harness: &str) -> StatusDoc
+pub fn subscribe_status() -> impl Stream<Item = StatusDoc>
+pub fn poke(event: ProbeEvent)  // Startup | AuthApplied | InstallCompleted
+                                // | LoginExit | BackoffExpired | FirstDetected
+
+pub fn start_login(harness: &str, variant: LoginVariant) -> TerminalHandle  // Native | MintSeat
+```
+
+The per-harness recipe table — the one place "every harness has its own way of accepting auth" is paid for:
+
+| Harness | gateway route | api_key / provider-config route | seat route |
+| --- | --- | --- | --- |
+| claude | `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`, isolated `CLAUDE_CONFIG_DIR` | the named env var / Bedrock+Azure env sets | `CLAUDE_CODE_OAUTH_TOKEN`, per-seat `CLAUDE_CONFIG_DIR`, strips auth-token/api-key/helper |
+| codex | isolated `CODEX_HOME` with provider-only `config.toml`; removes ambient `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` | the named env var | phase 2 (refreshing-file shape) |
+| opencode | isolated `XDG_CONFIG_HOME` + generated `opencode.json` (live gateway model list); `XDG_DATA_HOME` deliberately ambient for native coexistence | the named env var, additive | — |
+| grok | isolated `HOME`, `GROK_MODELS_BASE_URL`, `XAI_API_KEY` | the named env var | — |
+| cursor | typed refusal — no gateway route exists | the named env var (`CURSOR_API_KEY`) | — |
+
+A recipe never chooses a model. Ambient sanitization applies to every routed launch: the rerouting flags (`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`, `AWS_BEARER_TOKEN_BEDROCK`) are always stripped, and every provider selector the route did not itself set is removed — removal wins over inherited values, applied last at spawn. Adding a harness means: declare its auth vocabulary in the registry, add its cardinality row, write its recipe. Nothing else changes.
+
+Typed runtime errors, each with its status and the flow that raises it: `AGENT_ROUTE_SELECTION_MISSING` (409, flow 3 — rendered in plain words per the refusal variants) · `AGENT_ROUTE_SELECTION_INCOMPLETE` (409, flow 3) · `AGENT_ROUTE_UNSUPPORTED` (409, flow 3 — e.g. cursor gateway) · `AGENT_ROUTE_UNKNOWN_HARNESS` (409, flow 3) · `AGENT_ROUTE_STATE_MALFORMED` (500, flows 1 and 3) · `AGENT_ROUTE_STATE_STALE` (409, flow 1) · `AGENT_ROUTE_MATERIALIZE_FAILED` (500, flow 3).
+
+Cell-local invariants: the origin guard (a document from another server reads as absent); the revision guard (out-of-order pushes rejected, equal revisions content-authoritative); the pure-render/atomic-materialize split (recipes are pure functions; materialize is atomic writes; no commands); the probe engine's brakes (single-flight per harness, exponential backoff, one probe machine-wide); native credentials are read, never written; green needs dated evidence.
+
+### Cell 3 · the courier
+
+```text
+apps/
+├── desktop/src-tauri/src/sidecar.rs      sets PROLIFERATE_API_BASE_URL_ORIGIN at spawn (the origin guard's input)
+└── packages/product-client/src/
+    ├── hooks/agents/lifecycle/use-local-auth-state-sync.ts   the pull → stamp → push → ack loop
+    └── lib/domain/agents/local-auth-state.ts                 push planning, origin stamping, rider stripping
+```
+
+```ts
+pullStateAndApply()   // GET /state → fingerprint-compare → stamp origin → PUT into runtime → POST /state/ack
+uploadSeatToken()     // mint flow: POST /keys; held in memory, never persisted client-side
+```
+
+Cell-local invariants: latest-wins coalescing (rapid switches deliver only the newest document); rider stripping before the runtime push; runs on sign-in with a healthy local runtime — cloud compute is never a precondition.
+
+### Cell 4 · the frontend
+
+```text
+apps/packages/product-client/src/
+├── components/settings/panes/agents/harness/     the per-harness pane: auth section, status/evidence badges,
+│                                                 CLI + api-key details, provider rows/picker, config-issue banner
+├── components/settings/panes/agents/api-keys/ApiKeysPane.tsx
+├── components/settings/panes/agent-auth/ApiKeyCreatorModal.tsx
+├── stores/agents/auth-setup-onboarding-store.ts  onboarding auth flow state
+├── components/home/screen/HomeOnboardingCards.tsx · HomeOnboardingEvidenceCard.tsx
+├── lib/access/anyharness/agent-auth.ts           client edge of the runtime's local API
+├── lib/domain/settings/harness-auth-sources.ts · provider-config-fields.ts
+├── lib/domain/settings/agent-auth-evidence.ts    ⇒ deleted (the client derives nothing)
+└── copy/settings/agent-auth-copy.ts              all the words (the plain-words surface)
+```
+
+```ts
+useHarnessStatus(kind)   // subscribes the status document
+useMethods(kind)         // the method picker's truth
+useSeatUsage()           // the meters
+```
+
+Cell-local invariants: the status document renders verbatim; green only with an evidence age ("verified 2m ago"); every refusal renders its plain-words copy.
+
+---
+
+## Delta vs prod
+
+*Transitional — this section and the build list are deleted when spec and code converge.* Root-cause evidence for the first two rows is the 2026-08-26 renderer trace (prod API + CloudWatch).
+
+| This spec says | Prod today | The change |
 | --- | --- | --- |
-| Illegal selection set | `400` from `selection_rules` / store gate | fix the desired set |
-| Selection outside org policy | `403 policy_violation`; existing violations listed under `/policy/violations` | admin widens policy or user picks an allowed route |
-| Ack revision above rendered revision | `400 invalid_agent_auth_delivery_ack` | re-fetch `/state`, re-push, re-ack |
-| Document present, sources unsatisfiable | `409 AGENT_ROUTE_SELECTION_MISSING` at create/launch | fix the selection; native = remove the rows |
-| Pushed document older than persisted | `AGENT_ROUTE_STATE_STALE` | push the current document |
-| Desktop pointed at another server | state ignored (origin guard); harness runs native | sign in to the matching server |
-| Subject's gateway credit exhausted | gateway source withheld at render → launch refuses | top-up / reactivation (model gateway) |
+| Refusals name their cause in words | An unfunded org renders present-but-empty → launches fail as bare `AGENT_ROUTE_SELECTION_MISSING`. Confirmed live: the account's $2 signup grant never landed (a prior account's one-per-GitHub-identity allocation claim blocks it), so every gateway render withholds keys | Fund the subject (allocation + ledger move via the existing admin primitives, or a manual grant); then the typed-reason refusals |
+| Selections deliver with cloud gone | Delivery was gated on cloud compute until #2245; the first un-gated delivery applied the fail-closed unfunded doc — why "gateway broke" this week | Landed (#2245); the funding row clears the visible breakage |
+| Vault kinds include `anthropic_subscription`; the wire has a `seat` source | Three kinds; two source kinds | New enum values + `seats.py` + the seat recipe |
+| Zero enabled rows = unconfigured, refuse with words | Zero rows = "native login" by convention; the document omits the harness | Convention retired; native becomes a status-document detection with a mint offer |
+| `revision` = content hash | `revision` = ms-epoch render timestamp | Content hash; and the launch-options basis stops folding the global revision (`launch_options/basis.rs:67-72` — today every push invalidates every harness's options) |
+| Probe engine self-recovers (`BackoffExpired`, `FirstDetected`); status served stale-marked | Closed event set with no self-recovery; a missed probe darkens the harness until manual retry | Two new events + serve-stale store |
+| `status/` is the single machine truth; the frontend derives nothing | `agent-auth-evidence.ts` re-derives state client-side; `auth_state.rs` ships beside the legacy ladder | The status module absorbs the derivation; the evidence file is deleted |
+| `seat_usage_sample` + the usage probe + meters | — | New |
+| ai_gateway is its own folder and spec | Gateway code co-resident in `server/agent_auth/` and `db/store/agent_gateway/`; its spec was `model-gateway.md` in this folder | Spec moved to [ai_gateway](../ai_gateway/README.md) (this PR); the code split rides the build list |
+| The runtime cell lives in `domains/agent_auth/` | Its four modules sit inside `domains/agents/` | Wave-3 move |
+| Seat minting works end to end | `claude setup-token` proven by hand (2026-08-26): headless and interactive launch on a fresh dir; usage headers confirmed on a plain 1-token request | Build the capture + upload path |
+| Grok authenticates, or doesn't offer login | The catalog declares CLI login; no managed install recipe and no PATH binary, so the login terminal can never start | An install recipe, or drop the declaration |
+| The headless ladder exists | Selections are per-user only; org policy only restricts | Creator-credentials at v1; org default when the first team org lands (ruled 2026-08-26) |
 
-## Known gaps / follow-ups
+Carried, still true in prod (not deltas): the origin guard · only-forward acks · the contract fixture pin · the per-harness recipes and ambient sanitization · the restart-running-sessions offer after an applied auth change · the registry mirror drift tests · opencode's per-slot detector gap · the `azure_openai` cells pending live verification for codex and claude · native-auth harness settings never reaching the runtime (the settings rider covers the pane, not the launch).
 
-Carried from AGENT_AUTH.md's ledger plus what the cull surfaced.
+## Build list
 
-- [ ] **Renderer mislocated in a dying package — HAZARD.**
-      `render_agent_auth_state` / `build_agent_auth_state` live in
-      `server/cloud/materialization/materialize/agent_auth.py`, and
-      `service.py`, `enrollment.py`, `topups.py` import
-      `cloud.materialization.service.schedule_materialize_agent_auth`.
-      The dark-cloud deletion (delivery-spec-delete-dark-cloud, part 2) must
-      relocate the renderer into `server/agent_auth/` (e.g. `render.py`) and
-      replace the three schedule calls with this system's own after-commit
-      seam before `materialization/` goes. Bucket-4 with environments.
-- [ ] **Three-domain module split.** Model-gateway code (enrollment,
-      budgets, top-ups, usage import, verification, workers) is co-resident
-      in `server/agent_auth/` and `db/store/agent_gateway/`; the S1 URL
-      split landed, the code split did not. Wave-2 move.
-- [ ] **Resolution order for headless subjects.** `run override → subject
-      selection → org default` does not exist: selections are per user, org
-      policy only *restricts*. Task-class runs ([runs.md](../automations/runs.md)) need org
-      defaults and per-run gateway keys.
+*Transitional — deleted at convergence. Dependency order; each item names the delta row it discharges.*
 
-  > [!decision] PABLO DECIDES: org default = a new `org_agent_default`
-  > table (one selection set per org per harness, admin-owned; recommended —
-  > it is the headless subject's selection and keeps Law 6 mechanical), or
-  > extend `org_agent_policy` with a default route. Per-run gateway keys
-  > belong to model gateway either way.
-
-- [ ] **No cloud auth-applied poke.** The cloud materializer writes the file
-      and stamps the ack without poking an awake runtime's probe engine; a
-      cloud observation lags until the next wake. Either the transport grows
-      a poke or the lag is ruled acceptable.
-- [ ] **`azure_openai` cells stay pending** for codex and claude until each
-      clears its registry `pending` flag after a live run (or is dropped).
-- [ ] **Native-auth harness settings never reach the runtime**: the
-      fail-closed law forbids a settings-only entry. Needs a settings
-      channel outside `harnesses` that old readers ignore, plus the runtime
-      read; claude's `--chrome` flag is inert until the ACP sidecar forwards
-      argv.
-- [ ] **Typed-vault path is behind two gates**: the store's `kind ==
-      'api_key'` filter + CHECK constraint, and the client's
-      `getSupportedProviderConfigKinds()` returning `[]`. Both open together
-      or neither.
-- [ ] **Opencode's native detector discards the provider name** (one
-      whole-file verdict instead of per-slot).
-- [ ] **Stale cursor comment** in `model_snapshot/targets.rs`
-      (`AUTO_PROBE_EXCLUDED_HARNESSES`): the exclusion is right (keychain
-      prompt), the stated reason is wrong.
+- [ ] Fund the founder org's billing subject (row 1) — clears the live gateway breakage; no code
+- [ ] Typed launch refusals with plain words end to end (rows 1, 4)
+- [ ] Content-hash revision + content-hash launch-options basis + probe recovery events + serve-stale status (rows 5, 6)
+- [ ] Seats v1 for claude: vault kind, seat selection + wire source, mint capture, seat recipe + strip list, per-seat homes, verification probe (rows 3, 11)
+- [ ] Rotation: cooling on limit error, round-robin, gateway fallback (row 3)
+- [ ] The usage probe + `seat_usage_sample` + settings meters (row 8)
+- [ ] The status module; frontend subscribe migration; delete the client derivation (row 7)
+- [ ] ai_gateway code split out of `server/agent_auth/`; recompose the remainder (row 9)
+- [ ] Grok: a managed install recipe, or drop CLI-login from its catalog entry (row 12)
+- [ ] Wave 3: the Rust consolidation (row 10) · Phase 2: codex seats (refreshing-file shape, single lease, sync-back)

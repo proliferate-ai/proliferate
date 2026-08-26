@@ -7,7 +7,7 @@ The settings surface: one route (`/settings?section=…`) hosting user-scope, or
 | Information architecture (scopes, sections, admin state) — target | [information-architecture.md](information-architecture.md) |
 | Appearance scaling gate and preference — target | [appearance-scaling.md](appearance-scaling.md) |
 | Billing surfaces' semantics | [BILLING.md](../billing/deep-dive.md) |
-| Agent auth panes' semantics | [AGENT_AUTH.md](../agent_auth/deep-dive.md), [MODELS.md](../agent_auth/models.md) |
+| Agent auth panes' semantics | [AGENT_AUTH.md](../agent_auth/README.md), [MODELS.md](../agent_auth/models.md) |
 | Organization invitations and members | [../organizations/invitations.md](../identity/invitations.md) |
 
 ## Purpose
@@ -98,7 +98,7 @@ The `environments` / `repo-environment` sections edit cloud environment records 
   ([../onboarding/README.md](../onboarding/README.md)).
 - **Agent auth / model gateway** owns selection, enrollment, and policy
   semantics; settings renders them
-  ([AGENT_AUTH.md](../agent_auth/deep-dive.md)).
+  ([AGENT_AUTH.md](../agent_auth/README.md)).
 - **Integrations** (integration gateway) owns connection lifecycle, health,
   and grants; settings only starts connect flows and shows health.
 - **Billing** owns plans, credits, and gates

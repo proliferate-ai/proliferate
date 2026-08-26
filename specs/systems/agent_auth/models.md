@@ -2,7 +2,7 @@
 
 Status: current shipped contract
 
-This document owns executable model and launch-control membership, target observation, session launch intent, live session configuration, and the model gateway. Agent credential selection and route material belong to [Agent auth](deep-dive.md).
+This document owns executable model and launch-control membership, target observation, session launch intent, live session configuration, and the model gateway. Agent credential selection and route material belong to [Agent auth](README.md).
 
 ## Authority
 
@@ -200,7 +200,7 @@ Release coverage includes sparse/unknown Claude identifiers, model-scoped Claude
 ## Model gateway
 
 > Superseded for ownership by
-> [model_gateway/README.md](model-gateway.md) (the system
+> [ai_gateway/README.md](../ai_gateway/README.md) (the system
 > spec: owned tables, public surface, laws, code map). This section stays as
 > the harness-facing contract only; do not extend it.
 
