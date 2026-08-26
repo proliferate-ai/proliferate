@@ -116,6 +116,7 @@ REQUIRED_READMES = (
     "specs/codebase/systems/product/workspaces/README.md",
     "specs/codebase/systems/engineering/README.md",
     "specs/codebase/systems/engineering/analytics/README.md",
+    "specs/codebase/systems/engineering/customer-loop/README.md",
     "specs/codebase/systems/engineering/delivery/README.md",
     "specs/codebase/systems/engineering/observability/README.md",
     "guides/README.md",
