@@ -3,7 +3,7 @@ import type { FailureReport } from "./types.js";
 
 /**
  * Files one GitHub issue per distinct failure via the `gh` CLI. Off by
- * default (`--file-issues` opts in) — per specs/TESTING.md,
+ * default (`--file-issues` opts in) — per specs/engineering/testing/standard.md,
  * tier 3/4 failures "file issues into the issues service"; until that service
  * exists, `gh issue create` against this repo is the interim sink. When the
  * issues-service exists, swap the body of `fileIssue` for a POST of the same

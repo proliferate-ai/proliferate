@@ -8,7 +8,7 @@ publishing a new template build, moving a rolling tag forward, or rolling it
 back after a bad promotion. The release lane is documented in
 [`../deploying/releases.md`](../deploying/releases.md); what the template *is*
 (contents, instantiation, initialization) is owned by
-[`../../specs/FEATURE_DOCS/SANDBOX/lifecycle.md`](../../specs/FEATURE_DOCS/SANDBOX/lifecycle.md).
+[`../../specs/systems/environments/README.md`](../../specs/systems/environments/README.md).
 
 ## Mental model
 

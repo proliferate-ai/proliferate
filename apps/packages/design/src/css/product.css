@@ -111,7 +111,7 @@ body {
   line-height: var(--text-ui--line-height);
 }
 
-/* Layered per the shared-reset rule in specs/frontend/styling.md: unlayered
+/* Layered per the shared-reset rule in specs/areas/frontend.md: unlayered
    CSS beats every layer, which would both strip caret utilities off matching
    elements and defeat the empty-field caret suppression below — that rule must
    win this one by specificity inside the same layer. */

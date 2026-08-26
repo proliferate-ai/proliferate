@@ -62,7 +62,7 @@ export const PLAYGROUND_FILE_MENTIONS: FileMentionResult[] = [
   { path: "anyharness/crates/anyharness-lib/src/api/http/files.rs", name: "files.rs", parent: "anyharness/crates/anyharness-lib/src/api/http" },
   { path: "anyharness/sdk/src/client/files.ts", name: "files.ts", parent: "anyharness/sdk/src/client" },
   { path: "scripts/check_docs.py", name: "check_docs.py", parent: "scripts" },
-  { path: "specs/codebase/systems/product/chat/composer.md", name: "composer.md", parent: "specs/codebase/systems/product/chat" },
+  { path: "specs/systems/chat/composer.md", name: "composer.md", parent: "specs/systems/chat" },
   { path: "Makefile", name: "Makefile", parent: "" },
 ];
 

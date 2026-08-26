@@ -109,7 +109,7 @@ function fakeCell(): PlannedCellV1 {
   return {
     cell_id: `${LOCAL_WORLD_SMOKE_1_ID}/local/harness=${REPRESENTATIVE_HARNESS}`,
     scenario_id: LOCAL_WORLD_SMOKE_1_ID,
-    registry_flow_ref: "specs/TESTING/flows.md#local-world-smoke",
+    registry_flow_ref: "specs/engineering/testing/flows.md#local-world-smoke",
     runtime_lane: "local",
     dimensions: { harness: REPRESENTATIVE_HARNESS },
     required_env: [],

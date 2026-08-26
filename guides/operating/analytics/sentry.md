@@ -6,7 +6,7 @@ and Slack channels are live provider state; discover them during the operation
 instead of copying them into repository docs.
 
 The code-owned behavior and privacy contract live in the
-[Sentry system document](../../../specs/codebase/systems/engineering/observability/sentry.md).
+[Sentry system document](../../../specs/engineering/observability/sentry.md).
 There is no downstream issue-ingestion system; the issue-lifecycle system
 was retired in the 2026-08 engineering cull.
 

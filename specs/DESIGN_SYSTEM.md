@@ -20,17 +20,17 @@ index, and the change-control model for moving a value or adding a component.
 **Does not own:**
 
 - Class-authoring rules and which CSS file owns which rules —
-  [structures/frontend/guides/styling.md](frontend/styling.md).
+  [structures/frontend/guides/styling.md](areas/frontend.md).
 - The appearance-scaling gate's own contract (what it bans, its baselines, the
   Appearance preference it protects) —
-  [systems/product/settings/appearance-scaling.md](codebase/systems/product/settings/appearance-scaling.md).
+  [systems/product/settings/appearance-scaling.md](systems/settings/appearance-scaling.md).
   This document names the rules that shape the value system; that document is
   the gate's specification.
 - Package dependency direction between `design` and ProductClient's nested
   domain, primitives, and connected tiers —
-  [structures/frontend/packages/README.md](frontend/packages.md).
+  [structures/frontend/packages/README.md](areas/frontend.md).
 - Per-surface product behavior (what a screen does, its flows and copy) — the
-  owning [systems/product/**](codebase/systems/README.md) document.
+  owning [systems/product/**](README.md) document.
 
 ## System Contract
 
@@ -69,7 +69,7 @@ is importable.
 **Consumes.** Tailwind and Radix as vendors; nothing of ours. Dependency
 direction is `desktop/web → product-client connected tier → primitives →
 design` and never backwards
-([frontend/packages.md](frontend/packages.md)).
+([frontend/packages.md](areas/frontend.md)).
 
 **Laws.** Stated in the sections below and enforced as listed in
 [Changing The Design](#changing-the-design): `tokens.ts` is the number
@@ -87,11 +87,11 @@ under [lints/product](../lints/product/theme.toml) /
 checked against.
 
 **Fences.** Per-surface behavior belongs to the owning
-[systems/product](codebase/systems/product/README.md) document; class
-authoring rules to [frontend/styling.md](frontend/styling.md); the
+[systems/product](README.md) document; class
+authoring rules to [frontend/styling.md](areas/frontend.md); the
 appearance-scaling gate's own contract to
-[appearance-scaling.md](codebase/systems/product/settings/appearance-scaling.md);
-package direction to [frontend/packages.md](frontend/packages.md).
+[appearance-scaling.md](systems/settings/appearance-scaling.md);
+package direction to [frontend/packages.md](areas/frontend.md).
 
 **Proof.** `apps/packages/design/scripts/check-theme.mjs` (byte-equal
 re-projection + real Tailwind compile), `scripts/check_theme_contrast.py`,
@@ -946,7 +946,7 @@ The litmus test for any ambiguous line: **if a designer changed how the app look
 
 Slots are what keep the strictness livable. A pattern owns its skeleton and exposes `ReactNode` slots (`RosterRow`'s `leading`/`title`/`trailing`); feature code filling a slot with a `Badge`, a status glyph, or a shortcut hint is the mechanism working, not a violation. What is banned is redrawing the skeleton around the slot contents — and the same table applies *inside* the slot: a `ReactNode` passed into a slot may compose library components and layout, but may not itself constitute a new repeating skeleton. The conformance checks below apply to slot contents too.
 
-Two corollaries. State stacks have exactly one owner: a hover/active/disabled/focus-visible treatment lives inside the interactive primitive or pattern (`Button`, `RosterRow`, `RowActionIconButton`), never hand-assembled per call site — a per-callsite stack is where a missing `active:` state hides until a user feels it. The rule-of-two carve-out applies here too: a first-instance interactive shape with no fitting primitive may carry its own state stack in place, built only from the shared state tokens (`hover:bg-hover`/`bg-selected`/`active:bg-active` and the focus ring), and the stack promotes with the shape on second appearance — what is banned is re-writing states an existing component already owns. The sanctioned hover-reveal idiom (`group` + `opacity-0 group-hover:opacity-100`, per [styling.md](frontend/styling.md)) is slot-content layout, not a state-stack violation. And rhythm is anatomy, not layout: containers own the space between their children, so an area scaffold owns its section gaps the way `SettingsGroup` owns its hairline dividers — two panes built from identical patterns must not drift apart at `space-y-6` versus `space-y-3`.
+Two corollaries. State stacks have exactly one owner: a hover/active/disabled/focus-visible treatment lives inside the interactive primitive or pattern (`Button`, `RosterRow`, `RowActionIconButton`), never hand-assembled per call site — a per-callsite stack is where a missing `active:` state hides until a user feels it. The rule-of-two carve-out applies here too: a first-instance interactive shape with no fitting primitive may carry its own state stack in place, built only from the shared state tokens (`hover:bg-hover`/`bg-selected`/`active:bg-active` and the focus ring), and the stack promotes with the shape on second appearance — what is banned is re-writing states an existing component already owns. The sanctioned hover-reveal idiom (`group` + `opacity-0 group-hover:opacity-100`, per [styling.md](areas/frontend.md)) is slot-content layout, not a state-stack violation. And rhythm is anatomy, not layout: containers own the space between their children, so an area scaffold owns its section gaps the way `SettingsGroup` owns its hairline dividers — two panes built from identical patterns must not drift apart at `space-y-6` versus `space-y-3`.
 
 ### The library model
 
@@ -985,7 +985,7 @@ not a different role:
   as `product-client/src/primitives/patterns/` (built from primitives/patterns + tokens), but this tier
   is allowed to import concrete `#product/domain/<file>` view models and vocabulary, which
   `product-client/src/primitives/patterns/` must not (per the package boundary in
-  [packages/README.md](frontend/packages.md)). `BillingGateState`,
+  [packages/README.md](areas/frontend.md)). `BillingGateState`,
   `PrStatusBadge`, and the `secrets/` sub-tree live here for that reason, not
   because they belong to a feature folder.
 
@@ -1014,7 +1014,7 @@ components and `design` tokens. It does not invent new visual vocabulary:
   the appearance-scaling gate
   ([check_appearance_scaling.py](../scripts/check_appearance_scaling.py),
   owned by
-  [appearance-scaling.md](codebase/systems/product/settings/appearance-scaling.md)).
+  [appearance-scaling.md](systems/settings/appearance-scaling.md)).
 - **No re-implemented library behavior.** A feature component must not build its
   own popover positioning, its own dialog focus-trap, or any other behavior a
   library primitive/pattern already owns — compose the existing one instead of
@@ -1050,7 +1050,7 @@ The judgment half of enforcement. Every PR touching frontend components gets rev
 4. **Geometry escape hatches** — arbitrary values or inline styles without a legitimate cause (virtualization math and grid positioning are legitimate; decorative geometry is not). A legitimate cause is recorded in a comment at the site, so the judgment is visible in the diff.
 5. **Icon source** — glyphs come from `primitives/icons/`, never directly from `lucide-react`. Feature code imports zero lucide identifiers and the product packages no longer declare the dependency; any reintroduction — import line or `package.json` entry — is a finding.
 6. **New-pattern quality** — honest registry demo, correct tier (shapes vs nouns), named for the job not the feature.
-7. **Hand-assembled state stacks** — new `hover:`/`active:`/`focus-visible:` choreography written on a raw element when an interactive primitive already owns those states. A first-instance interactive shape carrying shared state tokens is legal (the rule-of-two carve-out above); a re-implementation of `Button`'s or `RosterRow`'s states is not, and neither is a state stack built from non-state tokens. The `group`/`opacity-0` hover-reveal and muted-to-prominent color-promotion idioms taught in [styling.md](frontend/styling.md) are sanctioned.
+7. **Hand-assembled state stacks** — new `hover:`/`active:`/`focus-visible:` choreography written on a raw element when an interactive primitive already owns those states. A first-instance interactive shape carrying shared state tokens is legal (the rule-of-two carve-out above); a re-implementation of `Button`'s or `RosterRow`'s states is not, and neither is a state stack built from non-state tokens. The `group`/`opacity-0` hover-reveal and muted-to-prominent color-promotion idioms taught in [styling.md](areas/frontend.md) are sanctioned.
 8. **Rhythm** — where an area scaffold exists, inter-pattern spacing comes from it (containers own the space between their children). Where no scaffold exists yet, a pane picks one spacing value and review checks consistency across sibling panes, not the choice itself.
 
 ### The sanctioned index
@@ -1322,7 +1322,7 @@ value it guards.
 | --- | --- |
 | [check-theme.mjs](../apps/packages/design/scripts/check-theme.mjs) | Everything in the section above: the generated CSS is a faithful, compilable projection of the authority, and hand-authored CSS owns no values. |
 | [check_theme_contrast.py](../scripts/check_theme_contrast.py) | Text contrast on every content, rail, editor, and control plane; border contrast on white, rail, recessed, and control surfaces; and ordered, distinguishable interaction-state fills. Pre-existing misses are exact ratchets rather than silent exemptions. |
-| [check_appearance_scaling.py](../scripts/check_appearance_scaling.py) | Banned class shapes at every call site (arbitrary radius/z/gap/size, the `w-[…]`/`h-[…]`/`p-[…]`/`m-[…]`/`inset-[…]` geometry families, non-token shadows, low-alpha foreground overlays, retired state classes, fixed text/glyph sizes, numeric durations and inline beziers, unowned `backdrop-filter`, raw hex, unsanctioned long lists), plus the sealed directories a migration slice finished. Its contract is owned by [appearance-scaling.md](codebase/systems/product/settings/appearance-scaling.md). |
+| [check_appearance_scaling.py](../scripts/check_appearance_scaling.py) | Banned class shapes at every call site (arbitrary radius/z/gap/size, the `w-[…]`/`h-[…]`/`p-[…]`/`m-[…]`/`inset-[…]` geometry families, non-token shadows, low-alpha foreground overlays, retired state classes, fixed text/glyph sizes, numeric durations and inline beziers, unowned `backdrop-filter`, raw hex, unsanctioned long lists), plus the sealed directories a migration slice finished. Its contract is owned by [appearance-scaling.md](systems/settings/appearance-scaling.md). |
 | [check_frontend_boundaries.py](../scripts/check_frontend_boundaries.py) | Radix containment inside ProductClient's library tiers, the closed `primitives/**` root/support-directory set, the nested primitives purity/layer law, the lucide icon-source ban (`LUCIDE_ICON_SOURCE` on any import line, `LUCIDE_PACKAGE_DEPENDENCY` on any product manifest entry), and the broader frontend import boundaries. |
 | [check_component_library.py](../scripts/check_component_library.py) | The decidable half of the UI-conformance review: hand-rolled `role="dialog\|menu\|listbox\|tooltip\|button"` outside the shape's owner (check 3), dead index rows with no non-playground call site and incubating notes that outlived their release, index rows that link a missing file, sanctioned components with no JSDoc, tier modules that carry no index row at all, and kit placement (a kit directory imports no feature code and does not exist without index rows). Its allowlist ([component_library_allowlist.json](../scripts/component_library_allowlist.json)) is shrink-only and every entry carries a written justification. |
 | [report_frontend_structure.py](../scripts/report_frontend_structure.py) (`--strict` in CI) | Raw DOM control usage (`RAW_DOM_CONTROL`) outside the primitives layer — the mechanical half of the behavior job's "compose, never rebuild". |

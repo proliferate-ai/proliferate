@@ -91,7 +91,7 @@ export interface ScenarioPlanContext {
 
 /**
  * One child cell a matrix scenario declares at planning time
- * (specs/TESTING/core-release-validation.md; historical section
+ * (specs/engineering/testing/core-release-validation.md; historical section
  * name: "Test-cell contract"). The
  * runner turns each spec into a `PlannedCellV1` with a runner-created cell id;
  * scenario code never invents cell ids.

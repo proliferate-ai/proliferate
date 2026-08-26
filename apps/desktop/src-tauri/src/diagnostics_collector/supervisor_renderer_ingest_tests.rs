@@ -324,7 +324,7 @@ fn renderer_ingest_receipt_is_bound_to_the_ready_collector_boot() {
 fn renderer_ingest_pins_the_exact_current_schema_at_the_native_boundary() {
     // `parse_ingest_batch_value` accepts the whole compatible producer-minor window, so a
     // renderer that claims 1.0 would otherwise pass the native check and contradict
-    // `specs/desktop-native.md`'s "Exact schema-v1.1 Desktop renderer batches". The renderer's
+    // `specs/systems/desktop-host/desktop-native.md`'s "Exact schema-v1.1 Desktop renderer batches". The renderer's
     // own check does not count here: `require_main_window` exists precisely to distrust it.
     let previous_minor = proliferate_diagnostics_protocol::v1::types::SchemaVersionV1 {
         major: CURRENT_SCHEMA_VERSION.major,

@@ -130,7 +130,7 @@ jobs:
       - name: Enforce /login runtime budget
         run: node scripts/measure-login-runtime-budget.mjs
 
-  # Scroll-physics tier (specs/TESTING.md): the real transcript renderer driven
+  # Scroll-physics tier (specs/engineering/testing/standard.md): the real transcript renderer driven
   # by a scripted streaming fixture in real Chromium AND real WebKit. The suite
   # runs workers=1 by config; both browser engines are required because scroll
   # physics differ between Blink and WebKit.

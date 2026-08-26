@@ -1,7 +1,7 @@
 name: Release E2E — Self-hosting (T3-SH / T4-SH)
 
 # The self-hosting battery from the tier-3 release runner
-# (specs/TESTING/self-hosting.md). Two lanes:
+# (specs/engineering/testing/self-hosting.md). Two lanes:
 #
 #   artifact-chain (T4-SH-2): the 2026-07-09 incident gate. Pure HTTP + git
 #     against the published desktop release — no box, no credentials — so it can

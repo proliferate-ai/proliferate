@@ -1,4 +1,4 @@
-// T2-WF-1 (specs/TESTING/scenarios.md): the two-plane workflow trigger seam.
+// T2-WF-1 (specs/engineering/testing/scenarios.md): the two-plane workflow trigger seam.
 // Real Desktop web UI, real server, and real Postgres, exactly like this
 // suite's sibling specs; the AnyHarness runtime process itself is never
 // started here (TIER2_INTENT_SKIP_RUNTIME=1 in CI), so this spec proves the

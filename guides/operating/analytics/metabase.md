@@ -4,7 +4,7 @@ Status: current procedure
 
 Use this procedure to discover whether the durable analytics objects,
 provider-ingestion job, and read-only BI presentation are healthy. The system
-contract is [Metabase And Durable Analytics Views](../../../specs/codebase/systems/engineering/analytics/metabase.md).
+contract is [Metabase And Durable Analytics Views](../../../specs/engineering/observability/metabase.md).
 
 ## Applicability
 

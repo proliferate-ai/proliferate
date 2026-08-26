@@ -1,6 +1,6 @@
 name: Intent Tests
 
-# Tier-2 "mocked intent" suite (specs/TESTING.md §Tier 2):
+# Tier-2 "mocked intent" suite (specs/engineering/testing/standard.md §Tier 2):
 # real server + real desktop web frontend + real Postgres, Playwright driving
 # a browser. Both jobs here are PROVISIONAL and NON-blocking while the harness
 # earns trust — do NOT add them to required checks yet.

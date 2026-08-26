@@ -197,7 +197,7 @@ Group the hits by literal before writing findings. One value repeated across N c
 **Carve-outs.**
 - `[var(--token)]` is token consumption, not an escape hatch.
 - `grid-cols-[minmax(...)]` / `grid-rows-[...]` is grid positioning - explicitly legitimate.
-- Virtualization math, runtime-measured widths/heights/positions, and CSS custom properties passed into a class-driven layout are legitimate per [styling.md § Callsite Styling](../../../specs/frontend/styling.md); inline `style` is the sanctioned mechanism for genuinely dynamic values.
+- Virtualization math, runtime-measured widths/heights/positions, and CSS custom properties passed into a class-driven layout are legitimate per [styling.md § Callsite Styling](../../../specs/areas/frontend.md); inline `style` is the sanctioned mechanism for genuinely dynamic values.
 - `[direction:rtl]` / `[unicode-bidi:plaintext]` is the taught RTL path-truncation idiom.
 - `bg-[var(--git-new-line-bg)]` and siblings are the taught git-diff colour path.
 - A hit that already carries an explanatory comment at the site has satisfied the rule. Say so and move on.
@@ -248,7 +248,7 @@ grep -n '<name>' apps/packages/product-client/src/components/playground/library/
 
 Read the demo, not just its presence. It should exercise the states a consumer will actually hit - empty, long text, loading, disabled, destructive tone - not one static row. A `Demo` wrapper that hard-codes props the real consumer never passes is a finding.
 
-**Also: the lookalike primitive.** The `RAW_DOM_CONTROL` gate you re-ran in Setup catches raw `<button>`/`<input>` in feature code. What no regex catches is a *locally defined* `Button` / `Input` / `Dialog` / `Menu` lookalike under another name - which is the same violation wearing a component's clothes, and it is a tier question, so it belongs here. Read [components.md § Shared UI](../../../specs/frontend/components.md), then check added files for a component that wraps or restyles a raw control.
+**Also: the lookalike primitive.** The `RAW_DOM_CONTROL` gate you re-ran in Setup catches raw `<button>`/`<input>` in feature code. What no regex catches is a *locally defined* `Button` / `Input` / `Dialog` / `Menu` lookalike under another name - which is the same violation wearing a component's clothes, and it is a tier question, so it belongs here. Read [components.md § Shared UI](../../../specs/areas/frontend.md), then check added files for a component that wraps or restyles a raw control.
 
 ```bash
 grep -nE '^\+.*React\.createElement\(\s*["'"'"'](button|input|label|select|textarea)' /tmp/pr$PR.diff
@@ -278,7 +278,7 @@ The script splits candidates two ways:
 
 **Carve-outs (all encoded in the script's sanctioned set, restated here for the judgment call).**
 - **First-instance carve-out.** A first-instance interactive shape with no fitting primitive may carry its own state stack in place, built only from the shared state tokens (`hover:bg-hover` / `bg-selected` / `active:bg-active` and the focus ring). What is banned is re-writing states an existing component already owns.
-- **Hover-reveal idiom.** `group` + `opacity-0 group-hover:opacity-100` (with `transition-opacity duration-200`, group named when nesting is possible) is slot-content layout, not a state stack. Sanctioned by [styling.md § Hover Reveal Pattern](../../../specs/frontend/styling.md).
+- **Hover-reveal idiom.** `group` + `opacity-0 group-hover:opacity-100` (with `transition-opacity duration-200`, group named when nesting is possible) is slot-content layout, not a state stack. Sanctioned by [styling.md § Hover Reveal Pattern](../../../specs/areas/frontend.md).
 - **Colour-promotion idiom.** Never animate opacity between two *visible* values on an always-visible glyph; express muted-to-prominent as a colour change (`text-current/75 transition-colors group-hover:text-current`). A bare semantic foreground token under `hover:` is that idiom and is sanctioned. An alpha-suffixed background overlay is not.
 - **Neutralization.** `hover:bg-transparent` on a library component is turning the primitive's own state off, not assembling a new one.
 - Off-vocabulary stacks predate the rule across most of feature code (the appendix has the census as of its date). Charge the PR only for what it *adds* - the script is diff-scoped for exactly that reason.

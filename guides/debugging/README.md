@@ -4,7 +4,7 @@ Status: authoritative for developer-facing debugging process.
 
 Use this folder for issue triage, support-report correlation, production/local
 debugging, and performance profiling. Product behavior belongs under
-`specs/codebase/**`; this folder owns operator workflow.
+`specs/**`; this folder owns operator workflow.
 
 ## Start From The Symptom
 

@@ -16,7 +16,7 @@ import {
 /**
  * T3-GW-1 — model gateway: the REAL product path (workspace → session → streamed
  * turn) through the gateway, with no workspace-env credential injection.
- * specs/TESTING/flows.md (Self-hosting) / #1106
+ * specs/engineering/testing/flows.md (Self-hosting) / #1106
  *
  * This SUPPLEMENTS T3-SH-3, which asserts only a direct LiteLLM
  * `/v1/chat/completions` call against the standing box. A direct completion
@@ -81,7 +81,7 @@ const GATEWAY_HARNESSES = ["claude", "codex"] as const;
 export const t3Gw1: ScenarioDefinition = {
   id: "T3-GW-1",
   title: "model gateway: real workspace → session → streamed turn, no env injection",
-  registryFlowRef: "specs/TESTING/flows.md#self-hosting",
+  registryFlowRef: "specs/engineering/testing/flows.md#self-hosting",
   lanes: ["local"],
   requiredEnv: ["RELEASE_E2E_GATEWAY_TEST_KEY", "RELEASE_E2E_GATEWAY_BASE_URL"],
   plan: () =>

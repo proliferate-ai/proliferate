@@ -95,7 +95,7 @@ including the rejected options.
          a loud structured error with a named code, a counter, or an
          invariant sweep.
       2. Test. Which tier 1–4 test covers it (per
-         [`specs/TESTING.md`](../../specs/TESTING.md)), naming any contract
+         [`specs/engineering/testing/standard.md`](../../specs/engineering/testing/standard.md)), naming any contract
          fixture.
    2. Regression coverage for existing behavior the feature could break.
    3. New dashboards (cloud only): what they plot and the threshold that

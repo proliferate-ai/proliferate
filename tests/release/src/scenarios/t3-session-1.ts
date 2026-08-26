@@ -22,7 +22,7 @@ export const SESSION_TABS_START_HARNESS = "claude";
 export const t3Session1: MatrixScenarioDefinition = {
   id: "T3-SESSION-1",
   title: "session and tab semantics in one workspace (LOCAL-5)",
-  registryFlowRef: "specs/TESTING/tier-3-scenario-contract.md#local-5",
+  registryFlowRef: "specs/engineering/testing/tier-3-scenario-contract.md#local-5",
   lanes: ["local"],
   requiredEnv: [
     "AGENT_GATEWAY_LITELLM_BASE_URL",

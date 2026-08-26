@@ -1,4 +1,4 @@
-// T2-ORG-2 (specs/TESTING/scenarios.md, flow-registry row
+// T2-ORG-2 (specs/engineering/testing/scenarios.md, flow-registry row
 // "Member visibility boundaries — sees own work, not others' private state").
 //
 // This is the visibility complement to T2-ORG-1 (organization-roles.spec.ts).

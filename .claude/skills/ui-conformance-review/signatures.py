@@ -249,7 +249,7 @@ def trim_unbalanced(util: str) -> str:
 # The sanctioned state vocabulary:
 #   - the three shared interaction fills (bg-hover / bg-selected / bg-active)
 #   - neutralizing a primitive's own fill (bg-transparent / bg-inherit)
-#   - the colour-promotion idiom from specs/frontend/styling.md: a *bare* semantic
+#   - the colour-promotion idiom from specs/areas/styling.md: a *bare* semantic
 #     foreground token, no /alpha and no palette scale. `hover:text-destructive` is
 #     promotion; `hover:bg-destructive/10` is an ad-hoc overlay and stays a finding.
 #   - the 0 -> 100 hover-reveal idiom and the focus ring

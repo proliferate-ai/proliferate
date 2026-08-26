@@ -26,7 +26,7 @@ import {
 
 /**
  * T3-PROV-2 — access: existing user (warm path).
- * specs/TESTING/scenarios.md#T3-PROV-2
+ * specs/engineering/testing/scenarios.md#T3-PROV-2
  *
  * #1041: the `current_product_user` gate lifted 2026-07-09 (PR #1023); `GET
  * /cloud-sandbox` and `POST /cloud-sandbox/ensure` succeed for real. What was
@@ -53,7 +53,7 @@ import {
 export const t3Prov2: ScenarioDefinition = {
   id: "T3-PROV-2",
   title: "access — existing user (warm path)",
-  registryFlowRef: "specs/TESTING/scenarios.md#T3-PROV-2",
+  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-PROV-2",
   lanes: ["sandbox"],
   requiredEnv: ["RELEASE_E2E_SERVER_URL"],
   plan: () => [

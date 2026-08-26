@@ -269,7 +269,7 @@ export const GIT_REVIEW_V2_FILES: GitReviewV2File[] = [
   },
   {
     key: "spec",
-    path: "specs/codebase/features/workspace-files.md",
+    path: "specs/features/workspace-files.md",
     status: "modified",
     additions: 12,
     deletions: 3,

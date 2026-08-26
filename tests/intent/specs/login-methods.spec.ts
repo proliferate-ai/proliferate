@@ -1,4 +1,4 @@
-// T2-AUTH-4 (specs/TESTING/scenarios.md): login-method
+// T2-AUTH-4 (specs/engineering/testing/scenarios.md): login-method
 // availability seam.
 //
 // Maps to the flow-registry row "Google OAuth sign-in (mocked provider

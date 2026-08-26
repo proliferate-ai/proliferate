@@ -112,7 +112,7 @@ def test_meta_enforce_min_desktop_version_garbage_is_permissive(monkeypatch) -> 
     assert _client().get("/meta").json()["minDesktopVersionEnforced"] is False
 
 
-# T1-SH-3 (specs/TESTING/self-hosting.md): the /meta wire contract.
+# T1-SH-3 (specs/engineering/testing/self-hosting.md): the /meta wire contract.
 #
 # `/meta` is the shape the desktop's connect-to-a-server dialog reads to render
 # its trust-confirmation screen ("Server version X"). A silent field rename or

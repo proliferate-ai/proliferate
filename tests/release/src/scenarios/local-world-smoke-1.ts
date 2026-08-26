@@ -93,7 +93,7 @@ export const localWorldSmoke1: ScenarioDefinition = {
   id: LOCAL_WORLD_SMOKE_1_ID,
   kind: "matrix",
   title: "prove one real local workspace turn: exact candidate bytes → gateway turn → correlated spend",
-  registryFlowRef: "specs/TESTING/flows.md#local-world-smoke",
+  registryFlowRef: "specs/engineering/testing/flows.md#local-world-smoke",
   lanes: ["local"],
   requiredEnv: [
     "AGENT_GATEWAY_LITELLM_BASE_URL",

@@ -1,7 +1,7 @@
 # Server grid gaps — the seed ledger.
 #
 # Every record here is a known-unenforced edge of the grid ownership model
-# (specs/codebase/structures/server/guides/grid-ownership-model.md, §Current
+# (specs/structures/server/guides/grid-ownership-model.md, §Current
 # gaps). They are `status = "leaks"`, `mode = "review"`, `enforced_by =
 # "review"`: no checker detects them today, so these records enforce nothing.
 # They exist so the gap has an id, an owner, a rule sentence, and a legal

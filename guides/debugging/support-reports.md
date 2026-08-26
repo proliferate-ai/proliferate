@@ -10,7 +10,7 @@ loop that once projected reports into issues was retired in the 2026-08
 engineering cull.)
 
 Product behavior is defined in
-[`../../specs/codebase/systems/product/support/README.md`](../../specs/codebase/systems/product/support/README.md).
+[`../../specs/systems/support/README.md`](../../specs/systems/support/README.md).
 
 ## Quick access to a report's raw detail
 
@@ -141,7 +141,7 @@ Legacy `SUPPORT_TRACKER_*`, `SUPPORT_GITHUB_*`, and `SUPPORT_LINEAR_*` values ma
 still be present. They do not activate a tracker in the current server.
 
 The complete inventory lives in
-[`../../specs/developing/reference/env-vars.yaml`](../../specs/developing/reference/env-vars.yaml); deployment ownership
+[`../../specs/areas/env-vars.yaml`](../../specs/areas/env-vars.yaml); deployment ownership
 is in [`../deploying/hosted.md`](../deploying/hosted.md).
 
 ## Find the report

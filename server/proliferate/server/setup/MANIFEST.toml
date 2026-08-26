@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "setup"
-spec = "specs/codebase/systems/product/onboarding/README.md"
+spec = "specs/systems/onboarding/README.md"
 owns = "First-run claim flow for single-org mode: the server-rendered /setup page and its lifecycle."
 
 public_surface = [

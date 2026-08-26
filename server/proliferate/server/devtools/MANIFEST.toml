@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "devtools"
-spec = "specs/server/README.md"
+spec = "specs/areas/server.md"
 owns = "Local development helper routes; never mounted for hosted deployments."
 
 public_surface = [

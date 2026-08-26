@@ -36,7 +36,7 @@ import type { PlannedCellV1 } from "../runner/result.js";
 
 /**
  * T3-INT-1 — real integration through the gateway: every harness, both lanes.
- * specs/TESTING/scenarios.md#T3-INT-1
+ * specs/engineering/testing/scenarios.md#T3-INT-1
  *
  * The contract: connect ONE real api_key-kind integration with a real key,
  * then for each cataloged harness the agent session calls a tool through the
@@ -86,7 +86,7 @@ import type { PlannedCellV1 } from "../runner/result.js";
 export const t3Int1: MatrixScenarioDefinition = {
   id: "T3-INT-1",
   title: "real integration through the gateway — every harness, both lanes",
-  registryFlowRef: "specs/TESTING/scenarios.md#T3-INT-1",
+  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-INT-1",
   lanes: ["local", "sandbox"],
   kind: "matrix",
   // The legacy diagnostic path's durable-user/server-URL AND its static

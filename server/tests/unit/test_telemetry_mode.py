@@ -56,7 +56,7 @@ def test_invalid_mode_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
-# T1-SH-1 (specs/TESTING/self-hosting.md): single_org_mode
+# T1-SH-1 (specs/engineering/testing/self-hosting.md): single_org_mode
 # derivation.
 #
 # `single_org_mode` is the invariant every self-hosted deploy leans on (one

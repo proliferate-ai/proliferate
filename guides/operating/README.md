@@ -4,7 +4,7 @@ Status: authoritative index for routine operator procedures.
 
 Use this area when the system already exists and an authorized operator needs
 to inspect or operate it. Architecture, product behavior, and code ownership
-belong under [`../../specs/codebase/`](../../specs/codebase/); incident investigation
+belong under [`../../specs/`](../../specs/); incident investigation
 starts under [`../debugging/`](../debugging/); deployment and promotion belong
 under [`../deploying/`](../deploying/).
 

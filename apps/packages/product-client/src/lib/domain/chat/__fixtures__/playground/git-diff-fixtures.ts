@@ -138,7 +138,7 @@ const PLAYGROUND_END_TURN_FILE_CHANGES = [
   },
   {
     itemId: "tool-end-diff-document-resource",
-    path: "specs/codebase/systems/product/chat/transcript.md",
+    path: "specs/systems/chat/transcript.md",
     additions: 5,
     deletions: 2,
     patch: PLAYGROUND_PATCH_MESSAGE_LIST,

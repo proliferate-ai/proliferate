@@ -96,7 +96,7 @@ function switchCell(): PlannedCellV1 {
   return {
     cell_id: SWITCH_CELL_ID,
     scenario_id: SELFHOST_ISOLATION_1_ID,
-    registry_flow_ref: "specs/TESTING/tier-3-scenario-contract.md#sh-switch-isolation",
+    registry_flow_ref: "specs/engineering/testing/tier-3-scenario-contract.md#sh-switch-isolation",
     runtime_lane: "selfhost",
     dimensions: { cell: SH_SWITCH_ISOLATION, harness: "claude" },
     required_env: [],

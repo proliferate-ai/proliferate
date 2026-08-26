@@ -8,9 +8,9 @@ cloud bootstrap writes worker and supervisor config directly inside the
 sandbox. Every managed-cloud launch is unconditionally Supervisor-owned: it
 launches Supervisor detached, and Supervisor starts AnyHarness and Worker
 itself. See
-[`specs/FEATURE_DOCS/MANAGED_RUNTIME.md`](../specs/FEATURE_DOCS/MANAGED_RUNTIME.md#launch-topology-by-surface)
+[`specs/systems/harnesses/managed-runtime.md`](../specs/systems/harnesses/managed-runtime.md#launch-topology-by-surface)
 for the current launch flow and
-[`specs/supervisor.md`](../specs/supervisor.md)
+[`specs/areas/anyharness.md`](../specs/areas/anyharness.md)
 for what Supervisor owns as the parent process.
 
 ## `proliferate-git-credential-helper`
@@ -19,7 +19,7 @@ A POSIX sh git credential helper for sandboxes. The managed-cloud template
 build copies it to `~/.proliferate/bin/proliferate-git-credential-helper`
 inside the sandbox image, and materialization configures git to call it so
 clones and fetches read the current GitHub lease instead of a baked-in token.
-[`specs/FEATURE_DOCS/SANDBOX/github-auth.md`](../specs/FEATURE_DOCS/SANDBOX/github-auth.md)
+[`specs/systems/github/sandbox-github-auth.md`](../specs/systems/github/sandbox-github-auth.md)
 owns the credential flow;
-[`specs/FEATURE_DOCS/SANDBOX/content.md`](../specs/FEATURE_DOCS/SANDBOX/content.md)
+[`specs/systems/environments/README.md`](../specs/systems/environments/README.md)
 describes the sandbox content layout it lands in.

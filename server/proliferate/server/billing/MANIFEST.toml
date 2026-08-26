@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "billing"
-spec = "specs/codebase/systems/product/billing/README.md"
+spec = "specs/systems/billing/README.md"
 owns = "Plans, credits, usage segments, and Stripe integration for organization billing."
 
 public_surface = [

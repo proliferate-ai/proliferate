@@ -1,4 +1,4 @@
-// Self-hosting tier-2 scenarios (specs/TESTING/self-hosting.md).
+// Self-hosting tier-2 scenarios (specs/engineering/testing/self-hosting.md).
 //
 // T2-SH-2: /setup claim UI — extends T2-AUTH-1 with the self-hosted specifics.
 //   The claimed user is OWNER of THE single instance organization, and a second

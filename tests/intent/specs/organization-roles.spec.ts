@@ -1,4 +1,4 @@
-// T2-ORG-1 (specs/TESTING/scenarios.md): organization roles and
+// T2-ORG-1 (specs/engineering/testing/scenarios.md): organization roles and
 // gating.
 //
 // Preconditions per the scenario: an org with one owner, one admin, one

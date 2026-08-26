@@ -13,7 +13,7 @@ import type { PlannedCellV1 } from "../runner/result.js";
 
 /**
  * T3-WF-1 — two-node reference workflow run: research then human review.
- * specs/TESTING/scenarios.md#T3-WF-1
+ * specs/engineering/testing/scenarios.md#T3-WF-1
  *
  * ── Frozen contract, not yet backed by a runtime ────────────────────────────
  * Every wire shape below is mirrored STRUCTURALLY (not imported) from the
@@ -70,7 +70,7 @@ const T3_WF_1_HARNESS = "claude";
 export const t3Wf1: MatrixScenarioDefinition = {
   id: "T3-WF-1",
   title: "two-node reference workflow run: research then human review",
-  registryFlowRef: "specs/TESTING/scenarios.md#T3-WF-1",
+  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-WF-1",
   lanes: ["local"],
   requiredEnv: [],
   kind: "matrix",

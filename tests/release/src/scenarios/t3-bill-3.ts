@@ -17,7 +17,7 @@ import {
 /**
  * T3-BILL-3 — the funded billing lifecycle against the real deployment, and
  * the proof that staging now runs Stripe in TEST mode.
- * specs/TESTING/scenarios.md#T3-BILL-3
+ * specs/engineering/testing/scenarios.md#T3-BILL-3
  *
  * Context (2026-07-09): staging was swapped from a `sk_live_` Stripe key to the
  * account's test mode — the exact blocker finding #4 recorded (a `cloud-checkout`
@@ -62,7 +62,7 @@ import {
 export const t3Bill3: ScenarioDefinition = {
   id: "T3-BILL-3",
   title: "funded billing lifecycle + test-mode deployment, live",
-  registryFlowRef: "specs/TESTING/scenarios.md#T3-BILL-3",
+  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-BILL-3",
   lanes: ["sandbox"],
   requiredEnv: ["RELEASE_E2E_SERVER_URL"],
   plan: () => [

@@ -7,7 +7,7 @@ import { defineConfig, devices } from "@playwright/test";
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url));
 const fixtureDir = fileURLToPath(new URL(".", import.meta.url));
 
-// Scroll-physics tier (specs/TESTING.md, Tier-2-style merge-gating suite).
+// Scroll-physics tier (specs/engineering/testing/standard.md, Tier-2-style merge-gating suite).
 // Real transcript renderer in real Chromium AND real WebKit, driving a scripted
 // streaming fixture through the REAL @anyharness/sdk reducer. Everything
 // external (server, sandbox, LLM, network) is absent; the fixture is fully

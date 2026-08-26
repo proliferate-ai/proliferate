@@ -7,7 +7,7 @@ import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/tran
 // kept (URLs dropped), and fenced/inline code content is preserved. It does
 // not need to match the painted DOM exactly — the paint layer highlights
 // best-effort and the active-match jump clamps to whatever marks exist (see
-// specs/codebase/features/content-search.md).
+// specs/systems/workspace-surface/content-search.md).
 
 const FENCE_LINE = /^\s*(`{3,}|~{3,}).*$/;
 
@@ -52,7 +52,7 @@ function stripBlockPrefix(line: string): string {
  * (collapsed) output bodies, reasoning, and plan cards are intentionally out of
  * scope — they are not part of the conversation prose the paint layer
  * highlights. Returns one string per prose item so match counting mirrors the
- * per-message paint. See specs/codebase/features/content-search.md.
+ * per-message paint. See specs/systems/workspace-surface/content-search.md.
  */
 export function extractTranscriptRowProseSegments(
   row: TranscriptVirtualRow,

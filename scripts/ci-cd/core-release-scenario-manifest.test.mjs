@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const testingDir = path.join(repoRoot, "specs/TESTING");
+const testingDir = path.join(repoRoot, "specs/engineering/testing");
 const contractPath = path.join(testingDir, "core-release-validation.md");
 const manifestPath = path.join(testingDir, "core-release-scenario-manifest.json");
 const tier3ContractPath = path.join(testingDir, "tier-3-scenario-contract.md");

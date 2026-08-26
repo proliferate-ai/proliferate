@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Portable CandidateBuildMapV1 assembler
-// (specs/TESTING/core-release-validation.md; historical section
+// (specs/engineering/testing/core-release-validation.md; historical section
 // name: "Candidate build map").
 // Given one or more built artifacts, computes their SHA-256 and writes the
 // local_file-only candidate build map the qualification runner consumes.

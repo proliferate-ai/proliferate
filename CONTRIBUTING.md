@@ -9,11 +9,11 @@ area doc for the part of the repo you are touching.
 
 Examples:
 
-- Frontend changes: [specs/frontend/README.md](specs/frontend/README.md)
-- Desktop native changes: [specs/desktop-native.md](specs/desktop-native.md)
-- Server changes: [specs/server/standards.md](specs/server/standards.md)
-- AnyHarness runtime changes: [specs/anyharness/README.md](specs/anyharness/README.md)
-- SDK changes: [specs/sdk.md](specs/sdk.md)
+- Frontend changes: [specs/areas/frontend.md](specs/areas/frontend.md)
+- Desktop native changes: [specs/systems/desktop-host/desktop-native.md](specs/systems/desktop-host/desktop-native.md)
+- Server changes: [specs/areas/server.md](specs/areas/server.md)
+- AnyHarness runtime changes: [specs/areas/anyharness.md](specs/areas/anyharness.md)
+- SDK changes: [specs/areas/frontend.md](specs/areas/frontend.md)
 - CI/CD or release changes: [guides/deploying/README.md](./guides/deploying/README.md)
 
 ## Local Development

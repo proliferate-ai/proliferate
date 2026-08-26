@@ -6,7 +6,7 @@
 //! between the two target binaries: it owns the request/result shapes, their
 //! path-safety validation, the atomic file IO, and the filename conventions.
 //!
-//! Ownership boundary (see `specs/supervisor.md`):
+//! Ownership boundary (see `specs/areas/anyharness.md`):
 //! the Supervisor must never depend on Worker internals, and the Worker must
 //! not gain any Supervisor internals. A small shared protocol crate — depended
 //! on by *both* — is the clean way to make the two sides agree on one wire

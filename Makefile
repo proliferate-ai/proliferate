@@ -571,7 +571,7 @@ db-ah:
 # Build a TEST-FLAVOR desktop app whose auto-updater points at a local manifest
 # server (UPDATER_URL) and trusts a throwaway key. For the tier-4 upgrade test.
 # The shipped tauri.conf.json is untouched -- a gitignored overlay is merged via
-# `tauri build --config`. See specs/TESTING/desktop-update-testing.md.
+# `tauri build --config`. See specs/engineering/testing/desktop-update-testing.md.
 #   make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json
 desktop-test-build:
 	@test -n "$(UPDATER_URL)" || { echo "UPDATER_URL is required. Example: make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json"; exit 1; }
@@ -815,7 +815,7 @@ publish-cloud-template-env-local:
 		fi
 
 # Tier-3 live end-to-end / tier-4 upgrade-path runner
-# (specs/TESTING/release-worlds-and-fixtures.md "Local And GitHub Actions
+# (specs/engineering/testing/release-worlds-and-fixtures.md "Local And GitHub Actions
 # Execution"). One runner
 # CLI with lane flags; this target is a thin wrapper so CI and laptops call it
 # identically. LANE=local|staging DESKTOP=web|native AGENTS=<list|all>
@@ -833,7 +833,7 @@ release-e2e:
 		$(if $(CANDIDATE_BUILD_MAP),--candidate-build-map $(CANDIDATE_BUILD_MAP),)
 
 # Assembles a CandidateBuildMapV1 for an already-built binary
-# (specs/TESTING/core-release-validation.md). BINARY defaults to the
+# (specs/engineering/testing/core-release-validation.md). BINARY defaults to the
 # release AnyHarness build; OUTPUT to tests/release/.output/candidate-build.json.
 CANDIDATE_MAP_BINARY ?= target/release/anyharness
 CANDIDATE_MAP_OUTPUT ?= tests/release/.output/candidate-build.json
@@ -843,7 +843,7 @@ qualification-candidate-build-map:
 		--output $(CANDIDATE_MAP_OUTPUT)
 
 # The real build→map→validate→materialize→launch→health→evidence proof
-# (specs/TESTING/core-release-validation.md; historical section
+# (specs/engineering/testing/core-release-validation.md; historical section
 # name: "Real handoff smoke").
 # Builds a release-mode AnyHarness stamped with the repository VERSION and the
 # current HEAD SHA, assembles the map, launches the exact bytes against an
@@ -855,7 +855,7 @@ qualification-candidate-build-map:
 # at target/release/ while cargo wrote somewhere else.
 # Validate and materialize a committed retained-release receipt — the exact
 # immutable production N-1 artifact set Tier 4 update proofs start from
-# (specs/TESTING/tier-4-scenario-contract.md "Artifact Identity").
+# (specs/engineering/testing/tier-4-scenario-contract.md "Artifact Identity").
 # Shape + policy validation run before any download; every byte is verified
 # against the receipt on every use (a cache hit is re-hashed, never trusted).
 # Read-only toward providers: LIVE=1 adds an E2B metadata lookup proving the
@@ -1024,7 +1024,7 @@ qualification-tier2:
 # exact local-world candidates as `qualification-local-workspace`
 # (`build-local-qualification-candidates.mjs`, unmodified), handed to the same
 # qualification runner, but driving the full LOCAL-1..7 functional cell set
-# (specs/TESTING/tier-3-scenario-contract.md §"Local cases")
+# (specs/engineering/testing/tier-3-scenario-contract.md §"Local cases")
 # instead of the single LOCAL-WORLD-SMOKE-1 infrastructure proof. This is the
 # ONE entrypoint; the release-e2e.yml manual job invokes this same target —
 # same build step, same runner invocation.

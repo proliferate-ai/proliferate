@@ -1,4 +1,4 @@
-// T2-WS-2 (specs/TESTING/scenarios.md): local + worktree create
+// T2-WS-2 (specs/engineering/testing/scenarios.md): local + worktree create
 // (desktop-web limits apply).
 //
 // Scenario text: "Local/worktree creation drive the local AnyHarness runtime

@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "organizations"
-spec = "specs/codebase/systems/product/organizations/README.md"
+spec = "specs/systems/identity/organizations.md"
 owns = "Organizations, membership, invitations, and organization-level policy."
 
 public_surface = [

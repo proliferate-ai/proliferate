@@ -207,7 +207,7 @@ def test_capabilities_cloud_workspaces_matches_provisioning_predicate_in_debug()
 # The two operator capabilities must stay independent: repository authority
 # (GitHub App completeness) and managed-Cloud execution (E2B + authority).
 # Matrix over disabled/partial/ready on each axis, per the frozen PR 1
-# contract (specs/codebase/platforms/product/deployment-capabilities.md).
+# contract (specs/product/deployment-capabilities.md).
 
 
 def test_capabilities_app_ready_e2b_absent_is_repo_access_without_cloud() -> None:

@@ -81,7 +81,7 @@ export class MissingEnvVarsError extends Error {
     );
     super(
       `Missing ${missing.length} required environment variable(s):\n${lines.join("\n")}\n` +
-        "Set these before running without --dry-run. See specs/developing/reference/env-vars.yaml " +
+        "Set these before running without --dry-run. See specs/areas/env-vars.yaml " +
         "and the PR description for tests/release for the full manifest.",
     );
     this.name = "MissingEnvVarsError";

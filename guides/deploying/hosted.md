@@ -2,7 +2,7 @@
 
 This procedure covers hosted staging and production. For release trains and
 hotfix coordinators, use [Releases](releases.md). The durable topology is in the
-[Delivery system](../../specs/codebase/systems/engineering/delivery/README.md).
+[Delivery system](../../specs/engineering/shipping/release-delivery.md).
 
 ## Before Dispatch
 
@@ -127,7 +127,7 @@ For every selected lane:
    verification remains pending.
 
 Release qualification and evidence requirements belong to
-[Testing](../../specs/TESTING.md).
+[Testing](../../specs/engineering/testing/standard.md).
 
 ## Failure Recovery
 

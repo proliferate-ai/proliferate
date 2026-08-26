@@ -5,7 +5,7 @@
 //! signature verification. So we own the transfer: stream to a staged file with
 //! resume, enforce a single live download via an abort token, and verify sha256
 //! + minisign against the baked pubkey before install. See Update Flow ADR
-//! (FR-2) and `specs/desktop-native.md`.
+//! (FR-2) and `specs/systems/desktop-host/desktop-native.md`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

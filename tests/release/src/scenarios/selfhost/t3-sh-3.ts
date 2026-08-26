@@ -6,7 +6,7 @@ import type { ScenarioDefinition } from "../types.js";
 /**
  * T3-SH-3 — model gateway add-on: the agent's model backend works on a
  * self-hosted box.
- * specs/TESTING/self-hosting.md#T3-SH-3
+ * specs/engineering/testing/self-hosting.md#T3-SH-3
  *
  * What "the agent works" reduces to on a self-hosted box: the LiteLLM gateway
  * add-on (`--profile agent-gateway`) is serving a real model to agent traffic.
@@ -52,7 +52,7 @@ const DEFAULT_MODEL = "claude-haiku-4-5";
 export const t3Sh3: ScenarioDefinition = {
   id: "T3-SH-3",
   title: "model gateway add-on: --profile agent-gateway + real completion",
-  registryFlowRef: "specs/TESTING/self-hosting.md#T3-SH-3",
+  registryFlowRef: "specs/engineering/testing/self-hosting.md#T3-SH-3",
   lanes: ["local"],
   requiredEnv: ["RELEASE_E2E_SELFHOST_URL", "RELEASE_E2E_GATEWAY_TEST_KEY"],
   plan: () => [

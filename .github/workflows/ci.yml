@@ -466,7 +466,7 @@ jobs:
       # Focused Tier-1 gate for the workflow authoring surface: builder save
       # gating (title + unresolved-reference blocks), schema-version refusal,
       # and main-page row lifecycle including confirmed delete
-      # (specs/FEATURE_DOCS/WORKFLOWS.md assigns UI conflict behavior to
+      # (specs/systems/automations/deep-dive.md assigns UI conflict behavior to
       # Tier 1). Keep this exact-file signal in addition to the package suite
       # so regressions remain immediately named.
       - name: Test workflow authoring surface
@@ -572,7 +572,7 @@ jobs:
   #       third-party.
   #
   # Any change to the set of required checks belongs in this comment and in
-  # specs/codebase/systems/engineering/delivery/README.md, in the same commit.
+  # specs/engineering/shipping/release-delivery.md, in the same commit.
   # ---------------------------------------------------------------------------
 
   # ---------------------------------------------------------------------------

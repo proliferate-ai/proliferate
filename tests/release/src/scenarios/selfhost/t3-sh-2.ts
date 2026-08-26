@@ -3,7 +3,7 @@ import { ScenarioBlockedError } from "../types.js";
 
 /**
  * T3-SH-2 — real (Tauri) desktop against a self-hosted box.
- * specs/TESTING/self-hosting.md#T3-SH-2 (§4)
+ * specs/engineering/testing/self-hosting.md#T3-SH-2 (§4)
  *
  * The only lane that proves the native connect slice end-to-end: a real Tauri
  * desktop build connects to alpha -> password login -> reset -> connects to
@@ -24,7 +24,7 @@ import { ScenarioBlockedError } from "../types.js";
 export const t3Sh2: ScenarioDefinition = {
   id: "T3-SH-2",
   title: "real Tauri desktop connect to a self-hosted box (native slice)",
-  registryFlowRef: "specs/TESTING/self-hosting.md#T3-SH-2",
+  registryFlowRef: "specs/engineering/testing/self-hosting.md#T3-SH-2",
   lanes: ["local"],
   requiredEnv: [],
   plan: () => [

@@ -1,6 +1,6 @@
 /**
  * T2-BILL — the authoritative required billing group (PR 4, BRIEF §6;
- * `specs/TESTING/core-release-validation.md` lines 342-356).
+ * `specs/engineering/testing/core-release-validation.md` lines 342-356).
  *
  * One matrix scenario (lane `local`, no new lane) whose child cells are the
  * authoritative manifest ids T2-BILL-1..15, run against ONE booted
@@ -1082,7 +1082,7 @@ const cases: Record<string, Tier2CellHandler> = {
 export const t2Bill = makeTier2MatrixScenario({
   id: T2_BILL_ID,
   title: "Tier-2 required billing group: pricing, seats, ledgers, imports, holds, Stripe events, top-up, exhaustion, recovery",
-  registryFlowRef: "specs/TESTING/core-release-validation.md#t2-bill",
+  registryFlowRef: "specs/engineering/testing/core-release-validation.md#t2-bill",
   // Stripe is resolved at boot (env or `stripe config`); an unresolved key
   // returns every cell BLOCKED, so no env-manifest gate is required here.
   requiredEnv: [],

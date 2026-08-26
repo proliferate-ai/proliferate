@@ -46,7 +46,7 @@ pub enum ConditionalUnloadOutcome {
 }
 
 /// Why a conditional unload was refused. Bounded classes only; these are log
-/// values (`specs/OBSERVABILITY.md`).
+/// values (`specs/engineering/observability/standard.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnloadRetainedReason {
     /// A turn is running: the command was read by the active-turn dispatch,

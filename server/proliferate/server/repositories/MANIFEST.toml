@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "repositories"
-spec = "specs/server/README.md"
+spec = "specs/areas/server.md"
 owns = "Repo configs and their environments (local and cloud kinds): the repo-settings persistence the desktop client edits."
 
 public_surface = [

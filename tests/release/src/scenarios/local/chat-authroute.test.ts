@@ -102,7 +102,7 @@ function cell(scenarioId: string, dimensions: Record<string, string>): PlannedCe
   return {
     cell_id: `${scenarioId}/local/${dimPart}`,
     scenario_id: scenarioId,
-    registry_flow_ref: "specs/TESTING/tier-3-scenario-contract.md#local",
+    registry_flow_ref: "specs/engineering/testing/tier-3-scenario-contract.md#local",
     runtime_lane: "local",
     dimensions,
     required_env: [],

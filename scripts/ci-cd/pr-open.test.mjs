@@ -8,7 +8,7 @@ const title = "docs(specs): engineering system spec — building loop";
 test("derives every required area from the diff and prefixes the release label", () => {
   const { labels, errors } = resolveLabels({
     changedFiles: [
-      "specs/codebase/systems/engineering/building-loop/README.md",
+      "specs/engineering/shipping/README.md",
       "scripts/ci-cd/pr-open.mjs",
     ],
     release: "release:maintenance",

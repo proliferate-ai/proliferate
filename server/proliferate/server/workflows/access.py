@@ -2,7 +2,7 @@
 
 Route handlers depend on :func:`workflow_definition_for_user` to receive a
 pre-authorized definition snapshot; services never re-run route-resource
-authorization (specs/server/auth.md).
+authorization (specs/systems/identity/auth-surface.md).
 """
 
 from __future__ import annotations
