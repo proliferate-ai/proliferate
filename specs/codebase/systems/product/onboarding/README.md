@@ -29,7 +29,7 @@ Out of scope:
 - billing authorization and Stripe subscription/refill behavior, owned by
   [specs/FEATURE_DOCS/BILLING.md](../../../../FEATURE_DOCS/BILLING.md)
 - managed workspace creation, owned by
-  [../../../platforms/product/workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md)
+  `../../../platforms/product/workspace-provisioning.md` (deleted, cull part 2)
 
 ## Read Order
 
@@ -42,7 +42,7 @@ Out of scope:
    managed credits, virtual keys, and gateway QA.
 5. [specs/FEATURE_DOCS/BILLING.md](../../../../FEATURE_DOCS/BILLING.md) for credit budgets,
    free allocations, Stripe checkout, refill, and billing state.
-6. [../../../platforms/product/workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md)
+6. `../../../platforms/product/workspace-provisioning.md` (deleted, cull part 2)
    and [Pending Workspace Shell](../workspaces/pending-shell.md) for first
    workspace creation and pending-shell handoff.
 
@@ -107,7 +107,7 @@ The normal onboarding path is:
   primitives. UI copy must not promise credits that the server cannot grant.
 - BYOK and managed-credit setup are cloud run readiness, not account identity.
 - First workspace creation must go through
-  [../../../platforms/product/workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md);
+  `../../../platforms/product/workspace-provisioning.md` (deleted, cull part 2);
   do not hand-roll first-workspace creation in an onboarding component.
 - Billing, provider, and agent-auth blockers should preserve the user's typed
   prompt or intent when practical, then resume through the normal pending-shell

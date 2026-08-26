@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from proliferate.db.store.integrations.action_approvals import ActionApprovalRecord
 from proliferate.server.api_errors import CloudApiError
 
 
@@ -31,45 +30,6 @@ class IntegrationToolPolicyError(CloudApiError):
             "tool": self.tool,
             "approval": self.approval,
         }
-
-
-class IntegrationToolApprovalRequired(IntegrationToolPolicyError):
-    def __init__(
-        self,
-        *,
-        provider: str,
-        tool: str,
-        approval: ActionApprovalRecord,
-    ) -> None:
-        super().__init__(
-            "integration_tool_approval_required",
-            "This external action requires a durable product approval before execution.",
-            provider=provider,
-            tool=tool,
-            approval={
-                "required": True,
-                "id": str(approval.id),
-                "status": approval.status,
-                "expiresAt": approval.expires_at.isoformat(),
-                "payloadDigest": approval.payload_digest,
-                "actionSummary": approval.safe_summary,
-                "integrationAccountId": str(approval.integration_account_id),
-                "integrationAccountGrantVersion": approval.integration_account_grant_version,
-                # Deprecated N-1 client alias during the additive rollout.
-                "integrationAccountAuthVersion": approval.integration_account_grant_version,
-                "organizationId": (
-                    str(approval.organization_id) if approval.organization_id is not None else None
-                ),
-                "executionSessionId": str(approval.gateway_session_id),
-                "workspaceId": approval.workspace_id,
-                "anyharnessSessionId": approval.anyharness_session_id,
-                "accountLabel": approval.safe_account_label,
-                "sourceLabel": approval.safe_source_label,
-                "target": approval.safe_target,
-                "contentPreview": approval.safe_content_preview,
-                "contentCharacterCount": approval.safe_content_character_count,
-            },
-        )
 
 
 class IntegrationGatewaySessionRequired(IntegrationToolPolicyError):

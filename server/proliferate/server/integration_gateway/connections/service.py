@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings as app_settings
 from proliferate.db.store import organizations as organization_store
-from proliferate.db.store.integrations import action_approvals as action_approvals_store
 from proliferate.db.store.integrations.accounts import (
     IntegrationAccountRecord,
     delete_account,
@@ -512,22 +511,6 @@ async def remove_integration_account(
         definition_id=account.definition_id,
         failure_code="disconnected",
     )
-    revoked_approvals = await action_approvals_store.revoke_active_for_account(
-        db,
-        integration_account_id=account_id,
-    )
-    for transition in revoked_approvals:
-        await action_approvals_store.record_event(
-            db,
-            approval_id=transition.approval.id,
-            event_type="revoked",
-            from_status=transition.from_status,
-            to_status="revoked",
-            actor_type="user",
-            actor_user_id=user_id,
-            actor_runtime_worker_id=None,
-            safe_action_summary=transition.approval.safe_summary,
-        )
     await stage_revocation_for_disconnect(
         db,
         account=account,

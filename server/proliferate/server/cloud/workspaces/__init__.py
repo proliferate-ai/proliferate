@@ -1,1 +1,0 @@
-"""Cloud workspaces feature package."""

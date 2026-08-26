@@ -63,11 +63,9 @@ class CloudRuntimeWorker(Base):
         nullable=True,
     )
     runtime_kind: Mapped[str] = mapped_column(String(32))
-    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
-    )
+    # Bare id: the cloud_sandbox table (and this column's FK) left with the
+    # sandbox stack; rows for that runtime kind no longer exist.
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
     desktop_install_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="online")
@@ -135,11 +133,9 @@ class CloudRuntimeWorkerEnrollment(Base):
         nullable=True,
     )
     runtime_kind: Mapped[str] = mapped_column(String(32))
-    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
-    )
+    # Bare id: the cloud_sandbox table (and this column's FK) left with the
+    # sandbox stack; rows for that runtime kind no longer exist.
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
     desktop_install_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="pending")

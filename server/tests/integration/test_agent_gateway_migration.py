@@ -51,7 +51,7 @@ from proliferate.server.agent_auth.budget import get_gateway_enrollment_for_user
 from proliferate.server.agent_auth.enrollment import ensure_org_enrollment
 from proliferate.server.agent_auth.free_credits import ensure_signup_free_credit_grant
 from proliferate.server.agent_auth.migration import migrate_legacy_enrollments
-from proliferate.server.cloud.materialization.materialize.agent_auth import (
+from proliferate.server.agent_auth.state_render import (
     build_agent_auth_state,
 )
 from proliferate.lib.infra.time.wall_clock import utcnow

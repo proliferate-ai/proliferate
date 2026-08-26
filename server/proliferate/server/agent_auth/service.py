@@ -25,7 +25,6 @@ from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_TYPED_KINDS,
     AGENT_AUTH_POLICY_ROUTES,
     AGENT_AUTH_ROUTE_NATIVE,
-    AGENT_AUTH_SURFACE_CLOUD,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import (
@@ -46,6 +45,9 @@ from proliferate.server.agent_auth.selection_rules import (
     SelectionRuleError,
     validate_auth_selection_set,
 )
+from proliferate.server.agent_auth.state_render import (
+    build_agent_auth_state,
+)
 from proliferate.server.api_errors import CloudApiError
 from proliferate.server.billing.domain.plans import (
     active_unlimited_cloud_entitlement,
@@ -54,10 +56,6 @@ from proliferate.server.billing.domain.plans import (
 from proliferate.server.billing.snapshots import billing_plan_rule_config
 from proliferate.server.billing.subjects import ensure_organization_billing_subject_state
 from proliferate.server.catalogs.service import supported_provider_config_kinds
-from proliferate.server.cloud.materialization import service as materialization_service
-from proliferate.server.cloud.materialization.materialize.agent_auth import (
-    build_agent_auth_state,
-)
 from proliferate.server.event_logging import log_cloud_event
 
 _ENROLLMENT_STATUS_NONE = "none"
@@ -352,16 +350,6 @@ async def put_auth_selections(
         source_count=len(rows),
         enabled_count=sum(1 for row in rows if row.enabled),
     )
-    if surface == AGENT_AUTH_SURFACE_CLOUD:
-        # Ensure-on-switch (agent-auth.md "A cloud switch ensures the
-        # sandbox"): the scheduled task provisions-or-wakes the user's
-        # existing sandbox through the canonical connect path so the new
-        # document lands now, not at the next unrelated wake. Schedule only —
-        # the write never blocks on sandbox boot (the ack pipeline observes
-        # arrival), and the never-provisioned case still falls to bootstrap.
-        await materialization_service.schedule_materialize_agent_auth(
-            db, user_id=user_id, ensure_sandbox=True
-        )
     return rows
 
 

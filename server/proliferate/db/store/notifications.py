@@ -16,7 +16,6 @@ from proliferate.constants.organizations import (
 )
 from proliferate.db.models.auth import OAuthAccount, User
 from proliferate.db.models.billing import BillingSubject
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 
 
@@ -54,7 +53,7 @@ async def get_billing_slack_notification_context(
         user = await db.get(User, subject.user_id)
 
     github = await _github_for_user(db, user.id) if user is not None else None
-    workspace_count = await _count_active_cloud_workspaces(db, subject)
+    workspace_count = 0
     name = _display_name(user, organization)
 
     return BillingSlackNotificationContext(
@@ -118,20 +117,6 @@ async def _github_for_user(db: AsyncSession, user_id: UUID) -> str | None:
         )
     ).scalar_one_or_none()
     return account.account_id if account is not None else None
-
-
-async def _count_active_cloud_workspaces(db: AsyncSession, subject: BillingSubject) -> int:
-    # CloudWorkspace lost billing_subject_id in the #803/#809 cutover; resolve
-    # the subject to its owning user, matching the billing store pattern.
-    if subject.user_id is None:
-        return 0
-    count = await db.scalar(
-        select(func.count(CloudWorkspace.id)).where(
-            CloudWorkspace.owner_user_id == subject.user_id,
-            CloudWorkspace.archived_at.is_(None),
-        )
-    )
-    return int(count or 0)
 
 
 async def _count_active_organization_users(db: AsyncSession, organization_id: UUID) -> int:

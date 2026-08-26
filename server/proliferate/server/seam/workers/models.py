@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 # A desired version flows into CDN redirect paths (runtime/stable/<pin>/...) and
@@ -97,28 +97,6 @@ class WorkerHeartbeatResponse(_CamelModel):
     # revoked Worker gets ``401 cloud_worker_unauthorized`` and no response body
     # at all, never a 200 whose verdict happens to be ``false``.
     launch_options_upload_allowed: bool
-
-
-class SetSandboxDesiredVersionsRequest(_CamelModel):
-    """Admin setter body for a sandbox's target-scoped desired versions.
-
-    ``None`` (the default, and the JSON explicit ``null``) clears the
-    override so the target inherits the global pin again.
-    """
-
-    desired_anyharness_version: str | None = Field(default=None, max_length=64)
-    desired_worker_version: str | None = Field(default=None, max_length=64)
-
-    @field_validator("desired_anyharness_version", "desired_worker_version")
-    @classmethod
-    def _safe_identifier(cls, value: str | None) -> str | None:
-        return _validate_version_identifier(value)
-
-
-class SetSandboxDesiredVersionsResponse(_CamelModel):
-    cloud_sandbox_id: str
-    desired_anyharness_version: str | None
-    desired_worker_version: str | None
 
 
 class DesktopWorkerEnrollmentRequest(_CamelModel):

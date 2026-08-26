@@ -1,11 +1,10 @@
 # Sandbox Lifecycle
 
-Status: superseded (staged deletion in progress). The cull sweep is
-dissolving the legacy cloud sandbox stack: the E2B webhook lane, orphan
-reaper, worktree policy, and agent run configs are
-already deleted (delivery/cull-sweep/delivery-spec-delete-dark-cloud.md,
-part 1); the remaining provisioning/workspace machinery follows in part 2.
-The environments system spec replaces this document.
+Status: superseded. The legacy cloud sandbox stack this document describes
+was deleted by the cull sweep (delivery/cull-sweep/delivery-spec-delete-dark-cloud.md,
+part 2): sandboxes, workspaces, materialization, secrets, the runtime gateway,
+and the billing reconciler are gone. Kept for the design record until the
+environments system spec replaces it; the code map below no longer resolves.
 
 Status: target. This document describes the accepted destination for the
 cloud sandbox container. The body is written in the ideal state. Every
@@ -142,11 +141,11 @@ initialized. In order:
 
 1. Stop any stale runtime processes left by a previous attempt: a scoped
    pgrep/kill against the known binary paths
-   ([bootstrap.py](../../../server/proliferate/server/cloud/runtime/bootstrap.py)).
+   (`bootstrap.py` (deleted, cull part 2)).
    This step exists because a resumed VM can carry an old AnyHarness still
    bound to port 8457 under an old bearer token, which made freshly minted
    tokens 401 in a real incident (self-healed since;
-   [test_cloud_sandbox_reconnect_self_heal.py](../../../server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py)).
+   `test_cloud_sandbox_reconnect_self_heal.py` (deleted, cull part 2)).
 2. Mint a single-use Worker enrollment token, then write two config files
    into the VM (mode 600): the Worker config
    (`~/.proliferate/worker/config.toml`: Cloud base URL, enrollment
@@ -172,7 +171,7 @@ initialized. In order:
 5. Poll AnyHarness health over its public E2B host (up to 30 attempts,
    0.5 s apart), then verify auth is actually enforced by asserting an
    unauthenticated request is rejected
-   ([liveness_health.py](../../../server/proliferate/server/cloud/runtime/liveness_health.py)).
+   (`liveness_health.py` (deleted, cull part 2)).
    A runtime that answers health but skips the auth check is treated as
    failed, never exposed.
 6. Persist the runtime access triple onto the row: the public base URL,
@@ -195,7 +194,7 @@ between users; the VM boundary is the user boundary, the org boundary is
 the payer boundary.
 
 The row shape this implies
-([sandboxes.py](../../../server/proliferate/db/models/cloud/sandboxes.py)):
+(`sandboxes.py` (deleted, cull part 2)):
 
 ```text
 cloud_sandbox
@@ -268,7 +267,7 @@ Row status is one of `creating`, `ready`, `paused`, `error`, `destroyed`
   typed 409 `cloud_sandbox_runtime_not_ready` (provisioning is far too
   slow to hold a request open) *and* schedules one background
   materialization for that sandbox
-  ([materialization/service.py](../../../server/proliferate/server/cloud/materialization/service.py)),
+  (`materialization/service.py` (deleted, cull part 2)),
   so the caller's retry is a wait, not a dead end. Two things keep it
   from stampeding: a non-blocking cross-process Redis claim keyed on the
   sandbox id (N concurrent cold callers schedule at most one run), and
@@ -348,9 +347,9 @@ The laws in sequence, for one user's first cloud workspace:
 ## The provisioning engine
 
 All provider work funnels through one engine: `connect_ready_sandbox`
-([connect.py](../../../server/proliferate/server/cloud/materialization/sandbox_io/connect.py)),
+(`connect.py` (deleted, cull part 2)),
 always invoked through
-[operation.py](../../../server/proliferate/server/cloud/materialization/operation.py),
+`operation.py` (deleted, cull part 2),
 which ends the DB transaction, takes a per-sandbox distributed lock, and
 reloads the row so no stale snapshot drives a lifecycle decision. The
 engine answers one question: "give me this row's sandbox, live and
@@ -366,7 +365,7 @@ authenticated, whatever that takes." In order:
    attribution metadata, then connect to it.
 5. Accept the resume: a state read immediately after can still find the
    provider paused (
-   [resume_acceptance.py](../../../server/proliferate/server/cloud/materialization/sandbox_io/resume_acceptance.py));
+   `resume_acceptance.py` (deleted, cull part 2));
    genuine liveness opens a usage segment, anything else downgrades the
    row honestly instead of reporting a false ready.
 6. Health-probe the existing runtime. A resumed VM whose AnyHarness
@@ -475,7 +474,7 @@ Pause is the steady state of an idle sandbox, not an exception:
 
 - AnyHarness liveness and auth enforcement are probed during
   materialization (
-  [liveness_health.py](../../../server/proliferate/server/cloud/runtime/liveness_health.py)).
+  `liveness_health.py` (deleted, cull part 2)).
 - The Worker heartbeats every 30 seconds; liveness is derived at read time
   as `last_seen_at` within 90 seconds
   ([constants](../../../server/proliferate/constants/cloud.py)). The
@@ -487,7 +486,7 @@ Pause is the steady state of an idle sandbox, not an exception:
   a `running` sandbox surfaces as `workerDegraded: true` in the workspace
   runtime-status payload and logs a structured warning on each read
   (`_worker_degraded` in
-  [workspaces/service.py](../../../server/proliferate/server/cloud/workspaces/service.py)),
+  `workspaces/service.py` (deleted, cull part 2)),
   because a silently dead Worker means stale binaries and expiring git
   credentials with no user-visible symptom. A paused/creating/error/destroyed
   sandbox's Worker is not expected to be heartbeating and is never reported
@@ -555,7 +554,7 @@ server/proliferate/
 
 - Materialization attempt fails: row `error` with a sanitized receipt; the
   next materialization retries. First response:
-  [cloud-provisioning-failure.md](../../../guides/operating/cloud-provisioning-failure.md).
+  `cloud-provisioning-failure.md` (deleted, cull part 2).
 - Provider target authoritatively gone: binding detached, next attempt
   creates a new VM under the same row; user state inside the old VM is
   lost, the logical sandbox is not.
@@ -578,28 +577,28 @@ server/proliferate/
 ## Proof
 
 - Recovery and invariant suites:
-  [test_cloud_sandbox_recovery.py](../../../server/tests/integration/test_cloud_sandbox_recovery.py),
+  `test_cloud_sandbox_recovery.py` (deleted, cull part 2),
   `test_cloud_sandbox_recovery_invariants.py` (deleted, cull part 1),
-  [test_cloud_sandbox_reconnect_self_heal.py](../../../server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py),
+  `test_cloud_sandbox_reconnect_self_heal.py` (deleted, cull part 2),
   `test_cloud_sandbox_orphan_reaper_lock.py` (deleted, cull part 1).
 - Usage fencing and connection state machine (absorbed with the fencing
   section):
-  [test_sandbox_materialization.py](../../../server/tests/unit/test_sandbox_materialization.py),
-  [test_cloud_connect_race.py](../../../server/tests/unit/test_cloud_connect_race.py),
-  [test_cloud_materialization_failures.py](../../../server/tests/unit/test_cloud_materialization_failures.py),
+  `test_sandbox_materialization.py` (deleted, cull part 2),
+  `test_cloud_connect_race.py` (deleted, cull part 2),
+  `test_cloud_materialization_failures.py` (deleted, cull part 2),
   `test_cloud_webhook_service.py` (deleted, cull part 1),
   `test_cloud_webhook_recovery_races.py` (deleted, cull part 1),
   `test_cloud_orphan_reaper.py` (deleted, cull part 1),
   `test_cloud_sandbox_reaper_task.py` (deleted, cull part 1),
-  [test_cloud_sandbox_reconciler_recovery.py](../../../server/tests/integration/test_cloud_sandbox_reconciler_recovery.py),
-  [test_cloud_sandbox_last_error_migration.py](../../../server/tests/integration/test_cloud_sandbox_last_error_migration.py),
-  [test_cloud_sandbox_ensure_billing_gate.py](../../../server/tests/integration/test_cloud_sandbox_ensure_billing_gate.py).
+  `test_cloud_sandbox_reconciler_recovery.py` (deleted, cull part 2),
+  `test_cloud_sandbox_last_error_migration.py` (deleted, cull part 2),
+  `test_cloud_sandbox_ensure_billing_gate.py` (deleted, cull part 2).
   Deterministic contracts only; live E2B qualification stays separate
   operational evidence.
 - Cold-access repair scheduling and its stampede guard:
-  [test_cloud_sandbox_cold_access_repair.py](../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py);
+  `test_cloud_sandbox_cold_access_repair.py` (deleted, cull part 2);
   the claim primitive itself in
-  [test_redis_lock.py](../../../server/tests/unit/test_redis_lock.py).
+  `test_redis_lock.py` (deleted, cull part 2).
 - Template smoke:
   [smoke-cloud-template.mjs](../../../scripts/smoke-cloud-template.mjs)
   (binaries present, Supervisor can start AnyHarness, sandbox killed on
@@ -640,7 +639,7 @@ stable — tests reference them by name:
 - **E5** Joining an org whose installation and user-auth legs already
   hold bootstraps that (user, org) sandbox. (server pytest; lands with
   E3)
-- **E6** [test_cloud_sandbox_cold_access_repair.py](../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py)
+- **E6** `test_cloud_sandbox_cold_access_repair.py` (deleted, cull part 2)
   survives unchanged — cold repair stays the loss backstop. Grep-gates:
   no `POST /wake` route, no legacy (non-Supervisor) launch path.
 
@@ -661,7 +660,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 - [ ] The account model is one sandbox per user globally (partial unique
       index on `owner_user_id`; org variants are stubs that raise, and
       the store hardcodes `organization_id=None`,
-      [cloud_sandboxes.py](../../../server/proliferate/db/store/cloud_sandboxes.py)).
+      `cloud_sandboxes.py` (deleted, cull part 2)).
       Ruled shape: `organization_id` NOT NULL keyed (owner, org), solo
       work in the default org, no stored billing subject. Migration:
       backfill `organization_id` to each owner's default org, re-key the
@@ -688,7 +687,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       bootstrap minutes, not the timeout window.
 - [ ] `runtime_generation` is a hardcoded constant stamped by the store
       (`runtime_generation=0`,
-      [cloud_sandboxes.py](../../../server/proliferate/db/store/cloud_sandboxes.py))
+      `cloud_sandboxes.py` (deleted, cull part 2))
       after its column was dropped; [gateway.md](gateway.md)
       owns the deletion end to end (wire field, client cache keys) and
       cross-lists it here for the store constant.

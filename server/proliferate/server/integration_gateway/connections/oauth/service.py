@@ -1,6 +1,6 @@
 """OAuth authorization-flow lifecycle for cloud integrations.
 
-Ported from the old ``server/cloud/mcp_oauth/service.py`` (commit ``4b54c9f2b``)
+Ported from the former cloud MCP OAuth service (commit ``4b54c9f2b``)
 and adapted onto the new integration stores/models:
 
 - flows/clients/accounts live in ``proliferate.db.store.integrations``

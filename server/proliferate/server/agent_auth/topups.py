@@ -58,7 +58,6 @@ from proliferate.server.agent_auth.enrollment import (
     enrollment_key_metadata,
     enrollment_subject_label,
 )
-from proliferate.server.cloud.materialization import service as materialization_service
 
 logger = logging.getLogger(__name__)
 
@@ -276,14 +275,6 @@ async def _reactivate_enrollment(
                 # value.
                 await _remint_enrollment_key(db, enrollment, enrollment_key)
                 reminted += 1
-    # One materialization pass per enrollment, not per re-minted key: the
-    # render reads every child key at once, so N passes for N keys would only
-    # re-render identical state N times (the last pass is the only one whose
-    # inputs are complete anyway).
-    if reminted and enrollment.user_id is not None:
-        await materialization_service.schedule_materialize_agent_auth(
-            db, user_id=enrollment.user_id
-        )
     # Always rewrite the team's LiteLLM budget: ``budget`` is the granted
     # allowance for a hard-capped subject, or ``None`` (explicit uncap) for an
     # overage-enabled one. Skipping the ``None`` case would leave an overage

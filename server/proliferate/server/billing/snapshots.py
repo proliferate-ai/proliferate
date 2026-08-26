@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
-    ACTIVE_SANDBOX_STATUSES,
     BILLING_PLAN_FREE,
     BILLING_PLAN_PRO,
     WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
@@ -282,9 +281,7 @@ def build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         now=now,
     )
 
-    active_sandbox_count = sum(
-        1 for sandbox in state.sandboxes if sandbox.status in ACTIVE_SANDBOX_STATUSES
-    )
+    active_sandbox_count = 0
 
     if settings.pro_billing_enabled:
         if is_pro_subscription:

@@ -24,7 +24,6 @@ from proliferate.server.agent_auth.topups import (
     create_llm_topup_grant,
     run_llm_topups,
 )
-from proliferate.server.cloud.materialization import service as materialization_service
 from tests.integration.agent_gateway_topups_shared import (
     StubLiteLLM,
     StubStripe,
@@ -404,69 +403,3 @@ async def test_importer_leaves_overage_subjects_to_the_topup_worker(
     # key; the top-up worker refunds the ledger instead.
     assert enforced is False
     assert disabled == []
-
-
-@pytest.mark.asyncio
-async def test_remint_schedules_materialization(
-    db_session: AsyncSession,
-    stub_litellm: StubLiteLLM,
-    stub_stripe: StubStripe,
-    topup_settings: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """After a virtual key rotation during top-up reactivation, agent-auth
-    materialization is scheduled for the affected user."""
-    org_id = await _create_org(db_session)
-    user_id = await _create_user(db_session)
-    enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
-    # Explicit funding for the org subject (admin grant, not the signup grant).
-    await store.create_llm_credit_grant(
-        db_session,
-        billing_subject_id=enrollment.billing_subject_id,
-        source="admin",
-        amount_usd=Decimal("5"),
-    )
-    old_key_ids = {
-        key.virtual_key_id
-        for key in await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment.id)
-    }
-    assert all(key_id is not None for key_id in old_key_ids)
-    await _spend(
-        db_session,
-        billing_subject_id=enrollment.billing_subject_id,
-        cost_usd=6.0,
-    )
-    await store.set_enrollment_budget_status(
-        db_session,
-        enrollment_id=enrollment.id,
-        budget_status="exhausted",
-    )
-
-    scheduled_users: list[uuid.UUID] = []
-
-    async def record_schedule(db: AsyncSession, *, user_id: uuid.UUID) -> None:
-        scheduled_users.append(user_id)
-
-    monkeypatch.setattr(
-        materialization_service,
-        "schedule_materialize_agent_auth",
-        record_schedule,
-        raising=False,
-    )
-
-    # Unblock will fail, triggering the remint path.
-    stub_litellm.fail_unblock = True
-    await create_llm_topup_grant(
-        db_session,
-        billing_subject_id=enrollment.billing_subject_id,
-        amount_usd=Decimal("10"),
-        source_ref=f"llm_topup:in_remint_{uuid.uuid4().hex[:6]}",
-    )
-
-    # Every per-harness key was rotated, and materialization was scheduled
-    # exactly ONCE for the enrollment — not once per re-minted key. The render
-    # reads the whole key map in one pass, so N schedules for N keys would be
-    # pure amplification (and only the last one would see a complete set).
-    assert set(stub_litellm.rotated) == old_key_ids
-    assert len(old_key_ids) > 1
-    assert scheduled_users == [user_id]

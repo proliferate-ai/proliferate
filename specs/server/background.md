@@ -272,7 +272,7 @@ unchecked item below is a concrete path that still departs from it — public de
 not a softer version of the rule.
 
 - [ ] **Billing reconciliation.**
-      [`_billing_reconciler_loop`](../../server/proliferate/server/billing/reconciler.py)
+      ``_billing_reconciler_loop`` (deleted, cull part 2)
       is started by `start_billing_reconciler` from the
       [`main.py` lifespan](../../server/proliferate/main.py) when
       `cloud_billing_mode` is `observe` or `enforce`;

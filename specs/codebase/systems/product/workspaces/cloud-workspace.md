@@ -36,7 +36,7 @@ mechanism it mentions is some platform's contract, consumed by link:
 - The caller contract (gating layers, ensure→resolve choreography):
   [access.md](../../../../FEATURE_DOCS/SANDBOX/access.md).
 - Create-request choreography (validation, row transactions, branch retry):
-  [workspace-provisioning.md](../../../platforms/product/workspace-provisioning.md).
+  `workspace-provisioning.md` (deleted, cull part 2).
 - The composer panel stack is [composer.md](../chat/composer.md)'s anatomy;
   this document names which panels appear when, never how panels work.
 

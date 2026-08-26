@@ -1,5 +1,11 @@
 # Sandbox GitHub Auth
 
+Status: superseded. The legacy cloud sandbox stack this document describes
+was deleted by the cull sweep (delivery/cull-sweep/delivery-spec-delete-dark-cloud.md,
+part 2): sandboxes, workspaces, materialization, secrets, the runtime gateway,
+and the billing reconciler are gone. Kept for the design record until the
+environments system spec replaces it; the code map below no longer resolves.
+
 Status: target. This document describes the accepted destination for GitHub
 repository authority in cloud sandboxes: how a sandbox gets permission to
 clone, fetch, and push, and nothing else. The body is written in the ideal
@@ -105,8 +111,8 @@ rolls back.
 
 Repository materialization writes three artifacts under
 `/home/user/.proliferate`
-([paths.py](../../../server/proliferate/server/cloud/materialization/paths.py),
-[materialize/github_credentials.py](../../../server/proliferate/server/cloud/materialization/materialize/github_credentials.py)):
+(`paths.py` (deleted, cull part 2),
+`materialize/github_credentials.py` (deleted, cull part 2)):
 
 - `git/github.com/token` — the current user-to-server token, mode 600;
   only the first line is ever read.

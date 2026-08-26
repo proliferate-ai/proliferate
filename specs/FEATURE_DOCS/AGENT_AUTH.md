@@ -180,12 +180,12 @@ once a third field:
 - **Bedrock is `region` + `bearerToken`**, not a static access-key pair and
   not a role to assume; that is the shape every arm of
   `_translate_provider_config_env` reads
-  ([agent_auth.py:395-411](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
+  (`agent_auth.py:395-411` (deleted, cull part 2)).
 - **Azure has no `deployment` field.** The renderer deliberately does not
   translate one: for opencode a deployment selection folds into a
   `--model azure/<id>` launch argument, which is outside `state.json`'s
   env-plus-files wire contract
-  ([agent_auth.py:434-446](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
+  (`agent_auth.py:434-446` (deleted, cull part 2)).
   A field the apply side cannot honor must not be collected, so the Azure
   entry affordance asks for endpoint and key only.
 
@@ -249,7 +249,7 @@ Document laws:
   than fanning one subject-wide key out to every entry.
 - **`api_key` sources carry plaintext.** The vault entry is decrypted at
   materialization
-  ([materialize/agent_auth.py](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py))
+  (`materialize/agent_auth.py` (deleted, cull part 2))
   and written into the 0600 file; revoking a key removes the value at the
   next pass. A typed vault entry travels as its resolved env-var map
   (`{"kind": "provider_config", "config_kind": "aws_bedrock", "env": {…}}`)
@@ -319,11 +319,11 @@ applied document, and the UI says so:
 
 The materialization worker writes the file directly into the user's
 sandbox
-([materialize/agent_auth.py](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)).
+(`materialize/agent_auth.py` (deleted, cull part 2)).
 
 - **When it runs.** Unconditionally during sandbox bootstrap, as one of
   the standard materialization steps
-  ([materialize/sandbox.py](../../server/proliferate/server/cloud/materialization/materialize/sandbox.py))
+  (`materialize/sandbox.py` (deleted, cull part 2))
   — so a fresh sandbox has the document before its first session. After
   that, on every auth-relevant event: a selection write (which ensures the
   sandbox, per the acknowledgement contract above), an enrollment
@@ -331,7 +331,7 @@ sandbox
   call `schedule_materialize_agent_auth`.
 - **How it runs.** Through the same asynchronous after-commit application
   used for every cloud-sandbox materialization event
-  ([materialization/service.py](../../server/proliferate/server/cloud/materialization/service.py)):
+  (`materialization/service.py` (deleted, cull part 2)):
   the handler registers the task on the open transaction via
   `run_after_commit`, and a spawned task runs only once the transaction
   commits — the materializer always reads committed truth, never a state
@@ -883,7 +883,7 @@ selectable, launchable, or visible.
 
 An apply can land while gateway enrollment sync is still incomplete: the
 renderer drops the unsatisfiable gateway source
-([agent_auth.py:261-271](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)),
+(`agent_auth.py:261-271` (deleted, cull part 2)),
 possibly leaving `sources: []` for that harness, which the launch path
 treats fail-closed. The ruling for the probe in that window:
 
@@ -938,7 +938,7 @@ never offered as a working option.
 
 - **claude × `azure_openai` (Foundry) is offerable in the registry but its
   render arm is self-admittedly unverified**
-  ([agent_auth.py:418-433](../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py)
+  (`agent_auth.py:418-433` (deleted, cull part 2)
   carries the unverified-judgment-call comment: the resource-name
   derivation and the API-key-vs-auth-token choice are both analogies to
   opencode's proven arm, not tested facts). **Ruling: verify before

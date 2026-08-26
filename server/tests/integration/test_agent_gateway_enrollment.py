@@ -48,7 +48,7 @@ from proliferate.server.agent_auth.enrollment import (
     ensure_org_enrollment,
     ensure_signup_enrollment,
 )
-from proliferate.server.cloud.materialization.materialize.agent_auth import (
+from proliferate.server.agent_auth.state_render import (
     build_agent_auth_state,
 )
 from proliferate.lib.infra.time.wall_clock import utcnow

@@ -28,7 +28,6 @@ from proliferate.db.models.billing import (
     BillingUsageExport,
     UsageSegment,
 )
-from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.repositories import RepoConfig, RepoEnvironment
 
 
@@ -62,29 +61,6 @@ async def _subject_scope_user_id(
     if subject is None:
         return None
     return subject.user_id or actor_user_id
-
-
-async def list_cloud_sandboxes_for_subject(
-    db: AsyncSession,
-    billing_subject_id: UUID,
-    *,
-    actor_user_id: UUID | None = None,
-) -> list[CloudSandbox]:
-    scope_user_id = await _subject_scope_user_id(db, billing_subject_id, actor_user_id)
-    if scope_user_id is None:
-        return []
-    return list(
-        (
-            await db.execute(
-                select(CloudSandbox).where(
-                    CloudSandbox.owner_user_id == scope_user_id,
-                    CloudSandbox.destroyed_at.is_(None),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
 
 
 async def count_active_cloud_repo_environments(

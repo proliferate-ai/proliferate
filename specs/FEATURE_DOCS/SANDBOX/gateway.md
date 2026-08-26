@@ -1,5 +1,11 @@
 # Sandbox Gateway
 
+Status: superseded. The legacy cloud sandbox stack this document describes
+was deleted by the cull sweep (delivery/cull-sweep/delivery-spec-delete-dark-cloud.md,
+part 2): sandboxes, workspaces, materialization, secrets, the runtime gateway,
+and the billing reconciler are gone. Kept for the design record until the
+environments system spec replaces it; the code map below no longer resolves.
+
 Status: target. This document describes the accepted destination for the
 wire between product clients and a cloud sandbox's runtime. The body is
 written in the ideal state. Every difference from `main` today is listed in
@@ -57,7 +63,7 @@ AnyHarnessClient ── product JWT ──▶ /v1/gateway/cloud-sandbox/anyharne
 ```
 
 One route serves every method and both transports
-([gateway/api.py](../../../server/proliferate/server/cloud/gateway/api.py),
+(`gateway/api.py` (deleted, cull part 2),
 mounted at `/v1/gateway` in
 [main.py](../../../server/proliferate/main.py)):
 
@@ -67,13 +73,13 @@ mounted at `/v1/gateway` in
 - `websocket("/cloud-sandbox/anyharness/{path:path}")` — the same product
   JWT, delivered WebSocket-fashion: preferred as the
   `proliferate-gateway-bearer` subprotocol pair, `Authorization` header
-  accepted ([gateway/access.py](../../../server/proliferate/server/cloud/gateway/access.py)).
+  accepted (`gateway/access.py` (deleted, cull part 2)).
   Auth failure closes 1008 before any upstream connection exists.
 
 There is no sandbox id in the URL and no way to name one: the gateway
 always resolves *the caller's own sandbox*
-([gateway/service.py](../../../server/proliferate/server/cloud/gateway/service.py)
-→ [cloud_sandboxes/service.py](../../../server/proliferate/server/cloud/cloud_sandboxes/service.py)),
+(`gateway/service.py` (deleted, cull part 2)
+→ `cloud_sandboxes/service.py` (deleted, cull part 2)),
 keyed by owner plus the request's org context (which workspace's traffic
 this is — lifecycle's per-(user, org) account model). Reaching someone
 else's sandbox is unrepresentable on this wire, not merely forbidden.
@@ -83,7 +89,7 @@ else's sandbox is unrepresentable on this wire, not merely forbidden.
 - **The client never learns the sandbox's address.** The E2B host URL and
   the AnyHarness bearer live only in the `cloud_sandbox` row (encrypted at
   rest, decrypted at forward time,
-  [db/store/cloud_sandboxes.py](../../../server/proliferate/db/store/cloud_sandboxes.py));
+  `db/store/cloud_sandboxes.py` (deleted, cull part 2));
   the resolved access object never crosses the API boundary. A leaked
   product token is revocable (`token_generation` bump); a leaked runtime
   bearer would be a direct line to the VM, so no client ever holds one.
@@ -93,7 +99,7 @@ else's sandbox is unrepresentable on this wire, not merely forbidden.
   side-channel; direct-to-E2B exists only in release-test tooling.
 - **The swap is total.** Inbound `authorization`, `cookie`, and hop-by-hop
   headers are stripped; the runtime bearer is attached fresh
-  ([gateway/proxy.py](../../../server/proliferate/server/cloud/gateway/proxy.py)).
+  (`gateway/proxy.py` (deleted, cull part 2)).
   Inbound `access_token` query params are stripped on HTTP; on WebSocket
   the *upstream* URL carries the swapped runtime token as `access_token`
   because the runtime authenticates sockets that way. Nothing the client
@@ -102,7 +108,7 @@ else's sandbox is unrepresentable on this wire, not merely forbidden.
   before the proxy enters the transport lifetime — a chat stream can stay
   open for hours and must not pin a pool checkout or a sandbox lock. Both
   routes carry the comment and a dedicated test pins the ordering
-  ([test_cloud_sandbox_gateway_transaction_lifetime.py](../../../server/tests/unit/test_cloud_sandbox_gateway_transaction_lifetime.py)).
+  (`test_cloud_sandbox_gateway_transaction_lifetime.py` (deleted, cull part 2)).
 - **The gateway gates on policy, not liveness.** It refuses when the
   caller may not reach the sandbox (billing hold → 402) or when runtime
   access was never materialized (→ 409); it does not check whether the VM
@@ -118,7 +124,7 @@ else's sandbox is unrepresentable on this wire, not merely forbidden.
 ## Access resolution and the bearer swap
 
 `ensure_cloud_sandbox_gateway_access` resolves per request
-([gateway/service.py](../../../server/proliferate/server/cloud/gateway/service.py)):
+(`gateway/service.py` (deleted, cull part 2)):
 
 1. Billing gate: an exhausted owner is refused before any row is staged
    (402, `billing_credits_exhausted` | `billing_start_blocked`, with
@@ -290,17 +296,17 @@ apps/mobile/src/lib/access/anyharness/cloud-sandbox-runtime.ts  mobile resolver
 ## Proof
 
 - Proxy mechanics (swap, stripping, streaming, SSE guard):
-  [test_cloud_sandbox_gateway_proxy.py](../../../server/tests/unit/test_cloud_sandbox_gateway_proxy.py).
+  `test_cloud_sandbox_gateway_proxy.py` (deleted, cull part 2).
 - Access resolution and cache:
-  [test_cloud_sandbox_gateway_service.py](../../../server/tests/unit/test_cloud_sandbox_gateway_service.py),
-  [test_cloud_sandbox_gateway_access.py](../../../server/tests/unit/test_cloud_sandbox_gateway_access.py).
+  `test_cloud_sandbox_gateway_service.py` (deleted, cull part 2),
+  `test_cloud_sandbox_gateway_access.py` (deleted, cull part 2).
 - Cold access schedules exactly one repair (sequential polling and
   concurrent callers, destroyed rows excluded, ready rows untouched):
-  [test_cloud_sandbox_cold_access_repair.py](../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py).
+  `test_cloud_sandbox_cold_access_repair.py` (deleted, cull part 2).
 - Commit-before-stream ordering:
-  [test_cloud_sandbox_gateway_transaction_lifetime.py](../../../server/tests/unit/test_cloud_sandbox_gateway_transaction_lifetime.py).
+  `test_cloud_sandbox_gateway_transaction_lifetime.py` (deleted, cull part 2).
 - WS Sentry-context hygiene:
-  [test_cloud_sandbox_gateway_ws_sentry.py](../../../server/tests/unit/test_cloud_sandbox_gateway_ws_sentry.py).
+  `test_cloud_sandbox_gateway_ws_sentry.py` (deleted, cull part 2).
 - Client connection contract:
   [cloud-sandbox-gateway.test.ts](../../../apps/packages/product-client/src/lib/access/cloud/cloud-sandbox-gateway.test.ts).
 
@@ -339,7 +345,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       ([lifecycle.md](lifecycle.md)).
 - [ ] `runtimeGeneration` still exists as a hardcoded-0 field: serialized
       on sandbox payloads
-      ([cloud_sandboxes/models.py](../../../server/proliferate/server/cloud/cloud_sandboxes/models.py)),
+      (`cloud_sandboxes/models.py` (deleted, cull part 2)),
       carried on `CloudSandboxGatewayAccess`, stamped as a constant by the
       store, and baked into client cache keys (worktree query keys, the
       materialization cache, terminal stream controller) where it can
@@ -348,7 +354,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       after VM replacement is already handled by re-resolution on
       failure; a version field nobody bumps is dead weight.
 - [ ] WebSocket auth still accepts `?access_token=` inbound
-      ([gateway/access.py](../../../server/proliferate/server/cloud/gateway/access.py),
+      (`gateway/access.py` (deleted, cull part 2),
       kept as legacy); product tokens do not belong in URLs. Clients all
       send the subprotocol transport now — drop the query path.
 - [ ] Mobile duplicates the connection resolver

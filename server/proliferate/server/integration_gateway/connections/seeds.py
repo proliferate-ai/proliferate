@@ -5,7 +5,7 @@
 (``source='seed'``), matched by namespace, without ever touching org-custom rows.
 
 Ported from the old MCP catalog
-(``server/proliferate/server/cloud/mcp_catalog/catalog.py`` and
+(the former cloud MCP catalog and
 ``domain/hosted_connectors.py`` as of commit ``4b54c9f2b``). Old ``auth_kind``
 values are normalized: ``secret`` -> ``api_key``, ``oauth`` -> ``oauth2``,
 ``none`` -> ``none``.

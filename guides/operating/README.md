@@ -16,7 +16,6 @@ under [`../deploying/`](../deploying/).
 | Grant a user free or discounted Pro access through Stripe | [Pro early-access promo codes](billing-pro-promo-codes.md) |
 | Triage Stripe webhook delivery or billing-mirror failures | [Stripe webhook failure](stripe-webhook-failure.md) |
 | Build, publish, promote, or roll back the E2B runtime template | [E2B template operations](e2b-template-operations.md) |
-| Triage cloud sandbox, repository materialization, or workspace creation failures | [Cloud provisioning failure](cloud-provisioning-failure.md) |
 | Triage Worker enrollment, heartbeat, or version convergence after checking AnyHarness independently | [Worker enrollment failure](worker-enrollment-failure.md) |
 | Prepare for break-glass access, secret rotation, support-bundle handling, or audit closeout | [Operator security posture](operator-security-posture.md) |
 | Understand, reproduce, or roll back the six production Grafana alert-rule identities | [Production alerts](production-alerts.md) |

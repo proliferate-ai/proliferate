@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.models.runtime_workers import CloudRuntimeWorkerEnrollment
 from proliferate.db.store import runtime_workers as runtime_worker_store
-from tests.e2e.cloud.helpers.auth import create_user_and_login
-from tests.e2e.cloud.helpers.github import seed_linked_github_account
+from tests.helpers.auth_session import create_user_and_login
+from tests.helpers.github_identity import seed_linked_github_account
 
 
 @pytest.fixture(autouse=True)

@@ -15,8 +15,8 @@ from __future__ import annotations
 import json
 import uuid
 
-from proliferate.server.cloud.materialization.materialize import agent_auth
-from tests.unit.test_agent_auth_materialization import (
+from proliferate.server.agent_auth import state_render as agent_auth
+from tests.unit.test_agent_auth_state_render import (
     FIXTURE_PATH,
     _inputs,
     _selection,

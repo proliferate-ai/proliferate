@@ -13,9 +13,6 @@ public_surface = [
 ]
 
 allowed_importers = [
-    "cloud/cloud_sandboxes",
-    "cloud/gateway",
-    "cloud/materialization",
     "main.py",
     "organizations",
     "permissions.py",

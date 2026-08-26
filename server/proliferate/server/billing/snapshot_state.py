@@ -17,7 +17,6 @@ from proliferate.constants.billing import (
 from proliferate.db.store.billing import (
     count_active_cloud_repo_environments,
     estimate_unaccounted_billable_seconds,
-    list_cloud_sandboxes_for_subject,
     list_entitlements,
     list_grants,
     list_usage_segments,
@@ -38,7 +37,6 @@ from proliferate.lib.infra.time.wall_clock import utcnow
 class BillingSnapshotState:
     subject: Any
     billing_subject_id: UUID
-    sandboxes: list[Any]
     grants: list[Any]
     entitlements: list[Any]
     holds: list[Any]
@@ -122,14 +120,6 @@ async def _build_snapshot_state_for_subject(
     return BillingSnapshotState(
         subject=subject,
         billing_subject_id=billing_subject_id,
-        # Sandbox and repo counts hang off a user, not a subject: an org subject
-        # has no ``user_id``, so without the actor an org member's active-sandbox
-        # and repo counts both read 0 (W-F1).
-        sandboxes=await list_cloud_sandboxes_for_subject(
-            db,
-            billing_subject_id,
-            actor_user_id=actor_user_id,
-        ),
         grants=grants,
         entitlements=entitlements,
         holds=await list_active_holds(db, billing_subject_id),

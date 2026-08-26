@@ -223,7 +223,7 @@ owned by the same user cannot collide or authorize one another.
 The implementation seams are
 [`launch_options_sync.rs`](../../anyharness/crates/proliferate-worker/src/launch_options_sync.rs)
 and
-[`server/cloud/harness_launch_options/`](../../server/proliferate/server/cloud/harness_launch_options/).
+``server/cloud/harness_launch_options/`` (deleted, cull part 2).
 
 ## Launch selection and intent
 

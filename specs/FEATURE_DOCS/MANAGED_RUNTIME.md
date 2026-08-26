@@ -7,7 +7,7 @@
 **Does not own:**
 - AnyHarness runtime internals → [AnyHarness structure](../anyharness/README.md)
 - Sandbox lifecycle and provisioning → [Sandbox lifecycle](SANDBOX/lifecycle.md)
-- Cloud workspace product flows → [Cloud workspace provisioning](../codebase/platforms/product/workspace-provisioning.md)
+- Cloud workspace product flows → `Cloud workspace provisioning` (deleted, cull part 2)
 - Server structure → [Server structure](../server/standards.md)
 
 ## Mental Model

@@ -7,11 +7,9 @@ env must carry exactly what the pin advertises so heartbeats report what runs.
 
 from __future__ import annotations
 
-import uuid
 
 import pytest
 
-from proliferate.server.cloud.runtime.bootstrap import build_runtime_env
 from proliferate.server.version import runtime_version_pin
 
 
@@ -30,38 +28,3 @@ class TestRuntimeVersionPin:
     def test_pin_ignores_blank(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("RUNTIME_VERSION", "   ")
         assert runtime_version_pin() is None
-
-
-class TestRuntimeLaunchEnvExport:
-    def test_exports_logical_target_identity_separately_from_provider_sandbox(self) -> None:
-        target_id = uuid.uuid4()
-        env = build_runtime_env(
-            "tok",
-            anyharness_data_key="key",
-            target_id=target_id,
-            sandbox_id="e2b-provider-sandbox",
-        )
-
-        assert env["ANYHARNESS_RUNTIME_TARGET_ID"] == str(target_id)
-        assert env["PROLIFERATE_SANDBOX_ID"] == "e2b-provider-sandbox"
-
-    def test_declares_the_cloud_surface_for_the_auto_install_carve_out(self) -> None:
-        # The runtime's auto-install startup pass needs the surface for exactly one
-        # carve-out: cursor never installs in cloud (login-only, no headless
-        # credential path, so it could never reach `Ready`). Consumed by
-        # `RuntimeSurface::from_env` in anyharness-lib.
-        env = build_runtime_env("tok", anyharness_data_key="key")
-        assert env["ANYHARNESS_RUNTIME_SURFACE"] == "cloud"
-
-    def test_exports_pin_when_stamped(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("RUNTIME_VERSION", "3.4.5")
-        env = build_runtime_env("tok", anyharness_data_key="key")
-        assert env["PROLIFERATE_ANYHARNESS_VERSION"] == "3.4.5"
-
-    def test_omits_export_when_unstamped(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("RUNTIME_VERSION", raising=False)
-        monkeypatch.setenv("SERVER_VERSION", "9.9.9")
-        env = build_runtime_env("tok", anyharness_data_key="key")
-        # No pin, no export: the worker reports no anyharness version and the
-        # server pins none, so the two stay consistent.
-        assert "PROLIFERATE_ANYHARNESS_VERSION" not in env

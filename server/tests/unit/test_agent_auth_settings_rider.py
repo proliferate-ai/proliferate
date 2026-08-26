@@ -15,8 +15,8 @@ from __future__ import annotations
 import dataclasses
 
 from proliferate.server.agent_auth.models import agent_auth_state_payload
-from proliferate.server.cloud.materialization.materialize import agent_auth
-from tests.unit.test_agent_auth_materialization import _inputs, _selection
+from proliferate.server.agent_auth import state_render as agent_auth
+from tests.unit.test_agent_auth_state_render import _inputs, _selection
 
 
 class TestHarnessSettingsRider:

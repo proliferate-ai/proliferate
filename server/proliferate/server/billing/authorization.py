@@ -13,30 +13,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
-    BILLING_DECISION_ENFORCE_ACTIVE_SPEND,
     BILLING_DECISION_ORG_LIMIT_PAUSE,
     BILLING_DECISION_READ_UNAVAILABLE,
     BILLING_DECISION_USER_LIMIT_PAUSE,
-    BILLING_MODE_ENFORCE,
     WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
     WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
     WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED,
 )
 from proliferate.db import session_ops as db_session
 from proliferate.db.store import billing as billing_store
-from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.billing_runtime_usage import (
     record_billing_decision_event,
-    resolve_billing_subject_id_for_user,
 )
-from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.errors import ProliferateError
 from proliferate.integrations.sentry import report_critical
-from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.billing.budget_limits import window_bounds
-from proliferate.server.billing.domain.plans import authorization_message
-from proliferate.server.billing.errors import BillingServiceError
-from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject_in_session
 
 # Block reasons that mean "you are out of included/managed cloud hours" — the
 # client keys off these to show upgrade-your-plan copy. Everything else is a
@@ -327,223 +318,3 @@ class CloudSandboxBillingBlock:
     start_blocked: bool
     active_sandbox_count: int
     remaining_seconds: float | None
-
-
-async def resolve_cloud_sandbox_billing_block(
-    db: AsyncSession,
-    *,
-    owner_user_id: UUID | None,
-) -> CloudSandboxBillingBlock | None:
-    """Decide whether an owner's managed compute must be denied or stopped.
-
-    Enforce-mode only (``CLOUD_BILLING_MODE=enforce``). Resolves the subject
-    that PAYS the same way segment-open does — an org member bills the org
-    subject, an org-less owner bills personal — then blocks on an active spend
-    hold or an over-cap compute budget, the same two conditions that make the
-    reconciler pause an open segment.
-
-    Pure decision: it neither writes an audit row nor commits, so a caller with
-    careful transaction phases (the E2B webhook) can record and commit on its
-    own schedule.
-    """
-    if settings.cloud_billing_mode != BILLING_MODE_ENFORCE:
-        return None
-    if owner_user_id is None:
-        return None
-    # Law N6 / corridor E6: every read below (subject resolution, snapshot,
-    # membership, budget-limit sums) is a billing-state read on an enforcement
-    # path. If any of them fails we must not fall through to "no decision =
-    # allowed", which is exactly what an uncaught exception here USED to leave to
-    # chance at the seams that swallow errors. Deny with a typed 503 plus a
-    # durable receipt and an alert instead. The guard lives HERE rather than in
-    # the assert wrapper so every caller of the decision inherits it — the E2B
-    # webhook's stray-wake re-pause (corridor N2) reads billing state through
-    # this same function, and an unreadable read there must not silently leave
-    # over-limit compute running either.
-    billing_subject_id: UUID | None = None
-    try:
-        # Resolve the subject that pays the same way segment-open does: an org member
-        # bills the org subject, an org-less owner bills personal. This must match
-        # segment attribution — org compute now drains the org grant pool, so the
-        # active-spend-hold snapshot has to read the org subject or a hold on the org
-        # pool would never block an org member's resume.
-        billing_subject_id = await resolve_billing_subject_id_for_user(db, owner_user_id)
-        # Pass the owner so the free allowance is minted on an ORG subject too
-        # (an org subject has no ``user_id`` of its own to fall back on). Without
-        # it the gate would read an org pool that is empty only because the
-        # allowance was never issued, and deny a new member's first start (W-F1).
-        snapshot = await get_billing_snapshot_for_subject_in_session(
-            db,
-            billing_subject_id,
-            grant_user_id=owner_user_id,
-        )
-
-        decision_type: str | None = None
-        reason: str | None = None
-        if snapshot.active_spend_hold:
-            decision_type = BILLING_DECISION_ENFORCE_ACTIVE_SPEND
-            reason = snapshot.hold_reason or "active_spend_hold"
-        else:
-            # Compute limits are org-scoped. The cloud_sandbox row has no org
-            # column, but the owner is one membership lookup away — the same
-            # resolution connect.py uses for identity tags and the segment open path
-            # uses to stamp ``usage_segment.organization_id``.
-            membership = await organizations_store.get_current_membership_for_user(
-                db,
-                owner_user_id,
-            )
-            if membership is not None:
-                decision_type = await _compute_budget_cap_breach(
-                    db,
-                    organization_id=membership.organization.id,
-                    user_id=owner_user_id,
-                    now=utcnow(),
-                )
-                if decision_type is not None:
-                    reason = "compute budget limit reached"
-    except BillingServiceError as error:
-        await _deny_unreadable_billing_state(
-            error,
-            billing_subject_id=billing_subject_id,
-            owner_user_id=owner_user_id,
-        )
-    except ProliferateError:
-        # Other typed product errors are already decisions; do not relabel them
-        # as unreadable reads.
-        raise
-    except Exception as error:
-        await _deny_unreadable_billing_state(
-            error,
-            billing_subject_id=billing_subject_id,
-            owner_user_id=owner_user_id,
-        )
-
-    if decision_type is None:
-        return None
-    # The recorded decision stays on the paying subject even though compute caps
-    # are summed by ``organization_id`` (matching the reconciler's
-    # ``_resolve_compute_limit_pause``).
-    return CloudSandboxBillingBlock(
-        billing_subject_id=billing_subject_id,
-        decision_type=decision_type,
-        reason=reason,
-        active_spend_hold=snapshot.active_spend_hold,
-        start_blocked=snapshot.start_blocked,
-        active_sandbox_count=snapshot.active_sandbox_count,
-        remaining_seconds=snapshot.remaining_seconds,
-    )
-
-
-async def record_cloud_sandbox_billing_block(
-    db: AsyncSession,
-    block: CloudSandboxBillingBlock,
-    *,
-    actor_user_id: UUID | None,
-    would_block_start: bool,
-    would_pause_active: bool,
-) -> None:
-    """Stage the audit row for a resolved block, without committing.
-
-    ``would_block_start``/``would_pause_active`` are the caller's effect: the
-    request gate refuses a start, the webhook/reconciler stop running compute.
-    """
-    await record_billing_decision_event(
-        db,
-        billing_subject_id=block.billing_subject_id,
-        actor_user_id=actor_user_id,
-        workspace_id=None,
-        decision_type=block.decision_type,
-        mode=settings.cloud_billing_mode,
-        would_block_start=would_block_start,
-        would_pause_active=would_pause_active,
-        reason=block.reason,
-        active_sandbox_count=block.active_sandbox_count,
-        remaining_seconds=block.remaining_seconds,
-    )
-
-
-async def assert_cloud_sandbox_resume_allowed(
-    db: AsyncSession,
-    sandbox: CloudSandboxValue,
-) -> None:
-    """Deny start/resume of a cloud sandbox that is over its billing limits.
-
-    Enforce-mode only (``CLOUD_BILLING_MODE=enforce``). Resolves the owner's
-    billing subject, then blocks on an active spend hold or an over-cap compute
-    budget — the same conditions that make the reconciler pause an open segment.
-    Records a ``BillingDecisionEvent`` and raises ``CloudSandboxResumeBlockedError``.
-
-    Delegates to ``assert_cloud_sandbox_resume_allowed_for_owner``; the gate only
-    reads ``sandbox.owner_user_id``, so the owner-id variant can run at seams that
-    do not yet have a sandbox row (see the ensure service layer).
-    """
-    await assert_cloud_sandbox_resume_allowed_for_owner(db, owner_user_id=sandbox.owner_user_id)
-
-
-async def assert_cloud_sandbox_resume_allowed_for_owner(
-    db: AsyncSession,
-    *,
-    owner_user_id: UUID | None,
-) -> None:
-    """Owner-scoped resume gate: same checks as the sandbox variant, keyed by owner.
-
-    Split out so a caller can gate before a cloud_sandbox row exists (the wake/
-    ensure path flushes a new-row INSERT inside ``ensure_personal_cloud_sandbox_exists``,
-    and this gate ``commit()``s its audit row before raising, so it must run first).
-    Enforce-mode only (``CLOUD_BILLING_MODE=enforce``).
-    """
-    # Reads (and their fail-closed guard) live in the resolver; enforce-mode and
-    # missing-owner short-circuits included.
-    block = await resolve_cloud_sandbox_billing_block(db, owner_user_id=owner_user_id)
-    if block is None:
-        return
-
-    # Persisting the verdict is billing I/O on the same session whose reads just
-    # succeeded, and the conditions that break billing reads (read-only replica,
-    # full disk, connection cap) break this write too. A failure here must land
-    # in the same fail-closed corridor as a failed read: a typed 503 with a
-    # receipt and an alert, never a bare RuntimeError. It must still DENY —
-    # ``_deny_unreadable_billing_state`` raises on every path, so there is no
-    # arm through this block that returns "allowed". Only the persistence I/O is
-    # wrapped; the 402 raise below stays outside so a legitimate quota denial is
-    # never relabelled as unreadable.
-    try:
-        await record_cloud_sandbox_billing_block(
-            db,
-            block,
-            actor_user_id=owner_user_id,
-            would_block_start=True,
-            would_pause_active=block.active_spend_hold,
-        )
-        # Persist the decision before raising: the production caller
-        # (materialization/runner._run_with_fresh_session) rolls back its session in
-        # the exception handler, which would otherwise discard this un-committed
-        # audit row. Safe at every call site: this gate runs first at each seam
-        # (connect_ready_sandbox's opening statement, and the ensure service
-        # layer before ensure_personal_cloud_sandbox_exists stages a row INSERT), so
-        # no other writes are staged on this session yet.
-        await db.commit()
-    except BillingServiceError as error:
-        await _deny_unreadable_billing_state(
-            error,
-            billing_subject_id=block.billing_subject_id,
-            owner_user_id=owner_user_id,
-        )
-    except ProliferateError:
-        raise
-    except Exception as error:
-        await _deny_unreadable_billing_state(
-            error,
-            billing_subject_id=block.billing_subject_id,
-            owner_user_id=owner_user_id,
-        )
-
-    raise CloudSandboxResumeBlockedError(
-        authorization_message(block.reason)
-        or "This sandbox is paused because your billing limit was reached.",
-        decision_type=block.decision_type,
-        reason=block.reason,
-        billing_subject_id=block.billing_subject_id,
-        owner_user_id=owner_user_id,
-        remaining_seconds=block.remaining_seconds,
-    )

@@ -14,7 +14,6 @@ from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_REDIRECT_SCHEMES
 from proliferate.db.store import github_app as github_app_store
-from proliferate.db.store import repositories as repositories_store
 from proliferate.integrations.github import (
     GitHubAppInstallationInfo,
     GitHubIntegrationError,
@@ -25,8 +24,6 @@ from proliferate.integrations.github import (
 )
 from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.api_errors import CloudApiError
-from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
-from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.server.github.models import (
     GitHubAppInstallationStartResponse,
     GitHubAppInstallationStatusResponse,
@@ -310,8 +307,6 @@ async def complete_github_app_user_authorization_callback(
         user_id=user_id,
         authorization=authorization,
     )
-    await cloud_sandboxes_service.ensure_personal_cloud_sandbox_exists(db, user_id=user_id)
-    await materialization_service.schedule_materialize_sandbox(db, user_id=user_id)
     await refresh_github_app_installation_cache(db)
     return return_to or _default_return_after_callback("account")
 
@@ -422,15 +417,6 @@ async def complete_github_app_installation_callback(
         installed_by_user_id=actor_user_id,
         allow_organization_rebind=True,
     )
-    repo_environments = await repositories_store.list_cloud_repo_environments_for_git_owner(
-        db,
-        git_owner=installation.account_login,
-    )
-    for repo_environment in repo_environments:
-        await materialization_service.schedule_materialize_repo_environment(
-            db,
-            repo_environment_id=repo_environment.id,
-        )
     return return_to or _default_return_after_callback("organization")
 
 

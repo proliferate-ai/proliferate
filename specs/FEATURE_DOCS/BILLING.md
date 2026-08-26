@@ -150,7 +150,7 @@ tightest-cap masking.** A member breaches when ANY applicable enabled row
 breaches, not just the row with the lowest raw `cap_value` — a per-user day
 cap and an org month cap are different rates over different windows and
 neither dominates. Both compute paths
-([`reconciler.py`](../../server/proliferate/server/billing/reconciler.py)'s
+(``reconciler.py`` (deleted, cull part 2)'s
 `_resolve_compute_limit_pause`,
 [`authorization.py`](../../server/proliferate/server/billing/authorization.py)'s
 `_compute_budget_cap_breach`) and the LLM import path
@@ -315,9 +315,9 @@ provider I/O.** In enforce mode, `assert_cloud_sandbox_resume_allowed`/
 `_for_owner`
 ([`authorization.py`](../../server/proliferate/server/billing/authorization.py))
 runs at the top of `connect_ready_sandbox`
-([`connect.py`](../../server/proliferate/server/cloud/materialization/sandbox_io/connect.py))
+(``connect.py`` (deleted, cull part 2))
 and `ensure_cloud_sandbox_ready`
-([`cloud_sandboxes/service.py`](../../server/proliferate/server/cloud/cloud_sandboxes/service.py)),
+(``cloud_sandboxes/service.py`` (deleted, cull part 2)),
 before either stages a provider call or a new-row INSERT, and raises
 `CloudSandboxResumeBlockedError` (HTTP 402) on an active spend hold or
 over-cap compute budget, committing its own audit `BillingDecisionEvent`
@@ -326,7 +326,7 @@ first (the caller rolls back its session on exception).
 **N2 — a held/over-limit subject cannot CONTINUE; the reconciler pauses
 within one pass, and a stray `resumed` webhook re-pauses and closes.** The
 15-minute reconciler
-([`reconciler.py`](../../server/proliferate/server/billing/reconciler.py))
+(``reconciler.py`` (deleted, cull part 2))
 lists every open segment, resolves its subject's live snapshot and any
 breached limit, and pauses the provider sandbox
 (`USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT`) under the same per-sandbox
@@ -355,7 +355,7 @@ only clears `exhausted`. Only `_enforce_org_llm_limits` clears
 **N5 — denials are never cached; a fixed subject succeeds within one
 enforcement cycle.** The billing snapshot and resume gate read fresh state
 every call. The adjacent gateway *access* cache (60s TTL,
-[`gateway/service.py`](../../server/proliferate/server/cloud/gateway/service.py))
+``gateway/service.py`` (deleted, cull part 2))
 bounds destroy/recreate propagation and is not a billing decision cache.
 
 **N6 — a billing-state read failure on an enforcement path fails closed,
@@ -469,7 +469,7 @@ Stripe integration unit tests
 
 - **B1** Segment/event attribution matches the org-always-pays ruling; the
   personal-context hardcode (`organization_id=None` in
-  [`cloud_sandboxes.py`](../../server/proliferate/db/store/cloud_sandboxes.py))
+  ``cloud_sandboxes.py`` (deleted, cull part 2))
   is a documented deferral — see [Current gaps](#current-gaps).
 - **B2** Accounting pass ×2 over the same segments yields identical
   balances, one export row per slice.
@@ -486,11 +486,11 @@ Stripe integration unit tests
 
 - **E1** Exhausted subject → ensure/resume → 402 with decision detail; zero
   provider calls.
-  [`test_credits_exhausted_uses_stable_402_code`](../../server/tests/integration/test_billing_start_block_paging.py),
-  [`test_ensure_denied_when_exhausted`](../../server/tests/integration/test_cloud_sandbox_ensure_billing_gate.py).
+  ``test_credits_exhausted_uses_stable_402_code`` (deleted, cull part 2),
+  ``test_ensure_denied_when_exhausted`` (deleted, cull part 2).
 - **E2** Reconciler pauses an open over-limit segment, closes as quota
   enforcement.
-  [`test_enforce_segment_pauses_on_limit_breached`](../../server/tests/integration/test_billing_limit_enforcement_compute.py).
+  ``test_enforce_segment_pauses_on_limit_breached`` (deleted, cull part 2).
 - **E3** A per-user day cap AND an org month cap both enforce when both
   apply — no raw-tightest masking.
   [`test_per_user_daily_cap_does_not_mask_org_wide_monthly_cap`](../../server/tests/integration/test_billing_limit_enforcement_llm.py).
@@ -533,7 +533,7 @@ Stripe integration unit tests
 - Enforce-mode billing block at resume/ensure: typed 402 before any
   provider I/O; the materialization runner logs it as routine business
   logic rather than paging
-  ([`runner.py`](../../server/proliferate/server/cloud/materialization/runner.py)).
+  (``runner.py`` (deleted, cull part 2)).
 - Over-limit compute observed by the reconciler: paused and closed as
   quota enforcement within one 15-minute pass.
 - LLM subject exhausted or over a budget cap: affected keys disabled,
@@ -556,7 +556,7 @@ Stripe integration unit tests
 Deltas between this document and `main`, each struck by its follow-up PR:
 
 - [ ] **B1.** `cloud_sandbox_value`
-      ([`cloud_sandboxes.py`](../../server/proliferate/db/store/cloud_sandboxes.py))
+      (``cloud_sandboxes.py`` (deleted, cull part 2))
       hardcodes `organization_id=None`/`billing_subject_id=None` on every
       mapped row; the personal-context path never carries org attribution
       through this value object, even though segment-open and the resume

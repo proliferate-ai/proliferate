@@ -14,8 +14,8 @@ from proliferate.constants.organizations import (
 )
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
-from tests.e2e.cloud.helpers.auth import create_user_and_login
-from tests.e2e.cloud.helpers.github import seed_linked_github_account
+from tests.helpers.auth_session import create_user_and_login
+from tests.helpers.github_identity import seed_linked_github_account
 
 CATALOG_URL = "/v1/cloud/integrations/catalog"
 

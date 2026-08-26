@@ -1,5 +1,11 @@
 # Sandbox Content
 
+Status: superseded. The legacy cloud sandbox stack this document describes
+was deleted by the cull sweep (delivery/cull-sweep/delivery-spec-delete-dark-cloud.md,
+part 2): sandboxes, workspaces, materialization, secrets, the runtime gateway,
+and the billing reconciler are gone. Kept for the design record until the
+environments system spec replaces it; the code map below no longer resolves.
+
 Status: target. This document describes the accepted destination for
 user-valuable state inside a cloud sandbox. The body is written in the ideal
 state. Every difference from `main` today is listed in
@@ -23,7 +29,7 @@ Fences, one owner per concern:
   resource-pressure measurement; content owns what spends the disk.
 - Cloud workspace creation choreography — request validation, GitHub
   authority checks, row transactions — belongs to
-  [../../codebase/platforms/product/workspace-provisioning.md](../../codebase/platforms/product/workspace-provisioning.md). This document owns
+  `../../codebase/platforms/product/workspace-provisioning.md` (deleted, cull part 2). This document owns
   what that choreography puts on disk, the two records that describe it,
   and when it all leaves.
 - GitHub *authority* — tokens, credential leases, the credential helper —
@@ -47,11 +53,11 @@ Fences, one owner per concern:
 ```
 
 Clone paths are computed by
-[paths.py](../../../server/proliferate/server/cloud/materialization/paths.py).
+`paths.py` (deleted, cull part 2).
 The worktrees root is AnyHarness's managed root
 ([managed_root.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/managed_root.rs)),
 declared by `ANYHARNESS_WORKTREES_ROOT` in the sandbox launch env
-([bootstrap.py](../../../server/proliferate/server/cloud/runtime/bootstrap.py))
+(`bootstrap.py` (deleted, cull part 2))
 exactly as local dev profiles already declare it — one fence, every
 environment. The clone is per-repository-environment, not per-workspace: ten
 workspaces on one repo cost one clone plus ten worktrees sharing its object
@@ -82,7 +88,7 @@ store.
 
 One idempotent script, run over the sandbox exec channel by repository
 materialization
-([repo_environment.py](../../../server/proliferate/server/cloud/materialization/materialize/repo_environment.py)),
+(`repo_environment.py` (deleted, cull part 2)),
 is the only writer of the shared clone:
 
 1. `git clone https://github.com/<owner>/<repo>.git` — only if no `.git`
@@ -92,7 +98,7 @@ is the only writer of the shared clone:
 3. Refuse rather than reset: a dirty checkout exits 43, local commits ahead
    of the remote exit 44; both map to a typed checkout error (HTTP 409 with
    an actionable message,
-   [workspaces/service.py](../../../server/proliferate/server/cloud/workspaces/service.py))
+   `workspaces/service.py` (deleted, cull part 2))
    instead of a hard reset that eats work. Only exit 42 (not a git repo) and
    these two are classified; the clone's own working tree is expected to sit
    clean on the default branch, because user changes belong in worktrees.
@@ -100,11 +106,11 @@ is the only writer of the shared clone:
    `git reset --hard origin/<default>`.
 
 Triggers, each refreshing as a side effect: repository-environment save
-([repositories/service.py](../../../server/proliferate/server/cloud/repositories/service.py)),
+(`repositories/service.py` (deleted, cull part 2)),
 GitHub App install/reauth completion
 ([github_app/service.py](../../../server/proliferate/server/github/service.py)),
 sandbox bootstrap preclone of every configured environment
-([materialize/sandbox.py](../../../server/proliferate/server/cloud/materialization/materialize/sandbox.py)),
+(`materialize/sandbox.py` (deleted, cull part 2)),
 and workspace creation (synchronously, in-request). (Gen-1 managed workflow
 delivery was a further trigger until that lane was deleted —
 `delivery/cull-sweep/delivery-spec-delete-gen1-workflows.md`.)
@@ -115,7 +121,7 @@ timeout is a typed busy error (503), never a second concurrent refresh.
 
 Deleting a repository environment is refused (409
 `cloud_repository_in_use`) while any workspace or automation references it
-([repositories/service.py](../../../server/proliferate/server/cloud/repositories/service.py)),
+(`repositories/service.py` (deleted, cull part 2)),
 so a successful delete proves no worktree depends on the clone. The delete
 soft-deletes the row, then reclaims the clone directory from the VM after
 commit, best-effort — the same commit-then-reclaim pattern lifecycle uses
@@ -164,7 +170,7 @@ AnyHarness fetches then requires that exact commit
 Cloud workspace archive, restore, and delete mutate only the Cloud product
 row; they do not call into the runtime or mutate an AnyHarness workspace or
 checkout
-([workspace-provisioning.md](../../codebase/platforms/product/workspace-provisioning.md)).
+(`workspace-provisioning.md` (deleted, cull part 2)).
 AnyHarness owns its separate user-requested archive, unarchive, and purge
 operations. Cloud provider loss is also separate: it marks affected product
 rows lost rather than pretending their runtime content can be restored.
@@ -193,10 +199,10 @@ database.
 
 **The product record.** Cloud workspace creation wraps that same runtime
 call in a product-plane transaction
-([workspaces/service.py](../../../server/proliferate/server/cloud/workspaces/service.py)):
+(`workspaces/service.py` (deleted, cull part 2)):
 a `cloud_workspace` row — owner, kind, repository environment, display name,
 branch, base branch
-([db/models/cloud/workspaces.py](../../../server/proliferate/db/models/cloud/workspaces.py))
+(`db/models/cloud/workspaces.py` (deleted, cull part 2))
 — commits first, the runtime call follows, and the returned runtime
 workspace id is stamped back onto the row. The row deliberately duplicates
 the naming and branch metadata the runtime also keeps; the link between the
@@ -214,7 +220,7 @@ and the runtime record is the only record. The asymmetry is the point:
   a durable second record would only be a cache that can go stale.
 - A cloud runtime is usually *not* reachable: paused, killed, or the app is
   a web tab with no VM awake. The cloud list endpoint
-  ([workspaces/api.py](../../../server/proliferate/server/cloud/workspaces/api.py))
+  (`workspaces/api.py` (deleted, cull part 2))
   reads Postgres only — runtime status derives from the stored sandbox row,
   never a live health call — so the product renders every cloud workspace,
   with an honest status badge, whether or not any VM exists. The row is
@@ -254,7 +260,7 @@ The write is deliberately boring: two keys, `user.name` and `user.email`,
 set by an idempotent `git config --global` script run over the sandbox exec
 channel during repository materialization — the same channel and shape as
 the credential-helper configuration step
-([github_credentials.py](../../../server/proliferate/server/cloud/materialization/materialize/github_credentials.py)),
+(`github_credentials.py` (deleted, cull part 2)),
 which already writes global git config on every sandbox
 (`credential.https://github.com.helper`, the SSH→HTTPS `insteadOf`
 rewrites). Global scope is correct because the VM is single-user, and
@@ -306,7 +312,7 @@ law. The runtime measures its own disk — one code path, local and cloud:
   orphan) already wired to delete flows in the client.
 - Disk-full during materialization is typed as disk exhaustion in the
   failure receipt
-  ([failures.py](../../../server/proliferate/server/cloud/materialization/failures.py))
+  (`failures.py` (deleted, cull part 2))
   with a delete-content remedy — the generic "runtime did not become ready,
   retry later" is worse than useless for ENOSPC, because retrying cannot
   free disk.
@@ -414,7 +420,7 @@ apps/packages/product-client/src/
 
 - Clone dirty or ahead at refresh: typed checkout error (exit 43/44 → 409);
   never a silent reset. First response:
-  [cloud-provisioning-failure.md](../../../guides/operating/cloud-provisioning-failure.md).
+  `cloud-provisioning-failure.md` (deleted, cull part 2).
 - Base-branch fetch fails at worktree create: creation proceeds on local
   state with the failure classified and surfaced; offline Desktop use is a
   legitimate instance of this path, not an error to block on.
@@ -440,15 +446,15 @@ apps/packages/product-client/src/
 ## Proof
 
 - Clone refresh, exit-code classification, transaction boundaries:
-  [test_cloud_repo_materialization_transactions.py](../../../server/tests/integration/test_cloud_repo_materialization_transactions.py),
-  [test_cloud_workspace_materialization_service.py](../../../server/tests/integration/test_cloud_workspace_materialization_service.py).
+  `test_cloud_repo_materialization_transactions.py` (deleted, cull part 2),
+  `test_cloud_workspace_materialization_service.py` (deleted, cull part 2).
 - Exact-ref source verification:
-  [test_cloud_workspace_exact_ref_source.py](../../../server/tests/integration/test_cloud_workspace_exact_ref_source.py).
+  `test_cloud_workspace_exact_ref_source.py` (deleted, cull part 2).
 - Purge fencing:
   [purge_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/purge_tests.rs),
   [deletion/tests/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/mod.rs).
 - Cloud row-only lifecycle proof:
-  [test_cloud_workspace_row_lifecycle.py](../../../server/tests/unit/test_cloud_workspace_row_lifecycle.py).
+  `test_cloud_workspace_row_lifecycle.py` (deleted, cull part 2).
 - Pending, landing with the remaining gap PRs: fetch-on-create
   classification tests; repository-environment delete reclaim; a live disk
   axis reading end to end.

@@ -14,7 +14,7 @@ runtime binary ([agent-distribution.md](../../specs/codebase/platforms/product/a
 so a catalog complaint is a binary-version complaint. (The legacy heartbeat
 catalog sync still runs until its deletion lands; its evidence path is kept
 below, marked legacy.)
-Use [`cloud-provisioning-failure.md`](cloud-provisioning-failure.md) when the
+Use the (deleted) cloud provisioning runbook when the
 provider sandbox or AnyHarness is not independently healthy.
 
 ## Required access
