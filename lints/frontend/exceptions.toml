@@ -33,23 +33,8 @@
 # - Nothing here tolerates a whole file. Every entry is (rule, path, site), so a
 #   second violation of the same rule elsewhere in a listed file still fails.
 
-[[exception]]
-rule = "FE-ACCESS-2"
-path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-materialization-health-pass.ts"
-site = "getAnyHarnessClient"
-reason = "workflow imports raw AnyHarness client"
 
-[[exception]]
-rule = "FE-ACCESS-2"
-path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-availability-actions.ts"
-site = "getAnyHarnessClient"
-reason = "workflow imports raw AnyHarness client"
 
-[[exception]]
-rule = "FE-ACCESS-2"
-path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-git-reconciliation-actions.ts"
-site = "getAnyHarnessClient"
-reason = "workflow imports raw AnyHarness client"
 
 [[exception]]
 rule = "FE-CACHE-1"
@@ -111,23 +96,8 @@ path = "apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-s
 site = "const reportDeliveryAck::queryClient.invalidateQueries("
 reason = "lifecycle hook owns query invalidation"
 
-[[exception]]
-rule = "FE-CACHE-2"
-path = "apps/packages/product-client/src/hooks/cloud/workflows/use-cloud-workspace-actions.ts"
-site = "@tanstack/react-query:useMutation"
-reason = "workflow owns useMutation wrapper"
 
-[[exception]]
-rule = "FE-CACHE-2"
-path = "apps/packages/product-client/src/hooks/cloud/workflows/use-create-cloud-workspace.ts"
-site = "@tanstack/react-query:useMutation"
-reason = "workflow owns useMutation wrapper"
 
-[[exception]]
-rule = "FE-CACHE-2"
-path = "apps/packages/product-client/src/hooks/workspaces/facade/use-worktree-settings-targets.ts"
-site = "@tanstack/react-query:useQueries"
-reason = "facade owns useQueries wrapper"
 
 [[exception]]
 rule = "FE-CACHE-2"
@@ -243,11 +213,6 @@ path = "apps/packages/product-client/src/lib/access/anyharness/session-runtime.t
 site = "type ListSessionsOptions::#product/stores/sessions/session-selection-store"
 reason = "access module imports session stores"
 
-[[exception]]
-rule = "FE-PC-6"
-path = "apps/packages/product-client/src/lib/access/cloud/owner-context-headers.ts"
-site = "#product/stores/organizations/organization-store"
-reason = "access module imports organization store"
 
 [[exception]]
 rule = "FE-PC-6"
@@ -285,11 +250,6 @@ path = "apps/packages/product-client/src/stores/toast/toast-store.ts"
 site = "#product/components/feedback/product-toast"
 reason = "store imports component toast implementation"
 
-[[exception]]
-rule = "FE-STORE-1"
-path = "apps/packages/product-client/src/stores/workspaces/cloud-workspace-billing-block-store.ts"
-site = "#product/lib/access/cloud/workspace-connection-retry"
-reason = "store imports access-owned billing type"
 
 [[exception]]
 rule = "FE-STORE-3"

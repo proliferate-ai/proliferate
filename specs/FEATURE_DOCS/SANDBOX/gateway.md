@@ -196,7 +196,7 @@ in a URL would cross infrastructure logs.
 
 Resolution from a cloud workspace to a live connection is one chain
 ([cloud-sandbox-gateway.ts](../../../apps/packages/product-client/src/lib/access/cloud/cloud-sandbox-gateway.ts),
-[workspace-connection-retry.ts](../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts)):
+`workspace-connection-retry.ts`):
 
 1. `GET /v1/cloud/workspaces/{id}` — the product record
    ([content.md](content.md), one workspace, two records).
@@ -321,7 +321,7 @@ them by name:
 - **F2** The two retry budgets hold: 2 s × 45 for
   `cloud_sandbox_runtime_not_ready`, 750 ms × 8 for
   `workspace_not_ready` —
-  [workspace-connection-retry.test.ts](../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.test.ts)
+  `workspace-connection-retry.test.ts`
   survives ([access.md](access.md)'s client contract).
 - **F3** A WebSocket offering only `?access_token=` closes 1008; the
   subprotocol is the only accepted transport; the legacy-acceptance test

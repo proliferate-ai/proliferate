@@ -147,7 +147,7 @@ the client classifies the code as a not-ready error and absorbs it on a
 provision-scale budget — 45 retries × 2 s (~90 s, sized to a full cold
 provision) against the generic not-ready budget below — rendering the
 ordinary connecting affordance while the scheduled repair runs
-([workspace-connection-retry.ts](../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts)).
+(`workspace-connection-retry.ts`).
 No wake-and-poll handshake exists, and none is wanted: the retry against
 the unchanged 409 is the wait.
 
@@ -166,7 +166,7 @@ The caller's path from a cloud workspace id to runtime traffic:
    law). This is the explicit entry point for flows that start from
    nothing; steady-state flows skip it because the row already exists.
 2. **Resolve a connection** — `getResolvedCloudWorkspaceConnection`
-   ([workspace-connection-retry.ts](../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts))
+   (`workspace-connection-retry.ts`)
    loads the cloud workspace and builds gateway connection info
    ([cloud-sandbox-gateway.ts](../../../apps/packages/product-client/src/lib/access/cloud/cloud-sandbox-gateway.ts)).
    Readiness is structural, not polled: a workspace with no stamped
@@ -174,13 +174,13 @@ The caller's path from a cloud workspace id to runtime traffic:
    client throws `cloud_client_unavailable` (401).
 3. **Retry flatly while not ready, on the budget the error names** — two
    fixed-delay budgets, no backoff, both in
-   [workspace-connection-retry.ts](../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.ts):
+   `workspace-connection-retry.ts`:
    the generic not-ready budget (750 ms × 8) for `workspace_not_ready`,
    any 5xx, or a network `TypeError`, and the provision-scale budget
    (2 s × 45, ~90 s) for `cloud_sandbox_runtime_not_ready`, whose repair
    is a real provision that takes tens of seconds. Anything else
    rethrows. React Query's native `retry` is the loop
-   ([use-cloud-workspace-connection.ts](../../../apps/packages/product-client/src/hooks/access/cloud/use-cloud-workspace-connection.ts),
+   (`use-cloud-workspace-connection.ts`,
    `staleTime` 30 s) — there is no hand-rolled poller.
 4. **Call the gateway** — the resolved connection is an ordinary
    AnyHarness client pointed at
@@ -312,7 +312,7 @@ cloud/sdk/src/client/
 - Cold access still 409s and schedules one repair:
   `test_cloud_sandbox_cold_access_repair.py` (deleted, cull part 2).
 - Client-side retry classification and the two budgets:
-  [workspace-connection-retry.test.ts](../../../apps/packages/product-client/src/lib/access/cloud/workspace-connection-retry.test.ts).
+  `workspace-connection-retry.test.ts`.
 - Pending, landing with the gap PRs: shared-classifier unit tests; a
   contract test that the wire carries no unpopulated branchable fields.
 

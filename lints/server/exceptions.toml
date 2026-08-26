@@ -156,6 +156,12 @@ reason = "inherited Auth transaction and error-persistence semantics retained du
 
 # ── SRV-INTEG-4 ───────────────────────────────────────────────────────
 
+[[exception]]
+rule = "SRV-INTEG-4"
+path = "server/proliferate/server/cloud/gateway/proxy.py"
+site = "<module>::import:httpx"
+reason = "managed sandbox gateway owns temporary HTTP/WS proxy transport until gateway access moves below product service layer"
+
 # ── SRV-MIGRATE-1 ─────────────────────────────────────────────────────
 
 [[exception]]

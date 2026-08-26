@@ -46,7 +46,7 @@ Entry points: the sidebar's new-workspace actions and the repo-setup
 dialogs ([MainSidebar.tsx](../../../../../apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx),
 [AddRepoFlowHost.tsx](../../../../../apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlowHost.tsx)).
 All converge on one flow
-([use-create-cloud-workspace.ts](../../../../../apps/packages/product-client/src/hooks/cloud/workflows/use-create-cloud-workspace.ts)):
+(`use-create-cloud-workspace.ts`):
 
 1. **The workspace appears before the network answers.** A pending entry
    seeds the sidebar (stage `submitting`) before the create request is
@@ -102,7 +102,7 @@ runtime-connecting takeover line in the composer.
   (settings-level action) never deletes workspace rows — workspaces are marked
   lost and render as such (content spec, "When the VM dies").
 - All three clear cached gateway connections and collections entries
-  ([use-cloud-workspace-actions.ts](../../../../../apps/packages/product-client/src/hooks/cloud/workflows/use-cloud-workspace-actions.ts)).
+  (`use-cloud-workspace-actions.ts`).
 
 ## Resources: the disk story's product end
 

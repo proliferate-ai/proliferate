@@ -89,8 +89,8 @@ from proliferate.server.organizations.registration_pages import (
     router as registration_pages_router,
 )
 from proliferate.server.organizations.usage.api import router as organization_usage_router
-from proliferate.server.repositories.api import router as repositories_router
 from proliferate.server.release import resolve_server_release_id
+from proliferate.server.repositories.api import router as repositories_router
 from proliferate.server.seam.workers.api import admin_router as runtime_workers_admin_router
 from proliferate.server.seam.workers.api import router as runtime_workers_router
 from proliferate.server.seam.workers.api import worker_router as runtime_worker_router
