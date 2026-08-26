@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "workflows"
-spec = "specs/FEATURE_DOCS/WORKFLOWS.md"
+spec = "specs/codebase/systems/product/automations/README.md"
 owns = "Server-side workflow definitions, invocations, and runs."
 
 public_surface = [
