@@ -16,10 +16,13 @@ from user action to agent to gateways to failure.
   one `session_id` across Sentry, structured logs → Grafana, and Honeycomb;
   the closed catalog, correlation vocabulary, scrubbing law, and the
   per-system Emits audit.
-- Testing and Linting, Building Loop, Alerting, Customer loop — landing
-  tonight as `testing/`, `building-loop/`, `alerting/`, `customer-loop/`;
-  until each lands, [`specs/TESTING.md`](../../../TESTING.md) and
-  [`specs/OBSERVABILITY.md`](../../../OBSERVABILITY.md) are the per-PR law.
+- [Testing and Linting](testing/README.md) — the tier contract
+  ([`specs/TESTING.md`](../../../TESTING.md) stays the per-PR standard), rule
+  records, ratchets, checkers, and the issue→test loop that pins every
+  spec's laws.
+- Building Loop, Alerting, Customer loop — landing tonight as
+  `building-loop/`, `alerting/`, `customer-loop/`; until each lands,
+  [`specs/OBSERVABILITY.md`](../../../OBSERVABILITY.md) is the per-PR law.
 
 Retired (2026-08-25, engineering cull PR #2214): the issue-lifecycle system
 and its hosted tracker. Support report *capture* is a product system
