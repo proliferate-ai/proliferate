@@ -35,7 +35,7 @@ Tables, all written only by this system
 ([db/models/integrations.py](../../../../../server/proliferate/db/models/integrations.py),
 [integration_authorization.py](../../../../../server/proliferate/db/models/integration_authorization.py),
 [integration_revocation.py](../../../../../server/proliferate/db/models/integration_revocation.py),
-[cloud/integration_approvals.py](../../../../../server/proliferate/db/models/cloud/integration_approvals.py)):
+`cloud/integration_approvals.py`):
 
 | Table | Row meaning |
 | --- | --- |
@@ -58,7 +58,7 @@ owned here — see Fences.
 ## 3. Public surface
 
 All routes mount under `/v1/cloud` via
-[cloud/api.py](../../../../../server/proliferate/server/cloud/api.py).
+`cloud/api.py`.
 
 Connections, user-authenticated
 ([connections/api.py](../../../../../server/proliferate/server/integration_gateway/connections/api.py)):
@@ -75,7 +75,7 @@ Connections, user-authenticated
 | `GET/POST /integrations/admin/organizations/{org}/definitions`, `POST …/definitions/{id}/enabled` | Org-admin custom definitions and enable/disable policy. |
 
 Approvals, user-authenticated
-([action_approvals/api.py](../../../../../server/proliferate/server/integration_gateway/connections/action_approvals/api.py)):
+(`action_approvals/api.py`):
 `GET /integrations/action-approvals`, `GET …/{id}`, `POST …/{id}/approve|reject|revoke`.
 A worker, gateway bearer, or MCP session can never call these.
 
@@ -92,7 +92,7 @@ Python surface for other systems (per the MANIFEST): `connections.api`,
 `background` (revocation task), `cloud` (router shell), `main.py` (seed sync).
 
 SDK: [integrations.ts](../../../../../cloud/sdk/src/client/integrations.ts),
-[integration-action-approvals.ts](../../../../../cloud/sdk/src/client/integration-action-approvals.ts).
+`integration-action-approvals.ts`.
 
 ## 4. Consumes
 
@@ -176,7 +176,7 @@ clock-bounded.** A gated action creates (or converges on) one durable
 gateway session, workspace, session, provider, tool, and the SHA-256 of the
 canonical arguments; 600 s TTL on the database clock; every transition is
 compare-and-set; consumption succeeds once
-([action_approvals/service.py](../../../../../server/proliferate/server/integration_gateway/connections/action_approvals/service.py)).
+(`action_approvals/service.py`).
 Approvals work even when the event pipe is degraded because they never ride
 it. Closes: replayed or double-consumed approvals.
 
@@ -294,7 +294,7 @@ Integration: [test_cloud_integrations_api.py](../../../../../server/tests/integr
 [test_cloud_integration_gateway_audit.py](../../../../../server/tests/integration/test_cloud_integration_gateway_audit.py),
 [test_cloud_integration_gateway_policy_api.py](../../../../../server/tests/integration/test_cloud_integration_gateway_policy_api.py),
 [test_cloud_integration_gateway_tool_policy_api.py](../../../../../server/tests/integration/test_cloud_integration_gateway_tool_policy_api.py),
-[test_cloud_integration_action_approvals_api.py](../../../../../server/tests/integration/test_cloud_integration_action_approvals_api.py),
+`test_cloud_integration_action_approvals_api.py`,
 [test_cloud_integrations_admin_api.py](../../../../../server/tests/integration/test_cloud_integrations_admin_api.py).
 
 Unit: [test_integration_config.py](../../../../../server/tests/unit/test_integration_config.py),

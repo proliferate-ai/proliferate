@@ -51,7 +51,7 @@ Not owned (agent_auth's rows, same package today): `agent_api_key`,
 ## 3. Public surface
 
 HTTP, mounted under `/v1/cloud/agent-gateway` by
-[cloud/api.py](../../../../../server/proliferate/server/cloud/api.py) from
+`cloud/api.py` from
 [agent_auth/api.py](../../../../../server/proliferate/server/agent_auth/api.py)
 (`gateway_account_router`):
 

@@ -7,12 +7,16 @@ primitive with two lifecycle classes — and the current implementation
 is recorded as archaeology in [Known gaps](#known-gaps). Supersedes
 [SANDBOX/lifecycle.md](../../../../FEATURE_DOCS/SANDBOX/lifecycle.md).
 
-Read before touching: `server/proliferate/integrations/sandbox/**`,
-`server/proliferate/db/models/cloud/sandboxes.py`,
-`server/proliferate/db/store/cloud_sandboxes.py`,
-`server/proliferate/server/cloud/cloud_sandboxes/**`,
-`server/proliferate/server/cloud/materialization/**`,
-`server/proliferate/server/cloud/runtime/**`, `scripts/build-template.mjs`.
+Read before touching: `server/proliferate/integrations/sandbox/**` and
+`scripts/build-template.mjs` (both live). The rest of the code map below is
+archaeology: cull part 2 deleted `db/models/cloud/sandboxes.py`,
+`db/store/cloud_sandboxes.py`, `server/cloud/cloud_sandboxes/**`,
+`server/cloud/materialization/**`, and `server/cloud/runtime/**` — their
+paths render as plain code spans, and the engine's invariants (with the
+pre-deletion SHA for one-command restore) are recorded in
+[notes-materialization-engine.md](../../../../../delivery/cull-sweep/notes-materialization-engine.md).
+`server/cloud/gateway/**` survives, held for the future `runtime_gateway`
+(spec amendment).
 
 ## 1. Purpose
 
@@ -40,9 +44,9 @@ other way around.
 ## 2. Owned state
 
 The sandbox row
-([sandboxes.py](../../../../../server/proliferate/db/models/cloud/sandboxes.py)),
+(`sandboxes.py`),
 written only through
-[db/store/cloud_sandboxes.py](../../../../../server/proliferate/db/store/cloud_sandboxes.py):
+`db/store/cloud_sandboxes.py`:
 
 ```text
 cloud_sandbox
@@ -86,7 +90,7 @@ what a segment costs).
 ## 3. Public surface
 
 Today, under `/v1/cloud`
-([cloud_sandboxes/api.py](../../../../../server/proliferate/server/cloud/cloud_sandboxes/api.py)):
+(`cloud_sandboxes/api.py`):
 
 | Route | Purpose |
 | --- | --- |
@@ -95,14 +99,14 @@ Today, under `/v1/cloud`
 | `DELETE /cloud-sandbox` | revoke workers and gateway token, mark destroyed, kill the provider VM after commit |
 
 Internal surface consumed by other systems:
-[materialization/service.py](../../../../../server/proliferate/server/cloud/materialization/service.py)
+`materialization/service.py`
 (`schedule_materialize_sandbox`, `schedule_repair_materialize_sandbox`,
 `schedule_materialize_repo_environment`, `schedule_materialize_secret_set`,
 `schedule_materialize_agent_auth`) and the engine entry
 `connect_ready_sandbox` in
-[sandbox_io/connect.py](../../../../../server/proliferate/server/cloud/materialization/sandbox_io/connect.py),
+`sandbox_io/connect.py`,
 always invoked through
-[operation.py](../../../../../server/proliferate/server/cloud/materialization/operation.py).
+`operation.py`.
 
 Target surface (※ new): **placement** — `place(run) → environment` for the
 task class, called by the runs system and answered from the concurrency
@@ -125,17 +129,17 @@ ensure/destroy verbs unchanged; no user-facing ensure for the task class
   segment cost and holds are billing's
   ([BILLING.md](../../../../FEATURE_DOCS/BILLING.md)).
 - **Seam** — `create_cloud_sandbox_enrollment` at runtime launch
-  ([runtime_launch.py](../../../../../server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py))
+  (`runtime_launch.py`)
   and worker liveness for `workerDegraded` ([seam.md](../seam/README.md)).
 - **GitHub** — the authority chain (membership ∧ installation ∧ user-auth)
   that triggers personal-class provisioning; installation-only for the task
   class ([SANDBOX/github-auth.md](../../../../FEATURE_DOCS/SANDBOX/github-auth.md)).
 - **Secrets / agent auth** — what is materialized into the VM
-  ([materialize/secret_set.py](../../../../../server/proliferate/server/cloud/materialization/materialize/secret_set.py),
-  [materialize/agent_auth.py](../../../../../server/proliferate/server/cloud/materialization/materialize/agent_auth.py));
+  (`materialize/secret_set.py`,
+  `materialize/agent_auth.py`);
   custody laws are theirs.
 - **Managed runtime** — the supervisor-owned launch topology inside the VM
-  ([runtime/bootstrap.py](../../../../../server/proliferate/server/cloud/runtime/bootstrap.py)
+  (`runtime/bootstrap.py`
   builds env, launcher, and supervisor config;
   [MANAGED_RUNTIME.md](../../../../FEATURE_DOCS/MANAGED_RUNTIME.md)).
 - **Runs** (※ new) — the placement request and the terminal checkpoint
@@ -153,7 +157,7 @@ reap after retention.
 
 **`error` is per-attempt, not terminal.** It records the last failed
 materialization with a sanitized receipt; the next attempt retries the same
-row ([failures.py](../../../../../server/proliferate/server/cloud/materialization/failures.py)).
+row (`failures.py`).
 
 **Ensure never provisions.** Row bookkeeping is free and unconditionally
 safe to call; provider work happens only inside a materialization operation.
@@ -168,14 +172,14 @@ run provisions live, with the org installation as the only GitHub authority
 materialization repairs.** No wake verb exists (grep-gate E6 holds). A row
 with no stamped runtime access answers `409 cloud_sandbox_runtime_not_ready`
 and schedules exactly one repair, claim-deduplicated across processes
-([locks.py](../../../../../server/proliferate/server/cloud/materialization/locks.py)).
+(`locks.py`).
 
 **One engine, serialized per sandbox.** `connect_ready_sandbox` under the
 per-sandbox lock: refuse destroyed, re-check the billing gate, bump the
 attempt epoch, resume-or-create, accept the resume conservatively
-([resume_acceptance.py](../../../../../server/proliferate/server/cloud/materialization/sandbox_io/resume_acceptance.py)),
+(`resume_acceptance.py`),
 health-probe the existing runtime
-([liveness_health.py](../../../../../server/proliferate/server/cloud/runtime/liveness_health.py)),
+(`liveness_health.py`),
 initialize if needed, mark ready with a CAS write. Lock timeout is a typed
 busy error, never a second engine run.
 
@@ -231,7 +235,7 @@ subject derives from `organization_id`.
 - Usage segment open/close with exact provider identity, consumed by
   billing.
 - Provisioning telemetry
-  ([provisioning_observability.py](../../../../../server/proliferate/server/cloud/provisioning_observability.py)).
+  (`provisioning_observability.py`).
 - Target: `environment_bound` / `environment_lost` on the session registry
   row (drives open / wake / fork), placement queued/admitted for triage, and
   the task-class `killed → run failed` mapping.
@@ -313,22 +317,22 @@ and a browser in the template for QA / computer-use.
 ## 9. Proof
 
 Current laws are pinned by
-[test_cloud_sandbox_ensure_billing_gate.py](../../../../../server/tests/integration/test_cloud_sandbox_ensure_billing_gate.py)
+`test_cloud_sandbox_ensure_billing_gate.py`
 (ensure never provisions, billing gate),
-[test_cloud_sandbox_cold_access_repair.py](../../../../../server/tests/integration/test_cloud_sandbox_cold_access_repair.py)
+`test_cloud_sandbox_cold_access_repair.py`
 (409 + single scheduled repair),
-[test_cloud_sandbox_recovery.py](../../../../../server/tests/integration/test_cloud_sandbox_recovery.py),
-[test_cloud_sandbox_reconnect_self_heal.py](../../../../../server/tests/integration/test_cloud_sandbox_reconnect_self_heal.py),
-[test_cloud_sandbox_billing_recovery.py](../../../../../server/tests/integration/test_cloud_sandbox_billing_recovery.py)
+`test_cloud_sandbox_recovery.py`,
+`test_cloud_sandbox_reconnect_self_heal.py`,
+`test_cloud_sandbox_billing_recovery.py`
 (fenced segments),
-[test_cloud_sandbox_desired_versions.py](../../../../../server/tests/integration/test_cloud_sandbox_desired_versions.py),
-[test_cloud_materialization_concurrency.py](../../../../../server/tests/unit/test_cloud_materialization_concurrency.py)
+`test_cloud_sandbox_desired_versions.py`,
+`test_cloud_materialization_concurrency.py`
 (one engine run per sandbox),
-[test_cloud_materialization_failures.py](../../../../../server/tests/unit/test_cloud_materialization_failures.py)
+`test_cloud_materialization_failures.py`
 (receipts),
-[test_cloud_sandbox_destroy_provider.py](../../../../../server/tests/unit/test_cloud_sandbox_destroy_provider.py)
+`test_cloud_sandbox_destroy_provider.py`
 (delete kills after commit), and the managed-cloud release world under
-[tests/release/src/worlds/managed-cloud/](../../../../../tests/release/src/worlds/managed-cloud/template.ts).
+`tests/release/src/worlds/managed-cloud/`.
 
 Target laws (placement, reap, task class) have no tests yet; each lands with
 its build item.
@@ -359,7 +363,7 @@ its build item.
       deletes must come off this map in the same PR; the survivors move to
       `server/environments/` in sweep Wave 2.
 - [ ] `HarnessLaunchOptionState` shares
-      [sandboxes.py](../../../../../server/proliferate/db/models/cloud/sandboxes.py)
+      `sandboxes.py`
       with the sandbox row but is agent auth's state; split the model file
       when the folder moves.
 - [ ] > [!decision] PABLO DECIDES: what survives of `materialization/`.

@@ -15,7 +15,7 @@ laws-and-proof detail.
   support upload queue and staged snapshot artifacts
   ([`db/models/support.py`](../../../../../server/proliferate/db/models/support.py),
   [`db/store/support_reports.py`](../../../../../server/proliferate/db/store/support_reports.py),
-  [`db/store/support_session_diagnostics.py`](../../../../../server/proliferate/db/store/support_session_diagnostics.py)).
+  `db/store/support_session_diagnostics.py`).
 - **Public surface:** `POST /v1/support/reports`, `.../upload-targets`,
   `.../complete`, plus the `report-uploads` and `messages` compatibility
   routes; Python `proliferate.server.support.{api,service,models}`; the
