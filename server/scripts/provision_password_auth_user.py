@@ -55,7 +55,9 @@ async def provision_user(
             user.is_verified = True
         await db.commit()
     action = "created" if created else "updated"
-    print(f"{action} password user {normalized_email}")
+    # The operator supplied the address; echoing it back adds nothing and
+    # keeps emails out of captured terminal logs.
+    print(f"{action} password user")
 
 
 def main() -> None:
