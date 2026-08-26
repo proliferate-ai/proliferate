@@ -2,7 +2,7 @@
 
 Status: current shipped contract
 
-This document owns executable model and launch-control membership, target observation, session launch intent, live session configuration, and the model gateway. Agent credential selection and route material belong to [Agent auth](README.md).
+This document owns executable model and launch-control membership, target observation, session launch intent, live session configuration, and the model gateway. Agent credential selection and route material belong to [Agent auth](../agent_auth/README.md).
 
 ## Authority
 

@@ -569,7 +569,7 @@ The remaining enforcement exceptions are:
 - the Tier 4 Desktop and cloud update journeys cannot qualify in CI today;
 - the agent-auth and model-gateway platform contracts are now written
   ([agent-auth.md](../../systems/agent_auth/README.md),
-  [MODELS.md](../../systems/agent_auth/models.md),
+  [MODELS.md](../../systems/harnesses/launch-options.md),
   both Status: target with pinned gaps); collectors for these areas audit
   against those documents' bodies, treating their Current-gaps items as
   known deltas rather than failures; and

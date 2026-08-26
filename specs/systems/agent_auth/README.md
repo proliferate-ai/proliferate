@@ -31,7 +31,7 @@ This spec reads as ground truth for the final system. Every difference from what
 | Not owned here | Owner | The line |
 | --- | --- | --- |
 | Serving our models: the LiteLLM instance and config, virtual keys, the credit ledger, top-ups, usage import | [ai_gateway](../ai_gateway/README.md) | this system renders the minted key as an opaque value and consults the budget predicate at render |
-| Harness install, readiness, the registry, the catalog, model/launch-option observation | harnesses ([distribution](../harnesses/distribution.md), [models.md](models.md)) | the registry declares each harness's auth vocabulary; this system applies it; install events arrive as probe pokes |
+| Harness install, readiness, the registry, the catalog, model/launch-option observation | harnesses ([distribution](../harnesses/distribution.md), [launch-options.md](../harnesses/launch-options.md)) | the registry declares each harness's auth vocabulary; this system applies it; install events arrive as probe pokes |
 | Launching sessions | sessions | sessions applies this system's answer faithfully and never looks inside it — wrong answer is our bug, right answer misapplied is theirs |
 | User login, JWTs, org membership | identity | a different auth |
 | Pixels | the settings surface | panes render this system's documents and add nothing |

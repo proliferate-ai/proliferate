@@ -24,7 +24,7 @@ A same-harness selection is `update_current_chat`, so it preserves the durable s
 
 ## Related Owners
 
-- [Models and harness launch options](../agent_auth/models.md) owns
+- [Models and harness launch options](../harnesses/launch-options.md) owns
   pre-launch executable identity and the active session's live configuration
   authority.
 - [Composer](composer.md) owns input, controls, picker presentation, panels,

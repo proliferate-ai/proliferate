@@ -18,7 +18,7 @@ This spec reads as ground truth; differences from `main` are collected in the tr
 | --- | --- | --- |
 | Which credential a harness launches with, delivery, application, seats | [agent_auth](../agent_auth/README.md) | this system hands agent_auth an opaque key + base URL and a budget predicate; agent_auth renders and refuses in plain words |
 | Compute billing, plans, segments, Stripe relationship | billing | top-ups charge *through* billing; the LLM ledger is this system's |
-| Which models a target *advertises* | harnesses ([models.md](../agent_auth/models.md)) | the gateway's model list is observed through the harness before any surface may offer it |
+| Which models a target *advertises* | harnesses ([models.md](../harnesses/launch-options.md)) | the gateway's model list is observed through the harness before any surface may offer it |
 | Company-systems gateway (MCP tools) | integration_gateway | the analogous gateway for tools, not models |
 
 **Rules of the road:**

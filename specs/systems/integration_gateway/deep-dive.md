@@ -9,7 +9,7 @@
 
 This platform owns connected third-party integration accounts, the Cloud-hosted integration MCP gateway, and the Worker identity that gives AnyHarness scoped access to that gateway. Provider credentials remain encrypted in Cloud; AnyHarness receives only a Proliferate gateway bearer.
 
-Harness model credentials and the LLM gateway are separate owners: [AGENT_AUTH.md](../agent_auth/README.md) and [MODELS.md](../agent_auth/models.md).
+Harness model credentials and the LLM gateway are separate owners: [AGENT_AUTH.md](../agent_auth/README.md) and [MODELS.md](../harnesses/launch-options.md).
 
 ## Mental Model
 

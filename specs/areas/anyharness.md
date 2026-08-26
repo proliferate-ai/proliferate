@@ -228,7 +228,7 @@ Specs:
 - [../codebase/platforms/product/agent-distribution.md](../systems/harnesses/distribution.md) for
   distribution pins, install/readiness topology, and seed artifacts; executable
   model/control observation and launch resolution belong to
-  [MODELS.md](../systems/agent_auth/models.md).
+  [MODELS.md](../systems/harnesses/launch-options.md).
 - [../codebase/platforms/product/mcp-runtime.md](../systems/subagents/mcp-runtime.md) for user MCP bindings, product MCP servers,
   session extensions, capability tokens, and MCP elicitation.
 - [../codebase/platforms/product/agent-features/servers.md](../systems/subagents/product-mcp-servers.md) for the repeatable product
@@ -5435,7 +5435,7 @@ The successful heartbeat acknowledgement carries `launchOptionsUploadAllowed`. A
 
 On `true`, the Worker lists runtime harness kinds, reads `GET /v1/agents/{kind}/launch-options`, serializes that response verbatim except for runtime-only readiness decoration, and uploads it to `/v1/cloud/harness-launch-options/{kind}`. In-memory state tracks the highest successfully copied source revision per harness. Equal/older revisions are skipped; a read, encoding, network, or ingest failure leaves the revision unadvanced for a later tick. The Worker never interprets model/control IDs, defaults, basis state, or probe evidence.
 
-See [MODELS.md "Cloud copy"](../systems/agent_auth/models.md#cloud-copy) for the server half of this contract.
+See [MODELS.md "Cloud copy"](../systems/harnesses/launch-options.md#cloud-copy) for the server half of this contract.
 
 ## Catalog Convergence (none)
 

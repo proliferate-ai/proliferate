@@ -7,7 +7,7 @@ The settings surface: one route (`/settings?section=…`) hosting user-scope, or
 | Information architecture (scopes, sections, admin state) — target | [information-architecture.md](information-architecture.md) |
 | Appearance scaling gate and preference — target | [appearance-scaling.md](appearance-scaling.md) |
 | Billing surfaces' semantics | [BILLING.md](../billing/deep-dive.md) |
-| Agent auth panes' semantics | [AGENT_AUTH.md](../agent_auth/README.md), [MODELS.md](../agent_auth/models.md) |
+| Agent auth panes' semantics | [AGENT_AUTH.md](../agent_auth/README.md), [MODELS.md](../harnesses/launch-options.md) |
 | Organization invitations and members | [../organizations/invitations.md](../identity/invitations.md) |
 
 ## Purpose

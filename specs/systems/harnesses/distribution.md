@@ -31,7 +31,7 @@ Boundaries — the auth split is declare vs apply:
   contract.
 - **Executable models and controls** belong to the selected target's observed
   launch-options state, not distribution.
-- **Gateway model lists** belong to the [model gateway](../agent_auth/models.md);
+- **Gateway model lists** belong to the [model gateway](launch-options.md);
   this platform knows only whether a harness supports the gateway route,
   never which models it serves.
 
@@ -118,7 +118,7 @@ The installer materializes exactly what the catalog pin says and nothing else. D
   contract's `ReconcileAgentResult.failureKind` → the terminal-failure toast,
   so the UI names WHY a reinstall failed.
 
-Installation is automatic. Every harness supported on a surface converges with no user action: absent means install, drifted means reinstall, and both are the same mechanism — the reconcile job ([`installer/reconcile/execution.rs`](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/reconcile/execution.rs)), triggered by the startup pass on every runtime boot (`spawn_startup_pass` in [`runtime.rs`](../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)), walks the supported set and installs whatever the drift planner ([`installer/install_policy.rs`](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/install_policy.rs)) says is absent or stale. A user authenticates harnesses; they never install them. Proliferate always maintains its own managed copy (R2.0, RULED): a user's own copy on PATH is detection-only now and no longer blocks the managed install — resolution already prefers the managed copy when both exist ([`readiness/artifacts.rs`](../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/artifacts.rs), `resolve_native_artifact`/`resolve_agent_process_artifact`), so nothing displaces the user's binary, but nothing defers to it either. The one remaining carve-out is one named predicate ([`installer/auto_install.rs`](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/auto_install.rs)), deliberately not a side effect of the pass's scope. Completed installs poke the launch-options probe ([MODELS.md](../agent_auth/models.md)) so a newly converged harness re-observes its executable options. The one carve-out:
+Installation is automatic. Every harness supported on a surface converges with no user action: absent means install, drifted means reinstall, and both are the same mechanism — the reconcile job ([`installer/reconcile/execution.rs`](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/reconcile/execution.rs)), triggered by the startup pass on every runtime boot (`spawn_startup_pass` in [`runtime.rs`](../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)), walks the supported set and installs whatever the drift planner ([`installer/install_policy.rs`](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/install_policy.rs)) says is absent or stale. A user authenticates harnesses; they never install them. Proliferate always maintains its own managed copy (R2.0, RULED): a user's own copy on PATH is detection-only now and no longer blocks the managed install — resolution already prefers the managed copy when both exist ([`readiness/artifacts.rs`](../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/artifacts.rs), `resolve_native_artifact`/`resolve_agent_process_artifact`), so nothing displaces the user's binary, but nothing defers to it either. The one remaining carve-out is one named predicate ([`installer/auto_install.rs`](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/auto_install.rs)), deliberately not a side effect of the pass's scope. Completed installs poke the launch-options probe ([MODELS.md](launch-options.md)) so a newly converged harness re-observes its executable options. The one carve-out:
 
 - Cursor never installs in cloud. Its readiness resolves through a headless
   credential path — an enabled `api_key` selection (agent-auth.md's
@@ -133,7 +133,7 @@ Installation is automatic. Every harness supported on a surface converges with n
   macOS Keychain, which no headless Linux sandbox has and which no cloud
   surface can interactively seed. For the same keychain reason it is
   excluded from unattended launch-option probing and refreshed only on request
-  ([MODELS.md](../agent_auth/models.md)'s probe engine).
+  ([MODELS.md](launch-options.md)'s probe engine).
 
 When a managed copy lands alongside a harness the user already had on PATH, the settings pane (`HarnessPane.tsx`) shows a one-time, dismissible notice explaining that Proliferate now maintains its own copy and the user's own install is untouched; dismissal persists per harness under `proliferate.harnessManagedNotice.v1`. The signal is an additive, tolerant `AgentSummary.userPathCopyDetected` bit (anyharness-contract), read independently of which artifact resolution picked — a managed hit short-circuits before ever checking PATH, so the resolved artifact alone cannot express "both exist". An escape hatch, `ANYHARNESS_ALWAYS_MANAGED_INSTALL=off`, restores the pre-R2.0 PATH carve-out for operators who need to revert without a code change; it defaults on (the ruling).
 

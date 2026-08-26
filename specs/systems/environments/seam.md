@@ -152,7 +152,7 @@ Target laws (※ new — asserted here so the build has a fixed target):
   the worker copies up
   ([launch_options_sync.rs](../../../anyharness/crates/proliferate-worker/src/launch_options_sync.rs)
   is seam transport; the payload is opaque to it —
-  [MODELS.md](../agent_auth/models.md)).
+  [MODELS.md](../harnesses/launch-options.md)).
 - **Environments** own the sandbox row, provisioning, and the moment a cloud
   worker's ticket is minted
   ([environments.md](../environments/README.md)).

@@ -47,7 +47,7 @@ Emitted projections: the triage list (per org, filter by subject / definition / 
 | placement, task environments, concurrency limiter | environments (target) | binding compute to a run; reap after checkpoint |
 | spend / segments / credit | billing ([BILLING.md](../billing/deep-dive.md)) | the envelope's money side; org is the only billing subject (Law 9) |
 | (subject, run) grants | integration gateway (target) | the envelope's capability side |
-| per-run gateway keys | model gateway ([MODELS.md](../agent_auth/models.md)) | budget enforcement on model traffic |
+| per-run gateway keys | model gateway ([MODELS.md](../harnesses/launch-options.md)) | budget enforcement on model traffic |
 | subjects (user, service) | accounts / organizations | every run has exactly one subject |
 
 ## 5. Laws
