@@ -69,7 +69,7 @@ Native harness login is not a method: it is an onboarding detection that offers 
         - The settings meters render it.
     - Three importable functions — the renderer (`render_agent_auth_state`), `resolve_headless` (target), `seat_usage_probe` (target).
         - The renderer is called only by this system's own routes; `resolve_headless` by automations at run placement; nothing else imports anything else.
-- **Consumes:** ai_gateway (`gateway_profile`, `is_gateway_budget_available`, `verify_key`) · the registry mirror constants · encryption at rest · org membership for policy routes.
+- **Consumes:** ai_gateway — `is_gateway_budget_available` at render, plus the renderer's gateway inputs (the public proxy base URL and the enrollment's per-harness virtual-key map, as opaque values) · the registry mirror constants · encryption at rest · org membership for policy routes.
 
 ### runtime `agent_auth` — the machine-truth half
 

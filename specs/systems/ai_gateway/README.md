@@ -38,7 +38,7 @@ This spec reads as ground truth; differences from `main` are collected in the tr
     - `GET /v1/cloud/agent-gateway/enrollment` — the caller's sync/budget status, for the settings surface.
     - `ensure_signup_enrollment` / `ensure_org_enrollment` — accounts and organizations call these after commit via `signup_hook.py`; durable row first, LiteLLM shape second, failure marks `failed` for the backfill. Never raises into an auth flow.
     - `is_gateway_budget_available` — the launch-gating predicate; agent_auth's renderer consults it and withholds gateway sources when false.
-    - `gateway_profile` (the minted key + base URL for a harness) — consumed by agent_auth's renderer as an opaque value.
+    - The renderer's gateway inputs — `build_agent_auth_state`'s input gathering hands agent_auth the public proxy base URL (`agent_gateway_litellm_public_base_url`) and the enrollment's per-harness virtual-key map, consumed as opaque values. (There is no `gateway_profile` function; the seam is the renderer's input assembly.)
     - `create_llm_topup_grant` — billing calls it when a top-up invoice is paid; records the grant and reactivates what it re-funds.
     - `get_remaining_credit_usd`, `llm_cost_usd_timeseries` and siblings — read-only ledger projections for the billing usage API.
 - **Consumes:** `integrations/litellm` (admin + spend-log client under the master key) · billing (Stripe charge for top-ups; the `free_cloud_allocation` anti-abuse guard) · organizations (membership rows drive the backfill) · the `agent_gateway_*` settings in config.py.
@@ -59,7 +59,7 @@ The five tables, one row meaning each (full DDL rides the code split; column det
 
 | Table | One row is | Load-bearing invariants |
 | --- | --- | --- |
-| `agent_gateway_enrollment` | one (org, member) in the org's LiteLLM team: `subject_kind`, `billing_subject_id`, `litellm_team_id`, `litellm_user_id`, `sync_status ∈ {pending, synced, failed}`, `budget_status ∈ {ok, exhausted, limit_reached}` | the team is the only budget layer; the row never carries `max_budget` |
+| `agent_gateway_enrollment` | one (org, member) in the org's LiteLLM team: `subject_kind`, `billing_subject_id`, `litellm_team_id`, `litellm_user_id`, `sync_status ∈ {pending, synced, failed}`, `budget_status ∈ {ok, exhausted, limit_reached}` | the team is the only budget layer; the row never carries `max_budget`. `subject_kind` still admits `user`: legacy user-kind rows persist soft-revoked so pre-migration spend attribution resolves — org-only is enforced for new enrollments by code, not schema |
 | `agent_gateway_enrollment_key` | one access-group-scoped virtual key per (enrollment, gateway-capable harness): alias, token hash, `verification_status` | alias is deterministic per (enrollment, harness), so re-minting is idempotent |
 | `agent_llm_usage_event` | one imported LiteLLM spend-log row, keyed by unique `litellm_request_id`, attributed to enrollment / billing subject / harness / model | idempotent insert |
 | `llm_credit_grant` | one credit-side ledger entry (`amount_usd`): signup free credit or a purchased top-up | remaining credit = active grants − imported usage cost |
@@ -73,7 +73,7 @@ Also owned: [config.yaml](../../../server/litellm/config.yaml) — the reviewed 
 
 **Flow 2 — Key mint.** One virtual key per (member, gateway-capable harness), alias-deterministic, access-group-scoped (`_sync_one_harness_key`). The key reaches a machine only inside agent_auth's rendered document; this system never delivers.
 
-**Flow 3 — Funding and exhaustion.** Remaining credit = grants − imported cost, mirrored onto the LiteLLM team budget. Zero remaining: keys disabled, `budget_status=exhausted`, `is_gateway_budget_available` turns false, agent_auth withholds gateway sources at render and refuses launches with the reason. A top-up (Stripe, through billing) records a grant and reactivates. Org caps produce `limit_reached` the same way; the next import tick after a raise reactivates.
+**Flow 3 — Funding and exhaustion.** Remaining credit = grants − imported cost, mirrored onto the LiteLLM team budget. Zero remaining: the team-budget mirror hits zero (the proxy blocks at its layer), `budget_status=exhausted`, `is_gateway_budget_available` turns false, and agent_auth withholds gateway sources at render, refusing launches with the reason — there is no per-key disable verb; the mirror and the withhold are the mechanism. A top-up (Stripe, through billing) records a grant and reactivates. Org caps produce `limit_reached` the same way; the next import tick after a raise reactivates.
 
 **Flow 4 — Usage import.** The importer reads spend logs from `last_seen − overlap`, inserts by unique request id (idempotent across restarts), applies margin, attributes to (subject, harness, model), and enforces exhaustion + org caps as it goes.
 
@@ -110,7 +110,7 @@ server/litellm/config.yaml · Dockerfile         the data plane: models, provide
 cloud/sdk/src/client/agent-gateway.ts           SDK client
 ```
 
-Settings (config.py `agent_gateway_*`): enabled flag, LiteLLM base URLs + master key, default org budget, free credit amount, margin percent, importer/verification/top-up intervals and thresholds, top-up price id, policy minimum plan.
+Settings (config.py `agent_gateway_*`): enabled flag, LiteLLM base URLs + master key + timeout, default org budget, free credit amount, margin percent, importer/verification/top-up intervals and thresholds, usage-import overlap window, top-up price id + amount, policy minimum plan, qualification run/shard ids.
 
 Proof: the unit and integration suites named per concern — enrollment, usage import, top-ups, litellm integration, config access groups (the reviewed config.yaml is pinned by `test_litellm_config_access_groups.py`), key lifecycle, migration, verification, org-member gateway, LLM limit enforcement — under `server/tests/{unit,integration}/test_agent_gateway_*` and siblings.
 
@@ -135,6 +135,6 @@ Failure modes: LiteLLM unreachable at enrollment → `sync_status=failed`, backf
 - [x] Claude 5 family added to the direct-Anthropic model list — PR #2249 (the first funded launch 403'd on `claude-sonnet-5`; lands on the next release run)
 - [ ] Refresh the codex model list the same way (gpt-5.2-era entries; codex's current default is newer — the same 403 is waiting)
 - [ ] Code split into `server/ai_gateway/` + manifest + recompose (with agent_auth's build list)
-- [ ] The blocked-signup-grant repair path (delta row 2) — also the live founder-org fix
+- [ ] Find the signup-hook miss that let an org reach day 8 with zero grants; alert on zero-grant orgs (delta row 2 — the founder org itself is already fixed)
 - [ ] Enable verification once config.yaml settles
 - [ ] Per-run keys + envelopes (pending the ruling) · then ai_magic through the gateway
