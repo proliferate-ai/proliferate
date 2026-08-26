@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _BLOCKED_ABSOLUTE_PREFIXES = ("/proc", "/sys", "/dev", "/run/e2b")

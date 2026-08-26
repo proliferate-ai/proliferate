@@ -18,9 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
-from proliferate.server.cloud.agent_gateway import usage_import as usage_import_service
-from proliferate.server.cloud.agent_gateway.enrollment import ensure_org_enrollment
-from proliferate.server.cloud.agent_gateway.topups import (
+from proliferate.server.agent_auth import usage_import as usage_import_service
+from proliferate.server.agent_auth.enrollment import ensure_org_enrollment
+from proliferate.server.agent_auth.topups import (
     create_llm_topup_grant,
     run_llm_topups,
 )

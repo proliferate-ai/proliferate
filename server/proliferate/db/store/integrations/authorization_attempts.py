@@ -14,10 +14,10 @@ from uuid import UUID
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.integration_authorization import (
+from proliferate.db.models.integration_authorization import (
     CloudIntegrationAuthorizationAttempt,
 )
-from proliferate.db.models.cloud.integrations import CloudIntegrationAccount
+from proliferate.db.models.integrations import CloudIntegrationAccount
 from proliferate.db.store.integrations.accounts import (
     IntegrationAccountRecord,
 )

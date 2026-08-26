@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorkerEnrollment
+from proliferate.db.models.runtime_workers import CloudRuntimeWorkerEnrollment
 from proliferate.db.store import runtime_workers as runtime_worker_store
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account

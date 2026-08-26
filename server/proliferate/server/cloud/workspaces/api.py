@@ -11,9 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.server.cloud.github_app.transactions import (
-    commit_github_app_reauthorization_on_error,
-)
 from proliferate.server.cloud.workspaces.materializations import access as materializations_access
 from proliferate.server.cloud.workspaces.materializations import (
     service as materializations_service,
@@ -38,6 +35,9 @@ from proliferate.server.cloud.workspaces.service import (
     list_cloud_workspaces_for_user,
     restore_cloud_workspace_for_user,
     sync_cloud_workspace_display_name,
+)
+from proliferate.server.github.transactions import (
+    commit_github_app_reauthorization_on_error,
 )
 
 _REAUTH_TRANSACTION_DEPENDENCIES = [Depends(commit_github_app_reauthorization_on_error)]

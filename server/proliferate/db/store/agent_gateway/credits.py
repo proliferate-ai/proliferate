@@ -23,7 +23,7 @@ from proliferate.constants.agent_gateway import (
     LLM_CREDIT_SOURCE_FREE_SIGNUP,
     LLM_CREDIT_SOURCE_TOPUP,
 )
-from proliferate.db.models.cloud.agent_gateway import (
+from proliferate.db.models.agent_gateway import (
     AgentLlmUsageEvent,
     LlmCreditGrant,
 )

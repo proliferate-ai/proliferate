@@ -19,7 +19,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import AGENT_AUTH_SURFACES
-from proliferate.db.models.cloud.agent_gateway import AgentAuthDeliveryAck
+from proliferate.db.models.agent_gateway import AgentAuthDeliveryAck
 from proliferate.db.store.agent_gateway.mappers import delivery_ack_record
 from proliferate.db.store.agent_gateway.records import AgentAuthDeliveryAckRecord
 from proliferate.lib.infra.time.wall_clock import utcnow

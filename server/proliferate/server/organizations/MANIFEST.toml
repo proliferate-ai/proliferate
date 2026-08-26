@@ -16,9 +16,8 @@ public_surface = [
 allowed_importers = [
     "accounts",
     "billing",
-    "cloud/agent_run_config",
-    "cloud/integrations",
-    "cloud/runtime_workers",
     "main.py",
     "setup",
+    "integration_gateway",
+    "seam",
 ]

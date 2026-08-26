@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.cloud import GitProvider
 from sqlalchemy import select
 
-from proliferate.db.models.cloud.repositories import RepoConfig
+from proliferate.db.models.repositories import RepoConfig
 from proliferate.db.models.workflows import WorkflowDefinition, WorkflowInvocation
 from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.workflows.domain.invocation import canonical_json

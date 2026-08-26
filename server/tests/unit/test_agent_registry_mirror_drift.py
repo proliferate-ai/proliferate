@@ -21,7 +21,7 @@ from proliferate.server.catalogs.service import (
     registry_multi_source_kinds,
     registry_single_source_kinds,
 )
-from proliferate.server.cloud.agent_gateway.selection_rules import (
+from proliferate.server.agent_auth.selection_rules import (
     MULTI_SOURCE_HARNESSES,
     SINGLE_SOURCE_HARNESSES,
 )

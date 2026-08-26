@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.cloud import CloudSandboxStatus
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
-from proliferate.server.cloud.runtime_workers.service import create_cloud_sandbox_enrollment
+from proliferate.server.seam.workers.service import create_cloud_sandbox_enrollment
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 

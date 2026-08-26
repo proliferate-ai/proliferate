@@ -108,7 +108,7 @@ from proliferate.constants.agent_gateway import (
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store.agent_gateway import AgentAuthSelectionRecord
-from proliferate.server.cloud.agent_gateway.budget import (
+from proliferate.server.agent_auth.budget import (
     get_gateway_enrollment_for_user,
     is_gateway_budget_available,
 )

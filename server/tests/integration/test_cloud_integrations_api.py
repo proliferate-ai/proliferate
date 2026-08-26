@@ -15,7 +15,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_STATUS_ACTIVE,
 )
-from proliferate.db.models.cloud.integrations import (
+from proliferate.db.models.integrations import (
     CloudIntegrationAccount,
     CloudIntegrationDefinition,
     CloudIntegrationOAuthFlow,
@@ -29,17 +29,17 @@ from proliferate.integrations.integration_oauth.models import (
     ProtectedResourceMetadata,
     RegisteredOAuthClient,
 )
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.integrations import api as integrations_api
-from proliferate.server.cloud.integrations import service as integrations_service
-from proliferate.server.cloud.integrations.config import (
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.integration_gateway.connections import api as integrations_api
+from proliferate.server.integration_gateway.connections import service as integrations_service
+from proliferate.server.integration_gateway.connections.config import (
     IntegrationConfig,
     StaticUrl,
     serialize_definition_config,
 )
-from proliferate.server.cloud.integrations.oauth import clients as oauth_clients
-from proliferate.server.cloud.integrations.oauth import service as oauth_service
-from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.server.integration_gateway.connections.oauth import clients as oauth_clients
+from proliferate.server.integration_gateway.connections.oauth import service as oauth_service
+from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
 from proliferate.config import settings
 from proliferate.lib.infra.encryption.json import decrypt_json
 from tests.e2e.cloud.helpers.auth import create_user_and_login

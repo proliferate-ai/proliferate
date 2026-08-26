@@ -23,11 +23,11 @@ from proliferate.integrations.github import (
     list_branches,
 )
 from proliferate.db.store.repositories import RepoEnvironmentValue
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.repos.domain.github_credentials import (
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.github.repos.domain.github_credentials import (
     CloudRepoGitHubCredentials,
 )
-from proliferate.server.cloud.repos.service import (
+from proliferate.server.github.repos.service import (
     _require_github_access_token,
     build_cloud_repo_credentials_for_user,
     get_cloud_repo_branches,
@@ -109,7 +109,7 @@ class TestGetRepoBranchesForUser:
         branches = GitHubRepoBranches(default_branch="main", branches=["main", "dev"])
 
         with patch(
-            "proliferate.server.cloud.repos.service.get_github_repo_branches",
+            "proliferate.server.github.repos.service.get_github_repo_branches",
             new_callable=AsyncMock,
             return_value=branches,
         ) as mock:
@@ -127,7 +127,7 @@ class TestGetRepoBranchesForUser:
         user = _make_user(github_token="gh-token")
 
         with patch(
-            "proliferate.server.cloud.repos.service.get_github_repo_branches",
+            "proliferate.server.github.repos.service.get_github_repo_branches",
             new_callable=AsyncMock,
             side_effect=GitHubRepoAccessRequired("no access"),
         ):
@@ -146,7 +146,7 @@ class TestGetRepoBranchesForUser:
         user = _make_user(github_token="gh-token")
 
         with patch(
-            "proliferate.server.cloud.repos.service.get_github_repo_branches",
+            "proliferate.server.github.repos.service.get_github_repo_branches",
             new_callable=AsyncMock,
             side_effect=GitHubRepoAccessRequired("no access"),
         ):
@@ -167,7 +167,7 @@ class TestGetRepoBranchesForUser:
         user = _make_user(github_token="gh-token")
 
         with patch(
-            "proliferate.server.cloud.repos.service.get_github_repo_branches",
+            "proliferate.server.github.repos.service.get_github_repo_branches",
             new_callable=AsyncMock,
             side_effect=GitHubIntegrationError("timeout"),
         ):
@@ -194,7 +194,7 @@ class TestGetRepoBranchesForUser:
         user = _make_user(github_token="gh-token")
 
         with patch(
-            "proliferate.server.cloud.repos.service.get_github_repo_branches",
+            "proliferate.server.github.repos.service.get_github_repo_branches",
             new_callable=AsyncMock,
             side_effect=GitHubServiceUnavailable(
                 "GitHub is temporarily unavailable. Try again.",
@@ -237,7 +237,7 @@ class TestGetRepoBranchesForCredentials:
         branches = GitHubRepoBranches(default_branch="main", branches=["main", "dev"])
 
         with patch(
-            "proliferate.server.cloud.repos.service.get_github_repo_branches",
+            "proliferate.server.github.repos.service.get_github_repo_branches",
             new_callable=AsyncMock,
             return_value=branches,
         ) as mock:
@@ -264,7 +264,7 @@ class TestGetCloudRepoBranches:
         )
 
         with patch(
-            "proliferate.server.cloud.repos.service.get_github_repo_branches",
+            "proliferate.server.github.repos.service.get_github_repo_branches",
             new_callable=AsyncMock,
             return_value=branches,
         ):
@@ -349,12 +349,12 @@ class TestListCloudRepositories:
 
         with (
             patch(
-                "proliferate.server.cloud.repos.service.list_github_repositories",
+                "proliferate.server.github.repos.service.list_github_repositories",
                 new_callable=AsyncMock,
                 return_value=github_page,
             ) as list_github,
             patch(
-                "proliferate.server.cloud.repos.service.list_cloud_repo_environments",
+                "proliferate.server.github.repos.service.list_cloud_repo_environments",
                 new_callable=AsyncMock,
                 return_value=environments,
             ),
@@ -389,7 +389,7 @@ class TestListCloudRepositories:
         )
         with (
             patch(
-                "proliferate.server.cloud.repos.service.list_github_repositories",
+                "proliferate.server.github.repos.service.list_github_repositories",
                 new_callable=AsyncMock,
                 side_effect=GitHubRateLimited("slow down", retry_after_seconds=30),
             ),
@@ -420,7 +420,7 @@ class TestListCloudRepositories:
         )
         with (
             patch(
-                "proliferate.server.cloud.repos.service.list_github_repositories",
+                "proliferate.server.github.repos.service.list_github_repositories",
                 new_callable=AsyncMock,
                 side_effect=GitHubServiceUnavailable(
                     "GitHub is temporarily unavailable. Try again.",

@@ -154,7 +154,7 @@ neither dominates. Both compute paths
 `_resolve_compute_limit_pause`,
 [`authorization.py`](../../server/proliferate/server/billing/authorization.py)'s
 `_compute_budget_cap_breach`) and the LLM import path
-([`usage_import.py`](../../server/proliferate/server/cloud/agent_gateway/usage_import.py)'s
+([`usage_import.py`](../../server/proliferate/server/agent_auth/usage_import.py)'s
 `_enforce_org_llm_limits`) check every enabled row before deciding.
 Display-only,
 [`resolve_effective_limit`](../../server/proliferate/server/billing/budget_limits.py)
@@ -333,7 +333,7 @@ breached limit, and pauses the provider sandbox
 lock the live path uses. A `created`/`resumed` provider webhook landing on
 an enforced spend hold is re-paused and closed by the webhook handler's own
 billing check
-([`webhooks/service.py`](../../server/proliferate/server/cloud/webhooks/service.py))
+(`webhooks/service.py` (deleted with the E2B webhook lane, cull part 1))
 — a separate, narrower gate than the resume-path one. In the target state
 it resolves the payer the same way segment attribution does and evaluates
 budget caps as well as the hold, so an over-limit wake cannot stand until
@@ -346,9 +346,9 @@ never bypasses an active budget limit.**
 ([`constants/agent_gateway.py`](../../server/proliferate/constants/agent_gateway.py))
 has `ok`, `exhausted` (credit ran out), `limit_reached` (an admin cap
 bound, regardless of credit). `_enforce_subject_exhaustion`
-([`usage_import.py`](../../server/proliferate/server/cloud/agent_gateway/usage_import.py))
+([`usage_import.py`](../../server/proliferate/server/agent_auth/usage_import.py))
 never overwrites `limit_reached`; top-up reactivation
-([`topups.py`](../../server/proliferate/server/cloud/agent_gateway/topups.py))
+([`topups.py`](../../server/proliferate/server/agent_auth/topups.py))
 only clears `exhausted`. Only `_enforce_org_llm_limits` clears
 `limit_reached`, once every applicable limit passes and credit is positive.
 
@@ -570,7 +570,7 @@ Deltas between this document and `main`, each struck by its follow-up PR:
       ruling 3, 2026-07-28) and stays a documented deferral here, not a
       silent fix.
 - [ ] **N2 webhook gate.** The `created`/`resumed` webhook re-pause check
-      ([`webhooks/service.py`](../../server/proliferate/server/cloud/webhooks/service.py))
+      (`webhooks/service.py` (deleted with the E2B webhook lane, cull part 1))
       resolves `ensure_personal_billing_subject` (never the org payer the
       way `resolve_billing_subject_id_for_user` does) and tests only
       `active_spend_hold` — it does not evaluate compute budget caps, so

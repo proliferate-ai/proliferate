@@ -9,7 +9,7 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.integration_revocation import (
+from proliferate.db.models.integration_revocation import (
     CloudIntegrationRevocationJob,
 )
 from proliferate.lib.infra.time.wall_clock import utcnow

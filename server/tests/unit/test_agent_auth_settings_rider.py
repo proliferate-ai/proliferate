@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from proliferate.server.cloud.agent_gateway.models import agent_auth_state_payload
+from proliferate.server.agent_auth.models import agent_auth_state_payload
 from proliferate.server.cloud.materialization.materialize import agent_auth
 from tests.unit.test_agent_auth_materialization import _inputs, _selection
 

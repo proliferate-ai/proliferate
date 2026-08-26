@@ -17,7 +17,6 @@ from proliferate.server.cloud.runtime.bundle import (
 from tests.e2e.cloud.helpers.shared import (
     CloudE2ETestError,
     CloudTestConfig,
-    DEFAULT_E2B_WEBHOOK_URL,
     DEFAULT_GITHUB_BASE_BRANCH,
     DEFAULT_GITHUB_OWNER,
     DEFAULT_GITHUB_REPO,
@@ -114,14 +113,9 @@ def build_linux_runtime_command() -> list[str] | None:
 def load_cloud_test_config() -> CloudTestConfig:
     return CloudTestConfig(
         run_cloud_e2e=env_flag("RUN_CLOUD_E2E"),
-        run_live_e2b_webhook=env_flag("RUN_LIVE_E2B_WEBHOOK"),
         server_base_url=os.environ.get(
             "PROLIFERATE_CLOUD_TEST_BASE_URL",
             DEFAULT_SERVER_BASE_URL,
-        ),
-        e2b_webhook_public_url=os.environ.get(
-            "E2B_WEBHOOK_PUBLIC_URL",
-            DEFAULT_E2B_WEBHOOK_URL,
         ),
         github_owner=os.environ.get("CLOUD_TEST_GITHUB_OWNER", DEFAULT_GITHUB_OWNER),
         github_repo=os.environ.get("CLOUD_TEST_GITHUB_REPO", DEFAULT_GITHUB_REPO),
@@ -134,7 +128,6 @@ def load_cloud_test_config() -> CloudTestConfig:
         google_api_key=discover_secret("GOOGLE_API_KEY"),
         e2b_api_key=discover_secret("E2B_API_KEY"),
         e2b_template_name=discover_secret("E2B_TEMPLATE_NAME"),
-        e2b_webhook_signature_secret=discover_secret("E2B_WEBHOOK_SIGNATURE_SECRET"),
         claude_auth_path=discover_existing_path(
             [
                 Path.home() / ".claude" / ".credentials.json",
@@ -179,11 +172,6 @@ def configure_cloud_settings_for_provider(
     monkeypatch.setattr(settings, "cloud_billing_mode", "off")
     monkeypatch.setattr(settings, "e2b_api_key", config.e2b_api_key or "")
     monkeypatch.setattr(settings, "e2b_template_name", config.e2b_template_name or "")
-    monkeypatch.setattr(
-        settings,
-        "e2b_webhook_signature_secret",
-        config.e2b_webhook_signature_secret or "",
-    )
 
 
 def env_flag(name: str) -> bool:

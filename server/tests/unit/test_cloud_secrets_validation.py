@@ -1,6 +1,6 @@
 import pytest
 
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.secrets.validation import (
     normalize_global_secret_file_path,
     normalize_secret_env_name,

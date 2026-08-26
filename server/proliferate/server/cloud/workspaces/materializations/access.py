@@ -18,7 +18,7 @@ from proliferate.db.store.cloud_workspace_materializations import (
     CloudWorkspaceMaterializationValue,
 )
 from proliferate.db.store.cloud_workspaces import CloudWorkspaceValue
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.workspaces.models import CreateMaterializationIntentRequest
 
 

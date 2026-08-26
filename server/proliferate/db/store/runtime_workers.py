@@ -23,7 +23,7 @@ from proliferate.constants.cloud import (
     CLOUD_RUNTIME_WORKER_OFFLINE_THRESHOLD_SECONDS,
     CLOUD_RUNTIME_WORKER_TOKEN_DOMAIN,
 )
-from proliferate.db.models.cloud.runtime_workers import (
+from proliferate.db.models.runtime_workers import (
     CloudIntegrationGatewayToken,
     CloudRuntimeWorker,
     CloudRuntimeWorkerEnrollment,

@@ -55,7 +55,7 @@ where surface is `local` (desktop) or `cloud` (sandboxes) — the same user
 can run the gateway in cloud sandboxes and their native login on desktop.
 
 Three tables in
-[db/models/cloud/agent_gateway.py](../../server/proliferate/db/models/cloud/agent_gateway.py):
+[db/models/agent_gateway.py](../../server/proliferate/db/models/agent_gateway.py):
 
 | Table | One row is | Scope | Key fields |
 | --- | --- | --- | --- |
@@ -80,7 +80,7 @@ Selection laws:
   Zero enabled rows for a scope means the harness runs on its own login.
   `native` exists as a string only in org-policy allow-lists.
 - **Cardinality is a per-harness rule**, codified in
-  [selection_rules.py](../../server/proliferate/server/cloud/agent_gateway/selection_rules.py):
+  [selection_rules.py](../../server/proliferate/server/agent_auth/selection_rules.py):
   claude, codex, grok, and cursor are single-source (at most one enabled
   row per scope — a radio); cursor's single source can only be `api_key`,
   because no gateway route exists for it; opencode is multi-source (a
@@ -124,13 +124,13 @@ Every other plane mirrors those sets rather than re-deriving them:
 - **Org policy gates writes, not launches.**
   `PUT …/selections/{harness}` runs every org the user belongs to
   through `_enforce_org_selection_policy`
-  ([service.py](../../server/proliferate/server/cloud/agent_gateway/service.py))
+  ([service.py](../../server/proliferate/server/agent_auth/service.py))
   and rejects a violating write with 403 `policy_violation`. A policy
   tightened after the fact shows up in the admin violations report
   (`GET /policy/violations`), not as a launch failure.
 - **Every selection write re-materializes.** The PUT handler ends by
   calling `schedule_materialize_agent_auth`
-  ([service.py:250](../../server/proliferate/server/cloud/agent_gateway/service.py)),
+  ([service.py:250](../../server/proliferate/server/agent_auth/service.py)),
   so the stored truth and the delivered document never drift for longer
   than one materialization pass.
 
@@ -727,14 +727,14 @@ that vendor's own docs.
 `native`, rendered Conductor-style but **not inside a card**. Radio
 semantics: picking one deselects the others, because for the four
 single-source harnesses the selection model is literally a radio
-([selection_rules.py](../../server/proliferate/server/cloud/agent_gateway/selection_rules.py)'s
+([selection_rules.py](../../server/proliferate/server/agent_auth/selection_rules.py)'s
 `SINGLE_SOURCE_HARNESSES`). Rationale: the stored model is one enabled
 source, so the control that writes it must be one-of-N and not a set of
 independent switches.
 
 For **opencode this section is not a gate.** Opencode is
 `MULTI_SOURCE_HARNESSES`
-([selection_rules.py](../../server/proliferate/server/cloud/agent_gateway/selection_rules.py)):
+([selection_rules.py](../../server/proliferate/server/agent_auth/selection_rules.py)):
 gateway, any number of API keys, and its own native login all compose
 additively, so there is no "method" to pick before anything else becomes
 usable. Nothing below §2 is disabled or hidden pending a choice there.
@@ -787,7 +787,7 @@ translate one, so collecting it would store a value nothing applies.
 Keys are **disabled, not deleted, while in use.** Revocation of a key wired
 into an enabled selection is refused server-side with the referencing
 harnesses named
-([service.py:232-240](../../server/proliferate/server/cloud/agent_gateway/service.py)'s
+([service.py:232-240](../../server/proliferate/server/agent_auth/service.py)'s
 `agent_api_key_referenced`), so the UI renders that state up front as an
 "in use by N harnesses" chip and offers disable rather than a delete button
 that 409s. Rationale: surface the refusal as a state, not as an error the
@@ -957,7 +957,7 @@ never offered as a working option.
 
 `/v1/cloud/agent-auth/` owns the user-facing auth relationship
 (handlers today in
-[agent_gateway/api.py](../../server/proliferate/server/cloud/agent_gateway/api.py)):
+[agent_gateway/api.py](../../server/proliferate/server/agent_auth/api.py)):
 
 - `GET/POST /keys`, `DELETE /keys/{id}` — the vault.
 - `GET /selections`, `PUT /selections/{harness}?surface=` — the selection
@@ -985,7 +985,7 @@ Where everything lives, in the order a credential travels:
 ```text
 server/proliferate/
 ├── constants/agent_gateway.py                 source kinds, surfaces, harness allow-list
-├── db/models/cloud/agent_gateway.py           the three tables + org policy, constraints
+├── db/models/agent_gateway.py           the three tables + org policy, constraints
 ├── db/store/agent_gateway/                    row CRUD, encryption at rest
 │   ├── selections.py
 │   └── api_keys.py

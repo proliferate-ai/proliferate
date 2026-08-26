@@ -8,7 +8,7 @@ import pytest
 
 from proliferate.db.store.agent_gateway.api_keys import build_redacted_hint
 from proliferate.db.store.agent_gateway.records import DesiredAuthSource
-from proliferate.server.cloud.agent_gateway.selection_rules import (
+from proliferate.server.agent_auth.selection_rules import (
     SelectionRuleError,
     validate_auth_selection_set,
 )

@@ -45,7 +45,6 @@ async def ensure_external_server(
             "CLOUD_BILLING_MODE": "off",
             "E2B_API_KEY": config.e2b_api_key or "",
             "E2B_TEMPLATE_NAME": config.e2b_template_name or "",
-            "E2B_WEBHOOK_SIGNATURE_SECRET": config.e2b_webhook_signature_secret or "",
         }
     )
     process = await asyncio.create_subprocess_exec(
@@ -156,21 +155,6 @@ async def list_ngrok_requests(
         if path_contains in uri:
             filtered.append(item)
     return filtered
-
-
-async def list_e2b_webhooks(config: CloudTestConfig) -> list[dict[str, object]]:
-    if not config.e2b_api_key:
-        raise CloudE2ETestError("E2B_API_KEY is required to list E2B webhooks.")
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.get(
-            "https://api.e2b.app/events/webhooks",
-            headers={"X-API-Key": config.e2b_api_key},
-        )
-        response.raise_for_status()
-        payload = response.json()
-    if not isinstance(payload, list):
-        raise CloudE2ETestError("Unexpected E2B webhook list response.")
-    return [item for item in payload if isinstance(item, dict)]
 
 
 async def list_e2b_sandbox_events(

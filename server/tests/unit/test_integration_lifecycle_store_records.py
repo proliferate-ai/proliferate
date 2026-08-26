@@ -3,11 +3,11 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from proliferate.db.models.cloud.integration_authorization import (
+from proliferate.db.models.integration_authorization import (
     CloudIntegrationAuthorizationAttempt,
     CloudIntegrationDefinitionSecurityRevision,
 )
-from proliferate.db.models.cloud.integrations import (
+from proliferate.db.models.integrations import (
     CloudIntegrationAccount,
     CloudIntegrationOAuthClient,
     CloudIntegrationOAuthFlow,

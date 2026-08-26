@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from proliferate.errors import ProliferateError
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 
 
 def test_cloud_api_error_is_product_error() -> None:

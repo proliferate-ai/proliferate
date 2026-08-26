@@ -19,13 +19,13 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
-from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.repositories import RepoConfig, RepoEnvironment
+from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.integrations.anyharness.models import RemoteGitStatusSnapshot
 from proliferate.integrations.github.repos import GitHubRepoBranches
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.integrations.anyharness.models import ResolvedRemoteWorkspace
 from proliferate.db.store import cloud_workspace_materializations as materialization_store
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
@@ -59,7 +59,6 @@ async def _seed(
         is_superuser=False,
         is_verified=False,
     )
-    db.add(user)
     cfg = RepoConfig(
         id=uuid.uuid4(),
         user_id=user.id,
@@ -68,7 +67,7 @@ async def _seed(
         git_repo_name="widgets",
         commit_instructions="",
     )
-    db.add(cfg)
+    db.add_all([user, cfg])
     env = RepoEnvironment(
         id=uuid.uuid4(),
         repo_config_id=cfg.id,
@@ -78,6 +77,7 @@ async def _seed(
         default_branch="main",
     )
     db.add(env)
+    await db.flush()  # parent rows first: plain FKs, no relationship() edge to order by
     sandbox = None
     if with_sandbox:
         sandbox = CloudSandbox(

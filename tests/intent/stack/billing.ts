@@ -278,6 +278,6 @@ export function runTopupPass(): void {
   // run_llm_topups requires a db session; run_llm_topups_once is the worker's
   // own session-wrapping entrypoint (the loop calls exactly this).
   serverPass(
-    "import asyncio; from proliferate.server.cloud.agent_gateway.worker import run_llm_topups_once; asyncio.run(run_llm_topups_once())",
+    "import asyncio; from proliferate.server.agent_auth.worker import run_llm_topups_once; asyncio.run(run_llm_topups_once())",
   );
 }

@@ -14,7 +14,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from proliferate.server.cloud.runtime_workers.models import (
+from proliferate.server.seam.workers.models import (
     WorkerDesiredVersions,
     WorkerHeartbeatResponse,
 )

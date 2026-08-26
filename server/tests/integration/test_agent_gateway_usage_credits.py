@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.db.models.auth import AuthIdentity, User
-from proliferate.db.models.cloud.agent_gateway import AgentLlmUsageEvent
+from proliferate.db.models.agent_gateway import AgentLlmUsageEvent
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
@@ -28,14 +28,14 @@ from proliferate.db.store.billing_subjects import (
     ensure_personal_billing_subject,
 )
 from proliferate.integrations.litellm import LiteLLMSpendLogEntry
-from proliferate.server.cloud.agent_gateway import enrollment as enrollment_service
-from proliferate.server.cloud.agent_gateway import usage_import as usage_import_service
-from proliferate.server.cloud.agent_gateway.enrollment import (
+from proliferate.server.agent_auth import enrollment as enrollment_service
+from proliferate.server.agent_auth import usage_import as usage_import_service
+from proliferate.server.agent_auth.enrollment import (
     ensure_org_enrollment,
     ensure_signup_enrollment,
 )
-from proliferate.server.cloud.agent_gateway.free_credits import ensure_signup_free_credit_grant
-from proliferate.server.cloud.agent_gateway.usage_import import (
+from proliferate.server.agent_auth.free_credits import ensure_signup_free_credit_grant
+from proliferate.server.agent_auth.usage_import import (
     is_gateway_budget_available,
     run_usage_import,
 )

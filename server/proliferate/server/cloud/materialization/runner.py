@@ -16,7 +16,7 @@ from proliferate.server.billing.authorization import (
     BillingStateUnavailableError,
     CloudSandboxResumeBlockedError,
 )
-from proliferate.server.cloud.github_app.errors import GitHubAppReauthorizationRequired
+from proliferate.server.github.errors import GitHubAppReauthorizationRequired
 
 logger = logging.getLogger("proliferate.cloud.materialization")
 

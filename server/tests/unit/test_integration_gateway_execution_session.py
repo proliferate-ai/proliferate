@@ -4,8 +4,8 @@ from uuid import UUID
 
 import pytest
 
-from proliferate.server.cloud.integration_gateway.domain import execution_session
-from proliferate.server.cloud.integration_gateway.domain.execution_session import (
+from proliferate.server.integration_gateway.gateway.domain import execution_session
+from proliferate.server.integration_gateway.gateway.domain.execution_session import (
     mint_execution_session_token,
     verify_execution_session_token,
 )

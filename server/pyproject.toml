@@ -111,10 +111,10 @@ module = [
     "proliferate.server.workflows.models",
     "proliferate.server.workflows.models_v2",
     "proliferate.server.meta",
-    "proliferate.server.cloud.repos.models",
-    "proliferate.server.cloud.integrations.action_approvals.models",
+    "proliferate.server.github.repos.models",
+    "proliferate.server.integration_gateway.connections.action_approvals.models",
     "proliferate.server.support.models",
-    "proliferate.server.cloud.agent_gateway.models",
+    "proliferate.server.agent_auth.models",
     "proliferate.config",
 ]
 disallow_any_explicit = false
@@ -125,7 +125,6 @@ testpaths = ["tests"]
 markers = [
     "cloud_e2e: live cloud lifecycle tests that require real provider credentials",
     "e2b: tests specific to the E2B provider",
-    "live_webhook: tests that require a real externally reachable E2B webhook target",
 ]
 
 [tool.hatch.build.targets.wheel]

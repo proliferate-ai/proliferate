@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+from proliferate.db.models.agent_gateway import AgentAuthSelection, OrgAgentPolicy
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.agent_gateway import AgentAuthSelection, OrgAgentPolicy
 from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.agent_gateway.mappers import org_agent_policy_record
 from proliferate.db.store.agent_gateway.records import OrgAgentPolicyRecord

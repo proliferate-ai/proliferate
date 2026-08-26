@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from proliferate.lib.infra.time.elapsed import duration_ms
-from proliferate.server.cloud.event_logging import log_cloud_event
+from proliferate.server.event_logging import log_cloud_event
 
 
 @asynccontextmanager

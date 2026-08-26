@@ -244,7 +244,7 @@ export function runUsageImportPass(): Promise<void> {
     // Multi-line: `async def` cannot follow `;`-joined imports on one logical
     // line (SyntaxError), so imports go on their own newline-separated lines.
     "import asyncio\n" +
-      "from proliferate.server.cloud.agent_gateway.usage_import import run_usage_import\n" +
+      "from proliferate.server.agent_auth.usage_import import run_usage_import\n" +
       "from proliferate.db import session_ops as db_session\n" +
       "async def _m():\n" +
       "    async with db_session.open_async_transaction() as db:\n" +
@@ -266,7 +266,7 @@ export function runEnrollmentBackfillPass(limit = 100): Promise<void> {
     // Multi-line: `async def` cannot follow `;`-joined imports on one logical
     // line (SyntaxError), so imports go on their own newline-separated lines.
     "import asyncio\n" +
-      "from proliferate.server.cloud.agent_gateway.enrollment import backfill_enrollments\n" +
+      "from proliferate.server.agent_auth.enrollment import backfill_enrollments\n" +
       "from proliferate.db import session_ops as db_session\n" +
       `async def _m():\n` +
       "    async with db_session.open_async_transaction() as db:\n" +

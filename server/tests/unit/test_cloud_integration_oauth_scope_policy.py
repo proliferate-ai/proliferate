@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from proliferate.server.cloud.integrations.oauth.scope_policy import (
+from proliferate.server.integration_gateway.connections.oauth.scope_policy import (
     OAuthScopePolicyError,
     resolve_refreshed_oauth_scopes,
     validate_callback_oauth_scopes,

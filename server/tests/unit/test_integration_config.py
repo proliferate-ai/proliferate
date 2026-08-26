@@ -4,13 +4,13 @@ import json
 
 import pytest
 
-from proliferate.server.cloud.integrations.config import (
+from proliferate.server.integration_gateway.connections.config import (
     IntegrationConfigError,
     parse_definition_config,
     render_mcp_url,
     serialize_definition_config,
 )
-from proliferate.server.cloud.integrations.seeds import SEED_DEFINITIONS
+from proliferate.server.integration_gateway.connections.seeds import SEED_DEFINITIONS
 
 
 def test_all_seeds_round_trip_through_the_config_codec() -> None:

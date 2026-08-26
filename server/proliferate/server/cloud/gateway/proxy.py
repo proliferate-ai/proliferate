@@ -17,7 +17,7 @@ from starlette.types import Receive, Scope, Send
 from starlette.websockets import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
 
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 
 _ANYHARNESS_MARKER = "/cloud-sandbox/anyharness"
 _HTTP_TIMEOUT = httpx.Timeout(connect=10.0, read=None, write=30.0, pool=10.0)

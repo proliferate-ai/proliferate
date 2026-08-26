@@ -14,7 +14,7 @@ from proliferate.background.config import (
     INTEGRATION_REVOCATION_SWEEP_TASK,
 )
 from proliferate.config import settings
-from proliferate.server.cloud.integrations.revocation import (
+from proliferate.server.integration_gateway.connections.revocation import (
     run_revocation_deadline_sweep,
     run_revocation_job,
 )

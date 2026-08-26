@@ -102,7 +102,7 @@ is the only writer of the shared clone:
 Triggers, each refreshing as a side effect: repository-environment save
 ([repositories/service.py](../../../server/proliferate/server/cloud/repositories/service.py)),
 GitHub App install/reauth completion
-([github_app/service.py](../../../server/proliferate/server/cloud/github_app/service.py)),
+([github_app/service.py](../../../server/proliferate/server/github/service.py)),
 sandbox bootstrap preclone of every configured environment
 ([materialize/sandbox.py](../../../server/proliferate/server/cloud/materialization/materialize/sandbox.py)),
 and workspace creation (synchronously, in-request). (Gen-1 managed workflow

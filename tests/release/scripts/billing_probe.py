@@ -45,7 +45,7 @@ from proliferate.db.models.billing import (  # noqa: E402
     BillingSubject,
     UsageSegment,
 )
-from proliferate.db.models.cloud.agent_gateway import AgentLlmUsageEvent  # noqa: E402
+from proliferate.db.models.agent_gateway import AgentLlmUsageEvent  # noqa: E402
 
 
 async def _subjects_for_user(db, user_id) -> dict[str, str]:

@@ -28,7 +28,7 @@ Integration code does not own:
 Hosted product state that controls whether an external action may proceed is
 therefore not an integration concern. The durable action-approval state
 machine lives under
-`server/cloud/integrations/action_approvals/`, with persistence in the hosted
+`server/integration_gateway/connections/action_approvals/`, with persistence in the hosted
 Cloud database. Raw MCP/provider clients remain leaves beneath that boundary.
 
 ## Shape

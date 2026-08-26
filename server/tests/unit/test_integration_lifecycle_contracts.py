@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from proliferate.server.cloud.integrations.models import (
+from proliferate.server.integration_gateway.connections.models import (
     IntegrationAuthorizationAttemptSummary,
     IntegrationConnectSchema,
     IntegrationManagementActions,

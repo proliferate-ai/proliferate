@@ -11,11 +11,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
+# Retained automation tables must stay registered in SQLAlchemy metadata.
+import proliferate.db.models.agent_gateway  # noqa: F401
 import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.auth  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
+import proliferate.db.models.github_app  # noqa: F401
+import proliferate.db.models.integration_authorization  # noqa: F401
+import proliferate.db.models.integration_revocation  # noqa: F401
+import proliferate.db.models.integrations  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
+import proliferate.db.models.repositories  # noqa: F401
+import proliferate.db.models.runtime_workers  # noqa: F401
 import proliferate.db.models.support  # noqa: F401
 import proliferate.db.models.workflows  # noqa: F401
 from proliferate.auth.api import router as auth_viewer_router
@@ -36,6 +44,16 @@ from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.accounts.desktop.api import router as desktop_router
 from proliferate.server.accounts.identity.api import router as identity_auth_router
+from proliferate.server.agent_auth.worker import (
+    start_agent_gateway_enrollment_backfill,
+    start_agent_gateway_llm_topups,
+    start_agent_gateway_usage_import,
+    start_agent_gateway_verification,
+    stop_agent_gateway_enrollment_backfill,
+    stop_agent_gateway_llm_topups,
+    stop_agent_gateway_usage_import,
+    stop_agent_gateway_verification,
+)
 from proliferate.server.ai_magic.api import router as ai_magic_router
 from proliferate.server.analytics.api import router as analytics_router
 from proliferate.server.anonymous_telemetry.api import router as anonymous_telemetry_router
@@ -50,25 +68,15 @@ from proliferate.server.billing.reconciler import (
     stop_billing_reconciler,
 )
 from proliferate.server.catalogs.api import router as catalogs_router
-from proliferate.server.cloud.agent_gateway.worker import (
-    start_agent_gateway_enrollment_backfill,
-    start_agent_gateway_llm_topups,
-    start_agent_gateway_usage_import,
-    start_agent_gateway_verification,
-    stop_agent_gateway_enrollment_backfill,
-    stop_agent_gateway_llm_topups,
-    stop_agent_gateway_usage_import,
-    stop_agent_gateway_verification,
-)
 from proliferate.server.cloud.api import router as cloud_router
 from proliferate.server.cloud.gateway.api import router as gateway_router
-from proliferate.server.cloud.github_app.api import callback_router as github_app_callback_router
-from proliferate.server.cloud.github_app.api import (
+from proliferate.server.devtools.api import router as devtools_router
+from proliferate.server.github.api import callback_router as github_app_callback_router
+from proliferate.server.github.api import (
     setup_callback_router as github_app_setup_callback_router,
 )
-from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
-from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
+from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
 from proliferate.server.meta import router as meta_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.organizations.join_api import router as organization_join_router

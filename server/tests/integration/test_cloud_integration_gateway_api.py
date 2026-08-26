@@ -16,7 +16,7 @@ from proliferate.constants.organizations import (
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
-from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
 from proliferate.lib.infra.encryption.json import encrypt_json
 from proliferate.config import settings
 from tests.e2e.cloud.helpers.auth import create_user_and_login
@@ -217,7 +217,7 @@ async def test_list_providers_reflects_ready_accounts(
     # for that user by reading it back from the worker owner.
     from sqlalchemy import select
 
-    from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+    from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 
     worker = (await db_session.execute(select(CloudRuntimeWorker))).scalars().first()
     assert worker is not None
@@ -246,7 +246,7 @@ async def test_call_tool_proxies_to_upstream(
 
     from sqlalchemy import select
 
-    from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+    from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 
     worker = (await db_session.execute(select(CloudRuntimeWorker))).scalars().first()
     assert worker is not None
@@ -261,7 +261,7 @@ async def test_call_tool_proxies_to_upstream(
         return {"content": [{"type": "text", "text": "ok"}], "isError": False}
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         fake_call_tool,
     )
 
@@ -321,7 +321,7 @@ async def test_call_tool_upstream_failure_returns_mcp_error_not_500(
 
     from sqlalchemy import select
 
-    from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+    from proliferate.db.models.runtime_workers import CloudRuntimeWorker
     from proliferate.integrations.mcp_remote import McpRemoteError
 
     worker = (await db_session.execute(select(CloudRuntimeWorker))).scalars().first()
@@ -331,7 +331,7 @@ async def test_call_tool_upstream_failure_returns_mcp_error_not_500(
         raise McpRemoteError("upstream is down", code="transport_error")
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integration_gateway.service.mcp_remote.call_tool",
+        "proliferate.server.integration_gateway.gateway.service.mcp_remote.call_tool",
         failing_call_tool,
     )
 
@@ -430,7 +430,7 @@ async def test_gateway_grant_resolves_without_stamping_last_used(
 
     from sqlalchemy import select
 
-    from proliferate.db.models.cloud.runtime_workers import CloudIntegrationGatewayToken
+    from proliferate.db.models.runtime_workers import CloudIntegrationGatewayToken
 
     token = (await db_session.execute(select(CloudIntegrationGatewayToken))).scalars().one()
     assert token.status == "active"
@@ -447,7 +447,7 @@ async def test_list_tools_cache_refetches_after_ttl(
 
     from sqlalchemy import select, update
 
-    from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+    from proliferate.db.models.runtime_workers import CloudRuntimeWorker
 
     worker = (await db_session.execute(select(CloudRuntimeWorker))).scalars().first()
     assert worker is not None
@@ -460,7 +460,7 @@ async def test_list_tools_cache_refetches_after_ttl(
         return [{"name": "resolve-library-id", "inputSchema": {"type": "object"}}]
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.integrations.tools.mcp_remote.list_tools",
+        "proliferate.server.integration_gateway.connections.tools.mcp_remote.list_tools",
         fake_list_tools,
     )
 
@@ -483,7 +483,7 @@ async def test_list_tools_cache_refetches_after_ttl(
     from datetime import UTC, datetime, timedelta
 
     from proliferate.constants.cloud import CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS
-    from proliferate.db.models.cloud.integrations import CloudIntegrationToolSchemaCache
+    from proliferate.db.models.integrations import CloudIntegrationToolSchemaCache
 
     await db_session.execute(
         update(CloudIntegrationToolSchemaCache).values(

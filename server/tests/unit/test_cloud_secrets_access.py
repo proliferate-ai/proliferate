@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.errors import ProliferateError
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.api_errors import CloudApiError
 from proliferate.server.cloud.secrets import access, api, service
 from proliferate.server.cloud.secrets.models import CloudSecretsResponse
 

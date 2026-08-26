@@ -10,9 +10,9 @@ import pytest
 
 from proliferate.integrations.github import GitHubAppInvalidGrant, GitHubIntegrationError
 from proliferate.integrations.redis_lock import RedisLeaseUnavailable
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.github_app import repo_authority
-from proliferate.server.cloud.github_app.errors import GitHubAppReauthorizationRequired
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.github import repo_authority
+from proliferate.server.github.errors import GitHubAppReauthorizationRequired
 
 
 def _expired_authorization(*, refresh_token: str | None = "refresh-token") -> SimpleNamespace:

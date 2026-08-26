@@ -10,7 +10,7 @@ against real GitHub.
 
 This is the sanctioned deliverable-A seam: a runner-side script that writes the
 exact rows `complete_github_app_user_authorization_callback`
-(server/proliferate/server/cloud/github_app/service.py:274) would produce, via
+(server/proliferate/server/github/service.py:274) would produce, via
 the server's OWN service/store functions in-process — NO product change. The
 only thing it does not do is exchange a browser-delivered OAuth `code`; that
 outcome (a real user-to-server token) is instead obtained by *refreshing* a real
@@ -87,10 +87,10 @@ from proliferate.server.cloud.cloud_sandboxes.service import (  # noqa: E402
     destroy_cloud_sandbox,
     ensure_personal_cloud_sandbox_exists,
 )
-from proliferate.server.cloud.github_app.repo_authority import (  # noqa: E402
+from proliferate.server.github.repo_authority import (  # noqa: E402
     ensure_fresh_github_app_authorization,
 )
-from proliferate.server.cloud.github_app.service import (  # noqa: E402
+from proliferate.server.github.service import (  # noqa: E402
     list_github_app_accessible_repositories,
     refresh_github_app_installation_cache,
 )

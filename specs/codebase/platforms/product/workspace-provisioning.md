@@ -54,7 +54,7 @@ AnyHarness call.
 
 ### Repository configuration
 
-[`repositories.py`](../../../../server/proliferate/db/models/cloud/repositories.py)
+[`repositories.py`](../../../../server/proliferate/db/models/repositories.py)
 defines:
 
 - `repo_config`: one user's GitHub repository identity;

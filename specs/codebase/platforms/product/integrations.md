@@ -31,7 +31,7 @@ AnyHarness session starts
 
 ## Integration State
 
-[`db/models/cloud/integrations.py`](../../../../server/proliferate/db/models/cloud/integrations.py)
+[`db/models/integrations.py`](../../../../server/proliferate/db/models/integrations.py)
 and
 [`db/models/cloud/integration_approvals.py`](../../../../server/proliferate/db/models/cloud/integration_approvals.py)
 own the current schema:
@@ -56,7 +56,7 @@ stale schema, while auth/configuration failures remain actionable errors.
 
 Definitions, accounts, policies, OAuth, health, cache behavior, and provider
 access live under
-[`server/.../cloud/integrations/`](../../../../server/proliferate/server/cloud/integrations/).
+[`server/.../cloud/integrations/`](../../../../server/proliferate/server/integration_gateway/connections/).
 Raw OAuth and MCP protocol clients live under
 [`server/proliferate/integrations/`](../../../../server/proliferate/integrations/)
 and do not own product persistence.
@@ -99,7 +99,7 @@ Slack tools; gateway tool authorization is a separate boundary.
 
 ## Runtime Worker Identity
 
-[`db/models/cloud/runtime_workers.py`](../../../../server/proliferate/db/models/cloud/runtime_workers.py)
+[`db/models/runtime_workers.py`](../../../../server/proliferate/db/models/runtime_workers.py)
 owns three related tables:
 
 | Table | Ownership |
@@ -118,7 +118,7 @@ family.
 
 ### Enrollment and heartbeat
 
-[`runtime_workers/service.py`](../../../../server/proliferate/server/cloud/runtime_workers/service.py)
+[`runtime_workers/service.py`](../../../../server/proliferate/server/seam/workers/service.py)
 implements the server flow:
 
 Desktop enrollment issuance and consumption are serialized per
@@ -205,11 +205,11 @@ gateway token.
 
 ## Integration Gateway
 
-[`integration_gateway/dependencies.py`](../../../../server/proliferate/server/cloud/integration_gateway/dependencies.py)
+[`integration_gateway/dependencies.py`](../../../../server/proliferate/server/integration_gateway/gateway/dependencies.py)
 resolves an active gateway token to its non-revoked Worker and revalidates
 organization membership on each organization-scoped request.
 
-[`integration_gateway/service.py`](../../../../server/proliferate/server/cloud/integration_gateway/service.py)
+[`integration_gateway/service.py`](../../../../server/proliferate/server/integration_gateway/gateway/service.py)
 applies definition visibility and organization policy, then exposes three
 virtual MCP tools:
 
@@ -411,10 +411,10 @@ POST /v1/cloud/integrations/action-approvals/{approval_id}/revoke
 ```
 
 The mounted router files are
-[`integrations/api.py`](../../../../server/proliferate/server/cloud/integrations/api.py),
-[`action_approvals/api.py`](../../../../server/proliferate/server/cloud/integrations/action_approvals/api.py),
-[`integration_gateway/api.py`](../../../../server/proliferate/server/cloud/integration_gateway/api.py),
-and [`runtime_workers/api.py`](../../../../server/proliferate/server/cloud/runtime_workers/api.py).
+[`integrations/api.py`](../../../../server/proliferate/server/integration_gateway/connections/api.py),
+[`action_approvals/api.py`](../../../../server/proliferate/server/integration_gateway/connections/action_approvals/api.py),
+[`integration_gateway/api.py`](../../../../server/proliferate/server/integration_gateway/gateway/api.py),
+and [`runtime_workers/api.py`](../../../../server/proliferate/server/seam/workers/api.py).
 
 ## Boundaries
 

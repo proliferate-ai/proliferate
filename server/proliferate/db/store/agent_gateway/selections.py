@@ -4,7 +4,7 @@ DB-coherence that the SQL CHECKs cannot express (api_key ownership + active
 status, no duplicate source within a scope) is enforced here; callers get
 typed ValueErrors. Per-harness enabled-set legality (cardinality, env-var
 shape, gateway capability) lives one layer up in the server validator
-(``server/cloud/agent_gateway/selection_rules.py``), which the write endpoint
+(``server/agent_auth/selection_rules.py``), which the write endpoint
 runs before calling ``put_auth_selections``.
 """
 
@@ -26,7 +26,7 @@ from proliferate.constants.agent_gateway import (
     AGENT_AUTH_SOURCE_KINDS,
     AGENT_AUTH_SURFACES,
 )
-from proliferate.db.models.cloud.agent_gateway import AgentApiKey, AgentAuthSelection
+from proliferate.db.models.agent_gateway import AgentApiKey, AgentAuthSelection
 from proliferate.db.store.agent_gateway.mappers import selection_record
 from proliferate.db.store.agent_gateway.records import (
     AgentAuthSelectionRecord,

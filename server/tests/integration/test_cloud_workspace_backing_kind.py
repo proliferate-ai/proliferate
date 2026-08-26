@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import GitProvider, RepoEnvironmentKind
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
+from proliferate.db.models.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import cloud_workspaces as store
 from proliferate.server.cloud.workspaces.domain.naming import scratch_workspace_display_name

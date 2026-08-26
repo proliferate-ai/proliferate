@@ -27,7 +27,6 @@ from proliferate.integrations.sandbox import (
     SandboxRuntimeContext,
 )
 from proliferate.server.cloud.cloud_sandboxes.transactions import run_with_fresh_session
-from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.runtime.bootstrap import (
     build_detached_supervisor_launch_command,
     build_runtime_env,
@@ -46,7 +45,8 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
     run_sandbox_command_logged,
 )
-from proliferate.server.cloud.runtime_workers.service import (
+from proliferate.server.event_logging import log_cloud_event
+from proliferate.server.seam.workers.service import (
     create_cloud_sandbox_enrollment,
     worker_cloud_base_url,
 )

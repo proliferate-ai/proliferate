@@ -189,12 +189,6 @@
       "count": 1
     },
     {
-      "path": "proliferate/background/tasks/cloud_sandboxes.py",
-      "code": "untyped-decorator",
-      "message": "Untyped decorator makes function \"cloud_sandbox_orphan_reap\" untyped",
-      "count": 1
-    },
-    {
       "path": "proliferate/background/tasks/health.py",
       "code": "import-untyped",
       "message": "Skipping analyzing \"celery\": module is installed, but missing library stubs or py.typed marker",
@@ -465,6 +459,24 @@
       "count": 1
     },
     {
+      "path": "proliferate/server/agent_auth/api.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"get\" of \"dict\" has incompatible type \"UUID | None\"; expected \"UUID\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/agent_auth/models.py",
+      "code": "unused-ignore",
+      "message": "Unused \"type: ignore\" comment",
+      "count": 6
+    },
+    {
+      "path": "proliferate/server/agent_auth/service.py",
+      "code": "arg-type",
+      "message": "Argument 1 to \"active_unlimited_cloud_entitlement\" has incompatible type \"list[BillingEntitlement]\"; expected \"Sequence[EntitlementLike]\"",
+      "count": 1
+    },
+    {
       "path": "proliferate/server/ai_magic/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
@@ -699,36 +711,6 @@
       "count": 10
     },
     {
-      "path": "proliferate/server/cloud/agent_gateway/api.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"get\" of \"dict\" has incompatible type \"UUID | None\"; expected \"UUID\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/agent_gateway/models.py",
-      "code": "unused-ignore",
-      "message": "Unused \"type: ignore\" comment",
-      "count": 6
-    },
-    {
-      "path": "proliferate/server/cloud/agent_gateway/service.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"active_unlimited_cloud_entitlement\" has incompatible type \"list[BillingEntitlement]\"; expected \"Sequence[EntitlementLike]\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/agent_run_config/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 9
-    },
-    {
-      "path": "proliferate/server/cloud/agent_run_config/models.py",
-      "code": "unused-ignore",
-      "message": "Unused \"type: ignore\" comment",
-      "count": 3
-    },
-    {
       "path": "proliferate/server/cloud/cloud_sandboxes/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
@@ -739,138 +721,6 @@
       "code": "arg-type",
       "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
       "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/api.py",
-      "code": "arg-type",
-      "message": "Argument \"org_user\" to \"create_github_app_installation_url\" has incompatible type \"proliferate.permissions.CurrentOrgUser\"; expected \"proliferate.server.cloud.github_app.service.CurrentOrgUser\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/api.py",
-      "code": "arg-type",
-      "message": "Argument \"org_user\" to \"get_github_app_installation_status\" has incompatible type \"proliferate.permissions.CurrentOrgUser\"; expected \"proliferate.server.cloud.github_app.service.CurrentOrgUser\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 5
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/repo_authority.py",
-      "code": "arg-type",
-      "message": "Argument \"access_token\" to \"GitHubCloudRepoAuthority\" has incompatible type \"str | None\"; expected \"str\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/repo_authority.py",
-      "code": "arg-type",
-      "message": "Argument \"coverage\" to \"upsert_installation_repo_cache\" has incompatible type \"GitHubAppRepositoryCoverage\"; expected \"GitHubAppRepositoryCoveragePayload\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/repo_authority.py",
-      "code": "arg-type",
-      "message": "Argument \"installation\" to \"upsert_github_app_installation\" has incompatible type \"GitHubAppInstallationInfo\"; expected \"GitHubAppInstallationPayload\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/repo_authority.py",
-      "code": "arg-type",
-      "message": "Argument \"user_access_token\" to \"fetch_installation_repo_coverage_from_github\" has incompatible type \"str | None\"; expected \"str\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/repo_authority.py",
-      "code": "arg-type",
-      "message": "Argument \"user_access_token\" to \"verify_github_app_user_repo_access\" has incompatible type \"str | None\"; expected \"str\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/service.py",
-      "code": "arg-type",
-      "message": "Argument \"expected_kind\" to \"_state_payload\" has incompatible type \"str\"; expected \"Literal['user_authorization', 'installation']\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/service.py",
-      "code": "arg-type",
-      "message": "Argument \"installation\" to \"upsert_github_app_installation\" has incompatible type \"GitHubAppInstallationInfo\"; expected \"GitHubAppInstallationPayload\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/service.py",
-      "code": "arg-type",
-      "message": "Argument \"kind\" to \"_state_for\" has incompatible type \"str\"; expected \"Literal['user_authorization', 'installation']\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/service.py",
-      "code": "arg-type",
-      "message": "Argument \"user_access_token\" to \"list_github_app_user_installations\" has incompatible type \"str | None\"; expected \"str\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/service.py",
-      "code": "import-untyped",
-      "message": "Library stubs not installed for \"jose\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/service.py",
-      "code": "no-any-return",
-      "message": "Returning Any from function declared to return \"str\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/webhooks.py",
-      "code": "arg-type",
-      "message": "Argument \"coverage\" to \"upsert_installation_repo_cache\" has incompatible type \"GitHubAppRepositoryCoverage\"; expected \"GitHubAppRepositoryCoveragePayload\"",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/github_app/webhooks.py",
-      "code": "arg-type",
-      "message": "Argument \"installation\" to \"upsert_github_app_installation\" has incompatible type \"GitHubAppInstallationInfo\"; expected \"GitHubAppInstallationPayload\"",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/integrations/access.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 9
-    },
-    {
-      "path": "proliferate/server/cloud/integrations/config.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 15
-    },
-    {
-      "path": "proliferate/server/cloud/integrations/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 17
-    },
-    {
-      "path": "proliferate/server/cloud/integrations/oauth/service.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/integrations/service.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 1
-    },
-    {
-      "path": "proliferate/server/cloud/integrations/tools.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 2
     },
     {
       "path": "proliferate/server/cloud/materialization/failures.py",
@@ -975,12 +825,6 @@
       "count": 1
     },
     {
-      "path": "proliferate/server/cloud/runtime_workers/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 13
-    },
-    {
       "path": "proliferate/server/cloud/secrets/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
@@ -991,18 +835,6 @@
       "code": "unused-ignore",
       "message": "Unused \"type: ignore\" comment",
       "count": 2
-    },
-    {
-      "path": "proliferate/server/cloud/webhooks/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 4
-    },
-    {
-      "path": "proliferate/server/cloud/webhooks/service.py",
-      "code": "arg-type",
-      "message": "Argument 2 to \"mark_cloud_workspaces_lost_for_sandbox\" has incompatible type \"CloudSandboxValue\"; expected \"CloudWorkspaceSandboxIdentity\"",
-      "count": 1
     },
     {
       "path": "proliferate/server/cloud/workspaces/materializations/summaries.py",
@@ -1017,16 +849,142 @@
       "count": 7
     },
     {
-      "path": "proliferate/server/cloud/worktree_policy/models.py",
+      "path": "proliferate/server/devtools/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 3
+    },
+    {
+      "path": "proliferate/server/github/api.py",
+      "code": "arg-type",
+      "message": "Argument \"org_user\" to \"create_github_app_installation_url\" has incompatible type \"proliferate.permissions.CurrentOrgUser\"; expected \"proliferate.server.github.service.CurrentOrgUser\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/api.py",
+      "code": "arg-type",
+      "message": "Argument \"org_user\" to \"get_github_app_installation_status\" has incompatible type \"proliferate.permissions.CurrentOrgUser\"; expected \"proliferate.server.github.service.CurrentOrgUser\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 5
+    },
+    {
+      "path": "proliferate/server/github/repo_authority.py",
+      "code": "arg-type",
+      "message": "Argument \"access_token\" to \"GitHubCloudRepoAuthority\" has incompatible type \"str | None\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/repo_authority.py",
+      "code": "arg-type",
+      "message": "Argument \"coverage\" to \"upsert_installation_repo_cache\" has incompatible type \"GitHubAppRepositoryCoverage\"; expected \"GitHubAppRepositoryCoveragePayload\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/repo_authority.py",
+      "code": "arg-type",
+      "message": "Argument \"installation\" to \"upsert_github_app_installation\" has incompatible type \"GitHubAppInstallationInfo\"; expected \"GitHubAppInstallationPayload\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/repo_authority.py",
+      "code": "arg-type",
+      "message": "Argument \"user_access_token\" to \"fetch_installation_repo_coverage_from_github\" has incompatible type \"str | None\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/repo_authority.py",
+      "code": "arg-type",
+      "message": "Argument \"user_access_token\" to \"verify_github_app_user_repo_access\" has incompatible type \"str | None\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/service.py",
+      "code": "arg-type",
+      "message": "Argument \"expected_kind\" to \"_state_payload\" has incompatible type \"str\"; expected \"Literal['user_authorization', 'installation']\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/github/service.py",
+      "code": "arg-type",
+      "message": "Argument \"installation\" to \"upsert_github_app_installation\" has incompatible type \"GitHubAppInstallationInfo\"; expected \"GitHubAppInstallationPayload\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/github/service.py",
+      "code": "arg-type",
+      "message": "Argument \"kind\" to \"_state_for\" has incompatible type \"str\"; expected \"Literal['user_authorization', 'installation']\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/github/service.py",
+      "code": "arg-type",
+      "message": "Argument \"user_access_token\" to \"list_github_app_user_installations\" has incompatible type \"str | None\"; expected \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/service.py",
+      "code": "import-untyped",
+      "message": "Library stubs not installed for \"jose\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/service.py",
+      "code": "no-any-return",
+      "message": "Returning Any from function declared to return \"str\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/webhooks.py",
+      "code": "arg-type",
+      "message": "Argument \"coverage\" to \"upsert_installation_repo_cache\" has incompatible type \"GitHubAppRepositoryCoverage\"; expected \"GitHubAppRepositoryCoveragePayload\"",
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/github/webhooks.py",
+      "code": "arg-type",
+      "message": "Argument \"installation\" to \"upsert_github_app_installation\" has incompatible type \"GitHubAppInstallationInfo\"; expected \"GitHubAppInstallationPayload\"",
+      "count": 2
+    },
+    {
+      "path": "proliferate/server/integration_gateway/connections/access.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 9
+    },
+    {
+      "path": "proliferate/server/integration_gateway/connections/config.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 15
+    },
+    {
+      "path": "proliferate/server/integration_gateway/connections/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 17
+    },
+    {
+      "path": "proliferate/server/integration_gateway/connections/oauth/service.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
       "count": 2
     },
     {
-      "path": "proliferate/server/devtools/models.py",
+      "path": "proliferate/server/integration_gateway/connections/service.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
-      "count": 3
+      "count": 1
+    },
+    {
+      "path": "proliferate/server/integration_gateway/connections/tools.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 2
     },
     {
       "path": "proliferate/server/organizations/models.py",
@@ -1057,6 +1015,12 @@
       "code": "arg-type",
       "message": "Argument 1 to \"resolve_effective_limit\" has incompatible type \"list[BillingBudgetLimit]\"; expected \"Sequence[_LimitLike]\"",
       "count": 2
+    },
+    {
+      "path": "proliferate/server/seam/workers/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 13
     },
     {
       "path": "proliferate/server/support/domain/report_records.py",

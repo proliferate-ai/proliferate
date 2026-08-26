@@ -18,8 +18,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from proliferate.server.cloud.github_app import service
-from proliferate.server.cloud.github_app.api import callback_router
+from proliferate.server.github import service
+from proliferate.server.github.api import callback_router
 
 
 def test_connected_page_is_self_host_safe_html() -> None:

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.store import github_app as github_app_store
 from proliferate.integrations.github import GitHubAppInvalidGrant
 from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthorization
-from proliferate.server.cloud.github_app import repo_authority
+from proliferate.server.github import repo_authority
 from proliferate.server.cloud.materialization import runner as materialization_runner
 from proliferate.server.cloud.materialization.materialize import github_credentials
 from tests.integration.cloud_api_helpers import configure_github_app, register_and_login

@@ -7,11 +7,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from proliferate.db.models.cloud.integration_revocation import (
+from proliferate.db.models.integration_revocation import (
     CloudIntegrationRevocationJob,
 )
 from proliferate.db.store.integrations import revocation_jobs as revocation_jobs_store
-from proliferate.server.cloud.integrations import revocation as revocation_service
+from proliferate.server.integration_gateway.connections import revocation as revocation_service
 from tests.integration.test_integration_revocation_lifecycle import _definition, _job
 
 

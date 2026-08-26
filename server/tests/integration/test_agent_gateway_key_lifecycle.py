@@ -36,13 +36,13 @@ from proliferate.db.models.organizations import Organization, OrganizationMember
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
-from proliferate.server.cloud.agent_gateway import enrollment as enrollment_service
-from proliferate.server.cloud.agent_gateway import usage_import as usage_import_service
-from proliferate.server.cloud.agent_gateway.enrollment import (
+from proliferate.server.agent_auth import enrollment as enrollment_service
+from proliferate.server.agent_auth import usage_import as usage_import_service
+from proliferate.server.agent_auth.enrollment import (
     ensure_org_enrollment,
     ensure_signup_enrollment,
 )
-from proliferate.server.cloud.agent_gateway.usage_import import _enforce_subject_exhaustion
+from proliferate.server.agent_auth.usage_import import _enforce_subject_exhaustion
 
 NOW = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)
 

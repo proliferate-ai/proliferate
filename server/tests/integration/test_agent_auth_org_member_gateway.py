@@ -33,18 +33,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import LLM_CREDIT_SOURCE_ADMIN
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment
+from proliferate.db.models.agent_gateway import AgentGatewayEnrollment
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.agent_gateway import DesiredAuthSource
 from proliferate.db.store.agent_gateway.selections import put_auth_selections
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
-from proliferate.server.cloud.agent_gateway import service as gateway_service
-from proliferate.server.cloud.agent_gateway.budget import (
+from proliferate.server.agent_auth import service as gateway_service
+from proliferate.server.agent_auth.budget import (
     get_gateway_enrollment_for_user,
     is_gateway_budget_available,
 )
-from proliferate.server.cloud.agent_gateway.enrollment import (
+from proliferate.server.agent_auth.enrollment import (
     ensure_org_enrollment,
     ensure_signup_enrollment,
 )

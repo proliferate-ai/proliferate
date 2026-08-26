@@ -147,7 +147,7 @@ endif
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b \
         cloud-runtime-build publish-cloud-template-env-local \
-        test-cloud-e2b test-cloud-all test-cloud-webhooks \
+        test-cloud-e2b test-cloud-all \
         cloud-openapi cloud-client-generate \
         stripe-setup-test \
         stage-sidecar \
@@ -816,13 +816,10 @@ publish-cloud-template-env-local:
 		fi
 
 test-cloud-e2b: cloud-runtime-build server-db-ready
-	cd server && RUN_CLOUD_E2E=1 uv run python -m pytest tests/e2e/cloud -m "cloud_e2e and e2b and not live_webhook" -xvs
-
-test-cloud-webhooks: server-db-ready
-	cd server && RUN_CLOUD_E2E=1 RUN_LIVE_E2B_WEBHOOK=1 uv run python -m pytest tests/e2e/cloud/test_e2b_webhooks.py -m "live_webhook" -xvs
+	cd server && RUN_CLOUD_E2E=1 uv run python -m pytest tests/e2e/cloud -m "cloud_e2e and e2b" -xvs
 
 test-cloud-all: cloud-runtime-build server-db-ready
-	cd server && RUN_CLOUD_E2E=1 RUN_LIVE_E2B_WEBHOOK=1 uv run python -m pytest tests/e2e/cloud -xvs
+	cd server && RUN_CLOUD_E2E=1 uv run python -m pytest tests/e2e/cloud -xvs
 
 # Tier-3 live end-to-end / tier-4 upgrade-path runner
 # (specs/TESTING/release-worlds-and-fixtures.md "Local And GitHub Actions

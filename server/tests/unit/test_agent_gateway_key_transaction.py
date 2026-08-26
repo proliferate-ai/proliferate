@@ -13,8 +13,8 @@ from starlette.types import Message, Receive, Scope, Send
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.store.agent_gateway.records import AgentApiKeyRecord
-from proliferate.server.cloud.agent_gateway import api
-from proliferate.server.cloud.agent_gateway import service as agent_gateway_service
+from proliferate.server.agent_auth import api
+from proliferate.server.agent_auth import service as agent_gateway_service
 
 
 @pytest.mark.asyncio

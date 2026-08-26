@@ -235,7 +235,7 @@ const LOOKUP_SCRIPT = `import asyncio, json, os
 from sqlalchemy import select
 from proliferate.db.engine import async_session_factory
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment, AgentGatewayEnrollmentKey
+from proliferate.db.models.agent_gateway import AgentGatewayEnrollment, AgentGatewayEnrollmentKey
 from proliferate.db.models.organizations import OrganizationMembership
 
 EMAIL = os.environ["QUAL_ACTOR_EMAIL"].lower()

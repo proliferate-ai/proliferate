@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.integrations import CloudIntegrationOAuthFlow
+from proliferate.db.models.integrations import CloudIntegrationOAuthFlow
 from proliferate.db.store.integrations.authorization_attempts import (
     acquire_authorization_attempt_lock,
 )

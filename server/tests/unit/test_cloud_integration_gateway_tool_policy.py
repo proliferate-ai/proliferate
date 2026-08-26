@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from proliferate.server.cloud.integration_gateway.domain.tool_policy import (
+from proliferate.server.integration_gateway.gateway.domain.tool_policy import (
     SLACK_MUTATING_TOOL_NAMES,
     SLACK_READ_TOOL_NAMES,
     ToolCallAllowed,

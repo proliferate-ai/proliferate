@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.integrations import CloudIntegrationDefinition
+from proliferate.db.models.integrations import CloudIntegrationDefinition
 from proliferate.lib.infra.time.wall_clock import utcnow
 
 

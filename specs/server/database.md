@@ -57,13 +57,13 @@ classes (a primary entity plus its junction tables).
 
 - **Sandbox access** (`db/models/cloud/sandboxes.py`): personal
   `cloud_sandbox` lifecycle, provider id, and encrypted AnyHarness access.
-- **Repository configuration** (`db/models/cloud/repositories.py`):
+- **Repository configuration** (`db/models/repositories.py`):
   `repo_config`, `repo_environment`, and
   `cloud_repo_environment_materialization`.
 - **Cloud workspace records** (`db/models/cloud/workspaces.py`): repository
   environment, branch/base branch, archive state, and optional
   `anyharness_workspace_id`.
-- **Optional runtime Worker** (`db/models/cloud/runtime_workers.py`): Worker,
+- **Optional runtime Worker** (`db/models/runtime_workers.py`): Worker,
   one-time enrollment, and integration-gateway token records.
 - **Sandbox secret materialization** (`db/models/cloud/secrets.py`): persisted
   runtime/repository secret-application state.

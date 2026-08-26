@@ -10,8 +10,8 @@ from uuid import UUID
 
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
 from proliferate.lib.infra.time.elapsed import duration_ms
-from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.runtime import bootstrap as bootstrap_module
+from proliferate.server.event_logging import format_exception_message, log_cloud_event
 
 
 def truncate_log_value(value: Any, *, max_chars: int = 240) -> str:

@@ -9,7 +9,7 @@ from proliferate.integrations.integration_oauth import (
     IntegrationOAuthProviderError,
     build_authorization_url,
 )
-from proliferate.server.cloud.integrations.oauth.service import (
+from proliferate.server.integration_gateway.connections.oauth.service import (
     _resolve_requested_oauth_scope,
 )
 

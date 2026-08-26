@@ -7,13 +7,20 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+import proliferate.db.models.agent_gateway  # noqa: F401
 import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.auth  # noqa: F401
 import proliferate.db.models.background  # noqa: F401
 import proliferate.db.models.billing  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
+import proliferate.db.models.github_app  # noqa: F401
+import proliferate.db.models.integration_authorization  # noqa: F401
+import proliferate.db.models.integration_revocation  # noqa: F401
+import proliferate.db.models.integrations  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
+import proliferate.db.models.repositories  # noqa: F401
+import proliferate.db.models.runtime_workers  # noqa: F401
 import proliferate.db.models.support  # noqa: F401
 import proliferate.db.models.workflows  # noqa: F401
 from alembic import context

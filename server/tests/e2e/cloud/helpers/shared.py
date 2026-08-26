@@ -8,7 +8,6 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[5]
 SERVER_ROOT = REPO_ROOT / "server"
 DEFAULT_SERVER_BASE_URL = "http://127.0.0.1:8000"
-DEFAULT_E2B_WEBHOOK_URL = "https://workers.ngrok.dev/v1/cloud/webhooks/e2b"
 DEFAULT_GITHUB_OWNER = "proliferate-ai"
 DEFAULT_GITHUB_REPO = "proliferate"
 DEFAULT_GITHUB_BASE_BRANCH = "main"
@@ -26,9 +25,7 @@ class CloudE2ETestError(RuntimeError):
 @dataclass(frozen=True)
 class CloudTestConfig:
     run_cloud_e2e: bool
-    run_live_e2b_webhook: bool
     server_base_url: str
-    e2b_webhook_public_url: str
     github_owner: str
     github_repo: str
     github_base_branch: str
@@ -37,7 +34,6 @@ class CloudTestConfig:
     google_api_key: str | None
     e2b_api_key: str | None
     e2b_template_name: str | None
-    e2b_webhook_signature_secret: str | None
     claude_auth_path: Path | None
     codex_auth_path: Path | None
 

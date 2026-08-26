@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.models.cloud.github_app import (
+from proliferate.db.models.github_app import (
     GitHubAppAuthorization,
     GitHubAppInstallation,
     GitHubAppInstallationRepository,

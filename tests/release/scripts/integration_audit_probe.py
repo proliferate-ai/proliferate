@@ -34,7 +34,7 @@ from sqlalchemy import select  # noqa: E402
 
 from proliferate.db.engine import async_session_factory  # noqa: E402
 from proliferate.db.models.auth import User  # noqa: E402
-from proliferate.db.models.cloud.integrations import (  # noqa: E402
+from proliferate.db.models.integrations import (  # noqa: E402
     CloudIntegrationToolCallEvent,
 )
 

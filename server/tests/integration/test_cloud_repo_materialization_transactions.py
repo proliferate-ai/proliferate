@@ -15,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from proliferate.db.store import github_app as github_app_store
-from proliferate.server.cloud.github_app import repo_authority
+from proliferate.server.github import repo_authority
 from proliferate.server.cloud.materialization import operation
 from proliferate.server.cloud.materialization.materialize import agent_auth
 from proliferate.server.cloud.materialization.materialize import github_credentials

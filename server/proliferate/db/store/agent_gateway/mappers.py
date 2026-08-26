@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from proliferate.db.models.cloud.agent_gateway import (
+from proliferate.db.models.agent_gateway import (
     AgentApiKey,
     AgentAuthDeliveryAck,
     AgentAuthSelection,

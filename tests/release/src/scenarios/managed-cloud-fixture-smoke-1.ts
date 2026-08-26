@@ -1684,7 +1684,7 @@ asyncio.run(main())
 const READ_BUDGET_STATUS_PY = `import asyncio, json, os
 from uuid import UUID
 from proliferate.db.engine import async_session_factory
-from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment
+from proliferate.db.models.agent_gateway import AgentGatewayEnrollment
 
 ENROLLMENT_ID = UUID(os.environ["SEED_ENROLLMENT_ID"])
 
@@ -1716,7 +1716,7 @@ asyncio.run(main())
  * background loop calls (run_usage_import over its own transaction).
  */
 const RUN_USAGE_IMPORT_PY = `import asyncio, json
-from proliferate.server.cloud.agent_gateway.worker import run_usage_import_once
+from proliferate.server.agent_auth.worker import run_usage_import_once
 
 async def main():
     result = await run_usage_import_once()

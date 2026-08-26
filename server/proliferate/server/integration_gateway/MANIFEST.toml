@@ -1,0 +1,24 @@
+# System manifest (Organization Standard rule 2) — validated by
+# scripts/check_manifests.py; rules PROD-MANIFEST-001/002 in
+# lints/product/manifests.toml. allowed_importers is measured reality, not
+# permission-by-intention: the checker fails on drift in either direction.
+
+name = "integration_gateway"
+spec = "specs/server/README.md"
+owns = "Product integration connections (OAuth flows, health probes, admission, management) and gateway-mediated integration tool access for agents: both halves of the integration-gateway system."
+
+public_surface = [
+    "proliferate.server.integration_gateway.connections.api",
+    "proliferate.server.integration_gateway.connections.service",
+    "proliferate.server.integration_gateway.connections.models",
+    "proliferate.server.integration_gateway.connections.access",
+    "proliferate.server.integration_gateway.gateway.api",
+    "proliferate.server.integration_gateway.gateway.service",
+    "proliferate.server.integration_gateway.gateway.models",
+]
+
+allowed_importers = [
+    "background",
+    "cloud",
+    "main.py",
+]

@@ -9,22 +9,22 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud.integrations import CloudIntegrationAccount
+from proliferate.db.models.integrations import CloudIntegrationAccount
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.db.store.integrations import oauth_clients as oauth_clients_store
 from proliferate.integrations.integration_oauth import tokens as oauth_tokens
 from proliferate.integrations.integration_oauth.errors import IntegrationOAuthProviderError
 from proliferate.integrations.integration_oauth.models import TokenResponse
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.integrations import access as integration_access
-from proliferate.server.cloud.integrations.access import ensure_provider_access
-from proliferate.server.cloud.integrations.config import (
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.integration_gateway.connections import access as integration_access
+from proliferate.server.integration_gateway.connections.access import ensure_provider_access
+from proliferate.server.integration_gateway.connections.config import (
     IntegrationConfig,
     StaticUrl,
     serialize_definition_config,
 )
-from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.server.integration_gateway.connections.seeds import sync_seed_definitions
 from proliferate.config import settings
 from proliferate.lib.infra.encryption.fernet import encrypt_text
 from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json

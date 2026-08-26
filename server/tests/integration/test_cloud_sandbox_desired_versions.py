@@ -27,8 +27,8 @@ from proliferate.constants.organizations import (
 )
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import instance_organizations as instance_organization_store
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.runtime_workers import service
+from proliferate.server.api_errors import CloudApiError
+from proliferate.server.seam.workers import service
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.helpers.worker_heartbeat import (
     enroll_sandbox_worker as _enroll_sandbox_worker,
