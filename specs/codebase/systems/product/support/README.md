@@ -24,7 +24,12 @@ laws-and-proof detail.
   Slack vendor leaves; the AnyHarness bounded session-window reads;
   capability `notifications` (Slack receipt); the Desktop diagnostics
   collector and export permit (owned by the desktop host seam).
-- **Emits:** Slack completion receipt (alerting projection only);
+- **Emits:** Slack completion receipt (alerting projection only; carries
+  the field set the
+  [customer loop](../../engineering/customer-loop/README.md) requires:
+  report id, kind/urgent/notify, `client_release_id`, bound session ids,
+  Sentry project/event pairs, the `support_report_id:<id>` Sentry query, and
+  a prefilled file-an-issue link);
   `desktop.support_snapshot.prepare|submit` lifecycles; `tracker_summary`
   and `client_release_id` projections on the row.
 - **Fences:** no issue triage, repair, release tracking or outreach (the
