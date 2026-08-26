@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  useCloudHarnessLaunchOptions,
   useCloudRepoBranches,
-  useCloudSandbox,
   useRepositories,
 } from "@proliferate/cloud-sdk-react";
+import type {
+  CloudHarnessLaunchOptionsResponse,
+} from "@proliferate/product-client/internal/domain/chats/cloud/launch-options-model";
 import {
   buildCloudLaunchComposerControls,
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
@@ -31,11 +32,14 @@ export function useMobileHomeLaunchModel() {
     controlValues: {},
   });
   const repoConfigs = useRepositories();
-  const cloudSandbox = useCloudSandbox();
-  const launchOptions = useCloudHarnessLaunchOptions({
-    cloudSandboxId: cloudSandbox.data?.id,
-    harnessKind: launchSelection.agentKind,
-  });
+  // The cloud sandbox stack is deleted: there is no copied launch-options
+  // observation to read, so the composer renders without model options.
+  const launchOptions = {
+    data: undefined as CloudHarnessLaunchOptionsResponse | undefined,
+    error: null as Error | null,
+    isError: false,
+    isLoading: false,
+  };
   const configuredCloudRepos = useMemo(
     () => (repoConfigs.data?.repositories ?? []).flatMap((repo) => {
       const cloudEnvironment = repo.environments.find((environment) =>

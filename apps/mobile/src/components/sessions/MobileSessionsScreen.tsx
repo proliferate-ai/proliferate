@@ -1,5 +1,4 @@
 import { StyleSheet, Text, View } from "react-native";
-import { useCloudWorkspaces } from "@proliferate/cloud-sdk-react";
 import type {
   CloudSessionProjection,
   CloudWorkspaceSummary,
@@ -18,7 +17,13 @@ interface MobileSessionsScreenProps {
 }
 
 export function MobileSessionsScreen({ onOpenChat }: MobileSessionsScreenProps) {
-  const workspaces = useCloudWorkspaces({ scope: "my" });
+  // The cloud workspace stack is deleted; there are no projected cloud
+  // sessions to list, so the screen settles on its empty state.
+  const workspaces = {
+    data: [] as CloudWorkspaceSummary[],
+    error: null as Error | null,
+    isLoading: false,
+  };
   const workspaceRows = workspaces.data ?? [];
   const projectedSessionCount = workspaceRows.reduce(
     (count, workspace) => count + (workspace.lastSessionSummary ? 1 : 0),

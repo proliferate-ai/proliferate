@@ -12,8 +12,8 @@ import type {
 } from "@proliferate/cloud-sdk";
 import {
   useCloudClient,
-  useCloudWorkspace,
 } from "@proliferate/cloud-sdk-react";
+import type { CloudWorkspaceDetail } from "@proliferate/cloud-sdk";
 import {
   buildCloudTranscriptView,
   cloudTranscriptHasAgentProgressAfterPrompt,
@@ -69,7 +69,16 @@ export function useMobileChatData({
   optimisticPrompts: readonly OptimisticPrompt[];
 }) {
   const client = useCloudClient();
-  const workspaceQuery = useCloudWorkspace(chat.workspaceId, true);
+  // The cloud workspace stack is deleted; there is no workspace document to
+  // read, so chat data settles from the id-only chat reference.
+  const workspaceQuery = {
+    data: undefined as CloudWorkspaceDetail | undefined,
+    error: null as Error | null,
+    isError: false,
+    isLoading: false,
+    isFetching: false,
+    refetch: async () => {},
+  };
   const workspace = workspaceQuery.data ?? null;
   const sessionsQuery = useQuery({
     queryKey: [

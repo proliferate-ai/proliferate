@@ -1,13 +1,9 @@
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { invalidateCloudWorkspaceLists } from "@proliferate/cloud-sdk-react";
 
+// The cloud workspace stack is deleted; there are no workspace-list queries
+// left to invalidate.
 export function useMobileCloudWorkspaceCache() {
-  const queryClient = useQueryClient();
-
-  const invalidateWorkspaceLists = useCallback(() => {
-    invalidateCloudWorkspaceLists(queryClient);
-  }, [queryClient]);
+  const invalidateWorkspaceLists = useCallback(() => {}, []);
 
   return { invalidateWorkspaceLists };
 }

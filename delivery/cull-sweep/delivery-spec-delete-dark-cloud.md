@@ -202,3 +202,17 @@ Consequently the acceptance grep changes: `grep -r "server.cloud"
 server/proliferate --include='*.py'` matches only
 `server/proliferate/server/cloud/gateway/` (the held folder's own intra-
 package imports) and nothing else.
+
+## Amendment (2026-08-25, part-2 implementation finding): the mobile app
+
+`apps/mobile` is a cloud-workspace client end to end — its sessions list,
+work inventory, chat, deep-link restoration, and home launch all read the
+deleted cloud workspace/sandbox surfaces. The spec was silent on it, and
+CI's required `mobile-typecheck` job forces a decision. Per coordinator
+ruling the cloud lanes are severed **inert, no scope change beyond
+compiling**: empty inventories and session lists, id-only chat references,
+launch-options permanently unobserved, submit refusing with "Cloud
+workspaces are no longer available." The shared composer/transcript domain
+surfaces it consumes from ProductClient (`domain/chats/cloud/*`) are kept.
+Whether the mobile app is retired or re-pointed at the environments rebuild
+is an open follow-up for Pablo.

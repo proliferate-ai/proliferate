@@ -1,8 +1,10 @@
 import type {
-  CloudHarnessLaunchOptionsResponse,
   CloudSessionProjection,
   CloudWorkspaceDetail,
 } from "@proliferate/cloud-sdk";
+import type {
+  CloudHarnessLaunchOptionsResponse,
+} from "@proliferate/product-client/internal/domain/chats/cloud/launch-options-model";
 import {
   buildCloudChatComposerControls,
   getLiveConfigControlValue,

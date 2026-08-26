@@ -6,8 +6,8 @@ import {
   githubAppRootKey,
   repositoriesKey,
   useCloudClient,
-  useCloudWorkspace,
 } from "@proliferate/cloud-sdk-react";
+import type { CloudWorkspaceDetail } from "@proliferate/cloud-sdk";
 
 import { isMobileGitHubAppCallbackUrl } from "../../../lib/access/cloud/auth/mobile-github-app-callback";
 import {
@@ -58,10 +58,9 @@ export function useMobileShellNavigation(
   const [initialLinkChecked, setInitialLinkChecked] = useState(false);
   const [navigationRestored, setNavigationRestored] = useState(false);
   const initialLinkAppliedRef = useRef(false);
-  const linkedWorkspace = useCloudWorkspace(
-    linkedWorkspaceId,
-    authState === "active" && linkedWorkspaceId !== null,
-  );
+  // The cloud workspace stack is deleted; a workspace deep link has no
+  // document behind it any more, so link restoration settles empty.
+  const linkedWorkspace = { data: undefined as CloudWorkspaceDetail | undefined };
   const queryClient = useQueryClient();
   const cloudClient = useCloudClient();
 
