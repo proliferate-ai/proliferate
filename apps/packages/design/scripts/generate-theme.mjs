@@ -28,6 +28,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { densityRungs, radiusRungs, rungAttributes, rungTokens } from "../dist/rungs.js";
 import { themeTokens } from "../dist/tokens.js";
 
 const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
@@ -99,6 +100,31 @@ const iconButtonSizeUtilities = ["sm", "md", "lg"].map(
 }`,
 );
 
+/**
+ * Geometry rungs. The `default` rung IS the token value (tokens.ts reads it),
+ * so it needs no block. Every other rung re-points the same tokens under the
+ * attribute the app sets on the document element — the density/radius twin of
+ * `:root[data-mode="light"]`. No alternate rung is populated today, so this
+ * emits nothing; populating one in rungs.ts is the whole change.
+ */
+function rungBlocks() {
+  const families = [
+    ["radius", radiusRungs],
+    ["density", densityRungs],
+  ];
+  const blocks = [];
+  for (const [family, rungs] of families) {
+    for (const [rungName, values] of Object.entries(rungs)) {
+      if (rungName === "default") continue;
+      const lines = Object.entries(rungTokens[family]).map(
+        ([key, tokenName]) => `  ${tokenName}: ${values[key]};`,
+      );
+      blocks.push(`:root[${rungAttributes[family]}="${rungName}"] {\n${lines.join("\n")}\n}`);
+    }
+  }
+  return blocks;
+}
+
 const css = `@theme {
   --color-*: initial;
   --text-*: initial;
@@ -115,6 +141,7 @@ ${declarations("light")}
 }
 
 ${[
+  ...rungBlocks(),
   "@utility rounded-inherit {\n  border-radius: inherit;\n}",
   ...zUtilities,
   ...durationUtilities,
