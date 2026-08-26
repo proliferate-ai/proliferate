@@ -67,8 +67,8 @@ Native harness login is not a method: it is an onboarding detection that offers 
         - The courier pulls and acks; the ack is what lets the pane say "applied" truthfully.
     - The seat-usage read — the latest window samples per seat.
         - The settings meters render it.
-    - Three importable functions — `render_state`, `resolve_headless`, `seat_usage_probe`.
-        - `render_state` is called only by this system's own routes; `resolve_headless` by automations at run placement; nothing else imports anything else.
+    - Three importable functions — the renderer (`render_agent_auth_state`), `resolve_headless` (target), `seat_usage_probe` (target).
+        - The renderer is called only by this system's own routes; `resolve_headless` by automations at run placement; nothing else imports anything else.
 - **Consumes:** ai_gateway (`gateway_profile`, `is_gateway_budget_available`, `verify_key`) · the registry mirror constants · encryption at rest · org membership for policy routes.
 
 ### runtime `agent_auth` — the machine-truth half
@@ -141,6 +141,9 @@ CREATE TABLE agent_auth_selection (
     enabled       boolean NOT NULL,
     UNIQUE (user_id, harness_kind, surface, source_kind, env_var_name)
     -- + partial unique index: at most one gateway row per scope
+    -- + ck_agent_auth_selection_gateway_shape / _api_key_shape (kind-conditional column presence)
+    -- api_key_id is ON DELETE CASCADE at the schema layer; the API layer never lets it fire
+    -- (delete of an in-use key refuses with 409) — the cascade is the belt behind that suspender
 );
 
 -- Courier receipts: the last acknowledged (sequence, fingerprint) per (user, surface).
@@ -149,19 +152,24 @@ CREATE TABLE agent_auth_selection (
 -- wedge the only-forward store against every later legitimate ack. v1 assumes one machine
 -- per (user, surface); multi-desktop ack reconciliation rides the environments rebuild.
 CREATE TABLE agent_auth_delivery_ack (
-    user_id      uuid NOT NULL,
-    surface      text NOT NULL,
-    sequence     bigint NOT NULL,             -- monotonic per (user, surface), bumped by every render whose fingerprint changed
-    fingerprint  text NOT NULL,               -- sha256 of the canonical document
-    applied_at   timestamptz NOT NULL
+    id                uuid PRIMARY KEY,
+    user_id           uuid NOT NULL,
+    surface           text NOT NULL,
+    acked_sequence    bigint NOT NULL,        -- monotonic per (user, surface); today's column is acked_revision
+    acked_fingerprint text NOT NULL,          -- sha256 of the canonical document
+    acked_at          timestamptz NOT NULL,
+    created_at        timestamptz NOT NULL,
+    updated_at        timestamptz NOT NULL,
+    UNIQUE (user_id, surface)
 );
 
 -- Catalog-declared per-harness toggles. Not auth; rides this system's delivery as the vehicle.
 CREATE TABLE agent_auth_harness_settings (
+    id            uuid PRIMARY KEY,
     user_id       uuid NOT NULL,
     harness_kind  text NOT NULL,
     surface       text NOT NULL,
-    settings      jsonb NOT NULL
+    settings_json text NOT NULL               -- JSON string; dict[str, bool]
 );
 
 -- Org guardrails: allow-lists per org. 'native' appears as a policy value only — it is never
@@ -169,8 +177,8 @@ CREATE TABLE agent_auth_harness_settings (
 -- policy surface in the admin report, never as launch failures.
 CREATE TABLE org_agent_policy (
     organization_id        uuid PRIMARY KEY,
-    allowed_routes_json    jsonb,             -- subset of {gateway, api_key, seat, native}; NULL = allow all
-    allowed_harnesses_json jsonb,             -- NULL = allow all
+    allowed_routes_json    text,              -- JSON list, subset of {gateway, api_key, seat, native}; NULL = allow all
+    allowed_harnesses_json text,              -- JSON list; NULL = allow all
     updated_by_user_id     uuid
 );
 
@@ -194,7 +202,7 @@ CREATE TABLE seat_usage_sample (
 Full desired state for one (user, surface): **every harness with any enabled selection appears in every render.** Pinned by the [contract fixture](../../../fixtures/contracts/agent-auth-state) — the Python renderer asserts it produces it, the Rust reader asserts it consumes it, and a shape change is made by changing the fixture.
 
 ```text
-{ version: 2, sequence, fingerprint, user_id, issuing_server_origin,
+{ version: 2, sequence, user_id, issuing_server_origin,
   harnesses: [ { harness_kind, sources: [ source ], settings? } ] }
 source = { kind: "gateway",         base_url, key }
        | { kind: "api_key",         env_var_name, value }
@@ -202,7 +210,7 @@ source = { kind: "gateway",         base_url, key }
        | { kind: "seat",            env: {CLAUDE_CODE_OAUTH_TOKEN: value}, seat_id }
 ```
 
-Two fields govern delivery: `sequence` (monotonic per surface, bumped by every render whose content changed) orders pushes — the runtime rejects a push whose sequence is below the persisted one — and `fingerprint` (a content hash of the canonical harnesses array) detects change: a render that changes nothing changes neither field, and downstream invalidation keys on per-harness content, never on the document's sequence. `issuing_server_origin` is the server-switch guard: the courier stamps the origin it fetched from, and the runtime treats a document from any other origin as absent. A harness whose selected sources cannot be satisfied keeps its entry with the dead source omitted — present-but-empty fails closed at launch, with the refusal naming the actual reason. `GET /state` adds two response-only riders the courier strips before pushing: `fingerprint`, and `harness_settings` (the surface's full settings map, so an unconfigured harness's toggles still reach the pane).
+Two fields govern delivery: `sequence` travels **in the document** (monotonic per surface, bumped by every render whose content changed) and orders pushes — the runtime rejects a push whose sequence is below the persisted one; `fingerprint` (a content hash of the canonical harnesses array) travels **only as a `GET /state` rider** and detects change. A render that changes nothing changes neither, and downstream invalidation keys on per-harness content, never on the document's sequence. The wire shape change (revision → sequence) is made by changing the contract fixture, which breaks whichever side lags. `issuing_server_origin` is the server-switch guard: the courier stamps the origin it fetched from, and the runtime treats a document from any other origin as absent. A harness whose selected sources cannot be satisfied keeps its entry with the dead source omitted — present-but-empty fails closed at launch, with the refusal naming the actual reason. `GET /state` adds two response-only riders the courier strips before pushing: `fingerprint`, and `harness_settings` (the surface's full settings map, so an unconfigured harness's toggles still reach the pane).
 
 ### Runtime persistent state (`<runtime_home>/`, mode 0600)
 
@@ -380,27 +388,27 @@ The full API, route by route (`/v1/cloud/agent-auth/…`, product-user bearer au
 
 ```text
 GET  /keys
-  → [ { id, title, kind, redactedHint, status, createdAt, updatedAt } ]
+  → [ { id, title, kind, redactedHint, status, createdAt } ]
 POST /keys                       { title, value }                          → the created key row
-POST /keys/provider-config       { title, kind, config: {…} }              → the created key row
+POST /keys/provider-config       { title, kind, value: {…} }               → the created key row
      (aws_bedrock: {region, bearerToken} · azure_openai: {endpoint, apiKey} — no deployment field)
 DELETE /keys/{key_id}
   → the revoked key row · 409 agent_api_key_referenced { harnesses: [kind] }   # in-use keys disable, never dangle
 
-GET  /selections?surface=
-  → [ { harnessKind, surface, sourceKind, apiKeyId?, envVarName?, providerHint?, enabled,
-        applied, createdAt, updatedAt } ]                      # applied = ack carries current (revision, fingerprint)
+GET  /selections?surface=        # surface optional — absent returns all surfaces
+  → [ { id, harnessKind, surface, sourceKind, apiKeyId?, keyTitle?, envVarName?, providerHint?,
+        enabled, applied, createdAt, updatedAt } ]             # applied = ack carries current (sequence, fingerprint)
 PUT  /selections/{harness}?surface=
      { sources: [ { sourceKind, apiKeyId?, envVarName?, providerHint?, enabled } ], settings?: {key: bool} }
   → the scope's selections          # full desired state; the server diffs. 400 illegal · 403 policy_violation
 
 GET  /state?surface=
   → state.json v2 + riders { fingerprint, harness_settings }   # same renderer for every caller
-POST /state/ack?surface=          { sequence, fingerprint }
+POST /state/ack?surface=          { sequence, fingerprint }   # (wire names revision/fingerprint until the rename lands)
   → the ack row · 400 invalid_agent_auth_delivery_ack          # only-forward; future acks refused
 
-Every error above shares one envelope: { error: { code, message, details? } } — code is the typed
-value shown per route, message is the plain-words copy, details carries the named fields.
+Every error above shares one envelope: { "detail": { code, message, ...fields } } — code is the
+typed value shown per route, message is the plain-words copy, extra fields are named per code.
 
 GET  /seats/usage
   → [ { apiKeyId, util5h, util7d, reset5h, reset7d, bindingWindow, status, sampledAt } ]
@@ -415,9 +423,10 @@ GET  /organizations/{org}/agent-auth/policy/violations → existing out-of-polic
 Importable functions (nothing else is):
 
 ```python
-render_state(user_id, surface) -> StateDocument   # pure over rows; full desired state; content-hash revision
-resolve_headless(subject, harness) -> Source      # the flow-3 ladder for automations
-seat_usage_probe(api_key_id) -> UsageSample       # flow 5's soft signal
+render_agent_auth_state(inputs) -> (document, fingerprint)   # THE renderer (state_render.py); pure; full desired state
+build_agent_auth_state(...)                                  # its input assembly
+resolve_headless(subject, harness) -> Source                 # target — the flow-3 ladder for automations
+seat_usage_probe(api_key_id) -> UsageSample                  # target — flow 5's soft signal
 ```
 
 Events (via `log_cloud_event`; ids carried: user, org, harness kind, key/seat id): `agent_api_key_created` · `agent_provider_config_created` · `agent_api_key_revoked` · `agent_auth_selections_put` · `agent_auth_delivery_acked` · `org_agent_policy_updated` · `agent_seat_minted` · `agent_seat_limit_hit` · `agent_seat_rotated`.
@@ -444,13 +453,14 @@ anyharness/crates/anyharness-lib/src/
 │   │   ├── probe_materialization.rs · probe_materialization/ · probe_materialization_tests/   scratch materialization for probes
 │   │   ├── mod.rs                        the pipeline, origin guard, RouteAuthError
 │   │   ├── test_support.rs               shared fixtures
-│   │   └── *_render_tests.rs             cursor · opencode · provider_config · contract-fixture pins
+│   │   └── tests: cursor/opencode/provider_config render · contract_fixture · origin_guard · gateway_plan
 │   ├── auth/
+│   │   ├── mod.rs
 │   │   ├── credentials.rs                native detection (read-only; env reads scoped by law)
 │   │   ├── login.rs · login_terminal.rs  CLI login flows (+ mint_seat capture)
 │   │   ├── launch_facts.rs               what the launcher is told
 │   │   ├── context.rs                    auth context assembly
-│   │   └── credential_ladder_tests.rs · credentials_tests.rs
+│   │   └── credential_ladder_tests.rs · credentials_tests.rs · launch_facts_provider_config_tests.rs
 │   ├── auth_state.rs                     evidence-based display derivation → absorbed by status/
 │   ├── launch_probe/
 │   │   ├── mod.rs                        reconciler: single-flight, pokes, the brakes
@@ -485,8 +495,10 @@ pub fn methods(harness: &str) -> Vec<MethodRow>   // {kind, available, seat_id?,
 
 pub fn status(harness: &str) -> StatusDoc
 pub fn subscribe_status() -> impl Stream<Item = StatusDoc>
-pub fn poke(event: ProbeEvent)  // Startup | AuthApplied | InstallCompleted
-                                // | LoginExit | BackoffExpired | FirstDetected
+pub fn poke(event: ProbeEvent)  // today: Startup | InstallCompleted | AuthApplied | LoginTerminal
+                                //        | LiveContradiction | Manual
+                                // target adds: BackoffExpired | FirstDetected, and AuthApplied
+                                // gains a changed-harness set (today it is the widest possible apply)
 
 pub fn start_login(harness: &str, variant: LoginVariant) -> TerminalHandle  // Native | MintSeat
 ```
@@ -495,11 +507,13 @@ The local HTTP API (runtime bearer auth) — the concrete mirror of doors 2-4 fo
 
 ```text
 PUT    /v1/agent-auth/state                    apply a document (sequence-guarded) · DELETE clears; both poke AuthApplied
+POST   /v1/agents/{kind}/launch-options/refresh   the manual-refresh poke (409 PROBE_ENGINE_NOT_OWNER for non-owners)
+POST   /v1/agents/login-terminals              create a login terminal (mint_seat is a request variant — target)
+GET|DELETE /v1/agents/login-terminals/{id}     terminal lifecycle · GET …/{id}/ws streams it
+── target routes (delta: the status/methods surface) ──
 GET    /v1/agent-auth/status                   → StatusDoc[] (all harnesses) · ?harness= for one
-GET    /v1/agent-auth/status/stream            SSE — one event per status-document change (the hooks' subscription; polling the GET is the documented fallback where SSE is unavailable, e.g. tests)
+GET    /v1/agent-auth/status/stream            SSE — one event per status-document change (polling the GET is the fallback where SSE is unavailable)
 GET    /v1/agent-auth/methods?harness=         → MethodRow[]
-POST   /v1/agents/{kind}/launch-options/refresh   the manual-refresh poke (existing route; 409 PROBE_ENGINE_NOT_OWNER for non-owners)
-WS     /v1/agents/{kind}/login-terminal        start_login stream (existing route; mint_seat is a query variant)
 ```
 
 The per-harness recipe table — the one place "every harness has its own way of accepting auth" is paid for:
@@ -518,7 +532,7 @@ A recipe never chooses a model. Ambient sanitization applies to every routed lau
 
 **Method availability**, as `methods(harness)` computes it: a method row is available when the catalog declares the method for the harness AND org policy allows it AND its material exists — for gateway, the org's enrollment is synced; for api_key, a usable vault row is selected; for seat, at least one active seat row exists. `applied` comes from the applied document, never from detection. Native appears as a detection row (`detected`, with the mint offer), never as an available launch method.
 
-**Probe targeting**, per event: `Startup` probes every eligible harness once; `AuthApplied{changed}` probes only the harnesses whose document content changed; `InstallCompleted` and `FirstDetected` probe that harness; `LoginExit` probes the harness whose terminal closed; `BackoffExpired` retries exactly the harness whose backoff lapsed. Cursor is excluded from every unattended probe (its keychain prompts) and probes only on manual refresh.
+**Probe targeting**, per event: `Startup` probes every eligible harness once; `AuthApplied{changed}` probes only the harnesses whose document content changed (today's `AuthApplied` is the widest possible apply — the changed-set is target); `InstallCompleted` and `FirstDetected` probe that harness; `LoginTerminal` probes the harness whose login terminal closed; `LiveContradiction` re-probes a harness whose live session contradicted the observation; `Manual` is the user's refresh; `BackoffExpired` retries exactly the harness whose backoff lapsed. Cursor is excluded from every unattended probe (its keychain prompts) and probes only on manual refresh.
 
 Typed runtime errors, each with its status and the flow that raises it: `AGENT_ROUTE_SELECTION_MISSING` (409, flow 3 — rendered in plain words per the refusal variants) · `AGENT_ROUTE_SELECTION_INCOMPLETE` (409, flow 3) · `AGENT_ROUTE_UNSUPPORTED` (409, flow 3 — e.g. cursor gateway) · `AGENT_ROUTE_UNKNOWN_HARNESS` (409, flow 3) · `AGENT_ROUTE_STATE_MALFORMED` (500, flows 1 and 3) · `AGENT_ROUTE_STATE_STALE` (409, flow 1) · `AGENT_ROUTE_MATERIALIZE_FAILED` (500, flow 3).
 
@@ -549,9 +563,9 @@ reportSeatLimitHit()   // relays the runtime's observed limit hit to POST /seats
 **The push semantics, exactly:**
 
 - Runs are serialized through one operation queue; rapid switches coalesce and only the newest rendered document is ever pushed (latest-wins — no intermediate document is observable after a later one).
-- The push skips when the served fingerprint equals the last pushed fingerprint (no-op renders move nothing).
+- The push skips when a client-computed fingerprint of the fetched document equals the last pushed one (no-op renders move nothing); the **ack** echoes the served rider fingerprint, never a client-computed value.
 - An empty document (zero harness entries) is delivered as `DELETE /v1/agent-auth/state`, not a push of `{}`.
-- The ack echoes the **served** fingerprint, never a client-computed one, and only after the runtime PUT succeeded.
+- The ack fires only after the runtime PUT succeeded.
 - A rejected push (`AGENT_ROUTE_STATE_STALE`) refetches `/state` and re-pushes; a failed push leaves the selection visibly **pending** — never a silently stale runtime — and the next invalidation retries. There is no client-side backoff loop; the pending badge plus the next trigger is the retry policy.
 - `uploadSeatToken` holds the token in memory only, POSTs once, and surfaces failure to the mint flow (which tells the user to re-run the mint); it never retries silently and never persists the token anywhere client-side.
 
@@ -614,10 +628,13 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 | Grok authenticates, or doesn't offer login | The catalog declares CLI login; no managed install recipe and no PATH binary, so the login terminal can never start | An install recipe, or drop the declaration |
 | The headless ladder exists | Selections are per-user only; org policy only restricts | Creator-credentials at v1; org default when the first team org lands (ruled 2026-08-26) |
 | `surface` stays in the schema; the API defaults it to `local` and the UI never shows it until cloud machines return | `?surface=` is a live parameter on every route; cloud rows may exist from the pre-cull era | Default the parameter, hide the dimension, keep the column (ruled 2026-08-26) |
-| Delivery ordered by `sequence`, content identified by `fingerprint` | `revision` is one ms-epoch number doing both jobs; `acked_revision` is a BigInteger | Split the fields; migrate the ack column; drop the equal-revision clause |
+| Delivery ordered by `sequence`, content identified by `fingerprint` (rider-only) | `revision` is one ms-epoch number doing both jobs, in-document; `acked_revision` is the ack column | Rename revision → sequence in the document AND the contract fixture; rename `acked_revision` → `acked_sequence`; drop the equal-revision clause |
+| The local API grows `GET /status`, `GET /status/stream`, `GET /methods`; the server grows `GET /seats/usage` + `POST /seats/{id}/limit-hit`; events grow `agent_seat_minted/limit_hit/rotated` | None of these exist | The seats + status build items |
+| Importable renderer keeps its names | `render_agent_auth_state` / `build_agent_auth_state` in `state_render.py` | No rename — the spec uses the real names; `resolve_headless` and `seat_usage_probe` are new |
+| Probe events gain `BackoffExpired`, `FirstDetected`, and a changed-set on `AuthApplied` | `PokeReason` is Startup · InstallCompleted · AuthApplied (widest apply) · LoginTerminal · LiveContradiction · Manual | Two new variants + per-harness targeting |
 | Zero rows = unconfigured, with a migration for today's native users | Zero rows = native and the harness launches on its own login — retiring the convention converts working native setups into refusals | Cutover ships the status-document detection + mint offer first; existing native harnesses get a one-time settings prompt, and until acted on launches keep native behavior behind a legacy flag the migration removes — the exact bridge UX is the design pass's call |
 | One ack row per (user, surface) | Same | v1 explicitly assumes one machine per surface; multi-desktop reconciliation rides the environments rebuild |
-| `org_agent_policy` gains `seat` in the allowed-routes vocabulary | Vocabulary is {gateway, api_key, native} | One vocabulary value; no shape change (DDL above matches prod's columns) |
+| `org_agent_policy` gains `seat` in the allowed-routes vocabulary | Vocabulary is {gateway, api_key, native} | One vocabulary value; no shape change |
 | The status document replaces `authState` on the agents projection | `authState` ships beside the legacy ladder fields | Replace the field; `credentialState`/`readiness` stay harnesses' |
 
 Carried, still true in prod (not deltas): the origin guard · only-forward acks · the contract fixture pin · the per-harness recipes and ambient sanitization · the restart-running-sessions offer after an applied auth change · the registry mirror drift tests · opencode's per-slot detector gap · the `azure_openai` cells pending live verification for codex and claude · native-auth harness settings never reaching the runtime (the settings rider covers the pane, not the launch).
