@@ -5,7 +5,6 @@ import {
   useAnyHarnessRuntimeContext,
 } from "@anyharness/sdk-react";
 import {
-  cloudGitSideFromStatus,
   cloudGitSideLastReported,
   localGitSideAbsent,
   localGitSideFromStatus,
@@ -20,26 +19,23 @@ import {
   type PushAndContinueOutcome,
 } from "#product/lib/domain/workspaces/cloud/push-and-continue-orchestration";
 import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { useCloudWorkspaceConnectionCache } from "#product/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import type { Workspace } from "@anyharness/sdk";
 
 /**
  * PR 6 — the client actions the reconciliation dialog drives: read the current
- * cross-target Git relation from LIVE status on BOTH sides (local runtime +
- * Cloud runtime, the latter reached through the resolved cloud connection), and
+ * cross-target Git relation (the local side LIVE from this Mac's runtime), and
  * run push-and-continue for a clean ahead relation via the EXISTING AnyHarness
- * push capability on whichever side is ahead. All git mutation is `push` only;
- * no reset/stash/rebase/merge/force is ever invoked. Re-evaluation between
- * preflight and push wins (the pure orchestration cancels a stale action).
+ * push capability. All git mutation is `push` only; no reset/stash/rebase/
+ * merge/force is ever invoked. Re-evaluation between preflight and push wins
+ * (the pure orchestration cancels a stale action).
  *
- * Truthfulness (PR6-CLOUD-TRUTH-01): the Cloud side is read LIVE. If its runtime
- * can't be reached, its cleanliness fields stay UNKNOWN (last-reported head only)
- * and the relation resolver withholds any same_head/safe claim.
+ * Truthfulness (PR6-CLOUD-TRUTH-01): the cloud sandbox gateway is deleted, so
+ * the Cloud side always reads last-reported — its cleanliness fields stay
+ * UNKNOWN and the relation resolver withholds any same_head/safe claim.
  */
 export function useWorkspaceGitReconciliationActions() {
   const runtime = useAnyHarnessRuntimeContext();
-  const { refreshCloudWorkspaceConnection } = useCloudWorkspaceConnectionCache();
   const showToast = useToastStore((state) => state.show);
 
   const readLocalSide = useCallback(async (
@@ -65,35 +61,16 @@ export function useWorkspaceGitReconciliationActions() {
     }
   }, [runtime]);
 
-  /** Read the CLOUD side LIVE through the resolved cloud connection. Falls back
-   * to last-reported (unknown-clean) only when the runtime can't be reached. */
+  /** The Cloud side always reads last-reported (unknown-clean): there is no
+   * cloud runtime left to reach for a live status. */
   const readCloudSide = useCallback(async (
     cloud: CloudWorkspaceSummary | null,
   ): Promise<WorkspaceGitSide> => {
     const repo = cloud?.repo ?? null;
     const managed = (cloud?.materializations ?? []).find((m) => m.targetKind === "managed_cloud")
       ?? null;
-    if (!cloud || !managed) {
-      // No managed Cloud copy → absent (Add-Cloud-copy), or a missing/failed row.
-      return cloudGitSideLastReported(managed, repo);
-    }
-    try {
-      const connection = await refreshCloudWorkspaceConnection(cloud.id);
-      const anyharnessWorkspaceId = connection.anyharnessWorkspaceId;
-      if (!connection.runtimeUrl || !anyharnessWorkspaceId) {
-        return cloudGitSideLastReported(managed, repo);
-      }
-      const client = getAnyHarnessClient({
-        runtimeUrl: connection.runtimeUrl,
-        authToken: connection.accessToken ?? undefined,
-      });
-      const status = await client.git.getStatus(anyharnessWorkspaceId);
-      return cloudGitSideFromStatus(status, repo);
-    } catch {
-      // Runtime not reachable this pass: last-reported head, cleanliness unknown.
-      return cloudGitSideLastReported(managed, repo);
-    }
-  }, [refreshCloudWorkspaceConnection]);
+    return cloudGitSideLastReported(managed, repo);
+  }, []);
 
   /** Read the current relation between the local checkout and the Cloud copy,
    * both sides LIVE where reachable. */
@@ -127,23 +104,10 @@ export function useWorkspaceGitReconciliationActions() {
         const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
         push = () => client.git.push(args.local!.id, {});
       } else {
-        const managed = (args.cloud?.materializations ?? [])
-          .find((m) => m.targetKind === "managed_cloud") ?? null;
-        if (!args.cloud || !managed) {
-          showToast("The Cloud copy isn't available to push right now.");
-          return null;
-        }
-        const connection = await refreshCloudWorkspaceConnection(args.cloud.id);
-        const cloudWorkspaceId = connection.anyharnessWorkspaceId;
-        if (!connection.runtimeUrl || !cloudWorkspaceId) {
-          showToast("The Cloud copy's runtime isn't reachable right now.");
-          return null;
-        }
-        const client = getAnyHarnessClient({
-          runtimeUrl: connection.runtimeUrl,
-          authToken: connection.accessToken ?? undefined,
-        });
-        push = () => client.git.push(cloudWorkspaceId, {});
+        // Pushing from the Cloud copy's own runtime needed the deleted cloud
+        // sandbox gateway; there is no runtime left to dispatch that push.
+        showToast("The Cloud copy's runtime isn't reachable right now.");
+        return null;
       }
 
       const outcome = await runPushAndContinue(args.expected, {
@@ -173,7 +137,7 @@ export function useWorkspaceGitReconciliationActions() {
       showToast(error instanceof Error ? error.message : "Could not push.");
       return null;
     }
-  }, [readCloudSide, readLocalSide, refreshCloudWorkspaceConnection, runtime, showToast]);
+  }, [readCloudSide, readLocalSide, runtime, showToast]);
 
   return { readRelation, pushAndContinue };
 }

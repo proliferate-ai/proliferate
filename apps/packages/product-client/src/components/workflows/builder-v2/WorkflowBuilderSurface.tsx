@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { useRepoRootsQuery } from "@anyharness/sdk-react";
-import { useCloudHarnessLaunchOptions, useCloudSandbox } from "@proliferate/cloud-sdk-react";
+import { useAgentLaunchOptionsListQuery, useRepoRootsQuery } from "@anyharness/sdk-react";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import { useWorkflowBuilder } from "#product/hooks/workflows/facade/use-workflow-builder";
@@ -23,6 +22,10 @@ import { ArrowLeft } from "#product/primitives/icons/core";
 import { StatusDot } from "#product/primitives/StatusDot";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { SegmentedControl } from "#product/primitives/SegmentedControl";
+
+/** The harness vocabulary a gen-2 node's optional `model` picks from, read
+ * from the local runtime's per-kind observations. */
+const WORKFLOW_BUILDER_HARNESS_KINDS = ["claude", "codex", "opencode", "grok"];
 
 export interface WorkflowBuilderSurfaceProps {
   /** `null` = a new workflow, blank or seeded from `template`. */
@@ -50,36 +53,17 @@ export function WorkflowBuilderSurface({
   const availableRepoRootIds = repoRootsQuery.data
     ? repoRootsQuery.data.map((repoRoot) => repoRoot.id)
     : null;
-  const cloudSandbox = useCloudSandbox();
-  const claudeOptions = useCloudHarnessLaunchOptions({
-    cloudSandboxId: cloudSandbox.data?.id,
-    harnessKind: "claude",
+  const launchOptionsEntries = useAgentLaunchOptionsListQuery({
+    harnessKinds: WORKFLOW_BUILDER_HARNESS_KINDS,
+    enabled: true,
   });
-  const codexOptions = useCloudHarnessLaunchOptions({
-    cloudSandboxId: cloudSandbox.data?.id,
-    harnessKind: "codex",
-  });
-  const opencodeOptions = useCloudHarnessLaunchOptions({
-    cloudSandboxId: cloudSandbox.data?.id,
-    harnessKind: "opencode",
-  });
-  const grokOptions = useCloudHarnessLaunchOptions({
-    cloudSandboxId: cloudSandbox.data?.id,
-    harnessKind: "grok",
-  });
-  const observedResponses = [
-    claudeOptions.data,
-    codexOptions.data,
-    opencodeOptions.data,
-    grokOptions.data,
-  ];
   const registriesQuery = {
-    isError: observedResponses.every((response) => !response)
-      && [claudeOptions, codexOptions, opencodeOptions, grokOptions].some((query) => query.isError),
+    isError: launchOptionsEntries.every((entry) => !entry.data)
+      && launchOptionsEntries.some((entry) => entry.isError),
   };
   const harnesses = useMemo(
-    () => workflowBuilderHarnessOptions(observedResponses),
-    [claudeOptions.data, codexOptions.data, grokOptions.data, opencodeOptions.data],
+    () => workflowBuilderHarnessOptions(launchOptionsEntries.map((entry) => entry.data)),
+    [launchOptionsEntries],
   );
   const availableModelSelections = useMemo(() => harnesses.map((harness) => ({
     agentKind: harness.agentKind,

@@ -98,8 +98,6 @@ const SETTINGS_NAV_ICONS = {
   "organization-limits": Gauge,
   "organization-members": Users,
   "organization-model-policy": Brain,
-  "organization-secrets": KeyRound,
-  "personal-secrets": KeyRound,
   "repo-actions": MousePointerClick,
   "repo-environment": KeyRound,
   support: LifeBuoy,

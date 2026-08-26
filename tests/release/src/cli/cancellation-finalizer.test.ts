@@ -30,11 +30,11 @@ test("SIGTERM uses the same memoized world finalizers in reverse registration or
   try {
     const calls: string[] = [];
     registerCancellationFinalizer({
-      world: "managed-cloud",
+      world: "local",
       run: run("qlc-123"),
-      runDir: path.join(dir, "managed", "1"),
+      runDir: path.join(dir, "local-world", "1"),
       finalize: async () => {
-        calls.push("managed-cloud");
+        calls.push("local");
         return { failed: 0 };
       },
     });
@@ -50,13 +50,13 @@ test("SIGTERM uses the same memoized world finalizers in reverse registration or
 
     await finalizeRegisteredForSignal("SIGTERM");
     await finalizeRegisteredForSignal("SIGTERM");
-    assert.deepEqual(calls, ["self-host", "managed-cloud"]);
+    assert.deepEqual(calls, ["self-host", "local"]);
 
-    const managed = JSON.parse(await readFile(path.join(dir, "managed", "1-cancellation-finalization.json"), "utf8"));
-    assert.deepEqual(managed.run, { run_id: "qlc-123", shard_id: "1", attempt: 2, source_sha: SHA });
-    assert.equal(managed.world, "managed-cloud");
-    assert.equal(managed.signal, "SIGTERM");
-    assert.equal(managed.status, "reconciled");
+    const localReceipt = JSON.parse(await readFile(path.join(dir, "local-world", "1-cancellation-finalization.json"), "utf8"));
+    assert.deepEqual(localReceipt.run, { run_id: "qlc-123", shard_id: "1", attempt: 2, source_sha: SHA });
+    assert.equal(localReceipt.world, "local");
+    assert.equal(localReceipt.signal, "SIGTERM");
+    assert.equal(localReceipt.status, "reconciled");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -139,13 +139,13 @@ test("a non-throwing cleanup summary with failed resources stays red", async () 
   const dir = await mkdtemp(path.join(os.tmpdir(), "qualification-cancel-summary-failed-"));
   try {
     registerCancellationFinalizer({
-      world: "managed-cloud",
+      world: "local",
       run: run("qlc-summary-failed"),
-      runDir: path.join(dir, "managed", "1"),
+      runDir: path.join(dir, "local-world", "1"),
       finalize: async () => ({ reconciled: 2, failed: 1 }),
     });
     await finalizeRegisteredForSignal("SIGTERM");
-    const raw = await readFile(path.join(dir, "managed", "1-cancellation-finalization.json"), "utf8");
+    const raw = await readFile(path.join(dir, "local-world", "1-cancellation-finalization.json"), "utf8");
     const receipt = JSON.parse(raw);
     assert.equal(receipt.status, "failed");
     assert.match(receipt.reason, /reported failures/);

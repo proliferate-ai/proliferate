@@ -23,8 +23,8 @@
  * browser-free route that mints a fresh access + refresh token pair from a
  * valid refresh token, with no DB/VPC access needed. Same
  * bootstrap-once-then-self-rotate shape as the GitHub App seed fixture's
- * refresh-token state file (./github-app-seed.ts /
- * ../../scripts/github_app_seed.py) — this module only needs re-bootstrapping
+ * refresh-token state file (./github-app-seed.ts) — this module only needs
+ * re-bootstrapping
  * if the state file is lost or the user's `token_generation` is bumped
  * (logout-everywhere / password change), which would revoke the refresh
  * token.

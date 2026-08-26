@@ -23,8 +23,10 @@ import path from "node:path";
  * registry (see "Parallel Tracks - Extension Contract"): new worlds add their
  * kinds here; registered-before-create and reverse-order-reconcile semantics
  * are non-negotiable and unchanged. The self-host block (PR 3) adds the four
- * AWS resource kinds its world provisions; the managed-cloud block (PR 2)
- * adds the E2B resource kinds its world provisions.
+ * AWS resource kinds its world provisions. (The managed-cloud blocks below
+ * were appended for the PR 2/PR 6 cloud world, which was deleted with the
+ * cloud sandbox stack — cull part 2; the kind strings stay so replay of an
+ * old persisted ledger still parses, but nothing registers them anymore.)
  */
 export type CleanupResourceKind =
   | "litellm_virtual_key"
@@ -57,14 +59,12 @@ export type CleanupResourceKind =
   | "security_group"
   | "key_pair"
   | "route53_record"
-  // ── Appended for PR 2 (managed-cloud world). Registered-before-create,
-  // reverse-order-reconcile; see worlds/managed-cloud/cleanup-kinds.ts for the
-  // cloud evidence-category mapping and cleanup stack. ──────────────────────
+  // ── Appended for PR 2 (managed-cloud world — deleted with the cloud
+  // sandbox stack, cull part 2; kinds retained for old-ledger parsing). ─────
   | "e2b_template"
   | "e2b_sandbox"
-  // ── Appended for PR 6 (managed-cloud shared fixture layer). Registered-
-  // before-create, reverse-order-reconcile; released by the same cloud cleanup
-  // stack (worlds/managed-cloud/cleanup-kinds.ts). None of these fire unless a
+  // ── Appended for PR 6 (managed-cloud shared fixture layer — deleted with
+  // the cloud sandbox stack, cull part 2). None of these fire unless a
   // PR-6 fixture (billingThreshold / callback relay / Stripe test clock) or the
   // append-only relay/Stripe deploy options are actually used, so a run that
   // touches none of them registers none of them and stays byte-identical. ────
@@ -81,11 +81,9 @@ export type CleanupResourceKind =
   | "callback_relay_process"
   | "stripe_test_clock"
   | "stripe_customer"
-  // ── Appended for MANAGED-CLOUD-FIXTURE-SMOKE-1 (shared fixture live smoke).
-  // Registered-before-create, reverse-order-reconcile; released by the same
-  // cloud cleanup stack (worlds/managed-cloud/cleanup-kinds.ts) and folded into
-  // the `stripeFixturesDeleted` evidence category. None fire unless the fixture
-  // smoke scenario runs, so a run that omits it registers none of them. ────────
+  // ── Appended for MANAGED-CLOUD-FIXTURE-SMOKE-1 (shared fixture live smoke
+  // — scenario deleted with the cloud sandbox stack, cull part 2; kinds
+  // retained for old-ledger parsing). ─────────────────────────────────────────
   //   - stripe_webhook_endpoint: the run-scoped Stripe TEST-mode webhook endpoint
   //     (we_…) the smoke creates so a real test-mode op fires a signed delivery;
   //     released by DELETE /v1/webhook_endpoints/{id}.

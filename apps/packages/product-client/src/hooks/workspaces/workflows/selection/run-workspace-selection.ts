@@ -27,7 +27,6 @@ import {
   startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
 import { cancelLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
-import { isCloudWorkspaceNotReadyError } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
 import { resolveCloudWorkspaceReadiness } from "#product/hooks/workspaces/workflows/selection/cloud-readiness";
 import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";
 import { currentWorkspaceSelectionSignal, isWorkspaceSelectionCurrent } from "#product/hooks/workspaces/workflows/selection/guards";
@@ -35,9 +34,6 @@ import {
   prepareOptimisticWorkspaceSessionShell,
   resolveInitialActiveSessionId,
 } from "#product/hooks/workspaces/workflows/selection/initial-session";
-import {
-  resolveCloudSelectionConnectionWithStatusRefresh,
-} from "#product/hooks/workspaces/workflows/selection/cloud-selection-connection";
 import type {
   WorkspaceSelectionContext,
   WorkspaceSelectionDeps,
@@ -245,41 +241,24 @@ export async function runWorkspaceSelection(
     cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
     return;
   }
-  if (
-    cloudReadiness.kind === "cloud-missing"
-    || cloudReadiness.kind === "cloud-pending"
-  ) {
+  if (cloudReadiness.kind === "cloud-missing") {
     cancelLatencyFlow(request.options?.latencyFlowId, cloudReadiness.kind, {
       cloudWorkspaceId: cloudReadiness.cloudWorkspaceId,
-      status: cloudReadiness.kind === "cloud-pending" ? cloudReadiness.status : null,
+      status: null,
     });
     return;
   }
 
   const context: WorkspaceSelectionContext = {
     ...baseContext,
-    cloudWorkspaceId: cloudReadiness.kind === "cloud-ready"
-      ? cloudReadiness.cloudWorkspaceId
-      : null,
+    cloudWorkspaceId: null,
   };
   if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
     cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
     return;
   }
 
-  const connectionResult = await resolveCloudSelectionConnectionWithStatusRefresh({
-    cloudReadiness,
-    context,
-    latencyFlowId: request.options?.latencyFlowId,
-    runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
-    selectionDeps: deps,
-  }, {
-    isCloudWorkspaceNotReadyError,
-    resolveSelectionConnection,
-  });
-  if (connectionResult === null) {
-    return;
-  }
+  const connectionResult = await resolveSelectionConnection(deps, context, cloudReadiness);
   if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
     cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
     return;

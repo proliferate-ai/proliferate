@@ -7,7 +7,7 @@ export type SupportedSignal = "SIGINT" | "SIGTERM";
 
 interface RegisteredFinalizer {
   id: string;
-  world: "local" | "managed-cloud" | "self-host";
+  world: "local" | "self-host";
   run: RunIdentityV1;
   receiptPath: string;
   runOnce: (signal?: SupportedSignal) => Promise<unknown>;

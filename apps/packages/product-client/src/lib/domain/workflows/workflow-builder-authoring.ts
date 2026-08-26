@@ -1,4 +1,4 @@
-import type { CloudHarnessLaunchOptionsResponse } from "@proliferate/cloud-sdk";
+import type { HarnessLaunchOptionsResponse } from "@anyharness/sdk";
 import { resolveObservedLaunchControlScope } from "#product/lib/domain/sessions/launch-control-scope";
 
 export interface WorkflowBuilderModelOption {
@@ -26,15 +26,16 @@ export interface WorkflowBuilderHarnessOption {
 /**
  * The harness/model vocabulary a gen-2 node's optional `model` picks from.
  *
- * Sourced directly from copied target-observed launch options. This mapper is
- * presentation-only: it preserves exact executable IDs and selects the exact
- * model row when present, otherwise the response's flat compatibility row.
+ * Sourced directly from the local runtime's target-observed launch options.
+ * This mapper is presentation-only: it preserves exact executable IDs and
+ * selects the exact model row when present, otherwise the response's flat
+ * compatibility row.
  */
 export function workflowBuilderHarnessOptions(
-  responses: readonly (CloudHarnessLaunchOptionsResponse | null | undefined)[],
+  responses: readonly (HarnessLaunchOptionsResponse | null | undefined)[],
 ): WorkflowBuilderHarnessOption[] {
   return responses
-    .filter((response): response is CloudHarnessLaunchOptionsResponse => Boolean(response?.options))
+    .filter((response): response is HarnessLaunchOptionsResponse => Boolean(response?.options))
     .map((response) => {
       const options = response.options!;
       return {
@@ -111,7 +112,7 @@ export function workflowBuilderModelOptions(
 
 function projectWorkflowBuilderControls(
   controls: readonly NonNullable<
-    CloudHarnessLaunchOptionsResponse["options"]
+    HarnessLaunchOptionsResponse["options"]
   >["controls"][number][],
   defaultControlValues: Readonly<Record<string, string>>,
 ): WorkflowBuilderControlOption[] {

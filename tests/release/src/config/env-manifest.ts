@@ -128,8 +128,8 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_E2B_TEAM_ID",
     description:
-      "E2B team/org id that scopes the template content-hash cache manifest lookup " +
-      "(see src/template/cache-manifest.ts) — template refs are only reusable within a team.",
+      "E2B team/org id the ground-truth sandbox listing probe scopes its queries to " +
+      "(src/fixtures/e2b-verify.ts) — sandbox/template refs are only visible within a team.",
     whereItLives: "Same E2B team dashboard as RELEASE_E2E_E2B_API_KEY.",
     secret: false,
     lanes: ["sandbox"],

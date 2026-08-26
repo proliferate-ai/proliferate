@@ -8,19 +8,13 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import type { CloudMobilityWorkspaceSummary } from "@proliferate/cloud-sdk/types";
-import { cloudBillingKey, cloudMobilityWorkspacesKey } from "#product/hooks/access/cloud/query-keys";
 import { useProductAuthUserId } from "#product/hooks/auth/facade/use-product-auth";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import type { WorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
-import {
-  getWorkspaceCollectionsFromCache,
-  workspaceCollectionsScopeKey,
-} from "#product/hooks/workspaces/cache/query-keys";
+import { getWorkspaceCollectionsFromCache } from "#product/hooks/workspaces/cache/query-keys";
 
 export interface WorkspaceSelectionCacheSnapshot {
   workspaceCollections: WorkspaceCollections | undefined;
-  cloudMobilityWorkspaces: CloudMobilityWorkspaceSummary[] | undefined;
   coworkStatus: CoworkStatus | undefined;
 }
 
@@ -50,9 +44,6 @@ export function useWorkspaceSelectionCache() {
       queryClient,
       runtimeUrl,
       cloudActive ? authUserId : null,
-    ),
-    cloudMobilityWorkspaces: queryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
-      cloudMobilityWorkspacesKey(),
     ),
     coworkStatus: queryClient.getQueryData<CoworkStatus>(
       anyHarnessCoworkStatusKey(runtimeUrl, cacheScopeKey),
@@ -88,20 +79,8 @@ export function useWorkspaceSelectionCache() {
     }
   }, [cacheScopeKey, queryClient]);
 
-  const invalidateCloudWorkspaceStartState = useCallback(async (runtimeUrl: string) => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: cloudBillingKey(),
-      }),
-    ]);
-  }, [queryClient]);
-
   return {
     cancelPreviousWorkspaceDisplayQueries,
     getWorkspaceSelectionSnapshot,
-    invalidateCloudWorkspaceStartState,
   };
 }

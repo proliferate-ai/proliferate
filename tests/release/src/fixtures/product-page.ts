@@ -8,17 +8,14 @@ import type { AuthenticatedActor, StoredAuthSession } from "./authenticated-acto
 import { scrubSecretText } from "./redact-diagnostics.js";
 
 /**
- * Resolves the failure-diagnostics output directory from either debug env var.
- * `LOCAL_WORLD_SMOKE_DEBUG_DIR` is the local-world lane's gate;
- * `MANAGED_CLOUD_SMOKE_DEBUG_DIR` is the managed-cloud lane's (CLOUD-PROVISION-1
- * + MANAGED-CLOUD-FIXTURE-SMOKE-1). A `productPage` opened in the cloud lane
- * must honour its own lane's var so the browser console/network sinks populate
- * and a UI-flow failure there is diagnosable — otherwise a cloud browser-turn
- * break uploads only its error text (the CLOUD-PROVISION-1 "no Project row"
- * blind spot). Empty (returns `undefined`) on the green path in both lanes.
+ * Resolves the failure-diagnostics output directory from the debug env var.
+ * `LOCAL_WORLD_SMOKE_DEBUG_DIR` is the local-world lane's gate. (The
+ * managed-cloud lane's `MANAGED_CLOUD_SMOKE_DEBUG_DIR` fallback was deleted
+ * with the cloud sandbox stack — cull part 2.) Empty (returns `undefined`)
+ * on the green path.
  */
 export function resolveDiagnosticsDir(): string | undefined {
-  return process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR || process.env.MANAGED_CLOUD_SMOKE_DEBUG_DIR || undefined;
+  return process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR || undefined;
 }
 
 /** Records browser console output for env-gated failure diagnostics. Secret

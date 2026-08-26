@@ -65,14 +65,6 @@ export interface WorkspaceSelectionDeps {
       previousWorkspaceIds: readonly (string | null | undefined)[];
       nextWorkspaceIds: readonly (string | null | undefined)[];
     }) => void;
-    invalidateCloudWorkspaceStartState: (runtimeUrl: string) => Promise<void>;
-    refreshCloudWorkspaceConnection: (cloudWorkspaceId: string) => Promise<{
-      runtimeUrl: string;
-      accessToken?: string | null;
-      anyharnessWorkspaceId?: string | null;
-      runtimeGeneration: number;
-      webSocketAuthTransport?: "protocol";
-    }>;
   };
   /**
    * Warm the global agent catalog in the background (UX Latency ADR §4.6, Rung
@@ -115,14 +107,12 @@ export interface WorkspaceSelectionDeps {
 
 export type CloudReadinessResult =
   | { kind: "local"; runtimeWorkspaceId?: string | null }
-  | { kind: "cloud-ready"; cloudWorkspaceId: string }
-  | { kind: "cloud-pending"; cloudWorkspaceId: string; status: string }
   | { kind: "cloud-missing"; cloudWorkspaceId: string }
   | { kind: "stale"; cloudWorkspaceId: string | null };
 
 export type ReadyCloudReadinessResult = Extract<
   CloudReadinessResult,
-  { kind: "local" | "cloud-ready" }
+  { kind: "local" }
 >;
 
 export interface WorkspaceConnectionResult {

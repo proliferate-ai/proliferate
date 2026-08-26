@@ -20,8 +20,6 @@ export type SettingsNavIconId =
   | "organization-limits"
   | "organization-members"
   | "organization-model-policy"
-  | "organization-secrets"
-  | "personal-secrets"
   | "repo-actions"
   | "repo-environment"
   | "support";
@@ -79,7 +77,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "account", label: "Account", iconId: "account" },
           { kind: "section", id: "general", label: "General", iconId: "general" },
           { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
-          { kind: "section", id: "personal-secrets", label: "Personal secrets", iconId: "personal-secrets" },
           { kind: "section", id: "integrations", label: "Integrations", iconId: "integrations" },
           { kind: "section", id: "archived-workspaces", label: "Archived workspaces", iconId: "archived-workspaces" },
         ],
@@ -97,7 +94,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "organization-members", label: "Members", iconId: "organization-members", adminOnly: true },
           { kind: "section", id: "billing", label: "Billing", iconId: "billing", adminOnly: true },
           { kind: "section", id: "organization-limits", label: "Usage & limits", iconId: "organization-limits", adminOnly: true },
-          { kind: "section", id: "organization-secrets", label: "Organization secrets", iconId: "organization-secrets", adminOnly: true },
           { kind: "section", id: "organization-integrations", label: "Integrations", iconId: "organization-integrations", adminOnly: true },
         ],
       },

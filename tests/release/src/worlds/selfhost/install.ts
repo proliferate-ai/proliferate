@@ -192,7 +192,7 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
     throw error;
   }
   // Persist the qualification-only overlay for the explicit later bootstrap.sh
-  // calls (gateway/cloud-addon convergence) and control-handle restarts.
+  // calls (gateway convergence) and control-handle restarts.
   await ssh.run(
     `sudo install -o root -g root -m 0600 ${remoteTlsComposeOverridePath} ` +
       `${SELFHOST_PERSISTED_TLS_COMPOSE_OVERRIDE}`,

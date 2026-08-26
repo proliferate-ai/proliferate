@@ -9,12 +9,12 @@
  * - "local": a local full-stack profile (`make run PROFILE=...`) plus a tunnel,
  *   so E2B sandboxes can call back into it.
  * - "staging": the real staging deployment (publicly reachable already).
- * - "cloud": a run-scoped candidate API published over public HTTPS on the
- *   managed-cloud world's EC2 ingress box (`<run>.qualification.proliferate.com`)
- *   — neither the local profile nor the shared staging deployment. Appended
- *   append-only for PR 2 (Prove One Real Managed-Cloud Workspace); see
- *   worlds/managed-cloud/world.ts. Distinct from the "sandbox" RuntimeLane
- *   below, which is where the E2B workspace runs.
+ * - "cloud": historically, a run-scoped candidate API published over public
+ *   HTTPS on the managed-cloud world's EC2 ingress box — that world and its
+ *   scenarios were deleted with the cloud sandbox stack (cull part 2). The
+ *   flag value is retained append-only for CLI/report compatibility; no
+ *   registered scenario targets it today. Distinct from the "sandbox"
+ *   RuntimeLane below.
  * - "selfhost": the world-backed self-host target. Each `lanes: ["selfhost"]`
  *   scenario provisions its OWN run-scoped EC2 control plane (candidate bytes,
  *   real DNS/TLS), so there is no shared "target server" the way local/staging/

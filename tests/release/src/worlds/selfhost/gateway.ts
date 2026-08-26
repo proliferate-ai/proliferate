@@ -162,12 +162,12 @@ export function resolveGatewayConfig(
 /**
  * The managed-gateway `sourceKind`. The server's ONE selection vocabulary is
  * `Literal["gateway", "api_key"]`
- * (server/proliferate/server/cloud/agent_gateway/models.py:33
+ * (server/proliferate/server/agent_auth/models.py
  * `AgentAuthSourceKind`). SH-GATEWAY selects the managed route, so the enabled
  * source is the single `"gateway"` kind — it carries NO `apiKeyId`/`envVarName`
  * (those belong only to the BYOK `"api_key"` route; the gateway recipe's key +
  * base URL are minted/rendered server-side from the user's enrollment, see
- * `materialize/agent_auth.py` `_render_gateway_source`). The per-harness
+ * `agent_auth/state_render.py` `_render_gateway_source`). The per-harness
  * legality validator (`selection_rules.py`) admits a lone gateway source for
  * every GATEWAY_CAPABLE_HARNESS (claude included).
  */
