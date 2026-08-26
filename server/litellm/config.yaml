@@ -72,6 +72,26 @@ model_list:
       api_key: os.environ/ANTHROPIC_API_KEY
     model_info:
       access_groups: [claude, opencode]
+  # Claude 5 family (claude-sonnet-5 is Claude Code's current default; its
+  # absence 403'd every gateway launch — "key can only access models=['claude']").
+  - model_name: claude-sonnet-5
+    litellm_params:
+      model: anthropic/claude-sonnet-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      access_groups: [claude, opencode]
+  - model_name: claude-opus-5
+    litellm_params:
+      model: anthropic/claude-opus-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      access_groups: [claude, opencode]
+  - model_name: claude-fable-5
+    litellm_params:
+      model: anthropic/claude-fable-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      access_groups: [claude, opencode]
 
   # OpenAI. access_groups: codex is the direct-OpenAI harness; opencode again
   # composes additively (see above).
