@@ -585,20 +585,22 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 | Seat minting works end to end | `claude setup-token` proven by hand (2026-08-26): headless and interactive launch on a fresh dir; usage headers confirmed on a plain 1-token request | Build the capture + upload path |
 | Grok authenticates, or doesn't offer login | The catalog declares CLI login; no managed install recipe and no PATH binary, so the login terminal can never start | An install recipe, or drop the declaration |
 | The headless ladder exists | Selections are per-user only; org policy only restricts | Creator-credentials at v1; org default when the first team org lands (ruled 2026-08-26) |
+| `surface` stays in the schema; the API defaults it to `local` and the UI never shows it until cloud machines return | `?surface=` is a live parameter on every route; cloud rows may exist from the pre-cull era | Default the parameter, hide the dimension, keep the column (ruled 2026-08-26) |
 
 Carried, still true in prod (not deltas): the origin guard · only-forward acks · the contract fixture pin · the per-harness recipes and ambient sanitization · the restart-running-sessions offer after an applied auth change · the registry mirror drift tests · opencode's per-slot detector gap · the `azure_openai` cells pending live verification for codex and claude · native-auth harness settings never reaching the runtime (the settings rider covers the pane, not the launch).
 
 ## Build list
 
-*Transitional — deleted at convergence. Dependency order; each item names the delta row it discharges.*
+*Transitional — deleted at convergence. Seats are the spine (ruled 2026-08-26): the reconstruction happens through seats v1, which pulls refusals, the status document, and rotation in as its parts.*
 
 - [ ] Fund the founder org's billing subject (row 1) — clears the live gateway breakage; no code
-- [ ] Typed launch refusals with plain words end to end (rows 1, 4)
-- [ ] Content-hash revision + content-hash launch-options basis + probe recovery events + serve-stale status (rows 5, 6)
-- [ ] Seats v1 for claude: vault kind, seat selection + wire source, mint capture, seat recipe + strip list, per-seat homes, verification probe (rows 3, 11)
-- [ ] Rotation: cooling on limit error, round-robin, gateway fallback (row 3)
-- [ ] The usage probe + `seat_usage_sample` + settings meters (row 8)
-- [ ] The status module; frontend subscribe migration; delete the client derivation (row 7)
+- [ ] **Seats v1 for claude, the spine** (rows 3, 11): vault kind, seat selection + wire source, mint capture, seat recipe + strip list, per-seat homes, verification probe — carrying with it:
+    - [ ] typed launch refusals with plain words end to end (rows 1, 4)
+    - [ ] rotation: cooling on limit error, round-robin, gateway fallback (row 3)
+    - [ ] the status module; frontend subscribe migration; delete the client derivation (row 7)
+    - [ ] the usage probe + `seat_usage_sample` + settings meters (row 8)
+- [ ] Alongside, not gating: content-hash revision + content-hash launch-options basis + probe recovery events + serve-stale status (rows 5, 6)
+- [ ] The API defaults `surface` to `local`; the column stays for cloud's return (ruled 2026-08-26)
 - [ ] ai_gateway code split out of `server/agent_auth/`; recompose the remainder (row 9)
 - [ ] Grok: a managed install recipe, or drop CLI-login from its catalog entry (row 12)
 - [ ] Wave 3: the Rust consolidation (row 10) · Phase 2: codex seats (refreshing-file shape, single lease, sync-back)
