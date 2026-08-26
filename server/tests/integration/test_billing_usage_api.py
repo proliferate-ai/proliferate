@@ -216,7 +216,7 @@ async def test_usage_timeseries_kind_filter_excludes_other_meter(
     session = await _register_and_login(client, "usage-timeseries-kind@example.com")
     user_id = uuid.UUID(session["user_id"])
     subject = await _payer_subject(db_session, user_id)
-    now = datetime.now(UTC)
+    occurred_at = datetime.now(UTC) - timedelta(minutes=5)
     db_session.add(
         AgentLlmUsageEvent(
             litellm_request_id=f"req-{uuid.uuid4().hex}",
@@ -228,7 +228,7 @@ async def test_usage_timeseries_kind_filter_excludes_other_meter(
             total_tokens=15,
             cost_usd=1.25,
             status="imported",
-            occurred_at=now - timedelta(minutes=5),
+            occurred_at=occurred_at,
         )
     )
     await db_session.commit()
@@ -247,7 +247,12 @@ async def test_usage_timeseries_kind_filter_excludes_other_meter(
         params={"granularity": "day", "days": 7, "kind": "llm"},
     )
     assert llm_only.status_code == 200
-    assert llm_only.json()["buckets"][-1]["llmCostUsd"] == 1.25
+    # Address the bucket by the event's own day: within five minutes of UTC
+    # midnight the event lands in yesterday's bucket, not the last one.
+    llm_by_day = {
+        datetime.fromisoformat(b["bucketStart"]).date(): b for b in llm_only.json()["buckets"]
+    }
+    assert llm_by_day[occurred_at.date()]["llmCostUsd"] == 1.25
 
 
 @pytest.mark.asyncio
