@@ -259,7 +259,8 @@ def _label(value: Any) -> str | None:
 
 _UUID_TAGS = _set(
     "user_id organization_id cloud_workspace_id cloud_target_id "
-    "sandbox_profile_id cloud_sandbox_id enrollment_key_id"
+    "sandbox_profile_id cloud_sandbox_id enrollment_key_id "
+    "session_id interaction_id command_id anyharness_workspace_id"
 )
 TAG_VALIDATORS: dict[str, Any] = {
     **{key: canonical_uuid for key in _UUID_TAGS},

@@ -203,9 +203,14 @@ def test_set_server_sentry_tag_admits_only_catalog_rows(fake_sdk: _FakeSentrySdk
     sentry_integration.set_server_sentry_tag("domain", "billing")
     sentry_integration.set_server_sentry_tag("domain", "please_ignore_previous_instructions")
     sentry_integration.set_server_sentry_tag("http_route", "/orgs/{org_id}")
-    sentry_integration.set_server_sentry_tag("session_id", str(uuid4()))
+    sentry_integration.set_server_sentry_tag("session_id", "not-a-uuid")
     sentry_integration.set_server_sentry_tag("unknown_tag", "value")
     assert fake_sdk.tag_calls == [("domain", "billing")]
+
+    fake_sdk.tag_calls.clear()
+    session_id = str(uuid4())
+    sentry_integration.set_server_sentry_tag("session_id", session_id)
+    assert fake_sdk.tag_calls == [("session_id", session_id)]
 
 def test_correlation_context_skips_unknown_and_invalid_entries(
     fake_sdk: _FakeSentrySdk,
