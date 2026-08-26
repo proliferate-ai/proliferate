@@ -27,10 +27,20 @@ import { useHarnessConnectionStore } from "#product/stores/sessions/harness-conn
  * settings page stays the authoritative place to manage auth.
  */
 export function useFirstRunAuthAdoption() {
-  const { cloudActive } = useCloudAvailabilityState();
+  const { authStatus, controlPlaneReachable } = useCloudAvailabilityState();
   const isDesktop = useProductHost().desktop !== null;
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
-  const workflowQueriesEnabled = cloudActive && isDesktop;
+  // Control-plane gate, NOT a cloud-compute gate. Adoption writes auth
+  // selections through the control plane; it has nothing to do with cloud
+  // COMPUTE (E2B sandboxes). The previous `cloudActive = cloudComputeEnabled &&
+  // authenticated` coupling meant a deployment with cloud compute off never ran
+  // first-run adoption at all, so a fresh profile that detected no native
+  // credentials kept zero selections and every gateway harness reported "no
+  // launchable model". Same decoupling as `shouldSyncLocalAuthState`
+  // (lib/domain/agents/local-auth-state.ts) and the settings `authGate`
+  // (components/settings/screen/render-settings-section.tsx, ADR FM6/Q9).
+  const authReady = authStatus === "authenticated" && controlPlaneReachable;
+  const workflowQueriesEnabled = authReady && isDesktop;
   const capabilitiesQuery = useAgentGatewayCapabilities(workflowQueriesEnabled);
   const selectionsQuery = useAuthSelections(null, workflowQueriesEnabled);
   const {
@@ -49,7 +59,7 @@ export function useFirstRunAuthAdoption() {
   const putMutate = putSelections.mutate;
 
   useEffect(() => {
-    if (attemptedRef.current || !cloudActive) {
+    if (attemptedRef.current || !authReady) {
       return;
     }
 
@@ -164,7 +174,7 @@ export function useFirstRunAuthAdoption() {
     capabilitiesQuery.data,
     capabilitiesQuery.error,
     capabilitiesQuery.isError,
-    cloudActive,
+    authReady,
     connectionState,
     isDesktop,
     reconcileError,
