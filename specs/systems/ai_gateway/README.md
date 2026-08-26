@@ -1,188 +1,138 @@
 # AI gateway
 
-Grade B system spec (code-verified on `main`, decisions marked; formerly `agent_auth/model-gateway.md` — split into its own system 2026-08-26; the code split out of `server/agent_auth/` rides the agent_auth build list). Owns all agent LLM traffic that Proliferate pays for or meters: the LiteLLM data plane, the enrollment that mints scoped virtual keys, the credit ledger that funds them, usage import, exhaustion enforcement, top-ups, and configuration verification. The harness remains the execution client; this system decides *whether* and *under whose budget* it may call a model.
+Managed model access: a deployment pays for and controls inference on behalf of every organization member without any client, worker, or machine ever holding a provider credential. The harness remains the execution client; this system decides *whether* and *under whose budget* it may call a model. (Formerly `agent_auth/model-gateway.md` — split into its own system 2026-08-26; the code split out of `server/agent_auth/` rides the agent_auth build list.)
 
-Sibling specs, one owner per concern: [agent_auth](../agent_auth/README.md) picks *which* credential a harness launches with and delivers it; [integration_gateway](../integration_gateway/README.md) is the analogous gateway for company systems (MCP tools), not models; [billing](../billing/deep-dive.md) owns compute segments, plans, credits for compute, and the Stripe relationship; [harness launch options](../agent_auth/models.md) owns which models a target *advertises* — the gateway's model list is observed through the harness before any surface may offer it.
+The one-sentence contract: **every gateway request is made with a per-(org member, harness) virtual key whose access group limits the models it can see, whose team budget mirrors the org's remaining LLM credit, and whose spend is imported back into that org's ledger; unfunded means no key.**
 
-## 1. Purpose
+This spec reads as ground truth; differences from `main` are collected in the transitional section at the end.
 
-A deployment can pay for and control inference on behalf of every organization member without any client, worker, or sandbox ever holding a provider credential. The outcome in one sentence: **every gateway request is made with a per-(org member, harness) virtual key whose access group limits the models it can see, whose team budget mirrors the org's remaining LLM credit, and whose spend is imported back into that org's ledger; unfunded means no key.**
+## 0 · Scope
 
-## 2. Owned state
+**The folder census:** the gateway files inside `server/agent_auth/` (enrollment, free_credits, budget, usage_import, topups, verification, migration, signup_hook, worker — marked `⇒ ai_gateway` in the agent_auth code map) · the gateway stores in `db/store/agent_gateway/` (enrollments, enrollment_keys, credits, usage) · the five gateway tables in `db/models/agent_gateway.py` · the data plane at `server/litellm/` (config.yaml + Dockerfile) · the vendor leaf `integrations/litellm/` · `server/ai_magic/` as the control plane's own inference consumer.
 
-Only this system writes these rows ([db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py)):
+**Responsibilities:** enroll every (org, member) into the org's LiteLLM team · mint one scoped virtual key per (member, gateway-capable harness) · fund those keys from the org's LLM credit ledger (signup grants, top-ups) and fail closed when the ledger is empty · import spend idempotently and attribute it · verify observed model access against the declared config.
 
-| Table | Row meaning | Notable invariants |
+**Fences:**
+
+| Not owned here | Owner | The line |
 | --- | --- | --- |
-| `agent_gateway_enrollment` | One (org, member) enrolled into the org's LiteLLM team. `subject_kind`, `billing_subject_id`, `litellm_team_id`, `litellm_user_id`, `sync_status ∈ {pending, synced, failed}`, `budget_status ∈ {ok, exhausted, limit_reached}`. | Check constraints pin both status vocabularies. The team is the only budget layer; the row never carries `max_budget`. |
-| `agent_gateway_enrollment_key` | One access-group-scoped virtual key per (enrollment, gateway-capable harness), with alias, token hash, `verification_status`. | Alias is deterministic per (enrollment, harness) so re-minting is idempotent. |
-| `agent_llm_usage_event` | One imported LiteLLM spend-log row, keyed by `litellm_request_id` (unique), attributed to enrollment / billing subject / harness / model. | Idempotent insert; status `imported`. |
-| `llm_credit_grant` | One credit-side ledger entry (`amount_usd`) on a billing subject: signup free credit or a purchased top-up. | Remaining credit = active grants − imported usage cost. |
-| `agent_llm_usage_import_cursor` | Single-row poll cursor for the spend-log importer. | Advances only after the batch commits. |
+| Which credential a harness launches with, delivery, application, seats | [agent_auth](../agent_auth/README.md) | this system hands agent_auth an opaque key + base URL and a budget predicate; agent_auth renders and refuses in plain words |
+| Compute billing, plans, segments, Stripe relationship | billing | top-ups charge *through* billing; the LLM ledger is this system's |
+| Which models a target *advertises* | harnesses ([models.md](../agent_auth/models.md)) | the gateway's model list is observed through the harness before any surface may offer it |
+| Company-systems gateway (MCP tools) | integration_gateway | the analogous gateway for tools, not models |
 
-Also owned: the data-plane configuration [server/litellm/config.yaml](../../../server/litellm/config.yaml) and its image [Dockerfile](../../../server/litellm/Dockerfile) — the reviewed source of truth for model names, upstream providers, and `model_info.access_groups`.
+**Rules of the road:**
 
-Not owned (agent_auth's rows, same package today): `agent_api_key`, `agent_auth_selection`, `agent_auth_delivery_ack`, `agent_auth_harness_settings`, `org_agent_policy`.
+- **Organizations are the only gateway and billing subject.** One LiteLLM team per org, one LiteLLM user per (org, member); a personal experience is a one-member default org, never a separate payer.
+- **Unfunded fails closed.** Zero credit withholds key material; the launch refusal (agent_auth's, in plain words) names the reason.
+- **Master credentials never leave the server.** Clients, workers, and machines receive only scoped keys through agent_auth's delivery.
+- **Proxy-side enforcement, never client-side filtering.** A key's access group is what limits its models; no UI filter substitutes.
 
-## 3. Public surface
+## 1 · Cells
 
-HTTP, mounted under `/v1/cloud/agent-gateway` by `cloud/api.py` from [agent_auth/api.py](../../../server/proliferate/server/agent_auth/api.py) (`gateway_account_router`):
+### the control plane (`server/agent_auth/` gateway files, splitting out)
 
-| Route | Serves |
-| --- | --- |
-| `GET /v1/cloud/agent-gateway/capabilities` | Whether the gateway is enabled for this deployment and which harnesses may take a gateway source. |
-| `GET /v1/cloud/agent-gateway/enrollment` | The caller's enrollment (sync/budget status) for the settings surface. |
+- **Owns:** the five tables below, the enrollment/key lifecycle, the ledger, the importer, verification, and the four background loops.
+- **Doors:**
+    - `GET /v1/cloud/agent-gateway/capabilities` — is the gateway enabled, which harnesses may take a gateway source. The settings pane and onboarding read it.
+    - `GET /v1/cloud/agent-gateway/enrollment` — the caller's sync/budget status, for the settings surface.
+    - `ensure_signup_enrollment` / `ensure_org_enrollment` — accounts and organizations call these after commit via `signup_hook.py`; durable row first, LiteLLM shape second, failure marks `failed` for the backfill. Never raises into an auth flow.
+    - `is_gateway_budget_available` — the launch-gating predicate; agent_auth's renderer consults it and withholds gateway sources when false.
+    - `gateway_profile` (the minted key + base URL for a harness) — consumed by agent_auth's renderer as an opaque value.
+    - `create_llm_topup_grant` — billing calls it when a top-up invoice is paid; records the grant and reactivates what it re-funds.
+    - `get_remaining_credit_usd`, `llm_cost_usd_timeseries` and siblings — read-only ledger projections for the billing usage API.
+- **Consumes:** `integrations/litellm` (admin + spend-log client under the master key) · billing (Stripe charge for top-ups; the `free_cloud_allocation` anti-abuse guard) · organizations (membership rows drive the backfill) · the `agent_gateway_*` settings in config.py.
 
-Python, the only functions other systems may call:
+### the data plane (`server/litellm/`)
 
-| Function | Caller | Contract |
+- **Owns:** the LiteLLM instance's reviewed configuration — model names, upstream providers, `model_info.access_groups` — and its image. The instance sits in the request path (harness → LiteLLM → provider); LLM traffic never touches the Python server.
+- **Doors:** the proxy URL itself, and `GET /v1/models` scoped by each key's access group; out-of-group inference is denied proxy-side.
+- **Consumes:** upstream provider credentials (deployment-owned, e.g. the deployment's AWS role for Bedrock models).
+
+### `ai_magic` — the control plane's own inference consumer
+
+Three direct endpoints today; routes through the gateway once per-run keys exist (open ruling, PR #2247 discussion).
+
+## 2 · Data
+
+The five tables, one row meaning each (full DDL rides the code split; column detail in [db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py)):
+
+| Table | One row is | Load-bearing invariants |
 | --- | --- | --- |
-| [`ensure_signup_enrollment`](../../../server/proliferate/server/agent_auth/enrollment.py), [`ensure_org_enrollment`](../../../server/proliferate/server/agent_auth/enrollment.py) | accounts / organizations, via [`signup_hook.py`](../../../server/proliferate/server/agent_auth/signup_hook.py) after commit | Durable row first (idempotent), LiteLLM shape second, failure marks `failed` for the backfill. Never raises into an auth flow. |
-| [`is_gateway_budget_available`](../../../server/proliferate/server/agent_auth/budget.py) | agent_auth's renderer, at launch | The launch-gating predicate: a gateway source materializes only when this is true. |
-| [`create_llm_topup_grant`](../../../server/proliferate/server/agent_auth/topups.py) | billing (Stripe invoice paid) | Records the grant and reactivates anything it re-funds. |
-| [`get_remaining_credit_usd`](../../../server/proliferate/db/store/agent_gateway/credits.py), [`llm_cost_usd_timeseries`](../../../server/proliferate/db/store/agent_gateway/usage.py) and siblings | billing usage API | Read-only ledger projections. |
-| `start_/stop_agent_gateway_*` in [worker.py](../../../server/proliferate/server/agent_auth/worker.py) | [main.py](../../../server/proliferate/main.py) lifespan | Four loops: enrollment backfill, usage import, verification, top-ups. |
+| `agent_gateway_enrollment` | one (org, member) in the org's LiteLLM team: `subject_kind`, `billing_subject_id`, `litellm_team_id`, `litellm_user_id`, `sync_status ∈ {pending, synced, failed}`, `budget_status ∈ {ok, exhausted, limit_reached}` | the team is the only budget layer; the row never carries `max_budget` |
+| `agent_gateway_enrollment_key` | one access-group-scoped virtual key per (enrollment, gateway-capable harness): alias, token hash, `verification_status` | alias is deterministic per (enrollment, harness), so re-minting is idempotent |
+| `agent_llm_usage_event` | one imported LiteLLM spend-log row, keyed by unique `litellm_request_id`, attributed to enrollment / billing subject / harness / model | idempotent insert |
+| `llm_credit_grant` | one credit-side ledger entry (`amount_usd`): signup free credit or a purchased top-up | remaining credit = active grants − imported usage cost |
+| `agent_llm_usage_import_cursor` | the single-row importer cursor | advances only after the batch commits |
 
-SDK: [cloud/sdk/src/client/agent-gateway.ts](../../../cloud/sdk/src/client/agent-gateway.ts).
+Also owned: [config.yaml](../../../server/litellm/config.yaml) — the reviewed source of truth for model names, providers, and access groups; unknown model names fail, cross-provider aliases are forbidden (they silently change semantics), and every model carries the harness access group allowed to invoke it.
 
-## 4. Consumes
+## 3 · Flows
 
-- [integrations/litellm](../../../server/proliferate/integrations/litellm/client.py)
-  — the vendor leaf: team/user/key admin API and spend-log reads under the
-  master key.
-- Settings `agent_gateway_*` in [config.py](../../../server/proliferate/config.py):
-  enabled flag, LiteLLM base URLs and master key, default org budget, free
-  credit, margin percent, importer/verification/top-up intervals and
-  thresholds, top-up Stripe price id, policy minimum plan.
-- billing: the Stripe charge for a top-up
-  ([`_charge_llm_topup`](../../../server/proliferate/server/agent_auth/topups.py))
-  and the `free_cloud_allocation` anti-abuse guard consumed by
-  [free_credits.py](../../../server/proliferate/server/agent_auth/free_credits.py).
-- organizations: active membership rows are what the backfill enrolls.
+**Flow 1 — Enrollment.** Signup or org-membership change → `signup_hook` schedules after commit → durable enrollment row (`pending`) → LiteLLM team/user/keys provisioned → `synced`; any LiteLLM failure marks `failed` and the backfill loop retries on its interval. `migration.py` converges pre-org residue first on every tick. Account creation never waits on LiteLLM — enrollment is fire-and-forget, and agent_auth re-renders when sync completes.
 
-## 5. Laws
+**Flow 2 — Key mint.** One virtual key per (member, gateway-capable harness), alias-deterministic, access-group-scoped (`_sync_one_harness_key`). The key reaches a machine only inside agent_auth's rendered document; this system never delivers.
 
-**Organizations are the only gateway and billing subject.** One LiteLLM team per org (`org-<uuid>`), one LiteLLM user per (org, member) (`org-<org>-user-<uuid>`), never one global user spanning orgs. A personal experience is a one-member default org, not a separate payer. Closes: a client-supplied user-only key selecting a different payer. Enforced in [enrollment.py](../../../server/proliferate/server/agent_auth/enrollment.py); pre-cut residue is converged by [migration.py](../../../server/proliferate/server/agent_auth/migration.py) on every backfill tick, never inline in alembic.
+**Flow 3 — Funding and exhaustion.** Remaining credit = grants − imported cost, mirrored onto the LiteLLM team budget. Zero remaining: keys disabled, `budget_status=exhausted`, `is_gateway_budget_available` turns false, agent_auth withholds gateway sources at render and refuses launches with the reason. A top-up (Stripe, through billing) records a grant and reactivates. Org caps produce `limit_reached` the same way; the next import tick after a raise reactivates.
 
-**One virtual key per (member, gateway-capable harness), scoped to that harness's access group.** `GET /v1/models` through that key returns only its group; out-of-group inference is denied proxy-side. Closes: a harness seeing a model it cannot bill for. Enforced by the key mint in [`_sync_one_harness_key`](../../../server/proliferate/server/agent_auth/enrollment.py) and the access groups in [config.yaml](../../../server/litellm/config.yaml). Which harnesses are gateway-capable is the constant tuple in [constants/agent_gateway.py](../../../server/proliferate/constants/agent_gateway.py), consumed by agent_auth's selection rules.
+**Flow 4 — Usage import.** The importer reads spend logs from `last_seen − overlap`, inserts by unique request id (idempotent across restarts), applies margin, attributes to (subject, harness, model), and enforces exhaustion + org caps as it goes.
 
-**Unfunded fails closed.** The team budget mirrors remaining credit ([`_remaining_credit_budget_raw`](../../../server/proliferate/server/agent_auth/enrollment.py)); zero credit withholds key material and [`is_gateway_budget_available`](../../../server/proliferate/server/agent_auth/budget.py) refuses the launch with a typed reason rather than letting the harness run on different credentials. Closes: silent fallback to native credentials.
+**Flow 5 — Verification.** On its interval (default-off today), diff each key's *observed* model list against the declared access group; a mismatch marks `verification_status=misconfigured` with the delta — the fix is config.yaml + redeploy, never a client-side patch.
 
-**Usage import is idempotent and cursor-driven.** Each importer tick reads LiteLLM spend logs from `last_seen − overlap`, inserts by `litellm_request_id` once, marks up provider spend by the configured margin ([`apply_llm_margin`](../../../server/proliferate/server/agent_auth/usage_import.py)), and advances the cursor only after commit. Closes: double-billing on importer restart.
-
-**Exhaustion disables keys; credit reactivates them.** When a subject's imported cost reaches its grants, [`_enforce_subject_exhaustion`](../../../server/proliferate/server/agent_auth/usage_import.py) disables every child key and flips `budget_status=exhausted`; an org LLM cap does the same as `limit_reached`. A top-up grant ([topups.py](../../../server/proliferate/server/agent_auth/topups.py)) re-mints or unblocks the keys and rewrites the team budget. Closes: a spent org continuing to accrue provider cost.
-
-**Master credentials never leave the server.** Product clients and workers receive only a scoped virtual key, and only through agent_auth's materialization path. Closes: master-key exfiltration via a sandbox.
-
-**Verification never overwrites a last-known-good on error.** The verification loop ([verification.py](../../../server/proliferate/server/agent_auth/verification.py)) diffs each key's observed model set against the access group declared in `config.yaml`; a transient LiteLLM error records no verdict. Closes: a blip flapping the settings surface to "misconfigured".
-
-**Free credit is one grant per human, ever.** Deduped through `free_cloud_allocation` on the linked GitHub identity; a joining member never brings a grant into another org. Closes: invite-farming for credit.
-
-## 6. Emits
-
-- Enrollment capability and status (`/capabilities`, `/enrollment`,
-  [`get_capabilities`](../../../server/proliferate/server/agent_auth/service.py))
-  — consumed by agent_auth to decide whether a `gateway` source is legal and
-  by the settings pane's evidence view.
-- The LLM ledger (grants, usage events, remaining credit) — consumed by
-  billing's usage API and invoices.
-- Spend attribution on every minted key
-  ([`enrollment_key_metadata`](../../../server/proliferate/server/agent_auth/enrollment.py)):
-  enrollment, subject, harness — the tags usage import resolves back.
-
-## 7. Fences
-
-- Selections, the key vault, `state.json` delivery, per-harness application
-  and org agent-model policy: [agent_auth](../agent_auth/README.md).
-  This spec consumes the gateway-capable harness list; it never filters models
-  client-side.
-- Compute segments, plans, Stripe customers, compute credits:
-  [billing](../billing/deep-dive.md). Top-ups charge *through* billing.
-- Which models a harness advertises and session live configuration:
-  [MODELS.md](../agent_auth/models.md).
-- Registry auth vocabulary and readiness projection:
-  [agent-distribution.md](../harnesses/distribution.md).
-
-### Control-plane inference (`ai_magic`) — a section, not a system
-
-[server/ai_magic](../../../server/proliferate/server/ai_magic/service.py) serves three prompted conveniences (`POST /v1/ai_magic/session-titles/generate`, `/workspace-names/generate`, `/commit-messages/generate`) with rate limits from [constants/ai_magic.py](../../../server/proliferate/constants/ai_magic.py). It owns no durable state and calls [integrations/anthropic.py](../../../server/proliferate/integrations/anthropic.py) directly, bypassing the gateway — so its spend is deployment-paid and unattributed. It fails the granularity test (no owned state, no laws of its own) and is therefore fenced here as the gateway's control-plane consumer.
-
-> [!decision] PABLO DECIDES: route `ai_magic` through the gateway (a
-> deployment-owned virtual key, spend attributed to the org that asked) or
-> keep it as direct, deployment-paid Anthropic calls. Recommendation: route
-> through the gateway once per-run keys exist (below) so every LLM dollar has
-> one ledger; until then leave it direct — it is three small endpoints.
-
-## 8. Code map
-
-The gateway lives inside the `agent_auth` package today (one MANIFEST, one folder, two specs). Ordered by the path a credit travels:
+## 4 · Structure
 
 ```text
 server/proliferate/
-├── constants/agent_gateway.py                  gateway-capable harness tuple, key kinds (shared with agent_auth)
-├── db/models/agent_gateway.py                  five gateway tables (+ agent_auth's four)
+├── constants/agent_gateway.py                  gateway-capable harness tuple (shared with agent_auth)
+├── db/models/agent_gateway.py                  the five gateway tables (+ agent_auth's)
 ├── db/store/agent_gateway/
 │   ├── enrollments.py · enrollment_keys.py     row CRUD, key hashes
 │   ├── credits.py                              grants, ledger moves, remaining credit
 │   ├── usage.py                                idempotent usage insert, cursor, cost projections
 │   └── records.py · mappers.py                 record types
 ├── integrations/litellm/                       vendor leaf: admin + spend-log client
-├── server/agent_auth/
-│   ├── signup_hook.py                          after-commit enrollment scheduling (accounts/orgs call this)
+├── server/agent_auth/                          ⇒ server/ai_gateway/ (the code split)
+│   ├── signup_hook.py                          after-commit enrollment scheduling
 │   ├── enrollment.py                           team/user/key provisioning, drift reopen, backfill
-│   ├── migration.py                            pre-org-only residue converger (runs first each tick)
+│   ├── migration.py                            pre-org-only residue converger (first each tick)
 │   ├── free_credits.py                         signup grant, GitHub-identity dedup
-│   ├── budget.py                               launch-gating predicate
+│   ├── budget.py                               the launch-gating predicate
 │   ├── usage_import.py                         spend-log importer, margin, exhaustion + org caps
 │   ├── topups.py                               Stripe top-up, grant, reactivation
 │   ├── verification.py                         observed-vs-declared access-group diff
 │   ├── worker.py                               the four background loops (started in main.py)
-│   ├── api.py                                  gateway_account_router (+ agent_auth's routers)
-│   ├── service.py                              get_capabilities / get_enrollment (+ agent_auth service)
+│   ├── api.py                                  gateway_account_router (co-hosted with agent_auth's)
+│   ├── service.py                              get_capabilities / get_enrollment
 │   └── models.py                               AgentGatewayCapabilitiesResponse, AgentGatewayEnrollmentResponse
-└── server/ai_magic/                            control-plane inference consumer (section above)
+└── server/ai_magic/                            control-plane inference consumer
 
 server/litellm/config.yaml · Dockerfile         the data plane: models, providers, access groups
 cloud/sdk/src/client/agent-gateway.ts           SDK client
 ```
 
-> [!decision] PABLO DECIDES: split `server/agent_auth/` into `agent_auth/`
-> and `model_gateway/` folders (each with its own MANIFEST and one spec) in
-> sweep Wave 2, or keep one folder with two specs. Recommendation: split —
-> the seam is already drawn file-by-file above, the stores are already
-> separate modules, and rule 2 ("every system folder carries a MANIFEST")
-> currently makes `agent_auth`'s manifest claim both systems.
+Settings (config.py `agent_gateway_*`): enabled flag, LiteLLM base URLs + master key, default org budget, free credit amount, margin percent, importer/verification/top-up intervals and thresholds, top-up price id, policy minimum plan.
 
-> [!decision] PABLO DECIDES: per-run virtual keys and budget envelopes
-> (Core Architecture §9 deltas) — the run primitive asks this system to mint a
-> key scoped to (org, run) with the run's envelope as its budget, and spend
-> imports tagged (class, workflow, run, subject). Options: (a) mint per run
-> at placement and delete at terminal; (b) mint per (member, harness) as
-> today and enforce envelopes only at import time. Recommendation: (a) — it
-> is the only shape where the proxy hard-stops a runaway subagent fan-out
-> mid-run, and key mint/delete is already idempotent by alias.
+Proof: the unit and integration suites named per concern — enrollment, usage import, top-ups, litellm integration, config access groups (the reviewed config.yaml is pinned by `test_litellm_config_access_groups.py`), key lifecycle, migration, verification, org-member gateway, LLM limit enforcement — under `server/tests/{unit,integration}/test_agent_gateway_*` and siblings.
 
-## 9. Proof
+Failure modes: LiteLLM unreachable at enrollment → `sync_status=failed`, backfill retries · out of credit → keys disabled, exhausted, typed launch refusal, top-up reactivates · org cap → `limit_reached`, raise + next tick reactivates · key sees wrong models → `misconfigured` with delta, fix config.yaml · importer restart mid-batch → nothing, the overlap window + unique id absorb it.
 
-Unit: [test_agent_gateway_enrollment.py](../../../server/tests/unit/test_agent_gateway_enrollment.py), [test_agent_gateway_usage_import.py](../../../server/tests/unit/test_agent_gateway_usage_import.py), [test_agent_gateway_topups.py](../../../server/tests/unit/test_agent_gateway_topups.py), [test_litellm_integration.py](../../../server/tests/unit/test_litellm_integration.py), [test_litellm_config_access_groups.py](../../../server/tests/unit/test_litellm_config_access_groups.py) (the reviewed `config.yaml` is pinned here).
+---
 
-Integration: [test_agent_gateway_enrollment.py](../../../server/tests/integration/test_agent_gateway_enrollment.py), [test_agent_gateway_enrollment_keys.py](../../../server/tests/integration/test_agent_gateway_enrollment_keys.py), [test_agent_gateway_key_lifecycle.py](../../../server/tests/integration/test_agent_gateway_key_lifecycle.py), [test_agent_gateway_migration.py](../../../server/tests/integration/test_agent_gateway_migration.py), [test_agent_gateway_usage_credits.py](../../../server/tests/integration/test_agent_gateway_usage_credits.py), [test_agent_gateway_topups.py](../../../server/tests/integration/test_agent_gateway_topups.py), [test_agent_gateway_topup_fixes.py](../../../server/tests/integration/test_agent_gateway_topup_fixes.py), [test_agent_gateway_verification.py](../../../server/tests/integration/test_agent_gateway_verification.py), [test_agent_auth_org_member_gateway.py](../../../server/tests/integration/test_agent_auth_org_member_gateway.py), [test_billing_limit_enforcement_llm.py](../../../server/tests/integration/test_billing_limit_enforcement_llm.py).
+## Delta vs prod
 
-## Failure modes
+*Transitional — deleted at convergence.*
 
-| Condition | Observable | Recovery |
+| This spec says | Prod today | The change |
 | --- | --- | --- |
-| LiteLLM unreachable at enrollment | row `sync_status=failed` | backfill loop retries every `agent_gateway_backfill_interval_seconds` |
-| Subject out of credit | keys disabled, `budget_status=exhausted`, launch refused with typed reason | top-up (auto if `agent_gateway_llm_topup_price_id` set and threshold crossed) |
-| Org LLM cap hit | `budget_status=limit_reached` | admin raises the cap; next import tick reactivates |
-| Key sees wrong models | `verification_status=misconfigured` with delta | fix `config.yaml`, redeploy proxy |
-| Importer restart mid-batch | none — overlap window + unique request id | automatic |
+| Its own folder `server/ai_gateway/` with its own MANIFEST | Gateway files co-resident in `server/agent_auth/`; one manifest claims both systems | The code split (on the agent_auth build list) |
+| A signup grant funds every new org | The one-per-GitHub-identity `free_cloud_allocation` guard permanently blocks the grant when a prior account holds the claim — the founder org has been unfunded since creation (2026-08-26 renderer trace) | An allocation transfer/regrant path (admin primitive exists); consider surfacing "grant blocked by a previous account" in words at signup |
+| Verification runs | `agent_gateway_verification_enabled=false` | Enable once config.yaml settles |
+| Per-run virtual keys with envelope budgets | Keys are per (member, harness); budgets are org team + member cap | Open ruling (PR #2247 discussion): mint per run at placement — the only shape where the proxy hard-stops a runaway fan-out mid-run |
+| `ai_magic` routes through the gateway | Three direct endpoints, spend unattributed | After per-run keys (open ruling) |
 
-## Known gaps / follow-ups
+## Build list
 
-- Folder split (decision above); the AGENT_AUTH.md gap list already carries
-  the same "module split" item from the URL-prefix split.
-- Per-run keys and envelopes do not exist; budgets today are per org team and
-  per member cap only.
-- `ai_magic` spend is unattributed (decision above).
-- Verification is default-off (`agent_gateway_verification_enabled=false`).
+- [ ] Code split into `server/ai_gateway/` + manifest + recompose (with agent_auth's build list)
+- [ ] The blocked-signup-grant repair path (delta row 2) — also the live founder-org fix
+- [ ] Enable verification once config.yaml settles
+- [ ] Per-run keys + envelopes (pending the ruling) · then ai_magic through the gateway
