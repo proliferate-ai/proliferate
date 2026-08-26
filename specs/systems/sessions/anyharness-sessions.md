@@ -1,13 +1,8 @@
 # Sessions
 
-`anyharness-lib/src/domains/sessions/**` owns durable session truth, session-domain
-validation, event persistence, live-config persistence, and the runtime-level
-orchestration that bridges durable sessions into live ACP execution.
+`anyharness-lib/src/domains/sessions/**` owns durable session truth, session-domain validation, event persistence, live-config persistence, and the runtime-level orchestration that bridges durable sessions into live ACP execution.
 
-This is a legacy subsystem doc updated for current implementation paths.
-Session MCP binding assembly lives under `domains/sessions/mcp_bindings/**`, and the
-session store is split under `domains/sessions/store/**`. The runtime implementation is
-split under `domains/sessions/runtime/**`.
+This is a legacy subsystem doc updated for current implementation paths. Session MCP binding assembly lives under `domains/sessions/mcp_bindings/**`, and the session store is split under `domains/sessions/store/**`. The runtime implementation is split under `domains/sessions/runtime/**`.
 
 ## Core Concepts
 
@@ -59,10 +54,7 @@ It includes:
 - status
 - timestamps
 
-This is the durable identity surface for a session, not the launch-config
-authority. The complete explicit selection lives in the session's atomic
-`ResolvedLaunchIntent`; current executable options and values live in its
-`SessionLiveConfigSnapshot`.
+This is the durable identity surface for a session, not the launch-config authority. The complete explicit selection lives in the session's atomic `ResolvedLaunchIntent`; current executable options and values live in its `SessionLiveConfigSnapshot`.
 
 ### `SessionEventRecord` (`anyharness/crates/anyharness-lib/src/domains/sessions/model.rs`)
 
@@ -89,8 +81,7 @@ It stores:
 - ACP notification kind
 - serialized raw notification JSON
 
-This is a debug and regression-capture surface. It does not replace normalized
-session events as the runtime truth for replay or rendering.
+This is a debug and regression-capture surface. It does not replace normalized session events as the runtime truth for replay or rendering.
 
 ### `SessionLinkRecord` (`anyharness/crates/anyharness-lib/src/domains/sessions/links/model.rs`)
 
@@ -110,18 +101,9 @@ It stores an advisory relationship between two existing sessions:
   relationships
 - optional `closed_at`, the terminal relationship-history marker
 
-The link service validates that parent and child sessions exist, rejects
-self-links, and enforces uniqueness for `(relation, parent_session_id,
-child_session_id)`. For `subagent` links, a child may have only one parent.
-Deleting a session removes any links where that session is the parent or child,
-including completion and wake-schedule rows attached to those links.
-Accepted completion-delivery snapshots are separate from link history: deleting
-the parent removes them, while promotion or later child deletion preserves them
-until the parent sees the attributed completion prompt.
+The link service validates that parent and child sessions exist, rejects self-links, and enforces uniqueness for `(relation, parent_session_id, child_session_id)`. For `subagent` links, a child may have only one parent. Deleting a session removes any links where that session is the parent or child, including completion and wake-schedule rows attached to those links. Accepted completion-delivery snapshots are separate from link history: deleting the parent removes them, while promotion or later child deletion preserves them until the parent sees the attributed completion prompt.
 
-Session links are durable product state, but their creator turn/tool metadata is
-provenance only. It must not be used as an authorization, billing, or trust
-boundary.
+Session links are durable product state, but their creator turn/tool metadata is provenance only. It must not be used as an authorization, billing, or trust boundary.
 
 ### Live Config Records (`anyharness/crates/anyharness-lib/src/domains/sessions/model.rs`)
 
@@ -133,16 +115,13 @@ There are two durable config-related record types:
 - `PendingConfigChangeRecord`
   - config changes requested while a session was busy
 
-These are how the runtime remembers live config across reconnects and busy
-periods.
+These are how the runtime remembers live config across reconnects and busy periods.
 
 ### Internal Prompt Provenance
 
-`PromptPayload` (`anyharness/crates/anyharness-lib/src/domains/sessions/prompt/**`)
-can carry internal prompt provenance while it moves through the runtime.
+`PromptPayload` (`anyharness/crates/anyharness-lib/src/domains/sessions/prompt/**`) can carry internal prompt provenance while it moves through the runtime.
 
-Current producers are internal only. Public prompt requests do not expose a
-provenance field, and unknown request fields are not trusted as provenance.
+Current producers are internal only. Public prompt requests do not expose a provenance field, and unknown request fields are not trusted as provenance.
 
 Supported internal provenance kinds are:
 
@@ -151,42 +130,25 @@ Supported internal provenance kinds are:
 - `system`
 - `subagent_wake`
 
-`None` means human, legacy, or unspecified. Provenance is persisted on
-`session_pending_prompts.provenance_json` so queued prompts retain their sender
-metadata across process restarts.
+`None` means human, legacy, or unspecified. Provenance is persisted on `session_pending_prompts.provenance_json` so queued prompts retain their sender metadata across process restarts.
 
-Public prompt request bodies still cannot set trusted provenance. Transcript
-user-message payloads and pending-prompt read models expose a display-safe
-projection for product UI:
+Public prompt request bodies still cannot set trusted provenance. Transcript user-message payloads and pending-prompt read models expose a display-safe projection for product UI:
 
 - `agentSession`
 - `subagentWake`
 - `system`
 
-Internal automation provenance is not exposed directly; it must be converted to
-generic display-safe system provenance or omitted.
+Internal automation provenance is not exposed directly; it must be converted to generic display-safe system provenance or omitted.
 
 ### Prompt Attachments
 
-Prompt attachments are durable session state split across SQLite metadata and
-runtime-home files. `session_prompt_attachments` owns lifecycle state, kind,
-source, MIME/display metadata, size/hash, and the relative storage path. The
-attachment bytes live under the AnyHarness runtime home at
-`attachments/sessions/<session-id>/<attachment-id>/content` and are read or
-deleted only through `PromptAttachmentStorage`.
+Prompt attachments are durable session state split across SQLite metadata and runtime-home files. `session_prompt_attachments` owns lifecycle state, kind, source, MIME/display metadata, size/hash, and the relative storage path. The attachment bytes live under the AnyHarness runtime home at `attachments/sessions/<session-id>/<attachment-id>/content` and are read or deleted only through `PromptAttachmentStorage`.
 
-`kind` describes the content class (`image` or `text_resource`). `source`
-describes how the attachment entered the prompt (`upload` or `paste`) and is
-display metadata only. Pasted text is still a text resource; it is not a
-separate prompt block type. Runtime dispatch embeds image and text-resource
-bytes into ACP prompt content after reading them from storage. Managed
-`anyharness-attachment://sessions/<session-id>/attachments/<attachment-id>`
-URIs identify transcript resources but are not an agent dereference mechanism.
+`kind` describes the content class (`image` or `text_resource`). `source` describes how the attachment entered the prompt (`upload` or `paste`) and is display metadata only. Pasted text is still a text resource; it is not a separate prompt block type. Runtime dispatch embeds image and text-resource bytes into ACP prompt content after reading them from storage. Managed `anyharness-attachment://sessions/<session-id>/attachments/<attachment-id>` URIs identify transcript resources but are not an agent dereference mechanism.
 
 ## Same-Workspace Delegated Agents
 
-Same-workspace delegated agents use `SessionLinkRecord`; `subagent` remains the
-durable relation and public product vocabulary.
+Same-workspace delegated agents use `SessionLinkRecord`; `subagent` remains the durable relation and public product vocabulary.
 
 The model is intentionally small:
 
@@ -234,13 +196,9 @@ Subagent relationship operability is separate from terminal session state:
   and config untouched; subsequent authorization and reads treat the session
   as ordinary.
 
-The relationship mutation gate is shared by Workspace Agent Operations and
-HTTP session mutations. This keeps Close serialized against prompts, config
-changes, and terminal lifecycle calls. There is no Subagents MCP
-registration, capability token, tool surface, or compatibility alias.
+The relationship mutation gate is shared by Workspace Agent Operations and HTTP session mutations. This keeps Close serialized against prompts, config changes, and terminal lifecycle calls. There is no Subagents MCP registration, capability token, tool surface, or compatibility alias.
 
-The subagent domain lives under
-`anyharness/crates/anyharness-lib/src/domains/sessions/subagents/**`.
+The subagent domain lives under `anyharness/crates/anyharness-lib/src/domains/sessions/subagents/**`.
 
 It owns only the remaining session-domain mechanics:
 
@@ -251,28 +209,13 @@ It owns only the remaining session-domain mechanics:
 
 ### Workspace MCP And Completion Delivery
 
-Workspace Agent Operations owns agent discovery, creation, configuration,
-messaging, interruption, Close, Open, Promote, and request-time relationship
-authorization. Its MCP implementation lives under
-`domains/agent_operations/mcp/**`; the exact 20-tool contract lives in
-[Workspace Product MCP](../subagents/workspace-mcp.md).
+Workspace Agent Operations owns agent discovery, creation, configuration, messaging, interruption, Close, Open, Promote, and request-time relationship authorization. Its MCP implementation lives under `domains/agent_operations/mcp/**`; the exact 20-tool contract lives in [Workspace Product MCP](../subagents/workspace-mcp.md).
 
-Workspace attaches to Standard sessions unless their binding policy is
-`InternalOnly`. That includes ordinary, delegated, and promoted/restarted
-sessions; Cowork and internal review/workflow sessions do not receive it. The
-capability token binds the runtime, workspace, session, and product MCP, while
-every `tools/call` resolves current caller role, parent ownership,
-relationship, workspace, and target truth again.
+Workspace attaches to Standard sessions unless their binding policy is `InternalOnly`. That includes ordinary, delegated, and promoted/restarted sessions; Cowork and internal review/workflow sessions do not receive it. The capability token binds the runtime, workspace, session, and product MCP, while every `tools/call` resolves current caller role, parent ownership, relationship, workspace, and target truth again.
 
-Delegated completion notification is durable session admission, not a
-one-shot MCP wake tool. Terminal persistence captures the child completion and
-delivery intent; the delivery worker admits at most one parent prompt with
-`PromptProvenance::SubagentWake`, and restart/reconciliation preserves exactly
-once visibility. The terminal assistant message remains the completion payload
-relayed to the parent.
+Delegated completion notification is durable session admission, not a one-shot MCP wake tool. Terminal persistence captures the child completion and delivery intent; the delivery worker admits at most one parent prompt with `PromptProvenance::SubagentWake`, and restart/reconciliation preserves exactly once visibility. The terminal assistant message remains the completion payload relayed to the parent.
 
-A fresh delivery may instead resolve without its own parent wake turn at
-enqueue time, in the same transaction that would have inserted the wake:
+A fresh delivery may instead resolve without its own parent wake turn at enqueue time, in the same transaction that would have inserted the wake:
 
 - `coalesced` — an earlier wake for the same child is still queued and
   unconsumed. Its queue row is rewritten in place (same seq and queue
@@ -301,46 +244,17 @@ enqueue time, in the same transaction that would have inserted the wake:
   removals. This makes live and replayed queue projections converge. This never
   applies to failed or cancelled turns; those always materialize a wake turn.
 
-Every automatic durable-queue drain first ensures that the row's
-`pending_prompt_added` event is persisted. Detached activation and startup
-replay therefore preserve the original queue identity and `queued_at` before
-the row can become an executed transcript item, including across a crash
-between queue commit and activation. The visibility check matches sequence,
-immutable `queued_at`, and the current prompt projection (`prompt_id`, text,
-content parts, and prompt provenance), so neither a legacy reused numeric
-sequence nor an earlier projection of an in-place completion-wake rewrite can
-impersonate the current row. A rewritten row receives a replacement
-`pending_prompt_added` before execution. If a staged row is removed before this
-check, the drain discards its staged payload and re-peeks the durable queue.
-Database migration backfill raises existing cursors from pending rows, scalar
-and reordered queue events, completion projections, and delivery-held prompt
-identities or review-feedback receipts before new prompts are allocated.
+Every automatic durable-queue drain first ensures that the row's `pending_prompt_added` event is persisted. Detached activation and startup replay therefore preserve the original queue identity and `queued_at` before the row can become an executed transcript item, including across a crash between queue commit and activation. The visibility check matches sequence, immutable `queued_at`, and the current prompt projection (`prompt_id`, text, content parts, and prompt provenance), so neither a legacy reused numeric sequence nor an earlier projection of an in-place completion-wake rewrite can impersonate the current row. A rewritten row receives a replacement `pending_prompt_added` before execution. If a staged row is removed before this check, the drain discards its staged payload and re-peeks the durable queue. Database migration backfill raises existing cursors from pending rows, scalar and reordered queue events, completion projections, and delivery-held prompt identities or review-feedback receipts before new prompts are allocated.
 
-Neither applies to a delivery that ever reached the parent queue
-(recreate/retry reconciliation keeps its legacy exactly-once path). A retired
-or suppressed delivery is terminal `delivered` with no
-`parent_prompt_seq`/`parent_turn_id`; the completion ledger row and injected
-completion event keep the result durable and visible to delegated-work
-surfaces, and the worker records the decision under
-`anyharness.subagent.delivery_suppressed` with the reason.
+Neither applies to a delivery that ever reached the parent queue (recreate/retry reconciliation keeps its legacy exactly-once path). A retired or suppressed delivery is terminal `delivered` with no `parent_prompt_seq`/`parent_turn_id`; the completion ledger row and injected completion event keep the result durable and visible to delegated-work surfaces, and the worker records the decision under `anyharness.subagent.delivery_suppressed` with the reason.
 
-The worker also injects one `subagent_turn_completed` event into the parent
-transcript on the single Pending to Enqueued delivery transition, ahead of the
-wake turn admitted from the queued prompt — and likewise when a delivery is
-suppressed, where that event is the only parent-transcript record. That event
-carries the completion metadata the transcript indexes for wake receipts and
-roster invalidation; injection is best effort because the delivery is already
-committed and the transition never repeats.
+The worker also injects one `subagent_turn_completed` event into the parent transcript on the single Pending to Enqueued delivery transition, ahead of the wake turn admitted from the queued prompt — and likewise when a delivery is suppressed, where that event is the only parent-transcript record. That event carries the completion metadata the transcript indexes for wake receipts and roster invalidation; injection is best effort because the delivery is already committed and the transition never repeats.
 
-`session_link_wake_schedules` remains a shared persistence and mobility wire
-contract solely for Cowork. Delegated-agent relationships cannot create, read,
-export, or import a wake schedule; mobility filters and validates schedules by
-Cowork relation.
+`session_link_wake_schedules` remains a shared persistence and mobility wire contract solely for Cowork. Delegated-agent relationships cannot create, read, export, or import a wake schedule; mobility filters and validates schedules by Cowork relation.
 
 ## Forked Sessions
 
-Forked sessions use the same durable session/link model but with
-`relation = fork` and `workspace_relation = same_workspace`.
+Forked sessions use the same durable session/link model but with `relation = fork` and `workspace_relation = same_workspace`.
 
 Fork invariants:
 
@@ -391,10 +305,7 @@ Fork invariants:
 
 ### Fork boundary and the durable operation record
 
-Every fork — tip or targeted — is one durable operation recorded in
-`fork_operations` before the native call and advanced through explicit phases.
-The record is the single source of truth for idempotency, provenance, and
-recovery; nothing load-bearing lives in opaque adapter `_meta`.
+Every fork — tip or targeted — is one durable operation recorded in `fork_operations` before the native call and advanced through explicit phases. The record is the single source of truth for idempotency, provenance, and recovery; nothing load-bearing lives in opaque adapter `_meta`.
 
 - Boundary. A tip fork carries no product anchor (`target = null`). A targeted
   fork's boundary is `(turn_id, item_id)` of a committed user message in the
@@ -437,11 +348,7 @@ recovery; nothing load-bearing lives in opaque adapter `_meta`.
 
 ### Restart and recovery
 
-A process-local fork id (Claude) only becomes durable (reloadable via
-`load_session`) once the child has run its own first turn. The
-has-the-child-run signal is the child's own `last_prompt_at`, never
-`turn_started`: the transcript snapshot copies the parent's `turn_started`
-events into the child, so that signal is always set for forks.
+A process-local fork id (Claude) only becomes durable (reloadable via `load_session`) once the child has run its own first turn. The has-the-child-run signal is the child's own `last_prompt_at`, never `turn_started`: the transcript snapshot copies the parent's `turn_started` events into the child, so that signal is always set for forks.
 
 On a child cold start:
 
@@ -454,41 +361,21 @@ On a child cold start:
   in-flight, known-result, or unknown-outcome operation never authorizes a
   second native fork.
 
-AnyHarness exposes fork through typed contract fields. ACP `_meta.anyharness`
-is reserved for private runtime-to-adapter extensions and must not leak into
-desktop or public HTTP shapes.
+AnyHarness exposes fork through typed contract fields. ACP `_meta.anyharness` is reserved for private runtime-to-adapter extensions and must not leak into desktop or public HTTP shapes.
 
 ### Parent Wake
 
-Every terminal child turn atomically records a completion row and an independent
-delivery snapshot while the subagent relationship exists. A retry worker turns
-that snapshot into one durable, attributed parent prompt using the stable
-delivery id for deduplication. This is automatic for completed, failed, and
-cancelled turns, including reversible Close cancellation; it does not depend on
-the legacy one-shot wake schedule. The worker reconciles parent transcript and
-pending-queue state before inserting, and marks delivery complete only after the
-attributed parent transcript item is durable — or after it suppresses a
-redundant or coalesced completed-turn wake as described under
-[Workspace MCP And Completion Delivery](#workspace-mcp-and-completion-delivery).
+Every terminal child turn atomically records a completion row and an independent delivery snapshot while the subagent relationship exists. A retry worker turns that snapshot into one durable, attributed parent prompt using the stable delivery id for deduplication. This is automatic for completed, failed, and cancelled turns, including reversible Close cancellation; it does not depend on the legacy one-shot wake schedule. The worker reconciles parent transcript and pending-queue state before inserting, and marks delivery complete only after the attributed parent transcript item is durable — or after it suppresses a redundant or coalesced completed-turn wake as described under [Workspace MCP And Completion Delivery](#workspace-mcp-and-completion-delivery).
 
-The shared one-shot wake-schedule table remains only for Cowork session-link
-behavior. Delegated-agent relationships neither create nor read those rows,
-and the table does not gate automatic terminal-completion delivery.
+The shared one-shot wake-schedule table remains only for Cowork session-link behavior. Delegated-agent relationships neither create nor read those rows, and the table does not gate automatic terminal-completion delivery.
 
-Parent-to-child prompts use internal `agent_session` provenance with the parent
-session id and session link id. Runtime child-to-parent wake prompts use
-internal `subagent_wake` provenance with the `session_link_id` and stable
-delivery id as `completion_id`. Legacy `system/subagent_wake` rows are tolerated
-for pending-wake detection, but public read models must not fabricate missing
-link or completion ids.
+Parent-to-child prompts use internal `agent_session` provenance with the parent session id and session link id. Runtime child-to-parent wake prompts use internal `subagent_wake` provenance with the `session_link_id` and stable delivery id as `completion_id`. Legacy `system/subagent_wake` rows are tolerated for pending-wake detection, but public read models must not fabricate missing link or completion ids.
 
 ## Session Extensions
 
-`SessionRuntime` supports small runtime extensions for launch additions and
-turn-finished notifications.
+`SessionRuntime` supports small runtime extensions for launch additions and turn-finished notifications.
 
-The extension trait lives in
-`anyharness/crates/anyharness-lib/src/domains/sessions/extensions.rs`.
+The extension trait lives in `anyharness/crates/anyharness-lib/src/domains/sessions/extensions.rs`.
 
 Extensions may:
 
@@ -497,17 +384,13 @@ Extensions may:
 - receive `on_turn_finished` notifications with session id, workspace, turn id,
   outcome, stop reason, and last event seq
 
-Cowork artifact support and subagent support both use this extension surface.
-Extension failures are isolated from the actor path: they are logged and do not
-make the completed turn fail.
+Cowork artifact support and subagent support both use this extension surface. Extension failures are isolated from the actor path: they are logged and do not make the completed turn fail.
 
 ## Durable Session Flow
 
 ### Create
 
-`SessionService::create_session(...)`
-(`anyharness/crates/anyharness-lib/src/domains/sessions/service/create.rs`)
-does the durable validation path.
+`SessionService::create_session(...)` (`anyharness/crates/anyharness-lib/src/domains/sessions/service/create.rs`) does the durable validation path.
 
 It:
 
@@ -527,11 +410,7 @@ It:
    with its complete `ResolvedLaunchIntent`, or returns the concurrently
    inserted row and its immutable intent for the same idempotent request
 
-This path does not start ACP directly. It commits the valid durable session and
-the exact launch promise the actor must later apply and confirm. Omitting
-`sessionId` preserves ordinary server-minted identity. Internal preselected ids
-remain strict fresh-create inputs unless their caller explicitly uses the
-idempotent public create seam.
+This path does not start ACP directly. It commits the valid durable session and the exact launch promise the actor must later apply and confirm. Omitting `sessionId` preserves ordinary server-minted identity. Internal preselected ids remain strict fresh-create inputs unless their caller explicitly uses the idempotent public create seam.
 
 ### Read and History
 
@@ -542,19 +421,15 @@ The durable service and store own:
 - `list_session_event_records`
 - `get_live_config_snapshot`
 
-SSE replay and history endpoints read from these durable records first before
-merging live events.
+SSE replay and history endpoints read from these durable records first before merging live events.
 
 ## Runtime Flow
 
-The runtime flow is implemented across `domains/sessions/runtime/**`, split by
-API-facing session operation family.
+The runtime flow is implemented across `domains/sessions/runtime/**`, split by API-facing session operation family.
 
 ### Create and Start
 
-`SessionRuntime::create_and_start_session(...)`
-(`anyharness/crates/anyharness-lib/src/domains/sessions/runtime/creation.rs`)
-is the eager live-start path.
+`SessionRuntime::create_and_start_session(...)` (`anyharness/crates/anyharness-lib/src/domains/sessions/runtime/creation.rs`) is the eager live-start path.
 
 It:
 
@@ -574,9 +449,7 @@ This is the bridge from durable session creation into live ACP execution.
 
 ### Resume
 
-`ensure_live_session(...)`
-(`anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs`)
-is the idempotent cold-start path for an existing session.
+`ensure_live_session(...)` (`anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs`) is the idempotent cold-start path for an existing session.
 
 It:
 
@@ -587,8 +460,7 @@ It:
 
 ### Prompt / Cancel / Close
 
-Prompt flow is owned by `SessionRuntime`, but actual prompt execution is owned
-by the ACP actor.
+Prompt flow is owned by `SessionRuntime`, but actual prompt execution is owned by the ACP actor.
 
 The runtime layer:
 
@@ -602,22 +474,17 @@ Cancel and close follow the same pattern.
 
 Interaction resolution also goes through `SessionRuntime`.
 
-It does not persist interaction decisions itself. It finds the live session
-handle and delegates to the live runtime. Current interaction kinds include:
+It does not persist interaction decisions itself. It finds the live session handle and delegates to the live runtime. Current interaction kinds include:
 
 - permission decisions
 - requested user input
 - MCP elicitation responses
 
-The public resolution path is
-`POST /v1/sessions/{session_id}/interactions/{interaction_id}/resolve`.
-`proliferate-worker` uses the same route for Cloud-mediated web/mobile/Slack
-approval and input commands.
+The public resolution path is `POST /v1/sessions/{session_id}/interactions/{interaction_id}/resolve`. `proliferate-worker` uses the same route for Cloud-mediated web/mobile/Slack approval and input commands.
 
 ## Configuring Flow
 
-Live session configuration is deliberately split across the session and ACP
-layers.
+Live session configuration is deliberately split across the session and ACP layers.
 
 ### What the session domain owns
 
@@ -628,10 +495,7 @@ The session domain owns:
 - the exact models, generic controls, allowed values, and complete current
   values exposed back to clients
 
-`live_config/**`
-(`anyharness/crates/anyharness-lib/src/domains/sessions/live_config/**`)
-maps the native handshake into the runtime-owned
-`SessionLiveConfigSnapshot` shape without dropping unknown identifiers.
+`live_config/**` (`anyharness/crates/anyharness-lib/src/domains/sessions/live_config/**`) maps the native handshake into the runtime-owned `SessionLiveConfigSnapshot` shape without dropping unknown identifiers.
 
 It:
 
@@ -663,13 +527,7 @@ The ACP runtime owns:
 
 ### Model selection specifics
 
-Model changes have protocol-specific transport because harnesses may expose a
-raw model config control or a direct ACP model setter. The selected ID itself is
-never rewritten: it must be an exact member of the current live snapshot and
-must be read back exactly after application. A legacy direct setter is usable
-only when the canonical snapshot advertises that model and the setter can
-positively confirm the response-carried current value. There is no catalog alias
-or optimistic acknowledgement path.
+Model changes have protocol-specific transport because harnesses may expose a raw model config control or a direct ACP model setter. The selected ID itself is never rewritten: it must be an exact member of the current live snapshot and must be read back exactly after application. A legacy direct setter is usable only when the canonical snapshot advertises that model and the setter can positively confirm the response-carried current value. There is no catalog alias or optimistic acknowledgement path.
 
 Model configuration spans both:
 
@@ -678,13 +536,9 @@ Model configuration spans both:
 
 #### Same-session model changes
 
-The current canonical live snapshot authorizes a model for the active session.
-That snapshot, rather than a catalog or the original launch observation, owns
-the session's executable model membership. The legacy direct setter is attempted
-only when there is no raw model config option and no direct model control.
+The current canonical live snapshot authorizes a model for the active session. That snapshot, rather than a catalog or the original launch observation, owns the session's executable model membership. The legacy direct setter is attempted only when there is no raw model config option and no direct model control.
 
-The runtime will start or resume a live actor before applying a model change.
-What happens next depends on actor state and confirmation:
+The runtime will start or resume a live actor before applying a model change. What happens next depends on actor state and confirmation:
 
 - When the actor is idle, it applies the update to the live process and reports
   success only after exact current-value readback.
@@ -697,8 +551,7 @@ What happens next depends on actor state and confirmation:
   Setter rejection also removes the pending change without changing current
   model state.
 
-Every path preserves both the durable session identity and the existing live
-agent process.
+Every path preserves both the durable session identity and the existing live agent process.
 
 ## SSE and Event Flow
 
@@ -753,8 +606,7 @@ Code path:
 
 ## Extension Points
 
-Add behavior here when it changes session-domain rules or durable/runtime
-session orchestration, for example:
+Add behavior here when it changes session-domain rules or durable/runtime session orchestration, for example:
 
 - new session validation rules
 - new durable config metadata

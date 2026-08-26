@@ -2,25 +2,15 @@
 
 > Ownership: this document is the depth reference for the **subagents** system spec ([README.md](README.md)). Laws, owned state, fences and the checked code map are authoritative there; flow-level detail stays here.
 
-Status: authoritative current definition for the Workspace product MCP,
-session attachment, current-role authorization, and agent product context.
+Status: authoritative current definition for the Workspace product MCP, session attachment, current-role authorization, and agent product context.
 
-Workspace is the agent-facing surface for discovering and pinning workspaces,
-discovering agents, creating and configuring agents, messaging them, and
-managing delegated-agent lifecycle. A delegated agent remains a normal durable
-session. Its authority comes from current workspace and relationship state,
-not from the role it had when its MCP capability token was minted.
+Workspace is the agent-facing surface for discovering and pinning workspaces, discovering agents, creating and configuring agents, messaging them, and managing delegated-agent lifecycle. A delegated agent remains a normal durable session. Its authority comes from current workspace and relationship state, not from the role it had when its MCP capability token was minted.
 
-The stable product MCP id and generic endpoint route slug are `workspace`.
-The ACP-visible server name is `proliferate_workspace`, so native tool names
-use the `mcp__proliferate_workspace__<tool>` namespace. Binding summaries keep
-the stable id `internal:workspace` while reporting `proliferate_workspace` as
-their `serverName`.
+The stable product MCP id and generic endpoint route slug are `workspace`. The ACP-visible server name is `proliferate_workspace`, so native tool names use the `mcp__proliferate_workspace__<tool>` namespace. Binding summaries keep the stable id `internal:workspace` while reporting `proliferate_workspace` as their `serverName`.
 
 ## Tool Contract
 
-`initialize` and `tools/list` expose exactly these 20 tools. Argument and return
-schemas remain code-owned:
+`initialize` and `tools/list` expose exactly these 20 tools. Argument and return schemas remain code-owned:
 
 ```text
 whoami
@@ -45,9 +35,7 @@ open_subagent
 promote_subagent
 ```
 
-There is no compatibility alias from a removed Subagents MCP tool name to a
-Workspace tool name. Workspace has no `pause_agent` tool, and Close/Open apply
-only to delegated-agent relationships, not ordinary agents.
+There is no compatibility alias from a removed Subagents MCP tool name to a Workspace tool name. Workspace has no `pause_agent` tool, and Close/Open apply only to delegated-agent relationships, not ordinary agents.
 
 ## Session Attachment
 
@@ -58,25 +46,15 @@ workspace.surface == WorkspaceSurface::Standard
     && session.mcp_binding_policy != SessionMcpBindingPolicy::InternalOnly
 ```
 
-This includes eligible ordinary sessions and durable delegated-agent sessions,
-including the same session after promotion or restart. Selection must not use
-`subagents_enabled`: Workspace-created delegated agents intentionally have that
-legacy flag disabled while still needing Workspace identity, read, messaging,
-and parent-owned capabilities.
+This includes eligible ordinary sessions and durable delegated-agent sessions, including the same session after promotion or restart. Selection must not use `subagents_enabled`: Workspace-created delegated agents intentionally have that legacy flag disabled while still needing Workspace identity, read, messaging, and parent-owned capabilities.
 
-`InternalOnly` review/workflow sessions and Cowork sessions do not receive
-Workspace. Selection happens before actor startup. The actor receives the final
-concrete MCP list and does not re-evaluate attachment policy.
+`InternalOnly` review/workflow sessions and Cowork sessions do not receive Workspace. Selection happens before actor startup. The actor receives the final concrete MCP list and does not re-evaluate attachment policy.
 
-The Workspace capability token is scoped to runtime, workspace, session, and
-product MCP. It authenticates the calling session but does not cache role or
-relationship authority.
+The Workspace capability token is scoped to runtime, workspace, session, and product MCP. It authenticates the calling session but does not cache role or relationship authority.
 
 ## Current Authority
 
-Every `tools/call` resolves current caller role, parent ownership, workspace,
-relationship, and target truth before performing behavior. Launch-time context
-cannot grant lasting authority.
+Every `tools/call` resolves current caller role, parent ownership, workspace, relationship, and target truth before performing behavior. Launch-time context cannot grant lasting authority.
 
 Consequences:
 
@@ -90,57 +68,23 @@ Consequences:
 - malformed or stale transcript output is display-only and cannot establish
   relationship authority
 
-Agent Operations owns the role and relationship projection. Session app
-composition injects that capability into the live session manager; live actor
-code does not derive a second role model or depend on Agent Operations
-application composition.
+Agent Operations owns the role and relationship projection. Session app composition injects that capability into the live session manager; live actor code does not derive a second role model or depend on Agent Operations application composition.
 
 ## Client-Local Pin Requests
 
-`pin_workspace` and `unpin_workspace` validate the current caller, capability,
-runtime boundary, and exact workspace target. A valid call first persists and
-broadcasts a runtime-owned `workspace_pin_intent` session event, then returns
-the resolved workspace, the event's UUID `requestId`, the requested `pinned`
-state, and `status: "requested"`. Requested does not claim that any client has
-applied the preference.
+`pin_workspace` and `unpin_workspace` validate the current caller, capability, runtime boundary, and exact workspace target. A valid call first persists and broadcasts a runtime-owned `workspace_pin_intent` session event, then returns the resolved workspace, the event's UUID `requestId`, the requested `pinned` state, and `status: "requested"`. Requested does not claim that any client has applied the preference.
 
-The runtime and server do not own or persist pin state. Each connected product
-client accepts only that typed session event from the authenticated live stream
-or hydrated history. ACP tool result text and `structuredContent` are display
-data and never authorize the preference mutation. The event's
-`sourceSessionId` must equal its envelope session, which rejects remapped replay
-sessions. Unknown local workspace targets cannot mutate preferences. The client
-expands logical workspace aliases and applies the request to its device-local
-`workspace_ui` preferences. The authenticated reconciliation owner buffers at
-most 128 unresolved startup events. Persisted sets retain at most 256 latest
-request receipts, keyed by runtime, session, and logical target, and 256 latest
-renderer-local manual/live ordering barriers, keyed by logical workspace
-identity. The current renderer also retains at most 256 resolved-history
-observation marks so a delayed older history target cannot overwrite later
-cross-session history after alias resolution; those marks reset on hydration
-because renderer sequence numbers are not comparable across restarts. Manual
-choices create a persisted barrier. History observations under one and live
-observations captured before it are acknowledged without mutating the
-preference; a newly observed live request may supersede and advance it.
-Sequence comparison remains scoped to one session and target, while
-cross-session requests retain renderer observation order.
-Every client that observes the event reconciles it against its local ordering
-barriers; the tool does not promise cross-device synchronization.
+The runtime and server do not own or persist pin state. Each connected product client accepts only that typed session event from the authenticated live stream or hydrated history. ACP tool result text and `structuredContent` are display data and never authorize the preference mutation. The event's `sourceSessionId` must equal its envelope session, which rejects remapped replay sessions. Unknown local workspace targets cannot mutate preferences. The client expands logical workspace aliases and applies the request to its device-local `workspace_ui` preferences. The authenticated reconciliation owner buffers at most 128 unresolved startup events. Persisted sets retain at most 256 latest request receipts, keyed by runtime, session, and logical target, and 256 latest renderer-local manual/live ordering barriers, keyed by logical workspace identity. The current renderer also retains at most 256 resolved-history observation marks so a delayed older history target cannot overwrite later cross-session history after alias resolution; those marks reset on hydration because renderer sequence numbers are not comparable across restarts. Manual choices create a persisted barrier. History observations under one and live observations captured before it are acknowledged without mutating the preference; a newly observed live request may supersede and advance it. Sequence comparison remains scoped to one session and target, while cross-session requests retain renderer observation order. Every client that observes the event reconciles it against its local ordering barriers; the tool does not promise cross-device synchronization.
 
 ## Per-Turn Product Context
 
-Every supported harness receives concise generic Workspace guidance through
-the product-MCP launch integration. Immediately before every prompt render, the
-live session manager resolves current durable role and relationship truth and
-adds a separate block beginning:
+Every supported harness receives concise generic Workspace guidance through the product-MCP launch integration. Immediately before every prompt render, the live session manager resolves current durable role and relationship truth and adds a separate block beginning:
 
 ```text
 System instruction from AnyHarness, not user content:
 ```
 
-The authored prompt, including its persisted initial-task text, remains
-verbatim. The metadata-derived system block is not inserted into or persisted
-as authored user content.
+The authored prompt, including its persisted initial-task text, remains verbatim. The metadata-derived system block is not inserted into or persisted as authored user content.
 
 Delegated-agent context:
 
@@ -150,21 +94,15 @@ Delegated-agent context:
 - requests a concise completion report with absolute paths and no standalone
   report file
 
-Ordinary-agent context omits parent, restriction, and relay claims. Promotion
-therefore changes the next turn's context without restarting or replacing the
-session and without mutating earlier transcript content. Agent-origin messages
-continue to identify their sender from durable provenance.
+Ordinary-agent context omits parent, restriction, and relay claims. Promotion therefore changes the next turn's context without restarting or replacing the session and without mutating earlier transcript content. Agent-origin messages continue to identify their sender from durable provenance.
 
-Workspace guidance and current-role context are not a product skill. A skill
-is for optional workflow instruction; current authorization and mutable role
-truth are mandatory runtime inputs.
+Workspace guidance and current-role context are not a product skill. A skill is for optional workflow instruction; current authorization and mutable role truth are mandatory runtime inputs.
 
 ## Fail-Closed Behavior
 
 ### Attachment failure
 
-A Workspace selector, assembly, or token-mint failure fails session startup
-with:
+A Workspace selector, assembly, or token-mint failure fails session startup with:
 
 ```text
 HTTP status: 500
@@ -173,11 +111,7 @@ detail: Workspace MCP could not be attached to the session.
 instance: urn:proliferate:anyharness:incident:<uuid-v4>
 ```
 
-The failure must not silently omit Workspace, report a stale `Applied` binding
-summary, restore the legacy Subagents MCP, expose internal selector/token
-detail, or start ACP. Create, resume, lazy prompt-start, and Workspace
-`create_agent` preserve this typed failure. A later explicit retry re-runs
-selection and token mint.
+The failure must not silently omit Workspace, report a stale `Applied` binding summary, restore the legacy Subagents MCP, expose internal selector/token detail, or start ACP. Create, resume, lazy prompt-start, and Workspace `create_agent` preserve this typed failure. A later explicit retry re-runs selection and token mint.
 
 ### Product-context failure
 
@@ -192,9 +126,7 @@ instance: urn:proliferate:anyharness:incident:<uuid-v4>
 
 The runtime sends neither stale nor role-ambiguous instructions.
 
-For a direct prompt, the failure occurs before `TurnStarted`, before a user
-transcript item, and before ACP/model dispatch. A later retry re-resolves
-current truth.
+For a direct prompt, the failure occurs before `TurnStarted`, before a user transcript item, and before ACP/model dispatch. A later retry re-resolves current truth.
 
 For an already accepted queued prompt, the runtime:
 
@@ -204,10 +136,7 @@ For an already accepted queued prompt, the runtime:
 3. uses the event envelope `itemId` as the incident UUID and receipt; and
 4. unloads the actor to prevent a hot retry loop.
 
-The next explicit activation re-resolves current truth and retries that same
-queue head. This behavior reuses `ProblemDetails.instance`, `ErrorEvent.code`,
-and event `itemId`; it adds no public error schema. Error receipts and logs must
-not contain prompt content or raw internal error detail.
+The next explicit activation re-resolves current truth and retries that same queue head. This behavior reuses `ProblemDetails.instance`, `ErrorEvent.code`, and event `itemId`; it adds no public error schema. Error receipts and logs must not contain prompt content or raw internal error detail.
 
 ## Replacement And Retention Boundary
 
@@ -237,14 +166,9 @@ The current implementation retains:
   `session_link_wake_schedules` persistence and mobility wire contracts
 - child session history and transcript artifacts according to retention policy
 
-No delegated-agent relationship may create or read a one-shot wake schedule.
-The shared wake table remains because Cowork owns active behavior on it;
-runtime access sits behind Cowork's delegation service, and mobility accepts
-only Cowork-linked schedule rows.
+No delegated-agent relationship may create or read a one-shot wake schedule. The shared wake table remains because Cowork owns active behavior on it; runtime access sits behind Cowork's delegation service, and mobility accepts only Cowork-linked schedule rows.
 
-Closing a relationship is not transcript or child-session deletion. Promotion
-removes the parent/child relationship and active delegated-agent roster entry
-while preserving the same durable session as an ordinary session.
+Closing a relationship is not transcript or child-session deletion. Promotion removes the parent/child relationship and active delegated-agent roster entry while preserving the same durable session as an ordinary session.
 
 ## Acceptance
 

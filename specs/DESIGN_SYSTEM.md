@@ -1,21 +1,10 @@
 # Design System
 
-The single design document for this codebase. It describes the value system —
-type, color, elevation, spacing, radii, motion, icons, layering — the component
-vocabulary built on top of it, and how to change either one.
+The single design document for this codebase. It describes the value system — type, color, elevation, spacing, radii, motion, icons, layering — the component vocabulary built on top of it, and how to change either one.
 
-**Two artifacts, one authority.** This document explains how the system works
-and why it is shaped that way;
-[tokens.ts](../apps/packages/design/src/tokens.ts) holds the values.
-Where this document and `tokens.ts` disagree about a number, `tokens.ts` is
-right and this document is stale. Every value was audited and consolidated in
-July 2026; that pass is why each token carries a provenance tag (see
-[Changing The Design](#changing-the-design)).
+**Two artifacts, one authority.** This document explains how the system works and why it is shaped that way; [tokens.ts](../apps/packages/design/src/tokens.ts) holds the values. Where this document and `tokens.ts` disagree about a number, `tokens.ts` is right and this document is stale. Every value was audited and consolidated in July 2026; that pass is why each token carries a provenance tag (see [Changing The Design](#changing-the-design)).
 
-**Owns:** the value system and the design intent behind it (the closed type
-ramp, the color role model, the elevation/spacing/radius/motion/icon/layering
-scales), the component library's tier model, governance rule, and sanctioned
-index, and the change-control model for moving a value or adding a component.
+**Owns:** the value system and the design intent behind it (the closed type ramp, the color role model, the elevation/spacing/radius/motion/icon/layering scales), the component library's tier model, governance rule, and sanctioned index, and the change-control model for moving a value or adding a component.
 
 **Does not own:**
 
@@ -34,80 +23,27 @@ index, and the change-control model for moving a value or adding a component.
 
 ## System Contract
 
-The design system as a system: what it owns, what it exposes, who consumes
-it, and how it is proven. The sections that follow this one are its body.
+The design system as a system: what it owns, what it exposes, who consumes it, and how it is proven. The sections that follow this one are its body.
 
-**Purpose.** One value system and one component vocabulary so every surface
-reads as the same product, and so a change to a value or a shape is made in
-one place and propagates mechanically.
+**Purpose.** One value system and one component vocabulary so every surface reads as the same product, and so a change to a value or a shape is made in one place and propagates mechanically.
 
-**Owned state.** No runtime state. Owned artifacts: the raw layer
-([palette.ts](../apps/packages/design/src/palette.ts) — physical colors by
-ramp and rung; [rungs.ts](../apps/packages/design/src/rungs.ts) — the
-density and radius rungs), the token record
-([tokens.ts](../apps/packages/design/src/tokens.ts) — `themeTokens`,
-`colors`, `spacing`, `radius`, `typography`, `shadows`, `timing`,
-`codeColors`, `themePreviewColors`), the motion and cadence primitives
-([motion.ts](../apps/packages/design/src/motion.ts),
-[cadence.ts](../apps/packages/design/src/cadence.ts)), the generated
-stylesheet (`dist/theme.css`, projected by `scripts/generate-theme.mjs`,
-not checked in), the shared CSS entrypoints
-([product.css](../apps/packages/design/src/css/product.css),
-[desktop.css](../apps/packages/design/src/css/desktop.css)), the React
-Native bridge ([react-native.ts](../apps/packages/design/src/react-native.ts)),
-and the component library under
-`apps/packages/product-client/src/primitives/**` (root primitives, the six
-kits under `patterns/` — composer, panel, settings, sidebar, tabs, toast —
-plus `icons/`, `overlays/`, `utils/`).
+**Owned state.** No runtime state. Owned artifacts: the raw layer ([palette.ts](../apps/packages/design/src/palette.ts) — physical colors by ramp and rung; [rungs.ts](../apps/packages/design/src/rungs.ts) — the density and radius rungs), the token record ([tokens.ts](../apps/packages/design/src/tokens.ts) — `themeTokens`, `colors`, `spacing`, `radius`, `typography`, `shadows`, `timing`, `codeColors`, `themePreviewColors`), the motion and cadence primitives ([motion.ts](../apps/packages/design/src/motion.ts), [cadence.ts](../apps/packages/design/src/cadence.ts)), the generated stylesheet (`dist/theme.css`, projected by `scripts/generate-theme.mjs`, not checked in), the shared CSS entrypoints ([product.css](../apps/packages/design/src/css/product.css), [desktop.css](../apps/packages/design/src/css/desktop.css)), the React Native bridge ([react-native.ts](../apps/packages/design/src/react-native.ts)), and the component library under `apps/packages/product-client/src/primitives/**` (root primitives, the six kits under `patterns/` — composer, panel, settings, sidebar, tabs, toast — plus `icons/`, `overlays/`, `utils/`).
 
-**Public surface.** `@proliferate/design/{tokens,palette,rungs,motion,cadence,react-native}`
-and the CSS entrypoints (39 product-client files import the package: 37
-`motion`, 12 `cadence`, 5 `tokens`); `#product/primitives/*` for Desktop/Web
-product code; `design/react-native` for Mobile. Nothing else in the package
-is importable.
+**Public surface.** `@proliferate/design/{tokens,palette,rungs,motion,cadence,react-native}` and the CSS entrypoints (39 product-client files import the package: 37 `motion`, 12 `cadence`, 5 `tokens`); `#product/primitives/*` for Desktop/Web product code; `design/react-native` for Mobile. Nothing else in the package is importable.
 
-**Consumes.** Tailwind and Radix as vendors; nothing of ours. Dependency
-direction is `desktop/web → product-client connected tier → primitives →
-design` and never backwards
-([frontend/packages.md](areas/frontend.md)).
+**Consumes.** Tailwind and Radix as vendors; nothing of ours. Dependency direction is `desktop/web → product-client connected tier → primitives → design` and never backwards ([frontend/packages.md](areas/frontend.md)).
 
-**Laws.** Stated in the sections below and enforced as listed in
-[Changing The Design](#changing-the-design): `tokens.ts` is the number
-authority; tokens are layered raw → semantic → component and never reach
-backwards ([Token Layers](#token-layers)); the type ramp is closed; Radix is contained inside primitives;
-primitives are defined only in the library (FE-STRUCT-1/2); the appearance
-gate bans literal sizes; contrast floors are measured on the built
-stylesheet (PROD-THEME); our styles are never attributed to another product
-(PROD-ATTR); the library's rule of two and at-least-one-call-site rule
-(check_component_library).
+**Laws.** Stated in the sections below and enforced as listed in [Changing The Design](#changing-the-design): `tokens.ts` is the number authority; tokens are layered raw → semantic → component and never reach backwards ([Token Layers](#token-layers)); the type ramp is closed; Radix is contained inside primitives; primitives are defined only in the library (FE-STRUCT-1/2); the appearance gate bans literal sizes; contrast floors are measured on the built stylesheet (PROD-THEME); our styles are never attributed to another product (PROD-ATTR); the library's rule of two and at-least-one-call-site rule (check_component_library).
 
-**Emits.** The generated theme, the component index, and the lint records
-under [lints/product](../lints/product/theme.toml) /
-[lints/frontend](../lints/frontend/structure.toml) that other surfaces are
-checked against.
+**Emits.** The generated theme, the component index, and the lint records under [lints/product](../lints/product/theme.toml) / [lints/frontend](../lints/frontend/structure.toml) that other surfaces are checked against.
 
-**Fences.** Per-surface behavior belongs to the owning
-[systems/product](README.md) document; class
-authoring rules to [frontend/styling.md](areas/frontend.md); the
-appearance-scaling gate's own contract to
-[appearance-scaling.md](systems/settings/appearance-scaling.md);
-package direction to [frontend/packages.md](areas/frontend.md).
+**Fences.** Per-surface behavior belongs to the owning [systems/product](README.md) document; class authoring rules to [frontend/styling.md](areas/frontend.md); the appearance-scaling gate's own contract to [appearance-scaling.md](systems/settings/appearance-scaling.md); package direction to [frontend/packages.md](areas/frontend.md).
 
-**Proof.** `apps/packages/design/scripts/check-theme.mjs` (byte-equal
-re-projection + real Tailwind compile), `scripts/check_theme_contrast.py`,
-`scripts/check_frontend_boundaries.py`, `scripts/report_frontend_structure.py`,
-`scripts/check_component_library.py`, `scripts/check_appearance_scaling.py`,
-`scripts/check_design_attribution.py` — all in the CI "Repo shape checks" and
-"Shared frontend packages" jobs; `primitives/__tests__` (21 files); the
-Tier-2 composer perimeter rendered spec. Current mechanical-gap census is
-the [Current Gaps](#current-gaps) list.
+**Proof.** `apps/packages/design/scripts/check-theme.mjs` (byte-equal re-projection + real Tailwind compile), `scripts/check_theme_contrast.py`, `scripts/check_frontend_boundaries.py`, `scripts/report_frontend_structure.py`, `scripts/check_component_library.py`, `scripts/check_appearance_scaling.py`, `scripts/check_design_attribution.py` — all in the CI "Repo shape checks" and "Shared frontend packages" jobs; `primitives/__tests__` (21 files); the Tier-2 composer perimeter rendered spec. Current mechanical-gap census is the [Current Gaps](#current-gaps) list.
 
 ### Decisions reserved for the founder
 
-The structure above is current and mechanical. The *taste* of the system —
-what it should look and feel like next — is not a spec-writer's call. Each
-item names the options so a ruling can be recorded without re-deriving the
-structure.
+The structure above is current and mechanical. The *taste* of the system — what it should look and feel like next — is not a spec-writer's call. Each item names the options so a ruling can be recorded without re-deriving the structure.
 
 > [!decision] RULED 2026-08-25 (Pablo): both restyle and re-architect.
 > The design system gets a re-architecture *and* a restyle, in that order.
@@ -180,15 +116,11 @@ scripts/git-hooks/pre-commit          staged-file gate; encodes the load-bearing
 Makefile                              git-hooks target wires core.hooksPath scripts/git-hooks
 ```
 
-`apps/packages/product-client/src/primitives` contains root `.ts`/`.tsx` files
-plus the five support directories above. That closure is enforced by
-`PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES` in
-[check_frontend_boundaries.py](../scripts/check_frontend_boundaries.py).
+`apps/packages/product-client/src/primitives` contains root `.ts`/`.tsx` files plus the five support directories above. That closure is enforced by `PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES` in [check_frontend_boundaries.py](../scripts/check_frontend_boundaries.py).
 
 ## Token Layers
 
-The authority is three layers with one direction of reference, so a restyle
-changes the bottom layer and everything above inherits:
+The authority is three layers with one direction of reference, so a restyle changes the bottom layer and everything above inherits:
 
 | Layer | Lives in | What it names | May reference |
 | --- | --- | --- | --- |
@@ -196,9 +128,7 @@ changes the bottom layer and everything above inherits:
 | **Semantic** | `themeTokens` entries tagged `layer: "semantic"` | Roles every surface composes from: `--color-border`, `--color-surface-under`, `--radius-md`, `--height-control`, `--duration-enter`, the closed type ramp. | Raw values, and other semantic tokens. |
 | **Component** | `themeTokens` entries tagged `layer: "component"` | One component's anatomy: `--color-composer-*`, `--diff-view-*`, `--workspace-shell-*`, `--color-sidebar-status-*`, the terminal/compute-target/delegated-agent special-purpose palettes. | Semantic tokens, raw values, and its own literals. |
 
-Two laws follow, both enforced by
-[check-theme.mjs](../apps/packages/design/scripts/check-theme.mjs) on the
-*rendered* values (so they hold however an entry is authored):
+Two laws follow, both enforced by [check-theme.mjs](../apps/packages/design/scripts/check-theme.mjs) on the *rendered* values (so they hold however an entry is authored):
 
 - **A semantic token paints only with raw-layer colors.** Every hex or
   `rgb()`/`rgba()` triple in a semantic value must be a member of the palette.
@@ -209,34 +139,17 @@ Two laws follow, both enforced by
   component tokens. (`var()` fallbacks consumers supply, such as
   `--markdown-font-size`, are not tokens and are exempt.)
 
-**Rungs.** Density and radius are the two geometry axes the product selects
-as a whole. A rung is a complete value set for its axis; the `default` rung
-*is* the token value (the checker pins `--radius-*`, `--height-control`, the
-icon-button boxes and the transcript-turn gaps to it, so there is one record
-rather than two numbers kept in step). Any other rung is projected by the
-generator as an attribute-scoped override block — `:root[data-radius="…"]`,
-`:root[data-density="…"]` — that re-points the same tokens, the geometry twin
-of `:root[data-mode="light"]`. No alternate rung is populated and nothing sets
-either attribute today; populating one is a values-only edit in `rungs.ts`
-that the generator, checker and every consumer already understand.
+**Rungs.** Density and radius are the two geometry axes the product selects as a whole. A rung is a complete value set for its axis; the `default` rung *is* the token value (the checker pins `--radius-*`, `--height-control`, the icon-button boxes and the transcript-turn gaps to it, so there is one record rather than two numbers kept in step). Any other rung is projected by the generator as an attribute-scoped override block — `:root[data-radius="…"]`, `:root[data-density="…"]` — that re-points the same tokens, the geometry twin of `:root[data-mode="light"]`. No alternate rung is populated and nothing sets either attribute today; populating one is a values-only edit in `rungs.ts` that the generator, checker and every consumer already understand.
 
-**Motion** is already layered: every duration, ease and cadence is a named
-token projected from [motion.ts](../apps/packages/design/src/motion.ts)
-(see [Motion](#motion)). An expressive motion vocabulary, if the founder wants
-one, is an *additive* namespace there; it does not change this structure.
+**Motion** is already layered: every duration, ease and cadence is a named token projected from [motion.ts](../apps/packages/design/src/motion.ts) (see [Motion](#motion)). An expressive motion vocabulary, if the founder wants one, is an *additive* namespace there; it does not change this structure.
 
-The special-purpose palettes stay literal by design (see
-[Special-purpose palettes](#special-purpose-palettes)); they are tagged
-`component` so the semantic law leaves them alone.
+The special-purpose palettes stay literal by design (see [Special-purpose palettes](#special-purpose-palettes)); they are tagged `component` so the semantic law leaves them alone.
 
 ## Type
 
 ### The closed ramp
 
-Type is a closed set of semantic roles, not a size scale. Each role authors
-size, line-height, and letter-spacing together, so a caller picks a *job*
-(`text-ui-sm`, `text-chat`) and inherits the whole triple. There is no legal way
-to ask for "13px" in the abstract.
+Type is a closed set of semantic roles, not a size scale. Each role authors size, line-height, and letter-spacing together, so a caller picks a *job* (`text-ui-sm`, `text-chat`) and inherits the whole triple. There is no legal way to ask for "13px" in the abstract.
 
 | Role | Size | Line-height | Letter-spacing | What it is for |
 | --- | --- | --- | --- | --- |
@@ -270,18 +183,9 @@ Two properties are visible in that table and are the ramp's actual design:
   (26/34). The tighter the leading, the more the type reads as an object rather
   than a paragraph.
 
-`readable-code` is the one unitless line-height in the ramp: code font size is
-independently adjustable through the Appearance preference, and a ratio keeps
-the block proportional at any resolved size, where a pinned px leading would not.
+`readable-code` is the one unitless line-height in the ramp: code font size is independently adjustable through the Appearance preference, and a ratio keeps the block proportional at any resolved size, where a pinned px leading would not.
 
-**The ramp is the entire legal vocabulary.** The generated `@theme` block opens
-with `--text-*: initial`, so Tailwind's stock text steps do not exist in the
-compiled stylesheet; the consolidation removed the ten generic
-`--text-xs`/`sm`/`base`/`lg`/`xl` size and line-height properties outright. The
-appearance gate then bans reintroducing them by hand: `text-xs`…`text-9xl`,
-`text-[…]`, `leading-[…]`, raw `font-size:` in CSS, and numeric `fontSize` props
-all fail `FIXED_TEXT_PATTERNS` in
-[check_appearance_scaling.py](../scripts/check_appearance_scaling.py).
+**The ramp is the entire legal vocabulary.** The generated `@theme` block opens with `--text-*: initial`, so Tailwind's stock text steps do not exist in the compiled stylesheet; the consolidation removed the ten generic `--text-xs`/`sm`/`base`/`lg`/`xl` size and line-height properties outright. The appearance gate then bans reintroducing them by hand: `text-xs`…`text-9xl`, `text-[…]`, `leading-[…]`, raw `font-size:` in CSS, and numeric `fontSize` props all fail `FIXED_TEXT_PATTERNS` in [check_appearance_scaling.py](../scripts/check_appearance_scaling.py).
 
 > **The chat/composer pair is CI-locked.**
 > [check-theme.mjs](../apps/packages/design/scripts/check-theme.mjs)
@@ -289,51 +193,23 @@ all fail `FIXED_TEXT_PATTERNS` in
 > `font-size + 8px` and compact composer leading is `font-size + 6px`. Retuning
 > either role onto a separate size ladder fails the design build.
 
-Thirteen of these roles — `uiSm`, `ui`, `chat`, `composer`, `body`,
-`bodyEmphasis`, `workspaceTitle`, `heading`, `title`, `hero`, `sidebarNav`,
-`sidebarRow`, `sidebarBrand` — additionally form the frozen ramp that crosses to
-React Native, and `check-theme.mjs` pins that key list and its order in
-`typography.size`/`lineHeight`/`letterSpacing`. `message`, `chat-meta` and
-`readable-code` are derived roles and exist only in CSS.
+Thirteen of these roles — `uiSm`, `ui`, `chat`, `composer`, `body`, `bodyEmphasis`, `workspaceTitle`, `heading`, `title`, `hero`, `sidebarNav`, `sidebarRow`, `sidebarBrand` — additionally form the frozen ramp that crosses to React Native, and `check-theme.mjs` pins that key list and its order in `typography.size`/`lineHeight`/`letterSpacing`. `message`, `chat-meta` and `readable-code` are derived roles and exist only in CSS.
 
 ### Weight
 
-`--font-weight-control: 450` is the single characteristic control weight, applied
-through the `font-control` class on icon buttons, menus, pickers and sidebar
-rows. It sits a half-step above regular: controls read denser than the prose
-around them without stepping up to medium, which at 11–12px turns into a visible
-bold and makes a toolbar shout.
+`--font-weight-control: 450` is the single characteristic control weight, applied through the `font-control` class on icon buttons, menus, pickers and sidebar rows. It sits a half-step above regular: controls read denser than the prose around them without stepping up to medium, which at 11–12px turns into a visible bold and makes a toolbar shout.
 
-Product prose is authored one notch below it — the `--font-weight-body: 445`
-token, applied to `html, body` in
-[product.css](../apps/packages/design/src/css/product.css) — so the
-whole product renders on a variable-font axis between regular and medium, with
-controls always the heavier of the two. Two weights, 5 units apart, carry the
-entire hierarchy; size and color do the rest.
+Product prose is authored one notch below it — the `--font-weight-body: 445` token, applied to `html, body` in [product.css](../apps/packages/design/src/css/product.css) — so the whole product renders on a variable-font axis between regular and medium, with controls always the heavier of the two. Two weights, 5 units apart, carry the entire hierarchy; size and color do the rest.
 
-The token name is what makes `font-control` a real utility: `--font-weight-*` is
-Tailwind's own font-weight namespace, so naming the token
-`--font-weight-control` is what emits the class. The same trick is why the type
-ramp works — `--text-*` is Tailwind's text namespace, so each role above emits
-`text-<role>` with its line-height and tracking attached. Two consumers compose
-the weight rather than restating it: `--workspace-shell-action-font-weight` is
-`var(--font-weight-control)`, and the right-panel tab system reads the same
-variable in `product.css`.
+The token name is what makes `font-control` a real utility: `--font-weight-*` is Tailwind's own font-weight namespace, so naming the token `--font-weight-control` is what emits the class. The same trick is why the type ramp works — `--text-*` is Tailwind's text namespace, so each role above emits `text-<role>` with its line-height and tracking attached. Two consumers compose the weight rather than restating it: `--workspace-shell-action-font-weight` is `var(--font-weight-control)`, and the right-panel tab system reads the same variable in `product.css`.
 
 ### Tracking primitives
 
-Only two tracking values are named, and only because more than one role uses
-each: `--tracking-heading: -0.01em` (heading, sidebar-brand) and
-`--tracking-tight: -0.025em` (title, hero). Every other role authors its
-letter-spacing inline, because it is used once.
+Only two tracking values are named, and only because more than one role uses each: `--tracking-heading: -0.01em` (heading, sidebar-brand) and `--tracking-tight: -0.025em` (title, hero). Every other role authors its letter-spacing inline, because it is used once.
 
 ### Markdown heading ramp and inline code
 
-Transcript Markdown (`.chat-markdown` in `authenticated.css`) derives its
-whole heading hierarchy and inline-code size from the semantic ramp above
-plus a small set of unitless scale tokens, rather than pinning literal px
-values inside the CSS file — the appearance gate's `fixed-font-size-css` rule
-would otherwise flag a raw px `font-size` there.
+Transcript Markdown (`.chat-markdown` in `authenticated.css`) derives its whole heading hierarchy and inline-code size from the semantic ramp above plus a small set of unitless scale tokens, rather than pinning literal px values inside the CSS file — the appearance gate's `fixed-font-size-css` rule would otherwise flag a raw px `font-size` there.
 
 | Token | Value | Role |
 | --- | --- | --- |
@@ -341,11 +217,7 @@ would otherwise flag a raw px `font-size` there.
 | `--markdown-heading-h4-scale` | `1.0833` | h4 size = `--markdown-font-size` × this scale. |
 | `--text-markdown-inline-code` | `0.92em` | Inline `code` size, relative to the surrounding message text (fenced code blocks are unaffected). |
 
-h1 stays anchored on the semantic `--text-title` role and h2 stays the
-midpoint of `--text-title` and `--markdown-font-size` — both already
-expressed through named roles, so neither needed a new token. h5 and h6 stay
-at 1× (no additional scale-up), matching a compact, uppercase
-micro-heading treatment rather than growing further.
+h1 stays anchored on the semantic `--text-title` role and h2 stays the midpoint of `--text-title` and `--markdown-font-size` — both already expressed through named roles, so neither needed a new token. h5 and h6 stay at 1× (no additional scale-up), matching a compact, uppercase micro-heading treatment rather than growing further.
 
 ### Font slots
 
@@ -354,41 +226,19 @@ micro-heading treatment rather than growing further.
 | `--font-sans` | `-apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, "Segoe UI", sans-serif` | The one UI type slot. Every text role inherits it; nothing else names a UI font. |
 | `--font-mono` | `"Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace` | Code, diffs, terminal, `--diffs-font-family`. |
 
-The sans slot currently ships a native system stack on trial. The previous Geist
-value is preserved in git history, so switching back is a one-value revert — the
-token's own provenance comment records that. Because the slot is single, no
-component can pin a font family: `check-theme.mjs` asserts `product.css`'s
-`:root` sets `font-family: var(--font-sans)` and contains no hand-authored
-stack.
+The sans slot currently ships a native system stack on trial. The previous Geist value is preserved in git history, so switching back is a one-value revert — the token's own provenance comment records that. Because the slot is single, no component can pin a font family: `check-theme.mjs` asserts `product.css`'s `:root` sets `font-family: var(--font-sans)` and contains no hand-authored stack.
 
 ## Color
 
-Color is expressed as roles, never as a palette. A component asks for
-`bg-surface-elevated` or `text-foreground-secondary`; it never asks for a gray.
-Every role has a dark and a light half in the same record, so a new role cannot
-ship half-themed.
+Color is expressed as roles, never as a palette. A component asks for `bg-surface-elevated` or `text-foreground-secondary`; it never asks for a gray. Every role has a dark and a light half in the same record, so a new role cannot ship half-themed.
 
 ### The house form: one neutral ink per mode
 
-Dark foreground and edge overlays derive from white; light neutrals derive from
-one near-black ink, `#1a1c1f`. Light borders, state fills, secondary text,
-control fills, scrollbars, and shadows use that ink with role-specific alpha
-instead of an opaque gray ramp. The alpha form composes over both the white
-content plane and the tinted rail without creating a separate gray for each
-parent surface.
+Dark foreground and edge overlays derive from white; light neutrals derive from one near-black ink, `#1a1c1f`. Light borders, state fills, secondary text, control fills, scrollbars, and shadows use that ink with role-specific alpha instead of an opaque gray ramp. The alpha form composes over both the white content plane and the tinted rail without creating a separate gray for each parent surface.
 
-The percentages are independently authored per mode because equal numeric
-alpha does not produce equal contrast over opposite backgrounds. In light mode,
-secondary text uses 65% ink while the faint tier uses 62%; the latter is the
-lowest clean two-decimal alpha that clears 4.5:1 on every measured plane,
-including the translucent control fill. The contrast contract, not numeric
-symmetry, chooses the rung.
+The percentages are independently authored per mode because equal numeric alpha does not produce equal contrast over opposite backgrounds. In light mode, secondary text uses 65% ink while the faint tier uses 62%; the latter is the lowest clean two-decimal alpha that clears 4.5:1 on every measured plane, including the translucent control fill. The contrast contract, not numeric symmetry, chooses the rung.
 
-Dark foreground-derived roles retain `color-mix(in oklab, …)` for perceptual
-steps. Light neutral overlays use direct `rgba(26, 28, 31, alpha)` values so
-their source ink and composition are explicit. The diff-view family uses
-white-anchored `color-mix(in srgb, #ffffff …, #1a1c1f)` values because those are
-surface-on-surface blends rather than translucent overlays.
+Dark foreground-derived roles retain `color-mix(in oklab, …)` for perceptual steps. Light neutral overlays use direct `rgba(26, 28, 31, alpha)` values so their source ink and composition are explicit. The diff-view family uses white-anchored `color-mix(in srgb, #ffffff …, #1a1c1f)` values because those are surface-on-surface blends rather than translucent overlays.
 
 > **`color-mix()` cannot live in Tailwind's `@theme`, so every default/dark mix
 > projected there carries a resolved literal.** Each such mix declares a
@@ -401,9 +251,7 @@ surface-on-surface blends rather than translucent overlays.
 
 ### Surfaces
 
-A recessed-to-raised ladder in dark; light uses white content over one `#f6f6f6`
-rail, with `#fafafa` reserved for editor/code chrome. Translucent neutral washes
-separate controls from either opaque parent.
+A recessed-to-raised ladder in dark; light uses white content over one `#f6f6f6` rail, with `#fafafa` reserved for editor/code chrome. Translucent neutral washes separate controls from either opaque parent.
 
 | Token | Dark | Light | Role |
 | --- | --- | --- | --- |
@@ -419,22 +267,9 @@ separate controls from either opaque parent.
 | `--color-surface-control` / `--color-muted` | 96% dark control / `#212121` | 4.9% light ink | Control chrome and low raised fills. |
 | `--color-composer-background` | `#2d2d2d` | `#f6f6f6` | The fully opaque composer input surface; light reuses the `#f6f6f6` rail plane. |
 
-The dark ladder steps `#141414 → #181818 → #212121/#222222 → #282828 → #2d2d2d`:
-roughly four to five levels of lightness per step, small enough that no step
-reads as a color change and large enough to separate two adjacent panels
-without a border. The sidebar sits at the `#222222` rung in dark, one step
-lighter than the root. Light deliberately has only the white content plane, the
-`#f6f6f6` rail, and the `#fafafa` editor plane; reusable fills remain alpha ink
-rather than adding opaque intermediate planes.
+The dark ladder steps `#141414 → #181818 → #212121/#222222 → #282828 → #2d2d2d`: roughly four to five levels of lightness per step, small enough that no step reads as a color change and large enough to separate two adjacent panels without a border. The sidebar sits at the `#222222` rung in dark, one step lighter than the root. Light deliberately has only the white content plane, the `#f6f6f6` rail, and the `#fafafa` editor plane; reusable fills remain alpha ink rather than adding opaque intermediate planes.
 
-The composer is opaque in both modes and uses no backdrop filter. That keeps
-transcript paint out of the input surface and avoids re-blurring the transcript
-while typing. It takes the existing `#f6f6f6` rail plane rather than a fourth
-opaque light plane, so the count above stays at three. Light combines a full
-CSS-pixel `--color-border-heavy` perimeter with a controlled ink-tinted lift;
-the edge keeps the full rounded silhouette unambiguous and the lift makes the
-ordinary empty composer read as an available input against white. Dark keeps
-its stronger fill step and no perimeter or shadow paint.
+The composer is opaque in both modes and uses no backdrop filter. That keeps transcript paint out of the input surface and avoids re-blurring the transcript while typing. It takes the existing `#f6f6f6` rail plane rather than a fourth opaque light plane, so the count above stays at three. Light combines a full CSS-pixel `--color-border-heavy` perimeter with a controlled ink-tinted lift; the edge keeps the full rounded silhouette unambiguous and the lift makes the ordinary empty composer read as an available input against white. Dark keeps its stronger fill step and no perimeter or shadow paint.
 
 ### Borders
 
@@ -445,10 +280,7 @@ its stronger fill step and no perimeter or shadow paint.
 | `--color-border-heavy` | 12% white | 18% light ink | Active/selected borders and deliberate edges. |
 | `--color-input` | 12% white | 20% light ink | Form-control outline. |
 
-Light's values are stronger than the visual proposal's 4.9% / 7.8% / 11.7%
-steps because those missed the repository's 1.25:1 edge floor. The chosen alpha
-ramp keeps every weight composed from the one ink while clearing the enforced
-floor on white, the rail, and the translucent control fill.
+Light's values are stronger than the visual proposal's 4.9% / 7.8% / 11.7% steps because those missed the repository's 1.25:1 edge floor. The chosen alpha ramp keeps every weight composed from the one ink while clearing the enforced floor on white, the rail, and the translucent control fill.
 
 ### Text
 
@@ -462,11 +294,7 @@ floor on white, the rail, and the translucent control fill.
 | `--color-sidebar-foreground` | 85% | 85% | Sidebar body text: below primary, above secondary. |
 | `--color-sidebar-muted-foreground` | 48.1% white | 62% light ink | Sidebar meta, including controls painted on the rail. |
 
-The light faint tier is deliberately close to secondary: 55% light ink resolves
-to about 3.74–3.84:1 across the actual planes, while 62% clears 4.5:1 everywhere.
-The guard measures white, rail, editor, control, muted, card, popover, and raised
-planes after alpha composition. `muted-foreground` and `faint` remain distinct
-role names because hundreds of call sites use them.
+The light faint tier is deliberately close to secondary: 55% light ink resolves to about 3.74–3.84:1 across the actual planes, while 62% clears 4.5:1 everywhere. The guard measures white, rail, editor, control, muted, card, popover, and raised planes after alpha composition. `muted-foreground` and `faint` remain distinct role names because hundreds of call sites use them.
 
 ### Interaction states
 
@@ -476,19 +304,9 @@ role names because hundreds of call sites use them.
 | `--color-selected` | 3.2% white | 6.5% light ink | Persistent selection. |
 | `--color-active` | 5.2% white | 7.8% light ink | Press/open (`active:`, `data-[state=open]`). |
 
-One vocabulary is reused everywhere. The light ladder is ordered so selected
-carries more ink than hover and active carries more than selected; all adjacent
-steps clear the state-distinction floor. Dark retains its historical ordering,
-with the selected-direction miss recorded by the contrast ratchet rather than
-hidden.
+One vocabulary is reused everywhere. The light ladder is ordered so selected carries more ink than hover and active carries more than selected; all adjacent steps clear the state-distinction floor. Dark retains its historical ordering, with the selected-direction miss recorded by the contrast ratchet rather than hidden.
 
-Consumers use these three roles directly — the shell, sidebar, lists and menus
-all paint from the same three tokens, so they cannot drift apart. The gate
-reinforces this from the class side: `bg-accent`/`bg-sidebar-accent` are
-banned as retired state spellings (`OLD_ACCENT_RE`), and any
-`bg-foreground/<alpha>` at or below 10% is banned outright
-(`FOREGROUND_ALPHA_RE`) — that is precisely the shape of an ad-hoc overlay
-invented where one of these three belongs.
+Consumers use these three roles directly — the shell, sidebar, lists and menus all paint from the same three tokens, so they cannot drift apart. The gate reinforces this from the class side: `bg-accent`/`bg-sidebar-accent` are banned as retired state spellings (`OLD_ACCENT_RE`), and any `bg-foreground/<alpha>` at or below 10% is banned outright (`FOREGROUND_ALPHA_RE`) — that is precisely the shape of an ad-hoc overlay invented where one of these three belongs.
 
 ### Semantic families
 
@@ -505,16 +323,9 @@ invented where one of these three belongs.
 | | `--color-warning-subtle` | `rgba(242,201,76,0.14)` | same |
 | Info | `--color-info` | `#339cff` | `#0b6bcb` |
 
-Each family is independently authored per mode. These status values are outside
-the neutral retune: changing the one-ink ladder must not move success,
-destructive, warning, or review-state hues.
+Each family is independently authored per mode. These status values are outside the neutral retune: changing the one-ink ladder must not move success, destructive, warning, or review-state hues.
 
-Git and review state carry a parallel set of roles rather than reusing these:
-`--color-git-green`/`-red`/`-yellow`, `--color-diff-added`,
-`--color-diff-deleted`, `--color-pr-merged` (`#ad7bf9`/`#8250df`),
-`--color-status-in-progress`. Git green matches success in each mode, but the
-roles stay separate so diff surface tints can move without changing every
-success badge.
+Git and review state carry a parallel set of roles rather than reusing these: `--color-git-green`/`-red`/`-yellow`, `--color-diff-added`, `--color-diff-deleted`, `--color-pr-merged` (`#ad7bf9`/`#8250df`), `--color-status-in-progress`. Git green matches success in each mode, but the roles stay separate so diff surface tints can move without changing every success badge.
 
 ### Accents
 
@@ -527,18 +338,11 @@ success badge.
 | `--color-ring` | 28% white | `#0b6bcb` | Focus ring. |
 | `--color-highlight` | `rgba(51, 156, 255, 0.12)` | `#e5f2ff` | Search/selection highlight fill. |
 
-**Primary is the inverted foreground pair, not a brand hue.** The primary button
-is white-on-near-black in dark and near-black-on-white in light. The product's
-one chromatic accent is blue, so blue means link, focus, information, or a
-called-out affordance and never the primary action. Light uses `#0b6bcb` for
-link, focus, info, special, and sidebar-ring roles; dark uses a brighter link
-step where prose contrast requires it. There are no per-surface link colors.
+**Primary is the inverted foreground pair, not a brand hue.** The primary button is white-on-near-black in dark and near-black-on-white in light. The product's one chromatic accent is blue, so blue means link, focus, information, or a called-out affordance and never the primary action. Light uses `#0b6bcb` for link, focus, info, special, and sidebar-ring roles; dark uses a brighter link step where prose contrast requires it. There are no per-surface link colors.
 
 ### Special-purpose palettes
 
-These are closed sets whose members exist to be indexed, not composed. They are
-listed by count because the individual values carry no design rule beyond
-"distinguishable, and stable per identity".
+These are closed sets whose members exist to be indexed, not composed. They are listed by count because the individual values carry no design rule beyond "distinguishable, and stable per identity".
 
 | Family | Count | Purpose |
 | --- | --- | --- |
@@ -562,27 +366,13 @@ The system is near-flat by design. Three elevation roles are authored per mode:
 | `--shadow-popover` | `0 4px 12px rgb(0 0 0 / 0.12)` | 0.5px 5% ink edge + 12px 10% ink shadow | Popovers, menus, tooltips, toasts. |
 | `--shadow-modal` | `0 25px 50px -12px rgb(0 0 0 / 0.5)` | `0 16px 40px rgba(26, 28, 31, 0.18)` | Dialogs, modal shells, command palette. |
 
-Depth is carried by borders and surface steps first, shadow second. Light shadow
-color derives from the same `#1a1c1f` ink as the neutral ladder, so elevation
-does not reintroduce a blue slate cast.
+Depth is carried by borders and surface steps first, shadow second. Light shadow color derives from the same `#1a1c1f` ink as the neutral ladder, so elevation does not reintroduce a blue slate cast.
 
-Two component roles refine the shared scale. The light user-message bubble uses
-a 5% ink 2px shadow. The light composer uses `--shadow-composer`: a full
-border-heavy perimeter followed by 5px and 20px ink-tinted layers. Both roles
-resolve to `none` in dark, where their opaque surface steps already provide
-separation. The composer recipe does not change layout and remains controlled
-enough to read as an in-page input rather than a popover.
+Two component roles refine the shared scale. The light user-message bubble uses a 5% ink 2px shadow. The light composer uses `--shadow-composer`: a full border-heavy perimeter followed by 5px and 20px ink-tinted layers. Both roles resolve to `none` in dark, where their opaque surface steps already provide separation. The composer recipe does not change layout and remains controlled enough to read as an in-page input rather than a popover.
 
-From the class side, the appearance gate bans every other elevation spelling —
-`shadow-sm/md/lg/xl/2xl/inner` (stock Tailwind emits a non-token shadow),
-`shadow-floating`, `shadow-keystone`, and `shadow-[…]` — through
-`OLD_SHADOW_RE`.
+From the class side, the appearance gate bans every other elevation spelling — `shadow-sm/md/lg/xl/2xl/inner` (stock Tailwind emits a non-token shadow), `shadow-floating`, `shadow-keystone`, and `shadow-[…]` — through `OLD_SHADOW_RE`.
 
-React Native ships hand-authored numeric approximations in
-[react-native.ts](../apps/packages/design/src/react-native.ts)
-(`mobileShadow.subtle`, `mobileShadow.floating`) because RN never parses CSS
-shadow strings; each entry is comment-linked to the CSS role it approximates, and
-`check-theme.mjs` pins the two-key shape.
+React Native ships hand-authored numeric approximations in [react-native.ts](../apps/packages/design/src/react-native.ts) (`mobileShadow.subtle`, `mobileShadow.floating`) because RN never parses CSS shadow strings; each entry is comment-linked to the CSS role it approximates, and `check-theme.mjs` pins the two-key shape.
 
 ## Spacing & Containers
 
@@ -594,11 +384,7 @@ The cross-platform spacing export is a sparse 4px scale:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | px | 4 | 8 | 12 | 16 | 20 | 24 | 32 | 40 | 48 |
 
-It is sparse on purpose: 7, 9 and 11 are absent because nothing needs 28, 36 or
-44px, and adding a key is how a one-off measurement becomes a system value. On
-the web these keys coincide with Tailwind's own spacing scale, so `gap-2` and
-`p-4` already mean 8px and 16px; the export exists so React Native resolves the
-same numbers from the same authority.
+It is sparse on purpose: 7, 9 and 11 are absent because nothing needs 28, 36 or 44px, and adding a key is how a one-off measurement becomes a system value. On the web these keys coincide with Tailwind's own spacing scale, so `gap-2` and `p-4` already mean 8px and 16px; the export exists so React Native resolves the same numbers from the same authority.
 
 ### Transcript measure
 
@@ -612,24 +398,9 @@ Five tokens define how a transcript reads:
 | `--spacing-transcript-turn` | `1rem` (16px) | Vertical rhythm between top-level turns. |
 | `--spacing-transcript-turn-tight` | `0.25rem` (4px) | Vertical rhythm within a turn, for closely related siblings (e.g. assistant prose and its action-row footer). |
 
-The width tokens name three *available* measures even though conversation
-prose currently uses one: the new-chat flow, live transcript, composer, and
-wide blocks (tables, code) all fill the 48rem thread column, so the measure
-does not change after launch. The 40rem readable tier remains available to
-prose-heavy surfaces outside that flow, while the 56rem wide tier records the
-space wide blocks may use once a deliberate breakout treatment lands. Two
-spacing tiers make a real distinction vertically: turn-to-turn
-rhythm and within-turn rhythm are two different rungs, not one shared gap.
+The width tokens name three *available* measures even though conversation prose currently uses one: the new-chat flow, live transcript, composer, and wide blocks (tables, code) all fill the 48rem thread column, so the measure does not change after launch. The 40rem readable tier remains available to prose-heavy surfaces outside that flow, while the 56rem wide tier records the space wide blocks may use once a deliberate breakout treatment lands. Two spacing tiers make a real distinction vertically: turn-to-turn rhythm and within-turn rhythm are two different rungs, not one shared gap.
 
-These names read oddly because they are authored *into Tailwind's own
-namespaces* — `--container-*` and `--spacing-*` — which makes
-`max-w-transcript-readable`, `max-w-transcript-thread`, `max-w-transcript-wide`,
-`gap-transcript-turn` and `gap-transcript-turn-tight` real generated utilities
-rather than bracket values. For the turn gaps that is gate-forced: a raw
-`gap-[16px]` fails `ARBITRARY_GAP_RE`. For the widths it is a consistency
-choice — the gate has no `max-w` rule. Note that Tailwind v4 does not derive
-`space-y-*` from the spacing namespace, so a turn stack is a flex column with
-`gap-transcript-turn`, not a `space-y-` variant.
+These names read oddly because they are authored *into Tailwind's own namespaces* — `--container-*` and `--spacing-*` — which makes `max-w-transcript-readable`, `max-w-transcript-thread`, `max-w-transcript-wide`, `gap-transcript-turn` and `gap-transcript-turn-tight` real generated utilities rather than bracket values. For the turn gaps that is gate-forced: a raw `gap-[16px]` fails `ARBITRARY_GAP_RE`. For the widths it is a consistency choice — the gate has no `max-w` rule. Note that Tailwind v4 does not derive `space-y-*` from the spacing namespace, so a turn stack is a flex column with `gap-transcript-turn`, not a `space-y-` variant.
 
 ### The 28px compact-control system
 
@@ -643,12 +414,7 @@ The workspace shell is built on one control height:
 | `--workspace-shell-action-radius` | `0.5rem` (8px) | Shell action corner. |
 | `--workspace-shell-tab-radius` | `0.375rem` (6px) | Tab corner. |
 
-28px is small enough that a tab strip and a toolbar read as chrome rather than
-content, and large enough to hold a 16px glyph with 6px of surround. Because
-actions and tabs share the height, the shell has a single horizontal rhythm; the
-remaining shell tokens are all state colors (transparent/hover/active/selected
-background and border) that alias the interaction ladder, so a tab and a toolbar
-button respond identically to the pointer.
+28px is small enough that a tab strip and a toolbar read as chrome rather than content, and large enough to hold a 16px glyph with 6px of surround. Because actions and tabs share the height, the shell has a single horizontal rhythm; the remaining shell tokens are all state colors (transparent/hover/active/selected background and border) that alias the interaction ladder, so a tab and a toolbar button respond identically to the pointer.
 
 ## Radii
 
@@ -663,32 +429,15 @@ button respond identically to the pointer.
 | `--radius-composer` | `1.75rem` (28px) | The composer frame, as its own name — deliberately softer than the panel scale. |
 | `--radius` | `0.5rem` (8px) | The unqualified base, equal to `md`. |
 
-**Radius grows with the element.** The named steps run 6 → 8 → 10 → 12 → 16px
-across elements that themselves grow from a 30px sidebar row to a 520px command
-palette, so the ratio of corner to element stays in a narrow band and nothing
-reads either boxy or over-rounded at its own scale. The sidebar row moved from
-`--radius-sm` to `--radius-lg` (6px → 10px) in the sidebar retune — a softer
-corner reads better against the sidebar's own recessed surface than it did
-against the previous, slightly-raised one.
+**Radius grows with the element.** The named steps run 6 → 8 → 10 → 12 → 16px across elements that themselves grow from a 30px sidebar row to a 520px command palette, so the ratio of corner to element stays in a narrow band and nothing reads either boxy or over-rounded at its own scale. The sidebar row moved from `--radius-sm` to `--radius-lg` (6px → 10px) in the sidebar retune — a softer corner reads better against the sidebar's own recessed surface than it did against the previous, slightly-raised one.
 
-`--radius-composer` is a named 28px rather than a reference to any shared step
-because the composer's corner is its own anatomy value — softer than the
-dialogs' `xl`, and past the top of the named scale — tunable without moving every dialog
-(`AgentHarnessConfigComposer` already overrides it locally).
-`--radius` duplicates `md` as the unqualified base for consumers that ask for
-"the" radius.
+`--radius-composer` is a named 28px rather than a reference to any shared step because the composer's corner is its own anatomy value — softer than the dialogs' `xl`, and past the top of the named scale — tunable without moving every dialog (`AgentHarnessConfigComposer` already overrides it locally). `--radius` duplicates `md` as the unqualified base for consumers that ask for "the" radius.
 
-Arbitrary radius is banned at the class level: `rounded-[…]` in any directional
-spelling fails `ARBITRARY_RADIUS_RE`.
+Arbitrary radius is banned at the class level: `rounded-[…]` in any directional spelling fails `ARBITRARY_RADIUS_RE`.
 
 ## Motion
 
-Motion has two scales that are deliberately *not* aliased to each other, plus a
-set of choreography delays and a small feedback scale for confirmation
-affordances. All four live in
-[motion.ts](../apps/packages/design/src/motion.ts) and are projected
-into CSS custom properties by the generator, so no component authors a
-millisecond or a bezier.
+Motion has two scales that are deliberately *not* aliased to each other, plus a set of choreography delays and a small feedback scale for confirmation affordances. All four live in [motion.ts](../apps/packages/design/src/motion.ts) and are projected into CSS custom properties by the generator, so no component authors a millisecond or a bezier.
 
 ### Interaction durations
 
@@ -702,12 +451,7 @@ millisecond or a bezier.
 | `--duration-pop` | 280ms | A compact item joining an already-mounted group. |
 | `--duration-emphasized` | 300ms | Emphasized, spring-led product moments. |
 
-**Exits are deliberately faster than entrances** — 120ms out against 160ms in.
-An entrance is information arriving and can afford to be seen; an exit is the
-user having already moved on, and matching the entrance duration makes dismissal
-feel sticky. The scale as a whole is ordered by how much geometry moves: color
-(120) < content (160) < height (200) < panel (240) < a compact item joining a
-group (280) < a moment you are meant to notice (300).
+**Exits are deliberately faster than entrances** — 120ms out against 160ms in. An entrance is information arriving and can afford to be seen; an exit is the user having already moved on, and matching the entrance duration makes dismissal feel sticky. The scale as a whole is ordered by how much geometry moves: color (120) < content (160) < height (200) < panel (240) < a compact item joining a group (280) < a moment you are meant to notice (300).
 
 ### Easing
 
@@ -719,10 +463,7 @@ group (280) < a moment you are meant to notice (300).
 | `--ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | Symmetric transitions and exits. |
 | `--ease-linear` | `linear` | Progress and streaming reveal, where constant rate is the point. |
 
-The paired defaults are visible in the composed tokens: `--animate-popover-in`
-is `popover-in var(--duration-enter) var(--ease-out-quint)`, and exits in
-`product.css` consistently pair `--duration-exit` with `--ease-standard` —
-entrances decelerate, exits do not need to.
+The paired defaults are visible in the composed tokens: `--animate-popover-in` is `popover-in var(--duration-enter) var(--ease-out-quint)`, and exits in `product.css` consistently pair `--duration-exit` with `--ease-standard` — entrances decelerate, exits do not need to.
 
 ### Activity cadences
 
@@ -742,31 +483,13 @@ entrances decelerate, exits do not need to.
 
 ### Choreography delays
 
-`delay.autoHideScrollbarMs: 700`, `delay.hoverCardHideMs: 120`,
-`delay.levelBarStaggerMs: 110`. These are waits, not animations: how long a
-scrollbar lingers before hiding, how long a hover card tolerates the pointer
-leaving, how far apart stepped level bars fire. They live with motion because
-they are perceived as part of the same choreography, and JS consumers that must
-stay in lockstep with CSS import them and format through `motion.cssMs()`.
+`delay.autoHideScrollbarMs: 700`, `delay.hoverCardHideMs: 120`, `delay.levelBarStaggerMs: 110`. These are waits, not animations: how long a scrollbar lingers before hiding, how long a hover card tolerates the pointer leaving, how far apart stepped level bars fire. They live with motion because they are perceived as part of the same choreography, and JS consumers that must stay in lockstep with CSS import them and format through `motion.cssMs()`.
 
-The same delay scale also owns the todo progress pill's choreography
-(`delay.todoPillStepLingerMs: 3400`, `delay.todoPillStepHideMs: 4000`,
-`delay.todoPillHoverLingerMs: 1200`, `delay.todoPillHoverHideMs: 1800`: how
-long the pill lingers after a step advance or after the pointer leaves before
-its fade starts and finishes), a ghost tab row's collapse window
-(`delay.ghostRowFinalizeMs: 280`: covers `duration.disclosureMs` plus
-timer-scheduling slack so a deleted row's disclosure transition finishes
-before it is torn down), and the bound on an optimistic archive/unarchive
-POST's outcome (`delay.optimisticSettleTimeoutMs: 12_000`: past this the
-outcome is treated as genuinely unknown rather than a false failure).
+The same delay scale also owns the todo progress pill's choreography (`delay.todoPillStepLingerMs: 3400`, `delay.todoPillStepHideMs: 4000`, `delay.todoPillHoverLingerMs: 1200`, `delay.todoPillHoverHideMs: 1800`: how long the pill lingers after a step advance or after the pointer leaves before its fade starts and finishes), a ghost tab row's collapse window (`delay.ghostRowFinalizeMs: 280`: covers `duration.disclosureMs` plus timer-scheduling slack so a deleted row's disclosure transition finishes before it is torn down), and the bound on an optimistic archive/unarchive POST's outcome (`delay.optimisticSettleTimeoutMs: 12_000`: past this the outcome is treated as genuinely unknown rather than a false failure).
 
 ### Feedback affordances
 
-`motion.feedback` is a third, smaller scale for a control flipping to a
-confirmation label and then reverting — not an animation and not a
-choreography wait. `feedback.copiedResetMs: 2_000` is how long a control reads
-"Copied" before reverting to its resting label; every copy-to-clipboard
-control shares this one token rather than each owning its own reset literal.
+`motion.feedback` is a third, smaller scale for a control flipping to a confirmation label and then reverting — not an animation and not a choreography wait. `feedback.copiedResetMs: 2_000` is how long a control reads "Copied" before reverting to its resting label; every copy-to-clipboard control shares this one token rather than each owning its own reset literal.
 
 ### Loading treatments
 
@@ -783,10 +506,7 @@ control shares this one token rather than each owning its own reset literal.
 > fast paths stay treatment-free; once a treatment is up it holds for 300ms so a
 > just-appeared spinner cannot flash back out.
 
-The [`LoadingBoundary`](../apps/packages/product-client/src/primitives/LoadingBoundary.tsx)
-primitive is the single owner of that state machine. Surfaces never hand-roll a
-`content-fade-in` + `animation-delay` show-delay again; they pass a discriminated
-`pending | empty | ready` state and a treatment slot. Doctrine, all load-bearing:
+The [`LoadingBoundary`](../apps/packages/product-client/src/primitives/LoadingBoundary.tsx) primitive is the single owner of that state machine. Surfaces never hand-roll a `content-fade-in` + `animation-delay` show-delay again; they pass a discriminated `pending | empty | ready` state and a treatment slot. Doctrine, all load-bearing:
 
 - The state is discriminated, never a boolean. `empty` is a resolved outcome and
   may only render after data lands; while `pending` the boundary shows the class
@@ -840,25 +560,9 @@ primitive is the single owner of that state machine. Surfaces never hand-roll a
 | `--icon-large` | `1.666667em` | 20px | 21.7px | 23.3px | Emphasized inline glyphs. |
 | `--icon-display` | `2em` | 24px | 26px | 28px | Empty-state and display glyphs. |
 
-**Sizing glyphs in `em` is what makes the Appearance font preference work.** The
-two odd-looking ratios are exact by construction: `1.230769em × 13px = 16px`, so
-a paired glyph lands at 16px beside compact UI text; `1.333333em × 12px = 16px`,
-so a control glyph lands at 16px when its owner uses the `ui-sm` role. At the
-current Default rung, compact UI and sidebar text are 13px while reading text
-is 14px, so the same proportional tiers resolve to the values shown above.
-Because each multiplier is relative, it tracks the user's font preference
-automatically where a fixed `size-4` would not.
+**Sizing glyphs in `em` is what makes the Appearance font preference work.** The two odd-looking ratios are exact by construction: `1.230769em × 13px = 16px`, so a paired glyph lands at 16px beside compact UI text; `1.333333em × 12px = 16px`, so a control glyph lands at 16px when its owner uses the `ui-sm` role. At the current Default rung, compact UI and sidebar text are 13px while reading text is 14px, so the same proportional tiers resolve to the values shown above. Because each multiplier is relative, it tracks the user's font preference automatically where a fixed `size-4` would not.
 
-The sidebar indicator and compact tiers intentionally share a current `1em`
-value while retaining distinct semantic roles: sidebar glyphs can be retuned
-without changing general inline glyphs. The tiers are projected as
-`icon-status`/`icon-compact`/`icon-paired`/
-`icon-control`/`icon-large`/`icon-display` utilities in
-[product.css](../apps/packages/design/src/css/product.css). The appearance gate
-holds the line at every glyph call site: fixed `size`/`width`/`height` attributes
-and utilities on owned glyph tags, `[&_svg]:size-N` descendant sizing,
-`iconClassName`/`glyphClassName` with fixed sizes, glyph-named class constants,
-local glyph component defaults, and `--*icon*-size:` CSS variables all fail.
+The sidebar indicator and compact tiers intentionally share a current `1em` value while retaining distinct semantic roles: sidebar glyphs can be retuned without changing general inline glyphs. The tiers are projected as `icon-status`/`icon-compact`/`icon-paired`/ `icon-control`/`icon-large`/`icon-display` utilities in [product.css](../apps/packages/design/src/css/product.css). The appearance gate holds the line at every glyph call site: fixed `size`/`width`/`height` attributes and utilities on owned glyph tags, `[&_svg]:size-N` descendant sizing, `iconClassName`/`glyphClassName` with fixed sizes, glyph-named class constants, local glyph component defaults, and `--*icon*-size:` CSS variables all fail.
 
 ### Control hit targets
 
@@ -868,29 +572,11 @@ local glyph component defaults, and `--*icon*-size:` CSS variables all fail.
 | `--size-icon-button-md` | `1.5rem` (24px) | `size-icon-button-md` |
 | `--size-icon-button-lg` | `1.75rem` (28px) | `size-icon-button-lg` |
 
-**Hit-target geometry belongs on the wrapper; glyph size belongs on the glyph.**
-That split is the reason the container scale is its own set of tokens rather than
-a padding convention: the glyph must scale with the user's font preference, and
-the pointer target must not. The three steps are 4px apart and top out at the
-shell's 28px control height, so an icon button can sit in a dense list (20px), a
-pane toolbar (24px), or the shell (28px) without new geometry. The generator
-emits each as a square `width`+`height` utility.
+**Hit-target geometry belongs on the wrapper; glyph size belongs on the glyph.** That split is the reason the container scale is its own set of tokens rather than a padding convention: the glyph must scale with the user's font preference, and the pointer target must not. The three steps are 4px apart and top out at the shell's 28px control height, so an icon button can sit in a dense list (20px), a pane toolbar (24px), or the shell (28px) without new geometry. The generator emits each as a square `width`+`height` utility.
 
-Because these utilities set both dimensions, they are registered in
-tailwind-merge's stock `size` group in
-[tw-merge.ts](../apps/packages/product-client/src/primitives/utils/tw-merge.ts). Unregistered,
-a consumer overriding a component's own `h-7 w-7` with `size-icon-button-sm`
-would keep both classes and lose on generated-CSS source order — the token
-survives the merge but never wins the cascade. The registration is locked against
-the generated theme's emitted utilities by a drift test, so adding a fourth tier
-without registering it fails.
+Because these utilities set both dimensions, they are registered in tailwind-merge's stock `size` group in [tw-merge.ts](../apps/packages/product-client/src/primitives/utils/tw-merge.ts). Unregistered, a consumer overriding a component's own `h-7 w-7` with `size-icon-button-sm` would keep both classes and lose on generated-CSS source order — the token survives the merge but never wins the cascade. The registration is locked against the generated theme's emitted utilities by a drift test, so adding a fourth tier without registering it fails.
 
-[RowActionIconButton.tsx](../apps/packages/product-client/src/primitives/RowActionIconButton.tsx)
-is the sanctioned primitive for hover-revealed row actions: a 28px box with an
-`icon-control` glyph, hover/active overlays, and a reveal contract expressed
-entirely in opacity (`group-hover`, `group-focus-within`, `focus-visible`, and
-`data-[state=open]`), so a colors-only transition cannot drop the fade. New
-row-action affordances compose it rather than re-deriving the box/glyph pairing.
+[RowActionIconButton.tsx](../apps/packages/product-client/src/primitives/RowActionIconButton.tsx) is the sanctioned primitive for hover-revealed row actions: a 28px box with an `icon-control` glyph, hover/active overlays, and a reveal contract expressed entirely in opacity (`group-hover`, `group-focus-within`, `focus-visible`, and `data-[state=open]`), so a colors-only transition cannot drop the fade. New row-action affordances compose it rather than re-deriving the box/glyph pairing.
 
 ## Layering
 
@@ -905,30 +591,15 @@ row-action affordances compose it rather than re-deriving the box/glyph pairing.
 | `--z-tooltip` | 70 | Tooltips and hover cards — above toasts, because a tooltip can be triggered from a surface a toast overlaps. |
 | `--z-top` | 80 | The last resort: native window-control safe areas, drag layers. |
 
-Eight named roles, projected as `z-base` … `z-top` utilities. Steps of 10 leave
-room to insert a role between two existing ones without renumbering, and 30 is
-currently unused. The ordering is a stacking *contract*: a consumer picks the
-role its element plays, and the numbers stay a private detail — which is exactly
-what lets `HeaderChatTab` express "resting / hovered / active" as
-`z-base` → `z-raised` → `z-sticky` instead of three magic numbers.
+Eight named roles, projected as `z-base` … `z-top` utilities. Steps of 10 leave room to insert a role between two existing ones without renumbering, and 30 is currently unused. The ordering is a stacking *contract*: a consumer picks the role its element plays, and the numbers stay a private detail — which is exactly what lets `HeaderChatTab` express "resting / hovered / active" as `z-base` → `z-raised` → `z-sticky` instead of three magic numbers.
 
-Arbitrary `z-[…]` fails `ARBITRARY_Z_RE`. Stock numeric `z-0/10/20/30/40/50` is
-censused per file by `STANDARD_Z_RE` and may only shrink: those spellings collide
-with the ladder while carrying no role, so no new site can be added, and the
-remaining ones burn down as consumers migrate.
+Arbitrary `z-[…]` fails `ARBITRARY_Z_RE`. Stock numeric `z-0/10/20/30/40/50` is censused per file by `STANDARD_Z_RE` and may only shrink: those spellings collide with the ladder while carrying no role, so no new site can be added, and the remaining ones burn down as consumers migrate.
 
 ## Component Library
 
-The value system above is consumed through a closed set of components. This
-section owns the tier model, the governance rule that keeps feature code from
-inventing new visual vocabulary, and the sanctioned index of what the library
-actually ships.
+The value system above is consumed through a closed set of components. This section owns the tier model, the governance rule that keeps feature code from inventing new visual vocabulary, and the sanctioned index of what the library actually ships.
 
-One non-component module lives inside a tier directory:
-[popover-surface.ts](../apps/packages/product-client/src/primitives/popover-surface.ts)
-holds the shared popover frame/surface class constants composed by `Popover`,
-`DropdownMenu`, and `PopoverButton`. Like the infrastructure directories, it is
-not a component: no index row below, no export subpath.
+One non-component module lives inside a tier directory: [popover-surface.ts](../apps/packages/product-client/src/primitives/popover-surface.ts) holds the shared popover frame/surface class constants composed by `Popover`, `DropdownMenu`, and `PopoverButton`. Like the infrastructure directories, it is not a component: no index row below, no export subpath.
 
 ### The five jobs of UI code
 
@@ -950,9 +621,7 @@ Two corollaries. State stacks have exactly one owner: a hover/active/disabled/fo
 
 ### The library model
 
-Three tiers inside `product-client/src/primitives`, organized by **component
-role, never by feature area** — a component's name describes what it does, not
-where it is used:
+Three tiers inside `product-client/src/primitives`, organized by **component role, never by feature area** — a component's name describes what it does, not where it is used:
 
 - **Root files** — the base tier. Holds both the raw Radix (and other vendor)
   wrapper families — `Dialog`, `Popover`, `DropdownMenu`,
@@ -978,8 +647,7 @@ where it is used:
   components in the atom/composition sense, so they get their own tier rather
   than living inside root primitives or `patterns/`.
 
-A fourth tier lives in ProductClient because of an import-direction constraint,
-not a different role:
+A fourth tier lives in ProductClient because of an import-direction constraint, not a different role:
 
 - **`product-client/src/components/patterns/`** — domain-aware patterns. Same composition rule
   as `product-client/src/primitives/patterns/` (built from primitives/patterns + tokens), but this tier
@@ -991,15 +659,11 @@ not a different role:
 
   Admission to this tier is mechanical: the component's public props must reference a domain noun type — imported from `#product/domain/**` or `#product/lib/domain/**`, or a locally declared view type that the re-audit relocates there — AND the component must compose two or more library components (`SecretManagementPanel` passes, with consumers in the personal, organization, and repo secrets panes). Anything less is a presenter function feeding a pure pattern instead — the mapping still gets exactly one home, beside its types under `#product/lib/domain/**`, and the library stays smaller. The remaining rows that predate this test are grandfathered pending re-audit — see Current Gaps. This tier is a shelf, not a landfill; the settings kit's descent into `primitives/patterns/settings/` and the noun re-audit (which sent `ProductPageShell` down to `patterns/`, `ModelTable` out to its sole consumer, and `billingGateView` to `lib/domain/`) have both shrunk it.
 
-There is no fourth content tier inside `product-client/src/primitives` (no
-`surfaces/`, no feature-keyed folder): a component's tier is always a root
-primitive, pattern, or icon module, decided by role.
+There is no fourth content tier inside `product-client/src/primitives` (no `surfaces/`, no feature-keyed folder): a component's tier is always a root primitive, pattern, or icon module, decided by role.
 
 ### Governance rule
 
-Feature code (pages, panes, and screens under `product-client` outside
-`components/patterns/`, plus `apps/desktop` and `apps/web`) composes library
-components and `design` tokens. It does not invent new visual vocabulary:
+Feature code (pages, panes, and screens under `product-client` outside `components/patterns/`, plus `apps/desktop` and `apps/web`) composes library components and `design` tokens. It does not invent new visual vocabulary:
 
 - **No raw Radix imports outside the library.** Every `@radix-ui/*` import must
   resolve to a root file directly under `product-client/src/primitives/` or any
@@ -1055,9 +719,7 @@ The judgment half of enforcement. Every PR touching frontend components gets rev
 
 ### The sanctioned index
 
-Every component below has one canonical `#product/primitives/...` subpath and a
-row here. A styled component with no row here is not library-sanctioned; the
-index is the closed set, not a sample of it. Closure is mechanical in both directions: `registry-row-without-file` fails on a row whose file is gone, and `tier-file-without-registry-row` fails on a module that lives in a tier directory with no row — the support layers (`utils`, `overlays`, `icons`), the modules named in `NON_COMPONENT_TIER_FILES`, and a component's own private parts (imported only from inside its folder) are the whole of the exemption.
+Every component below has one canonical `#product/primitives/...` subpath and a row here. A styled component with no row here is not library-sanctioned; the index is the closed set, not a sample of it. Closure is mechanical in both directions: `registry-row-without-file` fails on a row whose file is gone, and `tier-file-without-registry-row` fails on a module that lives in a tier directory with no row — the support layers (`utils`, `overlays`, `icons`), the modules named in `NON_COMPONENT_TIER_FILES`, and a component's own private parts (imported only from inside its folder) are the whole of the exemption.
 
 #### Primitives (`product-client/src/primitives/`)
 
@@ -1102,38 +764,9 @@ index is the closed set, not a sample of it. Closure is mechanical in both direc
 | `TypewriterRevealText` | [TypewriterRevealText.tsx](../apps/packages/product-client/src/primitives/TypewriterRevealText.tsx) | Reveals a label one character at a time the first time it is assigned; a tab that mounts already named renders whole, and reduced motion skips the character clock. Consumed by `ChromeTab`. |
 | `UserAvatar` | [UserAvatar.tsx](../apps/packages/product-client/src/primitives/UserAvatar.tsx) | Person avatar with initials fallback (`userInitials()` helper). |
 
-**Collision pairs (transitional).** Two primitive families ship both a raw
-wrapper and a same-tier overlay under names that would otherwise collide:
-`checkbox-primitive.tsx` (the raw `@radix-ui/react-checkbox` wrapper) sits
-alongside `Checkbox.tsx` (a one-line re-export of it), and
-`tooltip-primitive.tsx` (the raw `@radix-ui/react-tooltip` wrapper) sits
-alongside `Tooltip.tsx` (a formatting wrapper over it, adding `singleLine`
-handling). Both pairs are two entry points onto one implementation, not duplicate
-components — the lowercase `-primitive` module is the base layer, the PascalCase
-module is the styled call-site entry point most consumers use.
+**Collision pairs (transitional).** Two primitive families ship both a raw wrapper and a same-tier overlay under names that would otherwise collide: `checkbox-primitive.tsx` (the raw `@radix-ui/react-checkbox` wrapper) sits alongside `Checkbox.tsx` (a one-line re-export of it), and `tooltip-primitive.tsx` (the raw `@radix-ui/react-tooltip` wrapper) sits alongside `Tooltip.tsx` (a formatting wrapper over it, adding `singleLine` handling). Both pairs are two entry points onto one implementation, not duplicate components — the lowercase `-primitive` module is the base layer, the PascalCase module is the styled call-site entry point most consumers use.
 
-**`DropdownMenu` status.** `DropdownMenu.tsx` is a legacy menu system living
-alongside the sanctioned `PopoverButton`/`PopoverMenuItem` pair, not a second
-tier. Four files import it directly:
-[RightPanelNewTabMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/right-panel/RightPanelNewTabMenu.tsx),
-[WorkspaceActionsMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/topbar/WorkspaceActionsMenu.tsx)
-(both `product-client`), and
-[ProposedPlanCard.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx), and
-[SelectedResponseActionMenu.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/SelectedResponseActionMenu.tsx)
-(both `product-client`; the latter replaced chat's hand-rolled `role="menu"` machine). A fifth consumer,
-`WorkspaceItemMenu.tsx`, was deleted when the archiving-workspaces train's R7 rung
-folded the workspace sidebar's three-dot menu into the row's hover-action slot
-plus its existing context menus. Migrating the remaining four onto `PopoverButton`/`PopoverMenuItem` waits
-on parity: Radix's dropdown-menu primitive provides roving-tabindex arrow-key
-navigation, typeahead, and managed focus-return-to-trigger that
-`PopoverButton`/`PopoverMenuItem` do not implement today. Behavior parity is an
-admission requirement for sanctioned replacements — a library component is not
-declared the sanctioned replacement for a vendor-backed primitive until it
-matches that primitive's keyboard and focus behavior. Until
-`PopoverButton`/`PopoverMenuItem` reach parity, `DropdownMenu` remains the
-sanctioned path for menus that need keyboard navigation (the five consumers
-above are not migration debt); click-only popovers use
-`PopoverButton`/`PopoverMenuItem`.
+**`DropdownMenu` status.** `DropdownMenu.tsx` is a legacy menu system living alongside the sanctioned `PopoverButton`/`PopoverMenuItem` pair, not a second tier. Four files import it directly: [RightPanelNewTabMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/right-panel/RightPanelNewTabMenu.tsx), [WorkspaceActionsMenu.tsx](../apps/packages/product-client/src/components/workspace/shell/topbar/WorkspaceActionsMenu.tsx) (both `product-client`), and [ProposedPlanCard.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/ProposedPlanCard.tsx), and [SelectedResponseActionMenu.tsx](../apps/packages/product-client/src/components/workspace/chat/transcript/SelectedResponseActionMenu.tsx) (both `product-client`; the latter replaced chat's hand-rolled `role="menu"` machine). A fifth consumer, `WorkspaceItemMenu.tsx`, was deleted when the archiving-workspaces train's R7 rung folded the workspace sidebar's three-dot menu into the row's hover-action slot plus its existing context menus. Migrating the remaining four onto `PopoverButton`/`PopoverMenuItem` waits on parity: Radix's dropdown-menu primitive provides roving-tabindex arrow-key navigation, typeahead, and managed focus-return-to-trigger that `PopoverButton`/`PopoverMenuItem` do not implement today. Behavior parity is an admission requirement for sanctioned replacements — a library component is not declared the sanctioned replacement for a vendor-backed primitive until it matches that primitive's keyboard and focus behavior. Until `PopoverButton`/`PopoverMenuItem` reach parity, `DropdownMenu` remains the sanctioned path for menus that need keyboard navigation (the five consumers above are not migration debt); click-only popovers use `PopoverButton`/`PopoverMenuItem`.
 
 #### Patterns (`product-client/src/primitives/patterns/`)
 
@@ -1250,17 +883,11 @@ above are not migration debt); click-only popovers use
 > both the package `build` script and
 > [pre-commit](../scripts/git-hooks/pre-commit) hard-code the order.
 
-Everything downstream is a projection of the same authority: `dist/theme.css`
-(the `@theme` block, the dark `:root`, the single flattened
-`:root[data-mode="light"]`, and the generated z/duration/ease/icon-button
-utilities), the React Native bridge, and the Shiki/Monaco/terminal palettes.
-`product.css` holds rules only — never token values.
+Everything downstream is a projection of the same authority: `dist/theme.css` (the `@theme` block, the dark `:root`, the single flattened `:root[data-mode="light"]`, and the generated z/duration/ease/icon-button utilities), the React Native bridge, and the Shiki/Monaco/terminal palettes. `product.css` holds rules only — never token values.
 
 ### What check-theme proves
 
-[check-theme.mjs](../apps/packages/design/scripts/check-theme.mjs)
-never trusts the generator. It re-projects the compiled authority through its own
-independent code path and then asserts, in order:
+[check-theme.mjs](../apps/packages/design/scripts/check-theme.mjs) never trusts the generator. It re-projects the compiled authority through its own independent code path and then asserts, in order:
 
 - **Byte equality** between its projection and the committed generator output.
 - **A real Tailwind compile.** The generated CSS is run through Tailwind's
@@ -1299,8 +926,7 @@ independent code path and then asserts, in order:
 
 ### Provenance tags
 
-Every token carries a tag recording its disposition in the July 2026
-consolidation:
+Every token carries a tag recording its disposition in the July 2026 consolidation:
 
 | Tag | Meaning |
 | --- | --- |
@@ -1309,12 +935,7 @@ consolidation:
 | `[SHIPPED:motion/authority]` | A shipped cadence whose value now lives in `motion.ts`. |
 | `[RETUNE:<area/change>]` | A deliberate change, named by what it changed — e.g. `[RETUNE:radii/soft-scale]`, `[RETUNE:type/closed-ramp]`, `[RETUNE:state/overlay]`, `[RETUNE:layering/scale]`. |
 
-Tags are historical, not permissions. `[SHIPPED]` does not mean a value is
-protected and `[RETUNE:…]` does not mean it is still in flight — the tag records
-where the value came from. `tokens.ts` remains the authority; an intentional
-light-palette change also updates the exact invariant map in `check-theme.mjs`
-before rebuilding, so the architectural lock cannot drift silently with the
-value it guards.
+Tags are historical, not permissions. `[SHIPPED]` does not mean a value is protected and `[RETUNE:…]` does not mean it is still in flight — the tag records where the value came from. `tokens.ts` remains the authority; an intentional light-palette change also updates the exact invariant map in `check-theme.mjs` before rebuilding, so the architectural lock cannot drift silently with the value it guards.
 
 ### Gates
 
@@ -1328,21 +949,9 @@ value it guards.
 | [report_frontend_structure.py](../scripts/report_frontend_structure.py) (`--strict` in CI) | Raw DOM control usage (`RAW_DOM_CONTROL`) outside the primitives layer — the mechanical half of the behavior job's "compose, never rebuild". |
 | [check_docs.py](../scripts/check_docs.py) | Documentation links and anchors — a renamed source file breaks CI instead of silently orphaning a reference in this document. |
 
-Local enforcement runs through
-[pre-commit](../scripts/git-hooks/pre-commit), which checks only the
-staged frontend files (so it stays fast) and additionally recompiles and
-re-projects the theme whenever anything under `apps/packages/design/` is staged.
-It is wired by the `git-hooks` target in [Makefile](../Makefile), which
-sets `core.hooksPath scripts/git-hooks`. It is bypassable — `--no-verify` or
-`PROLIFERATE_SKIP_HOOKS=1` — because CI runs the same scripts over the whole
-repository, so a bypass defers the failure rather than hiding it.
+Local enforcement runs through [pre-commit](../scripts/git-hooks/pre-commit), which checks only the staged frontend files (so it stays fast) and additionally recompiles and re-projects the theme whenever anything under `apps/packages/design/` is staged. It is wired by the `git-hooks` target in [Makefile](../Makefile), which sets `core.hooksPath scripts/git-hooks`. It is bypassable — `--no-verify` or `PROLIFERATE_SKIP_HOOKS=1` — because CI runs the same scripts over the whole repository, so a bypass defers the failure rather than hiding it.
 
-**The appearance gate's census is a ratchet, not an allowlist.** Rule families
-whose consumers pre-date the token authority are censused per file in
-`scripts/appearance_scaling_baseline.json`: the gate fails on any hit *beyond*
-the frozen count, so no new violation can be introduced anywhere while the
-migration burns the existing ones down. Three properties keep that honest, and
-each is enforced, not merely intended:
+**The appearance gate's census is a ratchet, not an allowlist.** Rule families whose consumers pre-date the token authority are censused per file in `scripts/appearance_scaling_baseline.json`: the gate fails on any hit *beyond* the frozen count, so no new violation can be introduced anywhere while the migration burns the existing ones down. Three properties keep that honest, and each is enforced, not merely intended:
 
 - A census entry that allocates more than its file now uses fails
   `stale-census-allowance` — a slack entry is a live allowance waiting to swallow
@@ -1354,17 +963,9 @@ each is enforced, not merely intended:
 - A rule whose census reaches zero entries becomes an absolute ban from that
   moment, with no bookkeeping left to remove.
 
-Growth is legitimate in one situation only: a regex widens and newly *sees*
-pre-existing sites. A dead class left behind by a removed token never qualifies —
-that gets deleted at the call site.
+Growth is legitimate in one situation only: a regex widens and newly *sees* pre-existing sites. A dead class left behind by a removed token never qualifies — that gets deleted at the call site.
 
-**A finished directory is sealed, not censused.** `sealedDirectories` in the same
-baseline file pins a directory a migration slice completed at zero: any staged-rule
-hit under a sealed prefix fails as `sealed-directory-regression`, and
-`--write-baseline` refuses to record a census entry there at all. That is the one
-move the census alone cannot prevent — a cleaned surface quietly re-entering the
-staged set as if its violations were pre-existing. Each seal names the slice that
-cleaned it, so the pin records work done rather than an opinion about a directory.
+**A finished directory is sealed, not censused.** `sealedDirectories` in the same baseline file pins a directory a migration slice completed at zero: any staged-rule hit under a sealed prefix fails as `sealed-directory-regression`, and `--write-baseline` refuses to record a census entry there at all. That is the one move the census alone cannot prevent — a cleaned surface quietly re-entering the staged set as if its violations were pre-existing. Each seal names the slice that cleaned it, so the pin records work done rather than an opinion about a directory.
 
 ## Failure Modes
 
@@ -1388,8 +989,7 @@ cleaned it, so the pin records work done rather than an opinion about a director
 
 ## Current Gaps
 
-Everything above describes current behavior. These are the places where a rule
-this document states is not mechanically enforced.
+Everything above describes current behavior. These are the places where a rule this document states is not mechanically enforced.
 
 - Icon-button container sizes are the stated legal scale but are not enforced: no
   gate rule restricts freehand `size-N` on an icon *button* (`ARBITRARY_SIZE_RE`
@@ -1422,9 +1022,4 @@ this document states is not mechanically enforced.
 - The state job is review-enforced only: no gate detects a hand-assembled `hover:`/`active:`/`focus-visible:` stack on a raw element in feature code, and hundreds of such stacks predate the rule.
 - One domain-tier row is still grandfathered against the mechanical admission test (domain type in the public props plus composing two or more library components): `BillingGateState`, which now composes only `Button` and so fails the two-component clause — its re-audit outcome (dissolve into the pattern tier, or stay by review exception) is open. `PrStatusBadge` composes exactly one component (`StatusDot`) for the same reason and raises the same question.
 
-Test coverage for the mechanical library rules:
-[test_check_frontend_boundaries.py](../scripts/test_check_frontend_boundaries.py)
-(Radix containment, the primitives root set, the lucide icon-source ban) and
-[test_check_component_library.py](../scripts/test_check_component_library.py)
-(index parsing, overlay roles, dead vocabulary, JSDoc, kit placement, and the
-allowlist's refusal of an unjustified entry).
+Test coverage for the mechanical library rules: [test_check_frontend_boundaries.py](../scripts/test_check_frontend_boundaries.py) (Radix containment, the primitives root set, the lucide icon-source ban) and [test_check_component_library.py](../scripts/test_check_component_library.py) (index parsing, overlay roles, dead vocabulary, JSDoc, kit placement, and the allowlist's refusal of an unjustified entry).

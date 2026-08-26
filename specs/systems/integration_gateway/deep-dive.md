@@ -7,13 +7,9 @@
 > until the seam spec lands; the Slack tool policy, approvals, and the frozen
 > Slack delivery slice are referenced from the system spec's Current gaps.
 
-This platform owns connected third-party integration accounts, the Cloud-hosted
-integration MCP gateway, and the Worker identity that gives AnyHarness scoped
-access to that gateway. Provider credentials remain encrypted in Cloud;
-AnyHarness receives only a Proliferate gateway bearer.
+This platform owns connected third-party integration accounts, the Cloud-hosted integration MCP gateway, and the Worker identity that gives AnyHarness scoped access to that gateway. Provider credentials remain encrypted in Cloud; AnyHarness receives only a Proliferate gateway bearer.
 
-Harness model credentials and the LLM gateway are separate owners:
-[AGENT_AUTH.md](../agent_auth/deep-dive.md) and [MODELS.md](../agent_auth/models.md).
+Harness model credentials and the LLM gateway are separate owners: [AGENT_AUTH.md](../agent_auth/deep-dive.md) and [MODELS.md](../agent_auth/models.md).
 
 ## Mental Model
 
@@ -38,10 +34,7 @@ AnyHarness session starts
 
 ## Integration State
 
-[`db/models/integrations.py`](../../../server/proliferate/db/models/integrations.py)
-and
-``db/models/cloud/integration_approvals.py`` (deleted, cull part 2)
-own the current schema:
+[`db/models/integrations.py`](../../../server/proliferate/db/models/integrations.py) and ``db/models/cloud/integration_approvals.py`` (deleted, cull part 2) own the current schema:
 
 | Table | Ownership |
 | --- | --- |
@@ -55,24 +48,13 @@ own the current schema:
 | `cloud_integration_action_approval` | One exact external-action request. Its immutable user, organization, account revision, Worker, and MCP-session identity snapshots deliberately are not foreign keys, so later deletion cannot erase or rewrite the authorization evidence. |
 | `cloud_integration_action_approval_event` | Append-only request, decision, expiry, and consumption evidence with immutable actor-id snapshots and a product-safe action summary. |
 
-Accounts are personal today even though the schema reserves an organization
-owner-scope value. Credential writes increment `auth_version`; the tool cache
-is valid only when its version matches and its `fetched_at` is inside the
-configured TTL. A transient provider failure may serve a version-matching
-stale schema, while auth/configuration failures remain actionable errors.
+Accounts are personal today even though the schema reserves an organization owner-scope value. Credential writes increment `auth_version`; the tool cache is valid only when its version matches and its `fetched_at` is inside the configured TTL. A transient provider failure may serve a version-matching stale schema, while auth/configuration failures remain actionable errors.
 
-Definitions, accounts, policies, OAuth, health, cache behavior, and provider
-access live under
-[`server/.../cloud/integrations/`](../../../server/proliferate/server/integration_gateway/connections).
-Raw OAuth and MCP protocol clients live under
-[`server/proliferate/integrations/`](../../../server/proliferate/integrations)
-and do not own product persistence.
+Definitions, accounts, policies, OAuth, health, cache behavior, and provider access live under [`server/.../cloud/integrations/`](../../../server/proliferate/server/integration_gateway/connections). Raw OAuth and MCP protocol clients live under [`server/proliferate/integrations/`](../../../server/proliferate/integrations) and do not own product persistence.
 
 ### OAuth scope integrity
 
-Definition config chooses either the default provider-directed OAuth scope
-behavior or an exact scope policy. Slack uses the exact policy with this
-read/search-only ceiling:
+Definition config chooses either the default provider-directed OAuth scope behavior or an exact scope policy. Slack uses the exact policy with this read/search-only ceiling:
 
 ```text
 search:read.public
@@ -83,31 +65,13 @@ search:read.files
 search:read.users
 ```
 
-For an exact policy, an authorization challenge may omit scopes or name a
-subset, but it cannot add a scope; Cloud always requests the canonical
-configured set. The callback must report that same set before credentials can
-become ready. Token parsing accepts standard top-level scope metadata and
-Slack's nested user-token scope metadata with comma or whitespace separators.
-Slack's token endpoint can also return an HTTP-success response whose JSON body
-has `ok: false`. Cloud translates that envelope into a typed provider error
-before reading or persisting token fields; callback and refresh surfaces expose
-only fixed product-safe codes and messages, never the raw provider payload.
-Hosted callback and refresh paths identify Slack from the trusted definition
-namespace. Generic protocol callers fall back only to a narrowly validated
-equivalent of the canonical Slack token URL; a non-Slack namespace overrides a
-Slack-looking URL so other providers retain their existing response semantics.
+For an exact policy, an authorization challenge may omit scopes or name a subset, but it cannot add a scope; Cloud always requests the canonical configured set. The callback must report that same set before credentials can become ready. Token parsing accepts standard top-level scope metadata and Slack's nested user-token scope metadata with comma or whitespace separators. Slack's token endpoint can also return an HTTP-success response whose JSON body has `ok: false`. Cloud translates that envelope into a typed provider error before reading or persisting token fields; callback and refresh surfaces expose only fixed product-safe codes and messages, never the raw provider payload. Hosted callback and refresh paths identify Slack from the trusted definition namespace. Generic protocol callers fall back only to a narrowly validated equivalent of the canonical Slack token URL; a non-Slack namespace overrides a Slack-looking URL so other providers retain their existing response semantics.
 
-A refresh response that omits scope metadata preserves the stored value. An
-explicit non-empty refresh grant may be a subset but cannot exceed the ceiling;
-an explicit empty grant or known stored scope outside the ceiling requires
-reauthentication. Legacy Slack bundles with empty scope metadata remain usable
-for existing search behavior. This scope ceiling does not authorize outbound
-Slack tools; gateway tool authorization is a separate boundary.
+A refresh response that omits scope metadata preserves the stored value. An explicit non-empty refresh grant may be a subset but cannot exceed the ceiling; an explicit empty grant or known stored scope outside the ceiling requires reauthentication. Legacy Slack bundles with empty scope metadata remain usable for existing search behavior. This scope ceiling does not authorize outbound Slack tools; gateway tool authorization is a separate boundary.
 
 ## Runtime Worker Identity
 
-[`db/models/runtime_workers.py`](../../../server/proliferate/db/models/runtime_workers.py)
-owns three related tables:
+[`db/models/runtime_workers.py`](../../../server/proliferate/db/models/runtime_workers.py) owns three related tables:
 
 | Table | Ownership |
 | --- | --- |
@@ -115,28 +79,15 @@ owns three related tables:
 | `cloud_runtime_worker_enrollment` | Single-use pending/consumed/expired/revoked enrollment. User, organization, and sandbox references cascade; `created_by_user_id` is attribution and uses the database default action. |
 | `cloud_integration_gateway_token` | One active AnyHarness-facing token per Worker. Worker, user, and organization references cascade. |
 
-At most one non-revoked Worker exists per cloud sandbox and per `(owner,
-desktop_install_id)`. Worker liveness is derived from `status = online` plus a
-recent `last_seen_at`; the application does not eagerly write `offline`.
+At most one non-revoked Worker exists per cloud sandbox and per `(owner, desktop_install_id)`. Worker liveness is derived from `status = online` plus a recent `last_seen_at`; the application does not eagerly write `offline`.
 
-Enrollment, Worker, and gateway tokens are HMAC-SHA256 hashed under distinct
-domains before persistence. A raw token cannot authenticate as another token
-family.
+Enrollment, Worker, and gateway tokens are HMAC-SHA256 hashed under distinct domains before persistence. A raw token cannot authenticate as another token family.
 
 ### Enrollment and heartbeat
 
-[`runtime_workers/service.py`](../../../server/proliferate/server/seam/workers/service.py)
-implements the server flow:
+[`runtime_workers/service.py`](../../../server/proliferate/server/seam/workers/service.py) implements the server flow:
 
-Desktop enrollment issuance and consumption are serialized per
-`desktop_install_id`. Issuing a ticket revokes older pending tickets for that
-physical install, so only the newest ticket can enroll; the currently active
-Worker remains valid until the replacement consumes its ticket. This prevents
-a delayed pre-enrollment Worker from reclaiming authority after its
-replacement starts. The response advertises `pendingTicketPolicy =
-newest_wins`; repaired Desktop clients defer native Worker cutover and retry
-until the serving control plane provides that guarantee, so Desktop artifact
-publication does not have to race a matching server deployment.
+Desktop enrollment issuance and consumption are serialized per `desktop_install_id`. Issuing a ticket revokes older pending tickets for that physical install, so only the newest ticket can enroll; the currently active Worker remains valid until the replacement consumes its ticket. This prevents a delayed pre-enrollment Worker from reclaiming authority after its replacement starts. The response advertises `pendingTicketPolicy = newest_wins`; repaired Desktop clients defer native Worker cutover and retry until the serving control plane provides that guarantee, so Desktop artifact publication does not have to race a matching server deployment.
 
 1. consume and row-lock a single-use enrollment;
 2. revoke the prior Worker and gateway token for the same runtime identity;
@@ -144,81 +95,33 @@ publication does not have to race a matching server deployment.
 4. mint separate Worker and integration-gateway tokens; and
 5. return the heartbeat interval and gateway configuration.
 
-Heartbeat authenticates the opaque Worker bearer, updates `last_seen_at`, and
-persists any reported Worker and AnyHarness versions. Its response carries the
-desired Worker and AnyHarness versions (and, deletion-pending under the
-binary-only catalog ruling in
-[agent-distribution.md](../harnesses/distribution.md), an agent-catalog version).
-The Worker uses that response for heartbeat-driven convergence; see the
-[Proliferate Worker structure](../../areas/anyharness.md).
+Heartbeat authenticates the opaque Worker bearer, updates `last_seen_at`, and persists any reported Worker and AnyHarness versions. Its response carries the desired Worker and AnyHarness versions (and, deletion-pending under the binary-only catalog ruling in [agent-distribution.md](../harnesses/distribution.md), an agent-catalog version). The Worker uses that response for heartbeat-driven convergence; see the [Proliferate Worker structure](../../areas/anyharness.md).
 
-The gateway token's `last_used_at` column is deliberately not updated on the
-request hot path. It remains nullable bookkeeping, not reliable usage
-evidence.
+The gateway token's `last_used_at` column is deliberately not updated on the request hot path. It remains nullable bookkeeping, not reliable usage evidence.
 
 ### Gateway execution session
 
-At launch AnyHarness supplies its host-owned workspace and session ids as
-static MCP headers. The MCP initialize response mints an opaque, signed
-`Mcp-Session-Id` header whose signature binds the authenticated Worker plus
-those exact launch ids. Changing or omitting any identity invalidates the
-session; a session minted for one Worker, workspace, or AnyHarness session
-cannot be replayed in another.
-Subsequent approval-gated calls must return that header. Missing or invalid
-session state fails before an approval is requested; the agent cannot choose
-the trusted session id by supplying prompt text or tool arguments.
+At launch AnyHarness supplies its host-owned workspace and session ids as static MCP headers. The MCP initialize response mints an opaque, signed `Mcp-Session-Id` header whose signature binds the authenticated Worker plus those exact launch ids. Changing or omitting any identity invalidates the session; a session minted for one Worker, workspace, or AnyHarness session cannot be replayed in another. Subsequent approval-gated calls must return that header. Missing or invalid session state fails before an approval is requested; the agent cannot choose the trusted session id by supplying prompt text or tool arguments.
 
-An older unbound client can still initialize and use read-only gateway tools,
-but cannot request an external-action approval. The signed header narrows an
-approval to one gateway execution session and one exact workspace/session
-launch. It is not an approval credential: only a product-authenticated human
-can approve, reject, or revoke an action.
+An older unbound client can still initialize and use read-only gateway tools, but cannot request an external-action approval. The signed header narrows an approval to one gateway execution session and one exact workspace/session launch. It is not an approval credential: only a product-authenticated human can approve, reject, or revoke an action.
 
 ### Gateway credential file
 
-A fresh Worker enrollment returns the gateway URL and bearer. The Worker
-writes them atomically with private permissions to
-`<runtime_home>/integration-gateway.json` using
-[`integration_gateway.rs`](../../../anyharness/crates/proliferate-worker/src/integration_gateway.rs).
-AnyHarness loads that file at session launch and mounts the integration
-gateway when the binding policy permits it. The freshly enrolled Worker keeps
-that response in memory and, after each successful authenticated heartbeat,
-repairs the file if a delayed predecessor overwrote it. Once a predecessor
-observes heartbeat rejection it no longer reasserts its stale bearer; if a
-heartbeat succeeded just before revocation and its write lands afterward, the
-active successor repairs that final race on its next successful heartbeat.
+A fresh Worker enrollment returns the gateway URL and bearer. The Worker writes them atomically with private permissions to `<runtime_home>/integration-gateway.json` using [`integration_gateway.rs`](../../../anyharness/crates/proliferate-worker/src/integration_gateway.rs). AnyHarness loads that file at session launch and mounts the integration gateway when the binding policy permits it. The freshly enrolled Worker keeps that response in memory and, after each successful authenticated heartbeat, repairs the file if a delayed predecessor overwrote it. Once a predecessor observes heartbeat rejection it no longer reasserts its stale bearer; if a heartbeat succeeded just before revocation and its write lands afterward, the active successor repairs that final race on its next successful heartbeat.
 
-A restart that loads an existing Worker identity from local SQLite does not
-receive or recreate a missing gateway file. A revoked or invalid durable
-Worker token also does not automatically re-enroll. Do not prescribe deleting
-Worker SQLite or rotating tokens as routine recovery.
+A restart that loads an existing Worker identity from local SQLite does not receive or recreate a missing gateway file. A revoked or invalid durable Worker token also does not automatically re-enroll. Do not prescribe deleting Worker SQLite or rotating tokens as routine recovery.
 
 ## Cloud And Desktop Worker Startup
 
-Cloud materialization launches Proliferate Supervisor
-(``runtime_launch.py`` (deleted, cull part 2)),
-which spawns and supervises both AnyHarness and Worker as its children —
-there is no separately launched Worker sidecar (the legacy direct-nohup'd
-AnyHarness plus independent Worker sidecar, `worker_sidecar.py`, was deleted
-once the live E2B N-1->N update proof and the D5 BRIDGE proof both passed,
-2026-07-26). Direct AnyHarness health is independent of Worker health.
-Reusing an already-healthy Supervisor does not restart a missing Worker
-child on its own; the Supervisor's own restart loop covers that.
+Cloud materialization launches Proliferate Supervisor (``runtime_launch.py`` (deleted, cull part 2)), which spawns and supervises both AnyHarness and Worker as its children — there is no separately launched Worker sidecar (the legacy direct-nohup'd AnyHarness plus independent Worker sidecar, `worker_sidecar.py`, was deleted once the live E2B N-1->N update proof and the D5 BRIDGE proof both passed, 2026-07-26). Direct AnyHarness health is independent of Worker health. Reusing an already-healthy Supervisor does not restart a missing Worker child on its own; the Supervisor's own restart loop covers that.
 
-Desktop obtains a short-lived user-authenticated enrollment for its install,
-then starts the local Worker through Tauri. Desktop revoke is an idempotent
-user-authenticated operation that revokes the matching active Worker and
-gateway token.
+Desktop obtains a short-lived user-authenticated enrollment for its install, then starts the local Worker through Tauri. Desktop revoke is an idempotent user-authenticated operation that revokes the matching active Worker and gateway token.
 
 ## Integration Gateway
 
-[`integration_gateway/dependencies.py`](../../../server/proliferate/server/integration_gateway/gateway/dependencies.py)
-resolves an active gateway token to its non-revoked Worker and revalidates
-organization membership on each organization-scoped request.
+[`integration_gateway/dependencies.py`](../../../server/proliferate/server/integration_gateway/gateway/dependencies.py) resolves an active gateway token to its non-revoked Worker and revalidates organization membership on each organization-scoped request.
 
-[`integration_gateway/service.py`](../../../server/proliferate/server/integration_gateway/gateway/service.py)
-applies definition visibility and organization policy, then exposes three
-virtual MCP tools:
+[`integration_gateway/service.py`](../../../server/proliferate/server/integration_gateway/gateway/service.py) applies definition visibility and organization policy, then exposes three virtual MCP tools:
 
 ```text
 integrations.list_providers
@@ -226,17 +129,11 @@ integrations.list_tools
 integrations.call_tool
 ```
 
-`integrations.call_tool` decrypts and resolves provider credentials inside
-Cloud, invokes the remote provider, and records a
-`cloud_integration_tool_call_event` on success or failure. Provider credentials
-and rendered auth headers never cross the Cloud boundary.
+`integrations.call_tool` decrypts and resolves provider credentials inside Cloud, invokes the remote provider, and records a `cloud_integration_tool_call_event` on success or failure. Provider credentials and rendered auth headers never cross the Cloud boundary.
 
 ### Slack tool-call policy
 
-The gateway classifies Slack by the exact canonical `(provider, tool)` pair
-before account resolution, credential rendering, or an upstream MCP call. The
-provider identity must be exactly `slack`; other providers preserve the generic
-gateway behavior.
+The gateway classifies Slack by the exact canonical `(provider, tool)` pair before account resolution, credential rendering, or an upstream MCP call. The provider identity must be exactly `slack`; other providers preserve the generic gateway behavior.
 
 These known read/search tools execute directly:
 
@@ -259,9 +156,7 @@ slack_search_public_and_private
 slack_search_users
 ```
 
-These known external-action tools require approval and are currently rejected
-from provider execution after Cloud has created or reused the durable pending
-request for the exact action:
+These known external-action tools require approval and are currently rejected from provider execution after Cloud has created or reused the durable pending request for the exact action:
 
 ```text
 slack_add_reaction
@@ -282,19 +177,11 @@ slack_update_canvas
 slack_update_user_profile
 ```
 
-Every other Slack tool name fails closed. Matching is case-sensitive and does
-not normalize whitespace or infer behavior from prefixes. A known external
-action returns the typed code `integration_tool_approval_required` with a
-product-safe approval object; an unknown Slack tool returns
-`integration_tool_not_allowed`. Both are MCP tool errors and audit as failed
-calls. No Slack action is delivered in the current slice, including after its
-durable request becomes `approved`.
+Every other Slack tool name fails closed. Matching is case-sensitive and does not normalize whitespace or infer behavior from prefixes. A known external action returns the typed code `integration_tool_approval_required` with a product-safe approval object; an unknown Slack tool returns `integration_tool_not_allowed`. Both are MCP tool errors and audit as failed calls. No Slack action is delivered in the current slice, including after its durable request becomes `approved`.
 
 ### Durable external-action approvals
 
-The approval service consumes the pure `ToolCallRequiresApproval` verdict; it
-does not accept a provider or tool identity reconstructed from prompt text,
-client claims, or arbitrary approval-like tool arguments. One approval binds:
+The approval service consumes the pure `ToolCallRequiresApproval` verdict; it does not accept a provider or tool identity reconstructed from prompt text, client claims, or arbitrary approval-like tool arguments. One approval binds:
 
 - the exact authenticated product user and personal-or-organization scope;
 - the integration account UUID and current `auth_version`;
@@ -303,48 +190,17 @@ client claims, or arbitrary approval-like tool arguments. One approval binds:
 - the verdict's exact canonical provider and tool; and
 - the SHA-256 digest of canonical JSON action arguments.
 
-The combined binding and payload produce a deterministic idempotency key.
-Concurrent identical requests in the same authority and execution session
-converge on one active row. Actor, account, organization, Worker, and session
-identifiers are immutable audit snapshots rather than mutable client claims.
+The combined binding and payload produce a deterministic idempotency key. Concurrent identical requests in the same authority and execution session converge on one active row. Actor, account, organization, Worker, and session identifiers are immutable audit snapshots rather than mutable client claims.
 
-Requests have a 600-second TTL, measured from PostgreSQL
-`clock_timestamp()`, and the explicit states `pending`, `approved`,
-`rejected`, `revoked`, `expired`, and `consumed`. `expires_at` is the
-authoritative time boundary: an approved row cannot be consumed at or after
-that instant even if its stored status has not yet changed. List, get,
-decision, request-reuse, and admission observations materialize a due active
-row as terminal `expired` and append the corresponding system audit event.
-Transitions acquire the approval row lock before evaluating that database
-clock, so waiting on a lock cannot extend approval validity.
+Requests have a 600-second TTL, measured from PostgreSQL `clock_timestamp()`, and the explicit states `pending`, `approved`, `rejected`, `revoked`, `expired`, and `consumed`. `expires_at` is the authoritative time boundary: an approved row cannot be consumed at or after that instant even if its stored status has not yet changed. List, get, decision, request-reuse, and admission observations materialize a due active row as terminal `expired` and append the corresponding system audit event. Transitions acquire the approval row lock before evaluating that database clock, so waiting on a lock cannot extend approval validity.
 
-Approval, rejection, revocation, expiry, and the `approved -> consumed`
-transition are compare-and-set updates. Consumption matches every bound field
-again and succeeds once; replay and concurrent double consumption return the
-already-observed terminal result. Request creation and execution admission use
-short, independently committed transactions. A future provider delivery may
-continue only after the one-time consumption and its audit event have
-committed, so a crash cannot roll back admission after credentials or network
-I/O begin.
+Approval, rejection, revocation, expiry, and the `approved -> consumed` transition are compare-and-set updates. Consumption matches every bound field again and succeeds once; replay and concurrent double consumption return the already-observed terminal result. Request creation and execution admission use short, independently committed transactions. A future provider delivery may continue only after the one-time consumption and its audit event have committed, so a crash cannot roll back admission after credentials or network I/O begin.
 
-The first-party response contains typed ids, status and timestamps, the payload
-digest, and fixed action/account/source labels. Because this slice has no
-frozen per-tool argument schema, its reserved target, content-preview, and
-character-count fields remain null: guessing among provider aliases or rich
-fields could persist a secret or show a benign value while another field is
-later delivered. The full provider argument object is canonicalized only long
-enough to hash and is never stored or returned. The response never contains
-stored credentials, rendered authorization headers, or the raw provider
-payload.
-Product-user authorization rechecks ownership and active organization
-membership for list, get, approve, reject, and revoke operations. A Worker,
-gateway bearer, or MCP session cannot call those human decision routes or
-bypass them.
+The first-party response contains typed ids, status and timestamps, the payload digest, and fixed action/account/source labels. Because this slice has no frozen per-tool argument schema, its reserved target, content-preview, and character-count fields remain null: guessing among provider aliases or rich fields could persist a secret or show a benign value while another field is later delivered. The full provider argument object is canonicalized only long enough to hash and is never stored or returned. The response never contains stored credentials, rendered authorization headers, or the raw provider payload. Product-user authorization rechecks ownership and active organization membership for list, get, approve, reject, and revoke operations. A Worker, gateway bearer, or MCP session cannot call those human decision routes or bypass them.
 
 ### Frozen next Slack delivery slice
 
-The next slice is limited to actual approved delivery of
-`slack_send_message`. Its contract is:
+The next slice is limited to actual approved delivery of `slack_send_message`. Its contract is:
 
 1. Add only `chat:write` to the exact six-scope Slack set above and require an
    explicit OAuth reauthorization before a Slack account at the new
@@ -378,8 +234,7 @@ The next slice is limited to actual approved delivery of
    live Slack account and do not send a live Slack message in tests or rollout
    preparation.
 
-Every other Slack external-action tool remains non-executable and denied from
-the delivery path, even if an approval record exists.
+Every other Slack external-action tool remains non-executable and denied from the delivery path, even if an approval record exists.
 
 ## Mounted Routes
 
@@ -394,9 +249,7 @@ POST /v1/cloud/workers/desktop/enrollment
 POST /v1/cloud/workers/desktop/revoke
 ```
 
-The two download routes are intentionally public redirects to pinned or stable
-Worker and AnyHarness artifacts. They are usable before a Worker identity
-exists and do not expose private credentials.
+The two download routes are intentionally public redirects to pinned or stable Worker and AnyHarness artifacts. They are usable before a Worker identity exists and do not expose private credentials.
 
 The MCP endpoint is:
 
@@ -404,10 +257,7 @@ The MCP endpoint is:
 POST /v1/cloud/integration-gateway/mcp
 ```
 
-User-authenticated integration routes under `/v1/cloud/integrations` own the
-catalog, health, authentication, account deletion, OAuth flow, and callback
-surfaces. Organization-admin definition and policy routes are under
-`/v1/cloud/integrations/admin`. Product-user approval routes are:
+User-authenticated integration routes under `/v1/cloud/integrations` own the catalog, health, authentication, account deletion, OAuth flow, and callback surfaces. Organization-admin definition and policy routes are under `/v1/cloud/integrations/admin`. Product-user approval routes are:
 
 ```text
 GET  /v1/cloud/integrations/action-approvals
@@ -417,11 +267,7 @@ POST /v1/cloud/integrations/action-approvals/{approval_id}/reject
 POST /v1/cloud/integrations/action-approvals/{approval_id}/revoke
 ```
 
-The mounted router files are
-[`integrations/api.py`](../../../server/proliferate/server/integration_gateway/connections/api.py),
-``action_approvals/api.py`` (deleted, cull part 2),
-[`integration_gateway/api.py`](../../../server/proliferate/server/integration_gateway/gateway/api.py),
-and [`runtime_workers/api.py`](../../../server/proliferate/server/seam/workers/api.py).
+The mounted router files are [`integrations/api.py`](../../../server/proliferate/server/integration_gateway/connections/api.py), ``action_approvals/api.py`` (deleted, cull part 2), [`integration_gateway/api.py`](../../../server/proliferate/server/integration_gateway/gateway/api.py), and [`runtime_workers/api.py`](../../../server/proliferate/server/seam/workers/api.py).
 
 ## Boundaries
 
@@ -486,6 +332,4 @@ Focused server tests include:
 - `server/tests/unit/test_cloud_integration_gateway_tool_policy.py`
 - `server/tests/unit/test_integration_oauth_tokens.py`
 
-Worker behavior is covered by `cargo test -p proliferate-worker`. For an
-enrollment incident, use
-[`worker-enrollment-failure.md`](../../../guides/operating/worker-enrollment-failure.md).
+Worker behavior is covered by `cargo test -p proliferate-worker`. For an enrollment incident, use [`worker-enrollment-failure.md`](../../../guides/operating/worker-enrollment-failure.md).

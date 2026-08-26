@@ -1,29 +1,14 @@
 # Self-Hosting Test Hand-Off
 
-Status: legacy implementation and evidence hand-off from the self-hosting
-launch pass (2026-07-09). It remains useful for mechanism history and existing
-collector pointers, but its old IDs and standing-server topology are not the
-target qualification contract.
+Status: legacy implementation and evidence hand-off from the self-hosting launch pass (2026-07-09). It remains useful for mechanism history and existing collector pointers, but its old IDs and standing-server topology are not the target qualification contract.
 
-`core-release-validation.md` and `core-release-scenario-manifest.json` own
-self-host guarantee IDs and qualification scope;
-`release-worlds-and-fixtures.md` owns the run-scoped disposable self-host
-world; `tier-3-scenario-contract.md` and `tier-4-scenario-contract.md` own
-composed journey semantics. This file, `flows.md`, and `scenarios.md` are
-legacy implementation/evidence views and must not define or renumber target
-scenarios. The standing `alpha`/`beta` notes below describe prior evidence;
-strict qualification provisions disposable EC2 instances by candidate digest.
+`core-release-validation.md` and `core-release-scenario-manifest.json` own self-host guarantee IDs and qualification scope; `release-worlds-and-fixtures.md` owns the run-scoped disposable self-host world; `tier-3-scenario-contract.md` and `tier-4-scenario-contract.md` own composed journey semantics. This file, `flows.md`, and `scenarios.md` are legacy implementation/evidence views and must not define or renumber target scenarios. The standing `alpha`/`beta` notes below describe prior evidence; strict qualification provisions disposable EC2 instances by candidate digest.
 
 ---
 
 ## 1. The surface (mental model, validated)
 
-Every self-host deploy path is the same thing: the production Docker Compose
-bundle (`server/deploy/`) pulling public GHCR images
-(`ghcr.io/proliferate-ai/proliferate-server:stable`), whether the operator ran
-`bootstrap.sh` by hand on any Linux box or the AWS CloudFormation one-click did
-it for them on EC2. **There is no separate CFN architecture** — testing
-compose-on-EC2 covers both.
+Every self-host deploy path is the same thing: the production Docker Compose bundle (`server/deploy/`) pulling public GHCR images (`ghcr.io/proliferate-ai/proliferate-server:stable`), whether the operator ran `bootstrap.sh` by hand on any Linux box or the AWS CloudFormation one-click did it for them on EC2. **There is no separate CFN architecture** — testing compose-on-EC2 covers both.
 
 Orthogonal layers, each independently on/off:
 
@@ -34,113 +19,47 @@ Orthogonal layers, each independently on/off:
 - Lifecycle: `./update.sh` pulls + migrates + restarts; desktops follow the
   server's pin via `GET /desktop/updater/latest.json`.
 
-Invariants: every self-hosted server is single-org
-(`single_org_mode`, `config.py:376` — derived from non-`hosted_product`
-telemetry mode); `/setup` is claimed exactly once and 404s forever after;
-invitees register in a browser via the invitation's registration token.
+Invariants: every self-hosted server is single-org (`single_org_mode`, `config.py:376` — derived from non-`hosted_product` telemetry mode); `/setup` is claimed exactly once and 404s forever after; invitees register in a browser via the invitation's registration token.
 
-What already exists: `self-host-smoke.yml` (push-to-`main` + dispatch; off the
-PR path and no longer a required merge check since the 2026-08 engineering
-cull) boots the
-real compose stack http-only and walks health → `/meta` → claim → password
-login → invite → register → membership at the **API** level, then proves
-self-hosted Web served from the exact production image: `/` and `/login` return
-the ProductClient shell, a headless-Chromium browser executes the bundled JS to
-the `[data-auth-screen="auth"]` marker, hashed CSS/JS load, a deep client route
-refreshes, cache headers distinguish `index.html` from immutable assets, and
-unknown `/v1`/`/auth` paths plus missing assets stay non-200 (never the shell).
-The smoke's change detector runs the heavy image build when any Web-bundle
-input changes (`apps/web/**`, `apps/packages/**`, the Cloud/AnyHarness SDKs,
-root manifests/lockfile) in addition to the server-image inputs. Everything
-below is coverage that does not exist yet.
+What already exists: `self-host-smoke.yml` (push-to-`main` + dispatch; off the PR path and no longer a required merge check since the 2026-08 engineering cull) boots the real compose stack http-only and walks health → `/meta` → claim → password login → invite → register → membership at the **API** level, then proves self-hosted Web served from the exact production image: `/` and `/login` return the ProductClient shell, a headless-Chromium browser executes the bundled JS to the `[data-auth-screen="auth"]` marker, hashed CSS/JS load, a deep client route refreshes, cache headers distinguish `index.html` from immutable assets, and unknown `/v1`/`/auth` paths plus missing assets stay non-200 (never the shell). The smoke's change detector runs the heavy image build when any Web-bundle input changes (`apps/web/**`, `apps/packages/**`, the Cloud/AnyHarness SDKs, root manifests/lockfile) in addition to the server-image inputs. Everything below is coverage that does not exist yet.
 
 ## 2. Flow registry rows
 
-The rows below record the legacy collector vocabulary. The canonical ID
-migration table in `core-release-validation.md` controls how each pointer is
-folded, renamed, split, or rewritten before it can claim target coverage.
+The rows below record the legacy collector vocabulary. The canonical ID migration table in `core-release-validation.md` controls how each pointer is folded, renamed, split, or rewritten before it can claim target coverage.
 
 ## 3. Scenario definitions
 
 ### Tier 1
 
-**T1-SH-1: single-org derivation.** Pure config test: `telemetry_mode=
-"self_managed"` ⇒ `single_org_mode` true; `"hosted_product"` ⇒ false;
-`single_org_mode_override` wins in both directions. (`config.py:376`.)
+**T1-SH-1: single-org derivation.** Pure config test: `telemetry_mode= "self_managed"` ⇒ `single_org_mode` true; `"hosted_product"` ⇒ false; `single_org_mode_override` wins in both directions. (`config.py:376`.)
 
-**T1-SH-3: `/meta` contract.** Golden-fixture the response shape
-(`serverVersion` et al.) — this is the wire contract the connect dialog's
-trust-confirmation renders; a field rename breaks every desktop silently.
+**T1-SH-3: `/meta` contract.** Golden-fixture the response shape (`serverVersion` et al.) — this is the wire contract the connect dialog's trust-confirmation renders; a field rename breaks every desktop silently.
 
 ### Tier 2 (stack-boot fixture per `scenarios.md` conventions)
 
-**T2-SH-1: connect + switch (fixture-driven, see §4).**
-Preconditions: two server fixtures A and B on different ports.
-Steps: from sign-in surface → "Connect to a server" → enter A's URL →
-assert checking state → trust screen shows A's host + `Server version X` →
-Connect → assert config write + relaunch requested → assert "Connected to
-{A}" banner → Reset → connect to B.
-Negatives: non-Proliferate URL (no `/meta`) fails loudly with the entry
-retained; malformed URL rejected before any request; scheme-less input gets
-`https://` assumed.
+**T2-SH-1: connect + switch (fixture-driven, see §4).** Preconditions: two server fixtures A and B on different ports. Steps: from sign-in surface → "Connect to a server" → enter A's URL → assert checking state → trust screen shows A's host + `Server version X` → Connect → assert config write + relaunch requested → assert "Connected to {A}" banner → Reset → connect to B. Negatives: non-Proliferate URL (no `/meta`) fails loudly with the entry retained; malformed URL rejected before any request; scheme-less input gets `https://` assumed.
 
-**T2-SH-2: `/setup` claim UI.** T2-AUTH-1 already covers claim + password
-lifecycle; extend its asserts with the self-hosted specifics: claimed user is
-**owner** of the single instance org; second browser hitting `/setup`
-post-claim gets the already-claimed state (404 surface).
+**T2-SH-2: `/setup` claim UI.** T2-AUTH-1 already covers claim + password lifecycle; extend its asserts with the self-hosted specifics: claimed user is **owner** of the single instance org; second browser hitting `/setup` post-claim gets the already-claimed state (404 surface).
 
-**T2-SH-3: invite → register → desktop login.**
-Steps: admin invites from the UI → read the registration token from the
-invitation (no email locally — `delivery_status=skipped`; **invitations have
-no secret token**, auth is UUID + email-match per the 2026-07-07 survey) →
-fresh browser context to `/register` with token → set password → desktop-web
-sign-in as invitee.
-Assert: invitee active member of the instance org; wrong-email registration
-rejected.
+**T2-SH-3: invite → register → desktop login.** Steps: admin invites from the UI → read the registration token from the invitation (no email locally — `delivery_status=skipped`; **invitations have no secret token**, auth is UUID + email-match per the 2026-07-07 survey) → fresh browser context to `/register` with token → set password → desktop-web sign-in as invitee. Assert: invitee active member of the instance org; wrong-email registration rejected.
 
-**T2-SH-4: adaptive sign-in.** Server fixture without GitHub OAuth vars ⇒
-password form rendered (no GitHub button); with `GITHUB_OAUTH_CLIENT_ID/
-SECRET` set ⇒ GitHub button rendered. Driven purely by
-`GET /auth/desktop/methods`.
+**T2-SH-4: adaptive sign-in.** Server fixture without GitHub OAuth vars ⇒ password form rendered (no GitHub button); with `GITHUB_OAUTH_CLIENT_ID/ SECRET` set ⇒ GitHub button rendered. Driven purely by `GET /auth/desktop/methods`.
 
 ### Tier 3 (historical standing-server evidence)
 
-Two long-lived EC2 boxes, `alpha` and `beta`, each running the production
-compose bundle behind real DNS + Caddy-issued TLS (staging subdomains — needs
-one-time provisioning, §6). These attach to the existing
-`tests/release-runner` lanes.
+Two long-lived EC2 boxes, `alpha` and `beta`, each running the production compose bundle behind real DNS + Caddy-issued TLS (staging subdomains — needs one-time provisioning, §6). These attach to the existing `tests/release-runner` lanes.
 
-**T3-SH-1: cold boot to second user on real infra.** Fresh instance (reset
-motion, §6) → `bootstrap.sh` → claim → admin login → invite → register →
-invitee login. Same walk as the CI smoke but through real TLS/DNS, asserting
-rows in the instance Postgres ("shows up in the database in AWS").
+**T3-SH-1: cold boot to second user on real infra.** Fresh instance (reset motion, §6) → `bootstrap.sh` → claim → admin login → invite → register → invitee login. Same walk as the CI smoke but through real TLS/DNS, asserting rows in the instance Postgres ("shows up in the database in AWS").
 
-**T3-SH-2: real desktop against alpha/beta.** Real (Tauri) desktop build:
-connect to alpha → password login → reset → connect to beta. This is the
-only lane that proves the relaunch + config.json + keychain path end-to-end.
+**T3-SH-2: real desktop against alpha/beta.** Real (Tauri) desktop build: connect to alpha → password login → reset → connect to beta. This is the only lane that proves the relaunch + config.json + keychain path end-to-end.
 
-**T3-SH-3: gateway add-on.** On alpha: set the `AGENT_GATEWAY_*`/`LITELLM_*`
-env block (per `.env.production.example`, post-#1054) → compose up with
-`--profile agent-gateway` → agent request through the gateway with the
-staging test key on the cheapest model → real response. (Consistent with the
-no-mock-LLM ruling.)
+**T3-SH-3: gateway add-on.** On alpha: set the `AGENT_GATEWAY_*`/`LITELLM_*` env block (per `.env.production.example`, post-#1054) → compose up with `--profile agent-gateway` → agent request through the gateway with the staging test key on the cheapest model → real response. (Consistent with the no-mock-LLM ruling.)
 
 ### Tier 4 (upgrade path)
 
-**T4-SH-1: operator update motion.**
-Boot with `PROLIFERATE_SERVER_IMAGE_TAG=<N−1>` → run `./update.sh` → assert:
-migrations applied, health green, `/meta` reports N, existing session/user
-data intact.
+**T4-SH-1: operator update motion.** Boot with `PROLIFERATE_SERVER_IMAGE_TAG=<N−1>` → run `./update.sh` → assert: migrations applied, health green, `/meta` reports N, existing session/user data intact.
 
-**T4-SH-2: artifact chain (the incident test — see §5).**
-Mechanics (confirmed by the 2026-07-09 release-pipeline investigation): the
-desktop's Tauri updater feed is hardcoded to the CDN
-(`downloads.proliferate.com`, S3 `proliferate-desktop-downloads` behind
-CloudFront); the server's `GET /desktop/updater/latest.json` 302-redirects to
-the versioned manifest for its pinned `desktopVersion`, falling back to the
-flat manifest when the versioned one is missing — so the server pin is
-display-only today and the CDN is the ground truth.
-Asserts, against the release under test:
+**T4-SH-2: artifact chain (the incident test — see §5).** Mechanics (confirmed by the 2026-07-09 release-pipeline investigation): the desktop's Tauri updater feed is hardcoded to the CDN (`downloads.proliferate.com`, S3 `proliferate-desktop-downloads` behind CloudFront); the server's `GET /desktop/updater/latest.json` 302-redirects to the versioned manifest for its pinned `desktopVersion`, falling back to the flat manifest when the versioned one is missing — so the server pin is display-only today and the CDN is the ground truth. Asserts, against the release under test:
 1. `GET <server>/desktop/updater/latest.json` follows to HTTP 200.
 2. `https://downloads.proliferate.com/desktop/stable/latest.json` →
    `version` == the release's desktop version, `pub_date` fresh (== release
@@ -151,14 +70,11 @@ Asserts, against the release under test:
 4. **HEAD every platform artifact URL in the manifest → HTTP 200.**
 5. The tag `desktop-v<version>` exists and contains the release SHA
    (`git merge-base --is-ancestor <release-sha> desktop-v<version>`).
-Version-string equality is not a pass; only a fetchable artifact is. This
-must run in the release gate, not nightly-only.
+Version-string equality is not a pass; only a fetchable artifact is. This must run in the release gate, not nightly-only.
 
 ## 4. Tier-2 escalations (the desktop-web gaps)
 
-The connect affordance is gated on `isTauriRuntimeAvailable()`
-(`apps/desktop/src/components/auth/LoginScreen.tsx:117`) — **plain desktop-web
-never renders it**. Per the prefer-desktop-web ruling:
+The connect affordance is gated on `isTauriRuntimeAvailable()` (`apps/desktop/src/components/auth/LoginScreen.tsx:117`) — **plain desktop-web never renders it**. Per the prefer-desktop-web ruling:
 
 - T2-SH-1 drives the **LoginScreen fixture** that #1027 mirrored the connect
   UI into (used by tests/playground) — covers dialog logic, validation, trust
@@ -169,15 +85,7 @@ never renders it**. Per the prefer-desktop-web ruling:
 
 ## 5. Why the artifact-chain gate exists (incident, 2026-07-09)
 
-The connect feature (#1027) merged 2026-07-09 10:48 UTC. The nightly train had
-already cut `desktop-v0.3.13` at 09:05; both later train runs failed on a
-same-day `release-2026-07-09` tag-collision in `create-release-tags.mjs`
-(after one of them had already pushed a 0.3.14 version bump to main). Result:
-the server advanced to v0.3.16 while **no shipped desktop artifact contained
-the launch-flagship feature**, and every desktop-v* GitHub release sits in
-draft. No existing check catches this class: versions look consistent; the
-artifact is simply absent. T4-SH-2 is that check, and it must run in the
-release gate, not nightly-only.
+The connect feature (#1027) merged 2026-07-09 10:48 UTC. The nightly train had already cut `desktop-v0.3.13` at 09:05; both later train runs failed on a same-day `release-2026-07-09` tag-collision in `create-release-tags.mjs` (after one of them had already pushed a 0.3.14 version bump to main). Result: the server advanced to v0.3.16 while **no shipped desktop artifact contained the launch-flagship feature**, and every desktop-v* GitHub release sits in draft. No existing check catches this class: versions look consistent; the artifact is simply absent. T4-SH-2 is that check, and it must run in the release gate, not nightly-only.
 
 ## 6. Infrastructure prerequisites (one-time)
 

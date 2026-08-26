@@ -1,12 +1,8 @@
 # Product MCP Servers
 
-Product MCP servers are AnyHarness-owned tools exposed to agents through MCP.
-They let an agent call Proliferate product capabilities such as Workspace
-agent operations, reviews, cowork artifacts, computer use, browser use, or
-artifacts.
+Product MCP servers are AnyHarness-owned tools exposed to agents through MCP. They let an agent call Proliferate product capabilities such as Workspace agent operations, reviews, cowork artifacts, computer use, browser use, or artifacts.
 
-This document does not cover arbitrary external/user-supplied MCP servers
-except where those servers are merged into a session launch.
+This document does not cover arbitrary external/user-supplied MCP servers except where those servers are merged into a session launch.
 
 ## Core Model
 
@@ -36,8 +32,7 @@ integrations/mcp
   How does MCP JSON-RPC, tool formatting, and capability-token validation work?
 ```
 
-The live session actor receives a final concrete MCP server list. It must not
-decide which product MCPs are enabled.
+The live session actor receives a final concrete MCP server list. It must not decide which product MCPs are enabled.
 
 ## Current And Future Product MCPs
 
@@ -58,9 +53,7 @@ domains/browser/mcp
 domains/workspace_tools/mcp
 ```
 
-Current product MCPs are HTTP MCP endpoints exposed by AnyHarness and injected
-into agent sessions as MCP server configs. They are not separate stdio MCP
-processes.
+Current product MCPs are HTTP MCP endpoints exposed by AnyHarness and injected into agent sessions as MCP server configs. They are not separate stdio MCP processes.
 
 ## Target Source Shape
 
@@ -145,9 +138,7 @@ Banned:
 - launch prompt text
 - binding summary semantics
 
-The shared kit should be usable by every product MCP. If a feature needs custom
-JSON-RPC plumbing, first ask whether the shared dispatcher is missing a generic
-MCP behavior.
+The shared kit should be usable by every product MCP. If a feature needs custom JSON-RPC plumbing, first ask whether the shared dispatcher is missing a generic MCP behavior.
 
 ## Product MCP Definition
 
@@ -240,8 +231,7 @@ calls.rs
 
 Owns static metadata only.
 
-It may reference domain-owned constants and copy. It must not query stores,
-read runtime state, or build session launch config.
+It may reference domain-owned constants and copy. It must not query stores, read runtime state, or build session launch config.
 
 ### `auth.rs`
 
@@ -267,13 +257,7 @@ browser_use_allowed
 artifact_namespace
 ```
 
-Runtime bearer auth proves the HTTP caller can access protected AnyHarness
-routes. The product MCP capability token proves the MCP call was minted for a
-specific workspace/session/product capability. The token's expiry is
-defense-in-depth only: because the header is static for the life of the
-session, the shared endpoint accepts an expired-but-authentic token while the
-bound session is still open, and rejects with `403` plus a cause-naming body
-(never `401`, which triggers MCP client OAuth discovery) once it is not.
+Runtime bearer auth proves the HTTP caller can access protected AnyHarness routes. The product MCP capability token proves the MCP call was minted for a specific workspace/session/product capability. The token's expiry is defense-in-depth only: because the header is static for the life of the session, the shared endpoint accepts an expired-but-authentic token while the bound session is still open, and rejects with `403` plus a cause-naming body (never `401`, which triggers MCP client OAuth discovery) once it is not.
 
 ### `context.rs`
 
@@ -315,16 +299,9 @@ browser
   session has browser-use permission and browser sidecar is available
 ```
 
-Context resolution belongs in the product domain because it depends on product
-state.
+Context resolution belongs in the product domain because it depends on product state.
 
-Expected but currently unavailable product state should normally resolve to a
-typed context that advertises fewer tools rather than failing protocol setup.
-A reviews MCP attached to a session with no current review role is one
-example. Workspace is stricter: it lists its exact 20 tools and applies current
-role and relationship authorization on every call. Use a hard context error
-for missing rows, cross-workspace tokens, corrupt state, or a product MCP
-attached to a fundamentally unsupported surface.
+Expected but currently unavailable product state should normally resolve to a typed context that advertises fewer tools rather than failing protocol setup. A reviews MCP attached to a session with no current review role is one example. Workspace is stricter: it lists its exact 20 tools and applies current role and relationship authorization on every call. Use a hard context error for missing rows, cross-workspace tokens, corrupt state, or a product MCP attached to a fundamentally unsupported surface.
 
 ### `tools.rs`
 
@@ -339,14 +316,9 @@ input_schema
 availability by context/role
 ```
 
-Tool definitions should be easy to unit test. Do not hide business logic in
-tool-list construction.
+Tool definitions should be easy to unit test. Do not hide business logic in tool-list construction.
 
-Tool names stay generic (`create_artifact`, not `create_cowork_artifact`)
-because the ACP server name namespaces them at the agent surface
-(`mcp__artifacts__create_artifact`). Product identity, route slug, and ACP
-server name may differ; Workspace uses id and route slug `workspace` with ACP
-server name `proliferate_workspace`.
+Tool names stay generic (`create_artifact`, not `create_cowork_artifact`) because the ACP server name namespaces them at the agent surface (`mcp__artifacts__create_artifact`). Product identity, route slug, and ACP server name may differ; Workspace uses id and route slug `workspace` with ACP server name `proliferate_workspace`.
 
 ### `calls.rs`
 
@@ -361,13 +333,11 @@ call product domain service/runtime/live capability
 return structured MCP result
 ```
 
-Tool calls should delegate to product services/runtimes. The MCP server must
-not become a second implementation of the product feature.
+Tool calls should delegate to product services/runtimes. The MCP server must not become a second implementation of the product feature.
 
 ## Product MCP Trait
 
-Rust should use traits and typed structs, not inheritance or feature-local
-dispatchers copied by hand.
+Rust should use traits and typed structs, not inheritance or feature-local dispatchers copied by hand.
 
 Target shape:
 
@@ -397,8 +367,7 @@ Shared code handles JSON-RPC. Product code handles product meaning.
 
 ## Session MCP Binding Modules
 
-`domains/sessions/mcp_bindings/**` owns the central session MCP launch
-boundary.
+`domains/sessions/mcp_bindings/**` owns the central session MCP launch boundary.
 
 File responsibilities:
 
@@ -458,8 +427,7 @@ It does not own:
 
 ## Product MCP Registry
 
-`product_registry.rs` is the session-facing registry of product MCPs available
-to assembly and endpoints.
+`product_registry.rs` is the session-facing registry of product MCPs available to assembly and endpoints.
 
 It should provide:
 
@@ -470,12 +438,9 @@ server dispatch target for generic MCP endpoint
 injection metadata for session launch
 ```
 
-It may be constructed by app composition when concrete servers need runtime
-dependencies. The session MCP assembly still owns selection and injection; app
-composition only wires available implementations.
+It may be constructed by app composition when concrete servers need runtime dependencies. The session MCP assembly still owns selection and injection; app composition only wires available implementations.
 
-Do not make each product route manually rediscover its own MCP server. All
-product MCP endpoint dispatch should use the same registry shape.
+Do not make each product route manually rediscover its own MCP server. All product MCP endpoint dispatch should use the same registry shape.
 
 ## Selection Policy
 
@@ -533,8 +498,7 @@ artifact tools enabled for team automation
   receives artifacts MCP with org/team/workspace/session scope
 ```
 
-The live actor only receives the final launch payload. It must not evaluate
-selection policy.
+The live actor only receives the final launch payload. It must not evaluate selection policy.
 
 ## Injection Shape
 
@@ -551,12 +515,9 @@ headers:
   x-anyharness-product-mcp-token: <capability token>
 ```
 
-The capability token is minted at launch and scoped to the selected product
-MCP. It is not durable user config.
+The capability token is minted at launch and scoped to the selected product MCP. It is not durable user config.
 
-The binding summary should make attached product MCPs visible without exposing
-secret headers. Its stable id is derived from the product MCP id, while its
-`serverName` reports the ACP server name used for native tool names.
+The binding summary should make attached product MCPs visible without exposing secret headers. Its stable id is derived from the product MCP id, while its `serverName` reports the ACP server name used for native tool names.
 
 ## Endpoint Flow
 
@@ -566,8 +527,7 @@ Preferred generic endpoint:
 /v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/{product_mcp_id}
 ```
 
-Product MCPs use only the generic endpoint. There is no compatibility alias for
-the removed Subagents MCP route or tool names.
+Product MCPs use only the generic endpoint. There is no compatibility alias for the removed Subagents MCP route or tool names.
 
 POST flow:
 
@@ -603,13 +563,9 @@ SessionActor receives notification
 SessionEventSink persists/broadcasts normalized event
 ```
 
-If a product MCP changes durable product state independently, the owning domain
-may also expose normal API/UI refresh state. That does not belong in
-`integrations/mcp`.
+If a product MCP changes durable product state independently, the owning domain may also expose normal API/UI refresh state. That does not belong in `integrations/mcp`.
 
-A renderer-local effect must not treat the agent-visible ACP tool result as an
-authority channel. It requires a narrow runtime-owned session event emitted
-after authorization; `workspace_pin_intent` is the current example.
+A renderer-local effect must not treat the agent-visible ACP tool result as an authority channel. It requires a narrow runtime-owned session event emitted after authorization; `workspace_pin_intent` is the current example.
 
 ## Internal vs User-Selectable
 
@@ -645,8 +601,7 @@ Properties:
 - may depend on compute capability availability
 - use the same product MCP server pattern as internal MCPs
 
-Only selection and UI policy differ. The protocol, endpoint, auth, context,
-tools, and calls shape is the same.
+Only selection and UI policy differ. The protocol, endpoint, auth, context, tools, and calls shape is the same.
 
 ## Storage
 
@@ -718,14 +673,11 @@ product_mcp_id
 role/capability
 ```
 
-The same product MCP definition and call semantics should work locally and in
-cloud. Routing changes; product behavior should not fork.
+The same product MCP definition and call semantics should work locally and in cloud. Routing changes; product behavior should not fork.
 
 ## Adding A New Product MCP
 
-Concrete definitions for the MCPs currently being standardized live under
-[definitions/](./). Add or update that definition before
-implementing code.
+Concrete definitions for the MCPs currently being standardized live under [definitions/](./). Add or update that definition before implementing code.
 
 Required steps:
 

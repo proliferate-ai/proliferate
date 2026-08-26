@@ -7,16 +7,11 @@
 > reference — per-harness recipes, the settings surface, delivery detail —
 > until it is folded in; where the two disagree, the system spec wins.
 
-Status: target. This document describes the accepted destination for the
-agent-auth platform. The body is written in the ideal state. Every
-difference from `main` today is listed in [Current gaps](#current-gaps);
-the list shrinks as follow-up PRs land, and the label comes off when it is
-empty.
+Status: target. This document describes the accepted destination for the agent-auth platform. The body is written in the ideal state. Every difference from `main` today is listed in [Current gaps](#current-gaps); the list shrinks as follow-up PRs land, and the label comes off when it is empty.
 
 ## Purpose
 
-Agent auth is how a harness gets working model credentials at launch. It
-owns four things:
+Agent auth is how a harness gets working model credentials at launch. It owns four things:
 
 - the stored answer to "which auth source does this user use for this
   harness on this surface" (the selection model),
@@ -27,19 +22,11 @@ owns four things:
 - the per-harness application glue that turns a resolved source into the
   exact files and environment the harness's own auth mechanism expects.
 
-The end state is one sentence: **at session launch, the runtime reads one
-local document, resolves the harness's selected sources, and materializes
-them; a selection that cannot be satisfied refuses the launch with a typed
-error rather than silently running on different credentials.**
+The end state is one sentence: **at session launch, the runtime reads one local document, resolves the harness's selected sources, and materializes them; a selection that cannot be satisfied refuses the launch with a typed error rather than silently running on different credentials.**
 
 ## Boundaries
 
-This is the *apply* side of the declare-vs-apply split defined in
-[agent-distribution.md](../harnesses/distribution.md): the registry declares a
-harness's auth vocabulary (auth slots, env var names, login policy,
-supported provider-config kinds), and readiness is computed from that
-vocabulary. Agent auth owns what happens after a user picks a source:
-storage, delivery, and application.
+This is the *apply* side of the declare-vs-apply split defined in [agent-distribution.md](../harnesses/distribution.md): the registry declares a harness's auth vocabulary (auth slots, env var names, login policy, supported provider-config kinds), and readiness is computed from that vocabulary. Agent auth owns what happens after a user picks a source: storage, delivery, and application.
 
 Fences with the neighboring platforms:
 
@@ -56,13 +43,9 @@ Fences with the neighboring platforms:
 
 ## The selection model
 
-A selection answers "which source fills this harness's auth slot for this
-user on this surface." It is stored per `(user, harness_kind, surface)`
-where surface is `local` (desktop) or `cloud` (sandboxes) — the same user
-can run the gateway in cloud sandboxes and their native login on desktop.
+A selection answers "which source fills this harness's auth slot for this user on this surface." It is stored per `(user, harness_kind, surface)` where surface is `local` (desktop) or `cloud` (sandboxes) — the same user can run the gateway in cloud sandboxes and their native login on desktop.
 
-Three tables in
-[db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py):
+Three tables in [db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py):
 
 | Table | One row is | Scope | Key fields |
 | --- | --- | --- | --- |
@@ -102,13 +85,7 @@ Selection laws:
 
 ### Registry is the allow-list authority (FR-4)
 
-[registry.json](../../../catalogs/agents/registry.json) is the single
-declared authority for three allow-lists: the harness-kind set, the
-gateway-capable set (a harness is gateway-capable exactly when its
-`auth.slots[]` contains a slot with id `gateway`; cursor has none), and the
-single-vs-multi cardinality (an explicit per-agent `authCardinality` field,
-`single` or `multi`, because deriving multiplicity from slot count is fragile).
-Every other plane mirrors those sets rather than re-deriving them:
+[registry.json](../../../catalogs/agents/registry.json) is the single declared authority for three allow-lists: the harness-kind set, the gateway-capable set (a harness is gateway-capable exactly when its `auth.slots[]` contains a slot with id `gateway`; cursor has none), and the single-vs-multi cardinality (an explicit per-agent `authCardinality` field, `single` or `multi`, because deriving multiplicity from slot count is fragile). Every other plane mirrors those sets rather than re-deriving them:
 
 - The Python constants (`AGENT_AUTH_HARNESS_KINDS`,
   `AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS`,
@@ -143,36 +120,15 @@ Every other plane mirrors those sets rather than re-deriving them:
 
 ### Not auth: retired harness launch settings
 
-The former `agent_auth_harness_settings` passenger was configuration, never
-credential state. Static launch flag/env deltas were removed with the
-target-observed launch-option cutover: first-party launch behavior now sends
-only an exact model and `controlValues` selected from the target observation.
-No catalog-declared harness setting may change executable membership or the
-auth route used by the override-free probe.
+The former `agent_auth_harness_settings` passenger was configuration, never credential state. Static launch flag/env deltas were removed with the target-observed launch-option cutover: first-party launch behavior now sends only an exact model and `controlValues` selected from the target observation. No catalog-declared harness setting may change executable membership or the auth route used by the override-free probe.
 
-The passenger needs a vehicle: a harness only gets a `harnesses` entry
-when it has an enabled selection ("Absent means native; present-but-empty
-fails closed" forbids a settings-only entry), so a native-auth harness's
-persisted settings never appear in the rendered document. The settings
-pane therefore reads them from the `harness_settings` **response rider**
-on `GET /state` — the surface's full persisted map, keyed by
-harness_kind, carried next to `fingerprint` and stripped the same way by
-the desktop before the runtime push
-([local-auth-state.ts](../../../apps/packages/product-client/src/lib/domain/agents/local-auth-state.ts)).
-The runtime consequence stands: a native-auth harness's settings do not
-reach `resolve_settings_deltas`, because the document that would carry
-them is exactly the one a selection-less harness is absent from.
+The passenger needs a vehicle: a harness only gets a `harnesses` entry when it has an enabled selection ("Absent means native; present-but-empty fails closed" forbids a settings-only entry), so a native-auth harness's persisted settings never appear in the rendered document. The settings pane therefore reads them from the `harness_settings` **response rider** on `GET /state` — the surface's full persisted map, keyed by harness_kind, carried next to `fingerprint` and stripped the same way by the desktop before the runtime push ([local-auth-state.ts](../../../apps/packages/product-client/src/lib/domain/agents/local-auth-state.ts)). The runtime consequence stands: a native-auth harness's settings do not reach `resolve_settings_deltas`, because the document that would carry them is exactly the one a selection-less harness is absent from.
 
-`provider_hint` on a selection row is likewise display-only ("this key is
-my Anthropic key"); the renderer never puts it on the wire and nothing at
-launch reads it.
+`provider_hint` on a selection row is likewise display-only ("this key is my Anthropic key"); the renderer never puts it on the wire and nothing at launch reads it.
 
 ## The vault
 
-**One table holds every kind of user-provided credential.** A typed
-provider configuration is not a separate table and not multiple rows: it
-is one `agent_api_key` row whose `kind` says how to interpret the
-encrypted payload.
+**One table holds every kind of user-provided credential.** A typed provider configuration is not a separate table and not multiple rows: it is one `agent_api_key` row whose `kind` says how to interpret the encrypted payload.
 
 | `kind` | The ciphertext decrypts to | Applied as |
 | --- | --- | --- |
@@ -180,9 +136,7 @@ encrypted payload.
 | `aws_bedrock` | a JSON document: `region` + `bearerToken` | the harness's own Bedrock env set (for claude: `CLAUDE_CODE_USE_BEDROCK=1`, `AWS_BEARER_TOKEN_BEDROCK`, `AWS_REGION`) |
 | `azure_openai` | a JSON document: `endpoint` + `apiKey` | the harness's own Azure env set (claude's Foundry vars; opencode's `AZURE_API_KEY` + `AZURE_RESOURCE_NAME`) |
 
-The typed kinds carry exactly the fields some harness's env set actually
-consumes, and no more. Two consequences worth stating, because both were
-once a third field:
+The typed kinds carry exactly the fields some harness's env set actually consumes, and no more. Two consequences worth stating, because both were once a third field:
 
 - **Bedrock is `region` + `bearerToken`**, not a static access-key pair and
   not a role to assume; that is the shape every arm of
@@ -196,14 +150,7 @@ once a third field:
   A field the apply side cannot honor must not be collected, so the Azure
   entry affordance asks for endpoint and key only.
 
-All kinds share the same lifecycle: Fernet-encrypted at rest
-(`cloud-secret-v1` key id), created and revoked through
-[api_keys.py](../../../server/proliferate/db/store/agent_gateway/api_keys.py),
-displayed only as a redacted hint (`sk-…abc4`). A vault entry is not
-bound to a harness at storage time — binding happens when a selection row
-references it. Decryption happens in exactly two places, both
-server-side: state materialization and the authenticated `GET /state`
-read.
+All kinds share the same lifecycle: Fernet-encrypted at rest (`cloud-secret-v1` key id), created and revoked through [api_keys.py](../../../server/proliferate/db/store/agent_gateway/api_keys.py), displayed only as a redacted hint (`sk-…abc4`). A vault entry is not bound to a harness at storage time — binding happens when a selection row references it. Decryption happens in exactly two places, both server-side: state materialization and the authenticated `GET /state` read.
 
 Two rules keep typed kinds from sprawling:
 
@@ -216,19 +163,13 @@ Two rules keep typed kinds from sprawling:
   a user would set by hand), so a typed config is rendered by the same
   per-harness recipe table as every other source — no separate code path.
 
-Note the deployment-side complement: the gateway itself already serves
-Bedrock models using the deployment's own AWS role (model-gateway.md's
-config). Typed vault configs are for users who bring *their own* cloud
-account; the two never mix in one source.
+Note the deployment-side complement: the gateway itself already serves Bedrock models using the deployment's own AWS role (model-gateway.md's config). Typed vault configs are for users who bring *their own* cloud account; the two never mix in one source.
 
 ## Delivery: `state.json`
 
-Selections and vault rows live in the product database; harnesses launch
-on other machines. One document carries resolved key material to the
-runtime: `<runtime_home>/agent-auth/state.json`, mode 0600, version 2.
+Selections and vault rows live in the product database; harnesses launch on other machines. One document carries resolved key material to the runtime: `<runtime_home>/agent-auth/state.json`, mode 0600, version 2.
 
-Wire contract
-([state.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/state.rs)):
+Wire contract ([state.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/state.rs)):
 
 ```json
 {
@@ -287,8 +228,7 @@ Document laws:
 
 ### Applied means acknowledged
 
-An auth change is not *real* until the target runtime has confirmed the
-applied document, and the UI says so:
+An auth change is not *real* until the target runtime has confirmed the applied document, and the UI says so:
 
 - **Pending → applied.** A selection write shows as *pending* on its surface
   until the runtime acknowledges the applied `state.json`. A failed delivery
@@ -324,9 +264,7 @@ applied document, and the UI says so:
 
 ### Cloud delivery
 
-The materialization worker writes the file directly into the user's
-sandbox
-(`materialize/agent_auth.py` (deleted, cull part 2)).
+The materialization worker writes the file directly into the user's sandbox (`materialize/agent_auth.py` (deleted, cull part 2)).
 
 - **When it runs.** Unconditionally during sandbox bootstrap, as one of
   the standard materialization steps
@@ -364,9 +302,7 @@ sandbox
 
 ### Desktop delivery
 
-The desktop app is the transport: it pulls from the control plane and
-pushes into its embedded runtime
-([use-local-auth-state-sync.ts](../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts)).
+The desktop app is the transport: it pulls from the control plane and pushes into its embedded runtime ([use-local-auth-state-sync.ts](../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts)).
 
 - **When it runs.** On app start once signed in with a healthy runtime,
   and again whenever an auth mutation (selection PUT, vault
@@ -431,22 +367,9 @@ There is no third path.
 
 ## Applying auth at launch
 
-The mental model: **a launch builds the harness a world to run in.** Each
-harness expects credentials in its own shape — an env var, a config file
-in a specific home directory, a provider block in a JSON config. So at
-every live-session start (create, resume, fork), the runtime computes
-exactly what that world must look like for the selected sources — every
-env var to set, every env var that must *not* leak in, every file — then
-writes the files and spawns the process into that environment. The
-computation is deterministic from applied `state.json`, the selected harness's
-auth declaration, and—only for a route whose config must enumerate provider
-models—a live gateway model-materialization plan. That plan never supplies an
-executable default or picker membership; the subsequent override-free harness
-probe is the authority. Keeping lookup outside render makes retries idempotent
-and the recipes unit-testable as pure functions.
+The mental model: **a launch builds the harness a world to run in.** Each harness expects credentials in its own shape — an env var, a config file in a specific home directory, a provider block in a JSON config. So at every live-session start (create, resume, fork), the runtime computes exactly what that world must look like for the selected sources — every env var to set, every env var that must *not* leak in, every file — then writes the files and spawns the process into that environment. The computation is deterministic from applied `state.json`, the selected harness's auth declaration, and—only for a route whose config must enumerate provider models—a live gateway model-materialization plan. That plan never supplies an executable default or picker membership; the subsequent override-free harness probe is the authority. Keeping lookup outside render makes retries idempotent and the recipes unit-testable as pure functions.
 
-The pipeline ([route_auth/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs))
-answers four questions in order:
+The pipeline ([route_auth/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs)) answers four questions in order:
 
 1. **What did the user choose?** Load `state.json` (checking the
    server-origin guard) and fold the harness's `sources[]` into a typed
@@ -478,31 +401,15 @@ answers four questions in order:
    in-flight session launched under revision N−1 keeps its files; GC
    retains the current and immediately previous revision only.
 
-Any failure at any stage maps to `StartSessionError::RouteAuth`
-([startup.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs))
-and the launch is refused — 409 for selection-shaped preconditions, 500
-for a malformed or unwritable state
-([sessions_errors.rs](../../../anyharness/crates/anyharness-lib/src/api/http/sessions_errors.rs)).
-There is no fallback to native on a failure: a user who selected the
-gateway never silently runs on their personal login.
+Any failure at any stage maps to `StartSessionError::RouteAuth` ([startup.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs)) and the launch is refused — 409 for selection-shaped preconditions, 500 for a malformed or unwritable state ([sessions_errors.rs](../../../anyharness/crates/anyharness-lib/src/api/http/sessions_errors.rs)). There is no fallback to native on a failure: a user who selected the gateway never silently runs on their personal login.
 
-Environment layering law: the spawned process env is composed
-workspace → session → route_auth (later wins), and route_auth's remove
-list strips its keys from both the composed map and the truly inherited
-ambient process env (`command.env_remove` at spawn,
-[process.rs](../../../anyharness/crates/anyharness-lib/src/live/sessions/driver/process.rs)).
-An ambient `ANTHROPIC_API_KEY` on the host can never shadow or leak into
-a routed launch.
+Environment layering law: the spawned process env is composed workspace → session → route_auth (later wins), and route_auth's remove list strips its keys from both the composed map and the truly inherited ambient process env (`command.env_remove` at spawn, [process.rs](../../../anyharness/crates/anyharness-lib/src/live/sessions/driver/process.rs)). An ambient `ANTHROPIC_API_KEY` on the host can never shadow or leak into a routed launch.
 
-Route-auth is the **only writer of harness homes and config files** under
-`agent-auth/`, and it runs no commands — application is exclusively
-atomic file writes plus env composition, which is what makes a failed
-launch side-effect-free and a retry idempotent.
+Route-auth is the **only writer of harness homes and config files** under `agent-auth/`, and it runs no commands — application is exclusively atomic file writes plus env composition, which is what makes a failed launch side-effect-free and a retry idempotent.
 
 ### Per-harness recipes
 
-The render dispatch is a per-harness table; this is where "every harness
-has its own way of accepting auth" is paid for, in one place:
+The render dispatch is a per-harness table; this is where "every harness has its own way of accepting auth" is paid for, in one place:
 
 | Harness | Native route | Gateway route | `api_key` route |
 | --- | --- | --- | --- |
@@ -529,108 +436,31 @@ Three properties of the table itself, all load-bearing:
   are always removed, and each Anthropic selector the route did *not* itself set
   is removed so an ambient value cannot shadow the chosen credential.
 
-Typed provider configs are a third column in spirit but not in code: a
-`provider_config` source renders its env map through the same generic
-set-these-vars path as `api_key`, plus the harness's mode switch where
-one exists (claude's `CLAUDE_CODE_USE_BEDROCK`).
+Typed provider configs are a third column in spirit but not in code: a `provider_config` source renders its env map through the same generic set-these-vars path as `api_key`, plus the harness's mode switch where one exists (claude's `CLAUDE_CODE_USE_BEDROCK`).
 
-Ambient sanitization (claude): every routed launch strips
-`CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`,
-`AWS_BEARER_TOKEN_BEDROCK`, and any ambient
-`ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL` not set
-by the route itself
-([render.rs `sanitize_claude_ambient`](../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs)).
-A host configured for Bedrock cannot silently reroute a gateway or BYOK
-launch. Sanitization applies to every non-native route, not only the
-gateway.
+Ambient sanitization (claude): every routed launch strips `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `AWS_BEARER_TOKEN_BEDROCK`, and any ambient `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL` not set by the route itself ([render.rs `sanitize_claude_ambient`](../../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs)). A host configured for Bedrock cannot silently reroute a gateway or BYOK launch. Sanitization applies to every non-native route, not only the gateway.
 
-Adding a harness means: declare its auth vocabulary in the registry
-(agent-distribution), add its row to the server cardinality rules, and
-write its render recipe. Nothing else in the pipeline changes.
+Adding a harness means: declare its auth vocabulary in the registry (agent-distribution), add its row to the server cardinality rules, and write its render recipe. Nothing else in the pipeline changes.
 
 ### Native credentials are read, never written
 
-Harnesses' own logins (claude's `~/.claude/.credentials.json` and
-keychain entry, codex's `~/.codex/auth.json`, opencode's
-`~/.local/share/opencode/auth.json`, grok's `~/.grok/auth.json`, cursor's
-keychain entry) belong to the harness. Route-auth never writes them; for
-gateway launches it *isolates away from them* by pointing the harness at
-a synthetic home so a routed session cannot accidentally pick up (or
-bill) the user's personal login. Opencode is the designed exception:
-its data dir stays ambient because coexistence is its model. Native
-credential *detection* for readiness is a separate read-only path
-([auth/credentials.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs)),
-owned by agent-distribution's projection.
+Harnesses' own logins (claude's `~/.claude/.credentials.json` and keychain entry, codex's `~/.codex/auth.json`, opencode's `~/.local/share/opencode/auth.json`, grok's `~/.grok/auth.json`, cursor's keychain entry) belong to the harness. Route-auth never writes them; for gateway launches it *isolates away from them* by pointing the harness at a synthetic home so a routed session cannot accidentally pick up (or bill) the user's personal login. Opencode is the designed exception: its data dir stays ambient because coexistence is its model. Native credential *detection* for readiness is a separate read-only path ([auth/credentials.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs)), owned by agent-distribution's projection.
 
-Native login works on both surfaces, through the same mechanism:
-"Authenticate" starts the harness's own login command in a real PTY
-([login_terminal.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs))
-streamed over WebSocket
-([agent_login_terminals.rs](../../../anyharness/crates/anyharness-lib/src/api/ws/agent_login_terminals.rs)).
-The terminal is a PTY inside whichever process runs AnyHarness, so on
-desktop the login runs against the local runtime and in the cloud it runs
-inside the sandbox — the resulting credentials land in the sandbox's own
-harness home, exactly as they would on a laptop.
+Native login works on both surfaces, through the same mechanism: "Authenticate" starts the harness's own login command in a real PTY ([login_terminal.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs)) streamed over WebSocket ([agent_login_terminals.rs](../../../anyharness/crates/anyharness-lib/src/api/ws/agent_login_terminals.rs)). The terminal is a PTY inside whichever process runs AnyHarness, so on desktop the login runs against the local runtime and in the cloud it runs inside the sandbox — the resulting credentials land in the sandbox's own harness home, exactly as they would on a laptop.
 
 ### Readiness interplay
 
-Readiness projection (agent-distribution.md) is computed from installed
-artifacts plus locally-detected credentials, which alone would read
-`CredentialsRequired` for a routed harness even though launch will inject
-valid keys. Every projection therefore absorbs the enrolled route through
-**one** seam, `apply_launch_route_upgrade` in
-[readiness/service.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs):
-it asks route-auth one yes/no question —
-`launch_route_provides_credentials`, the same state load and origin
-guard as launch — and upgrades `CredentialsRequired`/`LoginRequired` to
-`Ready`. The predicate is deliberately tolerant (a malformed state reads
-`false`, never an error) because hard fail-closed belongs to the launch
-path alone; and the upgrade can never clear `InstallRequired` or
-`Unsupported`, because a route cannot conjure a binary.
+Readiness projection (agent-distribution.md) is computed from installed artifacts plus locally-detected credentials, which alone would read `CredentialsRequired` for a routed harness even though launch will inject valid keys. Every projection therefore absorbs the enrolled route through **one** seam, `apply_launch_route_upgrade` in [readiness/service.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs): it asks route-auth one yes/no question — `launch_route_provides_credentials`, the same state load and origin guard as launch — and upgrades `CredentialsRequired`/`LoginRequired` to `Ready`. The predicate is deliberately tolerant (a malformed state reads `false`, never an error) because hard fail-closed belongs to the launch path alone; and the upgrade can never clear `InstallRequired` or `Unsupported`, because a route cannot conjure a binary.
 
-Both the settings read (`resolve_agent`, behind `GET /v1/agents`) and the
-launch path (`resolve_launch_agent`) go through that one seam — that shared
-layer *is* the mechanism behind agent-distribution.md's law that the two
-surfaces resolve readiness the same way. They differ only in which
-environment counts: the launch path reads the workspace's composed env, the
-settings read the host's. `resolve_agent_unrouted` remains for the callers
-that genuinely mean "is the vendor CLI installed and logged in on this
-machine": the login flow (an enrolled route must never suppress a native
-login), the installed-only reconcile pass, and the catalog probe.
+Both the settings read (`resolve_agent`, behind `GET /v1/agents`) and the launch path (`resolve_launch_agent`) go through that one seam — that shared layer *is* the mechanism behind agent-distribution.md's law that the two surfaces resolve readiness the same way. They differ only in which environment counts: the launch path reads the workspace's composed env, the settings read the host's. `resolve_agent_unrouted` remains for the callers that genuinely mean "is the vendor CLI installed and logged in on this machine": the login flow (an enrolled route must never suppress a native login), the installed-only reconcile pass, and the catalog probe.
 
-Because route-upgraded readiness and native readiness collapse to the same
-`credentialState` on the wire, the projection also carries the provenance:
-`AgentSummary.credentialsFromRoute` is true exactly when the route is why
-the harness reads ready. Clients that mean native auth — first-run
-native-auth adoption, CLI login chrome — must exclude that case; the flag is
-absent on runtimes predating it, and those are the runtimes whose read
-surface was native-only, so absent correctly means "not from a route".
+Because route-upgraded readiness and native readiness collapse to the same `credentialState` on the wire, the projection also carries the provenance: `AgentSummary.credentialsFromRoute` is true exactly when the route is why the harness reads ready. Clients that mean native auth — first-run native-auth adoption, CLI login chrome — must exclude that case; the flag is absent on runtimes predating it, and those are the runtimes whose read surface was native-only, so absent correctly means "not from a route".
 
-Opencode's registry policy is `provider_managed`: the harness resolves
-PROVIDER auth itself at prompt time, so readiness does not gate on any ONE
-required slot the way `any_required_slot`/`all_required_slots` harnesses do.
-It is not credential-less, though — `aggregate_credential_state` (A9) reads
-every slot's actual ladder state and is `Ready` the moment any one resolves,
-same shape as `any_required_slot` but without requiring
-`required_for_readiness` on the slot. That is what makes the selection set
-opencode's real auth truth everywhere: a selection enrolls a route, the route
-clears the credential gap through the same `apply_launch_route_upgrade` seam
-every other harness uses, and read surfaces (settings' active-methods list,
-composer launch options) derive opencode's method state from the same
-selections.
+Opencode's registry policy is `provider_managed`: the harness resolves PROVIDER auth itself at prompt time, so readiness does not gate on any ONE required slot the way `any_required_slot`/`all_required_slots` harnesses do. It is not credential-less, though — `aggregate_credential_state` (A9) reads every slot's actual ladder state and is `Ready` the moment any one resolves, same shape as `any_required_slot` but without requiring `required_for_readiness` on the slot. That is what makes the selection set opencode's real auth truth everywhere: a selection enrolls a route, the route clears the credential gap through the same `apply_launch_route_upgrade` seam every other harness uses, and read surfaces (settings' active-methods list, composer launch options) derive opencode's method state from the same selections.
 
 ### The canonical evidence model
 
-Readiness above is the ladder a UI renders today. Underneath it, the runtime
-also computes ONE canonical per-harness agent-auth state as a struct of
-orthogonal facts plus one shared derivation
-([auth_state.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/auth_state.rs)).
-This is current runtime behavior for the derivation and its wire projection. It
-runs ALONGSIDE `credentialState`/`readiness`/`cliAuthState` and changes none of
-them, and the settings panes still render the legacy ladder until the UI rung
-adopts it. Its reason to exist is one invariant the legacy ladder cannot state:
-a harness reads green ONLY on dated evidence that the credential works, never on
-bare file or keychain presence.
+Readiness above is the ladder a UI renders today. Underneath it, the runtime also computes ONE canonical per-harness agent-auth state as a struct of orthogonal facts plus one shared derivation ([auth_state.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/auth_state.rs)). This is current runtime behavior for the derivation and its wire projection. It runs ALONGSIDE `credentialState`/`readiness`/`cliAuthState` and changes none of them, and the settings panes still render the legacy ladder until the UI rung adopts it. Its reason to exist is one invariant the legacy ladder cannot state: a harness reads green ONLY on dated evidence that the credential works, never on bare file or keychain presence.
 
 The facts are surface-agnostic and each answers one orthogonal question:
 
@@ -654,11 +484,7 @@ The facts are surface-agnostic and each answers one orthogonal question:
   `{initiated, awaiting-browser, completed, cancelled, timed-out}`, an `Option`
   whose adapters arrive later.
 
-`derive_agent_auth_state(facts)` folds those into a `DerivedState` carrying a
-`display`, a single `next_action`, and (when the display is green or an
-acknowledged `selected`) an `evidence_ref` and its `evidence_age`. The display
-vocabulary is a fixed precedence, first match wins, two structural pre-ladder
-terminals first:
+`derive_agent_auth_state(facts)` folds those into a `DerivedState` carrying a `display`, a single `next_action`, and (when the display is green or an acknowledged `selected`) an `evidence_ref` and its `evidence_age`. The display vocabulary is a fixed precedence, first match wins, two structural pre-ladder terminals first:
 
 1. **NotInstalled**: artifact absent; next is install.
 2. **Unsupported**: the render layer refuses the route (for example cursor
@@ -678,35 +504,15 @@ terminals first:
 10. **Installed**: installed with no chosen source and no verified credential;
     next is log in, paste a key, or choose a source.
 
-The invariant, enforced by a fact-permutation sweep in the module's tests: a
-display in `{Authenticated, Usable}` is reachable ONLY when `evidence_ref` names
-a probe observation, a key-scoped gateway check, or an acknowledged applied
-route, each with a non-null `evidence_age`. Bare file or keychain presence never
-yields green, so a locally-detected credential lands at `Installed` or
-`Selected` rather than a launchable terminal until a probe or trial confirms it.
+The invariant, enforced by a fact-permutation sweep in the module's tests: a display in `{Authenticated, Usable}` is reachable ONLY when `evidence_ref` names a probe observation, a key-scoped gateway check, or an acknowledged applied route, each with a non-null `evidence_age`. Bare file or keychain presence never yields green, so a locally-detected credential lands at `Installed` or `Selected` rather than a launchable terminal until a probe or trial confirms it.
 
-The derived state and the facts it derived from serialize additively onto the
-agents projection at `GET /v1/agents` as `AgentSummary.authState`, beside the
-untouched `credentialState`, `readiness`, and `credentialsFromRoute` fields
-([agents.rs](../../../anyharness/crates/anyharness-contract/src/v1/agents.rs)).
-The rung-2 fact adapter fills only what the readiness projection already carries.
-The probe, gateway, and handoff slots stay at their empty defaults until the
-rungs that own those inputs wire them, so no path through the current adapter can
-yield a green display.
+The derived state and the facts it derived from serialize additively onto the agents projection at `GET /v1/agents` as `AgentSummary.authState`, beside the untouched `credentialState`, `readiness`, and `credentialsFromRoute` fields ([agents.rs](../../../anyharness/crates/anyharness-contract/src/v1/agents.rs)). The rung-2 fact adapter fills only what the readiness projection already carries. The probe, gateway, and handoff slots stay at their empty defaults until the rungs that own those inputs wire them, so no path through the current adapter can yield a green display.
 
 ## The settings surface
 
-Everything above is the machinery. This section is the surface a user
-actually touches: **one pane per harness, reached from settings, whose job
-is to make "what credentials will my next session run on" legible in one
-screen** — and to make changing that answer a two-click operation rather
-than a configuration exercise.
+Everything above is the machinery. This section is the surface a user actually touches: **one pane per harness, reached from settings, whose job is to make "what credentials will my next session run on" legible in one screen** — and to make changing that answer a two-click operation rather than a configuration exercise.
 
-The implementation anchor is the Conductor reference capture at
-`reference/conductor/` (a local, untracked capture set): its setting-row
-rhythm (label left, state and affordance right, hairline between rows) is
-what this pane is built out of. Two shape rules follow from it and hold
-everywhere below:
+The implementation anchor is the Conductor reference capture at `reference/conductor/` (a local, untracked capture set): its setting-row rhythm (label left, state and affordance right, hairline between rows) is what this pane is built out of. Two shape rules follow from it and hold everywhere below:
 
 - **Flat sections, no cards.** The pane is a vertical stack of titled
   sections separated by rules. Nothing in it is a card, a tile, or a
@@ -719,67 +525,23 @@ everywhere below:
 
 ### Pane anatomy
 
-Seven sections, in this order. The order is the ruling: it walks from
-identity to auth to options to models, so the pane reads top to bottom as
-"which harness → how it authenticates → whether that worked → what else it
-can do → what it can run".
+Seven sections, in this order. The order is the ruling: it walks from identity to auth to options to models, so the pane reads top to bottom as "which harness → how it authenticates → whether that worked → what else it can do → what it can run".
 
-**§1 — Title and docs.** Harness display name, one-line description, and a
-link to the harness's own documentation (`docsUrl`, already declared per
-harness in the registry). Rationale: the first thing a user needs from a
-vendor-tool pane is confirmation of which vendor tool it is, and an exit to
-that vendor's own docs.
+**§1 — Title and docs.** Harness display name, one-line description, and a link to the harness's own documentation (`docsUrl`, already declared per harness in the registry). Rationale: the first thing a user needs from a vendor-tool pane is confirmation of which vendor tool it is, and an exit to that vendor's own docs.
 
-**§2 — Auth method.** The choice between `gateway`, `api_key`, and
-`native`, rendered Conductor-style but **not inside a card**. Radio
-semantics: picking one deselects the others, because for the four
-single-source harnesses the selection model is literally a radio
-([selection_rules.py](../../../server/proliferate/server/agent_auth/selection_rules.py)'s
-`SINGLE_SOURCE_HARNESSES`). Rationale: the stored model is one enabled
-source, so the control that writes it must be one-of-N and not a set of
-independent switches.
+**§2 — Auth method.** The choice between `gateway`, `api_key`, and `native`, rendered Conductor-style but **not inside a card**. Radio semantics: picking one deselects the others, because for the four single-source harnesses the selection model is literally a radio ([selection_rules.py](../../../server/proliferate/server/agent_auth/selection_rules.py)'s `SINGLE_SOURCE_HARNESSES`). Rationale: the stored model is one enabled source, so the control that writes it must be one-of-N and not a set of independent switches.
 
-For **opencode this section is not a gate.** Opencode is
-`MULTI_SOURCE_HARNESSES`
-([selection_rules.py](../../../server/proliferate/server/agent_auth/selection_rules.py)):
-gateway, any number of API keys, and its own native login all compose
-additively, so there is no "method" to pick before anything else becomes
-usable. Nothing below §2 is disabled or hidden pending a choice there.
-Rationale: a blocker UI would be a lie about a harness whose whole model is
-coexistence.
+For **opencode this section is not a gate.** Opencode is `MULTI_SOURCE_HARNESSES` ([selection_rules.py](../../../server/proliferate/server/agent_auth/selection_rules.py)): gateway, any number of API keys, and its own native login all compose additively, so there is no "method" to pick before anything else becomes usable. Nothing below §2 is disabled or hidden pending a choice there. Rationale: a blocker UI would be a lie about a harness whose whole model is coexistence.
 
-**§3 — Authenticated status.** *Every* method — gateway, API key, native —
-shows an authenticated-status row with a refresh affordance, styled exactly
-like Conductor's status row. Rationale: "am I authenticated" is one
-question with one answer shape; a per-method status treatment makes the
-user learn three.
+**§3 — Authenticated status.** *Every* method — gateway, API key, native — shows an authenticated-status row with a refresh affordance, styled exactly like Conductor's status row. Rationale: "am I authenticated" is one question with one answer shape; a per-method status treatment makes the user learn three.
 
-The native status row is additionally **clickable**, and opens the choice
-between refreshing the status and running a login terminal session. The
-login-terminal flow already exists and is surface-agnostic
-([HarnessAuthCliDetails.tsx:110-136](../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAuthCliDetails.tsx),
-over [login_terminal.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs));
-this ruling only moves its entry point onto the status row it explains.
-Rationale: the row that reports "not logged in" is the row a user clicks to
-fix it.
+The native status row is additionally **clickable**, and opens the choice between refreshing the status and running a login terminal session. The login-terminal flow already exists and is surface-agnostic ([HarnessAuthCliDetails.tsx:110-136](../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessAuthCliDetails.tsx), over [login_terminal.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs)); this ruling only moves its entry point onto the status row it explains. Rationale: the row that reports "not logged in" is the row a user clicks to fix it.
 
-Saved state and live state **coexist** in this section rather than
-overwriting each other: "API key set" is a fact about the vault and the
-selection; "authenticated" is a fact about the last observation. A saved
-key whose provider rejects it must read as *saved but failing*, never as
-either alone.
+Saved state and live state **coexist** in this section rather than overwriting each other: "API key set" is a fact about the vault and the selection; "authenticated" is a fact about the last observation. A saved key whose provider rejects it must read as *saved but failing*, never as either alone.
 
-**§4 — API keys.** **One spot per key.** Instead of a generic "add
-credential" affordance followed by a type picker, the section lists named
-entry affordances — "Set OpenAI API key", "Configure Bedrock", "Configure
-Azure" — each of which opens a **pre-typed, paste-first input**: the kind is
-already decided by which affordance was clicked, so the modal asks only for
-the value(s). Rationale: asking a user to classify a secret they just
-pasted is asking them to do the registry's job; the affordance they clicked
-already said which kind it is.
+**§4 — API keys.** **One spot per key.** Instead of a generic "add credential" affordance followed by a type picker, the section lists named entry affordances — "Set OpenAI API key", "Configure Bedrock", "Configure Azure" — each of which opens a **pre-typed, paste-first input**: the kind is already decided by which affordance was clicked, so the modal asks only for the value(s). Rationale: asking a user to classify a secret they just pasted is asking them to do the registry's job; the affordance they clicked already said which kind it is.
 
-The section **always displays which kind is set**, not just that something
-is. Field sets per kind, straight from the vault contract above:
+The section **always displays which kind is set**, not just that something is. Field sets per kind, straight from the vault contract above:
 
 | Affordance | Vault `kind` | Fields collected |
 | --- | --- | --- |
@@ -787,22 +549,11 @@ is. Field sets per kind, straight from the vault contract above:
 | "Configure Bedrock" | `aws_bedrock` | `region`, `bearerToken` |
 | "Configure Azure" | `azure_openai` | `endpoint`, `apiKey` |
 
-The Azure modal has **no `deployment` field** — see [The
-vault](#the-vault)'s Azure note: the renderer deliberately does not
-translate one, so collecting it would store a value nothing applies.
+The Azure modal has **no `deployment` field** — see [The vault](#the-vault)'s Azure note: the renderer deliberately does not translate one, so collecting it would store a value nothing applies.
 
-Keys are **disabled, not deleted, while in use.** Revocation of a key wired
-into an enabled selection is refused server-side with the referencing
-harnesses named
-([service.py:232-240](../../../server/proliferate/server/agent_auth/service.py)'s
-`agent_api_key_referenced`), so the UI renders that state up front as an
-"in use by N harnesses" chip and offers disable rather than a delete button
-that 409s. Rationale: surface the refusal as a state, not as an error the
-user discovers by hitting it.
+Keys are **disabled, not deleted, while in use.** Revocation of a key wired into an enabled selection is refused server-side with the referencing harnesses named ([service.py:232-240](../../../server/proliferate/server/agent_auth/service.py)'s `agent_api_key_referenced`), so the UI renders that state up front as an "in use by N harnesses" chip and offers disable rather than a delete button that 409s. Rationale: surface the refusal as a state, not as an error the user discovers by hitting it.
 
-**§5 — OpenCode "Add provider".** Opencode's pane gets one additional
-affordance: a modal that is a **near-literal copy of Conductor's** provider
-picker.
+**§5 — OpenCode "Add provider".** Opencode's pane gets one additional affordance: a modal that is a **near-literal copy of Conductor's** provider picker.
 
 - **The full list is searchable.** All ~149 vendored providers
   ([provider-registry.generated.json](../../../apps/packages/product-client/src/config/provider-registry.generated.json),
@@ -824,75 +575,34 @@ picker.
   See [open verification items](#open-verification-items) — the logo set's
   license is unresolved and gates the vendoring, not the design.
 
-Selecting a provider and pasting a key does exactly two writes: a vault
-`api_key` entry, and one opencode selection row whose `env_var_name` is the
-provider's first registry-declared env var and whose `provider_hint` is the
-provider id. The hint stays display-only, per [Not
-auth](#not-auth-retired-harness-launch-settings) — it is how the row later renders with
-that provider's name and logo, and nothing at launch reads it.
+Selecting a provider and pasting a key does exactly two writes: a vault `api_key` entry, and one opencode selection row whose `env_var_name` is the provider's first registry-declared env var and whose `provider_hint` is the provider id. The hint stays display-only, per [Not auth](#not-auth-retired-harness-launch-settings) — it is how the row later renders with that provider's name and logo, and nothing at launch reads it.
 
-The **expanded-row interaction is an assumption, not an observation**: this
-document specifies an inline paste field appearing in the selected row. The
-Conductor capture did not include that state, so it is marked as an
-assumption to be resolved against the reference before implementation.
+The **expanded-row interaction is an assumption, not an observation**: this document specifies an inline paste field appearing in the selected row. The Conductor capture did not include that state, so it is marked as an assumption to be resolved against the reference before implementation.
 
-**§6 — No static launch-options section.** The former catalog-declared
-harness toggles and `agent_auth_harness_settings` rider are compatibility
-storage only. Executable models and controls render from target
-`HarnessLaunchOptions` before create and from `SessionLiveConfigSnapshot`
-after handshake; the auth pane does not author a parallel launch setting.
+**§6 — No static launch-options section.** The former catalog-declared harness toggles and `agent_auth_harness_settings` rider are compatibility storage only. Executable models and controls render from target `HarnessLaunchOptions` before create and from `SessionLiveConfigSnapshot` after handshake; the auth pane does not author a parallel launch setting.
 
-**§7 — Model list.** The probed model list
-([MODELS.md](models.md)), auto-collapsed by default, with a
-probe status indicator on the left built from the **same status-row
-component as §3's auth status** and a refresh affordance on the right.
-Rationale: "when was this last checked, and can I check again" is the same
-question for credentials and for models, so it gets the same control; and
-the list itself is reference material, not the reason a user opened the
-pane, so it starts closed.
+**§7 — Model list.** The probed model list ([MODELS.md](models.md)), auto-collapsed by default, with a probe status indicator on the left built from the **same status-row component as §3's auth status** and a refresh affordance on the right. Rationale: "when was this last checked, and can I check again" is the same question for credentials and for models, so it gets the same control; and the list itself is reference material, not the reason a user opened the pane, so it starts closed.
 
-For opencode specifically, **the pane's job is auth-status clarity plus the
-provider listing** — ideally distinguishing opencode's own Zen service from
-a subscription plan in the wording (see the Zen note below) — and *not*
-displaying gateway models as its primary content. Rationale: an opencode
-user's question is "which of my providers are live", and a flat gateway
-model list answers a different question at the expense of that one.
+For opencode specifically, **the pane's job is auth-status clarity plus the provider listing** — ideally distinguishing opencode's own Zen service from a subscription plan in the wording (see the Zen note below) — and *not* displaying gateway models as its primary content. Rationale: an opencode user's question is "which of my providers are live", and a flat gateway model list answers a different question at the expense of that one.
 
-Wording: opencode's own hosted service is **Zen**, and the pane says Zen
-where it means Zen (the registry's `opencode-zen` slot, discovery kind
-`opencode-auth-json/opencode`). It is not "OpenCode auth" and not a
-subscription plan.
+Wording: opencode's own hosted service is **Zen**, and the pane says Zen where it means Zen (the registry's `opencode-zen` slot, discovery kind `opencode-auth-json/opencode`). It is not "OpenCode auth" and not a subscription plan.
 
 ### Model attribution
 
-Model rows in listings and popovers carry an origin icon. The rule is
-**selection-derived, not name-derived**, and it differs by cardinality:
+Model rows in listings and popovers carry an origin icon. The rule is **selection-derived, not name-derived**, and it differs by cardinality:
 
 | Harness kind | Attribution source | Rendered as |
 | --- | --- | --- |
 | single-source (claude, codex, grok, cursor) | the enabled selection itself | bedrock-typed entry → AWS logo on every row; azure-typed → Microsoft logo; `gateway` → Proliferate logo; native (no rows) → no icon |
 | opencode | the observation's verbatim `provider` field | that provider's logo, per row |
 
-Rationale: for a single-source harness every model in the list is served by
-the one selected source, so the selection *is* the attribution and no
-per-row inference is needed or correct. Opencode's list is genuinely mixed,
-and its observation already carries `provider` verbatim
-([MODELS.md](models.md)'s field contract) — so the honest
-attribution is the one the harness itself reported.
+Rationale: for a single-source harness every model in the list is served by the one selected source, so the selection *is* the attribution and no per-row inference is needed or correct. Opencode's list is genuinely mixed, and its observation already carries `provider` verbatim ([MODELS.md](models.md)'s field contract) — so the honest attribution is the one the harness itself reported.
 
-The icon table is explicit, with a neutral fallback for any provider
-without a mapped logo. And the hard rule: **attribution never gates
-anything.** An unknown provider, a missing logo, or an unmapped icon
-renders neutrally and changes nothing about whether the model is
-selectable, launchable, or visible.
+The icon table is explicit, with a neutral fallback for any provider without a mapped logo. And the hard rule: **attribution never gates anything.** An unknown provider, a missing logo, or an unmapped icon renders neutrally and changes nothing about whether the model is selectable, launchable, or visible.
 
 ### Probing during a degraded apply
 
-An apply can land while gateway enrollment sync is still incomplete: the
-renderer drops the unsatisfiable gateway source
-(`agent_auth.py:261-271` (deleted, cull part 2)),
-possibly leaving `sources: []` for that harness, which the launch path
-treats fail-closed. The ruling for the probe in that window:
+An apply can land while gateway enrollment sync is still incomplete: the renderer drops the unsatisfiable gateway source (`agent_auth.py:261-271` (deleted, cull part 2)), possibly leaving `sources: []` for that harness, which the launch path treats fail-closed. The ruling for the probe in that window:
 
 - **The probe still runs.** It observes whatever world actually exists and
   records it honestly.
@@ -903,16 +613,11 @@ treats fail-closed. The ruling for the probe in that window:
   acknowledged](#applied-means-acknowledged)), and the resulting apply ack
   fires a fresh probe.
 
-Rationale: never lie about what was observed, and do not invent a special
-no-probe state for a window that lasts seconds. A pending badge next to
-real data beats an empty pane next to no explanation.
+Rationale: never lie about what was observed, and do not invent a special no-probe state for a window that lasts seconds. A pending badge next to real data beats an empty pane next to no explanation.
 
 ### Evidence panes (rung 6, flag-gated)
 
-The panes above render the runtime's DERIVED `authState` rather than
-re-deriving status in the client, behind the build-time flag
-`agentAuthEvidencePanes` (env `VITE_AGENT_AUTH_EVIDENCE_PANES`, default off).
-With the flag off the legacy locally-derived badge is untouched. With it on:
+The panes above render the runtime's DERIVED `authState` rather than re-deriving status in the client, behind the build-time flag `agentAuthEvidencePanes` (env `VITE_AGENT_AUTH_EVIDENCE_PANES`, default off). With the flag off the legacy locally-derived badge is untouched. With it on:
 
 - **The status badge is the derivation, verbatim.** The badge reads
   `authState.display` for its label and tone and shows green ONLY for
@@ -931,17 +636,11 @@ With the flag off the legacy locally-derived badge is untouched. With it on:
   wired to render from the typed field ahead of the runtime adapters that
   emit it, so nothing shows until those land.
 
-**Observed membership is read-only.** The pane renders the target's exact
-`HarnessLaunchOptions` model list. It may label, order, group, or search rows,
-but no preference or server override may hide a model from executable
-membership. There is no model-visibility write path, and legacy
-`agent_catalog_override` storage is not a launch-option reader or writer.
+**Observed membership is read-only.** The pane renders the target's exact `HarnessLaunchOptions` model list. It may label, order, group, or search rows, but no preference or server override may hide a model from executable membership. There is no model-visibility write path, and legacy `agent_catalog_override` storage is not a launch-option reader or writer.
 
 ### Open verification items
 
-Cells this document specifies but does not yet claim as verified. Each is a
-card the UI marks *pending* until its run passes — a pending declaration is
-never offered as a working option.
+Cells this document specifies but does not yet claim as verified. Each is a card the UI marks *pending* until its run passes — a pending declaration is never offered as a working option.
 
 - **claude × `azure_openai` (Foundry) is offerable in the registry but its
   render arm is self-admittedly unverified**
@@ -962,9 +661,7 @@ never offered as a working option.
 
 ## API surface
 
-`/v1/cloud/agent-auth/` owns the user-facing auth relationship
-(handlers today in
-[agent_gateway/api.py](../../../server/proliferate/server/agent_auth/api.py)):
+`/v1/cloud/agent-auth/` owns the user-facing auth relationship (handlers today in [agent_gateway/api.py](../../../server/proliferate/server/agent_auth/api.py)):
 
 - `GET/POST /keys`, `DELETE /keys/{id}` — the vault.
 - `GET /selections`, `PUT /selections/{harness}?surface=` — the selection
@@ -974,16 +671,9 @@ never offered as a working option.
 - `GET/PUT /organizations/{org}/agent-auth/policy`,
   `GET …/policy/violations` — org allow-lists and the drift report.
 
-Gateway enrollment/capabilities stay under `/v1/cloud/agent-gateway/`
-(model-gateway.md). Target-local launch options are read from
-`GET /v1/agents/{kind}/launch-options`; cloud copies are addressed by cloud
-sandbox plus harness. Exact observed identifiers cross those routes unchanged.
+Gateway enrollment/capabilities stay under `/v1/cloud/agent-gateway/` (model-gateway.md). Target-local launch options are read from `GET /v1/agents/{kind}/launch-options`; cloud copies are addressed by cloud sandbox plus harness. Exact observed identifiers cross those routes unchanged.
 
-The runtime's own surface is two routes
-([api/http/agent_auth.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agent_auth.rs),
-[sdk client](../../../anyharness/sdk/src/client/agent-auth.ts)):
-`PUT /v1/agent-auth/state` (desktop push, revision-guarded) and
-`DELETE /v1/agent-auth/state` (return to native).
+The runtime's own surface is two routes ([api/http/agent_auth.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agent_auth.rs), [sdk client](../../../anyharness/sdk/src/client/agent-auth.ts)): `PUT /v1/agent-auth/state` (desktop push, revision-guarded) and `DELETE /v1/agent-auth/state` (return to native).
 
 ## Code map
 
@@ -1031,11 +721,7 @@ anyharness/
     └── live/sessions/driver/process.rs        env layering + ambient removal at spawn
 ```
 
-The wire shape crossing the Python↔Rust boundary is pinned by the
-`agent-auth-state` contract fixture
-([fixtures/contracts/agent-auth-state/](../../../fixtures/contracts/agent-auth-state)):
-the renderer asserts it produces it, `route_auth/` asserts it consumes it, and a
-shape change is made by changing the fixture — which breaks whichever side lags.
+The wire shape crossing the Python↔Rust boundary is pinned by the `agent-auth-state` contract fixture ([fixtures/contracts/agent-auth-state/](../../../fixtures/contracts/agent-auth-state)): the renderer asserts it produces it, `route_auth/` asserts it consumes it, and a shape change is made by changing the fixture — which breaks whichever side lags.
 
 | Layer | Owns |
 | --- | --- |
@@ -1064,8 +750,7 @@ shape change is made by changing the fixture — which breaks whichever side lag
 
 ## Proof
 
-Named, binary assertions; a corridor of work is done when its assertions are
-green. IDs are stable — tests reference them by name.
+Named, binary assertions; a corridor of work is done when its assertions are green. IDs are stable — tests reference them by name.
 
 Auth (the full system):
 
@@ -1122,8 +807,7 @@ Delivery, acknowledgement, restart:
 
 ## Current gaps
 
-Deltas between this document and the integration stack
-(`agents/integration-rc1`), each struck by its follow-up PR:
+Deltas between this document and the integration stack (`agents/integration-rc1`), each struck by its follow-up PR:
 
 - [ ] **The cloud surface has no auth-applied probe poke.** The desktop
       runtime's state PUT/DELETE fires the `AuthApplied` probe event, but

@@ -1,25 +1,10 @@
 # Desktop auto-update mechanism testing
 
-How the current local prototype builds an N−1-shaped Desktop app, points it at
-a local update feed, stages an N artifact, and exercises the real Tauri updater
-engine. This is useful mechanism signal, but it is not the complete
-`T4-DESKTOP-1` qualification journey. Read the target artifact, relaunch,
-state-continuity, AnyHarness, native CLI, ACP agent-process, and post-update-turn
-contract in [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md).
+How the current local prototype builds an N−1-shaped Desktop app, points it at a local update feed, stages an N artifact, and exercises the real Tauri updater engine. This is useful mechanism signal, but it is not the complete `T4-DESKTOP-1` qualification journey. Read the target artifact, relaunch, state-continuity, AnyHarness, native CLI, ACP agent-process, and post-update-turn contract in [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md).
 
-Read the product and UI acceptance contract in
-[`desktop-updates.md`](../shipping/desktop-updates.md) alongside
-this mechanism. The current collector proves manifest fetch, semver selection,
-signature verification, and a bundle swap headlessly. It does not launch the
-installed N application, run real bundled sidecars, preserve a real runtime
-home/session, or reconcile installed agents, so it cannot claim
-`T4-DESKTOP-1` qualification by itself.
+Read the product and UI acceptance contract in [`desktop-updates.md`](../shipping/desktop-updates.md) alongside this mechanism. The current collector proves manifest fetch, semver selection, signature verification, and a bundle swap headlessly. It does not launch the installed N application, run real bundled sidecars, preserve a real runtime home/session, or reconcile installed agents, so it cannot claim `T4-DESKTOP-1` qualification by itself.
 
-The shipped app is not touched. `apps/desktop/src-tauri/tauri.conf.json` keeps
-its production endpoint (`https://downloads.proliferate.com/desktop/stable/latest.json`)
-and production pubkey. A test build overrides only those two values (plus a
-test-only insecure-transport flag) through a **build-time config overlay**, so a
-build with no overlay is byte-for-byte today's config.
+The shipped app is not touched. `apps/desktop/src-tauri/tauri.conf.json` keeps its production endpoint (`https://downloads.proliferate.com/desktop/stable/latest.json`) and production pubkey. A test build overrides only those two values (plus a test-only insecure-transport flag) through a **build-time config overlay**, so a build with no overlay is byte-for-byte today's config.
 
 ## The pieces
 
@@ -34,16 +19,9 @@ build with no overlay is byte-for-byte today's config.
 
 ## Why the overlay, not env vars
 
-Tauri v2 merges `--config <file>` on top of `tauri.conf.json` (the same
-mechanism `make dev` uses with `tauri.dev.json`). Object keys merge recursively,
-so the overlay only needs the updater keys and every other field of the shipped
-config is preserved. There is no env-conditional branch inside the shipped
-config, so the default build cannot accidentally pick up a test endpoint.
+Tauri v2 merges `--config <file>` on top of `tauri.conf.json` (the same mechanism `make dev` uses with `tauri.dev.json`). Object keys merge recursively, so the overlay only needs the updater keys and every other field of the shipped config is preserved. There is no env-conditional branch inside the shipped config, so the default build cannot accidentally pick up a test endpoint.
 
-`dangerousInsecureTransportProtocol: true` is required in the overlay because a
-release build (`tauri build` is `--release`) **rejects a non-https updater
-endpoint** — and a local file server is http. The flag is test-only and never
-appears in the shipped config; the config guard test asserts that.
+`dangerousInsecureTransportProtocol: true` is required in the overlay because a release build (`tauri build` is `--release`) **rejects a non-https updater endpoint** — and a local file server is http. The flag is test-only and never appears in the shipped config; the config guard test asserts that.
 
 ## Produce an N−1 build and drive an update
 
@@ -86,9 +64,7 @@ appears in the shipped config; the config guard test asserts that.
 
 ## Proving `check()` without the full GUI
 
-`tauri_plugin_updater`'s `check()` (fetch manifest, semver-compare current vs
-served) can be exercised headlessly against the feed with a tiny harness built on
-`tauri::test::mock_app()` — no window, no sidecars, no signing:
+`tauri_plugin_updater`'s `check()` (fetch manifest, semver-compare current vs served) can be exercised headlessly against the feed with a tiny harness built on `tauri::test::mock_app()` — no window, no sidecars, no signing:
 
 ```rust
 let mut ctx = tauri::test::mock_context(tauri::test::noop_assets());
@@ -104,9 +80,7 @@ let updater = app.handle().updater_builder()
 let update = updater.check().await?; // Some(_) when served version > mock's 0.1.0
 ```
 
-The mock app reports package version `0.1.0`, so a feed serving `>0.1.0` yields
-`Some(update)` and `<=0.1.0` yields `None`. This is the cheapest faithful
-`check()` assertion; full download/install still needs the real bundle.
+The mock app reports package version `0.1.0`, so a feed serving `>0.1.0` yields `Some(update)` and `<=0.1.0` yields `None`. This is the cheapest faithful `check()` assertion; full download/install still needs the real bundle.
 
 ## Gotchas for the tier-4 test
 
@@ -127,12 +101,7 @@ The mock app reports package version `0.1.0`, so a feed serving `>0.1.0` yields
 
 ## Running the T4 scenario
 
-The steps above are wired into the current **T4-DESKTOP-1 prototype
-collector** under the release-e2e runner. It builds both apps, stages the feed,
-and drives the updater headlessly. The target journey must replace its
-N−1-shaped build with the exact retained production artifact, use the exact
-already-built candidate N, relaunch it, and collect the remaining runtime/state
-cells.
+The steps above are wired into the current **T4-DESKTOP-1 prototype collector** under the release-e2e runner. It builds both apps, stages the feed, and drives the updater headlessly. The target journey must replace its N−1-shaped build with the exact retained production artifact, use the exact already-built candidate N, relaunch it, and collect the remaining runtime/state cells.
 
 **Pieces:**
 
@@ -142,22 +111,7 @@ cells.
 | Orchestrator | `tests/release/upgrade/run-t4-desktop.mjs` | Builds N-1 + N (cached), stages the feed, copies the N-1 bundle, runs the driver, asserts N-1 → N. |
 | Headless driver | `tests/release/upgrade/updater-driver/` | A **workspace-detached** cargo crate. Drives the real `tauri_plugin_updater` `check()` + `download()` + explicit pre-install boundary + `install(bytes)` against a real N-1 `.app`. |
 
-**Why a headless Rust driver, not GUI automation.** The update UX is user-gated
-inside a release webview (Settings → "Desktop updates" → check → download →
-restart). Automating a webview headlessly is brittle; the readme's other option
-— "call the wrappers in `apps/desktop/src/lib/access/tauri/updater.ts`
-directly" — is not implemented by this collector. The driver calls the Rust
-updater engine beneath the plugin and preserves the wrapper's pre-install
-boundary, but it does not execute the JS wrapper or its native command.
-`UpdaterBuilder::executable_path` points the install at a copy of the N-1
-bundle (not the driver binary), so the real macOS `.app` swap happens on that
-copy. The driver's mock app reports running version `0.1.0` (a
-`tauri::test` limitation, not the real N-1 semver); this does not affect what is
-asserted — the manifest fetch, the semver "update available" decision, the
-**minisign signature verification of the real N artifact against the
-N-1-trusted pubkey**, and the real bundle swap. The N-1 → N evidence is read
-from the installed bundle's `Info.plist` `CFBundleShortVersionString` (exactly
-what `getVersion()` returns after a relaunch), before and after.
+**Why a headless Rust driver, not GUI automation.** The update UX is user-gated inside a release webview (Settings → "Desktop updates" → check → download → restart). Automating a webview headlessly is brittle; the readme's other option — "call the wrappers in `apps/desktop/src/lib/access/tauri/updater.ts` directly" — is not implemented by this collector. The driver calls the Rust updater engine beneath the plugin and preserves the wrapper's pre-install boundary, but it does not execute the JS wrapper or its native command. `UpdaterBuilder::executable_path` points the install at a copy of the N-1 bundle (not the driver binary), so the real macOS `.app` swap happens on that copy. The driver's mock app reports running version `0.1.0` (a `tauri::test` limitation, not the real N-1 semver); this does not affect what is asserted — the manifest fetch, the semver "update available" decision, the **minisign signature verification of the real N artifact against the N-1-trusted pubkey**, and the real bundle swap. The N-1 → N evidence is read from the installed bundle's `Info.plist` `CFBundleShortVersionString` (exactly what `getVersion()` returns after a relaunch), before and after.
 
 **Run it (local, Apple-silicon Mac):**
 

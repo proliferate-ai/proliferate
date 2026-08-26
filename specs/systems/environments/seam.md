@@ -1,37 +1,18 @@
 # Seam
 
-Status: target for the courier and event-shipping halves; the worker half
-(enrollment, identity, heartbeat) describes `main`. Grade B / C — see
-[Known gaps](#known-gaps).
+Status: target for the courier and event-shipping halves; the worker half (enrollment, identity, heartbeat) describes `main`. Grade B / C — see [Known gaps](#known-gaps).
 
-Read before touching: `server/proliferate/server/seam/**`,
-`server/proliferate/db/models/runtime_workers.py`,
-`server/proliferate/db/store/runtime_workers.py`,
-`anyharness/crates/proliferate-worker/**` (except `supervisor_bridge/`, which
-belongs to the managed runtime).
+Read before touching: `server/proliferate/server/seam/**`, `server/proliferate/db/models/runtime_workers.py`, `server/proliferate/db/store/runtime_workers.py`, `anyharness/crates/proliferate-worker/**` (except `supervisor_bridge/`, which belongs to the managed runtime).
 
 ## 1. Purpose
 
-The seam is the one contract between the control plane and a runtime. It
-answers three questions and nothing else: *who is this runtime* (identity and
-enrollment), *is it alive and what should it be running* (heartbeat), and —
-the target half — *how do prompts get down and events get up durably*
-(courier and shipping). Everything the control plane knows about a live
-execution environment arrives through this contract; everything a runtime is
-told by the control plane leaves through it. The worker process is the only
-speaker on a target: the runtime never talks to the control plane, and the
-supervisor never does either.
+The seam is the one contract between the control plane and a runtime. It answers three questions and nothing else: *who is this runtime* (identity and enrollment), *is it alive and what should it be running* (heartbeat), and — the target half — *how do prompts get down and events get up durably* (courier and shipping). Everything the control plane knows about a live execution environment arrives through this contract; everything a runtime is told by the control plane leaves through it. The worker process is the only speaker on a target: the runtime never talks to the control plane, and the supervisor never does either.
 
-The seam is symmetric by design: prompts travel down keyed by
-`(session, delivery_seq)` with a runtime ack cursor; events travel up keyed by
-`(session, seq)` with a control-plane ack cursor. One cursor discipline, two
-directions. Freezing this contract first is what lets every other system be
-built against it.
+The seam is symmetric by design: prompts travel down keyed by `(session, delivery_seq)` with a runtime ack cursor; events travel up keyed by `(session, seq)` with a control-plane ack cursor. One cursor discipline, two directions. Freezing this contract first is what lets every other system be built against it.
 
 ## 2. Owned state
 
-Server tables
-([runtime_workers.py](../../../server/proliferate/db/models/runtime_workers.py)):
+Server tables ([runtime_workers.py](../../../server/proliferate/db/models/runtime_workers.py)):
 
 ```text
 cloud_runtime_worker_enrollment   single-use ticket: (owner, org?, runtime_kind,
@@ -45,22 +26,11 @@ cloud_integration_gateway_token   hash-only derivative of a worker; at most one 
                                   per worker; revoked with it
 ```
 
-Worker-side state (SQLite at `worker_db_path`,
-[store/](../../../anyharness/crates/proliferate-worker/src/store/mod.rs)): the
-durable identity `worker_id + worker_token`
-([store/identity.rs](../../../anyharness/crates/proliferate-worker/src/store/identity.rs))
-and the last-observed running AnyHarness version
-([store/anyharness_update.rs](../../../anyharness/crates/proliferate-worker/src/store/anyharness_update.rs)).
-The worker persists nothing else about its target: sandbox, user, kind,
-revocation, and liveness are control-plane associations.
+Worker-side state (SQLite at `worker_db_path`, [store/](../../../anyharness/crates/proliferate-worker/src/store/mod.rs)): the durable identity `worker_id + worker_token` ([store/identity.rs](../../../anyharness/crates/proliferate-worker/src/store/identity.rs)) and the last-observed running AnyHarness version ([store/anyharness_update.rs](../../../anyharness/crates/proliferate-worker/src/store/anyharness_update.rs)). The worker persists nothing else about its target: sandbox, user, kind, revocation, and liveness are control-plane associations.
 
-Worker-written files: the integration-gateway dotfile the runtime reads to
-reach the gateway
-([integration_gateway.rs](../../../anyharness/crates/proliferate-worker/src/integration_gateway.rs)).
+Worker-written files: the integration-gateway dotfile the runtime reads to reach the gateway ([integration_gateway.rs](../../../anyharness/crates/proliferate-worker/src/integration_gateway.rs)).
 
-Target state (※ new, see Known gaps): per-session prompt-outbox delivery
-attempts and the two ack cursors (runtime ack of `delivery_seq`, control-plane
-ack of event `seq`).
+Target state (※ new, see Known gaps): per-session prompt-outbox delivery attempts and the two ack cursors (runtime ack of `delivery_seq`, control-plane ack of event `seq`).
 
 > [!decision] PABLO DECIDES: which spec owns the outbox and cursor rows.
 > The session registry row (sessions spec) carries *queued prompts* as
@@ -74,12 +44,9 @@ ack of event `seq`).
 
 ## 3. Public surface
 
-All routes mount under `/v1/cloud` via
-`cloud/api.py` (the mount point
-moves when that shell dissolves; the paths do not change).
+All routes mount under `/v1/cloud` via `cloud/api.py` (the mount point moves when that shell dissolves; the paths do not change).
 
-Worker-authenticated (bearer `worker_token`,
-[auth.py](../../../server/proliferate/server/seam/workers/auth.py)):
+Worker-authenticated (bearer `worker_token`, [auth.py](../../../server/proliferate/server/seam/workers/auth.py)):
 
 | Route | Purpose |
 | --- | --- |
@@ -96,30 +63,11 @@ User-authenticated:
 | `POST /workers/desktop/revoke` | Revoke the caller's active desktop worker and its gateway token; idempotent |
 | `PUT /workers/admin/sandboxes/{cloud_sandbox_id}/desired-versions` | Instance-admin per-target version override (`null` clears) |
 
-Python surface (the only importable modules, per
-[MANIFEST.toml](../../../server/proliferate/server/seam/MANIFEST.toml)):
-[workers/api.py](../../../server/proliferate/server/seam/workers/api.py),
-[workers/service.py](../../../server/proliferate/server/seam/workers/service.py)
-— `create_cloud_sandbox_enrollment` is how environments mint a sandbox
-worker's ticket at runtime launch — and
-[workers/models.py](../../../server/proliferate/server/seam/workers/models.py).
-`authenticate_worker` in
-[workers/auth.py](../../../server/proliferate/server/seam/workers/auth.py) is the
-dependency any worker-facing route on another system uses to establish a
-`WorkerAuthContext`.
+Python surface (the only importable modules, per [MANIFEST.toml](../../../server/proliferate/server/seam/MANIFEST.toml)): [workers/api.py](../../../server/proliferate/server/seam/workers/api.py), [workers/service.py](../../../server/proliferate/server/seam/workers/service.py) — `create_cloud_sandbox_enrollment` is how environments mint a sandbox worker's ticket at runtime launch — and [workers/models.py](../../../server/proliferate/server/seam/workers/models.py). `authenticate_worker` in [workers/auth.py](../../../server/proliferate/server/seam/workers/auth.py) is the dependency any worker-facing route on another system uses to establish a `WorkerAuthContext`.
 
-Worker binary surface: `proliferate-worker` configured by
-[config.rs](../../../anyharness/crates/proliferate-worker/src/config.rs)
-(`cloud_base_url`, `enrollment_token`, `worker_db_path`,
-`heartbeat_interval_seconds`, `runtime_base_url`,
-`supervisor_update_request_dir`); `--once` performs one heartbeat as a dry
-run.
+Worker binary surface: `proliferate-worker` configured by [config.rs](../../../anyharness/crates/proliferate-worker/src/config.rs) (`cloud_base_url`, `enrollment_token`, `worker_db_path`, `heartbeat_interval_seconds`, `runtime_base_url`, `supervisor_update_request_dir`); `--once` performs one heartbeat as a dry run.
 
-Target surface (※ new): the courier delivery call into the runtime, the
-runtime's ack of `delivery_seq`, the event-ingest POST keyed by
-`(session, seq)`, and the checkpoint upload — all cursor-shaped and
-idempotent. Whether these ride the heartbeat or dedicated routes is a
-decision below.
+Target surface (※ new): the courier delivery call into the runtime, the runtime's ack of `delivery_seq`, the event-ingest POST keyed by `(session, seq)`, and the checkpoint upload — all cursor-shaped and idempotent. Whether these ride the heartbeat or dedicated routes is a decision below.
 
 ## 4. Consumes
 
@@ -141,91 +89,37 @@ decision below.
   seam's numbers: heartbeat interval 30 s, offline threshold 90 s, enrollment
   TTLs 3600 s (sandbox) / 900 s (desktop), HMAC token domains.
 
-Worker side: the runtime's local HTTP surface (read-only version poll
-`GET /v1/catalogs/agents/version`, launch-option state reads) and the
-supervisor mailbox directory (write-only, managed runtime).
+Worker side: the runtime's local HTTP surface (read-only version poll `GET /v1/catalogs/agents/version`, launch-option state reads) and the supervisor mailbox directory (write-only, managed runtime).
 
 ## 5. Laws
 
-**One active worker per identity.** Enrollment retires every prior
-non-revoked worker for the same sandbox, or for the same desktop install
-regardless of owner (a user switch on one machine must not leave the previous
-user's worker "online" with a live gateway token). Enforced by the partial
-unique indexes on `cloud_runtime_worker` and by `enroll_worker` in
-[service.py](../../../server/proliferate/server/seam/workers/service.py).
+**One active worker per identity.** Enrollment retires every prior non-revoked worker for the same sandbox, or for the same desktop install regardless of owner (a user switch on one machine must not leave the previous user's worker "online" with a live gateway token). Enforced by the partial unique indexes on `cloud_runtime_worker` and by `enroll_worker` in [service.py](../../../server/proliferate/server/seam/workers/service.py).
 
-**Enrollment tokens are single-use, bounded, and hash-only.** The raw token is
-returned once and never stored; consumption is a compare-and-swap on the
-pending row (`consume_pending_enrollment_by_hash`); a desktop install's newer
-ticket revokes older pending ones so a stranded predecessor cannot enroll
-after its replacement (`revoke_pending_desktop_enrollments_for_install`).
+**Enrollment tokens are single-use, bounded, and hash-only.** The raw token is returned once and never stored; consumption is a compare-and-swap on the pending row (`consume_pending_enrollment_by_hash`); a desktop install's newer ticket revokes older pending ones so a stranded predecessor cannot enroll after its replacement (`revoke_pending_desktop_enrollments_for_install`).
 
-**A durable identity always wins over a config enrollment token, and a
-revoked identity never re-enrolls itself.** The worker uses a stored
-`worker_id + worker_token` if present and only enrolls when none exists
-([identity/mod.rs](../../../anyharness/crates/proliferate-worker/src/identity/mod.rs)).
-Re-enrollment is a control-plane act (a new ticket), never a worker reflex.
+**A durable identity always wins over a config enrollment token, and a revoked identity never re-enrolls itself.** The worker uses a stored `worker_id + worker_token` if present and only enrolls when none exists ([identity/mod.rs](../../../anyharness/crates/proliferate-worker/src/identity/mod.rs)). Re-enrollment is a control-plane act (a new ticket), never a worker reflex.
 
-**Heartbeat is liveness and desired state, nothing more.** The request carries
-status and self-reported versions; the ack carries the fleet or per-target
-pins and one verdict. A missed heartbeat never fails the worker loop — the
-current binary keeps serving and the next tick retries
-([runtime.rs](../../../anyharness/crates/proliferate-worker/src/runtime.rs)).
-Liveness on the control plane is `status = online` with `last_seen_at` inside
-the 90 s threshold.
+**Heartbeat is liveness and desired state, nothing more.** The request carries status and self-reported versions; the ack carries the fleet or per-target pins and one verdict. A missed heartbeat never fails the worker loop — the current binary keeps serving and the next tick retries ([runtime.rs](../../../anyharness/crates/proliferate-worker/src/runtime.rs)). Liveness on the control plane is `status = online` with `last_seen_at` inside the 90 s threshold.
 
-**Authentication is a separate boundary from the verdict.** A missing,
-unknown, or revoked worker receives `401 cloud_worker_unauthorized` with no
-body — never a 200 whose `launch_options_upload_allowed` happens to be
-`false`. The heartbeat service re-loads the row (REL-10) so a revocation
-racing the auth dependency still produces the 401.
+**Authentication is a separate boundary from the verdict.** A missing, unknown, or revoked worker receives `401 cloud_worker_unauthorized` with no body — never a 200 whose `launch_options_upload_allowed` happens to be `false`. The heartbeat service re-loads the row (REL-10) so a revocation racing the auth dependency still produces the 401.
 
-**The upload verdict is required on every 200 and fails closed.** The server
-computes it from the same rule the ingest route enforces (cloud-sandbox
-worker, sandbox exists, not destroyed); a worker that receives no field
-treats it as `false`
-([lifecycle/heartbeat.rs](../../../anyharness/crates/proliferate-worker/src/lifecycle/heartbeat.rs)).
-It is never cached across ticks and never influences convergence.
+**The upload verdict is required on every 200 and fails closed.** The server computes it from the same rule the ingest route enforces (cloud-sandbox worker, sandbox exists, not destroyed); a worker that receives no field treats it as `false` ([lifecycle/heartbeat.rs](../../../anyharness/crates/proliferate-worker/src/lifecycle/heartbeat.rs)). It is never cached across ticks and never influences convergence.
 
-**Exact versions or nothing.** The versioned download routes resolve the
-requested version or 404; rolling labels (`stable`, `latest`, …) are refused
-on that path so a pinned target is never handed a differently-labelled
-artifact (`_reject_rolling_or_unsafe_version`).
+**Exact versions or nothing.** The versioned download routes resolve the requested version or 404; rolling labels (`stable`, `latest`, …) are refused on that path so a pinned target is never handed a differently-labelled artifact (`_reject_rolling_or_unsafe_version`).
 
-**The gateway token is a derivative, not a peer.** It is minted at
-enrollment, written to the runtime's dotfile by the worker, revoked with the
-worker, and re-asserted after every successful heartbeat so a delayed
-predecessor write cannot leave stale authority on disk
-(`integration_gateway::ensure_current`). What the token *authorizes* is the
-integration gateway's law, not the seam's.
+**The gateway token is a derivative, not a peer.** It is minted at enrollment, written to the runtime's dotfile by the worker, revoked with the worker, and re-asserted after every successful heartbeat so a delayed predecessor write cannot leave stale authority on disk (`integration_gateway::ensure_current`). What the token *authorizes* is the integration gateway's law, not the seam's.
 
-**The worker is the only control-plane speaker on a target.** The runtime
-and the supervisor have no control-plane credentials; the worker relays. This
-is what makes the seam one contract rather than three.
+**The worker is the only control-plane speaker on a target.** The runtime and the supervisor have no control-plane credentials; the worker relays. This is what makes the seam one contract rather than three.
 
 Target laws (※ new — asserted here so the build has a fixed target):
 
-**Session before compute is durable by construction.** A prompt enqueues into
-the outbox `(session, delivery_seq)` in the same transaction that creates the
-session or invocation; the courier pushes when the environment is ready.
+**Session before compute is durable by construction.** A prompt enqueues into the outbox `(session, delivery_seq)` in the same transaction that creates the session or invocation; the courier pushes when the environment is ready.
 
-**Ack means persisted, not answered.** The runtime dedups on
-`(session, delivery_seq)`, persists into its own log before acting, and only
-then acks; the response is observed on the event pipe. Delivery is strictly
-ordered per session with head-of-line blocking; undeliverable past N attempts
-marks the session `delivery_stalled` — surfaced, never silently dropped.
+**Ack means persisted, not answered.** The runtime dedups on `(session, delivery_seq)`, persists into its own log before acting, and only then acks; the response is observed on the event pipe. Delivery is strictly ordered per session with head-of-line blocking; undeliverable past N attempts marks the session `delivery_stalled` — surfaced, never silently dropped.
 
-**Shipping is idempotent and at-least-once on `(session, seq)`.** The control
-plane dedups; a control-plane outage never affects the runtime — the worker
-retries from its ack cursor, and every heartbeat carries both cursors as the
-≤30 s drain backstop.
+**Shipping is idempotent and at-least-once on `(session, seq)`.** The control plane dedups; a control-plane outage never affects the runtime — the worker retries from its ack cursor, and every heartbeat carries both cursors as the ≤30 s drain backstop.
 
-**Ship policy is structural.** Ship-now = turn-level and lifecycle events
-(assistant message completed, status transitions, run result, explicit
-milestones); checkpoint = intra-turn durable events at terminal states and
-pauses; never-persist = token deltas and typing. The runtime never knows who
-is watching; fan-out is the control plane's job by binding. The live mirror is
-this same endpoint called more often — a frequency dial, never a migration.
+**Ship policy is structural.** Ship-now = turn-level and lifecycle events (assistant message completed, status transitions, run result, explicit milestones); checkpoint = intra-turn durable events at terminal states and pauses; never-persist = token deltas and typing. The runtime never knows who is watching; fan-out is the control plane's job by binding. The live mirror is this same endpoint called more often — a frequency dial, never a migration.
 
 ## 6. Emits
 
@@ -315,10 +209,7 @@ anyharness/crates/proliferate-worker/src/
 └── supervisor_bridge/                              NOT SEAM — managed runtime (mailbox)
 ```
 
-Target additions (※ new, not on `main`): `server/seam/courier/` (outbox drain,
-delivery attempts, wake-on-completion messages), `server/seam/ingest/`
-(ship-now endpoint, checkpoint upload, cursors, binding fan-out), and the
-worker's event shipper subscribed to the runtime's loopback SSE.
+Target additions (※ new, not on `main`): `server/seam/courier/` (outbox drain, delivery attempts, wake-on-completion messages), `server/seam/ingest/` (ship-now endpoint, checkpoint upload, cursors, binding fan-out), and the worker's event shipper subscribed to the runtime's loopback SSE.
 
 ## 9. Proof
 

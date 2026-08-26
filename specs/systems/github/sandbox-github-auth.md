@@ -1,30 +1,17 @@
 # Sandbox GitHub Auth
 
-Status: superseded. The legacy cloud sandbox stack this document describes
-was deleted by the cull sweep (delivery/cull-sweep/delivery-spec-delete-dark-cloud.md,
-part 2): sandboxes, workspaces, materialization, secrets, the runtime gateway,
-and the billing reconciler are gone. Kept for the design record until the
-environments system spec replaces it; the code map below no longer resolves.
+Status: superseded. The legacy cloud sandbox stack this document describes was deleted by the cull sweep (delivery/cull-sweep/delivery-spec-delete-dark-cloud.md, part 2): sandboxes, workspaces, materialization, secrets, the runtime gateway, and the billing reconciler are gone. Kept for the design record until the environments system spec replaces it; the code map below no longer resolves.
 
 > The GitHub App relationship (authorizations, installations, repository
 > authority, webhooks, the repo catalog) is owned by
 > [github/README.md](README.md), which
 > is live and unaffected by this supersession.
 
-Status: target. This document describes the accepted destination for GitHub
-repository authority in cloud sandboxes: how a sandbox gets permission to
-clone, fetch, and push, and nothing else. The body is written in the ideal
-state. Every difference from `main` today is listed in
-[Current gaps](#current-gaps); the list shrinks as follow-up PRs land, and
-the label comes off when it is empty.
+Status: target. This document describes the accepted destination for GitHub repository authority in cloud sandboxes: how a sandbox gets permission to clone, fetch, and push, and nothing else. The body is written in the ideal state. Every difference from `main` today is listed in [Current gaps](#current-gaps); the list shrinks as follow-up PRs land, and the label comes off when it is empty.
 
 ## Purpose
 
-This platform owns GitHub *authority* for cloud sandboxes: the GitHub App
-authorization that grants repository access, the short-lived credential
-lease materialized onto the VM, and the credential helper that serves it to
-git. Boundary law: authority says who may push; identity (who the commit is
-by) belongs to [content.md](../environments/README.md).
+This platform owns GitHub *authority* for cloud sandboxes: the GitHub App authorization that grants repository access, the short-lived credential lease materialized onto the VM, and the credential helper that serves it to git. Boundary law: authority says who may push; identity (who the commit is by) belongs to [content.md](../environments/README.md).
 
 Fences, one owner per concern:
 
@@ -83,41 +70,17 @@ Two GitHub relationships, deliberately separate:
   grants Cloud a user-to-server refresh capability, stored server-side.
 - **Installation** of the App on the org/repo: grants the repositories.
 
-Routes live in
-[github_app/api.py](../../../server/proliferate/server/github/api.py):
-start/status/callback for each flow, plus GitHub's Setup-URL callback (no
-signed state; it can only complete an installation the signed flows
-began), plus the accessible-repos and per-repo authority endpoints.
+Routes live in [github_app/api.py](../../../server/proliferate/server/github/api.py): start/status/callback for each flow, plus GitHub's Setup-URL callback (no signed state; it can only complete an installation the signed flows began), plus the accessible-repos and per-repo authority endpoints.
 
-These two relationships are also two of the three legs of the sandbox
-provisioning trigger: when user authorization, installation, and org
-membership all hold for a (user, org) pair, the completing callback
-schedules that pair's eager sandbox bootstrap —
-[lifecycle.md](../environments/README.md)'s chain-completion law; this
-document only owns the authority events themselves.
+These two relationships are also two of the three legs of the sandbox provisioning trigger: when user authorization, installation, and org membership all hold for a (user, org) pair, the completing callback schedules that pair's eager sandbox bootstrap — [lifecycle.md](../environments/README.md)'s chain-completion law; this document only owns the authority events themselves.
 
-Authority status for a repository
-([github_app/models.py](../../../server/proliferate/server/github/models.py))
-is one of: `authorized`, `needs_reauth`, `missing_authorization`,
-`missing_installation`, `not_covered`, `missing_user_repo_access`,
-`operator_configuration_required`, `error`. The no-unrepairable-action law
-from [access.md](../environments/README.md) applies verbatim: operator
-misconfiguration repairs operator-side (`action: null`), missing human
-repository access repairs on GitHub, and only genuinely-expired user
-authorization offers "Reconnect GitHub App".
+Authority status for a repository ([github_app/models.py](../../../server/proliferate/server/github/models.py)) is one of: `authorized`, `needs_reauth`, `missing_authorization`, `missing_installation`, `not_covered`, `missing_user_repo_access`, `operator_configuration_required`, `error`. The no-unrepairable-action law from [access.md](../environments/README.md) applies verbatim: operator misconfiguration repairs operator-side (`action: null`), missing human repository access repairs on GitHub, and only genuinely-expired user authorization offers "Reconnect GitHub App".
 
-Expiry is detected at use, not by polling: a token refresh failing marks
-the authorization `needs_reauth` in its own committed transaction
-(`commit_github_app_reauthorization_on_error`, wired into the routes that
-exercise authority), so the status flips even when the triggering request
-rolls back.
+Expiry is detected at use, not by polling: a token refresh failing marks the authorization `needs_reauth` in its own committed transaction (`commit_github_app_reauthorization_on_error`, wired into the routes that exercise authority), so the status flips even when the triggering request rolls back.
 
 ## The lease on the VM
 
-Repository materialization writes three artifacts under
-`/home/user/.proliferate`
-(`paths.py` (deleted, cull part 2),
-`materialize/github_credentials.py` (deleted, cull part 2)):
+Repository materialization writes three artifacts under `/home/user/.proliferate` (`paths.py` (deleted, cull part 2), `materialize/github_credentials.py` (deleted, cull part 2)):
 
 - `git/github.com/token` — the current user-to-server token, mode 600;
   only the first line is ever read.
@@ -129,25 +92,9 @@ Repository materialization writes three artifacts under
   `username=x-access-token` plus the token file's first line; on any other
   input it exits silently so git falls through rather than hanging.
 
-The same step configures global git config idempotently and self-tests the
-helper before trusting it: invoke the helper with a github.com query, grep
-for the expected username and a nonempty password, then set
-`credential.https://github.com.helper` and the two SSH→HTTPS `insteadOf`
-rewrites (`git@github.com:`, `ssh://git@github.com/`) so agent-written SSH
-remotes transparently use the lease.
+The same step configures global git config idempotently and self-tests the helper before trusting it: invoke the helper with a github.com query, grep for the expected username and a nonempty password, then set `credential.https://github.com.helper` and the two SSH→HTTPS `insteadOf` rewrites (`git@github.com:`, `ssh://git@github.com/`) so agent-written SSH remotes transparently use the lease.
 
-**Refresh is server-push at the point of need.** Every repository
-materialization (workspace create, repo-environment save, sandbox
-bootstrap preclone, workflow delivery — the trigger list in
-[content.md](../environments/README.md)) first runs
-`ensure_fresh_github_app_authorization` and rewrites the lease files with a
-fresh token (`expiresAt` from GitHub, else issued + 8 h; `refreshAfter` =
-`expiresAt` − 30 min). There is no refresh daemon on the VM and none is
-wanted: the helper never mints, nothing on the sandbox pulls, and a lease
-is only ever as old as the last materialization. The accepted consequence
-— git run *between* materializations can outlive the lease — fails as
-ordinary git auth failure, and the repair is any materialization-triggering
-action; the product surface must say so (gap below).
+**Refresh is server-push at the point of need.** Every repository materialization (workspace create, repo-environment save, sandbox bootstrap preclone, workflow delivery — the trigger list in [content.md](../environments/README.md)) first runs `ensure_fresh_github_app_authorization` and rewrites the lease files with a fresh token (`expiresAt` from GitHub, else issued + 8 h; `refreshAfter` = `expiresAt` − 30 min). There is no refresh daemon on the VM and none is wanted: the helper never mints, nothing on the sandbox pulls, and a lease is only ever as old as the last materialization. The accepted consequence — git run *between* materializations can outlive the lease — fails as ordinary git auth failure, and the repair is any materialization-triggering action; the product surface must say so (gap below).
 
 ## Failure modes
 
@@ -181,9 +128,7 @@ action; the product surface must say so (gap below).
   case (repo removed from the installation → typed `not_covered` before
   any clone).
 
-Corridor G — one credential story. Named, binary assertions; the
-corridor is done when they are green. IDs are stable — tests reference
-them by name:
+Corridor G — one credential story. Named, binary assertions; the corridor is done when they are green. IDs are stable — tests reference them by name:
 
 - **G1** The repo catalog and branch listings serve on App tokens;
   grep-gate: `repos/domain/github_credentials` stays deleted; the

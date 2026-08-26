@@ -1,26 +1,12 @@
 # Release Worlds And Fixtures
 
-Status: target contract for the Tier 2, Tier 3, and core Tier 4 test
-infrastructure. The scenario manifest defines what must be proved; this document
-defines the worlds and fixtures in which those scenarios run. Current-main
-enforcement gaps are named in [`core-release-validation.md`](core-release-validation.md)
-and never weaken the target contract silently.
-[`tier-3-scenario-contract.md`](tier-3-scenario-contract.md) defines how those
-fixtures compose into the exact Tier 3 journeys and matrix cells.
-[`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) defines how the
-retained production artifacts and candidate handles compose into the packaged
-install/update target cells.
+Status: target contract for the Tier 2, Tier 3, and core Tier 4 test infrastructure. The scenario manifest defines what must be proved; this document defines the worlds and fixtures in which those scenarios run. Current-main enforcement gaps are named in [`core-release-validation.md`](core-release-validation.md) and never weaken the target contract silently. [`tier-3-scenario-contract.md`](tier-3-scenario-contract.md) defines how those fixtures compose into the exact Tier 3 journeys and matrix cells. [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) defines how the retained production artifacts and candidate handles compose into the packaged install/update target cells.
 
 ## Core Principle
 
-Run each scenario in the smallest realistic composition containing every
-boundary that can break its guarantee. Do not rerun the complete product suite
-for every host, deployment topology, or authentication permutation.
+Run each scenario in the smallest realistic composition containing every boundary that can break its guarantee. Do not rerun the complete product suite for every host, deployment topology, or authentication permutation.
 
-Local invocation and GitHub Actions use the same runner, world provisioners,
-candidate manifests, scenario implementations, and readiness checks. "Local"
-means the runner was invoked from a developer machine; remote dependencies such
-as AWS, E2B, Stripe, and the public qualification gateway remain real.
+Local invocation and GitHub Actions use the same runner, world provisioners, candidate manifests, scenario implementations, and readiness checks. "Local" means the runner was invoked from a developer machine; remote dependencies such as AWS, E2B, Stripe, and the public qualification gateway remain real.
 
 ## Vocabulary
 
@@ -39,10 +25,7 @@ These axes are independent and must not be collapsed into a generic `lane`:
   qualification set; and
 - **behavior**: `diagnostic` or `strict` result handling.
 
-Moving a run from a laptop to GitHub Actions changes the execution host and
-secret source, not the selected world, product behavior, preparation code, or
-assertions. Existing `LANE` and runtime-lane flags are migration inputs only;
-new contracts use the explicit axes above.
+Moving a run from a laptop to GitHub Actions changes the execution host and secret source, not the selected world, product behavior, preparation code, or assertions. Existing `LANE` and runtime-lane flags are migration inputs only; new contracts use the explicit axes above.
 
 ## Shared Lifecycle
 
@@ -60,19 +43,11 @@ resolve selected cells and exact artifact receipts
   -> evaluate diagnostic or strict behavior
 ```
 
-This lifecycle is shared infrastructure, not a second implementation of the
-product journeys. A world is prepared once per compatible shard and reused by
-the cells whose isolation contract permits it.
+This lifecycle is shared infrastructure, not a second implementation of the product journeys. A world is prepared once per compatible shard and reused by the cells whose isolation contract permits it.
 
 ## Candidate Artifacts
 
-The implemented bounded handoff is the candidate-only, local-file-only
-`CandidateBuildMapV1` contract (`tests/release/src/artifacts/build-map.ts`).
-Each current world resolver requires its exact artifact set; the runner
-validates source identity, shape, local files, and every digest before setup.
-The complete remote/full
-manifest below — portable remote locators, retained N-1, and cross-run
-digest-verified downloads — is later work layered on that contract.
+The implemented bounded handoff is the candidate-only, local-file-only `CandidateBuildMapV1` contract (`tests/release/src/artifacts/build-map.ts`). Each current world resolver requires its exact artifact set; the runner validates source identity, shape, local files, and every digest before setup. The complete remote/full manifest below — portable remote locators, retained N-1, and cross-run digest-verified downloads — is later work layered on that contract.
 
 Every live or upgrade run begins with a content-addressed candidate manifest:
 
@@ -90,51 +65,21 @@ candidate-manifest.json
   self-host bundle and image digest
 ```
 
-Build each artifact once per candidate content hash and platform, then reuse it
-across worlds. Compilation caches may accelerate the build, but a cache entry is
-not qualification evidence. Downstream jobs download the prepared artifact and
-verify its digest against the candidate manifest.
+Build each artifact once per candidate content hash and platform, then reuse it across worlds. Compilation caches may accelerate the build, but a cache entry is not qualification evidence. Downstream jobs download the prepared artifact and verify its digest against the candidate manifest.
 
-Tier 4 additionally resolves the retained-release receipt for the last
-qualified production release, N-1 — implemented as `RetainedReleaseReceiptV1`
-(`tests/release/src/artifacts/retained-release-set.ts`) with committed
-receipts under `tests/release/retained-releases/` (see that directory's
-README for the N-1 identity rules, the one-time v0.3.38 bootstrap exception,
-and the retention roots). N-1 is not inferred by decrementing a patch version
-or rebuilding current source with an older version string.
+Tier 4 additionally resolves the retained-release receipt for the last qualified production release, N-1 — implemented as `RetainedReleaseReceiptV1` (`tests/release/src/artifacts/retained-release-set.ts`) with committed receipts under `tests/release/retained-releases/` (see that directory's README for the N-1 identity rules, the one-time v0.3.38 bootstrap exception, and the retention roots). N-1 is not inferred by decrementing a patch version or rebuilding current source with an older version string.
 
-Both manifests are versioned machine contracts. Each available artifact slot
-contains an immutable locator plus the digest/checksum needed to verify the
-downloaded bytes; E2B slots contain an immutable template ID and complete input
-hash. A slot may be explicitly unavailable while the foundation is under
-construction, but strict execution rejects an unavailable slot required by a
-selected world. Rolling references such as `latest` or unverified `stable`
-cannot satisfy an artifact slot.
+Both manifests are versioned machine contracts. Each available artifact slot contains an immutable locator plus the digest/checksum needed to verify the downloaded bytes; E2B slots contain an immutable template ID and complete input hash. A slot may be explicitly unavailable while the foundation is under construction, but strict execution rejects an unavailable slot required by a selected world. Rolling references such as `latest` or unverified `stable` cannot satisfy an artifact slot.
 
-The retained-production manifest also binds the production release/source SHA
-to the trusted qualification evidence that allowed it to be promoted. It is
-the receipt for the actual production N-1 artifacts, not a request to rebuild
-them.
+The retained-production manifest also binds the production release/source SHA to the trusted qualification evidence that allowed it to be promoted. It is the receipt for the actual production N-1 artifacts, not a request to rebuild them.
 
-The self-host artifact slot binds both the server image digest and the exact
-`proliferate-deploy.tar.gz`. The tarball contains `install.sh`,
-`docker-compose.production.yml`, `Caddyfile`, bootstrap/update/preflight/
-health/doctor scripts, the environment template, and `VERSION`. Optional
-self-host cloud cells additionally bind the Linux AnyHarness, Worker,
-Supervisor, catalog/registry, credential-helper, and bootstrap inputs they
-install. Scenarios never reconstruct this bundle from loose source files.
+The self-host artifact slot binds both the server image digest and the exact `proliferate-deploy.tar.gz`. The tarball contains `install.sh`, `docker-compose.production.yml`, `Caddyfile`, bootstrap/update/preflight/ health/doctor scripts, the environment template, and `VERSION`. Optional self-host cloud cells additionally bind the Linux AnyHarness, Worker, Supervisor, catalog/registry, credential-helper, and bootstrap inputs they install. Scenarios never reconstruct this bundle from loose source files.
 
-The qualification LiteLLM deployment is persistent external infrastructure,
-not a candidate artifact rebuilt by every run. World evidence records its
-deployed image/configuration identity and readiness, while scenarios receive
-fresh run/actor/cell-scoped virtual keys and budgets.
+The qualification LiteLLM deployment is persistent external infrastructure, not a candidate artifact rebuilt by every run. World evidence records its deployed image/configuration identity and readiness, while scenarios receive fresh run/actor/cell-scoped virtual keys and budgets.
 
-`tests/release/src/template/cache-manifest.ts` is only a local E2B content-cache
-index. `core-release-scenario-manifest.json` is only the target scenario
-inventory. Neither is a candidate or retained-production artifact manifest.
+`tests/release/src/template/cache-manifest.ts` is only a local E2B content-cache index. `core-release-scenario-manifest.json` is only the target scenario inventory. Neither is a candidate or retained-production artifact manifest.
 
-Scenarios consume prepared artifact handles. They do not select versions,
-build binaries, publish templates, or decide which feed to use.
+Scenarios consume prepared artifact handles. They do not select versions, build binaries, publish templates, or decide which feed to use.
 
 ## Infrastructure Lifetime
 
@@ -163,8 +108,7 @@ build binaries, publish templates, or decide which feed to use.
 - Desktop signing and updater-test infrastructure
 - GitHub environments and encrypted secret storage
 
-Long-lived infrastructure is reusable capacity. It is not shared mutable
-product state.
+Long-lived infrastructure is reusable capacity. It is not shared mutable product state.
 
 ### Run-scoped resources and product state
 
@@ -181,15 +125,11 @@ product state.
 - desired-version pins for upgrade targets
 - cleanup ledger and correlation identifiers
 
-Destructive scenarios must not use a shared durable staging user or mutate a
-global staging version pin. Every created external resource is registered in
-the cleanup ledger immediately. Scenario cleanup is followed by provider
-reconciliation and a TTL janitor for abandoned runs.
+Destructive scenarios must not use a shared durable staging user or mutate a global staging version pin. Every created external resource is registered in the cleanup ledger immediately. Scenario cleanup is followed by provider reconciliation and a TTL janitor for abandoned runs.
 
 ## World Dependency Matrix
 
-Dependencies are selected per world and per cell; the runner never boots every
-provider merely because it is available.
+Dependencies are selected per world and per cell; the runner never boots every provider merely because it is available.
 
 | World | Required composition | Conditional composition | Explicitly absent |
 | --- | --- | --- | --- |
@@ -199,12 +139,7 @@ provider merely because it is available.
 | Self-host | Disposable EC2, DNS/TLS, exact candidate bundle/server image, Postgres, Desktop renderer, separate candidate AnyHarness, run-scoped BYOK credential | Operator LiteLLM profile, GitHub OAuth, or E2B add-on only for their advertised-posture cells | Packaged Desktop, managed-product billing, and unrelated hosted services |
 | Tier 4 | Candidate and retained-production manifests plus packaged/native controllers and the exact selected target handles | Clean candidate Desktop, Desktop N-1→N, E2B runtime N-1→N, and change-triggered self-host N-1→N cells select only their own composition | The complete Tier 3 functional Cartesian product |
 
-Candidate AnyHarness, Desktop renderer/package, E2B-template, server, and
-self-host artifacts are
-built once per content identity and reused across compatible world shards.
-Long-lived LiteLLM, Stripe, GitHub App, E2B-team, and AWS capacity may be reused,
-but every user, key, customer, sandbox, instance, repository grant, and desired
-version written for a run is isolated and ledgered.
+Candidate AnyHarness, Desktop renderer/package, E2B-template, server, and self-host artifacts are built once per content identity and reused across compatible world shards. Long-lived LiteLLM, Stripe, GitHub App, E2B-team, and AWS capacity may be reused, but every user, key, customer, sandbox, instance, repository grant, and desired version written for a run is isolated and ledgered.
 
 ## Tier 2 World
 
@@ -220,19 +155,11 @@ no packaged Desktop
 no hosted Web until product-client unification
 ```
 
-Tier 2 owns server, database, browser, authorization, billing-state-machine,
-webhook-replay, policy, and deterministic integration guarantees. It may use a
-narrow non-LLM AnyHarness HTTP seam, but it does not launch an agent or replace
-a Tier 3 journey.
+Tier 2 owns server, database, browser, authorization, billing-state-machine, webhook-replay, policy, and deterministic integration guarantees. It may use a narrow non-LLM AnyHarness HTTP seam, but it does not launch an agent or replace a Tier 3 journey.
 
-Stripe test mode is the one standing real-network Tier 2 exception. It is not a
-fake: the tests use Stripe's test API, customers, subscriptions, payments, and
-test clocks. Trusted CI must have the test credential and fail closed when it
-is absent. A developer's explicitly diagnostic local run may report the Stripe
-cells blocked when the credential is unavailable.
+Stripe test mode is the one standing real-network Tier 2 exception. It is not a fake: the tests use Stripe's test API, customers, subscriptions, payments, and test clocks. Trusted CI must have the test credential and fail closed when it is absent. A developer's explicitly diagnostic local run may report the Stripe cells blocked when the credential is unavailable.
 
-The runner boots the same world locally and in GitHub Actions. Workflow YAML is
-a caller, not an alternate implementation of stack preparation.
+The runner boots the same world locally and in GitHub Actions. Workflow YAML is a caller, not an alternate implementation of stack preparation.
 
 ## Tier 3 Local-Runtime World
 
@@ -246,25 +173,11 @@ LiteLLM gateway
 no E2B
 ```
 
-This is the deep runtime world. It tests every supported harness, managed
-gateway and user-key route, live-discovered configuration option, Desktop-local
-workspace, and core chat/session behavior. It uses the Desktop renderer in
-Chromium for every product interaction. Ordinary application preferences are
-Tier 2; packaged/native Desktop, its bundled sidecar, native filesystem/
-keychain behavior, clean installation, and relaunch are Tier 4 only.
+This is the deep runtime world. It tests every supported harness, managed gateway and user-key route, live-discovered configuration option, Desktop-local workspace, and core chat/session behavior. It uses the Desktop renderer in Chromium for every product interaction. Ordinary application preferences are Tier 2; packaged/native Desktop, its bundled sidecar, native filesystem/ keychain behavior, clean installation, and relaunch are Tier 4 only.
 
-Hosted Web is deliberately absent: it cannot and must not reach a local
-AnyHarness. The current Tier 2 and Tier 3 contracts use the Desktop renderer;
-after product-client unification, selected shared cloud journeys add hosted Web
-without duplicating the expensive matrix.
+Hosted Web is deliberately absent: it cannot and must not reach a local AnyHarness. The current Tier 2 and Tier 3 contracts use the Desktop renderer; after product-client unification, selected shared cloud journeys add hosted Web without duplicating the expensive matrix.
 
-All local-runtime qualification uses the same persistent public qualification
-LiteLLM deployment. The runner never resets its global state: the candidate
-server provisions fresh run/actor/cell-scoped virtual keys and budgets, then
-correlates spend by immutable key identity. Only required inference routes are
-public; master keys and administrative routes remain private to the server or
-provisioner. World readiness records the exact deployed gateway image/
-configuration identity.
+All local-runtime qualification uses the same persistent public qualification LiteLLM deployment. The runner never resets its global state: the candidate server provisions fresh run/actor/cell-scoped virtual keys and budgets, then correlates spend by immutable key identity. Only required inference routes are public; master keys and administrative routes remain private to the server or provisioner. World readiness records the exact deployed gateway image/ configuration identity.
 
 ## Tier 3 Managed-Cloud World
 
@@ -279,8 +192,7 @@ Stripe test mode when selected
 GitHub and provider integrations
 ```
 
-Base-world preparation creates reusable capacity without pre-completing the
-first-user provisioning behavior:
+Base-world preparation creates reusable capacity without pre-completing the first-user provisioning behavior:
 
 ```text
 prepare candidate runtime bundle once
@@ -292,12 +204,7 @@ prepare candidate runtime bundle once
   -> return the managed-cloud base handle
 ```
 
-`CLOUD-PROVISION-1` starts from that handle with a fresh actor and proves that
-the real GitHub authorization/product path creates exactly one sandbox,
-enrolls Worker/Supervisor, and reaches AnyHarness readiness. Other cloud cells
-may reuse a separately prepared sandbox resource after that provisioning path
-has an independently green result; they never seed workspace/session state
-that their own journey is meant to prove.
+`CLOUD-PROVISION-1` starts from that handle with a fresh actor and proves that the real GitHub authorization/product path creates exactly one sandbox, enrolls Worker/Supervisor, and reaches AnyHarness readiness. Other cloud cells may reuse a separately prepared sandbox resource after that provisioning path has an independently green result; they never seed workspace/session state that their own journey is meant to prove.
 
 GitHub qualification keeps three boundaries distinct:
 
@@ -306,14 +213,7 @@ GitHub qualification keeps three boundaries distinct:
   and triggers the personal-sandbox path; and
 - the permanent qualification App installation grants repository coverage.
 
-The App remains installed on the durable qualification organization/repository.
-Ordinary parallel qualification mocks only the human approval page and the
-one-time authorization-code exchange. Playwright clicks the real product
-control, captures the generated GitHub URL and signed state, and asks a private
-controller to finish approval. That controller verifies the state belongs to
-the expected actor, refreshes the real qualification-bot authorization under a
-distributed token-rotation lock, and calls the same production-owned completion
-tail as the HTTP callback:
+The App remains installed on the durable qualification organization/repository. Ordinary parallel qualification mocks only the human approval page and the one-time authorization-code exchange. Playwright clicks the real product control, captures the generated GitHub URL and signed state, and asks a private controller to finish approval. That controller verifies the state belongs to the expected actor, refreshes the real qualification-bot authorization under a distributed token-rotation lock, and calls the same production-owned completion tail as the HTTP callback:
 
 ```text
 completeAuthorizationSuccess(state, realAuthorization)
@@ -324,31 +224,13 @@ completeAuthorizationSuccess(state, realAuthorization)
   -> refresh the real installation cache
 ```
 
-The paid-Core provisioning cell requires this tail to create exactly one real
-E2B sandbox. A separate fresh-free-actor cell proves authorization succeeds but
-provider creation remains compute-gated until paid credit exists. One serial
-periodic smoke drives the real interactive redirect, code exchange, and HTTP
-callback end to end. No qualification path may mock GitHub identity/token,
-installation/repository authority, E2B, Worker, Supervisor, or AnyHarness.
+The paid-Core provisioning cell requires this tail to create exactly one real E2B sandbox. A separate fresh-free-actor cell proves authorization succeeds but provider creation remains compute-gated until paid credit exists. One serial periodic smoke drives the real interactive redirect, code exchange, and HTTP callback end to end. No qualification path may mock GitHub identity/token, installation/repository authority, E2B, Worker, Supervisor, or AnyHarness.
 
-This world tests cloud-specific boundaries: provisioning, enrollment,
-connection, repository materialization, secrets, usage import, billing
-consumption, pause/wake/resume, callbacks, and cleanup. It does not repeat the
-entire local harness/configuration Cartesian product. One representative cloud
-harness proves Worker/runtime packaging; every-harness coverage remains local.
+This world tests cloud-specific boundaries: provisioning, enrollment, connection, repository materialization, secrets, usage import, billing consumption, pause/wake/resume, callbacks, and cleanup. It does not repeat the entire local harness/configuration Cartesian product. One representative cloud harness proves Worker/runtime packaging; every-harness coverage remains local.
 
-After Web/Desktop unification, one host-specific cloud-access journey runs on
-both Desktop and hosted Web against the same candidate deployment. It proves
-authentication bootstrap, gateway connection, stream continuity, deep-link
-ingress, and capability truth. Expensive provisioning, metering, exhaustion,
-and recovery actions still execute once per required world/shard, not once per
-historical frontend.
+After Web/Desktop unification, one host-specific cloud-access journey runs on both Desktop and hosted Web against the same candidate deployment. It proves authentication bootstrap, gateway connection, stream continuity, deep-link ingress, and capability truth. Expensive provisioning, metering, exhaustion, and recovery actions still execute once per required world/shard, not once per historical frontend.
 
-The complete E2B template identity includes every runtime-bundle input:
-AnyHarness, Worker, Supervisor, credential helper, agent seed/catalog inputs,
-bootstrap scripts, install layout, and pinned dependencies. A rolling template
-tag moves only after strict qualification; scenarios consume immutable template
-IDs.
+The complete E2B template identity includes every runtime-bundle input: AnyHarness, Worker, Supervisor, credential helper, agent seed/catalog inputs, bootstrap scripts, install layout, and pinned dependencies. A rolling template tag moves only after strict qualification; scenarios consume immutable template IDs.
 
 ## Tier 3 Self-Host World
 
@@ -364,11 +246,7 @@ Desktop renderer pointed at the instance
 separate candidate AnyHarness for the representative local turn
 ```
 
-Base-world preparation reserves disposable EC2/network/DNS capacity, supplies
-the immutable candidate bundle handle, and provides a clean Desktop-renderer
-controller plus separate candidate AnyHarness. It does not install or claim the
-product. The composed base self-host journey then performs the transitions
-being qualified:
+Base-world preparation reserves disposable EC2/network/DNS capacity, supplies the immutable candidate bundle handle, and provides a clean Desktop-renderer controller plus separate candidate AnyHarness. It does not install or claim the product. The composed base self-host journey then performs the transitions being qualified:
 
 ```text
 provision the disposable EC2 target
@@ -382,16 +260,11 @@ provision the disposable EC2 target
   -> terminate the instance
 ```
 
-This world owns installer, TLS, setup, registration, login, invitations,
-renderer-level server switching, server-origin isolation, optional-profile
-behavior, and truthful capability reporting. Native config/keychain writes,
-packaged-app relaunch, and restoration after relaunch remain Tier 4. It does not
-rerun every managed-cloud or local-runtime scenario.
+This world owns installer, TLS, setup, registration, login, invitations, renderer-level server switching, server-origin isolation, optional-profile behavior, and truthful capability reporting. Native config/keychain writes, packaged-app relaunch, and restoration after relaunch remain Tier 4. It does not rerun every managed-cloud or local-runtime scenario.
 
 ## Tier 4 Packaged-Install / Upgrade Stage
 
-Tier 4 is one qualification world/stage with four independently evidenced
-target cells:
+Tier 4 is one qualification world/stage with four independently evidenced target cells:
 
 1. clean candidate Desktop N;
 2. retained production Desktop N-1 to candidate N;
@@ -399,19 +272,11 @@ target cells:
 4. retained production self-host N-1 to candidate N when that deployment
    boundary changed.
 
-It does not rerun Tier 3. It starts from the smallest ordinary working state
-needed by each target, uses packaged/native artifacts and the real shipped
-mechanism, proves exact candidate artifacts and agent pins, preserves state,
-and completes a post-install or post-update turn.
+It does not rerun Tier 3. It starts from the smallest ordinary working state needed by each target, uses packaged/native artifacts and the real shipped mechanism, proves exact candidate artifacts and agent pins, preserves state, and completes a post-install or post-update turn.
 
-Here N-1 means the exact retained artifacts from the last qualified production
-release, resolved by manifest and digest. It never means a decremented patch
-number or candidate source rebuilt with an older version string. Candidate N is
-built once during candidate preparation and reused by the selected target
-cells.
+Here N-1 means the exact retained artifacts from the last qualified production release, resolved by manifest and digest. It never means a decremented patch number or candidate source rebuilt with an older version string. Candidate N is built once during candidate preparation and reused by the selected target cells.
 
-MCP servers are a separate runtime-configuration surface; they are not ACP
-agent processes and do not share this reconciliation assertion.
+MCP servers are a separate runtime-configuration surface; they are not ACP agent processes and do not share this reconciliation assertion.
 
 ### Clean candidate Desktop N
 
@@ -434,8 +299,7 @@ install candidate Desktop N in an isolated native environment
   -> prove origin/keychain/auth restoration
 ```
 
-This cell proves the candidate package can be installed fresh. It is not a
-substitute for the retained-production updater cell below.
+This cell proves the candidate package can be installed fresh. It is not a substitute for the retained-production updater cell below.
 
 ### Desktop N-1 to N
 
@@ -458,19 +322,9 @@ launch Desktop N-1
   -> perform a cheap real agent turn
 ```
 
-The updater feed is local to the developer Mac or macOS CI runner. It contains
-the exact candidate updater artifact and signature but never moves the public
-production stable feed. The retained N-1 application contains its real
-production sidecars and seed resources; placeholder sidecars are not qualifying
-evidence. Because the production endpoint is currently compiled into the app,
-the isolated feed is supplied through the external or previously shipped safe
-mechanism defined by the Tier 4 scenario contract without patching N-1 payload
-bytes or bypassing signature verification.
+The updater feed is local to the developer Mac or macOS CI runner. It contains the exact candidate updater artifact and signature but never moves the public production stable feed. The retained N-1 application contains its real production sidecars and seed resources; placeholder sidecars are not qualifying evidence. Because the production endpoint is currently compiled into the app, the isolated feed is supplied through the external or previously shipped safe mechanism defined by the Tier 4 scenario contract without patching N-1 payload bytes or bypassing signature verification.
 
-When an agent pin differs between N-1 and N, the scenario proves the real
-artifact update. When the pins are equal, it proves the startup reconcile is a
-no-op. Deterministic pin-drift edge cases remain focused lower-tier tests rather
-than artificial Tier 4 world states.
+When an agent pin differs between N-1 and N, the scenario proves the real artifact update. When the pins are equal, it proves the startup reconcile is a no-op. Deterministic pin-drift edge cases remain focused lower-tier tests rather than artificial Tier 4 world states.
 
 ### Managed-cloud sandbox N-1 to N
 
@@ -498,16 +352,14 @@ set this run's desired versions to N-1
   -> perform a cheap real agent turn
 ```
 
-The candidate API redirects the target updater to run-scoped immutable
-artifacts, for example:
+The candidate API redirects the target updater to run-scoped immutable artifacts, for example:
 
 ```text
 qualification/<run-id>/<candidate-sha>/linux-x86_64/anyharness
 qualification/<run-id>/<candidate-sha>/linux-x86_64/anyharness.sha256
 ```
 
-No test copies a binary or catalog into the sandbox after provisioning. The
-product heartbeat and update path must cause convergence.
+No test copies a binary or catalog into the sandbox after provisioning. The product heartbeat and update path must cause convergence.
 
 The intended ownership contract is:
 
@@ -518,15 +370,11 @@ The intended ownership contract is:
 - AnyHarness never replaces its own binary. After N starts, it owns installed
   agent reconciliation.
 
-The current direct-Worker activation implementation does not satisfy this
-intended boundary. The first release that introduces the Worker-to-Supervisor
-handoff requires a dedicated transition test. Subsequent releases use the
-ordinary N-1-to-N flow above.
+The current direct-Worker activation implementation does not satisfy this intended boundary. The first release that introduces the Worker-to-Supervisor handoff requires a dedicated transition test. Subsequent releases use the ordinary N-1-to-N flow above.
 
 ### Self-host N-1 to N
 
-This cell is selected when the self-host deploy bundle, server image, Compose
-topology, migrations, or update mechanism changed:
+This cell is selected when the self-host deploy bundle, server image, Compose topology, migrations, or update mechanism changed:
 
 ```text
 install exact retained production N-1 bundle behind real DNS/TLS
@@ -539,22 +387,13 @@ install exact retained production N-1 bundle behind real DNS/TLS
   -> perform one post-update turn
 ```
 
-This target reuses the Tier 3 self-host provisioner but uses packaged retained
-state and the real updater. It does not repeat owner/invitation/profile matrices
-already qualified in Tier 3.
+This target reuses the Tier 3 self-host provisioner but uses packaged retained state and the real updater. It does not repeat owner/invitation/profile matrices already qualified in Tier 3.
 
 ## Shared Fixtures
 
-A fixture creates reusable prerequisite product state. It must not pre-complete
-the behavior the scenario is meant to prove.
+A fixture creates reusable prerequisite product state. It must not pre-complete the behavior the scenario is meant to prove.
 
-World setup is not a fixture: candidate artifacts, API/database/runtime
-processes, E2B or EC2 capacity, run/shard identity, readiness, evidence sinks,
-and cleanup ledgers belong to provisioners. Provider access is also not a
-fixture: Stripe, LiteLLM, GitHub, E2B, AWS, and integration controllers run in
-the privileged test process and load secrets from local ignored storage or
-protected GitHub environments. Those credentials never enter the browser unless
-a scenario intentionally enters a user-owned provider key through product UI.
+World setup is not a fixture: candidate artifacts, API/database/runtime processes, E2B or EC2 capacity, run/shard identity, readiness, evidence sinks, and cleanup ledgers belong to provisioners. Provider access is also not a fixture: Stripe, LiteLLM, GitHub, E2B, AWS, and integration controllers run in the privileged test process and load secrets from local ignored storage or protected GitHub environments. Those credentials never enter the browser unless a scenario intentionally enters a user-owned provider key through product UI.
 
 The shared fixture surface is deliberately limited to six constructors:
 
@@ -598,13 +437,7 @@ The shared fixture surface is deliberately limited to six constructors:
    top-up, gating, and recovery remain production behavior. Fresh signup grants,
    checkout, plan credits, and ordinary consumption are never seeded.
 
-Workspace/session creation, harness/model/configuration choice, provider-key
-entry, integration connection/use, secret CRUD/materialization, invitations,
-GitHub onboarding, sandbox create/pause/wake, checkout/grants/usage/top-ups/
-holds/recovery, self-host install/claim/login, and Tier 4 baseline/update state
-are scenario actions rather than initial fixtures. A transition may return a
-typed handle for compatible later cells only after its own scenario is
-independently green.
+Workspace/session creation, harness/model/configuration choice, provider-key entry, integration connection/use, secret CRUD/materialization, invitations, GitHub onboarding, sandbox create/pause/wake, checkout/grants/usage/top-ups/ holds/recovery, self-host install/claim/login, and Tier 4 baseline/update state are scenario actions rather than initial fixtures. A transition may return a typed handle for compatible later cells only after its own scenario is independently green.
 
 ## Construction Sequence
 
@@ -629,8 +462,7 @@ Build this qualification system in dependency order:
    and Actions slice; and
 7. complete the packaged Tier 4 target cells after the Tier 3 worlds are stable.
 
-This is implementation order. Once the platform exists, independent Tier 3 and
-Tier 4 qualification jobs may execute concurrently.
+This is implementation order. Once the platform exists, independent Tier 3 and Tier 4 qualification jobs may execute concurrently.
 
 ## Local And GitHub Actions Execution
 
@@ -650,22 +482,11 @@ GitHub Actions
   independent Tier 3 and Tier 4 jobs run in parallel
 ```
 
-A red CI run must reproduce by using its candidate manifest and runner flags
-locally. Secrets are named in the environment-variable catalog and never
-embedded in scenarios, artifacts, logs, or evidence.
+A red CI run must reproduce by using its candidate manifest and runner flags locally. Secrets are named in the environment-variable catalog and never embedded in scenarios, artifacts, logs, or evidence.
 
-Job-level non-cancelling concurrency groups serialize overlapping runs of the
-same world in GitHub Actions. GitHub does not guarantee FIFO ordering for
-pending runs, so these groups are collision protection, not an ordered queue.
+Job-level non-cancelling concurrency groups serialize overlapping runs of the same world in GitHub Actions. GitHub does not guarantee FIFO ordering for pending runs, so these groups are collision protection, not an ordered queue.
 
-The current local manual job is a bounded precursor to the target topology: it
-builds one local-file candidate publication, runs the smoke world beneath
-`<run>/worlds/local-world-smoke-1`, and then copies and re-verifies the same
-published bytes for the functional run. The smoke finalizer owns only its child
-world directory, not the parent candidate map, ports sidecar, or artifact
-bytes. A retained local checkout can reuse that exact map on retry. GitHub
-reruns on a fresh runner still rebuild because no immutable remote candidate
-cache exists, and no current workflow claims cross-run reuse.
+The current local manual job is a bounded precursor to the target topology: it builds one local-file candidate publication, runs the smoke world beneath `<run>/worlds/local-world-smoke-1`, and then copies and re-verifies the same published bytes for the functional run. The smoke finalizer owns only its child world directory, not the parent candidate map, ports sidecar, or artifact bytes. A retained local checkout can reuse that exact map on retry. GitHub reruns on a fresh runner still rebuild because no immutable remote candidate cache exists, and no current workflow claims cross-run reuse.
 
 ## Foundation Contracts
 
@@ -681,72 +502,21 @@ The runner creates identity once, before any provider mutation:
 - GitHub workflow metadata or local origin is attached automatically for
   traceability, not supplied as product configuration.
 
-Every provider resource, ready-world handle, cell attempt, evidence record, and
-cleanup entry carries the run and shard identity. A one-shard local run still
-has an explicit shard identity so its output aggregates exactly like CI.
+Every provider resource, ready-world handle, cell attempt, evidence record, and cleanup entry carries the run and shard identity. A one-shard local run still has an explicit shard identity so its output aggregates exactly like CI.
 
 ### Secret preflight
 
-Preflight runs after cell and artifact selection but before world provisioning,
-account mutation, or provider spend. It derives requirements from
-the selected worlds and cells and checks only local availability and safe basic
-shape: for example an E2B key/team pair, a Stripe `sk_test_` key, readable key
-files, supported host platform, and public-HTTPS URL shape. It never prints
-values and does not substitute for provider authentication or health checks.
+Preflight runs after cell and artifact selection but before world provisioning, account mutation, or provider spend. It derives requirements from the selected worlds and cells and checks only local availability and safe basic shape: for example an E2B key/team pair, a Stripe `sk_test_` key, readable key files, supported host platform, and public-HTTPS URL shape. It never prints values and does not substitute for provider authentication or health checks.
 
-The laptop reads ignored local secret storage with the ambient environment
-taking precedence. GitHub Actions supplies protected environment secrets. Both
-invoke the same preflight implementation. Diagnostic behavior marks only the
-affected cells blocked and emits non-qualifying evidence; strict behavior fails
-before any external mutation. Actual provider permissions, callback delivery,
-and reachability are world-readiness checks.
+The laptop reads ignored local secret storage with the ambient environment taking precedence. GitHub Actions supplies protected environment secrets. Both invoke the same preflight implementation. Diagnostic behavior marks only the affected cells blocked and emits non-qualifying evidence; strict behavior fails before any external mutation. Actual provider permissions, callback delivery, and reachability are world-readiness checks.
 
-The current shared preflight is `scripts/ci-cd/qualification-preflight.mjs`.
-Its receipt records names/statuses, exact run/source identity, safe candidate
-artifact identities and digests when a local map is reused, and the trusted
-cleanup revision; for the manual local world it also records the validated
-strict/diagnostic behavior and the exact catalog agent selector before any
-installation, build, or provider-spend seam. A strict local run fails preflight
-when its scenario or agent selector is missing, empty, duplicated, malformed, or
-names an unshipped agent kind. Local preflight and executor selection share
-`tests/release/src/scenarios/qualification-world-scenarios.json`; this bounded
-inventory names only executable Local-world scenarios, while
-`core-release-scenario-manifest.json` remains the broader target-guarantee
-inventory. The receipt never records environment values or
-locator paths. Artifact
-mode `external` is accepted only for read-only Tier 4 validation: it records a
-null candidate build and explicitly delegates published-CDN/git artifact
-identity and availability checks to the selected scenario, without claiming a
-local build or cache hit. `T4-SH-2` uses this posture because it validates the
-already-published Desktop release. Self-host requirements are
-scenario-scoped, so `SELFHOST-CFN-1` requires its bucket/image-repository pair
-but not the BYOK or instance-type inputs used by
-install/qualification/isolation cells. Optional `SELFHOST-QUAL-1` inputs become
-early blockers only when their owning cell is explicitly selected; the default
-all-cell run preserves independent per-cell red outcomes. Managed-cloud preflight
-loads the attestation bytes from a separate canonical-origin checkout, proves
-that checkout's `HEAD` equals the bounded `ls-remote` result for the repository
-default branch, reads the committed file rather than mutable working-tree
-bytes, and requires the candidate SHA to be present. An unattested candidate
-fails before dependency installation, build, or provider mutation.
+The current shared preflight is `scripts/ci-cd/qualification-preflight.mjs`. Its receipt records names/statuses, exact run/source identity, safe candidate artifact identities and digests when a local map is reused, and the trusted cleanup revision; for the manual local world it also records the validated strict/diagnostic behavior and the exact catalog agent selector before any installation, build, or provider-spend seam. A strict local run fails preflight when its scenario or agent selector is missing, empty, duplicated, malformed, or names an unshipped agent kind. Local preflight and executor selection share `tests/release/src/scenarios/qualification-world-scenarios.json`; this bounded inventory names only executable Local-world scenarios, while `core-release-scenario-manifest.json` remains the broader target-guarantee inventory. The receipt never records environment values or locator paths. Artifact mode `external` is accepted only for read-only Tier 4 validation: it records a null candidate build and explicitly delegates published-CDN/git artifact identity and availability checks to the selected scenario, without claiming a local build or cache hit. `T4-SH-2` uses this posture because it validates the already-published Desktop release. Self-host requirements are scenario-scoped, so `SELFHOST-CFN-1` requires its bucket/image-repository pair but not the BYOK or instance-type inputs used by install/qualification/isolation cells. Optional `SELFHOST-QUAL-1` inputs become early blockers only when their owning cell is explicitly selected; the default all-cell run preserves independent per-cell red outcomes. Managed-cloud preflight loads the attestation bytes from a separate canonical-origin checkout, proves that checkout's `HEAD` equals the bounded `ls-remote` result for the repository default branch, reads the committed file rather than mutable working-tree bytes, and requires the candidate SHA to be present. An unattested candidate fails before dependency installation, build, or provider mutation.
 
-Managed-cloud preflight currently checks only the GitHub App fields consumed by
-the current candidate-world constructor. The Server's complete six-field App
-configuration gate is not yet wired by that path; #1304/#1318 owns that repair.
-Webhook/slug preflight requirements must be derived from the repaired production
-path when it lands, not added here as dead preflight-only inputs.
+Managed-cloud preflight currently checks only the GitHub App fields consumed by the current candidate-world constructor. The Server's complete six-field App configuration gate is not yet wired by that path; #1304/#1318 owns that repair. Webhook/slug preflight requirements must be derived from the repaired production path when it lands, not added here as dead preflight-only inputs.
 
 ### Typed ready-world handles
 
-Environment variables and configuration are preparation inputs. Scenarios
-receive a verified typed handle, not a loose environment map. Every ready
-handle contains run/shard and artifact identities, sanitized endpoints or
-clients, readiness observations, and references to the evidence sink and
-cleanup ledger. A base-world handle exposes prepared capacity; scenario actions
-such as first sandbox provisioning, self-host claim, workspace creation, or
-integration connection return narrower typed resource handles and register
-them in the same ledger. This prevents setup from pre-completing the behavior
-being tested. World-specific base fields expose only what that world owns:
+Environment variables and configuration are preparation inputs. Scenarios receive a verified typed handle, not a loose environment map. Every ready handle contains run/shard and artifact identities, sanitized endpoints or clients, readiness observations, and references to the evidence sink and cleanup ledger. A base-world handle exposes prepared capacity; scenario actions such as first sandbox provisioning, self-host claim, workspace creation, or integration connection return narrower typed resource handles and register them in the same ledger. This prevents setup from pre-completing the behavior being tested. World-specific base fields expose only what that world owns:
 
 - local runtime: candidate API/database, local AnyHarness, Desktop-renderer
   controller, and qualification gateway;
@@ -764,117 +534,33 @@ being tested. World-specific base fields expose only what that world owns:
   target-scoped desired-version controller, or retained/candidate self-host
   bundle handles.
 
-A provisioner returns the handle only after process/schema health, public
-reachability where required, artifact identity, controller enrollment, and
-credential applicability have all been observed.
+A provisioner returns the handle only after process/schema health, public reachability where required, artifact identity, controller enrollment, and credential applicability have all been observed.
 
 ### Cleanup ledger
 
-Every external resource is appended to durable run output immediately after
-creation and before it is handed to another operation. A ledger entry records
-only safe provider/type/resource identity, owning world, creation state,
-cleanup state, attempts, and timestamps; credentials and arbitrary provider
-payloads are forbidden. Cleanup runs in reverse registration order, continues
-through independent failures, and persists every transition atomically.
+Every external resource is appended to durable run output immediately after creation and before it is handed to another operation. A ledger entry records only safe provider/type/resource identity, owning world, creation state, cleanup state, attempts, and timestamps; credentials and arbitrary provider payloads are forbidden. Cleanup runs in reverse registration order, continues through independent failures, and persists every transition atomically.
 
-Normal completion, assertion failure, interruption, and provisioning failure
-all enter the same reconciliation path. A cleanup-by-run command can replay
-idempotent provider cleanup after a process or runner crash, and a TTL janitor
-is the final abandoned-run backstop. Later janitor success does not
-retroactively turn a strict run with failed cleanup green.
+Normal completion, assertion failure, interruption, and provisioning failure all enter the same reconciliation path. A cleanup-by-run command can replay idempotent provider cleanup after a process or runner crash, and a TTL janitor is the final abandoned-run backstop. Later janitor success does not retroactively turn a strict run with failed cleanup green.
 
-The current CLI installs one process bridge for `SIGINT` and `SIGTERM`.
-Local-workspace, managed-cloud, and self-host world constructors register their
-existing cleanup stacks with it immediately. Normal close, startup failure, and
-signal handling await one memoized finalizer, so cleanup cannot execute twice;
-signal evidence is written beside the world directory with exact
-run/shard/attempt/source identity and a red status when the cleanup summary
-reports failures. `SIGKILL`, runner loss, and a job-level timeout may bypass
-that bridge and the `if: always()` upload step.
+The current CLI installs one process bridge for `SIGINT` and `SIGTERM`. Local-workspace, managed-cloud, and self-host world constructors register their existing cleanup stacks with it immediately. Normal close, startup failure, and signal handling await one memoized finalizer, so cleanup cannot execute twice; signal evidence is written beside the world directory with exact run/shard/attempt/source identity and a red status when the cleanup summary reports failures. `SIGKILL`, runner loss, and a job-level timeout may bypass that bridge and the `if: always()` upload step.
 
-The self-host CloudFormation world additionally retains its ordinary cleanup
-summary beside the parent run logs after both setup failure and normal close.
-Deleting its nested ledger is therefore not itself treated as zero-survivor
-proof: the retained receipt must independently report stack and Route53
-absence, exact S3 `HEAD` absence, bounded GHCR tag-relist absence, local-path
-removal, and zero cleanup failures. Before its first S3 write, the world also
-issues a bounded, read-only `HEAD` against a reserved never-written key in the
-run prefix. Only an exact missing-object response permits provisioning to
-continue; authorization failures stay red and fail before provider mutation.
+The self-host CloudFormation world additionally retains its ordinary cleanup summary beside the parent run logs after both setup failure and normal close. Deleting its nested ledger is therefore not itself treated as zero-survivor proof: the retained receipt must independently report stack and Route53 absence, exact S3 `HEAD` absence, bounded GHCR tag-relist absence, local-path removal, and zero cleanup failures. Before its first S3 write, the world also issues a bounded, read-only `HEAD` against a reserved never-written key in the run prefix. Only an exact missing-object response permits provisioning to continue; authorization failures stay red and fail before provider mutation.
 
-GitHub Actions cancellation and job timeout are a distinct failure boundary:
-steps on the cancelled runner, including `if: always()` cleanup and artifact
-upload, are not guaranteed to execute. Managed-cloud AWS ingress resources
-therefore carry exact `Purpose`/`RunId`/`ShardId` provider tags and an
-independent `workflow_run` cleanup executes trusted default-branch code after
-the source workflow completes. It derives the single run identity shared by
-the managed-cloud invocations from the immutable Actions run id/attempt,
-validates the exact tags plus deterministic SG/key/DNS names, cleans those resources in
-dependency order, and proves a zero post-sweep. It never checks out the source
-run's branch and never performs account-wide prefix cleanup.
+GitHub Actions cancellation and job timeout are a distinct failure boundary: steps on the cancelled runner, including `if: always()` cleanup and artifact upload, are not guaranteed to execute. Managed-cloud AWS ingress resources therefore carry exact `Purpose`/`RunId`/`ShardId` provider tags and an independent `workflow_run` cleanup executes trusted default-branch code after the source workflow completes. It derives the single run identity shared by the managed-cloud invocations from the immutable Actions run id/attempt, validates the exact tags plus deterministic SG/key/DNS names, cleans those resources in dependency order, and proves a zero post-sweep. It never checks out the source run's branch and never performs account-wide prefix cleanup.
 
-That independent path also reconciles the other externally durable providers.
-E2B ownership is the exact run-derived template family resolved to one
-immutable template id; every running or paused sandbox using that id is killed
-before the template is deleted. Stripe ownership is the exact run/shard tag on
-webhook endpoints, customers, products, and prices plus the exact run-derived
-test-clock name; every list is exhausted and post-cleanup absence/inactivity is
-proved. LiteLLM teams, users, and keys created by a qualification candidate
-carry the exact run and shard in provider-returned metadata; cleanup validates
-the complete key-to-user-to-team graph before deleting child to parent and
-proves absence afterward. Missing credentials, ambiguous attribution,
-incomplete pagination, and accepted deletes whose resources remain are red.
+That independent path also reconciles the other externally durable providers. E2B ownership is the exact run-derived template family resolved to one immutable template id; every running or paused sandbox using that id is killed before the template is deleted. Stripe ownership is the exact run/shard tag on webhook endpoints, customers, products, and prices plus the exact run-derived test-clock name; every list is exhausted and post-cleanup absence/inactivity is proved. LiteLLM teams, users, and keys created by a qualification candidate carry the exact run and shard in provider-returned metadata; cleanup validates the complete key-to-user-to-team graph before deleting child to parent and proves absence afterward. Missing credentials, ambiguous attribution, incomplete pagination, and accepted deletes whose resources remain are red.
 
-The LiteLLM fields are qualification-only: ordinary deployments leave both
-settings empty and retain their existing enrollment behavior. The independent
-workflow authorizes LiteLLM reconciliation only when the exact candidate source
-SHA appears in the append-only
-`managed-cloud-litellm-attribution-attestations.v1.json` list shipped by the
-trusted default-branch cleanup revision. Candidate-authored contract bytes,
-comments, dead strings, and partial implementation markers cannot opt a source
-in. The list contains only individually reviewed frozen source SHAs; a later
-reviewed micro-PR may append another exact source SHA after its attribution
-behavior is proven. The source workflow's managed preflight consumes committed
-bytes from a separately fetched default-branch checkout and records that exact
-trusted revision; it never treats candidate checkout bytes as authorization. Every
-unattested candidate remains explicitly non-green rather than treating an
-empty metadata sweep as proof. The exact completed attempt's job inventory is the
-world-start gate: if `cloud-provision-1 (manual, strict)` is absent or skipped,
-the protected provider jobs do not start; any other terminal conclusion is
-cleaned conservatively. Inventory/API/receipt-upload failure stays red and also
-defaults to cleanup-required; only an exhaustive exact absent/skipped result
-suppresses the reapers. Provider calls, CLIs, dependency installs, and each
-reaper command carry internal time budgets below their job timeout so evidence
-finalization retains execution headroom. No provider cleanup uses aliases, random product UUIDs,
-prefix matching, or account-wide sweeps. The ephemeral Actions runner itself
-owns its local browser and renderer processes. The secret-bearing cleanup has
-no manual-dispatch surface: GitHub starts the default-branch workflow only from
-the completed source workflow's `workflow_run` event.
+The LiteLLM fields are qualification-only: ordinary deployments leave both settings empty and retain their existing enrollment behavior. The independent workflow authorizes LiteLLM reconciliation only when the exact candidate source SHA appears in the append-only `managed-cloud-litellm-attribution-attestations.v1.json` list shipped by the trusted default-branch cleanup revision. Candidate-authored contract bytes, comments, dead strings, and partial implementation markers cannot opt a source in. The list contains only individually reviewed frozen source SHAs; a later reviewed micro-PR may append another exact source SHA after its attribution behavior is proven. The source workflow's managed preflight consumes committed bytes from a separately fetched default-branch checkout and records that exact trusted revision; it never treats candidate checkout bytes as authorization. Every unattested candidate remains explicitly non-green rather than treating an empty metadata sweep as proof. The exact completed attempt's job inventory is the world-start gate: if `cloud-provision-1 (manual, strict)` is absent or skipped, the protected provider jobs do not start; any other terminal conclusion is cleaned conservatively. Inventory/API/receipt-upload failure stays red and also defaults to cleanup-required; only an exhaustive exact absent/skipped result suppresses the reapers. Provider calls, CLIs, dependency installs, and each reaper command carry internal time budgets below their job timeout so evidence finalization retains execution headroom. No provider cleanup uses aliases, random product UUIDs, prefix matching, or account-wide sweeps. The ephemeral Actions runner itself owns its local browser and renderer processes. The secret-bearing cleanup has no manual-dispatch surface: GitHub starts the default-branch workflow only from the completed source workflow's `workflow_run` event.
 
 ### Per-cell evidence and result behavior
 
-Each world provisioner returns a typed ready handle only after validating its
-real boundaries: process health, schema readiness, artifact identity, public
-reachability where required, and run-scoped credentials. Scenario execution
-starts only after world readiness.
+Each world provisioner returns a typed ready handle only after validating its real boundaries: process health, schema readiness, artifact identity, public reachability where required, and run-scoped credentials. Scenario execution starts only after world readiness.
 
-A required world that cannot reach readiness fails strict qualification. A
-required row cannot be converted to green with `continue-on-error`, an
-expected-failure status, a missing credential, or a silently skipped external
-dependency. There is no blocked budget in qualification: every required cell
-must produce exactly one final green result. Optional and change-untriggered
-cells are resolved as `not_required`, never disguised as blocked.
+A required world that cannot reach readiness fails strict qualification. A required row cannot be converted to green with `continue-on-error`, an expected-failure status, a missing credential, or a silently skipped external dependency. There is no blocked budget in qualification: every required cell must produce exactly one final green result. Optional and change-untriggered cells are resolved as `not_required`, never disguised as blocked.
 
-Runtime-discovered values — such as the exact model a live probe selects —
-are execution evidence recorded on the result, never cell dimensions. Cell
-identity is fixed by the plan; live-probed choices must not create or rename
-cells.
+Runtime-discovered values — such as the exact model a live probe selects — are execution evidence recorded on the result, never cell dimensions. Cell identity is fixed by the plan; live-probed choices must not create or rename cells.
 
-Diagnostic local and scheduled runs may report `blocked` or `expected_fail` so
-partially configured environments still produce useful signal. They always
-emit non-qualifying evidence, compare their blocked set with the previous run,
-and may not be consumed by promotion. A newly blocked diagnostic cell is a
-regression alert even when the diagnostic command itself continues.
+Diagnostic local and scheduled runs may report `blocked` or `expected_fail` so partially configured environments still produce useful signal. They always emit non-qualifying evidence, compare their blocked set with the previous run, and may not be consumed by promotion. A newly blocked diagnostic cell is a regression alert even when the diagnostic command itself continues.
 
 There are two result behaviors:
 
@@ -884,11 +570,6 @@ There are two result behaviors:
   cell, complete world readiness, valid artifact receipts, and successful
   cleanup.
 
-Merge and release qualification are selectors for different required cell
-sets, not separate execution behaviors. Planning/dry-run is also not a passing
-behavior: it may emit a plan but cannot emit green product evidence.
+Merge and release qualification are selectors for different required cell sets, not separate execution behaviors. Planning/dry-run is also not a passing behavior: it may emit a plan but cannot emit green product evidence.
 
-Strict evidence binds the source identity, candidate-manifest hash, world
-identity, artifact digests, scenario IDs, final results, and cleanup result.
-Production feeds, rolling tags, and desired-version pins move only after that
-evidence is green.
+Strict evidence binds the source identity, candidate-manifest hash, world identity, artifact digests, scenario IDs, final results, and cleanup result. Production feeds, rolling tags, and desired-version pins move only after that evidence is green.

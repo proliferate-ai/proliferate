@@ -2,9 +2,7 @@
 
 ## Purpose
 
-Harness docs explain provider-specific runtime behavior that a developer must
-know before changing an agent adapter, launch behavior, transcript
-normalization, or live controls.
+Harness docs explain provider-specific runtime behavior that a developer must know before changing an agent adapter, launch behavior, transcript normalization, or live controls.
 
 Use a harness doc when the rule is specific to one provider:
 
@@ -50,5 +48,4 @@ Each provider doc should answer:
 - what limitations are intentional so later changes do not accidentally remove
   safety guards
 
-If a provider rule affects multiple layers, document the provider-specific
-behavior here and link to the owning architecture guide for the shared rule.
+If a provider rule affects multiple layers, document the provider-specific behavior here and link to the owning architecture guide for the shared rule.

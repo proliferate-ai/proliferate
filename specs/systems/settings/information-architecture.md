@@ -6,32 +6,15 @@ Current gap: the managed-Target UI described here is not implemented.
 
 Date: 2026-05-20.
 
-Depends on: [`lifecycle.md`](../environments/README.md),
-`mcp-skills.md` (document retired; no owning platform document replaces it), and
-[`AGENT_AUTH.md`](../agent_auth/deep-dive.md).
+Depends on: [`lifecycle.md`](../environments/README.md), `mcp-skills.md` (document retired; no owning platform document replaces it), and [`AGENT_AUTH.md`](../agent_auth/deep-dive.md).
 
-Staleness note (2026-08-25): the SSH target product surface (SSH compute
-targets, `AddSshTargetDialog`, the SSH rows of the compute pane, SSH target
-enrollment, and the Desktop SSH tunnel) was deleted by the cull-sweep
-`delete-ssh-surface` delivery. Every SSH-target block below describes a
-destination that no longer exists and must not be built as written.
+Staleness note (2026-08-25): the SSH target product surface (SSH compute targets, `AddSshTargetDialog`, the SSH rows of the compute pane, SSH target enrollment, and the Desktop SSH tunnel) was deleted by the cull-sweep `delete-ssh-surface` delivery. Every SSH-target block below describes a destination that no longer exists and must not be built as written.
 
-Staleness note (2026-07-25): this document predates the Bifrost removal.
-Its Agents-scope content (the `agent-authentication` pane, its panes,
-primitives, deep links, copy files, and smoke steps) describes removed UI;
-each such block below carries a correction to the shipped per-harness
-sections. The authoritative auth contract is
-[`AGENT_AUTH.md`](../agent_auth/deep-dive.md).
+Staleness note (2026-07-25): this document predates the Bifrost removal. Its Agents-scope content (the `agent-authentication` pane, its panes, primitives, deep links, copy files, and smoke steps) describes removed UI; each such block below carries a correction to the shipped per-harness sections. The authoritative auth contract is [`AGENT_AUTH.md`](../agent_auth/deep-dive.md).
 
-This spec defines the settings shell, sidebar navigation, page ownership,
-shared UI primitives, and shared vocabulary used by every other spec
-that ships UI. Feature specs own page *content*; this spec owns the
-*frame*.
+This spec defines the settings shell, sidebar navigation, page ownership, shared UI primitives, and shared vocabulary used by every other spec that ships UI. Feature specs own page *content*; this spec owns the *frame*.
 
-The independent UI-font, readable-code, and window-zoom behavior exposed by
-the Appearance pane is owned by
-[`appearance-scaling.md`](appearance-scaling.md). This document continues to
-own the pane's Settings placement and shared frame.
+The independent UI-font, readable-code, and window-zoom behavior exposed by the Appearance pane is owned by [`appearance-scaling.md`](appearance-scaling.md). This document continues to own the pane's Settings placement and shared frame.
 
 ## 1. Purpose & Scope
 
@@ -72,10 +55,7 @@ Out of scope:
 
 ## 2. Mental Model
 
-Settings is a scope-tabbed shell: four horizontal scope tabs
-(User · Org · Repo · Agents), each owning a short section sidebar, over
-a single content pane. Each nav item maps to one pane component. The
-shell is dumb — it routes, the panes own their data.
+Settings is a scope-tabbed shell: four horizontal scope tabs (User · Org · Repo · Agents), each owning a short section sidebar, over a single content pane. Each nav item maps to one pane component. The shell is dumb — it routes, the panes own their data.
 
 ```text
 SettingsScreen
@@ -166,17 +146,9 @@ Verified against the current repository worktree on 2026-07-01.
 
 ### 4.1 What exists
 
-**Entry point**: `apps/packages/product-client/src/pages/SettingsPage.tsx` renders
-`<SettingsScreen />`. `SettingsScreen` renders a two-row header — a back
-row, then a 46px row of horizontal scope tabs (`SettingsScopeTabs` from
-`#product/components/patterns`) — over `SettingsSidebar` (240px
-fixed rail) + a scrollable content area.
+**Entry point**: `apps/packages/product-client/src/pages/SettingsPage.tsx` renders `<SettingsScreen />`. `SettingsScreen` renders a two-row header — a back row, then a 46px row of horizontal scope tabs (`SettingsScopeTabs` from `#product/components/patterns`) — over `SettingsSidebar` (240px fixed rail) + a scrollable content area.
 
-**Scope-tab IA**: navigation is split into four top-level scopes,
-surfaced as underline tabs (User · Org · Repo · Agents). Each scope owns
-a short section sidebar; selecting a tab lands on the scope's first
-section. Defined in
-`apps/packages/product-client/src/lib/domain/settings/navigation-presentation.ts`:
+**Scope-tab IA**: navigation is split into four top-level scopes, surfaced as underline tabs (User · Org · Repo · Agents). Each scope owns a short section sidebar; selecting a tab lands on the scope's first section. Defined in `apps/packages/product-client/src/lib/domain/settings/navigation-presentation.ts`:
 
 ```text
 SETTINGS_SCOPE_ORDER / SETTINGS_SCOPE_LABELS   tab order + labels
@@ -223,10 +195,7 @@ Agents    agent-defaults, agent-authentication
 > redirect to `agent-claude` and `agent-api-keys` respectively
 > ([navigation.ts](../../../apps/packages/product-client/src/lib/domain/settings/navigation.ts)).
 
-**Routing**: URL search param `?section=<id>`. Active section is
-managed by `useSettingsNavigation()`; the active scope tab is derived
-from the section. Sections are defined in
-`apps/packages/product-client/src/config/settings.ts`:
+**Routing**: URL search param `?section=<id>`. Active section is managed by `useSettingsNavigation()`; the active scope tab is derived from the section. Sections are defined in `apps/packages/product-client/src/config/settings.ts`:
 
 ```typescript
 SETTINGS_CONTENT_SECTIONS = [
@@ -250,10 +219,7 @@ SETTINGS_CONTENT_SECTIONS = [
 > page (§3 in the archiving-workspaces train's R7 delivery spec), not the
 > speculative `archived-chats` row it replaced.
 
-**Shortcuts**: Cmd-digit section shortcuts are per-scope.
-`SETTINGS_SHORTCUT_SECTION_ORDER` is filtered to the sections visible in
-the active scope's sidebar, so Cmd-1…N always maps to the rows currently
-on screen.
+**Shortcuts**: Cmd-digit section shortcuts are per-scope. `SETTINGS_SHORTCUT_SECTION_ORDER` is filtered to the sections visible in the active scope's sidebar, so Cmd-1…N always maps to the rows currently on screen.
 
 **Panes** (in `apps/packages/product-client/src/components/settings/panes/`):
 
@@ -297,10 +263,7 @@ subfolders:
 > selection/vault contracts owned by
 > [`AGENT_AUTH.md`](../agent_auth/deep-dive.md).
 
-**Existing shared primitives**: page chrome lives in the settings kit at
-`apps/packages/product-client/src/primitives/patterns/settings/`, plus
-`PageHeader.tsx` (`variant="flat"`) in
-`apps/packages/product-client/src/primitives/patterns/`:
+**Existing shared primitives**: page chrome lives in the settings kit at `apps/packages/product-client/src/primitives/patterns/settings/`, plus `PageHeader.tsx` (`variant="flat"`) in `apps/packages/product-client/src/primitives/patterns/`:
 
 ```text
 PageHeader.tsx            title + description + action slot (variant="flat")
@@ -316,84 +279,37 @@ SettingsEmptyState.tsx
 > `apps/packages/product-client/src/primitives/patterns/settings/SettingsGroup.tsx`
 > (it is domain-unaware, so it lives outside this directory).
 
-ProductClient's `src/components/settings/shared/`
-keeps `AdminOnlyPlaceholder`, `AgentHarnessConfigComposer`, and
-`RunCommandHelp`.
-Layout helpers use concrete ProductClient pattern imports
-(`#product/primitives/patterns/AutoHideScrollArea` and
-`#product/primitives/patterns/sidebar/SidebarNavRow`); general controls use concrete
-root imports such as `#product/primitives/Button`,
-`#product/primitives/Input`, and `#product/primitives/Switch`.
+ProductClient's `src/components/settings/shared/` keeps `AdminOnlyPlaceholder`, `AgentHarnessConfigComposer`, and `RunCommandHelp`. Layout helpers use concrete ProductClient pattern imports (`#product/primitives/patterns/AutoHideScrollArea` and `#product/primitives/patterns/sidebar/SidebarNavRow`); general controls use concrete root imports such as `#product/primitives/Button`, `#product/primitives/Input`, and `#product/primitives/Switch`.
 
-**Admin gating**: unchanged model. All Org-scope rows are marked
-`adminOnly`; `SettingsSidebar` hides them for non-admins via
-`useIsAdmin(activeOrganizationId)`, and `SettingsScreen` redirects a
-non-admin deep link at an admin-only section to the default section once
-the role check resolves. `TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION`
-(currently `false`) can force-show admin rows during UI iteration. Pane
-bodies still own their detailed read/write states.
+**Admin gating**: unchanged model. All Org-scope rows are marked `adminOnly`; `SettingsSidebar` hides them for non-admins via `useIsAdmin(activeOrganizationId)`, and `SettingsScreen` redirects a non-admin deep link at an admin-only section to the default section once the role check resolves. `TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION` (currently `false`) can force-show admin rows during UI iteration. Pane bodies still own their detailed read/write states.
 
-**Legacy Plugins page**: the former top-level Plugins page and catalog screen
-were removed. The `plugins` name survives only in compatibility deep links,
-callback paths, and telemetry normalization; supported product navigation lands
-in Settings > Integrations today. This is the current-state correction, not a
-retirement of spec 01's accepted future Plugins UI target. The package fold
-must not invent a moved ProductClient destination for the deleted files; any
-future surface is implemented from the target contract below with a new live
-owner.
+**Legacy Plugins page**: the former top-level Plugins page and catalog screen were removed. The `plugins` name survives only in compatibility deep links, callback paths, and telemetry normalization; supported product navigation lands in Settings > Integrations today. This is the current-state correction, not a retirement of spec 01's accepted future Plugins UI target. The package fold must not invent a moved ProductClient destination for the deleted files; any future surface is implemented from the target contract below with a new live owner.
 
 ### 4.2 What remains scaffolded / parked
 
-Connected panes keep their existing feature-owned content: organization
-profile/members/invitations, billing, secrets (personal + org),
-org integrations, environments, personal compute, worktree pruning,
-agent authentication, and agent defaults.
+Connected panes keep their existing feature-owned content: organization profile/members/invitations, billing, secrets (personal + org), org integrations, environments, personal compute, worktree pruning, agent authentication, and agent defaults.
 
-(shipped: `agent-authentication` and `agent-defaults` are no longer connected
-panes — removed by PR #814 (`f0f8403fa`) and PR #1100 (`7d5894807`); the
-Agents scope ships as the per-harness panes plus `agent-api-keys`.)
+(shipped: `agent-authentication` and `agent-defaults` are no longer connected panes — removed by PR #814 (`f0f8403fa`) and PR #1100 (`7d5894807`); the Agents scope ships as the per-harness panes plus `agent-api-keys`.)
 
-One page is intentionally scaffolded with `SettingsScaffoldPane`
-(registered in `copy/settings/settings-scaffold-copy.ts`) until its
-owning feature spec provides a connected body:
+One page is intentionally scaffolded with `SettingsScaffoldPane` (registered in `copy/settings/settings-scaffold-copy.ts`) until its owning feature spec provides a connected body:
 
 ```text
 organization-model-policy
 ```
 
-The scaffold establishes the route, sidebar placement, page title, and
-content ownership boundary without adding a fake model-policy backend.
-`organization-integrations` graduated to a connected pane
-(`OrganizationIntegrationsPane`).
+The scaffold establishes the route, sidebar placement, page title, and content ownership boundary without adding a fake model-policy backend. `organization-integrations` graduated to a connected pane (`OrganizationIntegrationsPane`).
 
-Parked (pane kept in code, section not registered in navigation or
-routing; `PARKED_SECTION_SCOPES` keeps its deep links on the right scope
-tab):
+Parked (pane kept in code, section not registered in navigation or routing; `PARKED_SECTION_SCOPES` keeps its deep links on the right scope tab):
 
 ```text
 slack-bot              SlackBotPane — entry points commented out
 ```
 
-Desktop registers the admin-only `organization-limits` section as **Usage &
-Limits** and renders `OrganizationBudgetsPane` with real billing, usage,
-member, timeseries, and limit hooks. Billing is also connected: Desktop and
-Web both reuse `BillingSettingsSurface`, while their navigation remains
-surface-specific.
+Desktop registers the admin-only `organization-limits` section as **Usage & Limits** and renders `OrganizationBudgetsPane` with real billing, usage, member, timeseries, and limit hooks. Billing is also connected: Desktop and Web both reuse `BillingSettingsSurface`, while their navigation remains surface-specific.
 
-When the user is authenticated and usage metering is enabled, usage renders
-inside the account popover as `SidebarConsumptionCard`'s status rows — Compute
-and LLM each as label, percentage used, and remaining balance — rather than as
-a separate footer trigger. The card preserves truthful loading, unavailable, and
-ready states for the usage summary. Billing actions are a separate
-capability-gated concern rather than a prerequisite for showing usage. A
-supported self-service organization owner gets one Billing action with that
-owner preserved in the settings route. When Desktop cannot guarantee a
-destination for the same personal or organization owner represented by the
-meters, the card renders no action and explains the unavailability.
+When the user is authenticated and usage metering is enabled, usage renders inside the account popover as `SidebarConsumptionCard`'s status rows — Compute and LLM each as label, percentage used, and remaining balance — rather than as a separate footer trigger. The card preserves truthful loading, unavailable, and ready states for the usage summary. Billing actions are a separate capability-gated concern rather than a prerequisite for showing usage. A supported self-service organization owner gets one Billing action with that owner preserved in the settings route. When Desktop cannot guarantee a destination for the same personal or organization owner represented by the meters, the card renders no action and explains the unavailability.
 
-Personal Integrations and Workflows are top-level app pages rather than
-Settings sections. Rows outside the target list are marked with a small
-`tbr` status pill until they are removed or explicitly re-scoped:
+Personal Integrations and Workflows are top-level app pages rather than Settings sections. Rows outside the target list are marked with a small `tbr` status pill until they are removed or explicitly re-scoped:
 
 ```text
 Settings / User         Archived chats
@@ -401,23 +317,15 @@ Settings / User         Archived chats
 
 Support and Desktop updates are not `tbr`.
 
-This spec owns the placement and naming of the Desktop updates settings action.
-[`desktop-updates.md`](../../engineering/shipping/desktop-updates.md) owns what that action does and the
-rest of the packaged updater and release-notice experience.
+This spec owns the placement and naming of the Desktop updates settings action. [`desktop-updates.md`](../../engineering/shipping/desktop-updates.md) owns what that action does and the rest of the packaged updater and release-notice experience.
 
 ## 5. Target Model
 
 ### 5.0 Organization control center map
 
-The organization settings surfaces form an organization control center. The
-shell is still the Desktop Settings shell, but the Admin group is product
-oriented: organization identity, members, billing, integrations, model policy,
-and capability limits. Usage and limit data is connected to the current
-organization APIs.
+The organization settings surfaces form an organization control center. The shell is still the Desktop Settings shell, but the Admin group is product oriented: organization identity, members, billing, integrations, model policy, and capability limits. Usage and limit data is connected to the current organization APIs.
 
-Each Admin surface carries an implementation maturity label so UI can ship
-before every backend primitive exists without confusing reviewers about what is
-real.
+Each Admin surface carries an implementation maturity label so UI can ship before every backend primitive exists without confusing reviewers about what is real.
 
 ```text
 real-now              connected to server state and permission enforcement
@@ -653,21 +561,11 @@ Preserved id (superseded):
 > about which workspaces exist, so the dedicated "Pruning" pane had nothing
 > left to own and was removed; `archived-workspaces` took its nav slot.
 
-The `?section=<id>` URL scheme is preserved. Old urls that point at
-`?section=repo` or `?section=cloudRepo` redirect to
-`?section=environments`; removed `shared-environments` and parked
-`slack-bot` redirect to the default section. Shipped redirects differ
-from this spec's originals: `?section=agent-authentication` goes to
-`agent-api-keys`, `agent-defaults` to `agent-claude`, and
-`?section=cloud` is focus-dependent (repo focus → `environments`,
-billing focus → `billing`) — see `normalizeSettingsSection` and
-`cloudRedirectSection` in
-[navigation.ts](../../../apps/packages/product-client/src/lib/domain/settings/navigation.ts).
+The `?section=<id>` URL scheme is preserved. Old urls that point at `?section=repo` or `?section=cloudRepo` redirect to `?section=environments`; removed `shared-environments` and parked `slack-bot` redirect to the default section. Shipped redirects differ from this spec's originals: `?section=agent-authentication` goes to `agent-api-keys`, `agent-defaults` to `agent-claude`, and `?section=cloud` is focus-dependent (repo focus → `environments`, billing focus → `billing`) — see `normalizeSettingsSection` and `cloudRedirectSection` in [navigation.ts](../../../apps/packages/product-client/src/lib/domain/settings/navigation.ts).
 
 ### 5.2 Per-page ownership
 
-Each pane is owned by one spec for content; spec 03 owns the shell
-and shared primitives the pane consumes.
+Each pane is owned by one spec for content; spec 03 owns the shell and shared primitives the pane consumes.
 
 ```text
 User
@@ -743,12 +641,7 @@ Help/check-for-updates      spec 03   updater
 
 ### 5.3 Shared vocabulary
 
-These strings are the shared presentation vocabulary. Specs that own server
-schema changes must emit the same strings on the wire and in DB CHECKs when
-they add those fields, but spec 03 itself is a frontend IA spec and does not
-add DB/API fields. Convention: snake_case for machine values (DB-friendly,
-matches existing `owner_scope='personal'`, `kind='managed_cloud'`). Human-
-readable labels live in copy and convert at render time.
+These strings are the shared presentation vocabulary. Specs that own server schema changes must emit the same strings on the wire and in DB CHECKs when they add those fields, but spec 03 itself is a frontend IA spec and does not add DB/API fields. Convention: snake_case for machine values (DB-friendly, matches existing `owner_scope='personal'`, `kind='managed_cloud'`). Human- readable labels live in copy and convert at render time.
 
 **WorkspaceType** (where a workspace runs):
 
@@ -788,10 +681,7 @@ claimed              one claiming user has narrowed control
 archived             retained but hidden from active lists
 ```
 
-Spec 04/05 add `cloud_workspace_exposure.visibility` using these values.
-Spec 05 (claiming) keeps claim as a one-way transition; there is no
-`admin_managed` state. Admins gain audit view via the `useIsAdmin` hook and
-the `scope=org-all` listing endpoint, not via a separate visibility state.
+Spec 04/05 add `cloud_workspace_exposure.visibility` using these values. Spec 05 (claiming) keeps claim as a one-way transition; there is no `admin_managed` state. Admins gain audit view via the `useIsAdmin` hook and the `scope=org-all` listing endpoint, not via a separate visibility state.
 
 **SandboxType** (the runtime container the work lives in):
 
@@ -978,8 +868,7 @@ WhereUsedDrawer
    Bifrost-era pane)
 ```
 
-**Status badge convention** (existing `Badge` primitive, new shared
-status variants):
+**Status badge convention** (existing `Badge` primitive, new shared status variants):
 
 ```text
 ready          green dot
@@ -998,11 +887,7 @@ apps/packages/product-client/src/components/settings/shared/StatusBadge.tsx   (n
   variant + label + tooltip)
 ```
 
-**Form / list-detail pattern**: all panes use
-`SettingsSection` + `SettingsRow` for primary content. List-detail
-flows (e.g. Compute targets) open a detail panel inside the same
-content area, not a modal, unless the action is destructive. Modals
-use `ModalShell`; destructive actions use `ConfirmationDialog`.
+**Form / list-detail pattern**: all panes use `SettingsSection` + `SettingsRow` for primary content. List-detail flows (e.g. Compute targets) open a detail panel inside the same content area, not a modal, unless the action is destructive. Modals use `ModalShell`; destructive actions use `ConfirmationDialog`.
 
 ### 5.5 Admin gating
 
@@ -1018,8 +903,7 @@ useIsAdmin(organizationId: string | null | undefined): {
 }
 ```
 
-Replaces all inline `role === "owner" || role === "admin"` checks. Pane
-gates render with:
+Replaces all inline `role === "owner" || role === "admin"` checks. Pane gates render with:
 
 ```tsx
 const { isAdmin } = useIsAdmin(organizationId);
@@ -1044,13 +928,11 @@ redirects a deep link at an admin-only section to the default section
 once the role check resolves.
 ```
 
-`useIsAdmin` reuses the existing `useOrganizationMembers()` hook
-under the hood; this is purely a consolidation.
+`useIsAdmin` reuses the existing `useOrganizationMembers()` hook under the hood; this is purely a consolidation.
 
 ### 5.6 Target Plugins page placement
 
-When spec 01's Plugins UI target is implemented, it is a **top-level page**, not
-a Settings pane. No `PluginsPage.tsx` is shipping today. Target reasons:
+When spec 01's Plugins UI target is implemented, it is a **top-level page**, not a Settings pane. No `PluginsPage.tsx` is shipping today. Target reasons:
 
 ```text
 - Plugins is a marketplace-ish discovery surface; settings panes are
@@ -1069,8 +951,7 @@ the future top-level surface. Per-target ComputeTargetReadiness will deep-link
 plugin readiness issues to that surface filtered by the relevant MCP/skill.
 ```
 
-The target Plugins surface stays outside the Settings sidebar. Until spec 01
-implements it, Settings > Integrations is the supported current destination.
+The target Plugins surface stays outside the Settings sidebar. Until spec 01 implements it, Settings > Integrations is the supported current destination.
 
 ### 5.7 Routing
 
@@ -1092,16 +973,13 @@ URL search param `?section=<id>` is preserved. Two clean-ups:
 > `agent-api-keys`. Per-harness pages are their own sections
 > (`?section=agent-claude` etc.), no `kind` param.
 
-`useSettingsNavigation()` exposes the focus param so panes can scroll
-to / open the right card.
+`useSettingsNavigation()` exposes the focus param so panes can scroll to / open the right card.
 
-Settings does **not** move to a path-based route in this spec. Search
-params are sufficient and the existing URL state survives.
+Settings does **not** move to a path-based route in this spec. Search params are sufficient and the existing URL state survives.
 
 ### 5.8 Copy
 
-Copy stays in `copy/<domain>/<domain>-copy.ts` per the existing rule.
-New copy files added by this spec:
+Copy stays in `copy/<domain>/<domain>-copy.ts` per the existing rule. New copy files added by this spec:
 
 ```text
 apps/packages/product-client/src/copy/settings/vocabulary-copy.ts
@@ -1118,14 +996,11 @@ apps/packages/product-client/src/copy/settings/slack-bot-copy.ts
 > [agent-api-keys-copy.ts](../../../apps/packages/product-client/src/copy/settings/agent-api-keys-copy.ts);
 > no `agent-authentication-copy.ts` exists.
 
-Existing `copy/settings/*` files are kept; rename inside copy follows
-the section-id renames.
+Existing `copy/settings/*` files are kept; rename inside copy follows the section-id renames.
 
 ### 5.9 Telemetry
 
-Pane open/close events follow the existing analytics pattern in
-`apps/packages/product-client/src/lib/domain/telemetry/events.ts` and its
-connected telemetry hooks. New events:
+Pane open/close events follow the existing analytics pattern in `apps/packages/product-client/src/lib/domain/telemetry/events.ts` and its connected telemetry hooks. New events:
 
 ```text
 settings_pane_opened    { sectionId, organizationId? }

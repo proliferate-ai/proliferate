@@ -2,9 +2,7 @@
 
 > Ownership: this document is the depth reference for the **harnesses** system spec ([README.md](README.md)). Laws, owned state, fences and the checked code map are authoritative there; flow-level detail stays here.
 
-`anyharness-lib/src/domains/agents/**` owns supported-agent metadata, installation,
-credential detection, readiness, and the final resolved launch surface handed to
-the live ACP runtime.
+`anyharness-lib/src/domains/agents/**` owns supported-agent metadata, installation, credential detection, readiness, and the final resolved launch surface handed to the live ACP runtime.
 
 ## Core Concepts
 
@@ -22,8 +20,7 @@ This area is about availability and launchability, not live session execution.
 
 ### `AgentDescriptor` (`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`)
 
-`AgentDescriptor` is the full static metadata definition for one supported
-agent.
+`AgentDescriptor` is the full static metadata definition for one supported agent.
 
 It includes:
 
@@ -34,10 +31,7 @@ It includes:
 - auth and credential-discovery config
 - docs URL
 
-The built-in descriptors live in
-`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`;
-`registry/service.rs` provides `descriptor(kind)`, the sanctioned single-kind
-lookup.
+The built-in descriptors live in `anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`; `registry/service.rs` provides `descriptor(kind)`, the sanctioned single-kind lookup.
 
 ### Artifact Specs (`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`)
 
@@ -120,30 +114,15 @@ Runtime code projects those bundled inputs into target-local surfaces:
 - `anyharness/crates/anyharness-lib/src/domains/agents/registry/**`
   - schema, validation, bundled loading, and descriptor/auth-slot projections
 
-Executable launch options are not projected from either document. The runtime
-probes the installed harness, persists target-scoped observations, and validates
-creation only against that current observed revision.
+Executable launch options are not projected from either document. The runtime probes the installed harness, persists target-scoped observations, and validates creation only against that current observed revision.
 
-Both inputs ride the binary: `catalog.json` and `registry.json` are
-`include_str!`'d, so a new document ships iff a new runtime binary ships —
-the binary is the only catalog transport
-([agent-distribution.md](distribution.md)).
-In cloud sandboxes the binary is swapped by Proliferate Supervisor on a
-mailbox request; Desktop gets a new binary via the app bundle. There is no
-live catalog sync: no served catalog version on the heartbeat and no push
-route on the runtime.
+Both inputs ride the binary: `catalog.json` and `registry.json` are `include_str!`'d, so a new document ships iff a new runtime binary ships — the binary is the only catalog transport ([agent-distribution.md](distribution.md)). In cloud sandboxes the binary is swapped by Proliferate Supervisor on a mailbox request; Desktop gets a new binary via the app bundle. There is no live catalog sync: no served catalog version on the heartbeat and no push route on the runtime.
 
-Neither document carries an unattended mode or executable fallback. Product
-consumers preserve exact target-observed control IDs and omission remains
-omission.
+Neither document carries an unattended mode or executable fallback. Product consumers preserve exact target-observed control IDs and omission remains omission.
 
 ### Resolution Flow
 
-Resolution is owned by
-`anyharness/crates/anyharness-lib/src/domains/agents/readiness/**`.
-`service.rs` is the side-effect-free entrypoint; artifact probing,
-compatibility checks, override parsing, managed artifact paths, and status
-calculation live in focused readiness modules beside it.
+Resolution is owned by `anyharness/crates/anyharness-lib/src/domains/agents/readiness/**`. `service.rs` is the side-effect-free entrypoint; artifact probing, compatibility checks, override parsing, managed artifact paths, and status calculation live in focused readiness modules beside it.
 
 The flow is:
 
@@ -155,8 +134,7 @@ The flow is:
 6. compute overall readiness
 7. return a `ResolvedAgent`
 
-Resolution does not install anything. It only reports the current machine-local
-state.
+Resolution does not install anything. It only reports the current machine-local state.
 
 ### Credential Detection Flow
 
@@ -168,14 +146,9 @@ Credential detection is layered:
    - return `LoginRequired` when a native login flow exists
    - otherwise return `MissingEnv`
 
-Provider-specific local discovery currently checks known local config/auth files
-for Claude, Codex, Gemini, OpenCode, and Cursor.
+Provider-specific local discovery currently checks known local config/auth files for Claude, Codex, Gemini, OpenCode, and Cursor.
 
-OpenCode is intentionally treated as provider-managed for readiness. AnyHarness
-may detect `~/.local/share/opencode/auth.json` as a positive signal, but it does
-not require AnyHarness-owned `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` env vars for
-OpenCode. OpenCode owns its provider universe, config files, AWS credential
-chain support, public/free model behavior, and live ACP-reported model list.
+OpenCode is intentionally treated as provider-managed for readiness. AnyHarness may detect `~/.local/share/opencode/auth.json` as a positive signal, but it does not require AnyHarness-owned `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` env vars for OpenCode. OpenCode owns its provider universe, config files, AWS credential chain support, public/free model behavior, and live ACP-reported model list.
 
 Code path:
 
@@ -191,9 +164,7 @@ Local readiness and cloud portability intentionally remain separate questions:
 
 ### Installation Flow
 
-Managed installation is owned by
-`anyharness/crates/anyharness-lib/src/domains/agents/installer/service.rs`,
-with focused sibling modules under `domains/agents/installer/`.
+Managed installation is owned by `anyharness/crates/anyharness-lib/src/domains/agents/installer/service.rs`, with focused sibling modules under `domains/agents/installer/`.
 
 The flow is:
 
@@ -203,15 +174,7 @@ The flow is:
 4. return installed artifact results
 5. resolve the agent again so the API returns fresh readiness state
 
-Every reconcile-owned install also reports an in-memory component snapshot for
-the `native_cli` and `agent_process` roles. Binary and archive transfers are
-streamed by AnyHarness itself, so the snapshot carries monotonic
-`downloadedBytes` and an exact `downloadSizeBytes` from the catalog or response
-`Content-Length`. The same snapshot advances through verification, extraction,
-package installation, and launcher finalization. npm and Git installs report
-their phase but keep `downloadSizeBytes=null`: their package-manager subprocess
-may fetch a dependency closure whose transfer size is not owned or known by
-AnyHarness, and installed directory size is not presented as download size.
+Every reconcile-owned install also reports an in-memory component snapshot for the `native_cli` and `agent_process` roles. Binary and archive transfers are streamed by AnyHarness itself, so the snapshot carries monotonic `downloadedBytes` and an exact `downloadSizeBytes` from the catalog or response `Content-Length`. The same snapshot advances through verification, extraction, package installation, and launcher finalization. npm and Git installs report their phase but keep `downloadSizeBytes=null`: their package-manager subprocess may fetch a dependency closure whose transfer size is not owned or known by AnyHarness, and installed directory size is not presented as download size.
 
 Important install cases:
 
@@ -290,65 +253,36 @@ Public HTTP routes include:
 - `DELETE /v1/agents/login-terminals/{id}`
 - `GET /v1/agents/login-terminals/{id}/ws`
 
-`login/start` is a compatibility endpoint for older clients that still show a
-command. New local/Desktop clients use `login/terminal`: AnyHarness resolves
-the correct provider executable, starts an ephemeral runtime-scoped PTY, and
-streams it over the agent-login terminal websocket. These terminals are not
-workspace terminals, do not mutate workspace terminal state, and do not persist
-output to `terminal_command_runs`.
+`login/start` is a compatibility endpoint for older clients that still show a command. New local/Desktop clients use `login/terminal`: AnyHarness resolves the correct provider executable, starts an ephemeral runtime-scoped PTY, and streams it over the agent-login terminal websocket. These terminals are not workspace terminals, do not mutate workspace terminal state, and do not persist output to `terminal_command_runs`.
 
-Login command resolution is runtime-owned and must not assume that the provider
-CLI is available on global `PATH`. Resolution order is:
+Login command resolution is runtime-owned and must not assume that the provider CLI is available on global `PATH`. Resolution order is:
 
 1. managed native executable
 2. managed agent-process registry binary or registry npm binary
 3. global `PATH`, only when the executable is actually resolvable
 
-The launched auth process receives a `PATH` prefixed with the resolved
-executable directory and managed runtime binary directories. It keeps the
-user's normal `HOME` and runs from the user home directory when available, so
-vendor CLIs write their usual local auth files.
+The launched auth process receives a `PATH` prefixed with the resolved executable directory and managed runtime binary directories. It keeps the user's normal `HOME` and runs from the user home directory when available, so vendor CLIs write their usual local auth files.
 
-Cloud target enrollment, Git bootstrap, and workspace materialization do not
-install agents. Today a fresh cloud target may report worker and
-AnyHarness online while `start_session` still fails with an
-install/readiness error until the requested agent is installed through this
-API, because the runtime startup pass reconciles *already-installed* agents
-only. That is a pinned gap, not the design: the settled target
-auto-installs the full supported set at startup reconcile
-([agent-distribution.md](distribution.md)
-Current gaps), after which the on-demand path here remains only as the
-explicit-reinstall hook.
+Cloud target enrollment, Git bootstrap, and workspace materialization do not install agents. Today a fresh cloud target may report worker and AnyHarness online while `start_session` still fails with an install/readiness error until the requested agent is installed through this API, because the runtime startup pass reconciles *already-installed* agents only. That is a pinned gap, not the design: the settled target auto-installs the full supported set at startup reconcile ([agent-distribution.md](distribution.md) Current gaps), after which the on-demand path here remains only as the explicit-reinstall hook.
 
 ### ACP Registry Flow (probe-time only)
 
-ACP-registry resolution is a **producer / probe-time** concern, not a runtime
-install input. `scripts/agent-catalog/resolve-pins.mjs` fetches the ACP registry
-(`cdn.agentclientprotocol.com/registry/v1/latest`), resolves each agent's
-platform distribution + ACP launch args, downloads + checksums the artifacts,
-and freezes the result into the catalog pin (`harness.<role>.source`).
+ACP-registry resolution is a **producer / probe-time** concern, not a runtime install input. `scripts/agent-catalog/resolve-pins.mjs` fetches the ACP registry (`cdn.agentclientprotocol.com/registry/v1/latest`), resolves each agent's platform distribution + ACP launch args, downloads + checksums the artifacts, and freezes the result into the catalog pin (`harness.<role>.source`).
 
-The runtime installer never consults the ACP registry — it materializes the
-frozen, sha256-verified pin. The former in-tree
-`integrations/agent_cli/acp_registry` module (registry fetch + install-time
-distribution resolution) was removed when the install path was fenced.
+The runtime installer never consults the ACP registry — it materializes the frozen, sha256-verified pin. The former in-tree `integrations/agent_cli/acp_registry` module (registry fetch + install-time distribution resolution) was removed when the install path was fenced.
 
 ### Reconcile Flow
 
-`installer/reconcile/`
-(`anyharness/crates/anyharness-lib/src/domains/agents/installer/reconcile/`)
-is the batch install path.
+`installer/reconcile/` (`anyharness/crates/anyharness-lib/src/domains/agents/installer/reconcile/`) is the batch install path.
 
-It iterates the built-in registry and attempts managed install where supported,
-returning:
+It iterates the built-in registry and attempts managed install where supported, returning:
 
 - installed
 - already installed
 - skipped
 - failed
 
-This is the “make the runtime ready” bulk path, not the per-agent resolution
-path.
+This is the “make the runtime ready” bulk path, not the per-agent resolution path.
 
 Reconcile runs in two scopes, selected by the `installed_only` flag:
 
@@ -362,57 +296,17 @@ Reconcile runs in two scopes, selected by the `installed_only` flag:
   [agent-distribution.md](distribution.md)
   Current gaps).
 
-`POST /v1/agents/reconcile` also accepts an optional `agentKinds` list. Empty
-keeps the all-agent behavior; a single kind is the asynchronous manual
-install/update path used by harness settings. Unknown kinds are rejected. An
-active job is reused only when its install mode and agent scope cover the new
-request; an incompatible request receives `409 AGENT_RECONCILE_BUSY` so the
-running download remains the single observable disk writer. Internal startup
-pokes (and, until the binary-only catalog ruling deletes it, the
-catalog-applied poke) reject compatible reuse, wait for any
-active job to finish, and atomically admit a fresh pass against one latest-catalog
-snapshot, so a foreground update cannot drop or partially mix a pin refresh.
+`POST /v1/agents/reconcile` also accepts an optional `agentKinds` list. Empty keeps the all-agent behavior; a single kind is the asynchronous manual install/update path used by harness settings. Unknown kinds are rejected. An active job is reused only when its install mode and agent scope cover the new request; an incompatible request receives `409 AGENT_RECONCILE_BUSY` so the running download remains the single observable disk writer. Internal startup pokes (and, until the binary-only catalog ruling deletes it, the catalog-applied poke) reject compatible reuse, wait for any active job to finish, and atomically admit a fresh pass against one latest-catalog snapshot, so a foreground update cannot drop or partially mix a pin refresh.
 
-`GET /v1/agents/reconcile` returns the job's `currentAgent`, `installedOnly`,
-and optional progress object. Progress contains aggregate transferred/total
-bytes, completed/total component counts, and the per-agent/per-role rows. The
-aggregate total is nullable and remains null if any planned role has an unknown
-transfer size; clients must render such jobs as indeterminate instead of
-inventing a percentage. This detailed state is process-local and ephemeral;
-`/health.agentReconcile` intentionally remains coarse.
+`GET /v1/agents/reconcile` returns the job's `currentAgent`, `installedOnly`, and optional progress object. Progress contains aggregate transferred/total bytes, completed/total component counts, and the per-agent/per-role rows. The aggregate total is nullable and remains null if any planned role has an unknown transfer size; clients must render such jobs as indeterminate instead of inventing a percentage. This detailed state is process-local and ephemeral; `/health.agentReconcile` intentionally remains coarse.
 
-Local and cloud clients consume this same contract. Local clients call the
-runtime directly. A selected cloud workspace resolves its AnyHarness
-connection and calls the same route; the cloud sandbox gateway already proxies
-the request and response unchanged. Worker heartbeat remains desired-version
-and liveness state and does not receive per-download byte ticks. The settings
-UI chooses this disk target explicitly (`Local runtime` or `Selected workspace`);
-the independent Cloud/Local authentication surface toggle never selects a
-runtime mutation target.
+Local and cloud clients consume this same contract. Local clients call the runtime directly. A selected cloud workspace resolves its AnyHarness connection and calls the same route; the cloud sandbox gateway already proxies the request and response unchanged. Worker heartbeat remains desired-version and liveness state and does not receive per-download byte ticks. The settings UI chooses this disk target explicitly (`Local runtime` or `Selected workspace`); the independent Cloud/Local authentication surface toggle never selects a runtime mutation target.
 
-The runtime drives reconcile itself at startup — `AgentRuntime::spawn_startup_pass`
-(kicked from `app/` wiring, runs on the desktop sidecar AND cloud workers): hydrate the
-bundled seed if pending, then run an installed-only reconcile. It is non-blocking (the
-HTTP server boots and answers `/health` while it runs), best-effort (failures land in the
-reconcile snapshot, never fatal), and idempotent (an up-to-date agent short-circuits with
-no network — see `install_policy` version-drift detection). The catalog-applied poke (a
-newer cloud catalog synced at runtime) also kicks an installed-only reconcile —
-deletion-pending with the heartbeat catalog transport
-([agent-distribution.md](distribution.md)
-Current gaps): under the binary-only ruling a new catalog always arrives with
-a fresh process start, so the startup pass is the only poke it needs.
+The runtime drives reconcile itself at startup — `AgentRuntime::spawn_startup_pass` (kicked from `app/` wiring, runs on the desktop sidecar AND cloud workers): hydrate the bundled seed if pending, then run an installed-only reconcile. It is non-blocking (the HTTP server boots and answers `/health` while it runs), best-effort (failures land in the reconcile snapshot, never fatal), and idempotent (an up-to-date agent short-circuits with no network — see `install_policy` version-drift detection). The catalog-applied poke (a newer cloud catalog synced at runtime) also kicks an installed-only reconcile — deletion-pending with the heartbeat catalog transport ([agent-distribution.md](distribution.md) Current gaps): under the binary-only ruling a new catalog always arrives with a fresh process start, so the startup pass is the only poke it needs.
 
 ### Bundled Agent Seed Flow
 
-Packaged desktop builds can ship a compressed agent seed so first launch does
-not need to download the most common managed agents before the user can start.
-The seed is a `.tar.zst` resource built by `scripts/build-agent-seed.mjs` from
-`apps/desktop/src-tauri/agent-seed.inputs.json` and hydrated by
-`anyharness/crates/anyharness-lib/src/domains/agents/installer/seed/` at
-runtime startup.
-The HTTP runtime starts immediately with `agentSeed.status=hydrating`; the heavy
-archive extraction and checksum verification run on a blocking background task
-so `/health` can respond while seed hydration is still in progress.
+Packaged desktop builds can ship a compressed agent seed so first launch does not need to download the most common managed agents before the user can start. The seed is a `.tar.zst` resource built by `scripts/build-agent-seed.mjs` from `apps/desktop/src-tauri/agent-seed.inputs.json` and hydrated by `anyharness/crates/anyharness-lib/src/domains/agents/installer/seed/` at runtime startup. The HTTP runtime starts immediately with `agentSeed.status=hydrating`; the heavy archive extraction and checksum verification run on a blocking background task so `/health` can respond while seed hydration is still in progress.
 
 V1 seeds include:
 
@@ -420,8 +314,7 @@ V1 seeds include:
 - `codex`
 - the target-specific Node runtime under `node/<target>/`
 
-The seed hydrates into the normal runtime home layout. It does not add a
-parallel resolver path:
+The seed hydrates into the normal runtime home layout. It does not add a parallel resolver path:
 
 ```text
 <runtime_home>/
@@ -436,15 +329,7 @@ parallel resolver path:
     <target>/
 ```
 
-The seed archive intentionally does not carry generated launchers. After
-hydration, the runtime regenerates launchers in the real runtime home so their
-absolute executable paths and PATH prefixes point at the final location. The
-generated launchers include the managed native CLI directory and the bundled
-Node `bin` directory when present, and are written through the staged-atomic
-promotion helper. Their env comes from the registry's per-harness
-`selfUpdateNeutralization` record, which is why managed Claude launchers set
-`DISABLE_AUTOUPDATER=1` — so desktop releases, not Claude's own updater, own the
-managed seeded version.
+The seed archive intentionally does not carry generated launchers. After hydration, the runtime regenerates launchers in the real runtime home so their absolute executable paths and PATH prefixes point at the final location. The generated launchers include the managed native CLI directory and the bundled Node `bin` directory when present, and are written through the staged-atomic promotion helper. Their env comes from the registry's per-harness `selfUpdateNeutralization` record, which is why managed Claude launchers set `DISABLE_AUTOUPDATER=1` — so desktop releases, not Claude's own updater, own the managed seeded version.
 
 Hydration is ownership-aware:
 
@@ -465,36 +350,13 @@ Public health reports low-cardinality seed state only:
 - `lastAction`: `none`, `hydrated`, or `repaired`
 - artifact counts, target, seeded agent names, and a coarse `failureKind`
 
-`/health` also carries a coarse `agentReconcile` summary (status, current agent, and
-installed / already-installed / skipped / failed counts) for the startup reconcile. The
-per-agent detail stays on `GET /v1/agents/reconcile`.
+`/health` also carries a coarse `agentReconcile` summary (status, current agent, and installed / already-installed / skipped / failed counts) for the startup reconcile. The per-agent detail stays on `GET /v1/agents/reconcile`.
 
-The runtime startup pass runs the installed-only reconcile after seed hydration
-settles (`AgentRuntime::spawn_startup_pass` awaits hydration, then reconciles), so
-already-installed agents track the catalog pins on both the desktop sidecar and cloud
-workers. The desktop frontend no longer triggers reconcile — it polls the reconcile
-snapshot (`GET /v1/agents/reconcile`) to display per-agent status and refreshes the agent
-list once per terminal job. A bounded 30-second inactive poll discovers runtime-owned
-startup/catalog jobs that begin after the initial idle read; queued/running work polls at
-1.5 seconds and active byte transfer at 750 milliseconds. The UI renders the runtime target,
-aggregate bytes, and separate CLI/ACP rows. Today missing non-seeded agents are not
-auto-installed at startup — they install on demand at session start or through a
-selected-agent reconcile from harness settings — but that is a pinned gap: the settled
-target auto-installs the full supported set at the startup pass
-([agent-distribution.md](distribution.md)
-Current gaps). The synchronous per-agent install endpoint remains available for
-compatibility.
+The runtime startup pass runs the installed-only reconcile after seed hydration settles (`AgentRuntime::spawn_startup_pass` awaits hydration, then reconciles), so already-installed agents track the catalog pins on both the desktop sidecar and cloud workers. The desktop frontend no longer triggers reconcile — it polls the reconcile snapshot (`GET /v1/agents/reconcile`) to display per-agent status and refreshes the agent list once per terminal job. A bounded 30-second inactive poll discovers runtime-owned startup/catalog jobs that begin after the initial idle read; queued/running work polls at 1.5 seconds and active byte transfer at 750 milliseconds. The UI renders the runtime target, aggregate bytes, and separate CLI/ACP rows. Today missing non-seeded agents are not auto-installed at startup — they install on demand at session start or through a selected-agent reconcile from harness settings — but that is a pinned gap: the settled target auto-installs the full supported set at the startup pass ([agent-distribution.md](distribution.md) Current gaps). The synchronous per-agent install endpoint remains available for compatibility.
 
-Seed hydration verifies the archive `.sha256`, validates the manifest target and
-schema, rejects unsafe tar entries, extracts into a staging directory under the
-same runtime home, preserves executable bits, and strips
-`com.apple.quarantine` from hydrated macOS executables on a best-effort basis.
-External seed dirs are dev-only unless a packaged build sets
-`ANYHARNESS_AGENT_SEED_DIR_UNSAFE=1`.
+Seed hydration verifies the archive `.sha256`, validates the manifest target and schema, rejects unsafe tar entries, extracts into a staging directory under the same runtime home, preserves executable bits, and strips `com.apple.quarantine` from hydrated macOS executables on a best-effort basis. External seed dirs are dev-only unless a packaged build sets `ANYHARNESS_AGENT_SEED_DIR_UNSAFE=1`.
 
-Claude's compatibility gate also checks the bundled Node binary before falling
-back to global `PATH`, so a machine without system Node can still resolve a
-seeded Claude install.
+Claude's compatibility gate also checks the bundled Node binary before falling back to global `PATH`, so a machine without system Node can still resolve a seeded Claude install.
 
 ## Boundaries
 
@@ -529,10 +391,7 @@ These are different:
 - the target's `HarnessLaunchOptions` answer which exact `modelId` and generic
   `controlValues` session create may accept now.
 
-Interactive and unattended callers both preserve their complete opaque
-selection. Session create reloads the target observation, exact-validates it,
-and atomically stores `ResolvedLaunchIntent`. Omitted values stay omitted; no
-catalog default, unattended-mode table, alias, or first option fills them.
+Interactive and unattended callers both preserve their complete opaque selection. Session create reloads the target observation, exact-validates it, and atomically stores `ResolvedLaunchIntent`. Omitted values stay omitted; no catalog default, unattended-mode table, alias, or first option fills them.
 
 ### Native CLI vs Agent Process
 
@@ -549,8 +408,7 @@ Resolution reports current state.
 
 Installation changes machine-local state.
 
-Do not mix those responsibilities. `resolve_agent(...)` should stay side-effect
-free.
+Do not mix those responsibilities. `resolve_agent(...)` should stay side-effect free.
 
 ## Important Invariants
 

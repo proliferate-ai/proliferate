@@ -1,8 +1,6 @@
 # Delegated Work UX
 
-Status: authoritative current spec for the same-workspace subagent Agents pane
-and its navigation paths; target UX spec for the remaining cowork and review
-surfaces described below.
+Status: authoritative current spec for the same-workspace subagent Agents pane and its navigation paths; target UX spec for the remaining cowork and review surfaces described below.
 
 Scope:
 
@@ -68,21 +66,14 @@ Names:
 | `colorToken` | `delegated-agent-3` | deterministic semantic identity color |
 | product handle | `subagent_abc123`, `review_abc123` | action routing, debug/details |
 
-Delegated-agent identity is generated and stable for a delegated-work id. Normal
-UI should use the canonical display handle when the surface represents the agent
-itself:
+Delegated-agent identity is generated and stable for a delegated-work id. Normal UI should use the canonical display handle when the surface represents the agent itself:
 
 ```text
 GeneratedName (title ID)
 Mary (API Surface Check abc123)
 ```
 
-The serious `title` remains available for details, search, and dense secondary
-copy. Chat header tabs are intentionally denser and show only `generatedName`;
-their hover card exposes the full `displayName`, origin, parent/source context,
-and status. Composer rows, transcript receipts, and creation rows should not
-fall back to a title-only display when the generated identity can be resolved.
-Raw ids do not appear outside debug/details surfaces.
+The serious `title` remains available for details, search, and dense secondary copy. Chat header tabs are intentionally denser and show only `generatedName`; their hover card exposes the full `displayName`, origin, parent/source context, and status. Composer rows, transcript receipts, and creation rows should not fall back to a title-only display when the generated identity can be resolved. Raw ids do not appear outside debug/details surfaces.
 
 ## Status Model
 
@@ -133,10 +124,7 @@ Composer visibility:
 - `parent_revising` keeps the delegated-work item visible but must not disable
   normal parent chat input.
 
-Avoid using one word for both action and state. On Cowork-owned surfaces,
-state is `Wake scheduled`; the corresponding action is `Notify me` or
-`Wake parent`. Delegated-agent surfaces do not expose one-shot wake actions or
-state.
+Avoid using one word for both action and state. On Cowork-owned surfaces, state is `Wake scheduled`; the corresponding action is `Notify me` or `Wake parent`. Delegated-agent surfaces do not expose one-shot wake actions or state.
 
 ## Surfaces
 
@@ -163,9 +151,7 @@ No surface should expose MCP mechanics as the user-facing concept.
 
 ## Current Agents Right Pane
 
-The workspace right panel includes an `Agents` tool for browsing and managing
-same-workspace subagents. The pane has its own per-workspace route and never
-changes the active chat session merely because the user drills through it:
+The workspace right panel includes an `Agents` tool for browsing and managing same-workspace subagents. The pane has its own per-workspace route and never changes the active chat session merely because the user drills through it:
 
 ```text
 overview
@@ -178,14 +164,7 @@ detail
   one child's transcript, composer, and lifecycle actions
 ```
 
-The durable runtime roster is the source of truth. The overview reads the
-workspace roster, while cluster/detail routes also read the selected parent's
-session roster. The client preserves server order and uses the server's
-`status.presentation` verdict directly; it does not reconstruct membership or
-presentation from open tabs, transcript receipts, or execution status. A
-settled focused roster may repair a stale route before a slower
-workspace-wide refresh finishes, but a loading or failed query must not make a
-parent or child disappear.
+The durable runtime roster is the source of truth. The overview reads the workspace roster, while cluster/detail routes also read the selected parent's session roster. The client preserves server order and uses the server's `status.presentation` verdict directly; it does not reconstruct membership or presentation from open tabs, transcript receipts, or execution status. A settled focused roster may repair a stale route before a slower workspace-wide refresh finishes, but a loading or failed query must not make a parent or child disappear.
 
 Current presentation rules:
 
@@ -209,38 +188,13 @@ Current presentation rules:
   handle owned by hot-session ingestion. A disconnected or ended non-Closed
   stream shows `Live updates paused` with a Reconnect action.
 
-Close, Open, and Promote use the durable subagent lifecycle routes. Closing a
-Running child requires confirmation; closing an Available child is immediate.
-A successful Close interrupts active work, clears queued prompts, disconnects
-the pane-owned stream, and preserves the transcript. Open restores a Closed
-child to the exact Running or Available presentation returned by the server.
-Lifecycle response state is immediate, keyed to the durable parent/child pair,
-and later roster invalidation reconciles it; an error is shown only while that
-same detail route remains selected.
+Close, Open, and Promote use the durable subagent lifecycle routes. Closing a Running child requires confirmation; closing an Available child is immediate. A successful Close interrupts active work, clears queued prompts, disconnects the pane-owned stream, and preserves the transcript. Open restores a Closed child to the exact Running or Available presentation returned by the server. Lifecycle response state is immediate, keyed to the durable parent/child pair, and later roster invalidation reconciles it; an error is shown only while that same detail route remains selected.
 
-Promote requires confirmation and turns a non-Closed child into an ordinary
-top-level session while preserving its transcript. On success the pane removes
-the child from its parent cluster, returns to that cluster, and opens the exact
-mapped ordinary session. A Promote 404 is not success by itself: the client
-converges it as an already-completed promotion only when successful refreshed
-roster and workspace-session reads agree that the child is no longer linked
-and is now listed as a workspace session.
+Promote requires confirmation and turns a non-Closed child into an ordinary top-level session while preserving its transcript. On success the pane removes the child from its parent cluster, returns to that cluster, and opens the exact mapped ordinary session. A Promote 404 is not success by itself: the client converges it as an already-completed promotion only when successful refreshed roster and workspace-session reads agree that the child is no longer linked and is now listed as a workspace session.
 
-Promotion is monotonic local authority for both the durable runtime ID and the
-mapped ProductClient session ID. Directory upserts, relationship hints, stale
-roster responses, and header hierarchy refreshes cannot reattach a promoted
-session as a child. That authority survives a transient directory-entry
-unmount/remount and is cleared only with the owning workspace or the full
-directory. Successful Promote transcript receipts establish the same authority,
-so replaying historical subagent provenance cannot resurrect the Agents-pane
-route. History hydration treats legacy completion/create provenance only as a
-candidate: a fresh parent roster must still contain that child before it is
-mounted as a subagent. When the roster omits it, promotion is recognized only
-if a fresh workspace-session read still lists the same durable session ID;
-failed or mismatched reads grant no relationship authority.
+Promotion is monotonic local authority for both the durable runtime ID and the mapped ProductClient session ID. Directory upserts, relationship hints, stale roster responses, and header hierarchy refreshes cannot reattach a promoted session as a child. That authority survives a transient directory-entry unmount/remount and is cleared only with the owning workspace or the full directory. Successful Promote transcript receipts establish the same authority, so replaying historical subagent provenance cannot resurrect the Agents-pane route. History hydration treats legacy completion/create provenance only as a candidate: a fresh parent roster must still contain that child before it is mounted as a subagent. When the roster omits it, promotion is recognized only if a fresh workspace-session read still lists the same durable session ID; failed or mismatched reads grant no relationship authority.
 
-Current entry points obey the live relationship, not merely the historical
-receipt shape:
+Current entry points obey the live relationship, not merely the historical receipt shape:
 
 - The composer Agents popover header and parent row open the parent cluster;
   its subagent rows open child detail.
@@ -252,17 +206,11 @@ receipt shape:
   unresolved target remains non-clickable rather than being guessed into the
   pane.
 
-The current implementation is owned by
-`apps/packages/product-client/src/components/workspace/delegated-work/agents-pane/**`,
-`apps/packages/product-client/src/hooks/agents/**`, and the shared session
-directory, transcript, shell, and receipt-routing owners they call. The Agents
-pane currently covers same-workspace subagents only; this section does not
-assign cowork or review work to it.
+The current implementation is owned by `apps/packages/product-client/src/components/workspace/delegated-work/agents-pane/**`, `apps/packages/product-client/src/hooks/agents/**`, and the shared session directory, transcript, shell, and receipt-routing owners they call. The Agents pane currently covers same-workspace subagents only; this section does not assign cowork or review work to it.
 
 ## Tool And Workflow Result Rendering
 
-Tool calls and workflow receipts that create or update delegated agents should
-render as named product events.
+Tool calls and workflow receipts that create or update delegated agents should render as named product events.
 
 Examples:
 
@@ -295,15 +243,9 @@ Rules:
 
 ## Tab Strip
 
-Same-workspace subagents are Agents-pane-only until promotion. They never
-appear as main chat tabs, attached tabs, or entries in the closed-tabs menu.
-Opening a subagent receipt, composer row, or roster row changes only the
-independent right-pane route; it does not change the active main chat tab.
-Promote preserves the durable session and transcript, removes the relationship,
-and opens that same session as an ordinary top-level chat tab.
+Same-workspace subagents are Agents-pane-only until promotion. They never appear as main chat tabs, attached tabs, or entries in the closed-tabs menu. Opening a subagent receipt, composer row, or roster row changes only the independent right-pane route; it does not change the active main chat tab. Promote preserves the durable session and transcript, removes the relationship, and opens that same session as an ordinary top-level chat tab.
 
-Review and Cowork child sessions remain real attached chat tabs because their
-owned workflows require a full main-chat surface. Their target shape is:
+Review and Cowork child sessions remain real attached chat tabs because their owned workflows require a full main-chat surface. Their target shape is:
 
 ```text
 [X] Main session  [X] reviewer Mary  [other tabs]
@@ -343,14 +285,11 @@ Parent: Main session
 Running
 ```
 
-Review runs are logical delegated-work items. Reviewer sessions remain real
-chat tabs, and each reviewer tab uses its own generated identity. Review
-`kind: code` maps to `code_review`; review `kind: plan` maps to `plan_review`.
+Review runs are logical delegated-work items. Reviewer sessions remain real chat tabs, and each reviewer tab uses its own generated identity. Review `kind: code` maps to `code_review`; review `kind: plan` maps to `plan_review`.
 
 ## Composer Agents Popover
 
-The composer Agents popover is an inbox for active/attention work in the
-current session. It is not a full session browser.
+The composer Agents popover is an inbox for active/attention work in the current session. It is not a full session browser.
 
 Sections:
 
@@ -374,10 +313,7 @@ Running
   API Surface Check              Running             Open
 ```
 
-The composer Agents popover surfaces review and same-workspace subagent work
-only. Cowork managed workspaces and their coding sessions live in the cowork
-sidebar (`CoworkThreadsSection` → `CoworkManagedWorkspaceList`) and are not
-duplicated above the composer.
+The composer Agents popover surfaces review and same-workspace subagent work only. Cowork managed workspaces and their coding sessions live in the cowork sidebar (`CoworkThreadsSection` → `CoworkManagedWorkspaceList`) and are not duplicated above the composer.
 
 Row rules:
 
@@ -389,9 +325,7 @@ Row rules:
 - Finished successful work is hidden by default unless it produced an action or
   durable notice that requires attention.
 
-The `Agents` trigger stays generic when it represents zero or multiple visible
-items. It may show a colored robot identity only when exactly one specific
-active/attention item is represented by the control.
+The `Agents` trigger stays generic when it represents zero or multiple visible items. It may show a colored robot identity only when exactly one specific active/attention item is represented by the control.
 
 Primary actions by kind:
 
@@ -418,8 +352,7 @@ reviewer row
   Retry reviewer
 ```
 
-The tab-cluster popover and composer Agents popover should use the same
-delegated-work view model and row components where possible.
+The tab-cluster popover and composer Agents popover should use the same delegated-work view model and row components where possible.
 
 ## Sidebar And Session Hierarchy
 
@@ -532,8 +465,7 @@ Actions:
   Delete
 ```
 
-Use a popover for quick entry and a dialog/drawer for richer inspection. Do not
-put a large details browser directly in the composer dock.
+Use a popover for quick entry and a dialog/drawer for richer inspection. Do not put a large details browser directly in the composer dock.
 
 ## Close And Delete Semantics
 

@@ -10,24 +10,15 @@ Scope:
 - `anyharness/crates/proliferate-diagnostics-collector/**`
 - `anyharness/crates/proliferate-diagnostics-protocol/**`
 
-Use this doc first to understand AnyHarness ownership. Then read the focused
-guide or spec for the layer or subsystem you are changing.
+Use this doc first to understand AnyHarness ownership. Then read the focused guide or spec for the layer or subsystem you are changing.
 
 ## Launch-option and live-session authority
 
-`domains/agents/launch_options/` owns target-observed pre-launch state and
-exact validation. `domains/agents/launch_probe/` owns override-free detection.
-`domains/sessions/launch_intent.rs` and the session store own the atomic
-resolved intent. The live actor applies and confirms that intent before ready;
-`domains/sessions/live_config/` owns the latest full per-session snapshot and
-validated mutation. Catalog modules are distribution, presentation, and
-compatibility support only and cannot authorize executable values.
+`domains/agents/launch_options/` owns target-observed pre-launch state and exact validation. `domains/agents/launch_probe/` owns override-free detection. `domains/sessions/launch_intent.rs` and the session store own the atomic resolved intent. The live actor applies and confirms that intent before ready; `domains/sessions/live_config/` owns the latest full per-session snapshot and validated mutation. Catalog modules are distribution, presentation, and compatibility support only and cannot authorize executable values.
 
 ## Overarching Architecture
 
-AnyHarness is a runtime server for coding-agent work inside workspaces. The
-central subsystem is the session engine: it creates, starts, resumes, prompts,
-streams, controls, and records agent sessions.
+AnyHarness is a runtime server for coding-agent work inside workspaces. The central subsystem is the session engine: it creates, starts, resumes, prompts, streams, controls, and records agent sessions.
 
 The structure exists because AnyHarness has to keep four concerns separate:
 
@@ -37,47 +28,27 @@ The structure exists because AnyHarness has to keep four concerns separate:
 - keep public over-the-wire contracts stable for SDKs and clients
 - expose controlled agent extensions, especially product-owned MCP tools
 
-These concerns change for different reasons and fail in different ways. Code is
-organized around those boundaries, not around whichever HTTP route happens to
-call it first.
+These concerns change for different reasons and fail in different ways. Code is organized around those boundaries, not around whichever HTTP route happens to call it first.
 
 ### How To Think About The Boundaries
 
 AnyHarness code falls into a small set of architectural divisions.
 
-**Wire vs. runtime.** Public HTTP/SSE/WS shapes are the client contract. Runtime
-internals may change; wire types should change deliberately and stay stable for
-SDK consumers.
+**Wire vs. runtime.** Public HTTP/SSE/WS shapes are the client contract. Runtime internals may change; wire types should change deliberately and stay stable for SDK consumers.
 
-**Transport vs. behavior.** API code receives requests and returns responses.
-It should translate between wire shapes and runtime calls. It should not become
-the place where session, workspace, MCP, or agent behavior is defined.
+**Transport vs. behavior.** API code receives requests and returns responses. It should translate between wire shapes and runtime calls. It should not become the place where session, workspace, MCP, or agent behavior is defined.
 
-**Durable vs. live.** Durable truth survives restart: session records, events,
-workspace records, agent readiness facts, config snapshots, and product rules.
-Live execution exists only in this process: ACP subprocesses, actors, handles,
-streams, PTYs, and pending permission/user-input/MCP callbacks.
+**Durable vs. live.** Durable truth survives restart: session records, events, workspace records, agent readiness facts, config snapshots, and product rules. Live execution exists only in this process: ACP subprocesses, actors, handles, streams, PTYs, and pending permission/user-input/MCP callbacks.
 
-**Product meaning vs. local capability.** Domains decide what an operation
-means in the product. Adapters perform focused local work such as reading
-files, running git, opening hosting metadata, or executing a process.
+**Product meaning vs. local capability.** Domains decide what an operation means in the product. Adapters perform focused local work such as reading files, running git, opening hosting metadata, or executing a process.
 
-**Product extension vs. protocol mechanics.** Product features own what their
-tools do. Integration code owns how to speak MCP, ACP, or a provider CLI. A
-shared MCP `tools/list` helper is protocol mechanics; a cowork or review tool
-is product behavior.
+**Product extension vs. protocol mechanics.** Product features own what their tools do. Integration code owns how to speak MCP, ACP, or a provider CLI. A shared MCP `tools/list` helper is protocol mechanics; a cowork or review tool is product behavior.
 
-**Composition vs. implementation.** App wiring constructs the runtime graph and
-connects extension implementations. It should not contain the implementation
-of those systems.
+**Composition vs. implementation.** App wiring constructs the runtime graph and connects extension implementations. It should not contain the implementation of those systems.
 
-**Startup vs. runtime.** The binary starts the process, chooses runtime home,
-initializes logging, and dispatches commands. Runtime behavior belongs behind
-the library boundary.
+**Startup vs. runtime.** The binary starts the process, chooses runtime home, initializes logging, and dispatches commands. Runtime behavior belongs behind the library boundary.
 
-**Credential discovery vs. readiness.** Credential discovery finds and
-normalizes local provider auth material. Agent readiness and install policy are
-runtime product decisions.
+**Credential discovery vs. readiness.** Credential discovery finds and normalizes local provider auth material. Agent readiness and install policy are runtime product decisions.
 
 ### Core Session Engine
 
@@ -141,8 +112,7 @@ live/terminals
   PTY lifecycle, terminal handles, terminal event streams
 ```
 
-Adapters perform local operations. Domains decide product meaning. Live systems
-own running state.
+Adapters perform local operations. Domains decide product meaning. Live systems own running state.
 
 ### Feature Domains And Extensions
 
@@ -157,9 +127,7 @@ domains/workflows
 domains/sessions/subagents
 ```
 
-They should not fork session startup, prompt dispatch, or event ingestion. When
-a product feature needs to participate in a session lifecycle, it plugs into a
-core extension point and `app/` wires the implementation.
+They should not fork session startup, prompt dispatch, or event ingestion. When a product feature needs to participate in a session lifecycle, it plugs into a core extension point and `app/` wires the implementation.
 
 Example:
 
@@ -191,8 +159,7 @@ api/http
   HTTP endpoint wrapper for product MCP servers
 ```
 
-Move protocol scaffolding to `integrations/mcp`. Keep product tool semantics in
-the owning domain.
+Move protocol scaffolding to `integrations/mcp`. Keep product tool semantics in the owning domain.
 
 ### Placement Questions
 
@@ -213,8 +180,7 @@ Use these questions before adding or moving code:
 
 Always start here.
 
-Guides define reusable engineering standards: where code goes, what each layer
-may own, and which patterns are allowed.
+Guides define reusable engineering standards: where code goes, what each layer may own, and which patterns are allowed.
 
 Guides:
 
@@ -249,8 +215,7 @@ Guides:
 - [repo-shape.md](anyharness.md) for file size thresholds,
   module style, and migration discipline.
 
-Specs define subsystem behavior: lifecycle invariants, edge cases, and
-verification for specific runtime flows.
+Specs define subsystem behavior: lifecycle invariants, edge cases, and verification for specific runtime flows.
 
 Specs:
 
@@ -272,8 +237,7 @@ Specs:
 - [../codebase/platforms/product/agent-features/definitions/README.md](../systems/subagents/product-mcp-servers.md) for the concrete product
   MCP definitions: Workspace, Cowork, and Reviews.
 
-Subsystem docs at the top level of `specs/areas/**` own
-behavior for runtime areas that do not yet have a focused guide or spec:
+Subsystem docs at the top level of `specs/areas/**` own behavior for runtime areas that do not yet have a focused guide or spec:
 
 - [agents.md](../systems/harnesses/agents-domain.md)
 - [acp.md](anyharness.md)
@@ -284,9 +248,7 @@ behavior for runtime areas that do not yet have a focused guide or spec:
 - [sessions.md](../systems/sessions/anyharness-sessions.md)
 - [workspaces.md](../systems/workspaces/anyharness-workspaces.md)
 
-Harness docs cover provider-specific behavior. Read
-[harnesses.md](../systems/harnesses/harness-integrations.md) first when deciding whether a
-provider rule belongs in a harness doc or an integration guide:
+Harness docs cover provider-specific behavior. Read [harnesses.md](../systems/harnesses/harness-integrations.md) first when deciding whether a provider rule belongs in a harness doc or an integration guide:
 
 - [harnesses/claude.md](../systems/harnesses/claude.md)
 - [harnesses/codex.md](../systems/harnesses/codex.md)
@@ -306,8 +268,7 @@ Also read:
 
 ## Code Map
 
-Use this map when starting from a file, task, or feature idea and deciding
-which guide to read and where the code belongs.
+Use this map when starting from a file, task, or feature idea and deciding which guide to read and where the code belongs.
 
 | You are changing or building | Paths | Owner | Read |
 | --- | --- | --- | --- |
@@ -341,10 +302,7 @@ which guide to read and where the code belongs.
 | Latency tracing, request measurement, diagnostic ids | `observability/latency.rs` and scattered measurement helpers | `observability/**` | [observability.md](anyharness.md) |
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [repo-shape.md](anyharness.md) |
 
-If a task appears to belong in two places, split by ownership. Example: a new
-Workspace MCP operation puts product behavior in
-`domains/agent_operations/**`, shared JSON-RPC/capability helpers in
-`integrations/mcp/**`, and the HTTP route adapter in `api/http/**`.
+If a task appears to belong in two places, split by ownership. Example: a new Workspace MCP operation puts product behavior in `domains/agent_operations/**`, shared JSON-RPC/capability helpers in `integrations/mcp/**`, and the HTTP route adapter in `api/http/**`.
 
 ## Target Shape
 
@@ -409,17 +367,11 @@ anyharness/crates/
       lib.rs
 ```
 
-Do not add new top-level AnyHarness folders without updating this doc and the
-focused guide that owns the layer.
+Do not add new top-level AnyHarness folders without updating this doc and the focused guide that owns the layer.
 
-`origin.rs` is advisory provenance, not authority. It may describe where a
-request/session/workspace came from. It should not decide auth, ownership,
-billing, mutability, or sandbox policy.
+`origin.rs` is advisory provenance, not authority. It may describe where a request/session/workspace came from. It should not decide auth, ownership, billing, mutability, or sandbox policy.
 
-Root-level files (`lib.rs`, `origin.rs`, `process_env.rs`) are crate-root
-support modules, not layers. If one grows product meaning, live state, protocol
-mechanics, local-machine capability, or DB infrastructure, move it into the
-owning layer instead of growing a new global bucket.
+Root-level files (`lib.rs`, `origin.rs`, `process_env.rs`) are crate-root support modules, not layers. If one grows product meaning, live state, protocol mechanics, local-machine capability, or DB infrastructure, move it into the owning layer instead of growing a new global bucket.
 
 ## Hard Rules
 
@@ -484,11 +436,7 @@ integrations -> domains
 persistence -> domains
 ```
 
-Core domains should not import product surface domains. When a product surface
-needs to plug into a core lifecycle, use an extension point wired in `app/`.
-For example, the session engine owns the `SessionExtension` trait; cowork,
-reviews, and delegated-agent completion delivery implement it; `app` wires
-them into `SessionRuntime`.
+Core domains should not import product surface domains. When a product surface needs to plug into a core lifecycle, use an extension point wired in `app/`. For example, the session engine owns the `SessionExtension` trait; cowork, reviews, and delegated-agent completion delivery implement it; `app` wires them into `SessionRuntime`.
 
 > [!note]
 > This is the AnyHarness area doc: crate layout, domains, persistence, protocol, plus the worker and supervisor crates. Stitched sections below, one per former owner doc:
@@ -531,11 +479,7 @@ Three rules generate the entire structure. Everything else is a consequence.
    domain's `runtime.rs` (its facade). Everything below the composing layer
    is single-concern by construction — which is what makes it readable alone.
 
-The corollary that decides most placements: anything **pure** is reachable by
-`use`; anything **live** (stores, gates, handles, ciphers, clocks) must be
-**handed in** as a dependency. `&self` on a service or runtime IS the deps
-object: its field list is the license of what that layer may touch, set once
-at wiring.
+The corollary that decides most placements: anything **pure** is reachable by `use`; anything **live** (stores, gates, handles, ciphers, clocks) must be **handed in** as a dependency. `&self` on a service or runtime IS the deps object: its field list is the license of what that layer may touch, set once at wiring.
 
 ## The Eight Jobs
 
@@ -550,16 +494,7 @@ at wiring.
 | 7 | Wire | `app/` only, via per-domain constructors |
 | 8 | Observe | one span at each use-case entry |
 
-The jobs compose; they do not embody. Orchestration **causes** effects by
-calling their owners — `store.insert(record)?`, `handle.send(command).await?`
-are orchestration lines, one effect-owner call each. **Performing** an effect
-is the owner's job: effects on owned state belong to the custodian (the store
-executes the SQL, the actor mutates live state when commanded); effects on the
-un-owned world (filesystem, processes, network, protocol IO) belong to
-mechanism files, `adapters/`, and `integrations/`. The violation is never
-that a use case caused an effect — it is an orchestration body that contains
-the mechanics inline: SQL strings, `std::fs` calls, process spawning,
-encryption loops. One function embodying two jobs is the leak.
+The jobs compose; they do not embody. Orchestration **causes** effects by calling their owners — `store.insert(record)?`, `handle.send(command).await?` are orchestration lines, one effect-owner call each. **Performing** an effect is the owner's job: effects on owned state belong to the custodian (the store executes the SQL, the actor mutates live state when commanded); effects on the un-owned world (filesystem, processes, network, protocol IO) belong to mechanism files, `adapters/`, and `integrations/`. The violation is never that a use case caused an effect — it is an orchestration body that contains the mechanics inline: SQL strings, `std::fs` calls, process spawning, encryption loops. One function embodying two jobs is the leak.
 
 ## Truths: Static, Dynamic, Derived
 
@@ -575,13 +510,11 @@ The state axis is "who owns the truth and does it change":
   options, preflight results. Recomputed from the truths above. Because they
   are write-free, anyone may call them anywhere, concurrently.
 
-A use case is classified by the truths it needs: durable-only -> `service.rs`
-owns it; live or multi-domain -> `runtime.rs` owns it.
+A use case is classified by the truths it needs: durable-only -> `service.rs` owns it; live or multi-domain -> `runtime.rs` owns it.
 
 ## The Use-Case Pipeline
 
-Complex use cases always read in this order. The pipeline is a shape, not a
-layer — it belongs to whichever layer owns the use case.
+Complex use cases always read in this order. The pipeline is a shape, not a layer — it belongs to whichever layer owns the use case.
 
 ```text
 preconditions -> idempotency -> pre-flight repairs -> resolve -> decide -> execute/record -> (compensate)
@@ -606,15 +539,9 @@ preconditions -> idempotency -> pre-flight repairs -> resolve -> decide -> execu
 - **Compensate**: failure-path effects (mark-errored) live in the use-case
   body next to the success path, never buried in `map_err`.
 
-The Context is **not a model**. It is named local variables: private to one
-use-case module, never exported, never stored, never serialized. The moment
-another file imports a Context, it has become a god object. Contexts are
-per-use-case; overlap between them is correct, deduplicating them is not.
+The Context is **not a model**. It is named local variables: private to one use-case module, never exported, never stored, never serialized. The moment another file imports a Context, it has become a god object. Contexts are per-use-case; overlap between them is correct, deduplicating them is not.
 
-The Plan is **data only**: debuggable, comparable, constructible in tests.
-Capabilities (closures, sinks, hooks) travel beside plans, never inside them.
-In-repo exemplar: `domains/artifacts` (`plan_create`/`plan_update` return typed
-plans; the runtime owns all effects).
+The Plan is **data only**: debuggable, comparable, constructible in tests. Capabilities (closures, sinks, hooks) travel beside plans, never inside them. In-repo exemplar: `domains/artifacts` (`plan_create`/`plan_update` return typed plans; the runtime owns all effects).
 
 ## Models
 
@@ -625,9 +552,7 @@ plans; the runtime owns all effects).
 | Row | inside `store/**` | never escapes the store |
 | Live | `live/<area>/model.rs` | live's doorstep vocabulary (launch bundles, commands, events) |
 
-Inputs, views, and plans are **domain models with role names**, not new kinds.
-A representation must earn its existence: wire and row copies always qualify
-(stability, layout); internal 1:1 mirrors are banned — pick one owner.
+Inputs, views, and plans are **domain models with role names**, not new kinds. A representation must earn its existence: wire and row copies always qualify (stability, layout); internal 1:1 mirrors are banned — pick one owner.
 
 ## Mapping
 
@@ -702,10 +627,7 @@ A use case legitimately checks both; they are different questions.
 
 ## Observability
 
-One `#[tracing::instrument]` span per use-case entry, fields declared once;
-everything inside inherits them. Phase timings are events. Hand-repeated field
-clusters and latency/flow context threaded through signatures are banned —
-that context propagates through spans.
+One `#[tracing::instrument]` span per use-case entry, fields declared once; everything inside inherits them. Phase timings are events. Hand-repeated field clusters and latency/flow context threaded through signatures are banned — that context propagates through spans.
 
 ## Proportionality: Ceremony Is Earned
 
@@ -718,21 +640,13 @@ that context propagates through spans.
 | Runtime layer | use case crosses concerns | service is the entry |
 | Concern folder | domain root past ~8 files or 2+ nameable concerns | stay flat |
 
-The invariants that never disappear, even for two-field CRUD: the auth
-assertion, no contract types past the edge, errors via `From`, rows inside the
-store.
+The invariants that never disappear, even for two-field CRUD: the auth assertion, no contract types past the edge, errors via `From`, rows inside the store.
 
 ## The Root Is A Table Of Contents
 
-A domain's root may contain only `mod.rs`, `model.rs`, the entry surface
-(`runtime.rs` and/or `service.rs`), and `store/`. Everything else lives in a
-named concern folder, and each concern folder follows the identical internal
-grammar (exports-only `mod.rs`, `service.rs`, policy, helpers — each earned).
+A domain's root may contain only `mod.rs`, `model.rs`, the entry surface (`runtime.rs` and/or `service.rs`), and `store/`. Everything else lives in a named concern folder, and each concern folder follows the identical internal grammar (exports-only `mod.rs`, `service.rs`, policy, helpers — each earned).
 
-If a file cannot say which concern it belongs to, that is not a homeless file —
-it is an unnamed concern. Name it. A root (domain or concern) holds roughly
-5–9 entries; shrink a table of contents by naming concerns, never by merging
-files. The same rule applies recursively to concern folders that outgrow it.
+If a file cannot say which concern it belongs to, that is not a homeless file — it is an unnamed concern. Name it. A root (domain or concern) holds roughly 5–9 entries; shrink a table of contents by naming concerns, never by merging files. The same rule applies recursively to concern folders that outgrow it.
 
 ## The Placement Algorithm
 
@@ -747,9 +661,7 @@ Four questions give every file exactly one home:
 
 ## Building A New Use Case
 
-The end-to-end order for a new feature. Skip any step the proportionality
-table says is unearned; never skip the four invariants (auth assertion, no
-contract types past the edge, errors via `From`, rows inside the store).
+The end-to-end order for a new feature. Skip any step the proportionality table says is unearned; never skip the four invariants (auth assertion, no contract types past the edge, errors via `From`, rows inside the store).
 
 1. **Wire shape**: request/response types in `anyharness-contract/src/v1/`.
 2. **Owner**: durable-only -> the domain's `service`; live or multi-domain ->
@@ -768,19 +680,11 @@ contract types past the edge, errors via `From`, rows inside the store).
 10. **Tests**: policy tests with hand-built Contexts (no DB), store tests,
     one handler test through the stanza.
 
-Reviewing existing code is the same list run in reverse: anything that
-deviates is either a named migration exception or a finding.
+Reviewing existing code is the same list run in reverse: anything that deviates is either a named migration exception or a finding.
 
 ## Smells (Greppable)
 
-A job has leaked if you see: a closure or clone-for-closure in an orchestration
-body · a strategy `match` in a facade · repeated tracing field blocks ·
-`map_err` with a hand-rolled variant match · `.to_string()` on a typed error ·
-control flow on `message.contains(...)` · a fetch inside a mapper or policy ·
-`Utc::now()`/`Uuid::new_v4()` inside decision logic · a handler importing
-domain internals beyond the facade and its types · a Context imported by
-another file · the same rule decided in two places · effects performed before
-validation completes.
+A job has leaked if you see: a closure or clone-for-closure in an orchestration body · a strategy `match` in a facade · repeated tracing field blocks · `map_err` with a hand-rolled variant match · `.to_string()` on a typed error · control flow on `message.contains(...)` · a fetch inside a mapper or policy · `Utc::now()`/`Uuid::new_v4()` inside decision logic · a handler importing domain internals beyond the facade and its types · a Context imported by another file · the same rule decided in two places · effects performed before validation completes.
 
 ## In-Repo Exemplars
 
@@ -801,8 +705,7 @@ textbook small domain   domains/repo_roots
 
 ## Migration Exceptions
 
-Known violations, named per the specs convention. The rule above is the law;
-these are the debt:
+Known violations, named per the specs convention. The rule above is the law; these are the debt:
 
 - ~81 `anyharness_contract` import lines inside `domains/**`; worst:
   `runtime_config` persists wire types as rows, `agents/auth` uses
@@ -839,9 +742,7 @@ Resolved (the rule now holds; listed for traceability):
 
 ## 1. Purpose / Ownership
 
-AnyHarness is **the runtime that runs coding-agent sessions over the ACP protocol,
-inside the sandbox or on Desktop**. Product clients call it directly; managed
-Cloud traffic reaches the same API through the cloud-sandbox gateway.
+AnyHarness is **the runtime that runs coding-agent sessions over the ACP protocol, inside the sandbox or on Desktop**. Product clients call it directly; managed Cloud traffic reaches the same API through the cloud-sandbox gateway.
 
 It owns:
 - **Running agent sessions** — spawning the agent subprocess, driving prompt turns
@@ -854,15 +755,9 @@ It owns:
 - **The product MCP tools** we expose back to the agent (subagents, reviews,
   cowork, skills, …).
 
-It does **not** own product orchestration or account/billing truth (Cloud's
-job), nor the external launch/update machinery used by Desktop, Worker, or an
-installed Supervisor. AnyHarness is a local runtime engine whose own APIs and
-SQLite database own workspace/session execution truth.
+It does **not** own product orchestration or account/billing truth (Cloud's job), nor the external launch/update machinery used by Desktop, Worker, or an installed Supervisor. AnyHarness is a local runtime engine whose own APIs and SQLite database own workspace/session execution truth.
 
-**The defining axis — Durable vs Live.** Almost every placement question in
-AnyHarness reduces to one split: *is this the durable meaning of a session, or the
-coordination of a running one?* Durable lives in `domains/` + `persistence/`; live
-lives in `live/`. Hold this and the rest of the structure follows.
+**The defining axis — Durable vs Live.** Almost every placement question in AnyHarness reduces to one split: *is this the durable meaning of a session, or the coordination of a running one?* Durable lives in `domains/` + `persistence/`; live lives in `live/`. Hold this and the rest of the structure follows.
 
 ---
 
@@ -877,9 +772,7 @@ anyharness-credential-discovery  probe the env for credentials (files/keychain/m
 anyharness-lib                   the runtime engine — everything below
 ```
 
-Three small satellites + one engine. The contract crate keeps wire shapes out of
-runtime types; credential-discovery keeps "find the creds" out of "am I ready to
-serve."
+Three small satellites + one engine. The contract crate keeps wire shapes out of runtime types; credential-discovery keeps "find the creds" out of "am I ready to serve."
 
 ### The eight layers in `anyharness-lib/src` (edge → substrate)
 
@@ -894,10 +787,7 @@ persistence/    durable storage substrate (SQLite) — how domains/ actually sav
 observability/  cross-cutting — tracing/metrics/logs.
 ```
 
-The structural feature that makes AnyHarness feel "more numerous" than the server:
-`domains/` and `live/` are **siblings, not a stack**. A feature splits across two
-homes — its durable half in `domains/<feature>/` and its running half in
-`live/<feature>/`. That doubling is the source of most of the extra rules.
+The structural feature that makes AnyHarness feel "more numerous" than the server: `domains/` and `live/` are **siblings, not a stack**. A feature splits across two homes — its durable half in `domains/<feature>/` and its running half in `live/<feature>/`. That doubling is the source of most of the extra rules.
 
 ### The session engine — the role chain
 
@@ -909,8 +799,7 @@ SessionRuntime → SessionService → SessionStore →          [DURABLE: domain
       driver (ACP conn + InboundDoor) / SessionEventSink / InteractionRendezvous   [EXTERNAL + ordering]
 ```
 
-The handoff `SessionStore → LiveSessionManager` is exactly the durable/live
-boundary.
+The handoff `SessionStore → LiveSessionManager` is exactly the durable/live boundary.
 
 ### The live grammar (5 roles)
 
@@ -924,10 +813,7 @@ driver    external backing mechanism — the ACP process/connection the actor dr
 sink      ordered write path        — decides HOW events become an ordered stream
 ```
 
-Two non-obvious boundaries: **"actor decides WHEN, sink decides HOW it becomes
-ordered output"**; and the **handle is the only port** — actor commands are
-constructed only inside `handle.rs` (`handle.send_prompt(...)`, never
-`handle.command_tx.send(SessionCommand::Prompt{...})`).
+Two non-obvious boundaries: **"actor decides WHEN, sink decides HOW it becomes ordered output"**; and the **handle is the only port** — actor commands are constructed only inside `handle.rs` (`handle.send_prompt(...)`, never `handle.command_tx.send(SessionCommand::Prompt{...})`).
 
 ### MCP — a vertical, not a layer
 
@@ -943,8 +829,7 @@ api/http/product_mcp.rs          edge: the one HTTP route product MCPs are serve
 
 ### The two applied bundles
 
-Both are **revision + scope versioned**, applied to a runtime scope, and
-**snapshotted per session at create** (config never mutates inside a live session):
+Both are **revision + scope versioned**, applied to a runtime scope, and **snapshotted per session at create** (config never mutates inside a live session):
 
 ```text
 runtime-config   PUT /v1/runtime-config       external MCPs + skills + artifacts + direct-attach-auth
@@ -953,20 +838,11 @@ agent-auth       PUT /v1/agents/auth-config    per-agent-kind provider creds (en
                    secrets: encrypted at rest (survives restart, needed to resume)
 ```
 
-A session **pins** to a revision at create (`runtime_config_session_context` /
-`agent_auth_scope` + `required_agent_auth_revision`), **materializes** secrets once
-into the session, and launches from that frozen snapshot. "Refresh" means an
-authorized caller applies a new revision and the *next* session picks it up —
-never a live update.
+A session **pins** to a revision at create (`runtime_config_session_context` / `agent_auth_scope` + `required_agent_auth_revision`), **materializes** secrets once into the session, and launches from that frozen snapshot. "Refresh" means an authorized caller applies a new revision and the *next* session picks it up — never a live update.
 
 ### The event model
 
-One `SessionEventSink` per session owns truth: a monotonic `seq`, the `turn_id`,
-and the open-item state. ACP notifications are *normalized* into contract events
-(one notification → 0..n events); `item_completed` is **synthesized** by
-accumulating chunks, not a raw ACP frame. Every event is **persisted before
-broadcast** (`publish_session_event`), which makes direct SSE/replay consumers
-recoverable by `seq`.
+One `SessionEventSink` per session owns truth: a monotonic `seq`, the `turn_id`, and the open-item state. ACP notifications are *normalized* into contract events (one notification → 0..n events); `item_completed` is **synthesized** by accumulating chunks, not a raw ACP frame. Every event is **persisted before broadcast** (`publish_session_event`), which makes direct SSE/replay consumers recoverable by `seq`.
 
 ---
 
@@ -1008,10 +884,7 @@ authorized caller → PUT /v1/runtime-config or /v1/agents/auth-config
   → next session created snapshots the new revision (running sessions unaffected)
 ```
 
-The current Proliferate Worker does not poll for these bundles or report applied
-revisions. Managed Cloud calls/proxies to AnyHarness directly; the Worker's
-AnyHarness HTTP use is limited to catalog convergence and the post-relaunch
-`GET /health` version gate.
+The current Proliferate Worker does not poll for these bundles or report applied revisions. Managed Cloud calls/proxies to AnyHarness directly; the Worker's AnyHarness HTTP use is limited to catalog convergence and the post-relaunch `GET /health` version gate.
 
 **Skill discovery / activation (advisory, no wiring change):**
 ```text
@@ -1067,9 +940,7 @@ SetConfigOption(model) → ensure live actor → attempt live apply (same sessio
   *protocol mechanics* (JSON-RPC, capability tokens) — the *meaning* of a product
   MCP tool lives in `domains/<feature>/mcp`.
 
-**`persistence/`** — the SQLite substrate. Synced config is content-addressed:
-skill bodies/resources are rows in `runtime_config_artifacts` (keyed by SHA), not
-files on disk; the manifest pins per session in `runtime_config_session_context`.
+**`persistence/`** — the SQLite substrate. Synced config is content-addressed: skill bodies/resources are rows in `runtime_config_artifacts` (keyed by SHA), not files on disk; the manifest pins per session in `runtime_config_session_context`.
 
 **`observability/`** — cross-cutting tracing/metrics; keep it dependency-light.
 
@@ -1098,19 +969,7 @@ files on disk; the manifest pins per session in `runtime_config_session_context`
 
 ## The Compression
 
-**AnyHarness is a single-sandbox session engine split by one axis — durable meaning
-(`domains/` + `persistence/`) vs the running instance (`live/`) — with edges
-(`api`/`app`) on top and leaves (`adapters`/`integrations`) underneath.** The role
-chain (`SessionRuntime → … → SessionActor → driver/Sink/Rendezvous`) walks that axis;
-the live grammar (manager/handle/actor/driver/sink) governs the concurrency at the
-bottom; one event sink owns `seq`/turn/item order (persist-before-broadcast); MCP is
-the one vertical cutting through all layers; and two revision-pinned synced bundles
-(runtime-config = external MCPs + skills; agent-auth = provider creds) are
-snapshotted per session at create and never mutated live. Skills are DB-backed,
-MCP-delivered, advisory know-how with progressive disclosure — not filesystem files
-and not access control. Direct clients and the Cloud gateway use the same
-AnyHarness contracts; the optional Worker only converges catalog/runtime
-versions around the running process.
+**AnyHarness is a single-sandbox session engine split by one axis — durable meaning (`domains/` + `persistence/`) vs the running instance (`live/`) — with edges (`api`/`app`) on top and leaves (`adapters`/`integrations`) underneath.** The role chain (`SessionRuntime → … → SessionActor → driver/Sink/Rendezvous`) walks that axis; the live grammar (manager/handle/actor/driver/sink) governs the concurrency at the bottom; one event sink owns `seq`/turn/item order (persist-before-broadcast); MCP is the one vertical cutting through all layers; and two revision-pinned synced bundles (runtime-config = external MCPs + skills; agent-auth = provider creds) are snapshotted per session at create and never mutated live. Skills are DB-backed, MCP-delivered, advisory know-how with progressive disclosure — not filesystem files and not access control. Direct clients and the Cloud gateway use the same AnyHarness contracts; the optional Worker only converges catalog/runtime versions around the running process.
 
 ---
 
@@ -1151,8 +1010,7 @@ The binary crate owns process bootstrap only:
 - server startup
 - command dispatch into `anyharness-lib`
 
-It must not own runtime behavior, durable business rules, stores, protocol
-normalization, or product workflows.
+It must not own runtime behavior, durable business rules, stores, protocol normalization, or product workflows.
 
 Expected shape:
 
@@ -1176,10 +1034,7 @@ Current commands:
 
 Rule of thumb:
 
-If a binary command needs to know how sessions, agents, files, or workspaces
-actually work, that logic belongs in `anyharness-lib`. The binary crate may
-compose services and choose startup policy; it must not become a second runtime
-implementation.
+If a binary command needs to know how sessions, agents, files, or workspaces actually work, that logic belongs in `anyharness-lib`. The binary crate may compose services and choose startup policy; it must not become a second runtime implementation.
 
 ## `anyharness-contract`
 
@@ -1192,13 +1047,9 @@ The contract crate owns public transport shapes:
 
 It must not import `anyharness-lib`.
 
-Contract request/response types should be mapped at the API boundary before
-entering durable domains or live runtime code.
+Contract request/response types should be mapped at the API boundary before entering durable domains or live runtime code.
 
-Exception: session event payloads may intentionally be both contract-visible and
-persisted event-log payloads. When a lower layer imports contract event types,
-that dependency must be because the type is the durable event payload, not
-because a handler leaked request/response models downward.
+Exception: session event payloads may intentionally be both contract-visible and persisted event-log payloads. When a lower layer imports contract event types, that dependency must be because the type is the durable event payload, not because a handler leaked request/response models downward.
 
 ## `anyharness-credential-discovery`
 
@@ -1232,20 +1083,13 @@ Use [README.md](anyharness.md) for the internal runtime structure.
 
 ## `proliferate-diagnostics-protocol`
 
-This crate owns schema-versioned diagnostics envelopes, API shapes, closed
-vocabularies, hard bounds, and pure record/lifecycle validation shared across
-Desktop-owned producers and the standalone collector. It is separate from
-`anyharness-contract`, whose audience is the AnyHarness public transport API.
+This crate owns schema-versioned diagnostics envelopes, API shapes, closed vocabularies, hard bounds, and pure record/lifecycle validation shared across Desktop-owned producers and the standalone collector. It is separate from `anyharness-contract`, whose audience is the AnyHarness public transport API.
 
-It must not own collector runtime state, transport handlers, files, processes,
-exporters, producer queues, or product orchestration. Cross-language meaning is
-pinned by `fixtures/contracts/rust-observability-v1/`.
+It must not own collector runtime state, transport handlers, files, processes, exporters, producer queues, or product orchestration. Cross-language meaning is pinned by `fixtures/contracts/rust-observability-v1/`.
 
 ## `proliferate-diagnostics-client`
 
-This crate owns the bounded local diagnostics adapter linked into the two
-Desktop-owned Rust producers — the bundled `anyharness serve` child and
-`proliferate-worker`:
+This crate owns the bounded local diagnostics adapter linked into the two Desktop-owned Rust producers — the bundled `anyharness serve` child and `proliferate-worker`:
 
 - one global `tracing` layer per process with structural secret filtering
 - the bounded admission queue, batching, receipts, and loss accounting
@@ -1254,9 +1098,7 @@ Desktop-owned Rust producers — the bundled `anyharness serve` child and
   product-launch failure
 - each component's fixed bounded fallback file family
 
-It consumes `proliferate-diagnostics-protocol` as its only wire-contract
-authority. It must not own collector runtime state, Desktop/Tauri wiring,
-Sentry/PostHog policy, product behavior, persistent queues, or replay.
+It consumes `proliferate-diagnostics-protocol` as its only wire-contract authority. It must not own collector runtime state, Desktop/Tauri wiring, Sentry/PostHog policy, product behavior, persistent queues, or replay.
 
 ## `proliferate-diagnostics-collector`
 
@@ -1271,26 +1113,15 @@ This crate owns the standalone, memory-only Desktop diagnostics collector:
   record class and widens to every non-secret class under the non-default
   `internal-dogfood-export` feature
 
-It consumes `proliferate-diagnostics-protocol` as its only wire-contract
-authority. It must not own Desktop/Tauri wiring, producer queues, AnyHarness
-runtime behavior, Worker behavior, server/cloud integration, or durable storage.
-The export adapter it does own is provider-neutral OTLP over HTTP; the
-destination URL and its request headers arrive as environment values, so no
-provider identity or credential is part of any contract this crate holds. Its
-process, transport, and export surfaces are documented in
-`proliferate-diagnostics-collector/README.md`.
+It consumes `proliferate-diagnostics-protocol` as its only wire-contract authority. It must not own Desktop/Tauri wiring, producer queues, AnyHarness runtime behavior, Worker behavior, server/cloud integration, or durable storage. The export adapter it does own is provider-neutral OTLP over HTTP; the destination URL and its request headers arrive as environment values, so no provider identity or credential is part of any contract this crate holds. Its process, transport, and export surfaces are documented in `proliferate-diagnostics-collector/README.md`.
 
 ---
 
 # AnyHarness Domains
 
-Read [mental-model.md](anyharness.md) first: it owns the eight jobs, the
-use-case pipeline, the mapping/error doctrines, and the placement algorithm
-this guide applies to domains.
+Read [mental-model.md](anyharness.md) first: it owns the eight jobs, the use-case pipeline, the mapping/error doctrines, and the placement algorithm this guide applies to domains.
 
-Product domains live under `domains/**`. Core session, workspace, agent, and
-repo-root domains use the same root as product surfaces, with dependency
-direction enforced by domain tier.
+Product domains live under `domains/**`. Core session, workspace, agent, and repo-root domains use the same root as product surfaces, with dependency direction enforced by domain tier.
 
 Current session-domain reality:
 
@@ -1315,8 +1146,7 @@ Domains should be readable without knowing HTTP routing or live actor internals.
 
 ## Domain Tiers
 
-Not every domain has the same role. Use the tier to decide dependency direction
-and internal shape.
+Not every domain has the same role. Use the tier to decide dependency direction and internal shape.
 
 ### Core Primitive Domains
 
@@ -1327,11 +1157,9 @@ agents
 repo_roots
 ```
 
-These are foundational runtime concepts. Other product domains may depend on
-them. They should not depend on product surfaces such as cowork or reviews.
+These are foundational runtime concepts. Other product domains may depend on them. They should not depend on product surfaces such as cowork or reviews.
 
-Core primitive domains may define extension traits when product surfaces need
-to participate in a core lifecycle. `app/` wires implementations into the core.
+Core primitive domains may define extension traits when product surfaces need to participate in a core lifecycle. `app/` wires implementations into the core.
 
 Expected shape:
 
@@ -1381,8 +1209,7 @@ plans
 mobility
 ```
 
-These are product workflows built on core primitives. They may depend on core
-domains. They should not be imported by core domains directly.
+These are product workflows built on core primitives. They may depend on core domains. They should not be imported by core domains directly.
 
 Expected shape:
 
@@ -1396,14 +1223,11 @@ Expected shape:
   session_extension.rs  # when the product plugs into session launch/prompt
 ```
 
-Product domains should use extension points instead of forking core session
-behavior. For example, reviews can inject review-specific MCP tools through a
-session extension; it should not duplicate session launch logic.
+Product domains should use extension points instead of forking core session behavior. For example, reviews can inject review-specific MCP tools through a session extension; it should not duplicate session launch logic.
 
 ### Session-Owned Product Subdomains
 
-Some product features are session-scoped and should live under `sessions/`
-rather than becoming top-level domains.
+Some product features are session-scoped and should live under `sessions/` rather than becoming top-level domains.
 
 Examples:
 
@@ -1412,8 +1236,7 @@ domains/sessions/subagents/
 domains/sessions/links/
 ```
 
-Use this shape when the concept has durable state or tool behavior, but its
-identity is subordinate to a session.
+Use this shape when the concept has durable state or tool behavior, but its identity is subordinate to a session.
 
 ## Canonical Files
 
@@ -1434,31 +1257,17 @@ Use:
 - `runtime.rs` / `runtime/` for high-level use cases that coordinate multiple
   services or bridge durable state to live execution.
 
-Do not add broad `helpers.rs`, `utils.rs`, or `misc.rs`. Name the concept:
-`prompt`, `events`, `retention`, `materialization`, `mcp_bindings`,
-`extensions`, `catalog`, `readiness`.
+Do not add broad `helpers.rs`, `utils.rs`, or `misc.rs`. Name the concept: `prompt`, `events`, `retention`, `materialization`, `mcp_bindings`, `extensions`, `catalog`, `readiness`.
 
 ## The Root Is A Table Of Contents
 
-A domain's root may contain only the canonical files above plus named concern
-folders. Every other file lives inside the concern it serves; each concern
-folder repeats the identical internal grammar (exports-only `mod.rs`,
-`service.rs`, policy, helpers — each earned, not mandatory).
+A domain's root may contain only the canonical files above plus named concern folders. Every other file lives inside the concern it serves; each concern folder repeats the identical internal grammar (exports-only `mod.rs`, `service.rs`, policy, helpers — each earned, not mandatory).
 
-If a file cannot say which concern it belongs to, that is an unnamed concern —
-name it. A root holds roughly 5–9 entries. Shrink a table of contents by
-naming concerns, never by merging files. The rule applies recursively: a
-concern folder (or a `runtime/` folder) that accumulates 10+ files is several
-concerns wearing one name.
+If a file cannot say which concern it belongs to, that is an unnamed concern — name it. A root holds roughly 5–9 entries. Shrink a table of contents by naming concerns, never by merging files. The rule applies recursively: a concern folder (or a `runtime/` folder) that accumulates 10+ files is several concerns wearing one name.
 
-Single-concern domains stay flat (`repo_roots`, `mobility`). The trigger for
-folders is a root crossing ~8 files or containing two nameable concerns.
+Single-concern domains stay flat (`repo_roots`, `mobility`). The trigger for folders is a root crossing ~8 files or containing two nameable concerns.
 
-Migration exception: `domains/workspaces` currently has ~25 root files
-(gates, worktrees, lifecycle, setup, and files concerns all flattened) and two
-parallel entry surfaces (`WorkspaceService`, `WorkspaceRuntime`) with
-duplicated bodies. Target: concern folders (`access/`, `lifecycle/`,
-`worktrees/`, `setup/`, `files/`) behind one entry surface.
+Migration exception: `domains/workspaces` currently has ~25 root files (gates, worktrees, lifecycle, setup, and files concerns all flattened) and two parallel entry surfaces (`WorkspaceService`, `WorkspaceRuntime`) with duplicated bodies. Target: concern folders (`access/`, `lifecycle/`, `worktrees/`, `setup/`, `files/`) behind one entry surface.
 
 ## Store vs Service vs Runtime
 
@@ -1496,8 +1305,7 @@ SessionRuntime = session workflows that may start/prompt/resume live sessions
 
 ## Use-Case Shape
 
-Complex use cases — service or runtime — follow one pipeline (see
-[mental-model.md](anyharness.md) for the full law):
+Complex use cases — service or runtime — follow one pipeline (see [mental-model.md](anyharness.md) for the full law):
 
 ```text
 preconditions -> idempotency -> pre-flight repairs -> resolve -> decide -> execute/record
@@ -1527,19 +1335,15 @@ Rules:
 - Below the thresholds, everything collapses inline: one fetch is a `let`, one
   rule is an `if`. Ceremony is earned.
 
-In-repo exemplar: `domains/artifacts` (typed `ArtifactCreatePlan` /
-`ArtifactUpdatePlan` produced by plan functions, effects owned by the runtime).
+In-repo exemplar: `domains/artifacts` (typed `ArtifactCreatePlan` / `ArtifactUpdatePlan` produced by plan functions, effects owned by the runtime).
 
 ## Growth Rules
 
-The most common failure mode is letting a domain grow by appending methods to a
-single `store.rs`, `service.rs`, or `runtime.rs`. Split by responsibility before
-the file becomes a god module.
+The most common failure mode is letting a domain grow by appending methods to a single `store.rs`, `service.rs`, or `runtime.rs`. Split by responsibility before the file becomes a god module.
 
 ### Store Growth
 
-Promote `store.rs` to `store/` when there is more than one table family or
-query family.
+Promote `store.rs` to `store/` when there is more than one table family or query family.
 
 ```text
 store/
@@ -1556,8 +1360,7 @@ Store files split by durable data family, not by API route.
 
 ### Service Growth
 
-Promote `service.rs` to `service/` when durable rules separate into named use
-cases.
+Promote `service.rs` to `service/` when durable rules separate into named use cases.
 
 ```text
 service/
@@ -1573,8 +1376,7 @@ Service files split by durable rule family. They do not hide live orchestration.
 
 ### Runtime Growth
 
-Promote `runtime.rs` to `runtime/` when workflows bridge multiple services or
-live systems.
+Promote `runtime.rs` to `runtime/` when workflows bridge multiple services or live systems.
 
 ```text
 runtime/
@@ -1587,9 +1389,7 @@ runtime/
   pending_prompts.rs
 ```
 
-Runtime files split by workflow family. If a workflow is actually actor state,
-stream state, or pending callback state, it belongs in `live/**`, not a domain
-runtime.
+Runtime files split by workflow family. If a workflow is actually actor state, stream state, or pending callback state, it belongs in `live/**`, not a domain runtime.
 
 ### Concept Promotion
 
@@ -1601,9 +1401,7 @@ Promote a named concern into its own folder when it has any of:
 - repeated files with a stable concept name
 - tests that naturally group around that concern
 
-Do not promote a concern folder just to shrink a file.
-`domains/sessions/title/{store,service}.rs` is wrong; `service/titles.rs` +
-`store/sessions.rs` is right.
+Do not promote a concern folder just to shrink a file. `domains/sessions/title/{store,service}.rs` is wrong; `service/titles.rs` + `store/sessions.rs` is right.
 
 Examples:
 
@@ -1617,8 +1415,7 @@ domains/workspaces/deletion/
 
 ## Extension Points
 
-Core domains may define extension traits when product surfaces need lifecycle
-hooks.
+Core domains may define extension traits when product surfaces need lifecycle hooks.
 
 Example:
 
@@ -1635,12 +1432,9 @@ domains/reviews/session_extension.rs
 domains/sessions/subagents/session_extension.rs
 ```
 
-`app/` wires implementations into the core. The core domain depends only on the
-trait.
+`app/` wires implementations into the core. The core domain depends only on the trait.
 
-The same define-here/implement-there pattern runs in both directions. A domain
-implements ports defined elsewhere in a dedicated `*_ports.rs` /
-`*_observer.rs` file — pure trait impls, no new behavior homes:
+The same define-here/implement-there pattern runs in both directions. A domain implements ports defined elsewhere in a dedicated `*_ports.rs` / `*_observer.rs` file — pure trait impls, no new behavior homes:
 
 ```text
 domains/plans/session_ports.rs
@@ -1653,8 +1447,7 @@ domains/sessions/live_ports.rs
   attachment storage
 ```
 
-Product reactions to a live session use the live-defined hook ports the same
-way (see `guides/live-runtime.md` for the mechanism decision table):
+Product reactions to a live session use the live-defined hook ports the same way (see `guides/live-runtime.md` for the mechanism decision table):
 
 ```text
 domains/plans/session_observer.rs     SessionEventObserver: plan sniffing
@@ -1666,8 +1459,7 @@ domains/plans/decision_op.rs          SessionDomainOp: approve/reject,
                                       serialized through the actor mailbox
 ```
 
-`app/sessions.rs` wires these into `ActorCapabilities`; the live layer depends
-only on its own traits.
+`app/sessions.rs` wires these into `ActorCapabilities`; the live layer depends only on its own traits.
 
 ## MCP Placement
 
@@ -1762,8 +1554,7 @@ app/
   product MCP endpoint registration
 ```
 
-Add a new product MCP by touching the product and composition points, not by
-forking transport or protocol machinery:
+Add a new product MCP by touching the product and composition points, not by forking transport or protocol machinery:
 
 ```text
 1. Add domains/<feature>/mcp/{definition,auth,context,tools,calls}.rs.
@@ -1777,32 +1568,15 @@ forking transport or protocol machinery:
 
 ## Contract Types
 
-Do not import contract request/response types into domains. Use internal
-domain models and API mappers. Domain models are the lingua franca between
-domains: cross-domain composition passes domain models as-is and never
-translates them.
+Do not import contract request/response types into domains. Use internal domain models and API mappers. Domain models are the lingua franca between domains: cross-domain composition passes domain models as-is and never translates them.
 
-Exception: session event payloads may use contract event types when those types
-are the durable event-log payload. The exception is for event payloads only —
-contract types as a domain's working model or as persisted rows are
-violations.
+Exception: session event payloads may use contract event types when those types are the durable event-log payload. The exception is for event payloads only — contract types as a domain's working model or as persisted rows are violations.
 
-Migration exceptions (the rule is the law; this is the debt):
-`domains/agents/auth` uses contract auth structs end-to-end.
-Target: domain twins minted at the API seam. (The sessions runtime's former
-fetching response mapper is resolved: `runtime/view.rs` composes `SessionView`
-and the API maps it dep-lessly.)
+Migration exceptions (the rule is the law; this is the debt): `domains/agents/auth` uses contract auth structs end-to-end. Target: domain twins minted at the API seam. (The sessions runtime's former fetching response mapper is resolved: `runtime/view.rs` composes `SessionView` and the API maps it dep-lessly.)
 
 ## Errors
 
-One error enum per public surface (thiserror). Each layer adds only the
-variants it introduces and absorbs lower errors with `#[from]` /
-`#[error(transparent)]`. Banned: twin enums joined by hand-written
-variant-copying mappers; `.to_string()` / `anyhow::anyhow!` applied to typed
-errors; control flow on `message.contains(...)`. Expected outcomes
-(not-found, needs-selection, already-done) are data in the `Ok` type, not
-error strings. The HTTP mapping for a domain's errors lives in exactly one
-`api/http/<resource>_errors.rs` `From` impl.
+One error enum per public surface (thiserror). Each layer adds only the variants it introduces and absorbs lower errors with `#[from]` / `#[error(transparent)]`. Banned: twin enums joined by hand-written variant-copying mappers; `.to_string()` / `anyhow::anyhow!` applied to typed errors; control flow on `message.contains(...)`. Expected outcomes (not-found, needs-selection, already-done) are data in the `Ok` type, not error strings. The HTTP mapping for a domain's errors lives in exactly one `api/http/<resource>_errors.rs` `From` impl.
 
 ---
 
@@ -1812,9 +1586,7 @@ error strings. The HTTP mapping for a domain's errors lives in exactly one
 
 `app/` is the composition root for the AnyHarness runtime.
 
-It constructs the runtime dependency graph once, stores it in `AppState`, and
-passes that graph to API handlers. It may know about every layer because its
-job is wiring. It should implement almost no product behavior.
+It constructs the runtime dependency graph once, stores it in `AppState`, and passes that graph to API handlers. It may know about every layer because its job is wiring. It should implement almost no product behavior.
 
 The mental model:
 
@@ -1826,15 +1598,13 @@ Db
         -> API handlers
 ```
 
-`app/` is allowed to import domains, live managers, adapters, integrations,
-persistence, and observability. Most other layers should not import `app/`.
+`app/` is allowed to import domains, live managers, adapters, integrations, persistence, and observability. Most other layers should not import `app/`.
 
 ## Why AppState Exists
 
 Do not replace `AppState` with imported singletons.
 
-AnyHarness needs an explicit runtime graph because many dependencies are
-process-specific:
+AnyHarness needs an explicit runtime graph because many dependencies are process-specific:
 
 - runtime home
 - runtime base URL
@@ -1848,9 +1618,7 @@ process-specific:
 - session extension implementations
 - product MCP endpoint registry
 
-Singleton imports hide startup behavior, make tests leak state, and make
-multi-profile local development harder. `AppState::new` makes construction,
-configuration, sharing, and task startup deliberate.
+Singleton imports hide startup behavior, make tests leak state, and make multi-profile local development harder. `AppState::new` makes construction, configuration, sharing, and task startup deliberate.
 
 ## Current Shape
 
@@ -1875,13 +1643,11 @@ app/
 - product MCP endpoint registry wiring
 - startup task wiring
 
-This is acceptable while the composition root is one readable file. Split it
-only when a named wiring family becomes easier to read as its own module.
+This is acceptable while the composition root is one readable file. Split it only when a named wiring family becomes easier to read as its own module.
 
 ## What Goes In AppState
 
-Put a constructed value in `AppState` when callers need one shared runtime
-instance with process-specific config, state, or dependencies.
+Put a constructed value in `AppState` when callers need one shared runtime instance with process-specific config, state, or dependencies.
 
 Good `AppState` values:
 
@@ -1899,9 +1665,7 @@ AgentAuthService
 RuntimeConfigService
 ```
 
-Do not put pure helper functions in `AppState`. If something is stateless,
-testable with plain inputs, and does not need shared process config, keep it in
-the owning module as a function.
+Do not put pure helper functions in `AppState`. If something is stateless, testable with plain inputs, and does not need shared process config, keep it in the owning module as a function.
 
 ## Construction Order
 
@@ -1920,35 +1684,21 @@ the owning module as a function.
 10. Return AppState.
 ```
 
-If a branch decides how sessions, workspaces, agents, reviews, MCPs, or
-terminal workflows behave, move that branch to the owning domain/runtime/live
-module.
+If a branch decides how sessions, workspaces, agents, reviews, MCPs, or terminal workflows behave, move that branch to the owning domain/runtime/live module.
 
 ## Per-Domain Wiring
 
-Each domain exposes one constructor entry — a `wire(deps) -> <Domain>` (or a
-deps-struct + build fn) — that owns the construction details only that domain
-knows. `AppState::new` then reads as a table of contents: one line per domain,
-in dependency order. The in-repo template is `app/product_mcp.rs` (named deps
-structs destructured into a single build fn).
+Each domain exposes one constructor entry — a `wire(deps) -> <Domain>` (or a deps-struct + build fn) — that owns the construction details only that domain knows. `AppState::new` then reads as a table of contents: one line per domain, in dependency order. The in-repo template is `app/product_mcp.rs` (named deps structs destructured into a single build fn).
 
-Shared-instance law: a service consumed by both a domain's facade and another
-domain (readiness, agent auth, gates) is constructed **once** and the same
-instance is injected into both. Who-holds-what must be readable from the
-`wire()` signatures alone — that visibility is the point of explicit wiring.
-Every service's `&self` field list is its license; `app/` is where licenses
-are granted.
+Shared-instance law: a service consumed by both a domain's facade and another domain (readiness, agent auth, gates) is constructed **once** and the same instance is injected into both. Who-holds-what must be readable from the `wire()` signatures alone — that visibility is the point of explicit wiring. Every service's `&self` field list is its license; `app/` is where licenses are granted.
 
-Migration exception: `AppState::new` is currently ~335 lines of inline
-construction for ~12 domains with no per-domain entry points. Target: the
-wiring-family split below, one `wire()` per domain.
+Migration exception: `AppState::new` is currently ~335 lines of inline construction for ~12 domains with no per-domain entry points. Target: the wiring-family split below, one `wire()` per domain.
 
 ## Session Extensions
 
 Core domains should not import product domains directly.
 
-When a product domain needs to participate in a core lifecycle, the core domain
-defines an extension trait and `app/` wires implementations into the core.
+When a product domain needs to participate in a core lifecycle, the core domain defines an extension trait and `app/` wires implementations into the core.
 
 Example:
 
@@ -1966,15 +1716,13 @@ app/
   passes them into SessionRuntime
 ```
 
-This keeps `sessions` core, while letting product surfaces participate in
-launch, prompt, config, or close boundaries.
+This keeps `sessions` core, while letting product surfaces participate in launch, prompt, config, or close boundaries.
 
 ## Product MCP Endpoint Registry
 
 `app/` owns product MCP endpoint registration because it is composition.
 
-It constructs the concrete product MCP servers and registers them with the
-generic serving-side registry:
+It constructs the concrete product MCP servers and registers them with the generic serving-side registry:
 
 ```text
 ProductMcpEndpointRegistry
@@ -1990,8 +1738,7 @@ ReviewProductMcpServer
 CoworkProductMcpServer
 ```
 
-`app/` must not implement tool behavior, token semantics, or session selection
-policy:
+`app/` must not implement tool behavior, token semantics, or session selection policy:
 
 ```text
 api/http/product_mcp.rs
@@ -2063,9 +1810,7 @@ Avoid:
 - hidden module-load singletons that read env, open DBs, or spawn tasks
 - app files named `helpers.rs`, `utils.rs`, or `misc.rs`
 
-`AppState` is a dependency graph, not a service locator. API handlers may pull
-coarse-grained dependencies from it. Lower layers should receive the narrow
-dependencies they need.
+`AppState` is a dependency graph, not a service locator. API handlers may pull coarse-grained dependencies from it. Lower layers should receive the narrow dependencies they need.
 
 ---
 
@@ -2073,8 +1818,7 @@ dependencies they need.
 
 ## Purpose
 
-`api/` is the transport boundary. It owns how clients reach the runtime, not
-the runtime behavior itself.
+`api/` is the transport boundary. It owns how clients reach the runtime, not the runtime behavior itself.
 
 API code may own:
 
@@ -2134,25 +1878,19 @@ It owns:
 - body limits
 - transport admission plumbing
 
-It should not implement product workflows. If a route needs a multi-step
-workflow, the router should point to a handler that calls the owning
-domain/runtime.
+It should not implement product workflows. If a route needs a multi-step workflow, the router should point to a handler that calls the owning domain/runtime.
 
 ### `auth.rs`
 
 `auth.rs` owns API-level auth extraction and transport admission.
 
-It may turn request auth material into an API auth context and API auth errors.
-It should not become product policy. Product ownership, mutability, billing,
-workspace lifecycle, and session-specific permission decisions belong in the
-owning domain/runtime.
+It may turn request auth material into an API auth context and API auth errors. It should not become product policy. Product ownership, mutability, billing, workspace lifecycle, and session-specific permission decisions belong in the owning domain/runtime.
 
 ### `openapi.rs`
 
 `openapi.rs` owns OpenAPI schema generation and route/type registration.
 
-It should depend on contract-visible types and route metadata. It should not
-pull runtime behavior into schema generation.
+It should depend on contract-visible types and route metadata. It should not pull runtime behavior into schema generation.
 
 ### `http/**`
 
@@ -2181,9 +1919,7 @@ let result = state.<domain>.<usecase>(input).await?; // 3. call ONE use case; er
 Ok(Json(<resource>_response(result)))               // 4. translate out (dep-less seam fn)
 ```
 
-`result` is usually the plain domain record; it is a composed view model only
-when the response needs composition — and assembling that view is the use
-case's job, never the handler's or the mapper's.
+`result` is usually the plain domain record; it is a composed view model only when the response needs composition — and assembling that view is the use case's job, never the handler's or the mapper's.
 
 Litmus rules (greppable):
 
@@ -2195,43 +1931,17 @@ Litmus rules (greppable):
 - no imports from `domains/**` beyond the called surface and its input/view
   types
 
-One sanctioned addition to the stanza: a route-scoped workspace operation
-gate (see Operation Gates below) may precede step 3 when it wraps exactly one
-call — it counts as transport admission, not a second domain call. If the
-lease must span a multi-step workflow, the workflow and the lease both belong
-in the domain runtime.
+One sanctioned addition to the stanza: a route-scoped workspace operation gate (see Operation Gates below) may precede step 3 when it wraps exactly one call — it counts as transport admission, not a second domain call. If the lease must span a multi-step workflow, the workflow and the lease both belong in the domain runtime.
 
-Authorization here answers "who is asking". Business preconditions ("is this
-workspace mutable right now") belong inside the domain use case — a flow
-checking both is correct; the edge checking preconditions is not.
+Authorization here answers "who is asking". Business preconditions ("is this workspace mutable right now") belong inside the domain use case — a flow checking both is correct; the edge checking preconditions is not.
 
-Proportionality: the `*_input()` constructor is earned at >3 fields or when
-defaults/grouping logic exists; below that, passing `&req.name` as a plain
-argument IS the translation — the invariant is "no contract type crosses into
-`domains/`", not "a constructor function exists". GET handlers drop step 2
-entirely (`Path(id)` is already the input). The outbound `*_response()`
-constructor always exists — that is where wire stability lives.
+Proportionality: the `*_input()` constructor is earned at >3 fields or when defaults/grouping logic exists; below that, passing `&req.name` as a plain argument IS the translation — the invariant is "no contract type crosses into `domains/`", not "a constructor function exists". GET handlers drop step 2 entirely (`Path(id)` is already the input). The outbound `*_response()` constructor always exists — that is where wire stability lives.
 
-If a handler contains product sequencing, move that sequence to the owning
-domain `runtime.rs` or `service.rs`.
+If a handler contains product sequencing, move that sequence to the owning domain `runtime.rs` or `service.rs`.
 
-`workspaces_lifecycle.rs` is the archive/unarchive pair, and it is the stanza
-with nothing added: each handler authorizes, maps the request body into the
-domain's own options type, calls one use case on
-`state.workspace_archive_service`, and maps the outcome back. The whole archive
-ordering story — quiesce, capture, the flip, the detached tail — lives in
-`domains/workspaces/archive/`, so neither handler branches on anything. Both
-take an OPTIONAL body so a bare `POST` with no `Content-Type` still converges,
-because the request that matters most (a re-POST that finishes an interrupted
-cleanup) is the one a human is most likely to issue by hand.
+`workspaces_lifecycle.rs` is the archive/unarchive pair, and it is the stanza with nothing added: each handler authorizes, maps the request body into the domain's own options type, calls one use case on `state.workspace_archive_service`, and maps the outcome back. The whole archive ordering story — quiesce, capture, the flip, the detached tail — lives in `domains/workspaces/archive/`, so neither handler branches on anything. Both take an OPTIONAL body so a bare `POST` with no `Content-Type` still converges, because the request that matters most (a re-POST that finishes an interrupted cleanup) is the one a human is most likely to issue by hand.
 
-Their typed refusals ride `ProblemDetails.extra`, the one structured extension
-slot: `WORKSPACE_UNARCHIVE_SCENARIO` carries the scenario body with its
-`strategies` list, and `WORKSPACE_GIT_LOCKED` carries the offending lock
-`file`. Before `extra` existed, a client needing either had to parse the human
-sentence in `detail`. The SDK passes `extra` through untouched — the code→shape
-table lives next to the status mapping in
-`workspaces_lifecycle_errors.rs`.
+Their typed refusals ride `ProblemDetails.extra`, the one structured extension slot: `WORKSPACE_UNARCHIVE_SCENARIO` carries the scenario body with its `strategies` list, and `WORKSPACE_GIT_LOCKED` carries the offending lock `file`. Before `extra` existed, a client needing either had to parse the human sentence in `detail`. The SDK passes `extra` through untouched — the code→shape table lives next to the status mapping in `workspaces_lifecycle_errors.rs`.
 
 ### `sse/**`
 
@@ -2242,8 +1952,7 @@ table lives next to the status mapping in
 - stream cancellation/close behavior
 - mapping internal event envelopes into SSE frames
 
-SSE code should not decide durable event meaning. Session event meaning belongs
-in session domains/live event sinks/stores.
+SSE code should not decide durable event meaning. Session event meaning belongs in session domains/live event sinks/stores.
 
 ### `ws/**`
 
@@ -2254,8 +1963,7 @@ in session domains/live event sinks/stores.
 - socket close behavior
 - mapping socket messages to live/domain calls
 
-WebSocket code should not own terminal business logic, PTY lifecycle, or
-durable terminal state.
+WebSocket code should not own terminal business logic, PTY lifecycle, or durable terminal state.
 
 ## Support Files
 
@@ -2272,8 +1980,7 @@ api/http/<resource>_contract.rs
   internal <-> contract mappers when mapping is large.
 ```
 
-These support files are still transport files. They should not become product
-service layers.
+These support files are still transport files. They should not become product service layers.
 
 ## Contract Mapping
 
@@ -2292,26 +1999,13 @@ api/http/<resource>_errors.rs
   one From<DomainError> for ApiError impl per domain error type
 ```
 
-Seam-file law: mappers are **sync, dep-less, and decisionless** — no
-`&AppState`, no store reads, no live lookups, no clock, no business branches.
-A mapper that needs to fetch means the use case returned too little; fix the
-use case's return type (a view model composed by the runtime), never the
-mapper. Each type pair has exactly one mapper.
+Seam-file law: mappers are **sync, dep-less, and decisionless** — no `&AppState`, no store reads, no live lookups, no clock, no business branches. A mapper that needs to fetch means the use case returned too little; fix the use case's return type (a view model composed by the runtime), never the mapper. Each type pair has exactly one mapper.
 
-Do not pass contract request/response types deep into domains or live runtime
-code.
+Do not pass contract request/response types deep into domains or live runtime code.
 
-Exception: normalized session event payloads may be contract types below
-`api/` when they are explicitly the durable event-log payload.
+Exception: normalized session event payloads may be contract types below `api/` when they are explicitly the durable event-log payload.
 
-Migration exceptions: `sessions_contract.rs::session_to_contract` delegates to
-an async fetching mapper on the session runtime (store reads + live lookups
-per record, called in a loop on list paths); `api/http/agents_model_registry.rs`
-carries a second error mechanism (`ProblemResponse`) alongside `ApiError`;
-`cowork.rs`
-and `mobility.rs` carry duplicate copies of mappers owned elsewhere. Targets:
-runtime-composed `SessionView` + dep-less mapper; one `ApiError` mechanism;
-one mapper per type pair.
+Migration exceptions: `sessions_contract.rs::session_to_contract` delegates to an async fetching mapper on the session runtime (store reads + live lookups per record, called in a loop on list paths); `api/http/agents_model_registry.rs` carries a second error mechanism (`ProblemResponse`) alongside `ApiError`; `cowork.rs` and `mobility.rs` carry duplicate copies of mappers owned elsewhere. Targets: runtime-composed `SessionView` + dep-less mapper; one `ApiError` mechanism; one mapper per type pair.
 
 ## AppState Use
 
@@ -2325,8 +2019,7 @@ state.terminal_service
 state.product_mcp_endpoint_registry
 ```
 
-Handlers should not use `AppState` fields to manually reconstruct workflows
-that a domain runtime already owns.
+Handlers should not use `AppState` fields to manually reconstruct workflows that a domain runtime already owns.
 
 Good:
 
@@ -2342,16 +2035,14 @@ handler -> session store + workspace service + MCP assembly + live actor command
 
 ## Operation Gates
 
-Workspace operation gates may be acquired in API handlers when they are
-transport-scoped admission checks around a single call.
+Workspace operation gates may be acquired in API handlers when they are transport-scoped admission checks around a single call.
 
 Examples:
 
 - a mutating product MCP `tools/call`
 - a route-level workspace write guard before dispatch
 
-If the lease is part of a deeper product workflow, move the workflow and lease
-ownership into the domain runtime.
+If the lease is part of a deeper product workflow, move the workflow and lease ownership into the domain runtime.
 
 ## Product MCP Endpoint
 
@@ -2459,8 +2150,7 @@ Transport schemas must live under an explicit version folder:
 - `v1/hosting.rs`
 - `v1/events.rs`
 
-Future breaking versions should become sibling folders such as `v2/`, not
-unstructured replacements.
+Future breaking versions should become sibling folders such as `v2/`, not unstructured replacements.
 
 ## Module Map
 
@@ -2470,23 +2160,15 @@ Owns shared identifier aliases used by the public API surface.
 
 ### `errors.rs`
 
-Owns `ProblemDetails`, the canonical wire error shape returned by HTTP
-endpoints.
+Owns `ProblemDetails`, the canonical wire error shape returned by HTTP endpoints.
 
-For handled runtime incidents, `instance` is the mixed-deployment capability
-receipt. AnyHarness mints one UUID, emits one bounded runtime-owned event, and
-returns `urn:proliferate:anyharness:incident:<uuid>` in that existing field.
-Callers may suppress their duplicate capture only after exact receipt
-validation; absent, malformed, or foreign instances retain legacy capture.
+For handled runtime incidents, `instance` is the mixed-deployment capability receipt. AnyHarness mints one UUID, emits one bounded runtime-owned event, and returns `urn:proliferate:anyharness:incident:<uuid>` in that existing field. Callers may suppress their duplicate capture only after exact receipt validation; absent, malformed, or foreign instances retain legacy capture.
 
 ### `health.rs`
 
 Owns health-check response types.
 
-`HealthResponse.agentSeed` is a public packaging/readiness diagnostic. It must
-stay low-cardinality: status, source, ownership, action, counts, target, seeded
-agent names, and coarse failure kind are allowed; absolute paths, raw errors,
-archive names, checksums, and install logs are not.
+`HealthResponse.agentSeed` is a public packaging/readiness diagnostic. It must stay low-cardinality: status, source, ownership, action, counts, target, seeded agent names, and coarse failure kind are allowed; absolute paths, raw errors, archive names, checksums, and install logs are not.
 
 ### `agents.rs`
 
@@ -2501,10 +2183,7 @@ Owns agent-facing transport types:
 
 ### `session_config.rs`
 
-Owns the full session-local `SessionLiveConfigSnapshot`: exact models, generic
-controls and allowed values, complete current values, monotonic source sequence,
-and compatibility presentation groupings. The exact full fields—not the
-groupings—are the active-session authority.
+Owns the full session-local `SessionLiveConfigSnapshot`: exact models, generic controls and allowed values, complete current values, monotonic source sequence, and compatibility presentation groupings. The exact full fields—not the groupings—are the active-session authority.
 
 ### `workspaces.rs`
 
@@ -2517,9 +2196,7 @@ Owns workspace-facing transport types:
   `already_present` outcomes
 - setup-script execution payload
 
-Workspace and session `origin` fields are advisory provenance read models only.
-They must not be used as authority for authorization, billing, mutability,
-sandbox ownership, MCP inheritance, or policy selection.
+Workspace and session `origin` fields are advisory provenance read models only. They must not be used as authority for authorization, billing, mutability, sandbox ownership, MCP inheritance, or policy selection.
 
 ### `sessions.rs`
 
@@ -2533,72 +2210,30 @@ Owns session-facing transport types:
 - pending-prompt edit, delete, exact-order, and steer requests
 - interaction resolution request
 
-`PromptInputBlock` is the client-to-runtime prompt shape. Plan handoff uses
-`PromptInputBlock::PlanReference` with only `planId` and `snapshotHash`; the
-runtime must resolve the trusted plan snapshot from its own store before any
-agent input is produced. Clients must not send plan markdown as authority.
-Image and embedded resource prompt blocks may carry optional attachment
-`source` metadata (`upload` or `paste`). Source is display metadata only and
-must not be used as an authorization, trust, or storage boundary.
+`PromptInputBlock` is the client-to-runtime prompt shape. Plan handoff uses `PromptInputBlock::PlanReference` with only `planId` and `snapshotHash`; the runtime must resolve the trusted plan snapshot from its own store before any agent input is produced. Clients must not send plan markdown as authority. Image and embedded resource prompt blocks may carry optional attachment `source` metadata (`upload` or `paste`). Source is display metadata only and must not be used as an authorization, trust, or storage boundary.
 
-Prompt provenance is a read-only display model on transcript user-message
-payloads and pending-prompt summaries/events. Public prompt request bodies must
-not accept provenance as trusted input. The public variants are deliberately
-bounded to display-safe `agentSession`, `subagentWake`, and `system` shapes;
-internal automation provenance is redacted or omitted rather than exposed
-directly.
+Prompt provenance is a read-only display model on transcript user-message payloads and pending-prompt summaries/events. Public prompt request bodies must not accept provenance as trusted input. The public variants are deliberately bounded to display-safe `agentSession`, `subagentWake`, and `system` shapes; internal automation provenance is redacted or omitted rather than exposed directly.
 
-Pending-prompt sequence numbers are immutable, runtime-owned queue-entry
-identities. They come from a durable per-session monotonic cursor and are never
-reused after execution or deletion. Array order is the queue position.
-`promptId` is only local-outbox reconciliation metadata and may be absent or
-duplicated. Reorder requests carry both the exact order the caller observed and
-the desired exact permutation; a changed current order is a typed 409 conflict.
-`pending_prompts_reordered` carries the complete authoritative queue after the
-runtime commits; reducers replace their queue from that payload rather than
-applying it as a relative move. Keeping `seq` stable also makes older reducers
-safe when they ignore the newer full-order event and later receive row updates
-or removals.
+Pending-prompt sequence numbers are immutable, runtime-owned queue-entry identities. They come from a durable per-session monotonic cursor and are never reused after execution or deletion. Array order is the queue position. `promptId` is only local-outbox reconciliation metadata and may be absent or duplicated. Reorder requests carry both the exact order the caller observed and the desired exact permutation; a changed current order is a typed 409 conflict. `pending_prompts_reordered` carries the complete authoritative queue after the runtime commits; reducers replace their queue from that payload rather than applying it as a relative move. Keeping `seq` stable also makes older reducers safe when they ignore the newer full-order event and later receive row updates or removals.
 
-`Session.mcpBindingSummaries` is a non-secret launch-time read model. It may
-describe which MCP bindings were applied or not applied, but it must not carry
-URLs, headers, env vars, command args, absolute paths, tokens, or raw error
-strings. `null` means the session predates this read model or the state is
-unknown; it does not mean the session had no MCP bindings.
+`Session.mcpBindingSummaries` is a non-secret launch-time read model. It may describe which MCP bindings were applied or not applied, but it must not carry URLs, headers, env vars, command args, absolute paths, tokens, or raw error strings. `null` means the session predates this read model or the state is unknown; it does not mean the session had no MCP bindings.
 
-`ResumeSessionRequest` must remain backwards-compatible with no body and `{}`.
-When present, it may carry refreshed secret-bearing `mcpServers` plus matching
-redacted `mcpBindingSummaries`; runtime liveness remains authoritative for
-whether those refreshed bindings are persisted. An explicit empty
-`pluginBundle` is a clear request and must be sent with an MCP refresh; this
-keeps the clear self-contained after a runtime process restart.
+`ResumeSessionRequest` must remain backwards-compatible with no body and `{}`. When present, it may carry refreshed secret-bearing `mcpServers` plus matching redacted `mcpBindingSummaries`; runtime liveness remains authoritative for whether those refreshed bindings are persisted. An explicit empty `pluginBundle` is a clear request and must be sent with an MCP refresh; this keeps the clear self-contained after a runtime process restart.
 
-`CreateSessionRequest.subagentsEnabled` remains accepted and persisted for
-wire and mobility compatibility. Omitted values default to enabled. Workspace
-attachment and current Agent Operations authority do not consult this legacy
-flag. Resume requests do not carry it; resumed sessions retain the persisted
-compatibility value.
+`CreateSessionRequest.subagentsEnabled` remains accepted and persisted for wire and mobility compatibility. Omitted values default to enabled. Workspace attachment and current Agent Operations authority do not consult this legacy flag. Resume requests do not carry it; resumed sessions retain the persisted compatibility value.
 
 ### Cloud Access And Optional Worker Interaction
 
-Managed Cloud does not translate product actions into a Worker command
-protocol. The server creates worktrees by calling the normal AnyHarness
-workspace API directly, and the cloud-sandbox gateway proxies ordinary
-AnyHarness HTTP/WebSocket requests from authorized clients. Session events
-remain AnyHarness runtime truth and are consumed through the normal runtime
-contracts; the Worker does not upload Cloud event batches.
+Managed Cloud does not translate product actions into a Worker command protocol. The server creates worktrees by calling the normal AnyHarness workspace API directly, and the cloud-sandbox gateway proxies ordinary AnyHarness HTTP/WebSocket requests from authorized clients. Session events remain AnyHarness runtime truth and are consumed through the normal runtime contracts; the Worker does not upload Cloud event batches.
 
-The optional Proliferate Worker uses a narrow catalog-and-health portion of the
-AnyHarness HTTP contract:
+The optional Proliferate Worker uses a narrow catalog-and-health portion of the AnyHarness HTTP contract:
 
 | Worker purpose | AnyHarness route | Notes |
 | --- | --- | --- |
 | read active catalog version | `GET /v1/catalogs/agents/version` | Read-only observability; the only catalogs route the runtime exposes. There is no apply/push route — the catalog is binary-only ([agent-distribution.md](../systems/harnesses/distribution.md) "Convergence"). |
 | verify a relaunched runtime | `GET /health` | Requires the desired AnyHarness version before accepting an in-place runtime update. Only a legacy (non-supervisor-owned, pre-bridge) target's Worker runs this gate itself; every other target is supervisor-owned, where Proliferate Supervisor runs the equivalent health-gate on its own activation. |
 
-The Worker's download, checksum, preflight, swap, and relaunch orchestration
-lives outside the AnyHarness API. Only the final health/version gate uses the
-runtime HTTP surface.
+The Worker's download, checksum, preflight, swap, and relaunch orchestration lives outside the AnyHarness API. Only the final health/version gate uses the runtime HTTP surface.
 
 ### `files.rs`
 
@@ -2638,40 +2273,15 @@ Owns the normalized session event stream:
 - interaction events
 - error events
 
-This file is the public transcript/event contract and must remain stable and
-well-structured.
+This file is the public transcript/event contract and must remain stable and well-structured.
 
-`SessionEvent::SubagentTurnCompleted` is retained legacy relationship-completion
-metadata, not a transcript item and not the automatic parent delivery or
-delivery acknowledgement. SDK reducers and UI consumers should not render it as
-assistant or user content by default or infer that a parent notification became
-visible from its presence. Automatic parent delivery is represented by the
-attributed user-message transcript item whose `promptProvenance` is
-`subagentWake`; the legacy event only carries the durable `completionId`,
-`sessionLinkId`, child identifiers, child last event seq, outcome, and optional
-label.
+`SessionEvent::SubagentTurnCompleted` is retained legacy relationship-completion metadata, not a transcript item and not the automatic parent delivery or delivery acknowledgement. SDK reducers and UI consumers should not render it as assistant or user content by default or infer that a parent notification became visible from its presence. Automatic parent delivery is represented by the attributed user-message transcript item whose `promptProvenance` is `subagentWake`; the legacy event only carries the durable `completionId`, `sessionLinkId`, child identifiers, child last event seq, outcome, and optional label.
 
-Interaction payloads should expose only typed, UI-safe fields. Adapter-specific
-metadata that becomes stable UI behavior must be promoted into a typed contract
-field, such as `PermissionInteractionContext`, instead of being read from raw
-ACP `_meta` or raw tool input/output blobs.
+Interaction payloads should expose only typed, UI-safe fields. Adapter-specific metadata that becomes stable UI behavior must be promoted into a typed contract field, such as `PermissionInteractionContext`, instead of being read from raw ACP `_meta` or raw tool input/output blobs.
 
-Adapter permission producers may provide display-safe context in vendor-scoped
-ACP metadata, currently `_meta.claudeCode.permissionContext` and
-`_meta.gemini.permissionContext`. `anyharness-lib/src/integrations/acp` is the
-only layer
-that should read those keys; SDK and Desktop consumers must use the normalized
-typed `PermissionInteractionContext` carried by interaction events and pending
-interaction summaries.
+Adapter permission producers may provide display-safe context in vendor-scoped ACP metadata, currently `_meta.claudeCode.permissionContext` and `_meta.gemini.permissionContext`. `anyharness-lib/src/integrations/acp` is the only layer that should read those keys; SDK and Desktop consumers must use the normalized typed `PermissionInteractionContext` carried by interaction events and pending interaction summaries.
 
-`ContentPart::ProposedPlan` and `ContentPart::PlanReference` intentionally
-represent different workflows even though they carry the same immutable plan
-snapshot fields. `ProposedPlan` is agent-emitted transcript content with
-decision UI. `PlanReference` is a user-prompt echo showing that a stored plan
-snapshot was attached to a prompt.
-`ContentPart::Image` and `ContentPart::Resource` may echo attachment `source`
-metadata so clients can render uploaded and pasted resources differently
-without inferring behavior from names or URIs.
+`ContentPart::ProposedPlan` and `ContentPart::PlanReference` intentionally represent different workflows even though they carry the same immutable plan snapshot fields. `ProposedPlan` is agent-emitted transcript content with decision UI. `PlanReference` is a user-prompt echo showing that a stored plan snapshot was attached to a prompt. `ContentPart::Image` and `ContentPart::Resource` may echo attachment `source` metadata so clients can render uploaded and pasted resources differently without inferring behavior from names or URIs.
 
 ## Transport-Only Rule
 
@@ -2696,50 +2306,25 @@ Contract types are not internal service result types.
 
 If a type must appear in OpenAPI or the generated SDK, it belongs here.
 
-If a type is only needed for runtime execution, persistence, or adapter
-behavior, it does not belong here.
+If a type is only needed for runtime execution, persistence, or adapter behavior, it does not belong here.
 
 ## Mobility Archive Rule
 
-Workspace mobility archives are public transport. If a workspace contains a
-delegated-session graph, the archive must preserve `session_links` and
-`session_link_completions` when both linked sessions are included. Pending
-`session_link_wake_schedules` travel only for Cowork links; delegated-agent
-links neither export nor import them. Export must block with a clear preflight
-error when only one side of a live link would be moved, because importing a
-partial graph would break durable relationship ownership.
-The optional `subagentClosedAt` field preserves reversible Closed state across
-mobility; absence remains backward-compatible and means Open.
+Workspace mobility archives are public transport. If a workspace contains a delegated-session graph, the archive must preserve `session_links` and `session_link_completions` when both linked sessions are included. Pending `session_link_wake_schedules` travel only for Cowork links; delegated-agent links neither export nor import them. Export must block with a clear preflight error when only one side of a live link would be moved, because importing a partial graph would break durable relationship ownership. The optional `subagentClosedAt` field preserves reversible Closed state across mobility; absence remains backward-compatible and means Open.
 
-Pending prompts preserve their stable prompt identity, structured content, and
-read-only `provenanceJson`, including canonical `subagentWake` attribution.
-Pending or enqueued automatic completion deliveries travel in
-`sessionLinkCompletionDeliveries` with their stable delivery/completion/link and
-parent/child/turn identities, outcome and notification content, delivery state,
-`parentPromptSeq`, retry count/schedule/error, and enqueue timestamps. Ephemeral
-lease token and lease-expiry fields never travel. Export must read session,
-prompt, event, subagent-graph, and completion-delivery rows from one coherent
-durable snapshot so an archive is entirely before or entirely after atomic
-completion admission, never a mixture of the two states.
+Pending prompts preserve their stable prompt identity, structured content, and read-only `provenanceJson`, including canonical `subagentWake` attribution. Pending or enqueued automatic completion deliveries travel in `sessionLinkCompletionDeliveries` with their stable delivery/completion/link and parent/child/turn identities, outcome and notification content, delivery state, `parentPromptSeq`, retry count/schedule/error, and enqueue timestamps. Ephemeral lease token and lease-expiry fields never travel. Export must read session, prompt, event, subagent-graph, and completion-delivery rows from one coherent durable snapshot so an archive is entirely before or entirely after atomic completion admission, never a mixture of the two states.
 
 ---
 
 # ACP Runtime
 
-`anyharness-lib/src/integrations/acp/**` owns remaining shared ACP helper
-modules: permission context mapping (`permission_context.rs`), permission
-payload normalization (`permission_payload.rs`), and provider error mapping
-(`provider_errors.rs`).
+`anyharness-lib/src/integrations/acp/**` owns remaining shared ACP helper modules: permission context mapping (`permission_context.rs`), permission payload normalization (`permission_payload.rs`), and provider error mapping (`provider_errors.rs`).
 
-Live ACP-backed session runtime now lives under `live/sessions/**`. This legacy
-subsystem doc maps the old "ACP runtime" concepts to current implementation
-paths: manager, handle, actor, driver, sink, rendezvous, background
-work, and replay are all under `live/sessions/**`.
+Live ACP-backed session runtime now lives under `live/sessions/**`. This legacy subsystem doc maps the old "ACP runtime" concepts to current implementation paths: manager, handle, actor, driver, sink, rendezvous, background work, and replay are all under `live/sessions/**`.
 
 ## Core Concepts
 
-The ACP runtime starts after the session domain has already decided that a
-session exists and should run live.
+The ACP runtime starts after the session domain has already decided that a session exists and should run live.
 
 The live ACP session runtime owns:
 
@@ -2749,8 +2334,7 @@ The live ACP session runtime owns:
 - interaction mediation for ACP permission requests
 - normalization of ACP-native notifications into AnyHarness session events
 
-It does not own session creation validation, workspace registration, or agent
-installation.
+It does not own session creation validation, workspace registration, or agent installation.
 
 ## Core Runtime Objects
 
@@ -2830,9 +2414,7 @@ This is the handoff from durable orchestration into live execution.
 
 ### `InboundDoor` (`anyharness/crates/anyharness-lib/src/live/sessions/driver/inbound/**`)
 
-`InboundDoor` (formerly `RuntimeClient`) is the agent-initiated direction of
-the AnyHarness ACP client: the connection (`driver/connection.rs`) registers
-its handlers for inbound requests and notifications.
+`InboundDoor` (formerly `RuntimeClient`) is the agent-initiated direction of the AnyHarness ACP client: the connection (`driver/connection.rs`) registers its handlers for inbound requests and notifications.
 
 It handles:
 
@@ -2852,8 +2434,7 @@ It does not own the actor loop. It translates ACP protocol callbacks into:
 
 ### `SessionEventSink` (`anyharness/crates/anyharness-lib/src/live/sessions/sink/**`)
 
-`SessionEventSink` is the canonical normalization layer from ACP updates into
-AnyHarness `SessionEventEnvelope`, with one ingestion entry: `sink.ingest`.
+`SessionEventSink` is the canonical normalization layer from ACP updates into AnyHarness `SessionEventEnvelope`, with one ingestion entry: `sink.ingest`.
 
 It owns:
 
@@ -2865,8 +2446,7 @@ It owns:
 
 ### `InteractionRendezvous` (`anyharness/crates/anyharness-lib/src/live/sessions/rendezvous/broker.rs`)
 
-`InteractionRendezvous` owns live pending interaction waits behind the
-normalized interaction contract.
+`InteractionRendezvous` owns live pending interaction waits behind the normalized interaction contract.
 
 It stores:
 
@@ -2911,9 +2491,7 @@ The live start flow is:
 
 ### Start/Inject Sequence Invariant
 
-AnyHarness event `seq` values are session-local and monotonic. Live actors
-normally own seq assignment through `SessionEventSink`, but runtime-owned
-events may also need to be appended while no actor is live.
+AnyHarness event `seq` values are session-local and monotonic. Live actors normally own seq assignment through `SessionEventSink`, but runtime-owned events may also need to be appended while no actor is live.
 
 To prevent duplicate seq values:
 
@@ -2930,23 +2508,15 @@ To prevent duplicate seq values:
   writes, then re-checks the registry before either routing through a
   replacement generation or appending offline.
 
-This lock is a process-local critical section. It must cover both the final
-live-handle check and the durable seq read/append.
+This lock is a process-local critical section. It must cover both the final live-handle check and the durable seq read/append.
 
-Injected runtime events use strict persistence: if the event cannot be written
-to `session_events`, the injection returns an error and must not report success.
-Existing ACP-derived events currently keep their best-effort persistence
-behavior because they are emitted while processing ACP notifications; injected
-events are runtime-owned calls where the caller relies on the returned envelope
-as durable truth.
+Injected runtime events use strict persistence: if the event cannot be written to `session_events`, the injection returns an error and must not report success. Existing ACP-derived events currently keep their best-effort persistence behavior because they are emitted while processing ACP notifications; injected events are runtime-owned calls where the caller relies on the returned envelope as durable truth.
 
-Replay actors reject runtime event injection. They are read-only playback
-surfaces over existing events and must not mutate session history.
+Replay actors reject runtime event injection. They are read-only playback surfaces over existing events and must not mutate session history.
 
 ### Turn-Finished Notifications
 
-At the end of each prompt turn, the session actor emits a
-`SessionTurnFinishResult` to `SessionRuntime`.
+At the end of each prompt turn, the session actor emits a `SessionTurnFinishResult` to `SessionRuntime`.
 
 The result contains:
 
@@ -2956,10 +2526,7 @@ The result contains:
 - optional stop reason
 - last durable event seq for the child session
 
-`SessionRuntime` maps that actor result into extension-facing
-`SessionTurnFinishedContext` and calls registered session extensions. This is
-how cowork autosave and subagent parent wake behavior observe completed turns
-without re-querying "latest" event state after the fact.
+`SessionRuntime` maps that actor result into extension-facing `SessionTurnFinishedContext` and calls registered session extensions. This is how cowork autosave and subagent parent wake behavior observe completed turns without re-querying "latest" event state after the fact.
 
 ### Prompt Flow
 
@@ -3037,8 +2604,7 @@ The interaction flow is:
 
 ### Config Flow
 
-Live config changes are ACP-owned runtime operations, not pure session-store
-updates.
+Live config changes are ACP-owned runtime operations, not pure session-store updates.
 
 The flow is:
 
@@ -3057,8 +2623,7 @@ Model selection has extra logic:
 - fall back to config-option setters when needed
 - keep the normalized snapshot aligned with the effective current model
 
-Most of that logic lives in
-`anyharness/crates/anyharness-lib/src/live/sessions/actor/config/**`.
+Most of that logic lives in `anyharness/crates/anyharness-lib/src/live/sessions/actor/config/**`.
 
 ## Boundaries
 
@@ -3113,16 +2678,11 @@ When that happens the actor is responsible for:
 - updating durable session status
 - emitting normalized error or session-ended events
 
-Known provider-model rejections exposed through ACP are reduced to bounded
-`ErrorEvent.code` values at the integration boundary. The original provider
-message remains the technical detail; clients use the bounded code for
-authored, actionable copy. A classification never changes launch-option
-membership, retries a non-retryable request, or selects another model.
+Known provider-model rejections exposed through ACP are reduced to bounded `ErrorEvent.code` values at the integration boundary. The original provider message remains the technical detail; clients use the bounded code for authored, actionable copy. A classification never changes launch-option membership, retries a non-retryable request, or selects another model.
 
 ## Extension Points
 
-Add behavior under `live/sessions/**` when it changes live ACP execution itself,
-for example:
+Add behavior under `live/sessions/**` when it changes live ACP execution itself, for example:
 
 - new ACP notification kinds
 - new normalized event behavior
@@ -3130,9 +2690,7 @@ for example:
 - new actor commands
 - new startup or resume behavior
 
-Only add code under `acp/**` when it is a shared ACP helper that fits the
-remaining permission context, permission payload, or provider error modules. Do
-not add live-session behavior there.
+Only add code under `acp/**` when it is a shared ACP helper that fits the remaining permission context, permission payload, or provider error modules. Do not add live-session behavior there.
 
 Do not add live ACP behavior when it belongs to:
 
@@ -3149,14 +2707,9 @@ Adapter code lives under `anyharness-lib/src/adapters/**`.
 
 ## Purpose
 
-Adapters perform focused operations against a local workspace or machine. They
-know how to do an operation. Domains decide when and why that operation is
-allowed.
+Adapters perform focused operations against a local workspace or machine. They know how to do an operation. Domains decide when and why that operation is allowed.
 
-Adapters are not product domains. They should be usable from tests or scripts
-with explicit inputs such as a workspace root, path, command, timeout, git ref,
-or provider CLI arguments. They should not need `AppState`, stores, HTTP
-request context, or session runtime state.
+Adapters are not product domains. They should be usable from tests or scripts with explicit inputs such as a workspace root, path, command, timeout, git ref, or provider CLI arguments. They should not need `AppState`, stores, HTTP request context, or session runtime state.
 
 The adapter mental model:
 
@@ -3208,9 +2761,7 @@ Adapters must not:
 - import contract request/response types as their internal model
 - map errors to HTTP responses
 
-If an endpoint exposes an adapter operation directly, the API layer still owns
-transport mapping and authentication. Workspace lifecycle policy belongs in the
-owning domain before the adapter is called.
+If an endpoint exposes an adapter operation directly, the API layer still owns transport mapping and authentication. Workspace lifecycle policy belongs in the owning domain before the adapter is called.
 
 ## Default Shape
 
@@ -3262,8 +2813,7 @@ pub mod operations {
 
 `types.rs` is the adapter-owned vocabulary.
 
-It is imported by operation files and by callers that need adapter result/input
-types.
+It is imported by operation files and by callers that need adapter result/input types.
 
 Put shared adapter shapes here:
 
@@ -3372,8 +2922,7 @@ processes/
 
 `operations/**` is the normal implementation home.
 
-Split operations by local capability family, not by HTTP route and not by
-product workflow.
+Split operations by local capability family, not by HTTP route and not by product workflow.
 
 Examples:
 
@@ -3405,11 +2954,9 @@ adapters/processes/operations/
   environment.rs
 ```
 
-Operation files may use `types.rs`, safety helpers, parser helpers, and
-`executor.rs`.
+Operation files may use `types.rs`, safety helpers, parser helpers, and `executor.rs`.
 
-Operation files should not import `api/**`, `app/**`, `live/**`, or domain
-services/stores.
+Operation files should not import `api/**`, `app/**`, `live/**`, or domain services/stores.
 
 The operation file can be the public adapter API. Callers may call:
 
@@ -3424,8 +2971,7 @@ This is acceptable. Do not add `service.rs` solely to avoid this path.
 
 `service.rs` is optional and rare.
 
-Use it only when it earns its keep through real shared state, configuration, or
-composition.
+Use it only when it earns its keep through real shared state, configuration, or composition.
 
 Good reasons to add `service.rs`:
 
@@ -3545,9 +3091,7 @@ Git adapter code does not decide:
 - whether a review should include a diff
 - when a cowork workspace should autosave as product policy
 
-Watch for product-flavored names in git adapter operations. If an operation is
-truly product-specific, move policy to a domain and keep only raw git mechanics
-in the adapter.
+Watch for product-flavored names in git adapter operations. If an operation is truly product-specific, move policy to a domain and keep only raw git mechanics in the adapter.
 
 ### Hosting
 
@@ -3563,8 +3107,7 @@ adapters/hosting/
     create_pr.rs
 ```
 
-Hosting adapter code owns provider command/API mechanics such as GitHub CLI
-wrappers and pull-request metadata lookup.
+Hosting adapter code owns provider command/API mechanics such as GitHub CLI wrappers and pull-request metadata lookup.
 
 Hosting adapter code does not decide:
 
@@ -3628,15 +3171,11 @@ Store
 ContractRequest
 ```
 
-If an adapter needs a workspace root, a domain or API caller resolves the
-workspace first and passes the root in. The adapter does not query durable
-workspace state.
+If an adapter needs a workspace root, a domain or API caller resolves the workspace first and passes the root in. The adapter does not query durable workspace state.
 
-Adapter outputs should be typed capability results, not HTTP responses and not
-product presentation models.
+Adapter outputs should be typed capability results, not HTTP responses and not product presentation models.
 
-Use free functions by default. Use a struct only when it holds dependencies,
-cache, config, subprocess state, or test-injectable behavior:
+Use free functions by default. Use a struct only when it holds dependencies, cache, config, subprocess state, or test-injectable behavior:
 
 ```text
 Good as functions:
@@ -3664,8 +3203,7 @@ Adapter errors should describe local capability failures:
 - provider CLI not authenticated
 - output could not be parsed
 
-Domains translate adapter failures into product decisions when needed. API code
-translates final errors into wire responses.
+Domains translate adapter failures into product decisions when needed. API code translates final errors into wire responses.
 
 Avoid putting HTTP concepts on adapter errors:
 
@@ -3674,8 +3212,7 @@ status_code()
 problem_code()
 ```
 
-Those mappings belong in API error translation. Adapters must not expose those
-helpers.
+Those mappings belong in API error translation. Adapters must not expose those helpers.
 
 ## Growth Rules
 
@@ -3717,12 +3254,9 @@ operations/output.rs
 
 ## Testing
 
-Adapter tests should use temp directories, fixture command output, or narrow
-command wrappers. They should not require an AnyHarness `AppState`, live
-session manager, or SQLite store.
+Adapter tests should use temp directories, fixture command output, or narrow command wrappers. They should not require an AnyHarness `AppState`, live session manager, or SQLite store.
 
-For git/process/hosting command wrappers, prefer testing parser behavior and
-command construction separately from process execution.
+For git/process/hosting command wrappers, prefer testing parser behavior and command construction separately from process execution.
 
 Operations with complex parsers may keep tests beside the operation:
 
@@ -3751,16 +3285,11 @@ When cleaning up an adapter:
 
 # AnyHarness Live Runtime
 
-Session manager, handle, actor, driver, sink, interaction rendezvous,
-background work, and replay live under `live/sessions/**`. Remaining `acp/**`
-files are shared permission, payload, and provider-error helpers, not
-live-session owners. Treat this guide as the grammar for new work and cleanup
-passes.
+Session manager, handle, actor, driver, sink, interaction rendezvous, background work, and replay live under `live/sessions/**`. Remaining `acp/**` files are shared permission, payload, and provider-error helpers, not live-session owners. Treat this guide as the grammar for new work and cleanup passes.
 
 ## Purpose
 
-Live runtime code owns state that only exists while the AnyHarness process is
-running:
+Live runtime code owns state that only exists while the AnyHarness process is running:
 
 - actor tasks and command channels
 - live handles and subscriptions
@@ -3771,8 +3300,7 @@ running:
 - provider-reported long-running work registries
 - cheap live snapshots
 
-Live runtime code should not become durable business logic. Durable records,
-product policy, SQL, and cross-restart truth stay in `domains/**`.
+Live runtime code should not become durable business logic. Durable records, product policy, SQL, and cross-restart truth stay in `domains/**`.
 
 ## Placement
 
@@ -3797,13 +3325,9 @@ Which HTTP response should the client receive?
 How does an external protocol format its raw wire messages?
 ```
 
-Those belong in `domains/**`, `persistence/**`, `api/**`, or
-`integrations/**`.
+Those belong in `domains/**`, `persistence/**`, `api/**`, or `integrations/**`.
 
-Only create a `live/<system>/` folder when there is a real long-lived runtime
-object: a manager, actor, handle, PTY, sidecar, watcher, stream registry, or
-pending interaction rendezvous. A domain workflow that merely starts a session
-does not earn one.
+Only create a `live/<system>/` folder when there is a real long-lived runtime object: a manager, actor, handle, PTY, sidecar, watcher, stream registry, or pending interaction rendezvous. A domain workflow that merely starts a session does not earn one.
 
 ## Core Grammar
 
@@ -3817,8 +3341,7 @@ driver  = private external backing mechanism
 sink    = private sequenced event/output write path
 ```
 
-Not every resource needs every role. The vocabulary is a grammar, not a
-template.
+Not every resource needs every role. The vocabulary is a grammar, not a template.
 
 Default target shape:
 
@@ -3837,16 +3360,11 @@ live/<resource>/
   replay/
 ```
 
-Only `model`, `manager`, `handle`, and intentionally public live
-result/snapshot/event types should be visible outside `live/<resource>`. Actor
-commands, driver clients, sink internals, and rendezvous waiters are private
-implementation details.
+Only `model`, `manager`, `handle`, and intentionally public live result/snapshot/event types should be visible outside `live/<resource>`. Actor commands, driver clients, sink internals, and rendezvous waiters are private implementation details.
 
 ## The Live Vocabulary File
 
-`live/<area>/model.rs` is the live layer's job-1 file: it declares every shape
-that crosses the live boundary, in live's own vocabulary. For sessions it
-holds:
+`live/<area>/model.rs` is the live layer's job-1 file: it declares every shape that crosses the live boundary, in live's own vocabulary. For sessions it holds:
 
 ```text
 launch bundles      SessionLaunch, LaunchEnv (named env layers — never four
@@ -3866,10 +3384,7 @@ product-hook ports  SessionEventObserver, PermissionAdvisor, SessionDomainOp
                     (+ ObserverEffects, PermissionAdvice, SessionOpEmitter)
 ```
 
-Live defines these traits; domains implement them
-(`domains/sessions/live_ports.rs` for the durable capabilities,
-`domains/plans/` and `domains/reviews/` for the product hooks); `app/` wires
-the implementations in. Live never imports domain services or stores.
+Live defines these traits; domains implement them (`domains/sessions/live_ports.rs` for the durable capabilities, `domains/plans/` and `domains/reviews/` for the product hooks); `app/` wires the implementations in. Live never imports domain services or stores.
 
 ## Manager
 
@@ -3892,14 +3407,9 @@ Manager non-responsibilities:
 - no protocol/client implementation
 - no broad `AppState` service-locator behavior
 
-Managers may own shared live infrastructure when that infrastructure exists
-only to coordinate instances of this live resource. If a broker or service is
-used independently by other domains/resources, `app/` should compose it and
-pass it in as a dependency.
+Managers may own shared live infrastructure when that infrastructure exists only to coordinate instances of this live resource. If a broker or service is used independently by other domains/resources, `app/` should compose it and pass it in as a dependency.
 
-The capability-wiring law: the wiring family (`app/sessions.rs`) builds the
-never-varies capability bundle exactly once; the manager owns it and hands it
-to every actor it starts.
+The capability-wiring law: the wiring family (`app/sessions.rs`) builds the never-varies capability bundle exactly once; the manager owns it and hands it to every actor it starts.
 
 ```rust
 // app/sessions.rs — composition only, no behavior
@@ -3933,8 +3443,7 @@ Handle non-responsibilities:
 - no event normalization
 - no durable SQL except through narrow dependencies owned elsewhere
 
-Code outside `live/<resource>` may hold a handle. It should not construct
-private actor commands or send directly on the actor mailbox.
+Code outside `live/<resource>` may hold a handle. It should not construct private actor commands or send directly on the actor mailbox.
 
 Good boundary:
 
@@ -3951,8 +3460,7 @@ handle
     .await?;
 ```
 
-The second form leaks actor internals and makes every caller part of the live
-state machine.
+The second form leaks actor internals and makes every caller part of the live state machine.
 
 ## Actor
 
@@ -3985,8 +3493,7 @@ call driver/sink/rendezvous/background_work helper
 return accepted/queued/rejected outcome
 ```
 
-The actor loop should read as dispatch, not as the full implementation of every
-subsystem.
+The actor loop should read as dispatch, not as the full implementation of every subsystem.
 
 ## Driver
 
@@ -4017,16 +3524,13 @@ Driver non-responsibilities:
 - no direct domain service orchestration
 - no ownership of the live actor loop
 
-Session code uses `driver/**` for this role because it fits processes, PTYs,
-protocol clients, browser drivers, and remote providers.
+Session code uses `driver/**` for this role because it fits processes, PTYs, protocol clients, browser drivers, and remote providers.
 
 ## Event And Output Sinks
 
-A sink is the sequenced write path from external/runtime events into the
-internal live stream.
+A sink is the sequenced write path from external/runtime events into the internal live stream.
 
-For sessions, this is an event sink with one ingestion entry — `sink.ingest`
-takes one ACP `SessionNotification` and owns its whole transcript consequence:
+For sessions, this is an event sink with one ingestion entry — `sink.ingest` takes one ACP `SessionNotification` and owns its whole transcript consequence:
 
 ```text
 ACP notification -> sink.ingest -> normalize -> persist -> broadcast
@@ -4035,8 +3539,7 @@ ACP notification -> sink.ingest -> normalize -> persist -> broadcast
                                    finish: config/mode/session-info)
 ```
 
-The sink stays meaning-blind: it never touches durable session-row state or
-product reactors. What it cannot finish it parses and hands back to the actor.
+The sink stays meaning-blind: it never touches durable session-row state or product reactors. What it cannot finish it parses and hands back to the actor.
 
 For terminals, this is more naturally an output sink:
 
@@ -4067,13 +3570,11 @@ actor decides when something happened
 sink decides how that becomes ordered output/events
 ```
 
-Avoid a generic `events/` folder. Use `sink/`, `output_sink/`,
-`projection/`, or a more specific name that says what the folder writes.
+Avoid a generic `events/` folder. Use `sink/`, `output_sink/`, `projection/`, or a more specific name that says what the folder writes.
 
 ## Rendezvous
 
-`rendezvous/**` owns pending live rendezvous. For sessions the broker type is
-`InteractionRendezvous` (`live/sessions/rendezvous/broker.rs`).
+`rendezvous/**` owns pending live rendezvous. For sessions the broker type is `InteractionRendezvous` (`live/sessions/rendezvous/broker.rs`).
 
 Examples:
 
@@ -4098,13 +3599,11 @@ Domain responsibilities stay outside live:
 - persist durable interaction records when needed
 - enforce product policy for submitted values
 
-Live may validate that a response is the right shape for the pending request.
-It should not decide product meaning.
+Live may validate that a response is the right shape for the pending request. It should not decide product meaning.
 
 ## Background Work
 
-`background_work/**` is only for long-running work that is reported by or
-delegated to the external provider/runtime and has identity of its own.
+`background_work/**` is only for long-running work that is reported by or delegated to the external provider/runtime and has identity of its own.
 
 Good examples:
 
@@ -4120,17 +3619,13 @@ Bad examples:
 - metrics emitters
 - delayed UI notifications
 
-Those belong under the role they serve: `driver/retry.rs`,
-`actor/shutdown/cleanup.rs`, `sink/publish.rs`, or
-`manager/cleanup.rs`.
+Those belong under the role they serve: `driver/retry.rs`, `actor/shutdown/cleanup.rs`, `sink/publish.rs`, or `manager/cleanup.rs`.
 
 ## Snapshots And Replay
 
-Handles may expose cheap snapshots directly. The actor should still be the
-write owner for live mutation.
+Handles may expose cheap snapshots directly. The actor should still be the write owner for live mutation.
 
-Promote to `snapshot/**` or `projection/**` when snapshot logic becomes a real
-read model:
+Promote to `snapshot/**` or `projection/**` when snapshot logic becomes a real read model:
 
 - browser URL/title/viewport/download state
 - terminal dimensions/process status/last output position
@@ -4144,9 +3639,7 @@ Use `replay/**` when replay is more than a tiny helper:
 - persisted output/event stream reconstruction
 - replay cursor handling
 
-Do not call something `replay_actor` unless it truly has its own mailbox,
-serialized state, independent task, and lifecycle. Otherwise prefer
-`replay/stream.rs` or `sink/replay.rs`.
+Do not call something `replay_actor` unless it truly has its own mailbox, serialized state, independent task, and lifecycle. Otherwise prefer `replay/stream.rs` or `sink/replay.rs`.
 
 ## Folder Composition
 
@@ -4235,8 +3728,7 @@ processing.rs
 logic.rs
 ```
 
-Do not use `service.rs`, `runtime.rs`, or `store.rs` inside `live/**` — those
-names belong to `domains/`.
+Do not use `service.rs`, `runtime.rs`, or `store.rs` inside `live/**` — those names belong to `domains/`.
 
 ### `driver/**`
 
@@ -4254,8 +3746,7 @@ driver/
   shutdown.rs
 ```
 
-Use concrete names for the external mechanism. For session ACP, the driver
-files are:
+Use concrete names for the external mechanism. For session ACP, the driver files are:
 
 ```text
 driver/types.rs
@@ -4268,11 +3759,7 @@ driver/stderr.rs
 driver/shutdown.rs
 ```
 
-`driver/inbound/` is the **inbound door**: everything the agent-initiated
-direction of the connection may touch. Handlers registered in `connection.rs`
-clone an `Arc<InboundDoor>`, which routes notifications to the actor's channel
-and inbound requests (permission, user input, MCP elicitation) through the
-rendezvous broker, rendering pending-interaction state via the shared sink.
+`driver/inbound/` is the **inbound door**: everything the agent-initiated direction of the connection may touch. Handlers registered in `connection.rs` clone an `Arc<InboundDoor>`, which routes notifications to the actor's channel and inbound requests (permission, user input, MCP elicitation) through the rendezvous broker, rendering pending-interaction state via the shared sink.
 
 For terminals, target driver files would likely be:
 
@@ -4309,8 +3796,7 @@ sink/
   normalization/
 ```
 
-Split by event/output family and sequencing responsibility. Keep the sink as
-the one ordered write path, with `ingest` as its one inbound entry.
+Split by event/output family and sequencing responsibility. Keep the sink as the one ordered write path, with `ingest` as its one inbound entry.
 
 ### `rendezvous/**`
 
@@ -4324,10 +3810,7 @@ rendezvous/
   mcp_elicitation/
 ```
 
-Use subfolders when the rendezvous kind has several protocol or normalization
-steps. The protocol-side creation of pending requests lives in
-`driver/inbound/` (permission, user input, MCP elicitation); the broker owns
-the waiters.
+Use subfolders when the rendezvous kind has several protocol or normalization steps. The protocol-side creation of pending requests lives in `driver/inbound/` (permission, user input, MCP elicitation); the broker owns the waiters.
 
 ### `background_work/**`
 
@@ -4442,40 +3925,9 @@ Sink
 
 ### Workspace-wide stop
 
-`SessionRuntime::stop_all_for_workspace` (`domains/sessions/runtime/lifecycle.rs`)
-is the one workspace-wide kill for the sessions plane. It is distinct from
-`dismiss`: a dismiss reply fires before the actor loop even finishes, so it
-proves nothing about the agent process. The stop path is backed by
-`LiveSessionHandle::stop_and_await`, a private `SessionCommand::Stop` the
-actor stores and answers only from `run()`'s exit sequence, after the agent's
-whole process GROUP (`spawn_agent_process` gives it its own group) has gone
-through the crate-root `process_kill` module's TERM -> 5s grace -> KILL
-escalation and been reaped. The census - total processes reaped and how many
-were `git` - travels back as the `PlaneKills` pair every stop primitive on
-every plane returns; the domain folds it and moves the session row to its
-stopped (`idle`, never `closed` or `dismissed`) state so unarchive/resume
-still works. `process_kill` itself lives at the crate root, not under
-`live/**` or `domains/**`, because both `live/terminals::manager` and
-`domains/workspaces::setup_runtime` need to name `PlaneKills` and either
-domain-side placement would force a second `live::` import in one of them.
+`SessionRuntime::stop_all_for_workspace` (`domains/sessions/runtime/lifecycle.rs`) is the one workspace-wide kill for the sessions plane. It is distinct from `dismiss`: a dismiss reply fires before the actor loop even finishes, so it proves nothing about the agent process. The stop path is backed by `LiveSessionHandle::stop_and_await`, a private `SessionCommand::Stop` the actor stores and answers only from `run()`'s exit sequence, after the agent's whole process GROUP (`spawn_agent_process` gives it its own group) has gone through the crate-root `process_kill` module's TERM -> 5s grace -> KILL escalation and been reaped. The census - total processes reaped and how many were `git` - travels back as the `PlaneKills` pair every stop primitive on every plane returns; the domain folds it and moves the session row to its stopped (`idle`, never `closed` or `dismissed`) state so unarchive/resume still works. `process_kill` itself lives at the crate root, not under `live/**` or `domains/**`, because both `live/terminals::manager` and `domains/workspaces::setup_runtime` need to name `PlaneKills` and either domain-side placement would force a second `live::` import in one of them.
 
-The escalation above describes unix, where the integer a caller holds names a
-process group (or, for a PTY, a session) because the spawn site called
-`process_group(0)`. Windows has neither concept and those spawn calls are
-`#[cfg(unix)]`, so on Windows the same integer is just the direct child's pid
-and `process_kill_windows.rs` reads it as the ROOT of a process tree, reaching
-the descendants through a `CreateToolhelp32Snapshot` walk over
-`th32ParentProcessID`. The return contract is the same - the same
-`(total, git)` census taken before anything is signaled, the same detached
-escalation, the same grace-as-deadline and confirmation budget - but the
-guarantee is weaker in three ways. `TerminateProcess` is unconditional, so the
-Windows ladder has no graceful rung before it. The kill is not atomic against
-a tree that grows mid-kill: `kill(-pgid)` still reaches a child created
-between the unix enumeration and the signal, whereas Windows acts on a pid
-list and picks such a child up only on the next confirmation pass. And a pid
-is not an identity, so a descendant whose creation time cannot be read is
-refused rather than killed, on the grounds that terminating a stranger is
-worse than leaking a descendant.
+The escalation above describes unix, where the integer a caller holds names a process group (or, for a PTY, a session) because the spawn site called `process_group(0)`. Windows has neither concept and those spawn calls are `#[cfg(unix)]`, so on Windows the same integer is just the direct child's pid and `process_kill_windows.rs` reads it as the ROOT of a process tree, reaching the descendants through a `CreateToolhelp32Snapshot` walk over `th32ParentProcessID`. The return contract is the same - the same `(total, git)` census taken before anything is signaled, the same detached escalation, the same grace-as-deadline and confirmation budget - but the guarantee is weaker in three ways. `TerminateProcess` is unconditional, so the Windows ladder has no graceful rung before it. The kill is not atomic against a tree that grows mid-kill: `kill(-pgid)` still reaches a child created between the unix enumeration and the signal, whereas Windows acts on a pid list and picks such a child up only on the next confirmation pass. And a pid is not an identity, so a descendant whose creation time cannot be read is refused rather than killed, on the grounds that terminating a stranger is worse than leaking a descendant.
 
 Two timing rules make the stop fit an archive's quiesce budget:
 
@@ -4487,19 +3939,11 @@ Two timing rules make the stop fit an archive's quiesce budget:
   terminals. The worst case for a whole plane is ONE grace window, never one
   per target.
 
-A `Stop` that arrives during an ACTIVE turn races the ACP cancel against a
-short bound (`ACTIVE_TURN_STOP_BOUND`, `actor/turn/active.rs`). The cancel is
-cooperative and nothing obliges an agent to honor it, so when the bound
-expires the turn is abandoned (its transcript turn is closed as `Cancelled`)
-and the exit sequence's group escalation runs regardless. The worst case for
-one session is therefore the bound plus the grace, never the length of the
-agent's turn.
+A `Stop` that arrives during an ACTIVE turn races the ACP cancel against a short bound (`ACTIVE_TURN_STOP_BOUND`, `actor/turn/active.rs`). The cancel is cooperative and nothing obliges an agent to honor it, so when the bound expires the turn is abandoned (its transcript turn is closed as `Cancelled`) and the exit sequence's group escalation runs regardless. The worst case for one session is therefore the bound plus the grace, never the length of the agent's turn.
 
 ## Product Hooks
 
-Product domains react to a live session through four mechanisms, all declared
-in `live/sessions/model.rs` and wired in `app/`. The actor's pockets are
-empty: it never imports plan or review services.
+Product domains react to a live session through four mechanisms, all declared in `live/sessions/model.rs` and wired in `app/`. The actor's pockets are empty: it never imports plan or review services.
 
 The mechanism decision table:
 
@@ -4510,11 +3954,7 @@ The mechanism decision table:
 | `PermissionAdvisor` | inbound permission arrival, before parking | inbound-door task, sink lock held by the caller | yes — committed rows returned in `Predecided` | sqlite tx only |
 | `SessionDomainOp` | product-initiated write needing command ordering | actor loop via the mailbox, sink lock per phase | yes — via `SessionOpEmitter::publish` | sqlite tx only (sync per phase) |
 
-Current implementors: `domains/plans/session_observer.rs` (plan sniffing),
-`domains/reviews/session_observer.rs` (candidate plans),
-`domains/plans/permission_advisor.rs` (plan-linked permissions),
-`domains/plans/decision_op.rs` (approve/reject via
-`SessionCommand::RunDomainOp`).
+Current implementors: `domains/plans/session_observer.rs` (plan sniffing), `domains/reviews/session_observer.rs` (candidate plans), `domains/plans/permission_advisor.rs` (plan-linked permissions), `domains/plans/decision_op.rs` (approve/reject via `SessionCommand::RunDomainOp`).
 
 ## Event-Emission Serialization
 
@@ -4525,25 +3965,13 @@ Session-event emission rests on two nested guarantees:
 2. **The sink lock** — every `next_seq` read, every domain tx persisting event
    rows, and every publish happens while the sink mutex is held.
 
-The actor loop adds *ordering* on top: domain writes that must not interleave
-with `Cancel`/`Close`/other commands ride the mailbox as a `SessionDomainOp`
-(two locked phases, lock released only for an interaction resolution between
-them).
+The actor loop adds *ordering* on top: domain writes that must not interleave with `Cancel`/`Close`/other commands ride the mailbox as a `SessionDomainOp` (two locked phases, lock released only for an interaction resolution between them).
 
-Observers run **in-loop in a single ordered pass**, in registration order,
-under one sink lock hold. Observer `i`'s returned envelopes are published
-immediately and fed forward only to observers `j > i` — never backward, never
-a second pass. The partial-failure seq contract: a hook either fails WITHOUT
-committing event rows, or commits and returns EVERY committed envelope; the
-sink advances `next_seq` only by returned envelopes, so an unreturned row
-collides loudly (unique-seq violation), never a silent gap.
+Observers run **in-loop in a single ordered pass**, in registration order, under one sink lock hold. Observer `i`'s returned envelopes are published immediately and fed forward only to observers `j > i` — never backward, never a second pass. The partial-failure seq contract: a hook either fails WITHOUT committing event rows, or commits and returns EVERY committed envelope; the sink advances `next_seq` only by returned envelopes, so an unreturned row collides loudly (unique-seq violation), never a silent gap.
 
-The advisor runs on the **inbound-door task** with the sink lock held by the
-caller — exactly where the inline logic it replaced ran.
+The advisor runs on the **inbound-door task** with the sink lock held by the caller — exactly where the inline logic it replaced ran.
 
-Anything event-emitting is synchronous under the sink lock. Side effects that
-emit nothing may hand off to a main-runtime `Handle` captured at app wiring —
-the per-session runtime dies with the session; never spawn lasting work on it.
+Anything event-emitting is synchronous under the sink lock. Side effects that emit nothing may hand off to a main-runtime `Handle` captured at app wiring — the per-session runtime dies with the session; never spawn lasting work on it.
 
 ## Live Terminals
 
@@ -4564,8 +3992,7 @@ live/terminals/
   shell.rs
 ```
 
-Future growth should keep the live and durable pieces explicit and promote
-flat live files into role folders only when the extra shape is earned:
+Future growth should keep the live and durable pieces explicit and promote flat live files into role folders only when the extra shape is earned:
 
 ```text
 domains/terminals/
@@ -4613,9 +4040,7 @@ output_sink
 
 ### Workspace-wide stop and the archive-script run
 
-`TerminalService` carries three workspace-wide primitives, split out of
-`manager.rs` into the sibling `command_runs/workspace_stop.rs` to stay under
-the line cap:
+`TerminalService` carries three workspace-wide primitives, split out of `manager.rs` into the sibling `command_runs/workspace_stop.rs` to stay under the line cap:
 
 - `close_all_for_workspace` walks the `TerminalRegistry` directly (not
   through `TerminalHandle::close()`, whose setup-terminal guard would refuse
@@ -4644,18 +4069,11 @@ the line cap:
   being archived, so no live PTY - and no blocking PTY-reader thread - may
   survive the run.
 
-All three return or compose the crate-root `process_kill` module's
-`PlaneKills` census and await confirmed process death before returning;
-none of them closes or kills the other resource in its pair - killing the
-setup terminal does not kill the setup script, and killing the setup script
-does not close the terminal. They are the mechanism only: no operation-gate
-lease, no access-gate assertion, and no parallel composition across planes -
-that composition is quiesce's, layered on top.
+All three return or compose the crate-root `process_kill` module's `PlaneKills` census and await confirmed process death before returning; none of them closes or kills the other resource in its pair - killing the setup terminal does not kill the setup script, and killing the setup script does not close the terminal. They are the mechanism only: no operation-gate lease, no access-gate assertion, and no parallel composition across planes - that composition is quiesce's, layered on top.
 
 ## Composite Live Resources
 
-Some future live resources are trees, not flat instances. Browsers are the
-important adversarial case:
+Some future live resources are trees, not flat instances. Browsers are the important adversarial case:
 
 ```text
 browser -> context -> page -> dialogs/downloads/network streams
@@ -4673,15 +4091,11 @@ live/browser_pages/
   separate page resource keyed by browser/context/page ids
 ```
 
-Do not hide a large tree of live instances inside one giant actor unless one
-serialized loop is truly the correct unit of mutation. Page-level actors often
-make sense for browser automation, while browser/context lifecycle can be
-managed above them.
+Do not hide a large tree of live instances inside one giant actor unless one serialized loop is truly the correct unit of mutation. Page-level actors often make sense for browser automation, while browser/context lifecycle can be managed above them.
 
 ## The Live Boundary
 
-How product code hands work to a live resource, and what live may know back
-(see [mental-model.md](anyharness.md) for the underlying law):
+How product code hands work to a live resource, and what live may know back (see [mental-model.md](anyharness.md) for the underlying law):
 
 - **Live receives complete descriptions.** The owning domain runtime resolves
   all product truths and hands the live layer one launch/command bundle. If a
@@ -4707,11 +4121,7 @@ How product code hands work to a live resource, and what live may know back
   (multiple env maps) are a silent-swap hazard and must be named struct
   fields.
 
-Sessions are the in-repo exemplar of this boundary:
-`manager.start_session(launch: SessionLaunch, hooks: SessionHooks)` is the
-whole per-call surface; the durable powers are the capability traits in
-`ActorCapabilities`, implemented by `domains/sessions/live_ports.rs` (pure
-1:1 delegation over `SessionStore`) and wired once in `app/sessions.rs`.
+Sessions are the in-repo exemplar of this boundary: `manager.start_session(launch: SessionLaunch, hooks: SessionHooks)` is the whole per-call surface; the durable powers are the capability traits in `ActorCapabilities`, implemented by `domains/sessions/live_ports.rs` (pure 1:1 delegation over `SessionStore`) and wired once in `app/sessions.rs`.
 
 ## Dependency Rules
 
@@ -4784,9 +4194,7 @@ Use this checklist when reviewing live runtime changes:
 
 # AnyHarness Persistence: Database Infrastructure
 
-`anyharness-lib/src/persistence/**` owns SQLite bootstrap, migrations, and the
-shared database handle used by domain stores. The store-standards half of the
-persistence pair is [persistence-stores.md](anyharness.md).
+`anyharness-lib/src/persistence/**` owns SQLite bootstrap, migrations, and the shared database handle used by domain stores. The store-standards half of the persistence pair is [persistence-stores.md](anyharness.md).
 
 ## Core Concepts
 
@@ -4799,8 +4207,7 @@ It owns:
 - running migrations
 - exposing the shared `Db` handle used by stores
 
-It does not own domain-specific SQL. That stays in the owning domain store such
-as `domains/sessions/store/**` or `domains/workspaces/store/**`.
+It does not own domain-specific SQL. That stays in the owning domain store such as `domains/sessions/store/**` or `domains/workspaces/store/**`.
 
 ## Core Models
 
@@ -4829,8 +4236,7 @@ The important methods are:
 
 ### Migrations (`anyharness/crates/anyharness-lib/src/persistence/migrations.rs`)
 
-`migrations.rs` owns the ordered migration list and the `_migrations` tracking
-table.
+`migrations.rs` owns the ordered migration list and the `_migrations` tracking table.
 
 Each migration:
 
@@ -4850,9 +4256,7 @@ Database startup is:
 4. run migrations
 5. return a shared `Db` handle
 
-`AppState::new(...)`
-(`anyharness/crates/anyharness-lib/src/app/mod.rs`)
-then injects that shared handle into domain stores.
+`AppState::new(...)` (`anyharness/crates/anyharness-lib/src/app/mod.rs`) then injects that shared handle into domain stores.
 
 ### Store Boundary
 
@@ -4918,23 +4322,19 @@ This keeps durable state definitions close to the domain that owns them.
 
 ## Extension Points
 
-Add behavior here when it changes DB bootstrap or migration mechanics, for
-example:
+Add behavior here when it changes DB bootstrap or migration mechanics, for example:
 
 - new startup pragmas
 - migration runner behavior
 - DB-handle helper APIs
 
-Do not add domain-specific query logic here unless it is truly cross-domain DB
-infrastructure.
+Do not add domain-specific query logic here unless it is truly cross-domain DB infrastructure.
 
 ---
 
 # AnyHarness Persistence: Store Standards
 
-Standards half of the persistence pair: where SQL lives, how stores are shaped,
-and who owns transactions. The database-infrastructure half is
-[persistence-database.md](anyharness.md).
+Standards half of the persistence pair: where SQL lives, how stores are shaped, and who owns transactions. The database-infrastructure half is [persistence-database.md](anyharness.md).
 
 ## Layer Split
 
@@ -4993,23 +4393,9 @@ TIER 2 (private)  row fns take &Connection so several can compose
                     pub(super) fn insert_event_row(conn, ...)
 ```
 
-The transaction boundary is the use-case boundary: when a use case needs
-atomicity across row families (fork = session + link + event snapshot), one
-tier-1 fn opens one `with_tx` and calls several tier-2 fns inside it.
-Connections never escape upward; row types and SQL never escape the store.
-In-repo exemplar: `domains/sessions/store/**`; cross-domain atomic deletes use
-the participant-trait pattern (`domains/sessions/deletion.rs`).
+The transaction boundary is the use-case boundary: when a use case needs atomicity across row families (fork = session + link + event snapshot), one tier-1 fn opens one `with_tx` and calls several tier-2 fns inside it. Connections never escape upward; row types and SQL never escape the store. In-repo exemplar: `domains/sessions/store/**`; cross-domain atomic deletes use the participant-trait pattern (`domains/sessions/deletion.rs`).
 
-Subagent lifecycle provides two additional exemplars. Creation inserts the
-child session and its fanout-capped relationship in one transaction, preventing
-an unlinked child from becoming visible as an ordinary session. Reversible
-Close sets `session_links.subagent_closed_at`, deletes the child's pending
-prompts, and defensively removes any retired legacy wake-schedule row for that
-link in one transaction. Delegated-agent runtime behavior does not create or
-read those rows; the shared schedule table remains active only for Cowork.
-Actor cancellation/unload happens only after that transaction returns; no
-database transaction is held across an actor await. Completion-ledger rows and
-durable session history are deliberately not deleted.
+Subagent lifecycle provides two additional exemplars. Creation inserts the child session and its fanout-capped relationship in one transaction, preventing an unlinked child from becoming visible as an ordinary session. Reversible Close sets `session_links.subagent_closed_at`, deletes the child's pending prompts, and defensively removes any retired legacy wake-schedule row for that link in one transaction. Delegated-agent runtime behavior does not create or read those rows; the shared schedule table remains active only for Cowork. Actor cancellation/unload happens only after that transaction returns; no database transaction is held across an actor await. Completion-ledger rows and durable session history are deliberately not deleted.
 
 Rules:
 
@@ -5034,8 +4420,7 @@ Rules:
 
 ## Store Decomposition
 
-A store file should split when it owns multiple independent row families or
-exceeds the repo-shape thresholds.
+A store file should split when it owns multiple independent row families or exceeds the repo-shape thresholds.
 
 For sessions, a clean target is:
 
@@ -5098,8 +4483,7 @@ Current split shapes:
 
 Prefer explicit concern files over giant `mod.rs` files.
 
-Use `mod.rs` to declare and lightly re-export a cohesive module surface, not to
-hold the whole implementation.
+Use `mod.rs` to declare and lightly re-export a cohesive module surface, not to hold the whole implementation.
 
 Avoid both extremes:
 
@@ -5118,9 +4502,7 @@ integrations/mcp/json_rpc.rs
 
 ## Large Subsystems
 
-The top-level boundary is not enough for large subsystems. Once a subsystem has
-multiple responsibility families, define its internal shape before splitting
-files. The target is legibility by path at both levels:
+The top-level boundary is not enough for large subsystems. Once a subsystem has multiple responsibility families, define its internal shape before splitting files. The target is legibility by path at both levels:
 
 ```text
 domains/sessions/runtime/prompt.rs    # session workflow entrypoint
@@ -5128,12 +4510,9 @@ live/sessions/actor/turn/active.rs    # active prompt turn loop
 live/sessions/sink/tools.rs           # transcript event normalization
 ```
 
-Do not dump unrelated files into a newly-correct parent folder. A move into
-`live/sessions/actor/*.rs` is only useful if the children also encode
-responsibility.
+Do not dump unrelated files into a newly-correct parent folder. A move into `live/sessions/actor/*.rs` is only useful if the children also encode responsibility.
 
-Large subsystem splits should name the local architecture explicitly in the
-owning spec or guide. For example:
+Large subsystem splits should name the local architecture explicitly in the owning spec or guide. For example:
 
 - durable domains split by `model`, `store`, `service`, `runtime`, and named
   subdomains.
@@ -5161,27 +4540,15 @@ owning spec or guide. For example:
 
 ## Boundary Ratchet
 
-CI runs `scripts/check_anyharness_boundaries.py` to keep AnyHarness dependency
-direction from regressing. The rules it enforces are records in
-`lints/anyharness/boundaries.toml` (AH-API-*, AH-DOMAIN-*, AH-LIVE-*, …), and
-each failure is rendered from its record, so the message carries the rule, the
-legal alternative, and the record path.
+CI runs `scripts/check_anyharness_boundaries.py` to keep AnyHarness dependency direction from regressing. The rules it enforces are records in `lints/anyharness/boundaries.toml` (AH-API-*, AH-DOMAIN-*, AH-LIVE-*, …), and each failure is rendered from its record, so the message carries the rule, the legal alternative, and the record path.
 
-Grandfathered violations live in `lints/anyharness/exceptions.toml`, one entry
-per site rather than a per-file count: a site is a content fingerprint, so a
-cleanup and a regression in the same file can no longer cancel out. New
-violations fail, and a listed site that no longer violates fails as stale.
+Grandfathered violations live in `lints/anyharness/exceptions.toml`, one entry per site rather than a per-file count: a site is a content fingerprint, so a cleanup and a regression in the same file can no longer cancel out. New violations fail, and a listed site that no longer violates fails as stale.
 
-When a change removes a tolerated violation, delete that entry in the same
-change. Adding one is an amendment — see `lints/README.md`.
+When a change removes a tolerated violation, delete that entry in the same change. Adding one is an amendment — see `lints/README.md`.
 
 ## Old Path Ratchets
 
-Completed splits block old flat file paths from coming back. The
-repo-shape CI job runs `scripts/check_anyharness_old_paths.py` for completed
-AnyHarness splits. Add paths to that check after the replacement lands on
-`main`, then keep the old path blocked instead of relying on review to catch
-resurrected flat files.
+Completed splits block old flat file paths from coming back. The repo-shape CI job runs `scripts/check_anyharness_old_paths.py` for completed AnyHarness splits. Add paths to that check after the replacement lands on `main`, then keep the old path blocked instead of relying on review to catch resurrected flat files.
 
 ## Review Questions
 
@@ -5201,8 +4568,7 @@ Ask these in PR review:
 
 `observability/` owns reusable tracing, latency, and measurement helpers.
 
-This layer exists so lower runtime layers do not import diagnostics from
-`api/http/**`.
+This layer exists so lower runtime layers do not import diagnostics from `api/http/**`.
 
 Target examples:
 
@@ -5247,16 +4613,9 @@ How runtime code emits diagnostics, regardless of layer:
   that a span is missing. Copy-pasted clusters drift; spans cannot.
 - Log where an error is handled, not at every hop it passes through.
 
-Under a Desktop-bundled supported-macOS `serve` launch, the same `tracing`
-events are additionally captured by the bounded Desktop diagnostics layer
-installed at binary bootstrap (`proliferate-diagnostics-client`); emitting
-code does not change for it, and its absence changes nothing here.
+Under a Desktop-bundled supported-macOS `serve` launch, the same `tracing` events are additionally captured by the bounded Desktop diagnostics layer installed at binary bootstrap (`proliferate-diagnostics-client`); emitting code does not change for it, and its absence changes nothing here.
 
-This doctrine now holds on the sessions startup/prompt paths: the former
-`LatencyRequestContext` (once threaded through ~13 signatures across
-api -> domains -> live and relayed via actor config/command fields) is
-deleted. Spans are attached at the transport edges and the
-`[workspace-latency]` event names are unchanged.
+This doctrine now holds on the sessions startup/prompt paths: the former `LatencyRequestContext` (once threaded through ~13 signatures across api -> domains -> live and relayed via actor config/command fields) is deleted. Spans are attached at the transport edges and the `[workspace-latency]` event names are unchanged.
 
 ## Dependency Rule
 
@@ -5286,9 +4645,7 @@ Integration code lives under `anyharness-lib/src/integrations/**`.
 
 ## Purpose
 
-`integrations/**` owns reusable implementations of external contracts that
-AnyHarness must speak. It is for protocol/vendor mechanics, not product policy
-and not live resource ownership.
+`integrations/**` owns reusable implementations of external contracts that AnyHarness must speak. It is for protocol/vendor mechanics, not product policy and not live resource ownership.
 
 The concise rule:
 
@@ -5328,8 +4685,7 @@ integrations/acp
   live session actor/driver lifecycle.
 ```
 
-The top-level folder name should be an external system, protocol, or vendor
-family:
+The top-level folder name should be an external system, protocol, or vendor family:
 
 ```text
 mcp
@@ -5384,8 +4740,7 @@ Integrations must not:
 - decide agent selection or credential policy
 - run a live session process
 
-If integration code needs product decisions, pass those decisions in as data or
-callbacks from the owning domain/live layer.
+If integration code needs product decisions, pass those decisions in as data or callbacks from the owning domain/live layer.
 
 The copy test:
 
@@ -5399,8 +4754,7 @@ no  -> probably domains/live/api/adapters
 
 ## Folder Composition
 
-Split integrations by external contract role, not by generic operations and not
-by product domain.
+Split integrations by external contract role, not by generic operations and not by product domain.
 
 Canonical shape:
 
@@ -5439,8 +4793,7 @@ It should not:
 
 `types.rs` is optional shared integration vocabulary.
 
-Use it for external/vendor shapes or neutral integration results shared by
-multiple integration files or callers:
+Use it for external/vendor shapes or neutral integration results shared by multiple integration files or callers:
 
 - wire DTOs
 - parsed vendor records
@@ -5470,8 +4823,7 @@ Use `protocol.rs` for wire-level rules:
 - protocol conversion helpers
 - constants required by the external spec
 
-Current MCP uses `json_rpc.rs` for this role. That name is fine because it is
-more specific than `protocol.rs`.
+Current MCP uses `json_rpc.rs` for this role. That name is fine because it is more specific than `protocol.rs`.
 
 ### `auth.rs`
 
@@ -5501,9 +4853,7 @@ Use `client.rs` for outbound protocol/API clients:
 - retry/error handling that is generic to the external system
 - typed client methods over an external API
 
-Do not use `client.rs` for live resource orchestration. If the client is owned
-by a running session/terminal/browser actor, that orchestration belongs under
-`live/<resource>/driver/**`.
+Do not use `client.rs` for live resource orchestration. If the client is owned by a running session/terminal/browser actor, that orchestration belongs under `live/<resource>/driver/**`.
 
 ### `server/`
 
@@ -5515,9 +4865,7 @@ Use `server/**` for inbound protocol/server frameworks:
 - method routing
 - server-side protocol errors
 
-For MCP, `product_server/**` is this role. It is allowed because it is the
-generic framework for product MCP servers; actual product tool behavior stays
-in domains.
+For MCP, `product_server/**` is this role. It is allowed because it is the generic framework for product MCP servers; actual product tool behavior stays in domains.
 
 ### `cli/`
 
@@ -5530,9 +4878,7 @@ Use `cli/**` for vendor CLI dialect mechanics:
 - launcher script shape
 - vendor-specific model discovery
 
-Generic process execution belongs in `adapters/processes`. CLI dialect logic
-belongs in `integrations/<vendor_or_family>/cli/**` or directly under the
-integration when small.
+Generic process execution belongs in `adapters/processes`. CLI dialect logic belongs in `integrations/<vendor_or_family>/cli/**` or directly under the integration when small.
 
 ### `registry.rs`
 
@@ -5556,8 +4902,7 @@ registry/
 
 ### `parsing.rs`
 
-Use `parsing.rs` for shared parsing helpers only when the parsing logic spans
-multiple files.
+Use `parsing.rs` for shared parsing helpers only when the parsing logic spans multiple files.
 
 If parsing belongs to one role, keep it near that role:
 
@@ -5650,10 +4995,7 @@ integrations/agent_cli/
   model_discovery.rs
 ```
 
-This is mostly valid, but should stay narrow. (`acp_registry.rs` was removed
-when the install path was fenced: ACP-registry resolution is now a probe-time
-producer concern — `scripts/agent-catalog/resolve-pins.mjs` — and install
-consumes the frozen catalog pin instead.)
+This is mostly valid, but should stay narrow. (`acp_registry.rs` was removed when the install path was fenced: ACP-registry resolution is now a probe-time producer concern — `scripts/agent-catalog/resolve-pins.mjs` — and install consumes the frozen catalog pin instead.)
 
 Mapping:
 
@@ -5742,8 +5084,7 @@ live/sessions/rendezvous/
   permission/user-input/MCP elicitation rendezvous
 ```
 
-ACP is a protocol/backend, not an architectural peer of actor/driver/event
-sink. ACP-specific code should sit under the role it serves.
+ACP is a protocol/backend, not an architectural peer of actor/driver/event sink. ACP-specific code should sit under the role it serves.
 
 ## GitHub / Hosting Rule
 
@@ -5785,9 +5126,7 @@ integrations -> api
 integrations -> live
 ```
 
-Integration code may use adapters only when it needs a generic local mechanism,
-but prefer keeping generic process/filesystem mechanics in adapters and passing
-plain data into integrations.
+Integration code may use adapters only when it needs a generic local mechanism, but prefer keeping generic process/filesystem mechanics in adapters and passing plain data into integrations.
 
 ## Migration Checklist
 
@@ -5806,39 +5145,15 @@ When adding or moving integration code:
 
 # Proliferate Worker
 
-Proliferate Worker is an optional process beside AnyHarness. It enrolls with
-Cloud once, sends heartbeats, and — when a heartbeat ack reports version
-divergence — writes a durable update request into a Proliferate Supervisor
-mailbox. The agent catalog is not converged here: it ships only inside the
-runtime binary
-([agent-distribution.md](../systems/harnesses/distribution.md)),
-so binary convergence is catalog convergence.
+Proliferate Worker is an optional process beside AnyHarness. It enrolls with Cloud once, sends heartbeats, and — when a heartbeat ack reports version divergence — writes a durable update request into a Proliferate Supervisor mailbox. The agent catalog is not converged here: it ships only inside the runtime binary ([agent-distribution.md](../systems/harnesses/distribution.md)), so binary convergence is catalog convergence.
 
-It is not a Cloud command runner. It does not lease commands, materialize
-workspaces, upload session events, or maintain Cloud projections. Cloud
-reaches AnyHarness directly for the current workspace and session flows.
+It is not a Cloud command runner. It does not lease commands, materialize workspaces, upload session events, or maintain Cloud projections. Cloud reaches AnyHarness directly for the current workspace and session flows.
 
 ## Harness launch-option synchronization
 
-`launch_options_sync.rs` reads the runtime's per-harness launch-option state on
-the heartbeat schedule and uploads only changed basis/revision documents. The
-server heartbeat eligibility bit gates all work. Payloads are copied verbatim;
-the Worker does not interpret models, controls, defaults, or evidence. A server
-denial after advertised eligibility is a bounded contract contradiction and
-does not advance the local last-pushed revision.
+`launch_options_sync.rs` reads the runtime's per-harness launch-option state on the heartbeat schedule and uploads only changed basis/revision documents. The server heartbeat eligibility bit gates all work. Payloads are copied verbatim; the Worker does not interpret models, controls, defaults, or evidence. A server denial after advertised eligibility is a bounded contract contradiction and does not advance the local last-pushed revision.
 
-On a **supervisor-owned target** (`supervisor_update_request_dir` set in
-config — every managed-cloud target, unconditionally), the Worker never
-downloads, replaces, kills, or rolls back AnyHarness or itself.
-It only observes heartbeat divergence and writes one durable request into
-`.proliferate/supervisor/updates` for Proliferate Supervisor to act on; see
-the [Lifecycle](#worker-lifecycle-and-convergence) section below and [specs/areas/anyharness.md](anyharness.md) for
-the consumer side. A target with no mailbox dir (desktop, whose app bundle
-owns both binaries) converges nothing: it heartbeats and syncs only. The
-legacy Worker-owned in-place swaps, the Worker self-`exec` update, and the
-one-time D5 bridge that migrated already-provisioned legacy sandboxes were
-deleted by the cull sweep's delete-worker-legacy track, after the live E2B
-UPDATE and D5 BRIDGE proofs (both 2026-07-26) and full fleet convergence.
+On a **supervisor-owned target** (`supervisor_update_request_dir` set in config — every managed-cloud target, unconditionally), the Worker never downloads, replaces, kills, or rolls back AnyHarness or itself. It only observes heartbeat divergence and writes one durable request into `.proliferate/supervisor/updates` for Proliferate Supervisor to act on; see the [Lifecycle](#worker-lifecycle-and-convergence) section below and [specs/areas/anyharness.md](anyharness.md) for the consumer side. A target with no mailbox dir (desktop, whose app bundle owns both binaries) converges nothing: it heartbeats and syncs only. The legacy Worker-owned in-place swaps, the Worker self-`exec` update, and the one-time D5 bridge that migrated already-provisioned legacy sandboxes were deleted by the cull sweep's delete-worker-legacy track, after the live E2B UPDATE and D5 BRIDGE proofs (both 2026-07-26) and full fleet convergence.
 
 ## Current Process
 
@@ -5857,8 +5172,7 @@ config + single-process lock + local SQLite
   -> sleep and repeat
 ```
 
-Worker startup is best-effort in a cloud sandbox. The direct AnyHarness path
-can remain healthy when the Worker is absent or unhealthy.
+Worker startup is best-effort in a cloud sandbox. The direct AnyHarness path can remain healthy when the Worker is absent or unhealthy.
 
 ## Current Source Tree
 
@@ -5897,8 +5211,7 @@ src/
     └── anyharness_update.rs
 ```
 
-Do not create folders for removed or hypothetical command, event-tail,
-inventory, or materialization subsystems.
+Do not create folders for removed or hypothetical command, event-tail, inventory, or materialization subsystems.
 
 ## Ownership Map
 
@@ -6001,29 +5314,17 @@ cloud_client/
 - a direct unauthenticated fetch from an already resolved CDN URL for the
   sibling checksum
 
-It has two `reqwest` clients. Authenticated requests never follow redirects,
-preventing a bearer token from crossing origins. Public artifact fetches
-use a redirect-following client and a longer request timeout.
+It has two `reqwest` clients. Authenticated requests never follow redirects, preventing a bearer token from crossing origins. Public artifact fetches use a redirect-following client and a longer request timeout.
 
-The client owns endpoint paths, headers, serialization, status checking, and
-wire compatibility. It does not decide when enrollment, catalog sync, or an
-update should happen, and it does not write the local store.
+The client owns endpoint paths, headers, serialization, status checking, and wire compatibility. It does not decide when enrollment, catalog sync, or an update should happen, and it does not write the local store.
 
 ## AnyHarness Access
 
-There is no general `anyharness_client` module in the current Worker; the
-narrow local calls that exist (catalog-version poll, launch-option reads)
-live with `launch_options_sync.rs`. These calls do not make the Worker the
-general execution client for AnyHarness. Cloud performs current workspace and
-session operations directly.
+There is no general `anyharness_client` module in the current Worker; the narrow local calls that exist (catalog-version poll, launch-option reads) live with `launch_options_sync.rs`. These calls do not make the Worker the general execution client for AnyHarness. Cloud performs current workspace and session operations directly.
 
 ## Artifact Identity
 
-The Cloud download endpoint redirects to a public artifact. The Worker reads
-the redirect's `Location` (never the body) and derives the checksum URL from
-that resolved binary URL, so the coordinates it writes into a mailbox request
-name a binary and checksum from the same published directory. It does not
-resolve the two artifacts through separate Cloud redirects.
+The Cloud download endpoint redirects to a public artifact. The Worker reads the redirect's `Location` (never the body) and derives the checksum URL from that resolved binary URL, so the coordinates it writes into a mailbox request name a binary and checksum from the same published directory. It does not resolve the two artifacts through separate Cloud redirects.
 
 ## Hard Rules
 
@@ -6045,9 +5346,7 @@ enrollment_token
   -> worker_id + worker_token + integration-gateway coordinates
 ```
 
-The persisted identity contains only `worker_id` and `worker_token`. Sandbox,
-user, runtime kind, revocation, and liveness are Cloud-owned associations; the
-Worker does not persist a Target, profile, slot, generation, or fence.
+The persisted identity contains only `worker_id` and `worker_token`. Sandbox, user, runtime kind, revocation, and liveness are Cloud-owned associations; the Worker does not persist a Target, profile, slot, generation, or fence.
 
 ## Source Ownership
 
@@ -6076,9 +5375,7 @@ otherwise:
   write integration-gateway credentials
 ```
 
-A durable identity always wins over an enrollment token still present in the
-configuration. An invalid or revoked durable token does not trigger automatic
-re-enrollment.
+A durable identity always wins over an enrollment token still present in the configuration. An invalid or revoked durable token does not trigger automatic re-enrollment.
 
 ## Credentials
 
@@ -6098,16 +5395,11 @@ re-enrollment.
 - `runtime_bearer_token` authenticates narrow calls to the co-located
   AnyHarness runtime. It is not Cloud auth.
 
-The enrollment response's integration-gateway coordinates are not stored in
-Worker SQLite. Repair is therefore limited to the process that freshly
-enrolled and still holds those coordinates in memory. A restart that loads an
-existing identity does not recreate a missing gateway file. Escalate that
-state; do not silently re-enroll or mint a replacement locally.
+The enrollment response's integration-gateway coordinates are not stored in Worker SQLite. Repair is therefore limited to the process that freshly enrolled and still holds those coordinates in memory. A restart that loads an existing identity does not recreate a missing gateway file. Escalate that state; do not silently re-enroll or mint a replacement locally.
 
 ## Fingerprint
 
-The fingerprint is SHA-256 over OS, architecture, and hostname. It is a
-diagnostic hint, not authentication or hardware attestation.
+The fingerprint is SHA-256 over OS, architecture, and hostname. It is a diagnostic hint, not authentication or hardware attestation.
 
 ## Hard Rules
 
@@ -6120,9 +5412,7 @@ diagnostic hint, not authentication or hardware attestation.
 
 # Worker Lifecycle And Convergence
 
-The Worker heartbeat is both its liveness signal and the carrier for desired
-binary versions. Binary versions are all it carries: the agent catalog rides
-inside the runtime binary, so there is no catalog version on the wire.
+The Worker heartbeat is both its liveness signal and the carrier for desired binary versions. Binary versions are all it carries: the agent catalog rides inside the runtime binary, so there is no catalog version on the wire.
 
 ```text
 POST /v1/cloud/worker/heartbeat
@@ -6131,68 +5421,31 @@ POST /v1/cloud/worker/heartbeat
             + required launchOptionsUploadAllowed (not desired state)
 ```
 
-The interval is `heartbeat_interval_seconds` from local configuration with a
-10-second minimum. The enrollment response also includes an interval, but the
-current Worker does not apply that response value.
+The interval is `heartbeat_interval_seconds` from local configuration with a 10-second minimum. The enrollment response also includes an interval, but the current Worker does not apply that response value.
 
-Cloud derives liveness from an `online` row with a recent `last_seen_at`. The
-Worker reports `online`; current application code does not transition the row
-to the schema's `offline` status.
+Cloud derives liveness from an `online` row with a recent `last_seen_at`. The Worker reports `online`; current application code does not transition the row to the schema's `offline` status.
 
-After a successful heartbeat, a process that freshly enrolled compares its
-in-memory integration-gateway credential with the shared runtime dotfile and
-repairs the file only when it differs. The check is intentionally after
-authentication: once a superseded Worker's heartbeat fails, it cannot keep
-reasserting a revoked gateway token. A success returned immediately before
-revocation can race one final stale write, which the active successor repairs
-on its next successful heartbeat.
+After a successful heartbeat, a process that freshly enrolled compares its in-memory integration-gateway credential with the shared runtime dotfile and repairs the file only when it differs. The check is intentionally after authentication: once a superseded Worker's heartbeat fails, it cannot keep reasserting a revoked gateway token. A success returned immediately before revocation can race one final stale write, which the active successor repairs on its next successful heartbeat.
 
 ## Harness Launch-Option Sync (server-gated, no convergence)
 
-Launch-option sync is copied observation, not desired-state convergence. It
-runs on the same tick before the mailbox convergence write.
+Launch-option sync is copied observation, not desired-state convergence. It runs on the same tick before the mailbox convergence write.
 
-The successful heartbeat acknowledgement carries
-`launchOptionsUploadAllowed`. Absent decodes to `false`; on `false`,
-`launch_options_sync::maybe_sync` returns before resolving the runtime bearer,
-listing harnesses, reading launch options, or uploading anything. The Worker
-does not re-derive eligibility.
+The successful heartbeat acknowledgement carries `launchOptionsUploadAllowed`. Absent decodes to `false`; on `false`, `launch_options_sync::maybe_sync` returns before resolving the runtime bearer, listing harnesses, reading launch options, or uploading anything. The Worker does not re-derive eligibility.
 
-On `true`, the Worker lists runtime harness kinds, reads
-`GET /v1/agents/{kind}/launch-options`, serializes that response verbatim except
-for runtime-only readiness decoration, and uploads it to
-`/v1/cloud/harness-launch-options/{kind}`. In-memory state tracks the highest
-successfully copied source revision per harness. Equal/older revisions are
-skipped; a read, encoding, network, or ingest failure leaves the revision
-unadvanced for a later tick. The Worker never interprets model/control IDs,
-defaults, basis state, or probe evidence.
+On `true`, the Worker lists runtime harness kinds, reads `GET /v1/agents/{kind}/launch-options`, serializes that response verbatim except for runtime-only readiness decoration, and uploads it to `/v1/cloud/harness-launch-options/{kind}`. In-memory state tracks the highest successfully copied source revision per harness. Equal/older revisions are skipped; a read, encoding, network, or ingest failure leaves the revision unadvanced for a later tick. The Worker never interprets model/control IDs, defaults, basis state, or probe evidence.
 
-See [MODELS.md "Cloud copy"](../systems/agent_auth/models.md#cloud-copy)
-for the server half of this contract.
+See [MODELS.md "Cloud copy"](../systems/agent_auth/models.md#cloud-copy) for the server half of this contract.
 
 ## Catalog Convergence (none)
 
-There is no catalog convergence in this crate: the agent catalog ships only
-inside the runtime binary, so the AnyHarness binary swap below IS the catalog
-update
-([agent-distribution.md "Convergence"](../systems/harnesses/distribution.md#convergence)). The Worker has no served catalog version to compare, no
-document to fetch, and no push route to call. Do not reintroduce one — a
-faster catalog lane would break the invariant that the active catalog is
-immutable for the lifetime of the runtime process.
+There is no catalog convergence in this crate: the agent catalog ships only inside the runtime binary, so the AnyHarness binary swap below IS the catalog update ([agent-distribution.md "Convergence"](../systems/harnesses/distribution.md#convergence)). The Worker has no served catalog version to compare, no document to fetch, and no push route to call. Do not reintroduce one — a faster catalog lane would break the invariant that the active catalog is immutable for the lifetime of the runtime process.
 
 ## Supervisor-Owned Convergence (mailbox)
 
-`heartbeat_and_converge` in `runtime.rs` branches on
-`supervisor_bridge::is_supervisor_owned(config)` (whether
-`supervisor_update_request_dir` is set): supervisor-owned targets route to
-`converge_via_mailbox` (the mailbox write); a target with no mailbox dir
-converges nothing.
+`heartbeat_and_converge` in `runtime.rs` branches on `supervisor_bridge::is_supervisor_owned(config)` (whether `supervisor_update_request_dir` is set): supervisor-owned targets route to `converge_via_mailbox` (the mailbox write); a target with no mailbox dir converges nothing.
 
-When `WorkerConfig.supervisor_update_request_dir` is set (a supervisor-owned
-target), AnyHarness and Worker binary divergence is **not** actioned in this
-crate. Instead `supervisor_bridge::write_update_request` resolves the
-artifact coordinates (public artifact redirect, sibling `.sha256`, size) and
-atomically writes one request into `.proliferate/supervisor/updates`:
+When `WorkerConfig.supervisor_update_request_dir` is set (a supervisor-owned target), AnyHarness and Worker binary divergence is **not** actioned in this crate. Instead `supervisor_bridge::write_update_request` resolves the artifact coordinates (public artifact redirect, sibling `.sha256`, size) and atomically writes one request into `.proliferate/supervisor/updates`:
 
 ```text
 desiredVersions diverges from the running AnyHarness/Worker version
@@ -6201,33 +5454,13 @@ desiredVersions diverges from the running AnyHarness/Worker version
   -> write_request(dir, &request)   # atomic tmp+rename, 0700/0600
 ```
 
-`request_id` is derived deterministically from `(component, version)`, so a
-replayed heartbeat for the same divergence overwrites the same file rather
-than enqueuing a duplicate; Proliferate Supervisor's own idempotency check
-(`result_exists`) guarantees exactly one activation. The Worker reads the
-Supervisor's terminal result only to reconcile: a successful AnyHarness
-activation records the observed version into the store so the next heartbeat
-reports convergence (R9-006), then GCs the request+result pair so a later
-re-pin to the same version re-applies (R9-003); a terminal failure is left
-latched so a lagging artifact is not retried until the pin changes.
+`request_id` is derived deterministically from `(component, version)`, so a replayed heartbeat for the same divergence overwrites the same file rather than enqueuing a duplicate; Proliferate Supervisor's own idempotency check (`result_exists`) guarantees exactly one activation. The Worker reads the Supervisor's terminal result only to reconcile: a successful AnyHarness activation records the observed version into the store so the next heartbeat reports convergence (R9-006), then GCs the request+result pair so a later re-pin to the same version re-applies (R9-003); a terminal failure is left latched so a lagging artifact is not retried until the pin changes.
 
-See [specs/areas/anyharness.md](anyharness.md)
-for the consumer side (verify, download, stage, activate, health-gate,
-rollback).
+See [specs/areas/anyharness.md](anyharness.md) for the consumer side (verify, download, stage, activate, health-gate, rollback).
 
 ## Launch Policy
 
-Convergence is opt-in by mailbox dir alone. Desktop owns its bundled binaries
-and never sets `supervisor_update_request_dir` (its config still writes the
-retired `self_update_enabled = false` key, now an ignored no-op). Every
-managed-cloud (E2B) target is always supervisor-owned: the server's
-`build_worker_config` (`server/proliferate/server/cloud/runtime/bootstrap.py`)
-emits `supervisor_update_request_dir` — calling it with
-`supervisor_owned=False` raises `ValueError` because the legacy
-independent-launch config shape was deleted. So the mailbox path in the
-previous section is the only convergence path any Worker config can express;
-on-disk configs still carrying the deleted legacy keys parse unchanged
-(serde ignores unknown fields).
+Convergence is opt-in by mailbox dir alone. Desktop owns its bundled binaries and never sets `supervisor_update_request_dir` (its config still writes the retired `self_update_enabled = false` key, now an ignored no-op). Every managed-cloud (E2B) target is always supervisor-owned: the server's `build_worker_config` (`server/proliferate/server/cloud/runtime/bootstrap.py`) emits `supervisor_update_request_dir` — calling it with `supervisor_owned=False` raises `ValueError` because the legacy independent-launch config shape was deleted. So the mailbox path in the previous section is the only convergence path any Worker config can express; on-disk configs still carrying the deleted legacy keys parse unchanged (serde ignores unknown fields).
 
 ## Hard Rules
 
@@ -6242,10 +5475,7 @@ on-disk configs still carrying the deleted legacy keys parse unchanged
 
 # Worker Root Support Files
 
-Root support modules are small process-wide dependencies. The focused root
-workflow modules—`integration_gateway.rs` and `launch_options_sync.rs`—are
-covered by the identity and lifecycle guides rather than treated as generic
-utilities.
+Root support modules are small process-wide dependencies. The focused root workflow modules—`integration_gateway.rs` and `launch_options_sync.rs`—are covered by the identity and lifecycle guides rather than treated as generic utilities.
 
 ## Ownership
 
@@ -6269,29 +5499,13 @@ Current configuration includes:
   presence is what makes a target supervisor-owned;
 - runtime base URL and optional runtime bearer token for narrow local calls.
 
-Runtime URL defaults to `http://127.0.0.1:8457`. Runtime bearer auth can be
-loaded from config or the `ANYHARNESS_BEARER_TOKEN` environment variable by
-the focused caller. Keys from the deleted legacy convergence paths that still
-appear in deployed configs are ignored as unknown fields.
+Runtime URL defaults to `http://127.0.0.1:8457`. Runtime bearer auth can be loaded from config or the `ANYHARNESS_BEARER_TOKEN` environment variable by the focused caller. Keys from the deleted legacy convergence paths that still appear in deployed configs are ignored as unknown fields.
 
 ## Telemetry And Privacy
 
-`logging.rs` stamps component-specific Worker release identity, initializes
-Sentry when configured, and scrubs bearer values, URL query strings, and
-absolute local paths from captured text. Before config load it also activates
-the bundled Desktop diagnostics adapter purely by possession of the two
-reserved bridge/shutdown descriptors: when present, the bounded
-`proliferate-diagnostics-client` tracing layer joins the subscriber and its
-guard flushes on shutdown; when absent, activation is `Disabled` with no
-producer task, file, or network behavior. Desktop keeps one continuous
-identity-stable natural-exit observer after startup; an ambiguous startup or
-later inspection retains the child, bridge, drainers, and tail rather than
-turning an error into reap authority. Flow modules still decide what an event
-means and when to emit it.
+`logging.rs` stamps component-specific Worker release identity, initializes Sentry when configured, and scrubs bearer values, URL query strings, and absolute local paths from captured text. Before config load it also activates the bundled Desktop diagnostics adapter purely by possession of the two reserved bridge/shutdown descriptors: when present, the bounded `proliferate-diagnostics-client` tracing layer joins the subscriber and its guard flushes on shutdown; when absent, activation is `Disabled` with no producer task, file, or network behavior. Desktop keeps one continuous identity-stable natural-exit observer after startup; an ambiguous startup or later inspection retains the child, bridge, drainers, and tail rather than turning an error into reap authority. Flow modules still decide what an event means and when to emit it.
 
-Use current identifiers such as `worker_id` and the authenticated user context
-when available. Do not add removed command, Target, projection, slot, or
-generation identifiers as standard Worker fields.
+Use current identifiers such as `worker_id` and the authenticated user context when available. Do not add removed command, Target, projection, slot, or generation identifiers as standard Worker fields.
 
 ## Hard Rules
 
@@ -6305,9 +5519,7 @@ generation identifiers as standard Worker fields.
 
 # Worker Runtime
 
-`main.rs` initializes telemetry, parses `--config` and `--once`, loads
-`WorkerConfig`, and calls `runtime::run`. It captures a terminal error for
-Sentry but does not own Worker behavior.
+`main.rs` initializes telemetry, parses `--config` and `--once`, loads `WorkerConfig`, and calls `runtime::run`. It captures a terminal error for Sentry but does not own Worker behavior.
 
 ## Startup
 
@@ -6325,8 +5537,7 @@ acquire the process lock beside the Worker database
   -> otherwise: sleep for the configured interval and repeat
 ```
 
-There is one loop. The Worker does not spawn command, event-tail, inventory,
-or materialization loops, and it has no custom shutdown coordinator.
+There is one loop. The Worker does not spawn command, event-tail, inventory, or materialization loops, and it has no custom shutdown coordinator.
 
 ## One Tick
 
@@ -6340,17 +5551,13 @@ POST heartbeat
      activation results, then write update requests for any divergence
 ```
 
-`--once` sends one heartbeat and may copy changed launch-option state, but it
-only reports pending convergence without writing mailbox requests.
+`--once` sends one heartbeat and may copy changed launch-option state, but it only reports pending convergence without writing mailbox requests.
 
 ## Failure Boundary
 
-After startup, a failed heartbeat or convergence action does not terminate the
-loop. The current Worker and runtime continue serving where possible, and a
-later heartbeat retries according to the owning module's rules.
+After startup, a failed heartbeat or convergence action does not terminate the loop. The current Worker and runtime continue serving where possible, and a later heartbeat retries according to the owning module's rules.
 
-Enrollment and local-store failures are startup failures because the loop
-cannot authenticate or preserve its required identity without them.
+Enrollment and local-store failures are startup failures because the loop cannot authenticate or preserve its required identity without them.
 
 ## Hard Rules
 
@@ -6363,8 +5570,7 @@ cannot authenticate or preserve its required identity without them.
 
 # Worker Store
 
-Worker-local SQLite contains only restart-critical Worker state. It is not
-Cloud workspace state, AnyHarness runtime state, or a copy of server truth.
+Worker-local SQLite contains only restart-critical Worker state. It is not Cloud workspace state, AnyHarness runtime state, or a copy of server truth.
 
 ## Current Tree
 
@@ -6391,15 +5597,7 @@ anyharness_update (single row, id = 1)
   updated_at
 ```
 
-`identity` lets a restart reuse the opaque Worker credential without another
-enrollment. `anyharness_update` keeps its historical name and shape; its
-`converged_version` records the runtime version of the last Supervisor
-activation the Worker reconciled from the mailbox, which is what the next
-heartbeat reports (R9-006). The `failed_pin` column is a leftover of the
-deleted Worker-owned swap: unread, kept only because the schema is applied
-on real boxes and is not worth migrating for a dead column. The swap journal
-and failure latch live with Proliferate Supervisor
-([specs/areas/anyharness.md](anyharness.md)).
+`identity` lets a restart reuse the opaque Worker credential without another enrollment. `anyharness_update` keeps its historical name and shape; its `converged_version` records the runtime version of the last Supervisor activation the Worker reconciled from the mailbox, which is what the next heartbeat reports (R9-006). The `failed_pin` column is a leftover of the deleted Worker-owned swap: unread, kept only because the schema is applied on real boxes and is not worth migrating for a dead column. The swap journal and failure latch live with Proliferate Supervisor ([specs/areas/anyharness.md](anyharness.md)).
 
 ## Source Ownership
 
@@ -6411,9 +5609,7 @@ and failure latch live with Proliferate Supervisor
 | `identity.rs` | Single-row identity load and upsert |
 | `anyharness_update.rs` | Converged-version reads/writes |
 
-The connection enables foreign keys and WAL and uses a five-second busy
-timeout. The containing directory and database file are permission-restricted
-on Unix.
+The connection enables foreign keys and WAL and uses a five-second busy timeout. The containing directory and database file are permission-restricted on Unix.
 
 ## Hard Rules
 
@@ -6438,10 +5634,7 @@ These standards apply to the target-side Supervisor binary:
 
 - `anyharness/crates/proliferate-supervisor/**`
 
-This document defines Supervisor source structure and ownership rules. It does
-not own server-side managed-cloud bootstrap, Worker command delivery, or
-AnyHarness runtime internals. Read the owning docs for
-those areas when changing those boundaries:
+This document defines Supervisor source structure and ownership rules. It does not own server-side managed-cloud bootstrap, Worker command delivery, or AnyHarness runtime internals. Read the owning docs for those areas when changing those boundaries:
 
 - `specs/areas/server.md` for managed-cloud bootstrap code under `server/**`
 - `specs/areas/anyharness.md` for target Worker behavior
@@ -6449,9 +5642,7 @@ those areas when changing those boundaries:
 
 ## Goal
 
-Supervisor exists to make a Proliferate target boring to operate. Once a target
-has the runtime bundle, one local process should own the lifecycle of the two
-long-lived child processes:
+Supervisor exists to make a Proliferate target boring to operate. Once a target has the runtime bundle, one local process should own the lifecycle of the two long-lived child processes:
 
 ```text
 proliferate-supervisor
@@ -6474,26 +5665,7 @@ Supervisor is not Cloud, not Worker, and not AnyHarness.
 
 ## Implementation Status (this PR)
 
-The update-mailbox consumer this PR adds is implemented and unit-tested. The
-shared `proliferate-runtime-update-protocol` dependency, the `SupervisorConfig`
-mailbox/health/download fields, the `SupervisorError` variants, the mailbox
-consumer (`update/request.rs`), the bounded artifact download (`update/download.rs`),
-the activation state machine (`update/activate.rs`), `RollbackPlan::apply`
-(restore `.prev` over the active path), and the real `/health`-polling gate in
-`process/health.rs` are all in place. `process/mod.rs` drains the mailbox
-(`activate::run_pending` via the `LiveHost` adapter) once children are up, and
-`cargo build -p proliferate-supervisor` succeeds. Two distinct live proofs
-exist here, and both PASSED on real E2B sandboxes 2026-07-26: the UPDATE proof
-(a fresh supervisor-owned sandbox converging pins 0.3.47→0.3.48 end to end,
-this mailbox consumer included, zero rollbacks, ~75s convergence) and the D5
-BRIDGE proof (in-place migration of an already-running legacy Worker's
-process tree onto Supervisor via the one-time bridge, not a fresh provision —
-sandbox `iwwvadhffzxoora56f437`, ~2.5s, no destroy/recreate). Both proofs
-together cleared the gate to delete the server-side legacy launch path
-entirely (`server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py`
-now has only one launch topology); the Worker-side bridge code itself was
-deleted after full fleet convergence by the cull sweep's delete-worker-legacy
-track. Everything below describes running code.
+The update-mailbox consumer this PR adds is implemented and unit-tested. The shared `proliferate-runtime-update-protocol` dependency, the `SupervisorConfig` mailbox/health/download fields, the `SupervisorError` variants, the mailbox consumer (`update/request.rs`), the bounded artifact download (`update/download.rs`), the activation state machine (`update/activate.rs`), `RollbackPlan::apply` (restore `.prev` over the active path), and the real `/health`-polling gate in `process/health.rs` are all in place. `process/mod.rs` drains the mailbox (`activate::run_pending` via the `LiveHost` adapter) once children are up, and `cargo build -p proliferate-supervisor` succeeds. Two distinct live proofs exist here, and both PASSED on real E2B sandboxes 2026-07-26: the UPDATE proof (a fresh supervisor-owned sandbox converging pins 0.3.47→0.3.48 end to end, this mailbox consumer included, zero rollbacks, ~75s convergence) and the D5 BRIDGE proof (in-place migration of an already-running legacy Worker's process tree onto Supervisor via the one-time bridge, not a fresh provision — sandbox `iwwvadhffzxoora56f437`, ~2.5s, no destroy/recreate). Both proofs together cleared the gate to delete the server-side legacy launch path entirely (`server/proliferate/server/cloud/materialization/sandbox_io/runtime_launch.py` now has only one launch topology); the Worker-side bridge code itself was deleted after full fleet convergence by the cull sweep's delete-worker-legacy track. Everything below describes running code.
 
 ## Target Shape
 
@@ -6526,8 +5698,7 @@ src/
     rollback.rs
 ```
 
-Do not create empty folders. Introduce a file or folder only when it has real
-responsibility to own.
+Do not create empty folders. Introduce a file or folder only when it has real responsibility to own.
 
 ## What Goes Where
 
@@ -6587,10 +5758,7 @@ loop:
   wait restart delay
 ```
 
-The mailbox drain runs once per supervise cycle, after children are up and
-before/around the restart select, so an update in flight cannot race an
-unrelated child-exit restart. This is the core Supervisor primitive. Keep it
-legible.
+The mailbox drain runs once per supervise cycle, after children are up and before/around the restart select, so an update in flight cannot race an unrelated child-exit restart. This is the core Supervisor primitive. Keep it legible.
 
 
 ## Operational Notes
@@ -6631,8 +5799,7 @@ AnyHarness
   workspaces, sessions, transcripts, agents, MCP, files, git, terminals
 ```
 
-Supervisor should know paths, binaries, env, child exits, restart delay, and
-update artifacts. It should not know product workflows.
+Supervisor should know paths, binaries, env, child exits, restart delay, and update artifacts. It should not know product workflows.
 
 ## Hard Rules
 
@@ -6682,14 +5849,7 @@ observability -> update/staging
 logging -> no product modules
 ```
 
-`proliferate-runtime-update-protocol` is an explicit, allowed workspace
-dependency: a tiny serde-only crate that defines the mailbox wire shapes and
-their atomic file IO. Both Supervisor and Worker depend on it; it depends on
-neither, so taking it on does not pull in Worker internals and is not the
-forbidden direction below. `reqwest` is likewise an explicit, declared
-dependency (added for this change) scoped to `update/download.rs` only —
-Supervisor's one and only outbound HTTP client, bounded to the single
-`artifact_url` named in an already-verified request.
+`proliferate-runtime-update-protocol` is an explicit, allowed workspace dependency: a tiny serde-only crate that defines the mailbox wire shapes and their atomic file IO. Both Supervisor and Worker depend on it; it depends on neither, so taking it on does not pull in Worker internals and is not the forbidden direction below. `reqwest` is likewise an explicit, declared dependency (added for this change) scoped to `update/download.rs` only — Supervisor's one and only outbound HTTP client, bounded to the single `artifact_url` named in an already-verified request.
 
 Forbidden direction:
 
@@ -6700,8 +5860,7 @@ Supervisor -> anyharness-lib runtime internals
 Supervisor -> cloud SDK/client code
 ```
 
-If a dependency feels awkward, keep the boundary narrow by passing paths,
-args, env, or manifest data in through config or CLI arguments.
+If a dependency feels awkward, keep the boundary narrow by passing paths, args, env, or manifest data in through config or CLI arguments.
 
 ## Change Discipline
 
@@ -6734,14 +5893,10 @@ args, env, or manifest data in through config or CLI arguments.
 
 # Generated references (formerly specs/areas/)
 
-Files in this directory are reproducible evidence generated by code or schema
-owners. Do not edit generated output by hand.
+Files in this directory are reproducible evidence generated by code or schema owners. Do not edit generated output by hand.
 
 | Reference | Owner | Regenerate | Owning test |
 | --- | --- | --- | --- |
 | [`anyharness-db-schema.sql`](anyharness-db-schema.sql) | AnyHarness SQLite migrations (`anyharness/crates/anyharness-lib/src/persistence/migrations.rs`) | `cargo test -p anyharness-lib update_anyharness_schema_snapshot -- --ignored` | `anyharness_schema_snapshot_matches_migrations` in [`anyharness/crates/anyharness-lib/src/persistence/schema_snapshot_tests.rs`](../../anyharness/crates/anyharness-lib/src/persistence/schema_snapshot_tests.rs) |
 
-The owning test must fail when generated output drifts from its source. The
-regenerate command is the `#[ignore]`d twin of that test in the same file: it
-runs the migrations against an in-memory database, dumps the schema, and
-rewrites the snapshot at the path the checking test reads.
+The owning test must fail when generated output drifts from its source. The regenerate command is the `#[ignore]`d twin of that test in the same file: it runs the migrations against an in-memory database, dumps the schema, and rewrites the snapshot at the path the checking test reads.

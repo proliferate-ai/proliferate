@@ -1,17 +1,10 @@
 # Organizations
 
-Status: current (grade B). System spec in the Organization Standard anatomy.
-[`invitations.md`](invitations.md) is this system's invitation section (join
-link, desktop join flow, admin UX).
+Status: current (grade B). System spec in the Organization Standard anatomy. [`invitations.md`](invitations.md) is this system's invitation section (join link, desktop join flow, admin UX).
 
 ## 1. Purpose
 
-Organizations own the tenant: the organization row, membership and roles,
-invitations, the single-org-mode instance organization and its admin floor,
-self-registration by invitation, team-checkout intents, and the org-admin
-usage/limits surface. An organization is the only billing subject at the
-product layer (every account gets a default org). Organizations do not
-authenticate anyone and do not compute money.
+Organizations own the tenant: the organization row, membership and roles, invitations, the single-org-mode instance organization and its admin floor, self-registration by invitation, team-checkout intents, and the org-admin usage/limits surface. An organization is the only billing subject at the product layer (every account gets a default org). Organizations do not authenticate anyone and do not compute money.
 
 ## 2. Owned state
 
@@ -24,8 +17,7 @@ authenticate anyone and do not compute money.
 | `organization_invitation` | email-specific pending grant; `status ∈ {pending, accepted, revoked, expired}`; delivery status; one pending row per (org, email). |
 | `organization_checkout_intent` | team-checkout intent: status, activation status, Stripe ids, idempotency key, staged invite emails, 24h expiry; one pending per creator. |
 
-`billing_budget_limit` is billing's table; organizations own the admin
-*routes* that replace it (see Fences).
+`billing_budget_limit` is billing's table; organizations own the admin *routes* that replace it (see Fences).
 
 ## 3. Public surface
 
@@ -42,15 +34,9 @@ GET  /join/{organizationId}                              landing page (HTML)
 POST /auth/password/register · GET|POST /register        single-org self-registration (mounted only in single-org mode)
 ```
 
-Python surface (MANIFEST): `proliferate.server.organizations.api`,
-`.service`, `.models`. Named seams other systems call: `service.resolve_owner_context`
-(used by `permissions.py`), `membership_policy.place_new_identity`,
-`admin_emails.ensure_admin_email_role` / `is_admin_listed_email`,
-`registration.ensure_default_organization_for_account`,
-`membership_policy.claim_instance_organization` (used by `setup`).
+Python surface (MANIFEST): `proliferate.server.organizations.api`, `.service`, `.models`. Named seams other systems call: `service.resolve_owner_context` (used by `permissions.py`), `membership_policy.place_new_identity`, `admin_emails.ensure_admin_email_role` / `is_admin_listed_email`, `registration.ensure_default_organization_for_account`, `membership_policy.claim_instance_organization` (used by `setup`).
 
-SDK: [`cloud/sdk/src/client/organizations.ts`](../../../cloud/sdk/src/client/organizations.ts),
-[`cloud/sdk-react/src/hooks/organizations.ts`](../../../cloud/sdk-react/src/hooks/organizations.ts).
+SDK: [`cloud/sdk/src/client/organizations.ts`](../../../cloud/sdk/src/client/organizations.ts), [`cloud/sdk-react/src/hooks/organizations.ts`](../../../cloud/sdk-react/src/hooks/organizations.ts).
 
 ## 4. Consumes
 

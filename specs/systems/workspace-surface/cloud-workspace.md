@@ -1,18 +1,10 @@
 # Cloud Workspace
 
-Status: target. This document describes the accepted destination for the
-end-to-end cloud workspace experience: what the user sees and does from
-create to delete. The body is written in the ideal state. Every difference
-from `main` today is listed in [Current gaps](#current-gaps).
+Status: target. This document describes the accepted destination for the end-to-end cloud workspace experience: what the user sees and does from create to delete. The body is written in the ideal state. Every difference from `main` today is listed in [Current gaps](#current-gaps).
 
 ## Cloud surfaces culled on the desktop client (PRO-10), backend dormant
 
-Every user-facing cloud-workspace surface on the desktop client (`apps/desktop`
-and `apps/packages/product-client`) is removed or host-gated to web. The backend
-provisioning machinery, the shared runtime providers, and the local/cloud
-reconciliation bridge stay in place but dormant: no desktop surface reaches
-them, so the journeys below describe the destination and the still-live web
-surface, not what the desktop client presents today.
+Every user-facing cloud-workspace surface on the desktop client (`apps/desktop` and `apps/packages/product-client`) is removed or host-gated to web. The backend provisioning machinery, the shared runtime providers, and the local/cloud reconciliation bridge stay in place but dormant: no desktop surface reaches them, so the journeys below describe the destination and the still-live web surface, not what the desktop client presents today.
 
 - Existing `cloud_workspace` rows and cloud-only repos are filtered out of every
   client list at a single data-source seam, so legacy state never resurrects a
@@ -24,9 +16,7 @@ surface, not what the desktop client presents today.
 
 ## Purpose
 
-This is the system document that stitches the cloud-sandbox platform specs
-into one user journey. It owns the screens, copy, and flow decisions; every
-mechanism it mentions is some platform's contract, consumed by link:
+This is the system document that stitches the cloud-sandbox platform specs into one user journey. It owns the screens, copy, and flow decisions; every mechanism it mentions is some platform's contract, consumed by link:
 
 - The box (states, wake, provisioning engine, webhooks, orphan reaping):
   [lifecycle.md](../environments/README.md).
@@ -42,11 +32,7 @@ mechanism it mentions is some platform's contract, consumed by link:
 
 ## Create
 
-Entry points: the sidebar's new-workspace actions and the repo-setup
-dialogs ([MainSidebar.tsx](../../../apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx),
-[AddRepoFlowHost.tsx](../../../apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlowHost.tsx)).
-All converge on one flow
-(`use-create-cloud-workspace.ts`):
+Entry points: the sidebar's new-workspace actions and the repo-setup dialogs ([MainSidebar.tsx](../../../apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx), [AddRepoFlowHost.tsx](../../../apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlowHost.tsx)). All converge on one flow (`use-create-cloud-workspace.ts`):
 
 1. **The workspace appears before the network answers.** A pending entry
    seeds the sidebar (stage `submitting`) before the create request is
@@ -65,13 +51,7 @@ All converge on one flow
 
 ## The status takeover
 
-One surface owns every not-usable-yet state: the blocked-status composer
-takeover (`useComposerBlockedState`, rendering rules per
-[composer.md](../chat/composer.md)), driven by one model builder
-([cloud-workspace-status-presentation.ts](../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status-presentation.ts))
-over one gate
-([cloud-workspace-status.ts](../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status.ts)).
-Five modes, exhaustive:
+One surface owns every not-usable-yet state: the blocked-status composer takeover (`useComposerBlockedState`, rendering rules per [composer.md](../chat/composer.md)), driven by one model builder ([cloud-workspace-status-presentation.ts](../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status-presentation.ts)) over one gate ([cloud-workspace-status.ts](../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status.ts)). Five modes, exhaustive:
 
 | Mode | When | Copy and affordance |
 | --- | --- | --- |
@@ -81,16 +61,9 @@ Five modes, exhaustive:
 | lost | `lost` | "Workspace lost"; explains that the sandbox was killed and the workspace contents are gone; delete action |
 | archived | `archived` | "This cloud workspace has been archived."; status footer only |
 
-Post-ready transitions ("Applying tracked files N/M", "Starting cloud
-setup") reuse the pending mode with their own titles. The blocked mode's
-trigger is the access spec's subject layer — the typed 402 and its reason —
-not a workspace-row field; the seven reason strings and their copy live in
-the presentation module and nowhere else.
+Post-ready transitions ("Applying tracked files N/M", "Starting cloud setup") reuse the pending mode with their own titles. The blocked mode's trigger is the access spec's subject layer — the typed 402 and its reason — not a workspace-row field; the seven reason strings and their copy live in the presentation module and nowhere else.
 
-Reconnect is not a mode: opening a workspace whose VM is paused just
-works — the first gateway call wakes it (access spec choreography, roughly
-a second) — so there is no "waking" screen, only the ordinary
-runtime-connecting takeover line in the composer.
+Reconnect is not a mode: opening a workspace whose VM is paused just works — the first gateway call wakes it (access spec choreography, roughly a second) — so there is no "waking" screen, only the ordinary runtime-connecting takeover line in the composer.
 
 ## Archive, delete, unarchive
 
@@ -106,9 +79,7 @@ runtime-connecting takeover line in the composer.
 
 ## Resources: the disk story's product end
 
-The composer environment status card
-([EnvironmentStatusCard.tsx](../../../apps/packages/product-client/src/components/workspace/chat/input/EnvironmentStatusCard.tsx))
-is the one resource surface, for local and cloud targets alike:
+The composer environment status card ([EnvironmentStatusCard.tsx](../../../apps/packages/product-client/src/components/workspace/chat/input/EnvironmentStatusCard.tsx)) is the one resource surface, for local and cloud targets alike:
 
 - A worktrees row (count, total size, hover list with per-worktree size and
   git state) opening the worktrees dialog

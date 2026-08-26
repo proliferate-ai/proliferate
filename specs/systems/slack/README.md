@@ -1,12 +1,8 @@
 # Slack (product app)
 
-Status: target. Grade C skeleton: this system does not exist on `main`. The
-body describes the accepted destination (Core Architecture §6–§7 and the
-Slack employee design); [Current gaps](#current-gaps) is the whole build list.
+Status: target. Grade C skeleton: this system does not exist on `main`. The body describes the accepted destination (Core Architecture §6–§7 and the Slack employee design); [Current gaps](#current-gaps) is the whole build list.
 
-The product Slack app is **a trigger source plus a client — never an
-engine**. It is one of the two Slack relationships and must never be conflated
-with the other:
+The product Slack app is **a trigger source plus a client — never an engine**. It is one of the two Slack relationships and must never be conflated with the other:
 
 | | Product Slack app (this spec) | Slack as an agent tool |
 | --- | --- | --- |
@@ -17,12 +13,7 @@ with the other:
 
 ## 1. Purpose
 
-`@proliferate fix this` in a thread creates a session before any compute
-exists, the thread receives turn-level progress and the final run result,
-replies in the thread become prompts, and approvals render as buttons — with
-zero Slack-specific machinery in the runtime, the courier, or the gateways.
-Slack is the proof case that the seams were drawn right: it lands as a
-webhook handler, a bindings table, and message formatting.
+`@proliferate fix this` in a thread creates a session before any compute exists, the thread receives turn-level progress and the final run result, replies in the thread become prompts, and approvals render as buttons — with zero Slack-specific machinery in the runtime, the courier, or the gateways. Slack is the proof case that the seams were drawn right: it lands as a webhook handler, a bindings table, and message formatting.
 
 ## 2. Owned state
 
@@ -32,10 +23,7 @@ webhook handler, a bindings table, and message formatting.
 | `slack_user_link` | Slack user id ↔ Proliferate user (else runs execute under the org's service subject and the ack offers linking). |
 | `slack_event_receipt` | Dedup on Slack event id (Slack redelivers aggressively). |
 
-The **external binding** `{kind: "slack", team_id, channel_id, thread_ts}`
-is **not** owned here: it is a row on the session registry (sessions spec) so
-the same primitive later serves Linear comments, GitHub issue threads, and
-email. This system writes bindings only through the sessions public surface.
+The **external binding** `{kind: "slack", team_id, channel_id, thread_ts}` is **not** owned here: it is a row on the session registry (sessions spec) so the same primitive later serves Linear comments, GitHub issue threads, and email. This system writes bindings only through the sessions public surface.
 
 ## 3. Public surface
 
@@ -66,33 +54,21 @@ email. This system writes bindings only through the sessions public surface.
 
 ## 5. Laws
 
-**Session before compute.** The registry row, binding and queued prompt are
-created and the ack posted *before* any environment exists; the environment
-catches up via the courier. Closes: a thread waiting on materialization.
+**Session before compute.** The registry row, binding and queued prompt are created and the ack posted *before* any environment exists; the environment catches up via the courier. Closes: a thread waiting on materialization.
 
-**The server is a client writer, never the log.** Replies append prompts
-through the courier attributed to the linked user; the server never writes
-into the runtime's event log directly. Closes: a second event authority.
+**The server is a client writer, never the log.** Replies append prompts through the courier attributed to the linked user; the server never writes into the runtime's event log directly. Closes: a second event authority.
 
-**Ship policy is structural.** Thread posts are driven by the ship-now event
-class (message completed, status transitions, run result, milestones); the
-runtime never knows a Slack thread is watching. Fan-out by binding happens at
-the control plane. Closes: consumer-aware runtimes.
+**Ship policy is structural.** Thread posts are driven by the ship-now event class (message completed, status transitions, run result, milestones); the runtime never knows a Slack thread is watching. Fan-out by binding happens at the control plane. Closes: consumer-aware runtimes.
 
-**Approvals never ride the event pipe.** Buttons work when the event path is
-degraded because approvals are born at the control plane. Closes: a stuck
-approval during a shipping outage.
+**Approvals never ride the event pipe.** Buttons work when the event path is degraded because approvals are born at the control plane. Closes: a stuck approval during a shipping outage.
 
-**Every inbound event is idempotent on Slack's event id.** Closes: duplicate
-sessions from redelivery.
+**Every inbound event is idempotent on Slack's event id.** Closes: duplicate sessions from redelivery.
 
-**A dead environment is an honest post.** Missed worker heartbeat → run
-failed → "lost contact" in the thread, never silence.
+**A dead environment is an honest post.** Missed worker heartbeat → run failed → "lost contact" in the thread, never silence.
 
 ## 6. Emits
 
-Thread posts (ack + session link, progress, approval buttons, final summary
-with PR link and evidence) — the destination's only output surface.
+Thread posts (ack + session link, progress, approval buttons, final summary with PR link and evidence) — the destination's only output surface.
 
 ## 7. Fences
 
@@ -121,10 +97,7 @@ db/models/slack.py · db/store/slack/    ※ new
 
 ## 9. Proof
 
-Destination: event-id dedup, signature rejection, mention → session row
-before compute (no environment call), reply → courier prompt attributed to
-the linked user, approval click → approval verb, result → final post — all
-with a mocked Slack API; no live workspace in tests.
+Destination: event-id dedup, signature rejection, mention → session row before compute (no environment call), reply → courier prompt attributed to the linked user, approval click → approval verb, result → final post — all with a mocked Slack API; no live workspace in tests.
 
 ## Current gaps
 

@@ -1,7 +1,6 @@
 # MCP In AnyHarness
 
-MCP appears in several places. They are related, but they are not the same
-thing.
+MCP appears in several places. They are related, but they are not the same thing.
 
 ## Four MCP Concepts
 
@@ -39,8 +38,7 @@ domains/reviews/hooks.rs
 domains/sessions/subagents/hooks.rs
 ```
 
-The subagent hook is completion-delivery lifecycle integration; it does not
-inject a Subagents MCP server.
+The subagent hook is completion-delivery lifecycle integration; it does not inject a Subagents MCP server.
 
 The extension returns launch extras:
 
@@ -103,8 +101,7 @@ SessionRuntime starts a session
 
 ## Session MCP Assembly
 
-Session launch needs one central assembly boundary. Do not spread MCP launch
-composition across session runtime, product domains, and actor startup.
+Session launch needs one central assembly boundary. Do not spread MCP launch composition across session runtime, product domains, and actor startup.
 
 Implementation owner:
 
@@ -161,8 +158,7 @@ SessionRuntime::start_live_session
   -> start live actor with final MCP server list and prompt additions
 ```
 
-The actor receives the final launch payload. It should not decide which product
-MCP servers to inject.
+The actor receives the final launch payload. It should not decide which product MCP servers to inject.
 
 ### Product MCP Extension Pattern
 
@@ -189,9 +185,7 @@ domains/<feature>/mcp/
   calls.rs       # product tool handlers
 ```
 
-Session MCP binding code is about making tools available to an agent. Product
-MCP server code is about handling tool calls after the agent invokes them. Keep
-those separate.
+Session MCP binding code is about making tools available to an agent. Product MCP server code is about handling tool calls after the agent invokes them. Keep those separate.
 
 Each product extension typically creates an HTTP MCP server:
 
@@ -215,19 +209,7 @@ POST -> validate capability header
         return JSON-RPC response or no-content response
 ```
 
-Capability validation returns a verdict, not a boolean. The token's embedded
-TTL is defense-in-depth, not the session-lifetime bound: the header is static
-for the life of the session, so an expired-but-authentic token defers to the
-sessions domain (`SessionService::session_open_for_capability`) and keeps
-serving while the session row exists, matches the workspace, and is not
-closed. Missing, malformed, mis-scoped, and expired-with-closed-session
-tokens are rejected with `403` and a cause-naming RFC 7807 body — never
-`401`, which MCP clients treat as an OAuth challenge and answer with
-authorization-server discovery that masks the real cause. Every rejection
-emits the named `anyharness.product_mcp.auth.rejected` tracing event with
-the session, workspace, endpoint slug, and reason
-(`missing | expired | invalid-signature | scope-mismatch`), and never the
-token value.
+Capability validation returns a verdict, not a boolean. The token's embedded TTL is defense-in-depth, not the session-lifetime bound: the header is static for the life of the session, so an expired-but-authentic token defers to the sessions domain (`SessionService::session_open_for_capability`) and keeps serving while the session row exists, matches the workspace, and is not closed. Missing, malformed, mis-scoped, and expired-with-closed-session tokens are rejected with `403` and a cause-naming RFC 7807 body — never `401`, which MCP clients treat as an OAuth challenge and answer with authorization-server discovery that masks the real cause. Every rejection emits the named `anyharness.product_mcp.auth.rejected` tracing event with the session, workspace, endpoint slug, and reason (`missing | expired | invalid-signature | scope-mismatch`), and never the token value.
 
 Target shared owner for transport scaffolding:
 
@@ -244,8 +226,7 @@ integrations/mcp/
   tools.rs
 ```
 
-The shared `integrations/mcp/**` helpers are present. New HTTP transports use
-the shared product-MCP scaffolding instead of adding per-feature wrappers.
+The shared `integrations/mcp/**` helpers are present. New HTTP transports use the shared product-MCP scaffolding instead of adding per-feature wrappers.
 
 ## Consolidation Rule
 

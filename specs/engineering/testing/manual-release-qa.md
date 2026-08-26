@@ -2,11 +2,7 @@
 
 Status: authoritative procedure for release QA and manual verification.
 
-Use this procedure for manual release QA: release intake, smoke matrices,
-surface-specific manual checks, and final QA reporting. Feature-specific
-acceptance criteria stay in the owning feature or primitive spec under
-`specs/**`; this runbook owns how an operator plans, executes,
-records, and reports a QA pass.
+Use this procedure for manual release QA: release intake, smoke matrices, surface-specific manual checks, and final QA reporting. Feature-specific acceptance criteria stay in the owning feature or primitive spec under `specs/**`; this runbook owns how an operator plans, executes, records, and reports a QA pass.
 
 ## Read Order
 
@@ -114,8 +110,7 @@ Use release labels to set the default depth:
 
 ## Baseline Verification
 
-Start with automated checks that match the touched area. Use broader checks
-only when the change crosses an API, runtime, release, or product boundary.
+Start with automated checks that match the touched area. Use broader checks only when the change crosses an API, runtime, release, or product boundary.
 
 Common commands:
 
@@ -128,11 +123,7 @@ pnpm --filter @proliferate/product-client typecheck
 cd server && uv run pytest -q
 ```
 
-Release and deployment changes must follow the workflow/helper checks in
-[../../guides/deploying/hosted.md](../../../guides/deploying/hosted.md) and
-[../../guides/deploying/releases.md](../../../guides/deploying/releases.md). Server changes must include
-the relevant `uv run pytest` slice. SDK contract changes must regenerate and
-build the SDK through the owning SDK workflow.
+Release and deployment changes must follow the workflow/helper checks in [../../guides/deploying/hosted.md](../../../guides/deploying/hosted.md) and [../../guides/deploying/releases.md](../../../guides/deploying/releases.md). Server changes must include the relevant `uv run pytest` slice. SDK contract changes must regenerate and build the SDK through the owning SDK workflow.
 
 ## Local Full-Stack QA
 
@@ -145,21 +136,13 @@ make run PROFILE=<name>
 make run PROFILE=<name> STRIPE=1
 ```
 
-Profile QA must use the URLs and ports printed by that profile. Do not mix
-state from the default local stack with a release QA profile.
+Profile QA must use the URLs and ports printed by that profile. Do not mix state from the default local stack with a release QA profile.
 
-Use `STRIPE=1` only when billing, checkout, portal, subscription, refill, or
-webhook behavior is part of the release. When provider auth, billing, cloud
-sandbox materialization, or real user-scoped visibility is in scope, use the
-credential source named by the applicable procedure and provide only the
-inputs required by the selected surfaces. Keep credential-bearing files
-uncommitted. If required access or input is unavailable, report the affected
-check as blocked.
+Use `STRIPE=1` only when billing, checkout, portal, subscription, refill, or webhook behavior is part of the release. When provider auth, billing, cloud sandbox materialization, or real user-scoped visibility is in scope, use the credential source named by the applicable procedure and provide only the inputs required by the selected surfaces. Keep credential-bearing files uncommitted. If required access or input is unavailable, report the affected check as blocked.
 
 ## Surface Matrix
 
-Select the rows that match the release. Do not require untouched surfaces unless
-the change crosses a shared contract.
+Select the rows that match the release. Do not require untouched surfaces unless the change crosses a shared contract.
 
 | Surface | Minimum manual smoke | Supporting docs |
 | --- | --- | --- |
@@ -211,9 +194,7 @@ When QA fails:
 
 ## Final Report Shape
 
-A manual result is `passed`, `failed`, or `blocked`. Intentionally skipped
-surfaces remain separate. A blocked check names the missing access or input
-and never counts as passed.
+A manual result is `passed`, `failed`, or `blocked`. Intentionally skipped surfaces remain separate. A blocked check names the missing access or input and never counts as passed.
 
 A QA report must include:
 
@@ -229,5 +210,4 @@ A QA report must include:
 - docs, release notes, landing page, public docs, support docs, analytics, or
   dashboard updates completed or explicitly assigned
 
-For clean passes, keep the summary short and concrete. For failures, lead with
-the failing behavior, reproduction path, and current owner.
+For clean passes, keep the summary short and concrete. For failures, lead with the failing behavior, reproduction path, and current owner.

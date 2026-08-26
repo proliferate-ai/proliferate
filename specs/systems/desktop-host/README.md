@@ -1,26 +1,12 @@
 # Desktop Host (seam)
 
-Status: current (grade B). System spec in the Organization Standard anatomy.
-The seam between the compiled product (one React bundle mounted by Desktop and
-Web through `ProductHost`), the native Tauri shell, and the two local processes
-the shell owns: the **AnyHarness sidecar** and the **desktop worker**. It is a
-seam spec, not a system: it owns a contract between planes (which bundle calls
-which native command, which process gets which env), and the small amount of
-state that contract needs. Everything the shell hosts *for* another system is
-fenced to that system.
+Status: current (grade B). System spec in the Organization Standard anatomy. The seam between the compiled product (one React bundle mounted by Desktop and Web through `ProductHost`), the native Tauri shell, and the two local processes the shell owns: the **AnyHarness sidecar** and the **desktop worker**. It is a seam spec, not a system: it owns a contract between planes (which bundle calls which native command, which process gets which env), and the small amount of state that contract needs. Everything the shell hosts *for* another system is fenced to that system.
 
-Depth references: [DESKTOP_HOST.md](deep-dive.md) (the
-`ProductHost` / `DesktopBridge` contract), [desktop-native.md](desktop-native.md)
-(build, bundle, sidecar boot, secrets, diagnostics), [worker.md](../../areas/anyharness.md).
+Depth references: [DESKTOP_HOST.md](deep-dive.md) (the `ProductHost` / `DesktopBridge` contract), [desktop-native.md](desktop-native.md) (build, bundle, sidecar boot, secrets, diagnostics), [worker.md](../../areas/anyharness.md).
 
 ## 1. Purpose
 
-Make Desktop a thin native shell: the same product code runs on Web with
-`desktop: null`, and every Desktop-only behavior is a capability behind the
-optional `DesktopBridge`. The shell's jobs are to boot and supervise the local
-runtime, enroll and supervise the desktop worker under the signed-in
-(user, org) identity, keep local secrets, and expose native OS affordances —
-nothing product-shaped.
+Make Desktop a thin native shell: the same product code runs on Web with `desktop: null`, and every Desktop-only behavior is a capability behind the optional `DesktopBridge`. The shell's jobs are to boot and supervise the local runtime, enroll and supervise the desktop worker under the signed-in (user, org) identity, keep local secrets, and expose native OS affordances — nothing product-shaped.
 
 ## 2. Owned state
 
@@ -35,31 +21,13 @@ nothing product-shaped.
 
 ## 3. Public surface
 
-**Renderer → shell**: the Tauri command list registered in
-[lib.rs](../../../apps/desktop/src-tauri/src/lib.rs). Seam-owned commands:
-`get_runtime_info`, `restart_runtime` ([commands/runtime.rs](../../../apps/desktop/src-tauri/src/commands/runtime.rs));
-`ensure_desktop_dispatch_worker`, `prepare_desktop_dispatch_worker_update`,
-`stop_desktop_dispatch_worker`; `get_app_config`/`set_app_config`;
-`get_desktop_install_id`; the keychain get/set/clear pairs; `set_running_agent_count`
-(quit flow); shell affordances (`pick_folder`, `open_in_editor`,
-`reveal_in_finder`, `open_in_terminal`, `open_external`, `copy_text`,
-`inspect_path`, `list_available_editors`, `command_exists`); window chrome;
-drag-drop; workspace scratch pad; workspace activity indicator.
+**Renderer → shell**: the Tauri command list registered in [lib.rs](../../../apps/desktop/src-tauri/src/lib.rs). Seam-owned commands: `get_runtime_info`, `restart_runtime` ([commands/runtime.rs](../../../apps/desktop/src-tauri/src/commands/runtime.rs)); `ensure_desktop_dispatch_worker`, `prepare_desktop_dispatch_worker_update`, `stop_desktop_dispatch_worker`; `get_app_config`/`set_app_config`; `get_desktop_install_id`; the keychain get/set/clear pairs; `set_running_agent_count` (quit flow); shell affordances (`pick_folder`, `open_in_editor`, `reveal_in_finder`, `open_in_terminal`, `open_external`, `copy_text`, `inspect_path`, `list_available_editors`, `command_exists`); window chrome; drag-drop; workspace scratch pad; workspace activity indicator.
 
-**Product-side contract**: `ProductHost` and `DesktopBridge` in
-[product-host.ts](../../../apps/packages/product-client/src/host/product-host.ts) and
-[desktop-bridge.ts](../../../apps/packages/product-client/src/host/desktop-bridge.ts);
-`host.desktop !== null` is the capability check, never `surface === "desktop"`.
+**Product-side contract**: `ProductHost` and `DesktopBridge` in [product-host.ts](../../../apps/packages/product-client/src/host/product-host.ts) and [desktop-bridge.ts](../../../apps/packages/product-client/src/host/desktop-bridge.ts); `host.desktop !== null` is the capability check, never `surface === "desktop"`.
 
-**Shell → sidecar**: `anyharness serve --host 127.0.0.1 --port <port>` with
-launch env = local secrets + agent seed env
-([agent_seed_env.rs](../../../apps/desktop/src-tauri/src/agent_seed_env.rs)) +
-login-shell `PATH` + `PROLIFERATE_API_BASE_URL_ORIGIN`; health polled at
-`/health` (250 ms, 60 s timeout).
+**Shell → sidecar**: `anyharness serve --host 127.0.0.1 --port <port>` with launch env = local secrets + agent seed env ([agent_seed_env.rs](../../../apps/desktop/src-tauri/src/agent_seed_env.rs)) + login-shell `PATH` + `PROLIFERATE_API_BASE_URL_ORIGIN`; health polled at `/health` (250 ms, 60 s timeout).
 
-**Shell → worker**: `proliferate-worker` spawned with a config whose
-`runtime_base_url` is the *current* sidecar URL and a single-use enrollment
-ticket handed in by the renderer.
+**Shell → worker**: `proliferate-worker` spawned with a config whose `runtime_base_url` is the *current* sidecar URL and a single-use enrollment ticket handed in by the renderer.
 
 ## 4. Consumes
 
@@ -75,45 +43,21 @@ ticket handed in by the renderer.
 
 ## 5. Laws
 
-**One host contract, capability-checked.** Product code checks
-`host.desktop`, never the surface string; a Desktop-only lifecycle lives behind
-the bridge or it does not exist ([DESKTOP_HOST.md](deep-dive.md)).
+**One host contract, capability-checked.** Product code checks `host.desktop`, never the surface string; a Desktop-only lifecycle lives behind the bridge or it does not exist ([DESKTOP_HOST.md](deep-dive.md)).
 
-**Restart rebuilds the same env classes as boot.** `restart_runtime` re-collects
-local secrets, seed env, sidecar defaults and shell `PATH`; renderer code never
-shells out to restart AnyHarness ([desktop-native.md](desktop-native.md), Restart Rules).
+**Restart rebuilds the same env classes as boot.** `restart_runtime` re-collects local secrets, seed env, sidecar defaults and shell `PATH`; renderer code never shells out to restart AnyHarness ([desktop-native.md](desktop-native.md), Restart Rules).
 
-**The worker follows the sidecar, not the sandbox default.** Desktop worker
-config sets `runtime_base_url` from `SharedSidecar.info.url` — the sidecar port
-is dynamic, so the worker's `127.0.0.1:8457` sandbox default is never valid
-here.
+**The worker follows the sidecar, not the sandbox default.** Desktop worker config sets `runtime_base_url` from `SharedSidecar.info.url` — the sidecar port is dynamic, so the worker's `127.0.0.1:8457` sandbox default is never valid here.
 
-**Enrollment is keyed by (user, org) and rotates identity.** The renderer
-guard enrolls once per `${userId}::${orgId}`; a user or org change re-enrolls
-(server-side ticket consumption rotates worker + integration-gateway identity),
-sign-out tears the worker down and deletes the gateway dotfile, and a failed
-enrollment clears the guard and retries after 15 s while mounted
-([use-desktop-worker-enrollment.ts](../../../apps/packages/product-client/src/hooks/cloud/lifecycle/use-desktop-worker-enrollment.ts)).
-This is what makes the desktop the identity-bearing target for integration
-access (Law 5 at the edge).
+**Enrollment is keyed by (user, org) and rotates identity.** The renderer guard enrolls once per `${userId}::${orgId}`; a user or org change re-enrolls (server-side ticket consumption rotates worker + integration-gateway identity), sign-out tears the worker down and deletes the gateway dotfile, and a failed enrollment clears the guard and retries after 15 s while mounted ([use-desktop-worker-enrollment.ts](../../../apps/packages/product-client/src/hooks/cloud/lifecycle/use-desktop-worker-enrollment.ts)). This is what makes the desktop the identity-bearing target for integration access (Law 5 at the edge).
 
-**Worker credentials are locked while it runs.** Replacing worker credentials
-while a worker process holds the `cloud-worker-v2` lock is refused
-(`WORKER_CREDENTIALS_LOCKED_ERROR`), and a legacy `cloud-worker` lock is never
-inspected or killed.
+**Worker credentials are locked while it runs.** Replacing worker credentials while a worker process holds the `cloud-worker-v2` lock is refused (`WORKER_CREDENTIALS_LOCKED_ERROR`), and a legacy `cloud-worker` lock is never inspected or killed.
 
-**Desktop never self-updates its runtime.** `self_update_enabled=false` is
-hardcoded and no runtime-swap gate or bridge field is written
-([commands/cloud_worker.rs](../../../apps/desktop/src-tauri/src/commands/cloud_worker.rs));
-binary convergence on desktop is the app update, owned by release-delivery.
+**Desktop never self-updates its runtime.** `self_update_enabled=false` is hardcoded and no runtime-swap gate or bridge field is written ([commands/cloud_worker.rs](../../../apps/desktop/src-tauri/src/commands/cloud_worker.rs)); binary convergence on desktop is the app update, owned by release-delivery.
 
-**A missing native transport is silent, never a toast.** A worker failure
-raised while `worker.isSupported()` is false (web build, intent tests) is an
-expected environment shape and shows nothing.
+**A missing native transport is silent, never a toast.** A worker failure raised while `worker.isSupported()` is false (web build, intent tests) is an expected environment shape and shows nothing.
 
-**Recreatable secrets live in 0600 files, the data key in the keychain.** A
-keychain ACL is bound to the code signature, so a reinstalled build could not
-read a keychain-held session; only the at-rest encryption key belongs there.
+**Recreatable secrets live in 0600 files, the data key in the keychain.** A keychain ACL is bound to the code signature, so a reinstalled build could not read a keychain-held session; only the at-rest encryption key belongs there.
 
 ## 6. Emits
 
@@ -168,8 +112,7 @@ apps/packages/product-client/src/lib/workflows/cloud/                         en
 apps/desktop/src-tauri/tauri.conf.json · build.rs                             externalBin staging
 ```
 
-Target: `specs/systems/desktop-host/deep-dive.md` graduates into this file (its
-contract section is the depth reference until then); no code moves.
+Target: `specs/systems/desktop-host/deep-dive.md` graduates into this file (its contract section is the depth reference until then); no code moves.
 
 ## 9. Proof
 

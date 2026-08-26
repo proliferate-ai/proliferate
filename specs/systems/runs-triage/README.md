@@ -1,28 +1,14 @@
 # Runs Triage
 
-Status: target. This document describes the accepted destination for the
-surface where a person sees every unit of agent work that is not the chat
-they are looking at — background subagents, goals and loops, workflow runs,
-scheduled/triggered runs, and their results — and acts on it. The body is
-written in the ideal state; every difference from `main` is in
-[Current gaps](#current-gaps). The ancestors on `main` are the activity
-chrome inside chat, the right-panel Background pane, the Agents pane, and
-the workflows main/run views.
+Status: target. This document describes the accepted destination for the surface where a person sees every unit of agent work that is not the chat they are looking at — background subagents, goals and loops, workflow runs, scheduled/triggered runs, and their results — and acts on it. The body is written in the ideal state; every difference from `main` is in [Current gaps](#current-gaps). The ancestors on `main` are the activity chrome inside chat, the right-panel Background pane, the Agents pane, and the workflows main/run views.
 
 ## Purpose
 
-One inbox for delegated work. A run is anything the product started on the
-person's behalf that produces a result: a subagent, a goal iteration, a
-loop fire, a workflow run, a triggered automation. Triage shows what is
-running, what finished, what needs a decision, and lets the person open the
-session behind it, approve, retry, or dismiss.
+One inbox for delegated work. A run is anything the product started on the person's behalf that produces a result: a subagent, a goal iteration, a loop fire, a workflow run, a triggered automation. Triage shows what is running, what finished, what needs a decision, and lets the person open the session behind it, approve, retry, or dismiss.
 
 ## Owned state
 
-UI state only — filters, the selected run, dismissals, and the roster
-projection. Runs, results, and spawn trees are records owned by the runs
-system (control plane) and, for in-environment subagents, by the runtime's
-sessions.
+UI state only — filters, the selected run, dismissals, and the roster projection. Runs, results, and spawn trees are records owned by the runs system (control plane) and, for in-environment subagents, by the runtime's sessions.
 
 ## Public surface
 

@@ -1,12 +1,10 @@
 # Product Prompt And Skill Policy
 
-Status: authoritative target policy for product-owned prompts, product skills,
-and MCP-related agent guidance.
+Status: authoritative target policy for product-owned prompts, product skills, and MCP-related agent guidance.
 
 ## Purpose
 
-Product MCPs and product workflows often need to teach or constrain agents.
-Those instructions must be delivered through the right channel:
+Product MCPs and product workflows often need to teach or constrain agents. Those instructions must be delivered through the right channel:
 
 ```text
 base system prompt
@@ -31,10 +29,7 @@ transcript artifact
   durable product context, not hidden instruction text
 ```
 
-Do not put product workflow tutorials into the base parent system prompt. When
-an agent needs optional best practices for a product capability, expose a
-skill. When correctness depends on current mutable product role or relationship
-truth, resolve it from metadata and deliver it as per-turn product context.
+Do not put product workflow tutorials into the base parent system prompt. When an agent needs optional best practices for a product capability, expose a skill. When correctness depends on current mutable product role or relationship truth, resolve it from metadata and deliver it as per-turn product context.
 
 ## Channel Rules
 
@@ -72,40 +67,27 @@ managed cowork role sessions
 future evaluator-only sessions
 ```
 
-Role prompts may include hard constraints because the product workflow depends
-on them. For example, a reviewer session must be told not to modify files and
-must be told to submit through `submit_review_result`.
+Role prompts may include hard constraints because the product workflow depends on them. For example, a reviewer session must be told not to modify files and must be told to submit through `submit_review_result`.
 
-Do not use a launch-time role prompt for a role that can change without
-replacing the session. Workspace ordinary/delegated role is resolved per turn
-so promotion takes effect on the next prompt without restart.
+Do not use a launch-time role prompt for a role that can change without replacing the session. Workspace ordinary/delegated role is resolved per turn so promotion takes effect on the next prompt without restart.
 
 ### Per-Turn Product Context
 
-Use for mandatory instructions derived from current durable metadata when the
-same session can change role or relationships over time. Workspace resolves
-ordinary or delegated-agent context immediately before every prompt render and
-adds a separate block beginning:
+Use for mandatory instructions derived from current durable metadata when the same session can change role or relationships over time. Workspace resolves ordinary or delegated-agent context immediately before every prompt render and adds a separate block beginning:
 
 ```text
 System instruction from AnyHarness, not user content:
 ```
 
-The resolver is fail-closed. It must not fall back to launch-time, cached, or
-role-ambiguous instructions. The exact Workspace failure and retry laws live in
-[workspace.md](../subagents/workspace-mcp.md).
+The resolver is fail-closed. It must not fall back to launch-time, cached, or role-ambiguous instructions. The exact Workspace failure and retry laws live in [workspace.md](../subagents/workspace-mcp.md).
 
-This block is platform-owned context, not user-authored prompt text and not a
-transcript artifact. Promotion changes the next turn's block without mutating
-the durable prompt or prior transcript content.
+This block is platform-owned context, not user-authored prompt text and not a transcript artifact. Promotion changes the next turn's block without mutating the durable prompt or prior transcript content.
 
 ### Product Skill
 
 Use for workflow best practices that an agent should opt into when relevant.
 
-There is no required Workspace product skill. Workspace discovery guidance is
-part of MCP launch integration, and current role constraints are per-turn
-product context. Do not invent a Workspace skill to carry either one.
+There is no required Workspace product skill. Workspace discovery guidance is part of MCP launch integration, and current role constraints are per-turn product context. Do not invent a Workspace skill to carry either one.
 
 Potential future product skills:
 
@@ -119,8 +101,7 @@ proliferate.cowork.workflow
   with the same lifecycle handles
 ```
 
-Reviewer agents should not need a skill to know how to finish. Their completion
-contract is part of their product role prompt and MCP tool list.
+Reviewer agents should not need a skill to know how to finish. Their completion contract is part of their product role prompt and MCP tool list.
 
 ### User And Agent Prompts
 
@@ -133,20 +114,13 @@ reject if prompt.trim().is_empty()
 send the original prompt string if valid
 ```
 
-Do not silently trim, rewrap, prepend hidden instructions, or append hidden
-instructions inside parent-to-child prompt text. The separate metadata-derived
-per-turn system block is allowed and required where specified; it never becomes
-part of the authored prompt string.
+Do not silently trim, rewrap, prepend hidden instructions, or append hidden instructions inside parent-to-child prompt text. The separate metadata-derived per-turn system block is allowed and required where specified; it never becomes part of the authored prompt string.
 
-Provenance should be metadata, not prompt text. UI can display that a prompt was
-sent by a parent agent or product workflow without changing what the child
-session receives.
+Provenance should be metadata, not prompt text. UI can display that a prompt was sent by a parent agent or product workflow without changing what the child session receives.
 
 ### Notification Prompts
 
-Product notifications are operational. They should tell the parent what
-happened and point to the durable artifact or currently supported tool needed
-next.
+Product notifications are operational. They should tell the parent what happened and point to the durable artifact or currently supported tool needed next.
 
 Delegated-agent completion notification:
 
@@ -178,8 +152,7 @@ Rules:
 - do not direct delegated agents or parents to removed Subagents MCP wake or
   result-read tools
 
-Cowork-owned scheduled wakes remain a separate active workflow and follow the
-same copy rules when they notify a parent.
+Cowork-owned scheduled wakes remain a separate active workflow and follow the same copy rules when they notify a parent.
 
 ### Transcript Artifacts
 
@@ -194,19 +167,13 @@ subagent completion receipts
 delegated-work started/completed receipts
 ```
 
-Artifacts should be visible, copyable when appropriate, and re-readable later.
-They should not be used as a hidden instruction transport.
+Artifacts should be visible, copyable when appropriate, and re-readable later. They should not be used as a hidden instruction transport.
 
 ## Product Skill Surface
 
-Product skills are delivered through the session plugin/skill system. The agent
-should see a compact index and activate a skill only when it needs the full
-instructions.
+Product skills are delivered through the session plugin/skill system. The agent should see a compact index and activate a skill only when it needs the full instructions.
 
-When a product defines an optional skill, its agent-visible index entry should
-be compact. The skill body should name exact current tools, the recommended
-order, and failure modes to avoid. Products with no optional skill must not add
-an empty or compatibility-only skill; Workspace defines none.
+When a product defines an optional skill, its agent-visible index entry should be compact. The skill body should name exact current tools, the recommended order, and failure modes to avoid. Products with no optional skill must not add an empty or compatibility-only skill; Workspace defines none.
 
 ## Source Ownership
 

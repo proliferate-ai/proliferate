@@ -2,8 +2,7 @@
 
 Status: current AnyHarness workspace environment reference.
 
-AnyHarness assembles the environment for commands that run in a selected
-workspace. Ordinary variables use this precedence, from lower to higher:
+AnyHarness assembles the environment for commands that run in a selected workspace. Ordinary variables use this precedence, from lower to higher:
 
 ```text
 <runtime-home>/secrets/global.env
@@ -12,9 +11,7 @@ workspace. Ordinary variables use this precedence, from lower to higher:
   < AnyHarness-owned PROLIFERATE_* metadata
 ```
 
-Later user layers override earlier ordinary variables. Any user-supplied key
-whose name begins with `PROLIFERATE_` is ignored; user files and command
-overrides cannot replace AnyHarness-owned metadata.
+Later user layers override earlier ordinary variables. Any user-supplied key whose name begins with `PROLIFERATE_` is ignored; user files and command overrides cannot replace AnyHarness-owned metadata.
 
 ## Always-Injected Metadata
 
@@ -28,8 +25,7 @@ PROLIFERATE_RUNTIME_HOME
 PROLIFERATE_REPO_NAME
 ```
 
-`PROLIFERATE_REPO_NAME` uses recorded remote repository metadata when
-available and otherwise uses the source-repository directory name.
+`PROLIFERATE_REPO_NAME` uses recorded remote repository metadata when available and otherwise uses the source-repository directory name.
 
 ## Conditional Metadata
 
@@ -44,14 +40,9 @@ AnyHarness adds:
 
 ## Consumers and Safety
 
-The merged workspace environment reaches process runs, terminals and setup
-commands, and live agent launches. A later command-specific ordinary-variable
-override can refine a terminal command's environment, but it still cannot
-replace `PROLIFERATE_*` metadata.
+The merged workspace environment reaches process runs, terminals and setup commands, and live agent launches. A later command-specific ordinary-variable override can refine a terminal command's environment, but it still cannot replace `PROLIFERATE_*` metadata.
 
-The three user environment files may contain credentials. They are execution
-inputs, not safe agent-context documentation: do not paste their contents into
-prompts, docs, logs, issues, or support artifacts.
+The three user environment files may contain credentials. They are execution inputs, not safe agent-context documentation: do not paste their contents into prompts, docs, logs, issues, or support artifacts.
 
 Commands can use the owned paths through normal shell expansion:
 
@@ -59,6 +50,4 @@ Commands can use the owned paths through normal shell expansion:
 cd "${PROLIFERATE_WORKTREE_DIR:-$PROLIFERATE_WORKSPACE_DIR}" && make dev
 ```
 
-This reference is owned by the AnyHarness runtime docs; the assembling code
-lives in `anyharness/crates/anyharness-lib/src/**`. See
-[README.md](README.md) for the rest of the owner's docs.
+This reference is owned by the AnyHarness runtime docs; the assembling code lives in `anyharness/crates/anyharness-lib/src/**`. See [README.md](README.md) for the rest of the owner's docs.

@@ -1,15 +1,8 @@
 # UX Latency + Transitions
 
-This document describes the current perceived-latency behavior and
-loading/transition treatments across the product client, delivered by the
-UX Latency + Transitions ADR's delivery ladder and merged to `main`.
+This document describes the current perceived-latency behavior and loading/transition treatments across the product client, delivered by the UX Latency + Transitions ADR's delivery ladder and merged to `main`.
 
-Owns the perceived-latency contract from the UX Latency + Transitions ADR:
-the loading-treatment state machine and its tokens, the chat pane's hero
-loading mark, the sidebar's held-key workspace traversal, and the sidebar
-row activation transition. Renderer instrumentation for these flows
-(`renderer.flow.*`, `renderer.loading.*` marks) is described where it is
-emitted, not re-derived here.
+Owns the perceived-latency contract from the UX Latency + Transitions ADR: the loading-treatment state machine and its tokens, the chat pane's hero loading mark, the sidebar's held-key workspace traversal, and the sidebar row activation transition. Renderer instrumentation for these flows (`renderer.flow.*`, `renderer.loading.*` marks) is described where it is emitted, not re-derived here.
 
 Fences, one owner per concern:
 
@@ -30,14 +23,7 @@ Fences, one owner per concern:
 
 ## Loading treatments
 
-A `LoadingBoundary` primitive (`apps/packages/product-client/src/primitives/LoadingBoundary.tsx`)
-is the single owner of the loading-treatment state machine. Callers pass a
-discriminated `pending | empty | ready` state and a treatment slot; the
-boundary never hand-rolls a `content-fade-in` + `animation-delay` show-delay
-per call site. `loading.showDelayMs` and `loading.minDisplayMs` gate that
-state machine; see [DESIGN_SYSTEM.md's Loading treatments
-table](../../DESIGN_SYSTEM.md#loading-treatments) for their values and
-role, and its sanctioned index for `LoadingBoundary`'s component-tier entry.
+A `LoadingBoundary` primitive (`apps/packages/product-client/src/primitives/LoadingBoundary.tsx`) is the single owner of the loading-treatment state machine. Callers pass a discriminated `pending | empty | ready` state and a treatment slot; the boundary never hand-rolls a `content-fade-in` + `animation-delay` show-delay per call site. `loading.showDelayMs` and `loading.minDisplayMs` gate that state machine; see [DESIGN_SYSTEM.md's Loading treatments table](../../DESIGN_SYSTEM.md#loading-treatments) for their values and role, and its sanctioned index for `LoadingBoundary`'s component-tier entry.
 
 | Value | ms | Role |
 | --- | --- | --- |
@@ -57,88 +43,31 @@ Doctrine, all load-bearing:
 
 ### Chat loading hero (R16)
 
-The chat pane's `workspace-status`/`session-loading` wait state
-([ChatLoadingHero.tsx](../../../apps/packages/product-client/src/components/workspace/chat/surface/ChatLoadingHero.tsx))
-renders a `DotCellLoader` in its `hero` size tier, mark-only: no caption or
-workspace-name copy. The surrounding container carries `role="status"` and
-`aria-label="Loading conversation"`; the mark itself is `aria-hidden`, so
-assistive tech gets one status announcement instead of narrating a
-decorative animation. `ThinkingText` (the `awaiting-first-turn` substep)
-stays outside this treatment, since it is agent-activity feedback inside
-otherwise-ready content, not a wait state.
+The chat pane's `workspace-status`/`session-loading` wait state ([ChatLoadingHero.tsx](../../../apps/packages/product-client/src/components/workspace/chat/surface/ChatLoadingHero.tsx)) renders a `DotCellLoader` in its `hero` size tier, mark-only: no caption or workspace-name copy. The surrounding container carries `role="status"` and `aria-label="Loading conversation"`; the mark itself is `aria-hidden`, so assistive tech gets one status announcement instead of narrating a decorative animation. `ThinkingText` (the `awaiting-first-turn` substep) stays outside this treatment, since it is agent-activity feedback inside otherwise-ready content, not a wait state.
 
-`hero` is a new `DotCellLoaderSize` tier
-([DotCellLoader.tsx](../../../apps/packages/product-client/src/primitives/DotCellLoader.tsx)),
-styled via `.dot-cell-loader[data-size="hero"]` in
-[product.css](../../../apps/packages/design/src/css/product.css) with its
-own `--dot-cell-size`/`--dot-cell-gap` pair: `0.375rem`/`0.25rem` (6px dots,
-4px gap), against the default tier's `0.1875rem`/`0.125rem` (3px dots, 2px
-gap) and the `compact` tier's `0.15625rem`/`0.09375rem`. The 3x3 grid this
-produces is 26px square, the largest of the three tiers.
+`hero` is a new `DotCellLoaderSize` tier ([DotCellLoader.tsx](../../../apps/packages/product-client/src/primitives/DotCellLoader.tsx)), styled via `.dot-cell-loader[data-size="hero"]` in [product.css](../../../apps/packages/design/src/css/product.css) with its own `--dot-cell-size`/`--dot-cell-gap` pair: `0.375rem`/`0.25rem` (6px dots, 4px gap), against the default tier's `0.1875rem`/`0.125rem` (3px dots, 2px gap) and the `compact` tier's `0.15625rem`/`0.09375rem`. The 3x3 grid this produces is 26px square, the largest of the three tiers.
 
-Because `ChatLoadingHero` hardcodes `state="pending"` for its whole life
-(the parent `ChatView` mounts it only while a wait mode is active and
-unmounts it synchronously on resolve), `LoadingBoundary`'s own min-display
-and fade-out machinery never fires from inside it, because that machinery
-only engages on a local transition away from `pending`, and this component
-never makes one. Resolution here is `ChatView` switching `mode.kind` and tearing
-this component down, not a state change this component owns.
+Because `ChatLoadingHero` hardcodes `state="pending"` for its whole life (the parent `ChatView` mounts it only while a wait mode is active and unmounts it synchronously on resolve), `LoadingBoundary`'s own min-display and fade-out machinery never fires from inside it, because that machinery only engages on a local transition away from `pending`, and this component never makes one. Resolution here is `ChatView` switching `mode.kind` and tearing this component down, not a state change this component owns.
 
-`ChatLoadingHero` instead reports the instant its treatment becomes visible
-through an `onTreatmentShown` callback. `useChatLoadingHeroExit`
-(`apps/packages/product-client/src/hooks/chat/ui/use-chat-loading-hero-exit.ts`)
-owns the exit choreography from that instant: it holds a `holding` phase for
-`loading.heroMinDisplayMs` (420ms) past the shown timestamp even if
-`mode.kind` flips away sooner, then a `fading` phase for `duration.exitMs`
-(120ms), then returns to `idle`. `ChatView` keeps a frozen
-`ChatLoadingHeroExitOverlay` mounted for the `holding`/`fading` phases on top
-of whatever real content `mode.kind` has already switched to underneath, so
-a fast resolve never cuts the mark off mid-mount. A wait that never crosses
-the 200ms show-delay has no shown timestamp, so `phase` stays `idle` and the
-mode switch takes effect immediately, unchanged from before R16.
+`ChatLoadingHero` instead reports the instant its treatment becomes visible through an `onTreatmentShown` callback. `useChatLoadingHeroExit` (`apps/packages/product-client/src/hooks/chat/ui/use-chat-loading-hero-exit.ts`) owns the exit choreography from that instant: it holds a `holding` phase for `loading.heroMinDisplayMs` (420ms) past the shown timestamp even if `mode.kind` flips away sooner, then a `fading` phase for `duration.exitMs` (120ms), then returns to `idle`. `ChatView` keeps a frozen `ChatLoadingHeroExitOverlay` mounted for the `holding`/`fading` phases on top of whatever real content `mode.kind` has already switched to underneath, so a fast resolve never cuts the mark off mid-mount. A wait that never crosses the 200ms show-delay has no shown timestamp, so `phase` stays `idle` and the mode switch takes effect immediately, unchanged from before R16.
 
-A workspace that has already bootstrapped in this browser session never
-mounts the hero mark at all
-(`hasWorkspaceBootstrappedInSession`), so revisiting an already-settled
-workspace does not re-show a loading treatment for it.
+A workspace that has already bootstrapped in this browser session never mounts the hero mark at all (`hasWorkspaceBootstrappedInSession`), so revisiting an already-settled workspace does not re-show a loading treatment for it.
 
 ## Sidebar row activation transition (R17)
 
-`SidebarRowSurface`
-([SidebarRowSurface.tsx](../../../apps/packages/product-client/src/primitives/patterns/sidebar/SidebarRowSurface.tsx))
-excludes `background-color` from its transitioned properties while a row is
-**activating**, and includes it while **deactivating**:
+`SidebarRowSurface` ([SidebarRowSurface.tsx](../../../apps/packages/product-client/src/primitives/patterns/sidebar/SidebarRowSurface.tsx)) excludes `background-color` from its transitioned properties while a row is **activating**, and includes it while **deactivating**:
 
 - Activating a row paints its selected background solid on the first
   available frame instead of fading in.
 - Deactivating a row keeps the fade, so hover/deselect still reads soft.
 
-This asymmetry exists because a rapid sidebar sweep (holding the
-next/prev-workspace shortcut) pins the main thread with a long task per
-switch, so the browser only manages to paint a handful of frames across the
-whole sweep. At roughly 5fps, every painted frame catches a still-fading-in
-background at near-zero alpha, and the highlight never reads as visible
-until the sweep stops. There is no frame budget a settle-by-one-frame trick
-can buy back here: a settle deferral (delaying which value drives the class
-by one `requestAnimationFrame`) fixes a *different* bug (a same-row net-zero
-flip across commits faster than a paint, which otherwise suppresses the
-transition entirely) but makes the frame-starved sweep worse, since the
-deferral's own callback can be starved for the same reason. Excluding
-`background-color` from the activating transition sidesteps the starvation
-instead of racing it: activation has nothing left to finish painting, so it
-is correct even at 5fps.
+This asymmetry exists because a rapid sidebar sweep (holding the next/prev-workspace shortcut) pins the main thread with a long task per switch, so the browser only manages to paint a handful of frames across the whole sweep. At roughly 5fps, every painted frame catches a still-fading-in background at near-zero alpha, and the highlight never reads as visible until the sweep stops. There is no frame budget a settle-by-one-frame trick can buy back here: a settle deferral (delaying which value drives the class by one `requestAnimationFrame`) fixes a *different* bug (a same-row net-zero flip across commits faster than a paint, which otherwise suppresses the transition entirely) but makes the frame-starved sweep worse, since the deferral's own callback can be starved for the same reason. Excluding `background-color` from the activating transition sidesteps the starvation instead of racing it: activation has nothing left to finish painting, so it is correct even at 5fps.
 
 ## Sidebar workspace switching (R19)
 
-Held-key workspace traversal (`Cmd+Opt+Left/Right`,
-`workspace.previous-workspace` / `workspace.next-workspace`) is a two-phase
-switch: a cheap preview cursor during traversal, one expensive selection
-commit after it settles.
+Held-key workspace traversal (`Cmd+Opt+Left/Right`, `workspace.previous-workspace` / `workspace.next-workspace`) is a two-phase switch: a cheap preview cursor during traversal, one expensive selection commit after it settles.
 
-Numbered workspace shortcuts use pinned workspaces first in persisted pin
-order, followed by visible unpinned repository rows. A pinned workspace remains
-a numbered shortcut target when its repository group is collapsed. Held-key
-traversal retains repository row order independently of pin order.
+Numbered workspace shortcuts use pinned workspaces first in persisted pin order, followed by visible unpinned repository rows. A pinned workspace remains a numbered shortcut target when its repository group is collapsed. Held-key traversal retains repository row order independently of pin order.
 
 ```text
 useAppShortcuts (React glue: refs to current target ids / commit action)
@@ -179,34 +108,15 @@ useAppShortcuts (React glue: refs to current target ids / commit action)
   list changed mid-traversal), the controller drops the preview instead of
   committing a stale id.
 
-`WorkspaceItem`
-([WorkspaceItem.tsx](../../../apps/packages/product-client/src/components/workspace/shell/sidebar/WorkspaceItem.tsx))
-reads a per-row selector that folds its own id and the committed `active`
-prop into one `displayedActive` boolean: while a cursor is set, the cursor
-position drives the highlight and the committed selection's highlight is
-suppressed, so exactly one row reads active during traversal and a cursor
-step re-renders only the two rows whose displayed state flips.
+`WorkspaceItem` ([WorkspaceItem.tsx](../../../apps/packages/product-client/src/components/workspace/shell/sidebar/WorkspaceItem.tsx)) reads a per-row selector that folds its own id and the committed `active` prop into one `displayedActive` boolean: while a cursor is set, the cursor position drives the highlight and the committed selection's highlight is suppressed, so exactly one row reads active during traversal and a cursor step re-renders only the two rows whose displayed state flips.
 
-Test-only: `vitest.config.ts` maps the public
-`@proliferate/product-client/internal/*` subpath to source, alongside the
-existing `@proliferate/product-client/host/*` mapping, so a test whose graph
-reaches product-client's diagnostics port through that subpath runs against
-source instead of requiring a package build first. It carries no runtime
-behavior; it exists only so the test lane keeps the same "tests run against
-source, never dist" rule the file already states for the `host/*` subpath.
+Test-only: `vitest.config.ts` maps the public `@proliferate/product-client/internal/*` subpath to source, alongside the existing `@proliferate/product-client/host/*` mapping, so a test whose graph reaches product-client's diagnostics port through that subpath runs against source instead of requiring a package build first. It carries no runtime behavior; it exists only so the test lane keeps the same "tests run against source, never dist" rule the file already states for the `host/*` subpath.
 
-The ADR's two-phase switch originally scoped a third leg: deferring the
-expensive pane mount itself during a rapid sweep, on top of the
-preview-cursor leg documented above. It was left out by design: leg 1 (the
-preview cursor) already makes every intermediate workspace during a sweep
-vanish before its pane would ever mount, so a separate deferred-pane
-mechanism would be unmeasured machinery protecting against a case leg 1
-already eliminates.
+The ADR's two-phase switch originally scoped a third leg: deferring the expensive pane mount itself during a rapid sweep, on top of the preview-cursor leg documented above. It was left out by design: leg 1 (the preview cursor) already makes every intermediate workspace during a sweep vanish before its pane would ever mount, so a separate deferred-pane mechanism would be unmeasured machinery protecting against a case leg 1 already eliminates.
 
 ### React-query stabilization (R19 companion)
 
-Two shell-wide query-hook fixes reduce the switch-triggered wide re-render
-this two-phase switch exists to keep off the traversal path:
+Two shell-wide query-hook fixes reduce the switch-triggered wide re-render this two-phase switch exists to keep off the traversal path:
 
 - `getProliferateApiOrigin`
   ([proliferate-api.ts](../../../apps/packages/product-client/src/lib/infra/proliferate-api.ts))

@@ -2,20 +2,13 @@
 
 Status: target
 
-Current gap: Desktop/Web already persist and apply independent UI font,
-readable-code font, and window-zoom preferences, but the visible contract is
-incomplete. At the frozen base, Default message/composer text is 13px while
-Default readable code is 10px; a production scan also finds 32 fixed text-size
-declarations across 20 files and 107 fixed-size vector-glyph call sites. Those
-fixed consumers respond to whole-window zoom but generally do not respond to
-the UI font preference.
+Current gap: Desktop/Web already persist and apply independent UI font, readable-code font, and window-zoom preferences, but the visible contract is incomplete. At the frozen base, Default message/composer text is 13px while Default readable code is 10px; a production scan also finds 32 fixed text-size declarations across 20 files and 107 fixed-size vector-glyph call sites. Those fixed consumers respond to whole-window zoom but generally do not respond to the UI font preference.
 
 Frozen delivery base: `ec2aafc2cf1d0d254adfce1bb0084a90e06e4b38`.
 
 ## Outcome and boundary
 
-The Appearance controls must be truthful across the shared Desktop/Web
-product:
+The Appearance controls must be truthful across the shared Desktop/Web product:
 
 - UI font size owns every non-code product text role and every
   Proliferate-owned vector glyph.
@@ -24,11 +17,7 @@ product:
 - Window zoom remains an independent multiplier over the whole rendered
   component tree.
 
-This is one indivisible Appearance-preference flow across auth, home,
-workspace, sidebar, settings, dialogs, error recovery, and shared Cloud product
-surfaces. A partly migrated product is not an acceptable intermediate target.
-Mobile remains outside this DOM preference contract until it exposes an
-equivalent native setting.
+This is one indivisible Appearance-preference flow across auth, home, workspace, sidebar, settings, dialogs, error recovery, and shared Cloud product surfaces. A partly migrated product is not an acceptable intermediate target. Mobile remains outside this DOM preference contract until it exposes an equivalent native setting.
 
 ## Design reference
 
@@ -66,14 +55,11 @@ windowZoomId
   -> existing whole-renderer zoom path
 ```
 
-The three stored ids remain independently selectable, persisted, resolved, and
-applied. Invalid or missing ids continue to fall back independently to
-`default`.
+The three stored ids remain independently selectable, persisted, resolved, and applied. Invalid or missing ids continue to fall back independently to `default`.
 
 ## Readable-code parity
 
-For every `id` in `APPEARANCE_SIZE_IDS`, the same-named readable-code font size
-equals the visible message/composer font size:
+For every `id` in `APPEARANCE_SIZE_IDS`, the same-named readable-code font size equals the visible message/composer font size:
 
 ```text
 READABLE_CODE_FONT_SCALES[id].monacoFontSize
@@ -93,8 +79,7 @@ READABLE_CODE_FONT_SCALES[id].monacoFontSize
 | Extra Extra Large | 17px | 17px |
 | Extra Extra Extra Large | 18px | 18px |
 
-Editor, diff, and terminal line heights remain readable, strictly monotonic,
-and greater than their font sizes; they do not need to equal prose line height.
+Editor, diff, and terminal line heights remain readable, strictly monotonic, and greater than their font sizes; they do not need to equal prose line height.
 
 ## Semantic text and glyph contract
 
@@ -118,8 +103,7 @@ and greater than their font sizes; they do not need to equal prose line height.
 - Third-party numeric APIs receive a value resolved by the appearance owner;
   they do not own literal sizes at feature call sites.
 
-Raster media, user avatars, screenshots, borders, shadows, and pointer hit
-targets are not glyph icons and do not become font-relative.
+Raster media, user avatars, screenshots, borders, shadows, and pointer hit targets are not glyph icons and do not become font-relative.
 
 ## Ownership and implementation seams
 
@@ -144,22 +128,13 @@ targets are not glyph icons and do not become font-relative.
 - Focused appearance/drift tests and a repository source guard own regression
   enforcement.
 
-The glyph ladder is exposed as `--icon-status`, `--icon-compact`,
-`--icon-paired`, `--icon-control`, `--icon-large`, and `--icon-display`.
-The matching `icon-*` utilities size only the visible vector through those
-properties; wrappers keep owning fixed pointer-target and row geometry.
+The glyph ladder is exposed as `--icon-status`, `--icon-compact`, `--icon-paired`, `--icon-control`, `--icon-large`, and `--icon-display`. The matching `icon-*` utilities size only the visible vector through those properties; wrappers keep owning fixed pointer-target and row geometry.
 
 ## Repository enforcement
 
-Repo checks must reject raw fixed production text or glyph sizing at product
-call sites. The migration inventory is generated from the final PR head and
-must reach zero.
+Repo checks must reject raw fixed production text or glyph sizing at product call sites. The migration inventory is generated from the final PR head and must reach zero.
 
-`scripts/check_appearance_scaling.py` is the no-allowlist production guard. It
-runs in the repo-shape CI job and from the Desktop design-system check; its
-focused unit test locks fixed text, imported/custom/inline SVG, descendant
-selectors, component-local glyph props/aliases/defaults, status-dot, and global
-CSS-alias failure cases.
+`scripts/check_appearance_scaling.py` is the no-allowlist production guard. It runs in the repo-shape CI job and from the Desktop design-system check; its focused unit test locks fixed text, imported/custom/inline SVG, descendant selectors, component-local glyph props/aliases/defaults, status-dot, and global CSS-alias failure cases.
 
 Allowed numeric definitions are limited to:
 
@@ -168,9 +143,7 @@ Allowed numeric definitions are limited to:
 - a documented third-party adapter whose numeric value is derived from the
   active preference.
 
-There is no open-ended allowlist. Every structural exception names its semantic
-reason in the guard. A developer adding a fixed `size={16}` glyph must get a
-failing repository check before merge.
+There is no open-ended allowlist. Every structural exception names its semantic reason in the guard. A developer adding a fixed `size={16}` glyph must get a failing repository check before merge.
 
 ## Failure behavior
 

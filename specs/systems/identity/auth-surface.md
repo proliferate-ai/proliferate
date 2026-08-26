@@ -1,13 +1,6 @@
 # Auth
 
-Server auth has four boundaries: **authentication** identifies the caller,
-**org authorization** decides whether that caller has the right standing in an
-organization, **resource access** checks whether the caller can touch a specific
-resource, and **product policy** decides whether the current resource state
-allows an action. New and refactored paths enforce these boundaries at the
-endpoint via `Depends()`: services receive resolved context rather than becoming
-a hidden permission layer. Existing inline checks are migration work, not a
-second recommended pattern.
+Server auth has four boundaries: **authentication** identifies the caller, **org authorization** decides whether that caller has the right standing in an organization, **resource access** checks whether the caller can touch a specific resource, and **product policy** decides whether the current resource state allows an action. New and refactored paths enforce these boundaries at the endpoint via `Depends()`: services receive resolved context rather than becoming a hidden permission layer. Existing inline checks are migration work, not a second recommended pattern.
 
 ## Ownership
 
@@ -18,32 +11,13 @@ second recommended pattern.
 | **Resource access** | Can this caller touch *this* resource? | `server/<domain>/access.py` | the resource snapshot, or raises 403/404 |
 | **Product rule** | Given this state, is the action permitted now? | `server/<domain>/domain/policy.py` | `PolicyVerdict` |
 
-Dependency-free authorization currency — `ActorIdentity`, `AuthenticatedUser`,
-`OwnerScope`, `OwnerSelection`, `OwnerContext`, `PolicyAllowed`, `PolicyDenied`,
-`PolicyVerdict`, and the pure `require_org_role` check — is defined in
-[auth/authorization.py](../../../server/proliferate/auth/authorization.py).
-[permissions.py](../../../server/proliferate/permissions.py) re-exports
-that vocabulary as the public domain-facing seam and owns request-time
-organization selection, membership resolution, request/RLS context, and
-FastAPI dependencies. New and refactored domain code imports public names from
-`proliferate.permissions`; direct imports from `auth.authorization` are
-migration work, not a second public seam.
+Dependency-free authorization currency — `ActorIdentity`, `AuthenticatedUser`, `OwnerScope`, `OwnerSelection`, `OwnerContext`, `PolicyAllowed`, `PolicyDenied`, `PolicyVerdict`, and the pure `require_org_role` check — is defined in [auth/authorization.py](../../../server/proliferate/auth/authorization.py). [permissions.py](../../../server/proliferate/permissions.py) re-exports that vocabulary as the public domain-facing seam and owns request-time organization selection, membership resolution, request/RLS context, and FastAPI dependencies. New and refactored domain code imports public names from `proliferate.permissions`; direct imports from `auth.authorization` are migration work, not a second public seam.
 
-[auth/dependencies.py](../../../server/proliferate/auth/dependencies.py)
-centralizes **actor dependencies**, not every FastAPI dependency used by a
-route. Resource-specific dependencies stay in the domain that owns the
-resource. [auth/**](../../../server/proliferate/auth) remains below product
-domains for credentials, sessions, provider protocols, identity persistence,
-and transport-neutral Auth failures. Product account-entry routes and
-orchestration live in
-[server/accounts/**](../../../server/proliferate/server/accounts). This
-split describes the current implementation; it does not make `permissions.py`
-an import-free leaf.
+[auth/dependencies.py](../../../server/proliferate/auth/dependencies.py) centralizes **actor dependencies**, not every FastAPI dependency used by a route. Resource-specific dependencies stay in the domain that owns the resource. [auth/**](../../../server/proliferate/auth) remains below product domains for credentials, sessions, provider protocols, identity persistence, and transport-neutral Auth failures. Product account-entry routes and orchestration live in [server/accounts/**](../../../server/proliferate/server/accounts). This split describes the current implementation; it does not make `permissions.py` an import-free leaf.
 
 ## The actor dependency hierarchy
 
-Authorization is a chain of `Depends()`, each one composing the one above it. An
-endpoint declares the lowest actor or organization context it requires.
+Authorization is a chain of `Depends()`, each one composing the one above it. An endpoint declares the lowest actor or organization context it requires.
 
 ```text
 anonymous
@@ -66,12 +40,7 @@ authenticate_worker                       opaque worker bearer token -> WorkerAu
 optional_current_active_user               maybe authenticated (public-with-extras)
 ```
 
-`require_owner_role(*roles)` is a dependency factory over the selected
-`OwnerContext`. `require_org_role(context, roles)` is instead a synchronous pure
-check over an already-resolved context. Path-organization routes use the
-`current_path_org_*` dependencies. There is no separate organization-membership
-factory. New and refactored paths resolve org standing at the endpoint boundary
-rather than hiding it inside a service.
+`require_owner_role(*roles)` is a dependency factory over the selected `OwnerContext`. `require_org_role(context, roles)` is instead a synchronous pure check over an already-resolved context. Path-organization routes use the `current_path_org_*` dependencies. There is no separate organization-membership factory. New and refactored paths resolve org standing at the endpoint boundary rather than hiding it inside a service.
 
 ## Shape
 
@@ -106,10 +75,7 @@ server/proliferate/
     auth.py                  # WorkerAuthContext + opaque bearer-token dependency
 ```
 
-The flat `auth/{jwt,oauth,passwords,pkce}.py` modules hold the closed set of auth
-crypto and protocol primitives; there is no general utility bucket. Not every
-domain needs `access.py` or `domain/policy.py` — only domains that protect
-resources or carry product rules.
+The flat `auth/{jwt,oauth,passwords,pkce}.py` modules hold the closed set of auth crypto and protocol primitives; there is no general utility bucket. Not every domain needs `access.py` or `domain/policy.py` — only domains that protect resources or carry product rules.
 
 ## Placement Rule
 
@@ -123,19 +89,11 @@ Use the question the code answers to decide where it lives:
 - "Does the current product state allow this action?" belongs in
   `server/<domain>/domain/policy.py`.
 
-Do not move resource-access deps into `auth/dependencies.py` just because they
-are implemented with `Depends()`. A resource-access dep consumes route params,
-loads domain-owned snapshots, composes actor/org authorization, and returns a
-pre-authorized resource for the handler. Keeping that code in
-`server/<domain>/access.py` prevents `auth/` from importing product stores and
-rules, and keeps the route signature explicit about which resource permission is
-required.
+Do not move resource-access deps into `auth/dependencies.py` just because they are implemented with `Depends()`. A resource-access dep consumes route params, loads domain-owned snapshots, composes actor/org authorization, and returns a pre-authorized resource for the handler. Keeping that code in `server/<domain>/access.py` prevents `auth/` from importing product stores and rules, and keeps the route signature explicit about which resource permission is required.
 
 ## Layer Examples
 
-Use `auth/dependencies.py` for actor-only checks. This file may verify a session,
-load the actor, and enforce account readiness, but it does not consume resource
-IDs or import resource-owned stores.
+Use `auth/dependencies.py` for actor-only checks. This file may verify a session, load the actor, and enforce account readiness, but it does not consume resource IDs or import resource-owned stores.
 
 ```python
 # auth/dependencies.py
@@ -148,10 +106,7 @@ async def current_product_user(
     return await _require_product_ready(db, user)
 ```
 
-Use `server/<domain>/access.py` when a route needs a concrete resource already
-loaded and authorized. The dep receives route params, composes actor/org deps,
-reads the store, calls pure policy if needed, raises 403/404, and returns the
-snapshot the handler or service will use.
+Use `server/<domain>/access.py` when a route needs a concrete resource already loaded and authorized. The dep receives route params, composes actor/org deps, reads the store, calls pure policy if needed, raises 403/404, and returns the snapshot the handler or service will use.
 
 ```python
 # server/cloud/workspaces/access.py
@@ -183,9 +138,7 @@ async def workspace_user_can_archive(
     return workspace
 ```
 
-Use `domain/policy.py` for pure product decisions. The function takes already
-loaded facts, performs no I/O, imports no FastAPI or stores, and returns a
-verdict instead of raising an HTTP exception.
+Use `domain/policy.py` for pure product decisions. The function takes already loaded facts, performs no I/O, imports no FastAPI or stores, and returns a verdict instead of raising an HTTP exception.
 
 ```python
 # server/cloud/workspaces/domain/policy.py
@@ -220,9 +173,7 @@ def can_archive_workspace(
 
 ## Authentication
 
-`auth/dependencies.py` owns user actor dependencies. The Cloud runtime-worker
-domain owns its separate machine-actor dependency because the opaque Worker
-token is part of that domain's enrollment lifecycle.
+`auth/dependencies.py` owns user actor dependencies. The Cloud runtime-worker domain owns its separate machine-actor dependency because the opaque Worker token is part of that domain's enrollment lifecycle.
 
 | Dep | Gates |
 |---|---|
@@ -232,10 +183,7 @@ token is part of that domain's enrollment lifecycle.
 | `current_organization_actor` | actor for organization-membership surfaces; applies the current hosted readiness gate and single-org bypass |
 | `optional_current_active_user` | maybe authenticated (public route with extra behavior when signed in) |
 
-`current_limited_user` is live compatibility vocabulary used by actor and
-identity routes. It currently returns `current_active_user` unchanged. Do not
-create more no-op actor wrappers; removing or bypassing this one is a separate
-code migration, not an assumption a caller should make from this guide.
+`current_limited_user` is live compatibility vocabulary used by actor and identity routes. It currently returns `current_active_user` unchanged. Do not create more no-op actor wrappers; removing or bypassing this one is a separate code migration, not an assumption a caller should make from this guide.
 
 ### Allowed
 
@@ -277,50 +225,19 @@ async def current_product_user(
 
 ### OAuth and account-entry surfaces
 
-Product account entry lives under `server/accounts/identity/**`, and the
-Desktop account-entry boundary lives under `server/accounts/desktop/**`.
-GitHub uses the shared
-`/auth/github/callback` provider callback for desktop, web, and mobile.
-The surface is recovered from the stored auth challenge, so the GitHub OAuth app
-needs only one callback URL:
+Product account entry lives under `server/accounts/identity/**`, and the Desktop account-entry boundary lives under `server/accounts/desktop/**`. GitHub uses the shared `/auth/github/callback` provider callback for desktop, web, and mobile. The surface is recovered from the stored auth challenge, so the GitHub OAuth app needs only one callback URL:
 
 ```text
 <API_BASE_URL>/auth/github/callback
 ```
 
-Desktop GitHub still starts through `POST /auth/desktop/github/start`, exchanges
-desktop auth codes through `/auth/desktop/token`, and handles
-`proliferate://auth/callback` deep links. The older
-`/auth/desktop/github/authorize` and `/auth/desktop/github/callback` routes are
-compatibility routes and must not be configured as the current callback.
+Desktop GitHub still starts through `POST /auth/desktop/github/start`, exchanges desktop auth codes through `/auth/desktop/token`, and handles `proliferate://auth/callback` deep links. The older `/auth/desktop/github/authorize` and `/auth/desktop/github/callback` routes are compatibility routes and must not be configured as the current callback.
 
-Both provider callback endpoints (`oauth_callback` for
-`/{surface}/{provider}/callback` and `oauth_shared_provider_callback` for
-`/{provider}/callback`) return an HTML handoff page when the challenge's stored
-surface is `desktop`, instead of a raw 302, because a system browser cannot
-render a custom-scheme redirect. The page fires the `proliferate://auth/callback`
-deep link itself (`make_desktop_handoff_page` on success,
-`make_desktop_provider_error_page` on a provider error) and gives desktop
-something to leave in the tab besides a blank page. Web and mobile callbacks
-keep the raw 302 in both cases; mobile shares the same
-`proliferate://auth/callback` string as desktop but relies on the OS
-intercepting the redirect, so the branch is always on the challenge's stored
-`surface`, never on the redirect URI's scheme. This branch only applies once a
-challenge is found: missing params and a provider-error callback whose
-challenge cannot be consumed both fall through to the shared error path and
-302 to the web `/auth/error` page, since there is no challenge left to read a
-surface from, but an unconsumable challenge on the success branch (expired or
-replayed state) is not caught there and surfaces the shared JSON 400 error
-response instead.
+Both provider callback endpoints (`oauth_callback` for `/{surface}/{provider}/callback` and `oauth_shared_provider_callback` for `/{provider}/callback`) return an HTML handoff page when the challenge's stored surface is `desktop`, instead of a raw 302, because a system browser cannot render a custom-scheme redirect. The page fires the `proliferate://auth/callback` deep link itself (`make_desktop_handoff_page` on success, `make_desktop_provider_error_page` on a provider error) and gives desktop something to leave in the tab besides a blank page. Web and mobile callbacks keep the raw 302 in both cases; mobile shares the same `proliferate://auth/callback` string as desktop but relies on the OS intercepting the redirect, so the branch is always on the challenge's stored `surface`, never on the redirect URI's scheme. This branch only applies once a challenge is found: missing params and a provider-error callback whose challenge cannot be consumed both fall through to the shared error path and 302 to the web `/auth/error` page, since there is no challenge left to read a surface from, but an unconsumable challenge on the success branch (expired or replayed state) is not caught there and surfaces the shared JSON 400 error response instead.
 
 ## Worker actor
 
-`server/seam/workers/auth.py::authenticate_worker` authenticates an
-enrolled runtime Worker. A Worker is not a user and does not present a JWT or a
-Target id. It presents an opaque bearer token; the dependency hashes that token,
-loads the active `cloud_runtime_worker`, and returns a frozen
-`WorkerAuthContext` containing `worker_id`, `owner_user_id`, optional
-`organization_id`, and `runtime_kind`.
+`server/seam/workers/auth.py::authenticate_worker` authenticates an enrolled runtime Worker. A Worker is not a user and does not present a JWT or a Target id. It presents an opaque bearer token; the dependency hashes that token, loads the active `cloud_runtime_worker`, and returns a frozen `WorkerAuthContext` containing `worker_id`, `owner_user_id`, optional `organization_id`, and `runtime_kind`.
 
 ### Allowed
 
@@ -358,20 +275,11 @@ async def authenticate_worker(
     )
 ```
 
-`POST /v1/cloud/worker/heartbeat` depends on `authenticate_worker` and receives
-the resolved Worker identity. Enrollment consumes its separate one-time token;
-the public artifact redirect routes are intentionally unauthenticated. There is
-no mounted Worker control, command lease/result, or applied-revision endpoint.
+`POST /v1/cloud/worker/heartbeat` depends on `authenticate_worker` and receives the resolved Worker identity. Enrollment consumes its separate one-time token; the public artifact redirect routes are intentionally unauthenticated. There is no mounted Worker control, command lease/result, or applied-revision endpoint.
 
 ## Org Authorization
 
-[auth/authorization.py](../../../server/proliferate/auth/authorization.py)
-owns the dependency-free vocabulary: `ActorIdentity`, `AuthenticatedUser`,
-`OwnerScope`, `OwnerSelection`, `OwnerContext`, `PolicyAllowed`, `PolicyDenied`,
-`PolicyVerdict`, and `require_org_role`.
-[permissions.py](../../../server/proliferate/permissions.py) re-exports
-those names as the public domain-facing seam and owns request-time org-standing
-resolution.
+[auth/authorization.py](../../../server/proliferate/auth/authorization.py) owns the dependency-free vocabulary: `ActorIdentity`, `AuthenticatedUser`, `OwnerScope`, `OwnerSelection`, `OwnerContext`, `PolicyAllowed`, `PolicyDenied`, `PolicyVerdict`, and `require_org_role`. [permissions.py](../../../server/proliferate/permissions.py) re-exports those names as the public domain-facing seam and owns request-time org-standing resolution.
 
 ### Allowed
 
@@ -442,12 +350,9 @@ def require_owner_role(*roles: str):
 
 ## Resource-Access Route Deps
 
-`server/<domain>/access.py` owns deps that look up a resource, check the caller
-can touch it, and return the resource (or raise 403/404).
+`server/<domain>/access.py` owns deps that look up a resource, check the caller can touch it, and return the resource (or raise 403/404).
 
-These deps are the adapter between request-time information and pure policy:
-they may read stores and raise HTTP-shaped permission results, while
-`domain/policy.py` remains synchronous and side-effect free.
+These deps are the adapter between request-time information and pure policy: they may read stores and raise HTTP-shaped permission results, while `domain/policy.py` remains synchronous and side-effect free.
 
 ### Allowed
 
@@ -486,18 +391,11 @@ async def workspace_user_can_admin(
 
 ### Naming convention
 
-`<resource>_user_can_<action>` — e.g., `workspace_user_can_read`,
-`workspace_user_can_admin`, `subscription_user_can_cancel`. The function returns
-the resource snapshot when access is granted.
+`<resource>_user_can_<action>` — e.g., `workspace_user_can_read`, `workspace_user_can_admin`, `subscription_user_can_cancel`. The function returns the resource snapshot when access is granted.
 
 ### Resource-scoped vs platform admin
 
-When "admin" means "admin of *this* path organization", compose
-`current_path_org_admin` in `<domain>/access.py`. A resource-only route can
-compose selected-owner `current_org_admin` or
-`require_owner_role("owner", "admin")` instead. When it means "platform admin"
-(Proliferate staff, system-wide), use the platform-admin actor from
-`auth/dependencies.py`.
+When "admin" means "admin of *this* path organization", compose `current_path_org_admin` in `<domain>/access.py`. A resource-only route can compose selected-owner `current_org_admin` or `require_owner_role("owner", "admin")` instead. When it means "platform admin" (Proliferate staff, system-wide), use the platform-admin actor from `auth/dependencies.py`.
 
 ## Product Policy Rules
 
@@ -539,10 +437,7 @@ async def delete_workspace(db: AsyncSession, *, workspace: WorkspaceSnapshot) ->
     await store.cloud_workspaces.mark_deleting(db, workspace.id)
 ```
 
-The service raises a domain error; the global handler maps it to an HTTP
-response. In the endpoint-composed shape, admin standing is resolved before
-`delete_workspace` is called. Existing services that still resolve standing
-inline are migration debt.
+The service raises a domain error; the global handler maps it to an HTTP response. In the endpoint-composed shape, admin standing is resolved before `delete_workspace` is called. Existing services that still resolve standing inline are migration debt.
 
 ## End-to-End Example
 

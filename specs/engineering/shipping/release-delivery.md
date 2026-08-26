@@ -1,9 +1,6 @@
 # Delivery System
 
-Delivery owns the repository's artifact identities and the topology that
-builds, deploys, promotes, and publishes them. It describes what the checked-in
-automation does. Operator steps live in
-[Developing: Deploying](../../../guides/deploying/README.md).
+Delivery owns the repository's artifact identities and the topology that builds, deploys, promotes, and publishes them. It describes what the checked-in automation does. Operator steps live in [Developing: Deploying](../../../guides/deploying/README.md).
 
 ## Identities
 
@@ -19,21 +16,9 @@ These coordinates are related, but none substitutes for another:
 | E2B `sha-<12>` | Immutable cloud-template identity. Rolling `staging` and `production` tags select an immutable build from the same template family. |
 | `release-YYYY-MM-DD` | Release checkpoint marker, not an artifact version. No checked-in workflow mints a `hotfix-*` ledger identity any more; `publish-product-release.mjs` keeps an uncalled `hotfix` mode. |
 
-The self-host CloudFormation template is one of the assets attached to a
-`server-v*` release; it is not a separate release coordinate. A public product
-version does not identify an exact artifact build unless the corresponding
-artifact tag and source SHA are also known.
+The self-host CloudFormation template is one of the assets attached to a `server-v*` release; it is not a separate release coordinate. A public product version does not identify an exact artifact build unless the corresponding artifact tag and source SHA are also known.
 
-The Proliferate LiteLLM wrapper has a separate upstream input coordinate. Both
-`server/litellm/Dockerfile` and local development Compose bind
-`ghcr.io/berriai/litellm:v1.93.0@sha256:a1745e629abfb17d434426ff48b115f54f4f4c4a0f5af241de569e93c63c411e`.
-The digest identifies the official multi-architecture OCI index and the tag
-makes its reviewed release legible; neither may be replaced by a floating or
-tag-only reference. This pin preserves Proliferate's checked-in model config,
-LiteLLM management API contract, and existing `$5` team/key enrollment cap.
-The selected upstream source contains the bounded per-request budget
-reservation behavior, so a request without `max_tokens` does not reserve all
-remaining budget headroom while it is in flight.
+The Proliferate LiteLLM wrapper has a separate upstream input coordinate. Both `server/litellm/Dockerfile` and local development Compose bind `ghcr.io/berriai/litellm:v1.93.0@sha256:a1745e629abfb17d434426ff48b115f54f4f4c4a0f5af241de569e93c63c411e`. The digest identifies the official multi-architecture OCI index and the tag makes its reviewed release legible; neither may be replaced by a floating or tag-only reference. This pin preserves Proliferate's checked-in model config, LiteLLM management API contract, and existing `$5` team/key enrollment cap. The selected upstream source contains the bounded per-request budget reservation behavior, so a request without `max_tokens` does not reserve all remaining budget headroom while it is in flight.
 
 ## Topology
 
@@ -49,122 +34,23 @@ Nothing in the pipeline asks for approval. Dispatching a run is the authorizatio
 
 The live E2B webhook workflow is manual-only and is not part of ordinary CI, staging, or the release pipeline. The E2B, mobile, and standalone Worker reusable lanes were deleted with the coordinators that were their only callers; the Celery worker and Beat services still deploy inside `_deploy-server.yml`, which is a different thing from the retired `_deploy-workers.yml` no-op.
 
-Hosted Playwright and Cargo Tauri dependency steps normalize the known Ubuntu
-runner mirror indirection to the canonical archive immediately before
-apt-managed installs; the required dependency sets are unchanged.
+Hosted Playwright and Cargo Tauri dependency steps normalize the known Ubuntu runner mirror indirection to the canonical archive immediately before apt-managed installs; the required dependency sets are unchanged.
 
 See the [Hosted procedure](../../../guides/deploying/hosted.md).
 
 ### Background plane topology
 
-`_deploy-server.yml` builds one exact-SHA server image that the API, the Celery
-worker, and the Celery Beat scheduler all run. Its rollout order is migrations →
-broker/scheduler-store verify → worker + Beat → worker/Beat health (which also
-asserts the running task definitions carry the candidate image) → candidate-plane
-execution proof → API roll. This ordering guarantees a newly rolled API never
-enqueues a task name that no running worker can import.
+`_deploy-server.yml` builds one exact-SHA server image that the API, the Celery worker, and the Celery Beat scheduler all run. Its rollout order is migrations → broker/scheduler-store verify → worker + Beat → worker/Beat health (which also asserts the running task definitions carry the candidate image) → candidate-plane execution proof → API roll. This ordering guarantees a newly rolled API never enqueues a task name that no running worker can import.
 
-Resource health is not sufficient on its own — a `runningCount` of 1 does not
-prove the plane can execute work (broker credentials, task routing, worker
-task-registry import, RedBeat state, or relay publish/consume could all be
-broken while the container is up). Before the API rolls, the workflow enqueues
-one committed health no-op — keyed to this exact run and run-attempt, so a rerun
-enqueues a fresh row rather than replaying a prior attempt's already-published
-one — via a one-off task on the candidate worker task definition, then observes
-BOTH a fresh relay-heartbeat advance (Beat dispatched `background.relay` and a
-worker ran it, so the scheduler store and broker are reachable) AND an
-**exact-id** execution receipt for that specific enqueued row. The receipt is a
-structured log line the health task emits on success carrying its own task id
-(which the relay sets equal to the enqueued outbox id); the gate matches on that
-id, so an aggregate success count advanced by a concurrent deploy, an operator
-smoke, or a retry does **not** satisfy it — only execution of the row this
-attempt enqueued does. It **fails closed** on timeout. The heartbeat rides the
-plane's own CloudWatch metric namespace (`Proliferate/Background/<env>`) and the
-receipt is read from the server log group (derived from the environment name), so
-the proof references no broker/store resource ID and the identical gate covers
-both the managed-AWS-IDs path and the external-endpoint rebind path.
+Resource health is not sufficient on its own — a `runningCount` of 1 does not prove the plane can execute work (broker credentials, task routing, worker task-registry import, RedBeat state, or relay publish/consume could all be broken while the container is up). Before the API rolls, the workflow enqueues one committed health no-op — keyed to this exact run and run-attempt, so a rerun enqueues a fresh row rather than replaying a prior attempt's already-published one — via a one-off task on the candidate worker task definition, then observes BOTH a fresh relay-heartbeat advance (Beat dispatched `background.relay` and a worker ran it, so the scheduler store and broker are reachable) AND an **exact-id** execution receipt for that specific enqueued row. The receipt is a structured log line the health task emits on success carrying its own task id (which the relay sets equal to the enqueued outbox id); the gate matches on that id, so an aggregate success count advanced by a concurrent deploy, an operator smoke, or a retry does **not** satisfy it — only execution of the row this attempt enqueued does. It **fails closed** on timeout. The heartbeat rides the plane's own CloudWatch metric namespace (`Proliferate/Background/<env>`) and the receipt is read from the server log group (derived from the environment name), so the proof references no broker/store resource ID and the identical gate covers both the managed-AWS-IDs path and the external-endpoint rebind path.
 
-The worker/Beat rollout is **conditional and fails closed as a set**. It runs
-only when both the worker and Beat service names are configured on the
-environment; a partial configuration (one set, the other empty) aborts the whole
-deploy rather than silently skipping the background plane and rolling the API
-alone. When neither is configured, the workflow deploys the API exactly as
-before. The re-image step also asserts that exactly one container matches each
-configured name and that the registered task definition carries the candidate
-image, so a mistyped container name fails closed instead of rolling the old
-image. Before either worker or Beat task definition is registered, the same
-checked-in hosted contract must match its execution role and its one direct
-`REDBEAT_REDIS_URL` reference by source service, account, region, and
-environment-owned name; duplicate, plaintext, field-projected, or
-sibling-environment references fail closed. The re-image also authors and then
-asserts the Cloud provider pair needed by periodic maintenance: exactly one
-`E2B_API_KEY` field projection from the verified environment-owned server-app
-secret and exactly one reviewed `E2B_TEMPLATE_NAME`, with no inherited
-plaintext, duplicate, or sibling-environment key reference. The registered
-revision is re-read and checked against the same complete contract before the
-service is rolled.
+The worker/Beat rollout is **conditional and fails closed as a set**. It runs only when both the worker and Beat service names are configured on the environment; a partial configuration (one set, the other empty) aborts the whole deploy rather than silently skipping the background plane and rolling the API alone. When neither is configured, the workflow deploys the API exactly as before. The re-image step also asserts that exactly one container matches each configured name and that the registered task definition carries the candidate image, so a mistyped container name fails closed instead of rolling the old image. Before either worker or Beat task definition is registered, the same checked-in hosted contract must match its execution role and its one direct `REDBEAT_REDIS_URL` reference by source service, account, region, and environment-owned name; duplicate, plaintext, field-projected, or sibling-environment references fail closed. The re-image also authors and then asserts the Cloud provider pair needed by periodic maintenance: exactly one `E2B_API_KEY` field projection from the verified environment-owned server-app secret and exactly one reviewed `E2B_TEMPLATE_NAME`, with no inherited plaintext, duplicate, or sibling-environment key reference. The registered revision is re-read and checked against the same complete contract before the service is rolled.
 
-`server/infra/background.tf` (Amazon MQ RabbitMQ broker, ElastiCache Serverless
-Valkey scheduler store, and the worker/Beat ECS services, task definitions,
-metric filters, and alarms) is a set of **checked-in definitions only**. Both
-Terraform stages gate on `count` flags that default to disabled, and the deploy
-workflow's background steps are inert until the service names are set. These
-definitions are **not a description of current live operating infrastructure**:
-no hosted background broker, scheduler store, or worker/Beat service is asserted
-to exist from their presence in the tree. Enabling the Terraform stages
-(provisioning the plane or rebinding to existing managed endpoints), setting the
-deploy environment's worker/Beat variables, and running the staging outbox smoke
-are **separate, individually gated actions** outside the merge of these
-definitions. `background_services_enabled = true` fails at Terraform plan time
-(a variable validation proven by `server/infra/tests/background_plane.tftest.hcl`
-under a mocked provider) unless either the managed broker/store stage is enabled
-or both external endpoint secret ARNs are supplied, so the services can never be
-created without a reachable broker/store. The optional Terraform Cloud-provider
-inputs accept only an absent pair or a base Secrets Manager ARN plus a nonempty
-template; partial and pre-projected key inputs fail at plan time. When present,
-the execution role can read only the supplied base secret and ECS performs the
-exact `E2B_API_KEY` field projection at task start.
+`server/infra/background.tf` (Amazon MQ RabbitMQ broker, ElastiCache Serverless Valkey scheduler store, and the worker/Beat ECS services, task definitions, metric filters, and alarms) is a set of **checked-in definitions only**. Both Terraform stages gate on `count` flags that default to disabled, and the deploy workflow's background steps are inert until the service names are set. These definitions are **not a description of current live operating infrastructure**: no hosted background broker, scheduler store, or worker/Beat service is asserted to exist from their presence in the tree. Enabling the Terraform stages (provisioning the plane or rebinding to existing managed endpoints), setting the deploy environment's worker/Beat variables, and running the staging outbox smoke are **separate, individually gated actions** outside the merge of these definitions. `background_services_enabled = true` fails at Terraform plan time (a variable validation proven by `server/infra/tests/background_plane.tftest.hcl` under a mocked provider) unless either the managed broker/store stage is enabled or both external endpoint secret ARNs are supplied, so the services can never be created without a reachable broker/store. The optional Terraform Cloud-provider inputs accept only an absent pair or a base Secrets Manager ARN plus a nonempty template; partial and pre-projected key inputs fail at plan time. When present, the execution role can read only the supplied base secret and ECS performs the exact `E2B_API_KEY` field projection at task start.
 
-The hosted API also uses Redis for cross-process Cloud materialization and
-GitHub-refresh leases, independently of whether worker and Beat services are
-enabled. `server/infra/hosted-redis/` is the isolated durable owner for
-the environment-specific deploy-role and ECS-execution-role child grants. Its
-one-time non-destructive adoption imported the two pre-existing deploy policies
-and created the two dedicated execution policies only after an exact saved-plan
-shape check; it never removes the roles' other pre-existing secret grants.
-`server/deploy/hosted-redis-contract.json` is the single machine-readable map
-consumed by both that Terraform root and the workflow; it binds the current
-hosted account, region, workflow environment aliases, stable server-app secret
-names, optional background Redis reference identities, and existing role names without
-claiming ownership of the live ECS services or background secrets. The server
-deploy resolves the generated secret ARN only after
-assuming the exact environment role, preflights a valid DNS-resolved non-loopback
-`REDBEAT_REDIS_URL`, authors that exact field projection on the API task, removes
-inherited plaintext or stale references, and fails before task registration
-when any identity or dependency check fails. It also proves the live task
-definition uses the contract's account/environment execution role before
-cloning that same definition. The resolved base secret ARN is kept out of the
-job-wide environment and is produced only after every third-party action's main
-phase. Because those actions can register post-job hooks, the first-party render
-and background re-image transactions keep all identifier-bearing task JSON in
-private temporary directories and remove it on every exit before those hooks
-run. The loopback default remains a local-development convenience, not hosted
-configuration.
+The hosted API also uses Redis for cross-process Cloud materialization and GitHub-refresh leases, independently of whether worker and Beat services are enabled. `server/infra/hosted-redis/` is the isolated durable owner for the environment-specific deploy-role and ECS-execution-role child grants. Its one-time non-destructive adoption imported the two pre-existing deploy policies and created the two dedicated execution policies only after an exact saved-plan shape check; it never removes the roles' other pre-existing secret grants. `server/deploy/hosted-redis-contract.json` is the single machine-readable map consumed by both that Terraform root and the workflow; it binds the current hosted account, region, workflow environment aliases, stable server-app secret names, optional background Redis reference identities, and existing role names without claiming ownership of the live ECS services or background secrets. The server deploy resolves the generated secret ARN only after assuming the exact environment role, preflights a valid DNS-resolved non-loopback `REDBEAT_REDIS_URL`, authors that exact field projection on the API task, removes inherited plaintext or stale references, and fails before task registration when any identity or dependency check fails. It also proves the live task definition uses the contract's account/environment execution role before cloning that same definition. The resolved base secret ARN is kept out of the job-wide environment and is produced only after every third-party action's main phase. Because those actions can register post-job hooks, the first-party render and background re-image transactions keep all identifier-bearing task JSON in private temporary directories and remove it on every exit before those hooks run. The loopback default remains a local-development convenience, not hosted configuration.
 
-The plane's telemetry distinguishes two age/latency signals:
-`OutboxOldestDuePendingAgeSeconds` measures a row's pre-publish wait in Postgres
-(the SLO signal, a truthful current-oldest gauge), while
-`TaskBrokerResidenceLatencySeconds` measures how long a task waited in RabbitMQ
-between relay publish and worker consume. The latter is a **lagging** per-task
-latency observed only on consume: it goes silent exactly when consumption stalls,
-so it is **not** a truthful "current oldest queued-task age". Amazon MQ exposes no
-native oldest-message-age metric, so current-oldest-queued-age is not available
-from this substrate; broker backlog is instead covered by the `AWS/AmazonMQ`
-`MessageCount` depth alarm, which does not go silent when workers stop consuming.
-Desired-vs-running worker/Beat
-alarms query `RunningTaskCount` in `ECS/ContainerInsights` (Container Insights is
-enabled on the cluster), and the task-outcome metric filters carry `task_name`
-(and, for retries/failures, safe `error_code`) dimensions.
+The plane's telemetry distinguishes two age/latency signals: `OutboxOldestDuePendingAgeSeconds` measures a row's pre-publish wait in Postgres (the SLO signal, a truthful current-oldest gauge), while `TaskBrokerResidenceLatencySeconds` measures how long a task waited in RabbitMQ between relay publish and worker consume. The latter is a **lagging** per-task latency observed only on consume: it goes silent exactly when consumption stalls, so it is **not** a truthful "current oldest queued-task age". Amazon MQ exposes no native oldest-message-age metric, so current-oldest-queued-age is not available from this substrate; broker backlog is instead covered by the `AWS/AmazonMQ` `MessageCount` depth alarm, which does not go silent when workers stop consuming. Desired-vs-running worker/Beat alarms query `RunningTaskCount` in `ECS/ContainerInsights` (Container Insights is enabled on the cluster), and the task-outcome metric filters carry `task_name` (and, for retries/failures, safe `error_code`) dimensions.
 
 ### Release coordinator
 
@@ -192,28 +78,15 @@ See the [Release procedure](../../../guides/deploying/releases.md).
 
 ### Artifact lanes
 
-Desktop, Runtime/SDK, Server/self-host, and E2B template outputs have distinct
-coordinates. The two standalone cloud-template workflows operate on the same
-immutable `sha-<12>` plus rolling `staging`/`production` family;
-`release-cloud-template.yml` builds an immutable tag and moves `staging`, and
-`promote-cloud-template.yml` smokes an immutable tag and moves `production`.
-They are separate entrypoints, not separate artifact identities.
+Desktop, Runtime/SDK, Server/self-host, and E2B template outputs have distinct coordinates. The two standalone cloud-template workflows operate on the same immutable `sha-<12>` plus rolling `staging`/`production` family; `release-cloud-template.yml` builds an immutable tag and moves `staging`, and `promote-cloud-template.yml` smokes an immutable tag and moves `production`. They are separate entrypoints, not separate artifact identities.
 
-Server releases publish server and LiteLLM GHCR images with version and rolling
-`stable` tags, never commit-SHA image tags. A `server-v<version>` GitHub Release
-also holds the two Linux runtime bundles, CloudFormation template, installer,
-AWS launch helper, deploy bundle, and checksum manifest enumerated in the
-[Release procedure](../../../guides/deploying/releases.md).
+Server releases publish server and LiteLLM GHCR images with version and rolling `stable` tags, never commit-SHA image tags. A `server-v<version>` GitHub Release also holds the two Linux runtime bundles, CloudFormation template, installer, AWS launch helper, deploy bundle, and checksum manifest enumerated in the [Release procedure](../../../guides/deploying/releases.md).
 
-Those published LiteLLM images are Proliferate-owned wrappers. Their rolling or
-versioned outer tags do not loosen the wrapper's upstream input: every build
-still starts from the exact release-and-index-digest coordinate above.
+Those published LiteLLM images are Proliferate-owned wrappers. Their rolling or versioned outer tags do not loosen the wrapper's upstream input: every build still starts from the exact release-and-index-digest coordinate above.
 
 ## Workflow Inventory
 
-Each checked-in workflow appears exactly once below. Trigger posture describes
-how the file can run; it does not imply that the workflow is a merge or release
-gate.
+Each checked-in workflow appears exactly once below. Trigger posture describes how the file can run; it does not imply that the workflow is a merge or release gate.
 
 ### Reusable build and deploy lanes
 
@@ -241,9 +114,7 @@ gate.
 | `self-host-smoke.yml` | Push to `main` or manual | Smoke the production Compose path when relevant paths change. Off the PR path since the 2026-08 cull; the push run also seeds the buildx layer cache. |
 | `server-ci.yml` | Relevant push/PR, manual, or reusable | Validate the server. It is a gate, not a publisher: the release image and asset build lives in `_build-server.yml`. |
 
-Server CI's shrink-only mypy census compares a pull request with its base SHA
-and a push with the event's pre-push SHA. Manual and reusable invocations must
-supply an explicit comparison SHA.
+Server CI's shrink-only mypy census compares a pull request with its base SHA and a push with the event's pre-push SHA. Manual and reusable invocations must supply an explicit comparison SHA.
 
 ### Hosted deployment and release coordinators
 
@@ -277,10 +148,7 @@ supply an explicit comparison SHA.
   identity as Sentry `release` and structured-log `release_id`; event
   production does not redefine Delivery identity.
 
-The current release scripts publish a raw GitHub Release ledger from merged PR
-metadata. No checked-in landing-changelog or release-manifest publisher exists
-(the issue-lifecycle system that owned that target was retired in the 2026-08
-engineering cull).
+The current release scripts publish a raw GitHub Release ledger from merged PR metadata. No checked-in landing-changelog or release-manifest publisher exists (the issue-lifecycle system that owned that target was retired in the 2026-08 engineering cull).
 
 ## Current Gaps
 
@@ -305,22 +173,9 @@ engineering cull).
 
 ## Merge Gate
 
-Branch protection on `main` cannot distinguish "no red X" from "actually
-verified". A required status check is satisfied when it reports `success`, and
-also when it reports `skipped`, and also when the name stops resolving because
-the job behind it was renamed, deleted, or gated off. A required-checks list
-made of per-lane names therefore degrades silently to green at exactly the
-moment the lanes stop running.
+Branch protection on `main` cannot distinguish "no red X" from "actually verified". A required status check is satisfied when it reports `success`, and also when it reports `skipped`, and also when the name stops resolving because the job behind it was renamed, deleted, or gated off. A required-checks list made of per-lane names therefore degrades silently to green at exactly the moment the lanes stop running.
 
-Two rollup jobs invert that. `ci-ok` in `.github/workflows/ci.yml` and
-`server-ci-ok` in `.github/workflows/server-ci.yml` each depend on every lane in
-their own workflow, run under `if: always()`, and fail unless every dependency
-concluded `success` -- `failure`, `skipped`, and `cancelled` are all fatal, and
-the failing lanes are named in the output. Each carries a drift guard that
-parses its own workflow file and fails if a job exists there but not in the
-rollup's `needs:` list, so a lane cannot leave the gate unnoticed. `needs:`
-cannot cross workflows, which is why there is one rollup per workflow rather
-than one overall.
+Two rollup jobs invert that. `ci-ok` in `.github/workflows/ci.yml` and `server-ci-ok` in `.github/workflows/server-ci.yml` each depend on every lane in their own workflow, run under `if: always()`, and fail unless every dependency concluded `success` -- `failure`, `skipped`, and `cancelled` are all fatal, and the failing lanes are named in the output. Each carries a drift guard that parses its own workflow file and fails if a job exists there but not in the rollup's `needs:` list, so a lane cannot leave the gate unnoticed. `needs:` cannot cross workflows, which is why there is one rollup per workflow rather than one overall.
 
 The required status checks for `main` are:
 
@@ -333,36 +188,12 @@ The required status checks for `main` are:
 | `Analyze (rust)` | CodeQL |
 | `Validate PR title and labels` | PR Metadata |
 
-2026-08 engineering cull: the two Self-Host Smoke checks (`Detect
-smoke-relevant changes`, `Production compose smoke`) left this list when
-`self-host-smoke.yml` came off the PR path; removing them from branch
-protection is a founder settings action recorded in the cull PR description.
+2026-08 engineering cull: the two Self-Host Smoke checks (`Detect smoke-relevant changes`, `Production compose smoke`) left this list when `self-host-smoke.yml` came off the PR path; removing them from branch protection is a founder settings action recorded in the cull PR description.
 
-Names are check-run display names, as `gh pr checks` prints them. No individual
-lane name from `ci.yml` or `server-ci.yml` belongs on the list: the rollups are
-strictly stronger, and a per-lane name is a name that can rot. Because a
-`needs:` entry on a matrix job covers all of its shards, sharding or renaming a
-lane never requires a branch-protection edit.
+Names are check-run display names, as `gh pr checks` prints them. No individual lane name from `ci.yml` or `server-ci.yml` belongs on the list: the rollups are strictly stronger, and a per-lane name is a name that can rot. Because a `needs:` entry on a matrix job covers all of its shards, sharding or renaming a lane never requires a branch-protection edit.
 
-Excluded on purpose: `intent-tests (provisional)` and `intent-billing
-(provisional)` are `continue-on-error` while the harness earns trust and no
-longer run on PRs at all (dispatch-only since the 2026-08 cull); the CI Heavy
-Lanes jobs are dispatch-only demotions from `ci.yml` (same cull); the Vercel
-checks are third-party. `docker` and `self-hosted-release-assets` used to be
-excluded as release-only jobs inside Server CI; they now live in
-`_build-server.yml` and are outside the rollup's file entirely. Server CI's
-drift guard still derives a release-only exemption from a job's `server-v` tag
-gate rather than by name, so a future release-gated job cannot silently join or
-leave the rollup, but the exempt set is empty today and every job in the file is
-covered.
+Excluded on purpose: `intent-tests (provisional)` and `intent-billing (provisional)` are `continue-on-error` while the harness earns trust and no longer run on PRs at all (dispatch-only since the 2026-08 cull); the CI Heavy Lanes jobs are dispatch-only demotions from `ci.yml` (same cull); the Vercel checks are third-party. `docker` and `self-hosted-release-assets` used to be excluded as release-only jobs inside Server CI; they now live in `_build-server.yml` and are outside the rollup's file entirely. Server CI's drift guard still derives a release-only exemption from a job's `server-v` tag gate rather than by name, so a future release-gated job cannot silently join or leave the rollup, but the exempt set is empty today and every job in the file is covered.
 
-Server CI carries no `on.pull_request.paths` filter, because a path-skipped
-workflow never reports a conclusion at all and a required check pointing into it
-would strand every unrelated pull request on a pending check. It runs on every
-pull request instead, and a `changes` job publishes one relevance flag that each
-lane's steps consume. A lane with nothing to verify reports a real `success`
-rather than `skipped`, and an unset flag -- what a failed `changes` job produces
--- runs the real suite.
+Server CI carries no `on.pull_request.paths` filter, because a path-skipped workflow never reports a conclusion at all and a required check pointing into it would strand every unrelated pull request on a pending check. It runs on every pull request instead, and a `changes` job publishes one relevance flag that each lane's steps consume. A lane with nothing to verify reports a real `success` rather than `skipped`, and an unset flag -- what a failed `changes` job produces -- runs the real suite.
 
-Any change to the set of required checks belongs here and in the comment block
-above `ci-ok` in `.github/workflows/ci.yml`, in the same commit.
+Any change to the set of required checks belongs here and in the comment block above `ci-ok` in `.github/workflows/ci.yml`, in the same commit.

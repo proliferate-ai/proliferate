@@ -6,23 +6,9 @@
 > reference until its sections are folded in; where the two disagree, the
 > system spec wins.
 
-Read before touching: `apps/packages/product-client/src/**/*workflow*`,
-`server/proliferate/server/workflows/**`,
-`anyharness/crates/anyharness-lib/src/domains/workflows/**`,
-`anyharness/crates/anyharness-lib/src/live/workflows/**`,
-`anyharness/crates/anyharness-lib/src/domains/workspaces/workflow_placement.rs`
+Read before touching: `apps/packages/product-client/src/**/*workflow*`, `server/proliferate/server/workflows/**`, `anyharness/crates/anyharness-lib/src/domains/workflows/**`, `anyharness/crates/anyharness-lib/src/live/workflows/**`, `anyharness/crates/anyharness-lib/src/domains/workspaces/workflow_placement.rs`
 
-This document describes the current (gen-2, `schema_version` 2) Workflow
-system across its three planes: the control plane owns definitions and frozen
-invocations; the client owns authoring, the trigger courier, and the run view;
-the AnyHarness runtime owns placement and execution. The gen-1 lane
-(one-prompt runs, portable invocations, run control, managed cloud execution)
-was deleted end to end — runtime first by the gen-2 ladder, then the server
-managed-delivery lane, v1 wire shapes, and legacy client surfaces by
-`delivery/cull-sweep/delivery-spec-delete-gen1-workflows.md`. Git history is
-the archive; the managed lane's delivery/retry design is summarized in
-`delivery/cull-sweep/notes-gen1-delivery-retry-shape.md` as courier starting
-material.
+This document describes the current (gen-2, `schema_version` 2) Workflow system across its three planes: the control plane owns definitions and frozen invocations; the client owns authoring, the trigger courier, and the run view; the AnyHarness runtime owns placement and execution. The gen-1 lane (one-prompt runs, portable invocations, run control, managed cloud execution) was deleted end to end — runtime first by the gen-2 ladder, then the server managed-delivery lane, v1 wire shapes, and legacy client surfaces by `delivery/cull-sweep/delivery-spec-delete-gen1-workflows.md`. Git history is the archive; the managed lane's delivery/retry design is summarized in `delivery/cull-sweep/notes-gen1-delivery-retry-shape.md` as courier starting material.
 
 ## Mental model
 
@@ -34,10 +20,7 @@ definition (CP, Postgres)         a saved, validated gen-2 document
                                   one session per node, pure transition table
 ```
 
-Delivery between the planes is the **client trigger courier**: the client PUTs
-the invocation to the control plane, then reconstitutes the frozen snapshot
-into a run PUT against the local runtime. The server never contacts the
-runtime to execute a workflow.
+Delivery between the planes is the **client trigger courier**: the client PUTs the invocation to the control plane, then reconstitutes the frozen snapshot into a run PUT against the local runtime. The server never contacts the runtime to execute a workflow.
 
 - **Control plane governs, runtime executes.** The CP validates and stores
   documents and freezes invocations; it never resolves placement, models, or
@@ -52,8 +35,7 @@ runtime to execute a workflow.
 
 ## Definitions (control plane)
 
-A workflow definition is a personal, revisioned record whose payload is one
-camelCase `WorkflowDefinitionV2` JSON document:
+A workflow definition is a personal, revisioned record whose payload is one camelCase `WorkflowDefinitionV2` JSON document:
 
 - `nodes` (1–64): `{id, type: "agent" | "human_in_loop", title, prompt,
   model?}`. `model` is a pass-through config
@@ -68,16 +50,9 @@ camelCase `WorkflowDefinitionV2` JSON document:
 - `docTemplates` (≤64): `{slug, producingNodeId, body}` — the context
   documents the run materializes into the workspace.
 
-Validation is identical in intent on every plane (the runtime re-validates
-the frozen document with no CP catalog available). Placement never appears in
-the document — it is a trigger-time binding.
+Validation is identical in intent on every plane (the runtime re-validates the frozen document with no CP catalog available). Placement never appears in the document — it is a trigger-time binding.
 
-Persistence is the `workflow_definition` Postgres table (definition document
-in `definition_json`, optimistic `revision` counter, soft delete). The
-`schema_version` column and the legacy `inputs_json`/`stages_json`/
-`validated_catalog_version` columns predate gen-2's single-document shape;
-gen-2 rows write the legacy columns empty. `default_repo_config_id` is an
-opaque runtime repo-root id stored shape-only.
+Persistence is the `workflow_definition` Postgres table (definition document in `definition_json`, optimistic `revision` counter, soft delete). The `schema_version` column and the legacy `inputs_json`/`stages_json`/ `validated_catalog_version` columns predate gen-2's single-document shape; gen-2 rows write the legacy columns empty. `default_repo_config_id` is an opaque runtime repo-root id stored shape-only.
 
 API (`server/proliferate/server/workflows/api.py`, camelCase wire):
 
@@ -89,18 +64,11 @@ PUT    /v1/workflows/{id}            full replacement + expectedRevision
 DELETE /v1/workflows/{id}?expectedRevision=
 ```
 
-Access policy: owner-only, non-enumerating not-found for anyone else,
-server-owned identity fields. A stale `expectedRevision` is a 409 that
-changes nothing; the update store is one conditional
-`UPDATE ... WHERE revision = :expected` — read-then-write without the
-predicate is invalid.
+Access policy: owner-only, non-enumerating not-found for anyone else, server-owned identity fields. A stale `expectedRevision` is a 409 that changes nothing; the update store is one conditional `UPDATE ... WHERE revision = :expected` — read-then-write without the predicate is invalid.
 
 ## Invocations (control plane)
 
-`PUT /v1/workflow-invocations/{id}` freezes the current definition revision,
-the caller's scalar arguments, and the placement into an immutable record;
-`GET` returns the frozen record verbatim. The invocation id is a
-client-minted canonical lowercase UUID supplied in the path only.
+`PUT /v1/workflow-invocations/{id}` freezes the current definition revision, the caller's scalar arguments, and the placement into an immutable record; `GET` returns the frozen record verbatim. The invocation id is a client-minted canonical lowercase UUID supplied in the path only.
 
 - **Replay identity is RFC 8785 canonical JSON** of the creation request:
   whitespace and key order never matter, values always do. Same id + equal
@@ -121,15 +89,11 @@ client-minted canonical lowercase UUID supplied in the path only.
   document (`document_json()`) so the runtime never receives an
   author-omitted model field.
 
-Argument values are redacted from this route's validation-error responses
-(`main.py::_validation_error_handler`) — a 422 must not leak argument
-content.
+Argument values are redacted from this route's validation-error responses (`main.py::_validation_error_handler`) — a 422 must not leak argument content.
 
 ## Trigger courier (client)
 
-`apps/packages/product-client/src/lib/workflows/trigger/trigger-courier.ts`
-runs the two-plane placement sequence behind every "run this workflow"
-affordance:
+`apps/packages/product-client/src/lib/workflows/trigger/trigger-courier.ts` runs the two-plane placement sequence behind every "run this workflow" affordance:
 
 1. `PUT /v1/workflow-invocations/{id}` (control plane) freezes the snapshot;
 2. `PUT /v1/workflow-runs/{run_id}` (runtime plane) is handed a body
@@ -137,22 +101,11 @@ affordance:
    server-normalized arguments, placement — and materializes the workspace
    and the run.
 
-Both ids are minted before the first request and travel out on success and
-failure paths alike, so a retry after a partial failure replays rather than
-duplicates. Failure classification
-(`lib/domain/workflows/workflow-trigger-failure.ts`) names the plane that
-failed: control-plane errors carry their typed envelope; a run-stage fetch
-`TypeError` (nothing answered) renders as "runtime not connected" copy; both
-planes' coded errors are read through
-`workflow-run-state.ts::inspectWorkflowCloudError` /
-`inspectWorkflowRuntimeError` (AnyHarness errors carry RFC 7807 fields under
-`.problem`).
+Both ids are minted before the first request and travel out on success and failure paths alike, so a retry after a partial failure replays rather than duplicates. Failure classification (`lib/domain/workflows/workflow-trigger-failure.ts`) names the plane that failed: control-plane errors carry their typed envelope; a run-stage fetch `TypeError` (nothing answered) renders as "runtime not connected" copy; both planes' coded errors are read through `workflow-run-state.ts::inspectWorkflowCloudError` / `inspectWorkflowRuntimeError` (AnyHarness errors carry RFC 7807 fields under `.problem`).
 
 ## Runtime execution
 
-Owner: `domains/workflows` (durable cell) + `live/workflows` (per-run actor)
-in `anyharness-lib`. SQLite owns three tables — `workflow_runs`,
-`workflow_run_nodes`, `workflow_run_docs` — and they are the sole truth.
+Owner: `domains/workflows` (durable cell) + `live/workflows` (per-run actor) in `anyharness-lib`. SQLite owns three tables — `workflow_runs`, `workflow_run_nodes`, `workflow_run_docs` — and they are the sole truth.
 
 - **Acceptance** (`api/http/workflow_runs.rs`): the PUT re-validates the
   frozen snapshot, resolves placement, and inserts the run + node + doc rows.
@@ -204,66 +157,21 @@ POST .../approve-node · fail-redo-node · flip-node-type · undo-advance
 
 ## Client surfaces
 
-All Workflows UI ships behind the `workflows_v2` gate
-(`lib/domain/capabilities/workflows-v2.ts`): the compiled-in default is ON
-and `VITE_WORKFLOWS_V2` is the runtime kill switch ("0" forces the whole
-surface dark without cutting a release).
+All Workflows UI ships behind the `workflows_v2` gate (`lib/domain/capabilities/workflows-v2.ts`): the compiled-in default is ON and `VITE_WORKFLOWS_V2` is the runtime kill switch ("0" forces the whole surface dark without cutting a release).
 
 ### Index and authoring
 
-The authenticated Workflows surface lists saved schema-v2 definitions and
-runtime executions; creation starts from a blank workflow or one of the four
-starter templates. Definition Run continues through the trigger courier and
-opens the exact workspace.
+The authenticated Workflows surface lists saved schema-v2 definitions and runtime executions; creation starts from a blank workflow or one of the four starter templates. Definition Run continues through the trigger courier and opens the exact workspace.
 
-The builder has a fixed palette rail, deterministic graph canvas, and
-inspector. The draft owns explicit real-node `edges`; the editor-only Input
-sentinel connects to the unique head and is never serialized. New nodes start
-detached, removing a node removes only incident edges, and moving a node
-changes display order without rewiring. Save requires a workflow title, a
-title and a prompt on every step, one linear path covering every node, and an
-Input-to-head connection, in addition to the definition, reference,
-launch-intent, and repository rules — the same set the control plane and the
-runtime enforce, so a savable draft is one every plane accepts. Every gate
-that holds Save down is stated on the surface: definition issues against the
-step that owns them, and the workflow title and unapplyable JSON as their own
-banners. Canvas Backspace/Delete removes the selected node or document, while
-Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z undo and redo the whole draft outside
-editable controls.
+The builder has a fixed palette rail, deterministic graph canvas, and inspector. The draft owns explicit real-node `edges`; the editor-only Input sentinel connects to the unique head and is never serialized. New nodes start detached, removing a node removes only incident edges, and moving a node changes display order without rewiring. Save requires a workflow title, a title and a prompt on every step, one linear path covering every node, and an Input-to-head connection, in addition to the definition, reference, launch-intent, and repository rules — the same set the control plane and the runtime enforce, so a savable draft is one every plane accepts. Every gate that holds Save down is stated on the surface: definition issues against the step that owns them, and the workflow title and unapplyable JSON as their own banners. Canvas Backspace/Delete removes the selected node or document, while Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z undo and redo the whole draft outside editable controls.
 
-Cards are placed by hand: dragging a card body moves it under the pointer at
-any zoom, arrow keys nudge a focused card by the grid pitch, and edges are
-redrawn from wherever the cards now sit. A card that has not been moved keeps
-its rank in the deterministic layout, so placement is an override of that
-layout and never a replacement for it. Placements are local to the machine
-and keyed by workflow (`workflow_node_layout` in product storage): they are
-not part of the definition — the document is sealed and frozen into every
-invocation — and two people can arrange the same chain differently. A draft
-holds its arrangement in memory and adopts it under the new id at the first
-save.
+Cards are placed by hand: dragging a card body moves it under the pointer at any zoom, arrow keys nudge a focused card by the grid pitch, and edges are redrawn from wherever the cards now sit. A card that has not been moved keeps its rank in the deterministic layout, so placement is an override of that layout and never a replacement for it. Placements are local to the machine and keyed by workflow (`workflow_node_layout` in product storage): they are not part of the definition — the document is sealed and frozen into every invocation — and two people can arrange the same chain differently. A draft holds its arrangement in memory and adopts it under the new id at the first save.
 
-The JSON tab edits only the camelCase `WorkflowDefinitionV2` document. Title,
-description, and default repository stay in the record envelope. Valid JSON
-is applied atomically to the graph; malformed, semantically invalid, or
-unknown-field JSON keeps the last valid graph, retains its editor text, and
-blocks Save. Format prettifies the valid document and Revert restores the
-graph's current document, which the tab also re-seeds from on every reopen
-unless it holds unparseable text the author typed.
+The JSON tab edits only the camelCase `WorkflowDefinitionV2` document. Title, description, and default repository stay in the record envelope. Valid JSON is applied atomically to the graph; malformed, semantically invalid, or unknown-field JSON keeps the last valid graph, retains its editor text, and blocks Save. Format prettifies the valid document and Revert restores the graph's current document, which the tab also re-seeds from on every reopen unless it holds unparseable text the author typed.
 
 ### Run view and lifecycle
 
-The run view is the existing workspace view plus a right-panel "workflow"
-tool: a graph pane over the run's nodes and a docs pane over its context
-documents, with the run commands (approve, fail-and-redo, flip node type,
-undo advance, add ad-hoc node, cancel) as controls. Auto-advance announces a
-newly started node with an undoable toast, keyed on the started row plus its
-`startedAt` instant so a poll re-delivering an already-announced advance
-stays silent. The resume popover surfaces interrupted (parked) runs; its
-dismissals are per browser session and keyed `{runId: updatedAt}` so a run
-interrupted again after a resume is a new, unanswered interruption. Data
-comes from the runtime SDK hooks (`@anyharness/sdk-react`); the Cloud SDK v2
-module (`cloud/sdk/src/client/workflows-v2.ts`) and
-`@proliferate/cloud-sdk-react/hooks/workflows-v2` own the control-plane half.
+The run view is the existing workspace view plus a right-panel "workflow" tool: a graph pane over the run's nodes and a docs pane over its context documents, with the run commands (approve, fail-and-redo, flip node type, undo advance, add ad-hoc node, cancel) as controls. Auto-advance announces a newly started node with an undoable toast, keyed on the started row plus its `startedAt` instant so a poll re-delivering an already-announced advance stays silent. The resume popover surfaces interrupted (parked) runs; its dismissals are per browser session and keyed `{runId: updatedAt}` so a run interrupted again after a resume is a new, unanswered interruption. Data comes from the runtime SDK hooks (`@anyharness/sdk-react`); the Cloud SDK v2 module (`cloud/sdk/src/client/workflows-v2.ts`) and `@proliferate/cloud-sdk-react/hooks/workflows-v2` own the control-plane half.
 
 ## Proof
 

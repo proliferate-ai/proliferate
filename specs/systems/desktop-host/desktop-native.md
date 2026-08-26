@@ -1,14 +1,8 @@
 # Desktop Native Shell
 
-Read this before changing `apps/desktop/src-tauri/**`, desktop packaging,
-native commands, sidecar boot, bundled resources, local secrets, or desktop
-dispatch worker process management.
+Read this before changing `apps/desktop/src-tauri/**`, desktop packaging, native commands, sidecar boot, bundled resources, local secrets, or desktop dispatch worker process management.
 
-The desktop native shell owns the boundary between the React renderer, the OS,
-bundled binaries, local secrets, and local long-running processes. It does not
-own product UI structure; use `specs/areas/frontend.md` for renderer code.
-It does not own AnyHarness runtime internals; use `specs/areas/anyharness.md`
-for runtime behavior behind the local HTTP API.
+The desktop native shell owns the boundary between the React renderer, the OS, bundled binaries, local secrets, and local long-running processes. It does not own product UI structure; use `specs/areas/frontend.md` for renderer code. It does not own AnyHarness runtime internals; use `specs/areas/anyharness.md` for runtime behavior behind the local HTTP API.
 
 ## File Tree
 
@@ -59,15 +53,11 @@ apps/desktop/src-tauri/
 
 # Agent Seeds
 
-Agent seeds are packaged desktop resources that preinstall selected managed
-agent artifacts into the local AnyHarness runtime home. They exist to avoid
-first-launch network installs for the most important local agents.
+Agent seeds are packaged desktop resources that preinstall selected managed agent artifacts into the local AnyHarness runtime home. They exist to avoid first-launch network installs for the most important local agents.
 
 ## Short Answer
 
-There are not two runtime layouts for seeded vs downloaded agents. Seeded
-artifacts and downloaded artifacts both end up in the normal AnyHarness runtime
-home:
+There are not two runtime layouts for seeded vs downloaded agents. Seeded artifacts and downloaded artifacts both end up in the normal AnyHarness runtime home:
 
 ```text
 <runtime_home>/
@@ -84,8 +74,7 @@ home:
     state.json
 ```
 
-The difference is ownership metadata in `agent-seed/state.json` and health
-metadata returned by `/health`, not a different agent resolver path.
+The difference is ownership metadata in `agent-seed/state.json` and health metadata returned by `/health`, not a different agent resolver path.
 
 ## Build Flow
 
@@ -115,8 +104,7 @@ Current v1 seed contents:
 
 ## Tauri Launch Env
 
-`apps/desktop/src-tauri/src/agent_seed_env.rs` decides what seed env to pass to
-AnyHarness.
+`apps/desktop/src-tauri/src/agent_seed_env.rs` decides what seed env to pass to AnyHarness.
 
 | Case | Env passed to sidecar |
 | --- | --- |
@@ -176,9 +164,7 @@ On macOS, the fallback resource path is:
 | Prior `seed`, file changed | Preserve and mark `user_modified`. |
 | Prior `user_existing` or `user_modified` | Preserve. |
 
-Managed install and reconcile paths refresh seed state after installs. If a
-seed-owned artifact is replaced by an install path, it becomes user-modified so
-future seeds do not silently overwrite it.
+Managed install and reconcile paths refresh seed state after installs. If a seed-owned artifact is replaced by an install path, it becomes user-modified so future seeds do not silently overwrite it.
 
 ## Health States
 
@@ -202,12 +188,9 @@ Ownership can be:
 
 ## Reconcile Interaction
 
-Desktop should not start reconcile while seed status is `hydrating`. After
-hydration, reconcile can install non-seeded or still-missing agents.
+Desktop should not start reconcile while seed status is `hydrating`. After hydration, reconcile can install non-seeded or still-missing agents.
 
-For dev runtimes with `not_configured_dev`, reconcile should remain a manual
-setup action. Local dev without a seed must not silently kick off long network
-installs at app boot.
+For dev runtimes with `not_configured_dev`, reconcile should remain a manual setup action. Local dev without a seed must not silently kick off long network installs at app boot.
 
 ## Paths To Know
 
@@ -222,9 +205,7 @@ installs at app boot.
 
 # AnyHarness Sidecar
 
-This spec covers the local AnyHarness runtime process launched by the Desktop
-native shell. It is the process that serves the local HTTP API used by the
-desktop renderer.
+This spec covers the local AnyHarness runtime process launched by the Desktop native shell. It is the process that serves the local HTTP API used by the desktop renderer.
 
 ## Ownership
 
@@ -253,22 +234,11 @@ desktop renderer.
    macOS this means the sidecar binary is resolved from the app bundle's
    `Contents/MacOS` directory.
 
-For the two accepted macOS targets, release staging requires the exact
-prebuilt `proliferate-diagnostics-collector` artifact and fails rather than
-substituting a placeholder. Debug builds may stage a marked placeholder so
-unrelated Desktop work can compile; the supervisor classifies it as
-`binary_invalid`. Other targets retain an explicit unsupported placeholder and
-the native health state is `unsupported`, never ready.
+For the two accepted macOS targets, release staging requires the exact prebuilt `proliferate-diagnostics-collector` artifact and fails rather than substituting a placeholder. Debug builds may stage a marked placeholder so unrelated Desktop work can compile; the supervisor classifies it as `binary_invalid`. Other targets retain an explicit unsupported placeholder and the native health state is `unsupported`, never ready.
 
-The Proliferate Worker binary follows the same staging/bundling model, but it
-is not the AnyHarness sidecar. It is launched on demand by desktop dispatch
-logic in `commands/cloud_worker.rs`.
+The Proliferate Worker binary follows the same staging/bundling model, but it is not the AnyHarness sidecar. It is launched on demand by desktop dispatch logic in `commands/cloud_worker.rs`.
 
-Desktop worker config must set `runtime_base_url` from the current
-`SharedSidecar.info.url`. The sidecar normally uses a dynamically selected
-loopback port (and may use `ANYHARNESS_DEV_URL` in development), so the worker
-must not rely on its sandbox-oriented `127.0.0.1:8457` default when connecting
-to the local runtime for catalog convergence or command delivery.
+Desktop worker config must set `runtime_base_url` from the current `SharedSidecar.info.url`. The sidecar normally uses a dynamically selected loopback port (and may use `ANYHARNESS_DEV_URL` in development), so the worker must not rely on its sandbox-oriented `127.0.0.1:8457` default when connecting to the local runtime for catalog convergence or command delivery.
 
 ## Boot Flow
 
@@ -325,9 +295,7 @@ anyharness serve --host 127.0.0.1 --port <port>
 
 ## Runtime Home
 
-The sidecar chooses its runtime home inside AnyHarness unless a dev profile
-passes `--runtime-home`. In normal packaged desktop usage the default local home
-is under:
+The sidecar chooses its runtime home inside AnyHarness unless a dev profile passes `--runtime-home`. In normal packaged desktop usage the default local home is under:
 
 ```text
 ~/.proliferate/anyharness/
@@ -339,13 +307,11 @@ Dev profiles use:
 ~/.proliferate-local/runtimes/<profile>/
 ```
 
-The renderer should treat `get_runtime_info` and `/health` as the source of
-truth for the current sidecar URL and runtime home.
+The renderer should treat `get_runtime_info` and `/health` as the source of truth for the current sidecar URL and runtime home.
 
 ## Local Secrets
 
-`commands/keychain.rs` resolves the secrets folded into sidecar launch env. Two
-storage backends, split by sensitivity:
+`commands/keychain.rs` resolves the secrets folded into sidecar launch env. Two storage backends, split by sensitivity:
 
 - **Recreatable secrets** — the desktop **auth session** + **pending OAuth state**
   + **provider/env credentials** — are stored as **`0600` files under the durable
@@ -360,86 +326,32 @@ storage backends, split by sensitivity:
   (`com.proliferate.app.runtime`). Generated on first use, injected into the
   sidecar env.
 
-A one-time, best-effort purge clears secrets an older build left in the keychain.
-The desktop release matrix is macOS-only and the files are owner-only (`0600`) on
-unix; Windows/Linux desktop builds, if added, should revisit storage (Windows has
-no `0600` path, and both have user-scoped OS keychains that survive reinstall).
+A one-time, best-effort purge clears secrets an older build left in the keychain. The desktop release matrix is macOS-only and the files are owner-only (`0600`) on unix; Windows/Linux desktop builds, if added, should revisit storage (Windows has no `0600` path, and both have user-scoped OS keychains that survive reinstall).
 
 ## Restart Rules
 
-`restart_runtime` must restart with the same classes of launch env as first
-boot:
+`restart_runtime` must restart with the same classes of launch env as first boot:
 
 - local secrets (see [Local Secrets](#local-secrets))
 - bundled/external agent seed env
 - sidecar-owned default env
 - shell `PATH`
 
-Do not restart AnyHarness from renderer code by shelling out directly. Use the
-Tauri command so state, child process ownership, and `runtime-info.json` remain
-consistent.
+Do not restart AnyHarness from renderer code by shelling out directly. Use the Tauri command so state, child process ownership, and `runtime-info.json` remain consistent.
 
 ## Diagnostics Collector And Shutdown
 
-Tauri passes a new 32-byte random capability and a typed control channel to
-each collector launch through child-only inherited descriptors. It reads one
-bounded descriptor line, authenticates health, and exposes no endpoint or
-token to renderer code or the CLI. The CLI resolves an owner-only locator and
-uses the Tauri-owned pathname Unix-socket broker; customer artifacts reject
-external export, while the default-off internal artifact permits only the
-accepted internal point-in-time export.
+Tauri passes a new 32-byte random capability and a typed control channel to each collector launch through child-only inherited descriptors. It reads one bounded descriptor line, authenticates health, and exposes no endpoint or token to renderer code or the CLI. The CLI resolves an owner-only locator and uses the Tauri-owned pathname Unix-socket broker; customer artifacts reject external export, while the default-off internal artifact permits only the accepted internal point-in-time export.
 
-Native `tracing` detail uses a 1 MiB/256-record memory queue. Before readiness,
-during outages, and after collector teardown, `desktop-native.log` is the
-structurally scrubbed fallback: active plus `.1` through `.3`, 256 KiB each,
-with no disk replay. Exact schema-v1.1 Desktop renderer batches normally enter
-the ready collector through the main-window-only native command. After native
-validation and before any authenticated request, `starting`, `unsupported`,
-`degraded`, `stopped`, and shutdown-armed states may write each already-filtered
-renderer record through the same bounded fallback pipeline without activating
-it; the command still returns its original unavailable error. Post-dispatch
-receipt, replacement, deadline, and transport failures do not fall back. The
-obsolete renderer diagnostics file receives no new writes, while historical
-support discovery remains. Sentry, PostHog, anonymous telemetry, and support
-composition remain under their existing owners.
+Native `tracing` detail uses a 1 MiB/256-record memory queue. Before readiness, during outages, and after collector teardown, `desktop-native.log` is the structurally scrubbed fallback: active plus `.1` through `.3`, 256 KiB each, with no disk replay. Exact schema-v1.1 Desktop renderer batches normally enter the ready collector through the main-window-only native command. After native validation and before any authenticated request, `starting`, `unsupported`, `degraded`, `stopped`, and shutdown-armed states may write each already-filtered renderer record through the same bounded fallback pipeline without activating it; the command still returns its original unavailable error. Post-dispatch receipt, replacement, deadline, and transport failures do not fall back. The obsolete renderer diagnostics file receives no new writes, while historical support discovery remains. Sentry, PostHog, anonymous telemetry, and support composition remain under their existing owners.
 
-On the two supported packaged macOS targets, owned AnyHarness and Worker
-launches prepare the direct executable first, then create the fallback-root,
-bridge, and shutdown descriptors; only a direct binary child may inherit them
-(never Cargo, a shell, or any wrapper — a `cargo run` launcher spawns
-unprotected). A pre-exec descriptor failure closes every partial authority and
-performs at most one direct unprotected relaunch — an observability outcome,
-never a product failure — and a returned successful protected spawn is the
-point of no retry. Each bridge lives on the identity-stable process owner
-(`SidecarProcess`, `CloudWorkerProcess`) beside the owned `Child`; the Worker
-owner also holds the two pipe drainers and the bounded 65,536-byte/12-line
-in-memory tail that replaces `worker.log` on supported targets. Historical
-`worker.log` files are untouched customer data, and unsupported builds keep
-the legacy writer verbatim. Parent status and flush are one-slot requests with
-fixed deadlines; the child's terminal status/fence is cached at most once, and
-the tail is cleared only when the verified owner is released. Each owner starts
-one generation-bound natural-exit observer after healthy startup; explicit
-stop/restart cancels it while holding the same lifecycle mutex, and an
-ambiguous inspection retains the full owner for later reconciliation.
+On the two supported packaged macOS targets, owned AnyHarness and Worker launches prepare the direct executable first, then create the fallback-root, bridge, and shutdown descriptors; only a direct binary child may inherit them (never Cargo, a shell, or any wrapper — a `cargo run` launcher spawns unprotected). A pre-exec descriptor failure closes every partial authority and performs at most one direct unprotected relaunch — an observability outcome, never a product failure — and a returned successful protected spawn is the point of no retry. Each bridge lives on the identity-stable process owner (`SidecarProcess`, `CloudWorkerProcess`) beside the owned `Child`; the Worker owner also holds the two pipe drainers and the bounded 65,536-byte/12-line in-memory tail that replaces `worker.log` on supported targets. Historical `worker.log` files are untouched customer data, and unsupported builds keep the legacy writer verbatim. Parent status and flush are one-slot requests with fixed deadlines; the child's terminal status/fence is cached at most once, and the tail is cleared only when the verified owner is released. Each owner starts one generation-bound natural-exit observer after healthy startup; explicit stop/restart cancels it while holding the same lifecycle mutex, and an ambiguous inspection retains the full owner for later reconciliation.
 
-Terminal shutdown is idempotent: arm shutdown and cancel broker leases; drain
-the native queue while one absolute 500 ms deadline concurrently covers that
-drain plus both child bridge shutdown-signal/flush requests, each capped at
-the milliseconds remaining. Child HTTP dispatch and remaining fallback writes
-consume that same absolute window, and a later natural guard reuses a parent
-flush result instead of starting another wait. Then stop/reap Worker and
-AnyHarness while the collector remains available; admit the collector-stop
-start; stop/reap the collector; write its
-terminal to teardown fallback; remove the locator; close fallback. Windows'
-direct-exit updater command enters this same coordinator before installation,
-preserving its existing fail-closed Worker behavior.
+Terminal shutdown is idempotent: arm shutdown and cancel broker leases; drain the native queue while one absolute 500 ms deadline concurrently covers that drain plus both child bridge shutdown-signal/flush requests, each capped at the milliseconds remaining. Child HTTP dispatch and remaining fallback writes consume that same absolute window, and a later natural guard reuses a parent flush result instead of starting another wait. Then stop/reap Worker and AnyHarness while the collector remains available; admit the collector-stop start; stop/reap the collector; write its terminal to teardown fallback; remove the locator; close fallback. Windows' direct-exit updater command enters this same coordinator before installation, preserving its existing fail-closed Worker behavior.
 
 ## Desktop Path Inspection
 
-`commands/shell.rs::inspect_path` is the native metadata boundary for a path
-that product code has already routed to Desktop. It accepts only a non-empty,
-NUL-free, platform-absolute path and intentionally uses `std::fs::metadata` so
-the final link is followed. Its serialized response is path-free:
+`commands/shell.rs::inspect_path` is the native metadata boundary for a path that product code has already routed to Desktop. It accepts only a non-empty, NUL-free, platform-absolute path and intentionally uses `std::fs::metadata` so the final link is followed. Its serialized response is path-free:
 
 - regular file/link-to-file: `{"kind":"file"}`
 - directory/link-to-directory: `{"kind":"directory"}`
@@ -447,11 +359,7 @@ the final link is followed. Its serialized response is path-free:
 - invalid input, denied metadata, unsupported object type, or other I/O:
   `{"kind":"unavailable","reason":"<bounded_reason>"}`
 
-The bounded reasons are `invalid_path`, `permission_denied`,
-`unsupported_type`, and `io_error`. Expected outcomes do not use a native
-string-error channel, and the command does not log the input, link target, or
-OS error. Inspection and the later OS open are separate operations; the
-same-user race between them is accepted.
+The bounded reasons are `invalid_path`, `permission_denied`, `unsupported_type`, and `io_error`. Expected outcomes do not use a native string-error channel, and the command does not log the input, link target, or OS error. Inspection and the later OS open are separate operations; the same-user race between them is accepted.
 
 ## Failure Modes
 

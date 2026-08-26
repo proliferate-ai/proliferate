@@ -1,7 +1,6 @@
 # Flow Registry
 
-Legacy human-readable inventory of end-to-end flows that must never break.
-Owned and dictated by Pablo. Until the generated view replaces this file:
+Legacy human-readable inventory of end-to-end flows that must never break. Owned and dictated by Pablo. Until the generated view replaces this file:
 
 - Adding or materially changing a guarantee updates the canonical target
   manifest and collector metadata in the same PR.
@@ -10,8 +9,7 @@ Owned and dictated by Pablo. Until the generated view replaces this file:
 - The replacement generator discovers collectors in both directions and emits
   this view; no claimed completeness audit exists on current main yet.
 
-Tiers per `specs/engineering/testing/standard.md`: **2** = mocked intent (per-PR, blocks merge),
-**3** = live end-to-end (release train), **4** = upgrade path (release train).
+Tiers per `specs/engineering/testing/standard.md`: **2** = mocked intent (per-PR, blocks merge), **3** = live end-to-end (release train), **4** = upgrade path (release train).
 
 ## Auth & identity — must work, even if basic
 
@@ -78,11 +76,7 @@ Tiers per `specs/engineering/testing/standard.md`: **2** = mocked intent (per-PR
 
 ## Self-hosting
 
-Every self-hosted deploy is the production compose bundle (hand-run
-`bootstrap.sh` or the AWS one-click), single-org, claimed once via `/setup`.
-Canonical guarantee IDs and journeys live in `core-release-validation.md`, the
-target manifest, and the Tier 3/4 scenario contracts. `self-hosting.md` is the
-legacy implementation/evidence hand-off for the pointers below.
+Every self-hosted deploy is the production compose bundle (hand-run `bootstrap.sh` or the AWS one-click), single-org, claimed once via `/setup`. Canonical guarantee IDs and journeys live in `core-release-validation.md`, the target manifest, and the Tier 3/4 scenario contracts. `self-hosting.md` is the legacy implementation/evidence hand-off for the pointers below.
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
@@ -133,9 +127,7 @@ legacy implementation/evidence hand-off for the pointers below.
 
 ## Upgrade & release
 
-The target contract and current red gaps live in
-[`tier-4-scenario-contract.md`](tier-4-scenario-contract.md). These pointers
-name current collectors only; they do not imply complete qualification.
+The target contract and current red gaps live in [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md). These pointers name current collectors only; they do not imply complete qualification.
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
@@ -145,7 +137,4 @@ name current collectors only; they do not imply complete qualification.
 | Public release artifact chain is complete and immutable before feeds/tags move | 4 | tests/release/src/scenarios/upgrade/t4-sh-2.ts (current collector requires execution audit) |
 | Forward migrations preserve retained Postgres, AnyHarness SQLite, and Worker SQLite state | 4 | — |
 
-The target Tier 3 local-runtime contract derives every supported harness and
-visible configuration from the live probe, including OpenCode. It exercises
-managed LiteLLM and user API-key routes in GitHub Actions. Native CLI-login
-permutations are deliberately outside that qualification matrix.
+The target Tier 3 local-runtime contract derives every supported harness and visible configuration from the live probe, including OpenCode. It exercises managed LiteLLM and user API-key routes in GitHub Actions. Native CLI-login permutations are deliberately outside that qualification matrix.

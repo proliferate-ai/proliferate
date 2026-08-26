@@ -1,14 +1,8 @@
 # Pending Workspace Shell, Session Intents, And Optimistic UI
 
-Read this doc before changing new-workspace launch, existing-workspace
-selection/opening, pending workspace UI, optimistic session creation, queued
-prompts, projected chat tabs, workspace arrival panels, optimistic
-config/interaction handling, or sidebar/footer/header state during workspace
-or session materialization.
+Read this doc before changing new-workspace launch, existing-workspace selection/opening, pending workspace UI, optimistic session creation, queued prompts, projected chat tabs, workspace arrival panels, optimistic config/interaction handling, or sidebar/footer/header state during workspace or session materialization.
 
-This is a UI-side spec. It does not define AnyHarness runtime semantics. It
-defines how the desktop renders immediately, stores outbound user work, and
-reconciles that UI with AnyHarness and workspace materialization later.
+This is a UI-side spec. It does not define AnyHarness runtime semantics. It defines how the desktop renders immediately, stores outbound user work, and reconciles that UI with AnyHarness and workspace materialization later.
 
 ## Scope Map
 
@@ -66,10 +60,7 @@ Workspace and session creation has hard latency:
 - a submitted prompt may need runtime acknowledgement before it appears in the
   authoritative transcript
 
-The UI must not wait for those steps before showing the target shell. The first
-workspace render should look like the eventual materialized shell, with the same
-header actions, chat tab, model/config controls, sidebar row,
-and queued user work.
+The UI must not wait for those steps before showing the target shell. The first workspace render should look like the eventual materialized shell, with the same header actions, chat tab, model/config controls, sidebar row, and queued user work.
 
 The system has one job:
 
@@ -77,16 +68,11 @@ The system has one job:
 > immediately, then reconcile that projection with the real runtime objects
 > when they materialize.
 
-The user should never see the implementation timeline. A new workspace should
-not look like "empty shell, then path, then tab, then model." A
-queued prompt should not look like "text only, then controls." Config changes
-should not appear applied, then roll back, then apply again. Those are all
-projection bugs.
+The user should never see the implementation timeline. A new workspace should not look like "empty shell, then path, then tab, then model." A queued prompt should not look like "text only, then controls." Config changes should not appear applied, then roll back, then apply again. Those are all projection bugs.
 
 ## 2. Mental Model
 
-Optimistic UI is not a second UI. It is the normal shell rendered from two
-sources:
+Optimistic UI is not a second UI. It is the normal shell rendered from two sources:
 
 1. Authoritative runtime/workspace state that already exists.
 2. Client-owned projected state for work the user just requested.
@@ -109,8 +95,7 @@ user action
   -> reconciliation
 ```
 
-The synchronous projection is mandatory. Dispatch is best effort and may wait
-for a workspace id, session id, stream, or runtime queue seq.
+The synchronous projection is mandatory. Dispatch is best effort and may wait for a workspace id, session id, stream, or runtime queue seq.
 
 ### The Four Ledgers
 
@@ -123,66 +108,43 @@ When reasoning about a bug, keep these ledgers separate:
 | Outbound session intents | "send this prompt, then set config, then resolve permission" | `session-intent-store` |
 | Runtime truth | "AnyHarness created session xyz and emitted transcript/config events" | AnyHarness SDK/query/stream state |
 
-Do not merge these ledgers to make one surface easier. A pending workspace is
-not a fake logical workspace. A projected session is not a real runtime
-session. A session intent is not a transcript event.
+Do not merge these ledgers to make one surface easier. A pending workspace is not a fake logical workspace. A projected session is not a real runtime session. A session intent is not a transcript event.
 
-Selection is a camera. It decides what is presented, never whether a launch
-completes. The shell-selection ledger points at one attempt at a time; the
-attempts themselves live in their own registry and finish on their own.
+Selection is a camera. It decides what is presented, never whether a launch completes. The shell-selection ledger points at one attempt at a time; the attempts themselves live in their own registry and finish on their own.
 
 ## 3. Vocabulary
 
 **Pending workspace entry**
 
-`PendingWorkspaceEntry` is the client-side record for one workspace creation or
-entry attempt. It owns the attempt id, request kind, deterministic display
-data, stage, materialized workspace id once known, setup status, and failure
-state.
+`PendingWorkspaceEntry` is the client-side record for one workspace creation or entry attempt. It owns the attempt id, request kind, deterministic display data, stage, materialized workspace id once known, setup status, and failure state.
 
 **Pending workspace UI key**
 
-`pending-workspace:<attemptId>` is the provisional logical workspace key used
-before a real logical workspace exists. It is never persisted as the last stable
-workspace selection.
+`pending-workspace:<attemptId>` is the provisional logical workspace key used before a real logical workspace exists. It is never persisted as the last stable workspace selection.
 
 **Materialized workspace id**
 
-The real AnyHarness or cloud workspace id returned by creation/select flows.
-Pending entries may learn this id before workspace selection has finished.
+The real AnyHarness or cloud workspace id returned by creation/select flows. Pending entries may learn this id before workspace selection has finished.
 
 **Projected session**
 
-A client session record created before a real AnyHarness session exists. It is
-stored under the pending workspace UI key and is used by header tabs, model
-controls, chat surface state, and queued prompts.
+A client session record created before a real AnyHarness session exists. It is stored under the pending workspace UI key and is used by header tabs, model controls, chat surface state, and queued prompts.
 
 **Live attempt**
 
-An attempt still present in the pending workspace registry. Liveness is what
-the launch pipeline runs on: patching the entry, remapping and materializing
-projected sessions, and clearing the entry. Only an explicit dismissal (back,
-or an app-level selection reset) ends it.
+An attempt still present in the pending workspace registry. Liveness is what the launch pipeline runs on: patching the entry, remapping and materializing projected sessions, and clearing the entry. Only an explicit dismissal (back, or an app-level selection reset) ends it.
 
 **Attended attempt**
 
-The attempt the user is currently looking at: the selected logical workspace id
-equals `pending-workspace:<attemptId>`, or the entry has a materialized
-workspace id and it equals the selected workspace id. Attendance gates
-presentation only, and at most one attempt is attended at a time.
+The attempt the user is currently looking at: the selected logical workspace id equals `pending-workspace:<attemptId>`, or the entry has a materialized workspace id and it equals the selected workspace id. Attendance gates presentation only, and at most one attempt is attended at a time.
 
 **Launch intent**
 
-A transient marker for a home/new-workspace launch. It can help the UI know
-that a launch is underway, but it is not the source of shell truth once a
-pending workspace entry or projected session exists.
+A transient marker for a home/new-workspace launch. It can help the UI know that a launch is underway, but it is not the source of shell truth once a pending workspace entry or projected session exists.
 
 **Session intent**
 
-Client-owned outbound session work that must preserve user order, render
-immediately when it affects visible UI, and dispatch once the target session can
-accept it. Session intents include prompt sends, config updates, interaction
-responses, and queued prompt edit/delete actions.
+Client-owned outbound session work that must preserve user order, render immediately when it affects visible UI, and dispatch once the target session can accept it. Session intents include prompt sends, config updates, interaction responses, and queued prompt edit/delete actions.
 
 ## 4. Core Invariants
 
@@ -289,8 +251,7 @@ Use these owners. Do not introduce another general-purpose pending state owner.
 | Beginning/finalizing workspace entry | `hooks/workspaces/**` workflow hooks | Coordinates stores, selection, focus, materialization. |
 | Dispatch/reconciliation effects | lifecycle hooks | App-mounted effects own waits, streams, dispatch loops, and reconciliation. |
 
-Stores hold facts and local transactions. They do not wait for work, dispatch
-network calls, subscribe to streams, or decide UI projection rules.
+Stores hold facts and local transactions. They do not wait for work, dispatch network calls, subscribe to streams, or decide UI projection rules.
 
 ## 6. End-To-End Timeline
 
@@ -317,9 +278,7 @@ Home submit
   -> clear pending workspace state after handoff is complete
 ```
 
-Only the lower half of this timeline may be slow. Everything through
-`enqueue initial prompt/config/interaction work` is synchronous UI projection
-and should be visible in the first shell paint.
+Only the lower half of this timeline may be slow. Everything through `enqueue initial prompt/config/interaction work` is synchronous UI projection and should be visible in the first shell paint.
 
 The same model applies to an existing workspace with a new session:
 
@@ -334,8 +293,7 @@ user opens/sends to a new session
   -> dispatch and reconcile later live intents
 ```
 
-The same model also applies when selecting an existing workspace with remembered
-tabs:
+The same model also applies when selecting an existing workspace with remembered tabs:
 
 ```text
 user selects existing workspace
@@ -347,12 +305,9 @@ user selects existing workspace
   -> patch the placeholder from the real session summary, or clear it if stale
 ```
 
-This fast-open placeholder is only shell scaffolding. It must not invent
-transcript content, runtime activity, or action capabilities. The real session
-summary and stream replace it as soon as AnyHarness session data is available.
+This fast-open placeholder is only shell scaffolding. It must not invent transcript content, runtime activity, or action capabilities. The real session summary and stream replace it as soon as AnyHarness session data is available.
 
-Changing harnesses in an unused chat is a transactional replacement, not a
-second visible tab:
+Changing harnesses in an unused chat is a transactional replacement, not a second visible tab:
 
 ```text
 user selects a different harness
@@ -364,86 +319,19 @@ user selects a different harness
      remove the replacement, and restore the exact old shell
 ```
 
-Replaceability is based on user work, not raw runtime event count. Startup,
-status, and config acknowledgement events do not make an otherwise unused chat
-non-empty. Transcript turns, attempted/queued/optimistic prompts, goals,
-pending interactions, or active runtime work do. A superseded materializer must
-never reinsert its session after replacement, and composer drafts and
-attachments remain owned by the workspace across the swap.
+Replaceability is based on user work, not raw runtime event count. Startup, status, and config acknowledgement events do not make an otherwise unused chat non-empty. Transcript turns, attempted/queued/optimistic prompts, goals, pending interactions, or active runtime work do. A superseded materializer must never reinsert its session after replacement, and composer drafts and attachments remain owned by the workspace across the swap.
 
-Prompts submitted after the replacement shell becomes active but before it
-materializes are part of the transaction. If materialization fails, each
-acquired prompt moves into a visible, workspace-scoped recovery surface before
-the replacement shell is removed. Recovery retains the complete prompt payload,
-including structured blocks, attachment snapshots, content parts, and resolved
-agent/model/mode configuration. It must not overwrite a newer workspace draft.
-Retry and dismissal act only on the explicitly selected recovered prompt, so
-multiple failed submissions remain independently identifiable and recoverable.
+Prompts submitted after the replacement shell becomes active but before it materializes are part of the transaction. If materialization fails, each acquired prompt moves into a visible, workspace-scoped recovery surface before the replacement shell is removed. Recovery retains the complete prompt payload, including structured blocks, attachment snapshots, content parts, and resolved agent/model/mode configuration. It must not overwrite a newer workspace draft. Retry and dismissal act only on the explicitly selected recovered prompt, so multiple failed submissions remain independently identifiable and recoverable.
 
-Replacement suppression has two phases. While the new session is still
-materializing, the old runtime id and its client-session alias are staged only
-in memory: UI/query projections hide them, but bootstrap reconciliation must
-not dismiss them, and an app restart naturally restores the old runtime. Once
-the replacement succeeds, the old session may remain suppressed only after its
-tombstone is persisted or its runtime absence is confirmed by dismissal. If
-both persistence and dismissal fail, the old session is restored to the visible
-session model rather than being left as a hidden runtime. A persisted tombstone
-remains in force until a later authoritative session
-list omits the retired runtime id; mutation success alone is not sufficient,
-because a list request that began before dismissal can still refill cache.
-Only a list request that began after the tombstone commit may clear it; an
-older request can omit a runtime that had not been created when it started.
-After that authoritative omission removes persisted cleanup state, the current
-renderer keeps an in-memory retired-id fence until reload so any older response
-that arrives out of order is still filtered. Every session-list owner must
-filter both cache hits and fetched results through the staged, committed, and
-retired suppression set. An explicit user restore is the sole inverse: it
-first fences the workspace against new replacement cleanup, waits for any
-already-started replacement dismissals to settle, then restores and releases
-the restored runtime id and its client aliases before cache upsert. Restore must
-first prove that the cleanup-state update is durable; if that preflight fails,
-it must not republish the runtime. Replacement
-dismissals are deduplicated per workspace and runtime id. Cleanup requested
-during a restore is queued until the final same-workspace restore fence closes;
-the runtime id actually restored is removed from that queue, while unrelated
-queued cleanup drains immediately in the background.
+Replacement suppression has two phases. While the new session is still materializing, the old runtime id and its client-session alias are staged only in memory: UI/query projections hide them, but bootstrap reconciliation must not dismiss them, and an app restart naturally restores the old runtime. Once the replacement succeeds, the old session may remain suppressed only after its tombstone is persisted or its runtime absence is confirmed by dismissal. If both persistence and dismissal fail, the old session is restored to the visible session model rather than being left as a hidden runtime. A persisted tombstone remains in force until a later authoritative session list omits the retired runtime id; mutation success alone is not sufficient, because a list request that began before dismissal can still refill cache. Only a list request that began after the tombstone commit may clear it; an older request can omit a runtime that had not been created when it started. After that authoritative omission removes persisted cleanup state, the current renderer keeps an in-memory retired-id fence until reload so any older response that arrives out of order is still filtered. Every session-list owner must filter both cache hits and fetched results through the staged, committed, and retired suppression set. An explicit user restore is the sole inverse: it first fences the workspace against new replacement cleanup, waits for any already-started replacement dismissals to settle, then restores and releases the restored runtime id and its client aliases before cache upsert. Restore must first prove that the cleanup-state update is durable; if that preflight fails, it must not republish the runtime. Replacement dismissals are deduplicated per workspace and runtime id. Cleanup requested during a restore is queued until the final same-workspace restore fence closes; the runtime id actually restored is removed from that queue, while unrelated queued cleanup drains immediately in the background.
 
-Empty-session creation also has a small durable pre-acknowledgement phase. The
-client persists the projected `client-session:*` id, a caller-selected runtime
-UUID, workspace, exact optional `modelId`, complete generic `controlValues`,
-subagent preference, and replacement target before sending `POST /v1/sessions`.
-The ledger stores intent, not availability or frozen defaults. This seam is
-enabled only for the bundled local runtime,
-which deploys in lockstep with ProductClient; cloud runtimes can lag and
-retain the pre-existing server-minted create behavior until they advertise an
-equivalent capability. Session create reloads current target launch options,
-exact-validates the selection, and atomically stores `ResolvedLaunchIntent`;
-the actor applies and confirms every explicit value before readiness. A
-successful create response strictly acknowledges and removes the entry. There
-is no post-create defaults loop. If acknowledgement storage fails,
-the materializer retires the created runtime or retains it honestly rather than
-publishing an unowned replay entry. If a reload interrupts the request before
-the response is observed, workspace bootstrap resumes the entry with both
-original ids and frozen inputs before it considers opening a default empty
-session. The fresh renderer keeps the original client alias only while that
-replay is unresolved. Once the replay materializes, it atomically promotes the
-session record, queued intents, active selection, and shell preferences to the
-runtime UUID; a successful replay must not leave a `client-session:*` tab
-behind. The runtime UUID is the idempotency identity: resume may repeat that
-exact request, but must never probe by agent/model and must never mint a new
-UUID as a fallback. This ledger is limited to empty session creation;
-prompt-bearing projected sessions retain their existing inspectable
-failure/retry ownership.
+Empty-session creation also has a small durable pre-acknowledgement phase. The client persists the projected `client-session:*` id, a caller-selected runtime UUID, workspace, exact optional `modelId`, complete generic `controlValues`, subagent preference, and replacement target before sending `POST /v1/sessions`. The ledger stores intent, not availability or frozen defaults. This seam is enabled only for the bundled local runtime, which deploys in lockstep with ProductClient; cloud runtimes can lag and retain the pre-existing server-minted create behavior until they advertise an equivalent capability. Session create reloads current target launch options, exact-validates the selection, and atomically stores `ResolvedLaunchIntent`; the actor applies and confirms every explicit value before readiness. A successful create response strictly acknowledges and removes the entry. There is no post-create defaults loop. If acknowledgement storage fails, the materializer retires the created runtime or retains it honestly rather than publishing an unowned replay entry. If a reload interrupts the request before the response is observed, workspace bootstrap resumes the entry with both original ids and frozen inputs before it considers opening a default empty session. The fresh renderer keeps the original client alias only while that replay is unresolved. Once the replay materializes, it atomically promotes the session record, queued intents, active selection, and shell preferences to the runtime UUID; a successful replay must not leave a `client-session:*` tab behind. The runtime UUID is the idempotency identity: resume may repeat that exact request, but must never probe by agent/model and must never mint a new UUID as a fallback. This ledger is limited to empty session creation; prompt-bearing projected sessions retain their existing inspectable failure/retry ownership.
 
 ## 7. Begin Flow
 
 All workspace creation entrypoints should converge on this shape:
 
-Keyboard shortcuts and command-palette entries must resolve the same repository
-target as the visible UI. If a sidebar repo create menu is open, use that repo.
-If Home is showing a repository target, use Home's selected repository and
-branch. Otherwise fall back to the selected workspace. Create commands should
-enter the workspace shell before dispatching the async create work.
+Keyboard shortcuts and command-palette entries must resolve the same repository target as the visible UI. If a sidebar repo create menu is open, use that repo. If Home is showing a repository target, use Home's selected repository and branch. Otherwise fall back to the selected workspace. Create commands should enter the workspace shell before dispatching the async create work.
 
 1. Resolve deterministic display and request data before shell entry.
    For worktrees this includes `workspaceName`, `branchName`, `baseBranch`,
@@ -519,8 +407,7 @@ When the real workspace id is known:
 
 ## 9. UI Projection Rules
 
-Each surface that normally reads real workspace/session data needs a pending
-projection path.
+Each surface that normally reads real workspace/session data needs a pending projection path.
 
 | Surface | First render source | Runtime handoff source |
 | --- | --- | --- |
@@ -642,14 +529,9 @@ projection path.
 
 ## 10. Session Intents
 
-The current implementation uses one ordered per-session intent system. It
-replaces the old prompt-only outbox and the separate pending-config path.
+The current implementation uses one ordered per-session intent system. It replaces the old prompt-only outbox and the separate pending-config path.
 
-Some prompt-specific names still exist in the code, such as
-`PromptOutboxEntry`, `PromptOutboxDeliveryState`, and
-`usePromptOutboxActions`. Treat those as prompt-specific compatibility names
-inside the broader session intent system. The store of record is
-`session-intent-store.ts`.
+Some prompt-specific names still exist in the code, such as `PromptOutboxEntry`, `PromptOutboxDeliveryState`, and `usePromptOutboxActions`. Treat those as prompt-specific compatibility names inside the broader session intent system. The store of record is `session-intent-store.ts`.
 
 Use this split for outbound session work:
 
@@ -731,29 +613,15 @@ Rules:
 
 ### Dispatch Ordering
 
-`selectNextDispatchableSessionIntent` walks a session's ordered intent list and
-returns the first dispatchable record. Non-terminal earlier intents block later
-ones. This preserves config-before-prompt and response-before-next-prompt
-semantics without special component logic.
+`selectNextDispatchableSessionIntent` walks a session's ordered intent list and returns the first dispatchable record. Non-terminal earlier intents block later ones. This preserves config-before-prompt and response-before-next-prompt semantics without special component logic.
 
-The dispatcher should mark API acceptance quickly enough to unblock later
-intents when AnyHarness owns subsequent ordering internally. It should not wait
-for unrelated UI hydration, history loading, or shell selection completion once
-the materialized session id exists.
+The dispatcher should mark API acceptance quickly enough to unblock later intents when AnyHarness owns subsequent ordering internally. It should not wait for unrelated UI hydration, history loading, or shell selection completion once the materialized session id exists.
 
-Creation-consumed config intents never enter this loop. Publication settles
-their exact frozen IDs and generations before it materializes or binds the
-session record.
-Compatible existing-session adoption instead resolves launch-only semantic
-keys against that session's authoritative normalized controls before binding;
-applicable records remain ordered live work, unsupported records become stale,
-and an absent live-config snapshot leaves raw-addressable records queued for
-dispatch after binding.
+Creation-consumed config intents never enter this loop. Publication settles their exact frozen IDs and generations before it materializes or binds the session record. Compatible existing-session adoption instead resolves launch-only semantic keys against that session's authoritative normalized controls before binding; applicable records remain ordered live work, unsupported records become stale, and an absent live-config snapshot leaves raw-addressable records queued for dispatch after binding.
 
 ### Attachment Conversion
 
-Prompt intents snapshot attachments before dispatch. When converting a prompt
-intent to runtime prompt blocks:
+Prompt intents snapshot attachments before dispatch. When converting a prompt intent to runtime prompt blocks:
 
 - inline image/resource payloads must not also send `attachmentId`
 - existing runtime attachments may send `attachmentId`
@@ -763,8 +631,7 @@ intent to runtime prompt blocks:
 
 ## 11. Action Routing Rules
 
-Use these rules when deciding whether a user action can happen before
-materialization:
+Use these rules when deciding whether a user action can happen before materialization:
 
 - If the action affects visible chat history, enqueue a session intent and
   render immediately.
@@ -858,14 +725,11 @@ Pending failures must preserve enough state to retry or exit cleanly:
   background promotion has no composer holding the text, so its notice names
   the workspace and offers a way to open it
 
-If materialization fails after a projected session exists, do not create a new
-session automatically. The user should see the failed workspace shell and keep
-their queued prompt.
+If materialization fails after a projected session exists, do not create a new session automatically. The user should see the failed workspace shell and keep their queued prompt.
 
 ## 14. Tests
 
-Changes to this system should include focused tests near the owner being
-changed.
+Changes to this system should include focused tests near the owner being changed.
 
 Minimum coverage by concern:
 

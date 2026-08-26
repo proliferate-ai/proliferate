@@ -1,18 +1,10 @@
 # API
 
-Status: target. The agent-first `/v1` front door does not exist on `main`;
-the body is written in the ideal state and [Current gaps](#current-gaps) is
-the whole build. Source: Core Architecture §5 (API surface), the
-agents-are-clients law, and the primitives index.
+Status: target. The agent-first `/v1` front door does not exist on `main`; the body is written in the ideal state and [Current gaps](#current-gaps) is the whole build. Source: Core Architecture §5 (API surface), the agents-are-clients law, and the primitives index.
 
 ## 1. Purpose
 
-One public contract through which humans, CI, the Slack app, the CLI, and
-agents create and steer work. Product MCP and the CLI are thin veneers over
-it; the GitHub Action is just a caller with `--wait`. Agents are the
-highest-volume, worst-behaved clients, so the contract is built for them
-first: self-teaching, typed, idempotent, blocking where they need to block,
-and rate/spend-limited as part of the contract rather than despite it.
+One public contract through which humans, CI, the Slack app, the CLI, and agents create and steer work. Product MCP and the CLI are thin veneers over it; the GitHub Action is just a caller with `--wait`. Agents are the highest-volume, worst-behaved clients, so the contract is built for them first: self-teaching, typed, idempotent, blocking where they need to block, and rate/spend-limited as part of the contract rather than despite it.
 
 ## 2. Owned state
 
@@ -51,8 +43,7 @@ Plus the agent-first bar:
 - Rate limits (per token) and spend limits (per envelope) returned in
   headers on every response.
 
-Veneers, same contract: `proliferate` CLI and `proliferate mcp`
-(`apps/cli/`, one binary); the GitHub Action.
+Veneers, same contract: `proliferate` CLI and `proliferate mcp` (`apps/cli/`, one binary); the GitHub Action.
 
 ## 4. Consumes
 
@@ -68,34 +59,23 @@ Veneers, same contract: `proliferate` CLI and `proliferate mcp`
 
 ## 5. Laws
 
-**Agents are clients.** No internal channel does anything a token cannot;
-a run spawning a child hits this API with a delegated token. This is what
-makes every use case land as rows and endpoints on one lane.
+**Agents are clients.** No internal channel does anything a token cannot; a run spawning a child hits this API with a delegated token. This is what makes every use case land as rows and endpoints on one lane.
 
-**Delegation only attenuates.** A child token's scopes ⊆ parent's, envelope
-≤ parent's remaining, expiry ≤ parent's. `attenuate` (runs) is the one
-function; a token cannot mint more than it holds.
+**Delegation only attenuates.** A child token's scopes ⊆ parent's, envelope ≤ parent's remaining, expiry ≤ parent's. `attenuate` (runs) is the one function; a token cannot mint more than it holds.
 
-**Tokens are hashed, scoped, expiring, revocable.** The plaintext is shown
-once at mint; revoking a parent revokes its delegation chain.
+**Tokens are hashed, scoped, expiring, revocable.** The plaintext is shown once at mint; revoking a parent revokes its delegation chain.
 
-**Every create is idempotent.** Same key + same canonical body → the
-original resource (`200`); same key + different body → `409`. Keys expire.
+**Every create is idempotent.** Same key + same canonical body → the original resource (`200`); same key + different body → `409`. Keys expire.
 
-**Errors carry their remediation.** A typed error names the verb or setting
-that fixes it; a bare status code is a bug filed against this spec.
+**Errors carry their remediation.** A typed error names the verb or setting that fixes it; a bare status code is a bug filed against this spec.
 
-**`/v1` is frozen.** New capability is a new verb or an additive field;
-never a changed meaning. Breaking changes are `/v2`.
+**`/v1` is frozen.** New capability is a new verb or an additive field; never a changed meaning. Breaking changes are `/v2`.
 
-**Limits are part of the contract.** Rate and spend headers on every
-response; a refused request says which limit and when it resets.
+**Limits are part of the contract.** Rate and spend headers on every response; a refused request says which limit and when it resets.
 
 ## 6. Emits
 
-`token.minted`, `token.delegated`, `token.revoked`, `api.request`
-(audited: token, verb, resource, outcome, limit state). Consumed by billing
-(spend), the runs triage projection, and security review.
+`token.minted`, `token.delegated`, `token.revoked`, `api.request` (audited: token, verb, resource, outcome, limit state). Consumed by billing (spend), the runs triage projection, and security review.
 
 ## 7. Fences
 
@@ -121,26 +101,15 @@ apps/cli/                               ※ `proliferate` + `proliferate mcp`, v
 catalogs/skills/proliferate-api/        ※ the skill file (same text as GET /v1/agent)
 ```
 
-Adjacent code the build reuses: the JWT/bearer plumbing in
-[auth/jwt.py](../../../server/proliferate/auth/jwt.py) and
-[auth/dependencies.py](../../../server/proliferate/auth/dependencies.py); the
-`CloudApiError` envelope in
-[api_errors.py](../../../server/proliferate/server/api_errors.py); the
-validation-error redaction in [main.py](../../../server/proliferate/main.py).
+Adjacent code the build reuses: the JWT/bearer plumbing in [auth/jwt.py](../../../server/proliferate/auth/jwt.py) and [auth/dependencies.py](../../../server/proliferate/auth/dependencies.py); the `CloudApiError` envelope in [api_errors.py](../../../server/proliferate/server/api_errors.py); the validation-error redaction in [main.py](../../../server/proliferate/main.py).
 
 ## 9. Proof
 
-Pinning tests to write with the system: delegation cannot widen any axis
-(property test over scopes/envelope/expiry); revoking a parent revokes the
-chain; idempotent create under concurrency; `wait` returns at terminal or
-timeout, never hangs; every error response validates against the typed
-envelope and carries `remediation`; `GET /v1/agent` renders the same text as
-the skill file (snapshot); rate-limit headers present on every route.
+Pinning tests to write with the system: delegation cannot widen any axis (property test over scopes/envelope/expiry); revoking a parent revokes the chain; idempotent create under concurrency; `wait` returns at terminal or timeout, never hangs; every error response validates against the typed envelope and carries `remediation`; `GET /v1/agent` renders the same text as the skill file (snapshot); rate-limit headers present on every route.
 
 ## Current gaps
 
-The entire system is a gap. It is step 4 of the build order and the piece
-Friday's GitHub Action reuses wholesale.
+The entire system is a gap. It is step 4 of the build order and the piece Friday's GitHub Action reuses wholesale.
 
 > [!decision] PABLO DECIDES: token storage — a new `api_token` table with
 > opaque hashed bearers (recommended: scopes, envelope, expiry and delegation

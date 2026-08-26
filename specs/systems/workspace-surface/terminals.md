@@ -14,12 +14,7 @@
 
 ## Creation Grid Contract
 
-A terminal PTY must be created with the exact cols/rows the xterm renderer
-will display. The shell prints its first prompt immediately after spawn; zsh
-prefixes every prompt with the PROMPT_SP sequence (`%` + COLUMNS−1 spaces +
-CR), which is invisible only when the emit width equals the render width. A
-mismatched creation grid shows a stray `%` line at the top of new terminals
-and mis-wraps anything printed before the first resize.
+A terminal PTY must be created with the exact cols/rows the xterm renderer will display. The shell prints its first prompt immediately after spawn; zsh prefixes every prompt with the PROMPT_SP sequence (`%` + COLUMNS−1 spaces + CR), which is invisible only when the emit width equals the render width. A mismatched creation grid shows a stray `%` line at the top of new terminals and mis-wraps anything printed before the first resize.
 
 Operating rules:
 

@@ -1,25 +1,12 @@
 # Accounts
 
-Status: current (grade B). System spec in the Organization Standard anatomy.
-The surface-level product rules (sign-in methods, web beta, password auth,
-reviewer accounts, surface UX) live in the companion document
-[`../auth/README.md`](accounts.md); the server layering rules
-(actor dependencies, org authorization, resource access, product policy) live
-in [`specs/systems/identity/auth-surface.md`](auth-surface.md). This spec is the
-owner; those two are its sections.
+Status: current (grade B). System spec in the Organization Standard anatomy. The surface-level product rules (sign-in methods, web beta, password auth, reviewer accounts, surface UX) live in the companion document [`../auth/README.md`](accounts.md); the server layering rules (actor dependencies, org authorization, resource access, product policy) live in [`specs/systems/identity/auth-surface.md`](auth-surface.md). This spec is the owner; those two are its sections.
 
 ## 1. Purpose
 
-Accounts turns a person into a `User`: sign-in (GitHub, Google, Apple,
-email/password), linked provider identities and their encrypted grants,
-session and token minting for web, mobile and desktop, product-readiness
-gates, and the account-entry side effects (organization placement, agent
-gateway enrollment, signup notification). It does not decide organization
-standing (that is `organizations` via `permissions.py`) and does not own any
-resource.
+Accounts turns a person into a `User`: sign-in (GitHub, Google, Apple, email/password), linked provider identities and their encrypted grants, session and token minting for web, mobile and desktop, product-readiness gates, and the account-entry side effects (organization placement, agent gateway enrollment, signup notification). It does not decide organization standing (that is `organizations` via `permissions.py`) and does not own any resource.
 
-SSO was deleted end to end on 2026-08-25 (cull PR #2218); there are no
-`sso_*` settings, tables, routes or client surfaces.
+SSO was deleted end to end on 2026-08-25 (cull PR #2218); there are no `sso_*` settings, tables, routes or client surfaces.
 
 ## 2. Owned state
 
@@ -34,13 +21,11 @@ SSO was deleted end to end on 2026-08-25 (cull PR #2218); there are no
 | `desktop_auth_code` | Short-lived PKCE authorization code for the desktop exchange. |
 | `password_login_attempt` | Throttle counters by email-hash and IP-hash buckets — counters only, never raw values. |
 
-Not owned here: `instance_setup_token` (owned by `setup`, the first-run claim
-flow) and `organization_membership` (owned by `organizations`).
+Not owned here: `instance_setup_token` (owned by `setup`, the first-run claim flow) and `organization_membership` (owned by `organizations`).
 
 ## 3. Public surface
 
-Routes, mounted under `/auth`
-([`main.py`](../../../server/proliferate/main.py)):
+Routes, mounted under `/auth` ([`main.py`](../../../server/proliferate/main.py)):
 
 ```text
 identity  POST /auth/{surface}/{provider}/start · GET /auth/{surface}/{provider}/callback
@@ -57,15 +42,9 @@ desktop   GET  /auth/desktop/methods · GET /auth/desktop/github/availability
           POST /auth/desktop/poll                         (poll for the PKCE handoff by state; 202 while pending)
 ```
 
-Python surface (MANIFEST): `proliferate.server.accounts`. The importable
-authentication leaf below it — `proliferate.auth.dependencies`
-(`current_active_user`, `current_limited_user`, `current_product_user`,
-`current_organization_actor`, `optional_current_active_user`) and
-`proliferate.auth.authorization` (the dependency-free vocabulary re-exported
-by `permissions.py`) — is the surface every other system consumes.
+Python surface (MANIFEST): `proliferate.server.accounts`. The importable authentication leaf below it — `proliferate.auth.dependencies` (`current_active_user`, `current_limited_user`, `current_product_user`, `current_organization_actor`, `optional_current_active_user`) and `proliferate.auth.authorization` (the dependency-free vocabulary re-exported by `permissions.py`) — is the surface every other system consumes.
 
-SDK: [`cloud/sdk/src/client/auth.ts`](../../../cloud/sdk/src/client/auth.ts),
-[`cloud/sdk-react/src/hooks/auth.ts`](../../../cloud/sdk-react/src/hooks/auth.ts).
+SDK: [`cloud/sdk/src/client/auth.ts`](../../../cloud/sdk/src/client/auth.ts), [`cloud/sdk-react/src/hooks/auth.ts`](../../../cloud/sdk-react/src/hooks/auth.ts).
 
 ## 4. Consumes
 

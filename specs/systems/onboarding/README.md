@@ -1,10 +1,6 @@
 # Onboarding
 
-The path from a signed-out person to commandable work: sign-in, product
-readiness, harness install and agent-auth setup, and the first workspace.
-A **client composition surface** spanning the login page, the Home screen's
-onboarding cards, and the readiness gates other surfaces mount; it owns no
-account, credential, or workspace record.
+The path from a signed-out person to commandable work: sign-in, product readiness, harness install and agent-auth setup, and the first workspace. A **client composition surface** spanning the login page, the Home screen's onboarding cards, and the readiness gates other surfaces mount; it owns no account, credential, or workspace record.
 
 | Section | Document |
 | --- | --- |
@@ -17,10 +13,7 @@ account, credential, or workspace record.
 
 ## Purpose
 
-Get a person from install to their first useful prompt with every blocked
-layer named. Readiness is layered and each layer is owned elsewhere; this
-surface sequences them and preserves the person's intent (typed prompt,
-chosen repo) across blockers.
+Get a person from install to their first useful prompt with every blocked layer named. Readiness is layered and each layer is owned elsewhere; this surface sequences them and preserves the person's intent (typed prompt, chosen repo) across blockers.
 
 ```text
 account identity      signed in (GitHub-first; password limited until GitHub readiness)
@@ -39,9 +32,7 @@ workspace readiness   a workspace exists and the first prompt is commandable
 | Home draft + deferred launch | The first prompt draft and a launch deferred behind readiness | [home-draft-handoff-store.ts](../../../apps/packages/product-client/src/stores/home/home-draft-handoff-store.ts), [deferred-home-launch-store.ts](../../../apps/packages/product-client/src/stores/home/deferred-home-launch-store.ts) |
 | Login redirect target | Where to land after sign-in | [login-redirect](../../../apps/packages/product-client/src/lib/domain/auth/login-redirect.ts) via `location.state` |
 
-Auth session state itself is host-owned (`ProductHost.auth`); the product
-reads it and never holds the credential
-([product-host.ts](../../../apps/packages/product-client/src/host/product-host.ts)).
+Auth session state itself is host-owned (`ProductHost.auth`); the product reads it and never holds the credential ([product-host.ts](../../../apps/packages/product-client/src/host/product-host.ts)).
 
 ## Public surface
 

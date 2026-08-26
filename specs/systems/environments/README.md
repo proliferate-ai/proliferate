@@ -1,30 +1,12 @@
 # Environments
 
-Status: target. Grade C. The body asserts the destination — one sandbox
-primitive with two lifecycle classes — and the current implementation
-(personal sandboxes under `server/cloud/`, dissolving under
-[delivery-spec-delete-dark-cloud.md](../../../delivery/cull-sweep/delivery-spec-delete-dark-cloud.md))
-is recorded as archaeology in [Known gaps](#known-gaps). Supersedes
-[SANDBOX/lifecycle.md](README.md).
+Status: target. Grade C. The body asserts the destination — one sandbox primitive with two lifecycle classes — and the current implementation (personal sandboxes under `server/cloud/`, dissolving under [delivery-spec-delete-dark-cloud.md](../../../delivery/cull-sweep/delivery-spec-delete-dark-cloud.md)) is recorded as archaeology in [Known gaps](#known-gaps). Supersedes [SANDBOX/lifecycle.md](README.md).
 
-Read before touching: `server/proliferate/integrations/sandbox/**` and
-`scripts/build-template.mjs` (both live). The rest of the code map below is
-archaeology: cull part 2 deleted `db/models/cloud/sandboxes.py`,
-`db/store/cloud_sandboxes.py`, `server/cloud/cloud_sandboxes/**`,
-`server/cloud/materialization/**`, and `server/cloud/runtime/**` — their
-paths render as plain code spans, and the engine's invariants (with the
-pre-deletion SHA for one-command restore) are recorded in
-[notes-materialization-engine.md](../../../delivery/cull-sweep/notes-materialization-engine.md).
-`server/cloud/gateway/**` survives, held for the future `runtime_gateway`
-(spec amendment).
+Read before touching: `server/proliferate/integrations/sandbox/**` and `scripts/build-template.mjs` (both live). The rest of the code map below is archaeology: cull part 2 deleted `db/models/cloud/sandboxes.py`, `db/store/cloud_sandboxes.py`, `server/cloud/cloud_sandboxes/**`, `server/cloud/materialization/**`, and `server/cloud/runtime/**` — their paths render as plain code spans, and the engine's invariants (with the pre-deletion SHA for one-command restore) are recorded in [notes-materialization-engine.md](../../../delivery/cull-sweep/notes-materialization-engine.md). `server/cloud/gateway/**` survives, held for the future `runtime_gateway` (spec amendment).
 
 ## 1. Purpose
 
-An environment is the container a run executes in: a provider VM (E2B
-today) carrying the execution bundle — supervisor, worker, AnyHarness —
-provisioned from one immutable template. This system owns the container and
-nothing inside it: provisioning, lifecycle states and their single causes,
-the template pipeline, usage-segment fencing, health, and reaping.
+An environment is the container a run executes in: a provider VM (E2B today) carrying the execution bundle — supervisor, worker, AnyHarness — provisioned from one immutable template. This system owns the container and nothing inside it: provisioning, lifecycle states and their single causes, the template pipeline, usage-segment fencing, health, and reaping.
 
 The generalization the rebuild delivers is **one primitive, two classes**:
 
@@ -36,17 +18,11 @@ The generalization the rebuild delivers is **one primitive, two classes**:
 | Death | explicit delete only | complete → checkpoint → pause → reap after retention |
 | Provision trigger | GitHub authority-chain completion | placement of a run; org installation only, no user-auth leg |
 
-Same template, same provisioning engine, same supervisor topology, same
-fencing. The existing "one per (user, org)" law becomes a law *about the
-personal class*. Compute is a lazily-bound resource of a run, never the
-other way around.
+Same template, same provisioning engine, same supervisor topology, same fencing. The existing "one per (user, org)" law becomes a law *about the personal class*. Compute is a lazily-bound resource of a run, never the other way around.
 
 ## 2. Owned state
 
-The sandbox row
-(`sandboxes.py`),
-written only through
-`db/store/cloud_sandboxes.py`:
+The sandbox row (`sandboxes.py`), written only through `db/store/cloud_sandboxes.py`:
 
 ```text
 cloud_sandbox
@@ -63,22 +39,9 @@ cloud_sandbox
 └── desired_anyharness_version · desired_worker_version   per-target pins (seam admin route)
 ```
 
-Target additions (※ new): `class` (`personal | task`), a polymorphic owner
-(`owner_user_id` for personal, `run_id` for task), `organization_id` NOT
-NULL, per-class uniqueness (`(owner_user_id, organization_id)` for personal;
-`run_id` for task), a per-class causes table, a reap policy, and the
-org/class **concurrency policy row + placement queue**.
+Target additions (※ new): `class` (`personal | task`), a polymorphic owner (`owner_user_id` for personal, `run_id` for task), `organization_id` NOT NULL, per-class uniqueness (`(owner_user_id, organization_id)` for personal; `run_id` for task), a per-class causes table, a reap policy, and the org/class **concurrency policy row + placement queue**.
 
-Also owned: the template artifacts and their promotion state (immutable
-sha tags, `:staging` / `:production` rolling tags — produced by
-[build-template.mjs](../../../scripts/build-template.mjs),
-[promote-cloud-template.mjs](../../../scripts/promote-cloud-template.mjs),
-[smoke-cloud-template.mjs](../../../scripts/smoke-cloud-template.mjs) and the
-two workflows
-[release-cloud-template.yml](../../../.github/workflows/release-cloud-template.yml),
-[promote-cloud-template.yml](../../../.github/workflows/promote-cloud-template.yml));
-and the fenced open/close operations on compute usage segments (billing owns
-what a segment costs).
+Also owned: the template artifacts and their promotion state (immutable sha tags, `:staging` / `:production` rolling tags — produced by [build-template.mjs](../../../scripts/build-template.mjs), [promote-cloud-template.mjs](../../../scripts/promote-cloud-template.mjs), [smoke-cloud-template.mjs](../../../scripts/smoke-cloud-template.mjs) and the two workflows [release-cloud-template.yml](../../../.github/workflows/release-cloud-template.yml), [promote-cloud-template.yml](../../../.github/workflows/promote-cloud-template.yml)); and the fenced open/close operations on compute usage segments (billing owns what a segment costs).
 
 > [!decision] PABLO DECIDES: class as a column or as two tables.
 > Options: (a) one `cloud_sandbox` table with a `class` column and
@@ -89,8 +52,7 @@ what a segment costs).
 
 ## 3. Public surface
 
-Today, under `/v1/cloud`
-(`cloud_sandboxes/api.py`):
+Today, under `/v1/cloud` (`cloud_sandboxes/api.py`):
 
 | Route | Purpose |
 | --- | --- |
@@ -98,21 +60,9 @@ Today, under `/v1/cloud`
 | `POST /cloud-sandbox/ensure` | create or return the row, billing-gated; never touches the provider |
 | `DELETE /cloud-sandbox` | revoke workers and gateway token, mark destroyed, kill the provider VM after commit |
 
-Internal surface consumed by other systems:
-`materialization/service.py`
-(`schedule_materialize_sandbox`, `schedule_repair_materialize_sandbox`,
-`schedule_materialize_repo_environment`, `schedule_materialize_secret_set`,
-`schedule_materialize_agent_auth`) and the engine entry
-`connect_ready_sandbox` in
-`sandbox_io/connect.py`,
-always invoked through
-`operation.py`.
+Internal surface consumed by other systems: `materialization/service.py` (`schedule_materialize_sandbox`, `schedule_repair_materialize_sandbox`, `schedule_materialize_repo_environment`, `schedule_materialize_secret_set`, `schedule_materialize_agent_auth`) and the engine entry `connect_ready_sandbox` in `sandbox_io/connect.py`, always invoked through `operation.py`.
 
-Target surface (※ new): **placement** — `place(run) → environment` for the
-task class, called by the runs system and answered from the concurrency
-queue; **reap** after the run's terminal checkpoint; the personal
-ensure/destroy verbs unchanged; no user-facing ensure for the task class
-(runs own it).
+Target surface (※ new): **placement** — `place(run) → environment` for the task class, called by the runs system and answered from the concurrency queue; **reap** after the run's terminal checkpoint; the personal ensure/destroy verbs unchanged; no user-facing ensure for the task class (runs own it).
 
 ## 4. Consumes
 
@@ -149,68 +99,33 @@ ensure/destroy verbs unchanged; no user-facing ensure for the task class
 
 Lifecycle:
 
-**Only explicit delete destroys a personal sandbox; a task sandbox is reaped
-by its run.** No timeout, error, webhook, or reaper pass sets `destroyed` on
-an attributed personal row — idle sandboxes pause. A task row's death is a
-lifecycle event of the run: terminal → checkpoint acknowledged → pause →
-reap after retention.
+**Only explicit delete destroys a personal sandbox; a task sandbox is reaped by its run.** No timeout, error, webhook, or reaper pass sets `destroyed` on an attributed personal row — idle sandboxes pause. A task row's death is a lifecycle event of the run: terminal → checkpoint acknowledged → pause → reap after retention.
 
-**`error` is per-attempt, not terminal.** It records the last failed
-materialization with a sanitized receipt; the next attempt retries the same
-row (`failures.py`).
+**`error` is per-attempt, not terminal.** It records the last failed materialization with a sanitized receipt; the next attempt retries the same row (`failures.py`).
 
-**Ensure never provisions.** Row bookkeeping is free and unconditionally
-safe to call; provider work happens only inside a materialization operation.
+**Ensure never provisions.** Row bookkeeping is free and unconditionally safe to call; provider work happens only inside a materialization operation.
 
-**A sandbox provisions when it first becomes able to do work — not before,
-not lazier.** Personal: authority-chain completion for the (user, org) pair
-schedules one background bootstrap that ends *paused*. Task: placement of a
-run provisions live, with the org installation as the only GitHub authority
-(Law 6: headless runs never hold human credentials).
+**A sandbox provisions when it first becomes able to do work — not before, not lazier.** Personal: authority-chain completion for the (user, org) pair schedules one background bootstrap that ends *paused*. Task: placement of a run provisions live, with the org installation as the only GitHub authority (Law 6: headless runs never hold human credentials).
 
-**The gateway gates on policy, the provider wakes on traffic,
-materialization repairs.** No wake verb exists (grep-gate E6 holds). A row
-with no stamped runtime access answers `409 cloud_sandbox_runtime_not_ready`
-and schedules exactly one repair, claim-deduplicated across processes
-(`locks.py`).
+**The gateway gates on policy, the provider wakes on traffic, materialization repairs.** No wake verb exists (grep-gate E6 holds). A row with no stamped runtime access answers `409 cloud_sandbox_runtime_not_ready` and schedules exactly one repair, claim-deduplicated across processes (`locks.py`).
 
-**One engine, serialized per sandbox.** `connect_ready_sandbox` under the
-per-sandbox lock: refuse destroyed, re-check the billing gate, bump the
-attempt epoch, resume-or-create, accept the resume conservatively
-(`resume_acceptance.py`),
-health-probe the existing runtime
-(`liveness_health.py`),
-initialize if needed, mark ready with a CAS write. Lock timeout is a typed
-busy error, never a second engine run.
+**One engine, serialized per sandbox.** `connect_ready_sandbox` under the per-sandbox lock: refuse destroyed, re-check the billing gate, bump the attempt epoch, resume-or-create, accept the resume conservatively (`resume_acceptance.py`), health-probe the existing runtime (`liveness_health.py`), initialize if needed, mark ready with a CAS write. Lock timeout is a typed busy error, never a second engine run.
 
 Fencing (the billing primitives this system owns):
 
-**Three fence inputs, all on the row.** `materialization_attempt` (epoch),
-`provider_sandbox_id` (identity), `provider_observed_at` (freshness floor).
-Every usage open and close names the exact binding it fences; any delayed
-observation at or before the floor is inert.
+**Three fence inputs, all on the row.** `materialization_attempt` (epoch), `provider_sandbox_id` (identity), `provider_observed_at` (freshness floor). Every usage open and close names the exact binding it fences; any delayed observation at or before the floor is inert.
 
-**Supersession is transactional and committed first.** Only authoritative
-provider-target-not-found detaches a binding: CAS the binding to absent and
-close that exact provider's segment in one transaction before creating a
-replacement. Transient failures never supersede.
+**Supersession is transactional and committed first.** Only authoritative provider-target-not-found detaches a binding: CAS the binding to absent and close that exact provider's segment in one transaction before creating a replacement. Transient failures never supersede.
 
-**Create records identity and usage together.** A provider create persists
-the exact new provider id and its provision usage in one transaction; an
-ambiguous commit adopts the known candidate rather than losing custody of a
-spending VM.
+**Create records identity and usage together.** A provider create persists the exact new provider id and its provision usage in one transaction; an ambiguous commit adopts the known candidate rather than losing custody of a spending VM.
 
-**Terminal events close exactly one segment.** Kill, delete, and reap each
-close the exact bound provider's segment and nothing else.
+**Terminal events close exactly one segment.** Kill, delete, and reap each close the exact bound provider's segment and nothing else.
 
 Capacity (※ new):
 
-**Placement is admission-controlled per (org, class).** A concurrency policy
-row bounds live task environments per org; placement beyond it queues, never
-fails, and the queue is the one genuinely new backend piece.
+**Placement is admission-controlled per (org, class).** A concurrency policy row bounds live task environments per org; placement beyond it queues, never fails, and the queue is the one genuinely new backend piece.
 
-**The org is the only billing subject.** No stored payer on the row; the
-subject derives from `organization_id`.
+**The org is the only billing subject.** No stored payer on the row; the subject derives from `organization_id`.
 
 > [!decision] PABLO DECIDES: reap retention for task environments.
 > Options: reap immediately after the checkpoint ack; keep paused for a
@@ -260,8 +175,7 @@ subject derives from `organization_id`.
 
 ## 8. Code map
 
-Current (`main`; every path under `server/cloud/` relocates to
-`server/environments/` when the cloud shell dissolves — a pure move):
+Current (`main`; every path under `server/cloud/` relocates to `server/environments/` when the cloud shell dissolves — a pure move):
 
 ```text
 scripts/
@@ -307,35 +221,13 @@ server/proliferate/
         ├── bundle.py · data_key.py · sandbox_exec.py · domain/
 ```
 
-Target additions (※ new): `server/environments/placement/` (concurrency
-policy, queue, `place(run)`), `server/environments/reaper/` (task-class
-reap after checkpoint; orphan backstop), `server/environments/webhooks/`
-(provider lifecycle events, HMAC — salvaged in
-[notes-webhook-hmac.md](../../../delivery/cull-sweep/notes-webhook-hmac.md)),
-and a browser in the template for QA / computer-use.
+Target additions (※ new): `server/environments/placement/` (concurrency policy, queue, `place(run)`), `server/environments/reaper/` (task-class reap after checkpoint; orphan backstop), `server/environments/webhooks/` (provider lifecycle events, HMAC — salvaged in [notes-webhook-hmac.md](../../../delivery/cull-sweep/notes-webhook-hmac.md)), and a browser in the template for QA / computer-use.
 
 ## 9. Proof
 
-Current laws are pinned by
-`test_cloud_sandbox_ensure_billing_gate.py`
-(ensure never provisions, billing gate),
-`test_cloud_sandbox_cold_access_repair.py`
-(409 + single scheduled repair),
-`test_cloud_sandbox_recovery.py`,
-`test_cloud_sandbox_reconnect_self_heal.py`,
-`test_cloud_sandbox_billing_recovery.py`
-(fenced segments),
-`test_cloud_sandbox_desired_versions.py`,
-`test_cloud_materialization_concurrency.py`
-(one engine run per sandbox),
-`test_cloud_materialization_failures.py`
-(receipts),
-`test_cloud_sandbox_destroy_provider.py`
-(delete kills after commit), and the managed-cloud release world under
-`tests/release/src/worlds/managed-cloud/`.
+Current laws are pinned by `test_cloud_sandbox_ensure_billing_gate.py` (ensure never provisions, billing gate), `test_cloud_sandbox_cold_access_repair.py` (409 + single scheduled repair), `test_cloud_sandbox_recovery.py`, `test_cloud_sandbox_reconnect_self_heal.py`, `test_cloud_sandbox_billing_recovery.py` (fenced segments), `test_cloud_sandbox_desired_versions.py`, `test_cloud_materialization_concurrency.py` (one engine run per sandbox), `test_cloud_materialization_failures.py` (receipts), `test_cloud_sandbox_destroy_provider.py` (delete kills after commit), and the managed-cloud release world under `tests/release/src/worlds/managed-cloud/`.
 
-Target laws (placement, reap, task class) have no tests yet; each lands with
-its build item.
+Target laws (placement, reap, task class) have no tests yet; each lands with its build item.
 
 ## Known gaps
 

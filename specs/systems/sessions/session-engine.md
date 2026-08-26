@@ -90,9 +90,7 @@ High-level session use cases:
 - steer a pending prompt to execute next
 - inject/replay events
 
-This is the bridge between durable sessions and live execution. The
-implementation is split under `domains/sessions/runtime/**` by API-facing operation
-family; callers should continue to use the public `SessionRuntime` type.
+This is the bridge between durable sessions and live execution. The implementation is split under `domains/sessions/runtime/**` by API-facing operation family; callers should continue to use the public `SessionRuntime` type.
 
 Two files carry special roles:
 
@@ -116,8 +114,7 @@ Live registry:
 - owns `ActorCapabilities` (wired once in `app/sessions.rs`) and hands it to
   every actor it starts
 
-Current path: `live/sessions/manager/**`. The whole per-call surface is
-`start_session(launch: SessionLaunch, hooks: SessionHooks)`.
+Current path: `live/sessions/manager/**`. The whole per-call surface is `start_session(launch: SessionLaunch, hooks: SessionHooks)`.
 
 ### LiveSessionHandle
 
@@ -145,21 +142,13 @@ One running agent session state machine:
 - event sink calls
 - shutdown/error handling
 
-The actor implementation is split under `live/sessions/actor/**`; the detailed
-folder contract is specified in `specs/session-actor.md`.
+The actor implementation is split under `live/sessions/actor/**`; the detailed folder contract is specified in `specs/session-actor.md`.
 
 ### Driver / InboundDoor
 
-`live/sessions/driver/**` owns the ACP process and connection mechanics:
-process spawn (`process.rs`), connection establishment (`connection.rs`),
-initialization (`session_lifecycle.rs`), and native new/load/fork calls
-(`native_session.rs`).
+`live/sessions/driver/**` owns the ACP process and connection mechanics: process spawn (`process.rs`), connection establishment (`connection.rs`), initialization (`session_lifecycle.rs`), and native new/load/fork calls (`native_session.rs`).
 
-`driver/inbound/**` is the `InboundDoor` — the agent-initiated direction of
-the connection. It routes notifications to the actor's channel and inbound
-requests (permission, user input, MCP elicitation) through the rendezvous
-broker; the permission path consults the `PermissionAdvisor` before parking.
-The driver does not own session business rules.
+`driver/inbound/**` is the `InboundDoor` — the agent-initiated direction of the connection. It routes notifications to the actor's channel and inbound requests (permission, user input, MCP elicitation) through the rendezvous broker; the permission path consults the `PermissionAdvisor` before parking. The driver does not own session business rules.
 
 ### SessionEventSink
 
@@ -182,8 +171,7 @@ Pending interaction rendezvous (`live/sessions/rendezvous/broker.rs`):
 - MCP elicitation forms
 - MCP URL reveal
 
-The inbound door parks a pending request. The API later resolves it; the actor
-cleans up on shutdown.
+The inbound door parks a pending request. The API later resolves it; the actor cleans up on shutdown.
 
 ### Prompt Preparation
 
@@ -196,15 +184,11 @@ Prompt preparation turns user intent into a protocol-safe prompt payload:
 - provenance
 - validation
 
-The pipeline is split pure/IO: `AttachmentSource::load` (the live capability,
-implemented over store + attachment storage) loads every referenced part;
-`domains/sessions/prompt/render.rs` is the pure half — `ResolvedParts` in,
-ACP content blocks out, no IO, base64 and UTF-8 validation only.
+The pipeline is split pure/IO: `AttachmentSource::load` (the live capability, implemented over store + attachment storage) loads every referenced part; `domains/sessions/prompt/render.rs` is the pure half — `ResolvedParts` in, ACP content blocks out, no IO, base64 and UTF-8 validation only.
 
 ### Plans And Reviews Hooks
 
-Plans and reviews never appear inside the actor. They hook in through the
-ports declared in `live/sessions/model.rs` and wired in `app/sessions.rs`:
+Plans and reviews never appear inside the actor. They hook in through the ports declared in `live/sessions/model.rs` and wired in `app/sessions.rs`:
 
 - `domains/plans/session_observer.rs` / `domains/reviews/session_observer.rs`
   — `SessionEventObserver`s run in one ordered in-loop pass (plans before
@@ -216,8 +200,7 @@ ports declared in `live/sessions/model.rs` and wired in `app/sessions.rs`:
   `SessionDomainOp` serialized through the actor mailbox
   (`SessionCommand::RunDomainOp`).
 
-See `guides/live-runtime.md` for the mechanism decision table and the
-serialization/seq contracts.
+See `guides/live-runtime.md` for the mechanism decision table and the serialization/seq contracts.
 
 ## Prompt Flow
 
@@ -244,13 +227,7 @@ Event path:
   SessionEventSink -> SQLite append -> live broadcast channel -> SSE stream
 ```
 
-The command response reports acceptance, not the agent response. For prompts,
-the actor returns `Started { turn_id }` when it begins a turn and
-`Queued { seq }` when the session is already busy and the prompt is durably
-queued. The agent response arrives later as ordered `SessionEventEnvelope`
-records over the event stream. Clients reconnect with `after_seq`; the SSE
-handler replays missed SQLite events and then subscribes to the live broadcast
-channel.
+The command response reports acceptance, not the agent response. For prompts, the actor returns `Started { turn_id }` when it begins a turn and `Queued { seq }` when the session is already busy and the prompt is durably queued. The agent response arrives later as ordered `SessionEventEnvelope` records over the event stream. Clients reconnect with `after_seq`; the SSE handler replays missed SQLite events and then subscribes to the live broadcast channel.
 
 ## Create Flow
 
@@ -269,13 +246,9 @@ API handler
 
 ## Session Actor Shape
 
-`SessionActor` is the serialized owner of one live ACP session. Its job is
-ordering: it decides how product commands, ACP notifications, prompt execution,
-background work, pending interactions, config updates, and shutdown interleave.
+`SessionActor` is the serialized owner of one live ACP session. Its job is ordering: it decides how product commands, ACP notifications, prompt execution, background work, pending interactions, config updates, and shutdown interleave.
 
-The actor should not own prompt attachment validation, transcript rendering,
-MCP schemas, plan product semantics, raw SQL query families, or API
-request/response mapping. It should call the modules that own those concerns.
+The actor should not own prompt attachment validation, transcript rendering, MCP schemas, plan product semantics, raw SQL query families, or API request/response mapping. It should call the modules that own those concerns.
 
 High-level actor files:
 
@@ -297,8 +270,7 @@ live/sessions/actor/
   tests/
 ```
 
-See `specs/session-actor.md` for the concern-folder grammar and migration
-plan.
+See `specs/session-actor.md` for the concern-folder grammar and migration plan.
 
 The high-level loop should read as dispatch:
 
@@ -323,10 +295,7 @@ accept prompt
   -> process accepted mailbox commands before low-priority queue drain
 ```
 
-Split idle and busy command handling. While idle, prompt/config/fork/close can
-usually execute immediately. While busy, a prompt is queued, config is queued,
-cancel is forwarded to ACP, interaction resolution is allowed, and close/dismiss
-records intent to finish safely.
+Split idle and busy command handling. While idle, prompt/config/fork/close can usually execute immediately. While busy, a prompt is queued, config is queued, cancel is forwarded to ACP, interaction resolution is allowed, and close/dismiss records intent to finish safely.
 
 Core actor invariants:
 
@@ -350,9 +319,7 @@ Core actor invariants:
 
 ## Event Sink Shape
 
-`SessionEventSink` is the transcript writer. The actor decides when something
-happened; the sink decides how that becomes durable `SessionEventEnvelope`
-records.
+`SessionEventSink` is the transcript writer. The actor decides when something happened; the sink decides how that becomes durable `SessionEventEnvelope` records.
 
 Sink files:
 
@@ -378,12 +345,7 @@ live/sessions/sink/
   tests/
 ```
 
-The sink may assign sequence numbers, persist normalized events, and broadcast
-them. It should not decide actor lifecycle, prompt queueing, config timing, or
-pending interaction waits. The sink is meaning-blind: arms that need durable
-session-row state or product reactors are parsed in `ingest.rs` and returned
-to the actor as `ActorBoundUpdate`; special observations are collected for the
-actor's observer pass.
+The sink may assign sequence numbers, persist normalized events, and broadcast them. It should not decide actor lifecycle, prompt queueing, config timing, or pending interaction waits. The sink is meaning-blind: arms that need durable session-row state or product reactors are parsed in `ingest.rs` and returned to the actor as `ActorBoundUpdate`; special observations are collected for the actor's observer pass.
 
 ## File Shape
 

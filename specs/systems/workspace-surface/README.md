@@ -1,12 +1,6 @@
 # Workspace Surface
 
-Everything around the chat column: the shell (sidebar, header tabs, right
-panel), the files sidebar and viewer, terminals, git review and publish,
-repo setup / workspace creation, and the session-selection contract that
-decides which chat the shell shows. A **client composition surface**: it
-owns layout and selection state, and consumes the runtime's workspace,
-file, terminal, git, and session contracts. The focused documents below are
-its sections.
+Everything around the chat column: the shell (sidebar, header tabs, right panel), the files sidebar and viewer, terminals, git review and publish, repo setup / workspace creation, and the session-selection contract that decides which chat the shell shows. A **client composition surface**: it owns layout and selection state, and consumes the runtime's workspace, file, terminal, git, and session contracts. The focused documents below are its sections.
 
 | Section | Document |
 | --- | --- |
@@ -20,15 +14,11 @@ its sections.
 
 ## Purpose
 
-Give a person one place per repository to work: open a workspace, see and
-switch its sessions, browse and edit its files, run terminals, review and
-publish its git changes, and create the next workspace — with the runtime as
-the only authority on what exists on disk.
+Give a person one place per repository to work: open a workspace, see and switch its sessions, browse and edit its files, run terminals, review and publish its git changes, and create the next workspace — with the runtime as the only authority on what exists on disk.
 
 ## Owned state
 
-UI and selection state only; the runtime owns workspaces, worktrees, files,
-terminals, and git.
+UI and selection state only; the runtime owns workspaces, worktrees, files, terminals, and git.
 
 | Store | Holds | Code |
 | --- | --- | --- |
@@ -61,9 +51,7 @@ terminals, and git.
 
 ## Consumes
 
-All from the runtime through `@anyharness/sdk-react` unless noted; raw
-clients only under
-[lib/access/anyharness/](../../../apps/packages/product-client/src/lib/access/anyharness/workspaces.ts):
+All from the runtime through `@anyharness/sdk-react` unless noted; raw clients only under [lib/access/anyharness/](../../../apps/packages/product-client/src/lib/access/anyharness/workspaces.ts):
 
 | Runtime contract | Used for | Hooks |
 | --- | --- | --- |
@@ -76,13 +64,7 @@ clients only under
 | Desktop bridge (host, not runtime) | native context menus, open-in-editor, file drop, paths | [desktop-bridge.ts](../../../apps/packages/product-client/src/host/desktop-bridge.ts) |
 | Cloud (`@proliferate/cloud-sdk`) | GitHub App state and PR identity, workspace display names, cloud repo branches | [use-github-app-state-invalidation.ts](../../../apps/packages/product-client/src/hooks/workspaces/cache/use-github-app-state-invalidation.ts), [use-workspace-display-name-actions.ts](../../../apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-display-name-actions.ts) |
 
-The cloud-workspace client paths under `hooks/cloud/` and
-`domain/workspaces/cloud-work-*` still compile against
-`@proliferate/cloud-sdk/client/workspaces` and `cloud-sandboxes`. They are
-gated dark in production and are deleted by the dark-cloud cull's second
-half (`delivery/cull-sweep/delivery-spec-delete-dark-cloud.md`, part 2,
-pending); [cloud-workspace.md](cloud-workspace.md) is the target contract
-that outlives them.
+The cloud-workspace client paths under `hooks/cloud/` and `domain/workspaces/cloud-work-*` still compile against `@proliferate/cloud-sdk/client/workspaces` and `cloud-sandboxes`. They are gated dark in production and are deleted by the dark-cloud cull's second half (`delivery/cull-sweep/delivery-spec-delete-dark-cloud.md`, part 2, pending); [cloud-workspace.md](cloud-workspace.md) is the target contract that outlives them.
 
 ## Laws
 
@@ -173,10 +155,7 @@ apps/packages/product-client/src/
 └── pages/MainPage.tsx · pages/WorkspacesPage.tsx
 ```
 
-Target moves (later sweep wave): `components/workspace/shell` +
-`hooks/workspaces` → `systems/workspace/`; the sessions stores/hooks split
-out into a `sessions` client system shared with chat; cloud-work domain
-files die with the dark-cloud cull part 2.
+Target moves (later sweep wave): `components/workspace/shell` + `hooks/workspaces` → `systems/workspace/`; the sessions stores/hooks split out into a `sessions` client system shared with chat; cloud-work domain files die with the dark-cloud cull part 2.
 
 ## Proof
 

@@ -1,18 +1,10 @@
 # Billing
 
-Status: current (grade B). System spec in the Organization Standard anatomy.
-The laws below were lifted from the retired target document
-[`specs/systems/billing/deep-dive.md`](deep-dive.md) (now a
-pointer) and re-verified against `main` after the 2026-08-25 cull. Corridor
-IDs (A/N/M/T, B/E/W/U) are stable; tests reference them by name.
+Status: current (grade B). System spec in the Organization Standard anatomy. The laws below were lifted from the retired target document [`specs/systems/billing/deep-dive.md`](deep-dive.md) (now a pointer) and re-verified against `main` after the 2026-08-25 cull. Corridor IDs (A/N/M/T, B/E/W/U) are stable; tests reference them by name.
 
 ## 1. Purpose
 
-Billing owns the money math for managed compute and managed LLM usage: who
-pays, what a usage segment costs, how grants are consumed, when overage is
-exported to Stripe, and every enforcement decision that follows from a
-balance or a limit. It never opens or closes a provider binding, never owns a
-navigation surface, and never decides membership.
+Billing owns the money math for managed compute and managed LLM usage: who pays, what a usage segment costs, how grants are consumed, when overage is exported to Stripe, and every enforcement decision that follows from a balance or a limit. It never opens or closes a provider binding, never owns a navigation surface, and never decides membership.
 
 **Ruled 2026-08-25 (Core Architecture §10, the three-way split):**
 
@@ -39,8 +31,7 @@ navigation surface, and never decides membership.
 
 ## 2. Owned state
 
-Only billing writes these tables
-([`db/models/billing.py`](../../../server/proliferate/db/models/billing.py)):
+Only billing writes these tables ([`db/models/billing.py`](../../../server/proliferate/db/models/billing.py)):
 
 | Table | Meaning |
 | --- | --- |
@@ -57,13 +48,11 @@ Only billing writes these tables
 | `usage_segment` | The compute meter: seconds per environment binding, attributed to (subject, user). |
 | `webhook_event_receipt` | `(provider, event_id)` dedup receipts for Stripe (and formerly E2B). |
 
-The managed-LLM meter `agent_llm_usage_event` is written by `agent_auth`'s
-usage import and only *read* here (see Fences).
+The managed-LLM meter `agent_llm_usage_event` is written by `agent_auth`'s usage import and only *read* here (see Fences).
 
 ## 3. Public surface
 
-Routes (mounted under `/v1` by
-[`main.py`](../../../server/proliferate/main.py)):
+Routes (mounted under `/v1` by [`main.py`](../../../server/proliferate/main.py)):
 
 ```text
 GET  /billing/plan · /billing/cloud-plan · /billing/overview
@@ -75,19 +64,11 @@ POST /billing/team-checkout · GET /billing/team-checkout/current
 POST /billing/team-checkout/{intent_id}/cancel
 ```
 
-Owner-scoped reads default to the personal owner and use an organization only
-when selected and authorized; the usage summary is the current user's usage
-inside the selected owner, not aggregate org usage. Org aggregation and the
-limits editor are served by `organizations` (`/organizations/{id}/usage/**`,
-`/limits`) on top of billing's store reads.
+Owner-scoped reads default to the personal owner and use an organization only when selected and authorized; the usage summary is the current user's usage inside the selected owner, not aggregate org usage. Org aggregation and the limits editor are served by `organizations` (`/organizations/{id}/usage/**`, `/limits`) on top of billing's store reads.
 
-Python surface (MANIFEST `public_surface`): `proliferate.server.billing.api`,
-`proliferate.server.billing.models`. Other systems may additionally call the
-named orchestration seams listed in Fences (`subjects`, `seat_reconciliation`,
-`authorization`, `runtime_usage`); anything else in the package is internal.
+Python surface (MANIFEST `public_surface`): `proliferate.server.billing.api`, `proliferate.server.billing.models`. Other systems may additionally call the named orchestration seams listed in Fences (`subjects`, `seat_reconciliation`, `authorization`, `runtime_usage`); anything else in the package is internal.
 
-SDK: [`cloud/sdk/src/client/billing.ts`](../../../cloud/sdk/src/client/billing.ts),
-[`cloud/sdk-react/src/hooks/billing.ts`](../../../cloud/sdk-react/src/hooks/billing.ts).
+SDK: [`cloud/sdk/src/client/billing.ts`](../../../cloud/sdk/src/client/billing.ts), [`cloud/sdk-react/src/hooks/billing.ts`](../../../cloud/sdk-react/src/hooks/billing.ts).
 
 ## 4. Consumes
 
@@ -248,10 +229,7 @@ apps/packages/product-client/src/components/settings/panes/{OrganizationBudgetsP
 apps/packages/product-client/src/components/app/sidebar/SidebarConsumptionCard.tsx
 ```
 
-Background: the reconciler is an in-process asyncio loop started by
-`main.py` (`start_billing_reconciler`) when `run_background_workers` and
-`cloud_billing_mode != off`; the accounting pass runs at the top of each
-reconciler pass. There is no Celery task for billing.
+Background: the reconciler is an in-process asyncio loop started by `main.py` (`start_billing_reconciler`) when `run_background_workers` and `cloud_billing_mode != off`; the accounting pass runs at the top of each reconciler pass. There is no Celery task for billing.
 
 ## 9. Proof
 

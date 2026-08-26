@@ -1,13 +1,8 @@
 # Core Release Validation Contract
 
-Status: target contract for automated Tier 2, Tier 3, and Tier 4 product
-qualification. The final section names current-main enforcement exceptions;
-none of them count as qualification.
+Status: target contract for automated Tier 2, Tier 3, and Tier 4 product qualification. The final section names current-main enforcement exceptions; none of them count as qualification.
 
-This document is the complete target manifest for deciding whether a
-Proliferate release works as intended. It owns the required guarantees and the
-meaning of a passing release. The surrounding testing documents have narrower
-roles:
+This document is the complete target manifest for deciding whether a Proliferate release works as intended. It owns the required guarantees and the meaning of a passing release. The surrounding testing documents have narrower roles:
 
 - [`../TESTING.md`](standard.md) owns tier mechanics, placement, and test-writing
   rules.
@@ -42,9 +37,7 @@ roles:
 - [`manual-release-qa.md`](manual-release-qa.md) owns manual verification that cannot be
   automated.
 
-When another testing document describes a smaller or provisional matrix, this
-contract wins. Product behavior remains owned by the relevant feature and
-primitive specs under `specs/**`.
+When another testing document describes a smaller or provisional matrix, this contract wins. Product behavior remains owned by the relevant feature and primitive specs under `specs/**`.
 
 ## Contract Vocabulary And Source Of Truth
 
@@ -67,20 +60,13 @@ The testing system keeps five concepts separate:
    every final cell result to the merged SHA, candidate manifest, world handle,
    artifacts, correlations, and cleanup result.
 
-No hand-maintained document owns collector pointers or current run status.
-CI discovers collectors in both directions and fails when a required manifest
-cell has no collector, a collector names an unknown cell, an implemented cell
-is not selected by its claimed gate, or duplicate collectors claim one final
-cell. `flows.md` and execution reports are generated views.
+No hand-maintained document owns collector pointers or current run status. CI discovers collectors in both directions and fails when a required manifest cell has no collector, a collector names an unknown cell, an implemented cell is not selected by its claimed gate, or duplicate collectors claim one final cell. `flows.md` and execution reports are generated views.
 
-Matrix collectors return explicit child-cell results. A parent scenario that
-returns successfully after swallowing a per-harness, per-route, or per-host
-skip cannot qualify the matrix.
+Matrix collectors return explicit child-cell results. A parent scenario that returns successfully after swallowing a per-harness, per-route, or per-host skip cannot qualify the matrix.
 
 ## Qualification rule
 
-A release is qualified only when all of the following are true for the exact
-merged `main` SHA and the exact artifacts being promoted:
+A release is qualified only when all of the following are true for the exact merged `main` SHA and the exact artifacts being promoted:
 
 1. Every required Tier 1 check passes.
 2. Every Tier 2 row in this document passes on the merge candidate or exact
@@ -95,34 +81,15 @@ merged `main` SHA and the exact artifacts being promoted:
    Superseded attempts remain recorded separately and never replace a product
    assertion failure.
 
-`green` is the only passing state. Missing credentials, an unavailable
-provider, fixture exhaustion, or an infrastructure outage means the candidate
-is not qualified; it never means the product passed. Provider recovery may
-trigger a rerun of the same SHA. A product assertion failure requires triage
-and normally a new SHA.
+`green` is the only passing state. Missing credentials, an unavailable provider, fixture exhaustion, or an infrastructure outage means the candidate is not qualified; it never means the product passed. Provider recovery may trigger a rerun of the same SHA. A product assertion failure requires triage and normally a new SHA.
 
-No required job, matrix cell, or assertion may be neutralized with
-`continue-on-error`, a skipped-success fallback, or exit-code normalization.
-Independent siblings may continue after one failure to collect complete
-diagnostics, and cleanup/evidence steps run unconditionally, but the aggregate
-check remains red.
+No required job, matrix cell, or assertion may be neutralized with `continue-on-error`, a skipped-success fallback, or exit-code normalization. Independent siblings may continue after one failure to collect complete diagnostics, and cleanup/evidence steps run unconditionally, but the aggregate check remains red.
 
-Tier 3 and Tier 4 do not block ordinary merges. They block production
-promotion, stable updater publication, and promotion of affected runtime,
-worker, catalog, or template artifacts.
+Tier 3 and Tier 4 do not block ordinary merges. They block production promotion, stable updater publication, and promotion of affected runtime, worker, catalog, or template artifacts.
 
-During foundation construction, the active standing Tier 3 set is the union
-of Tier 3 guarantee references from composed journeys plus any explicitly
-listed standalone standing guarantees. An unreferenced Tier 3 guarantee is
-machine-classified `deferred`, appears in every evidence summary, and does not
-silently pass. Such a run may be called **foundation qualification** for its
-named set, never full core-release qualification. Full core-release
-qualification is available only when the manifest has no deferred Tier 3
-guarantees and every Tier 3 row is green. This lets the gate ratchet from an
-honest vertical slice without weakening the end-state contract.
+During foundation construction, the active standing Tier 3 set is the union of Tier 3 guarantee references from composed journeys plus any explicitly listed standalone standing guarantees. An unreferenced Tier 3 guarantee is machine-classified `deferred`, appears in every evidence summary, and does not silently pass. Such a run may be called **foundation qualification** for its named set, never full core-release qualification. Full core-release qualification is available only when the manifest has no deferred Tier 3 guarantees and every Tier 3 row is green. This lets the gate ratchet from an honest vertical slice without weakening the end-state contract.
 
-Cell selection and result behavior are separate. A selector resolves the exact
-required cells before execution:
+Cell selection and result behavior are separate. A selector resolves the exact required cells before execution:
 
 - the merge selector resolves the trusted Tier 1/2 set for the exact
   integration commit; and
@@ -137,12 +104,7 @@ The runner has two result behaviors:
 - `strict` requires every selected required cell to be present exactly once and
   green, with valid artifact/world identity and successful cleanup.
 
-There is no blocked budget under `strict`, regardless of selector. Optional or
-change-untriggered cells resolve to `not_required` before execution. Planning
-or dry-run emits no green evidence. During the foundation migration, a smaller
-strict baseline may ratchet upward, but its evidence is explicitly `partial`
-and must never be labeled full core-release qualification. The end state
-requires every core row in this contract.
+There is no blocked budget under `strict`, regardless of selector. Optional or change-untriggered cells resolve to `not_required` before execution. Planning or dry-run emits no green evidence. During the foundation migration, a smaller strict baseline may ratchet upward, but its evidence is explicitly `partial` and must never be labeled full core-release qualification. The end state requires every core row in this contract.
 
 ## Required proof shape
 
@@ -153,8 +115,7 @@ Every core behavior has two proofs:
 2. The smallest real deployed path proving that the server, clients,
    AnyHarness, agents, providers, and artifacts are connected correctly.
 
-Every scenario asserts observable outcomes rather than implementation steps or
-LLM prose. Where applicable, a scenario covers:
+Every scenario asserts observable outcomes rather than implementation steps or LLM prose. Where applicable, a scenario covers:
 
 - the happy path and every supported role, plan, route, harness, and lane;
 - unauthorized and alternate-entry bypass attempts;
@@ -165,11 +126,7 @@ LLM prose. Where applicable, a scenario covers:
 - cleanup and absence of duplicate money movement or tool execution;
 - the latency or propagation budget owned by the relevant feature spec.
 
-Agent, model, mode, provider, tool, and auth-route matrices are derived from
-the shipped catalogs and contracts. The same rule applies to Product MCPs,
-workflow step and trigger kinds, worker reconcile domains, billing entry
-points, and update mechanisms. A newly supported value enters the matrix
-automatically; a hand-maintained allowlist cannot silently omit it.
+Agent, model, mode, provider, tool, and auth-route matrices are derived from the shipped catalogs and contracts. The same rule applies to Product MCPs, workflow step and trigger kinds, worker reconcile domains, billing entry points, and update mechanisms. A newly supported value enters the matrix automatically; a hand-maintained allowlist cannot silently omit it.
 
 ## Gate cadence
 
@@ -183,8 +140,7 @@ automatically; a hand-maintained allowlist cannot silently omit it.
 
 ## Fixture contract
 
-Live qualification uses a disposable, run-scoped world rather than shared
-mutable staging state:
+Live qualification uses a disposable, run-scoped world rather than shared mutable staging state:
 
 - fresh owner, admin, member, removed member, and outsider identities;
 - separate personal and organization billing subjects for free, funded,
@@ -203,21 +159,13 @@ mutable staging state:
   destinations;
 - a disposable self-hosted installation when self-host scenarios run.
 
-Every resource carries the run correlation id, has deterministic teardown, and
-has a TTL janitor for interrupted runs. Secrets never appear in logs or
-qualification artifacts.
+Every resource carries the run correlation id, has deterministic teardown, and has a TTL janitor for interrupted runs. Secrets never appear in logs or qualification artifacts.
 
-Cheap real models are intentional. Live scenarios use bounded turns, tool
-budgets, deadlines, and a cheap model reported by the selected target.
-Deterministic
-scripted agents remain the correct lower-tier tool for exact permission,
-crash, malformed-message, and replay matrices; real-agent tests prove the
-shipped integration path.
+Cheap real models are intentional. Live scenarios use bounded turns, tool budgets, deadlines, and a cheap model reported by the selected target. Deterministic scripted agents remain the correct lower-tier tool for exact permission, crash, malformed-message, and replay matrices; real-agent tests prove the shipped integration path.
 
 ### Billing invariants
 
-Every billing row proves the applicable invariants, not merely the expected
-HTTP response:
+Every billing row proves the applicable invariants, not merely the expected HTTP response:
 
 - closed billable compute seconds equal credit-covered seconds plus
   overage-attributed seconds plus explicit write-off seconds;
@@ -248,17 +196,9 @@ HTTP response:
 
 ## Tier 2 required manifest
 
-Tier 2 runs the real server, product browser surfaces, and Postgres. It stops
-at a sandbox, real-agent, or provider-execution boundary, except that Stripe
-test mode and the mock OIDC/email/poll fixtures are part of the Tier 2
-contract.
+Tier 2 runs the real server, product browser surfaces, and Postgres. It stops at a sandbox, real-agent, or provider-execution boundary, except that Stripe test mode and the mock OIDC/email/poll fixtures are part of the Tier 2 contract.
 
-Stripe test mode is an explicit real-network exception, not a fake. Trusted CI
-must provide an `sk_test_` credential and treat absence, provider failure, or a
-skipped billing cell as a red merge result. Untrusted fork events cannot access
-the credential and are visibly non-qualifying; the trusted merge-queue commit
-must execute the complete Tier 2 set. Local diagnostics may report these cells
-blocked when the developer intentionally omits Stripe.
+Stripe test mode is an explicit real-network exception, not a fake. Trusted CI must provide an `sk_test_` credential and treat absence, provider failure, or a skipped billing cell as a red merge result. Untrusted fork events cannot access the credential and are visibly non-qualifying; the trusted merge-queue commit must execute the complete Tier 2 set. Local diagnostics may report these cells blocked when the developer intentionally omits Stripe.
 
 ### Authentication, organizations, and surfaces
 
@@ -331,8 +271,7 @@ blocked when the developer intentionally omits Stripe.
 
 ### Billing
 
-Billing Tier 2 uses Stripe test mode and test clocks. A missing Stripe test
-credential fails the required check.
+Billing Tier 2 uses Stripe test mode and test clocks. A missing Stripe test credential fails the required check.
 
 | ID | Required validation |
 | --- | --- |
@@ -365,16 +304,7 @@ credential fails the required check.
 
 ## Tier 3 required manifest
 
-Tier 3 tests the deployed candidate with real AnyHarness binaries, real E2B,
-real provider handshakes where supported, Stripe test mode, and cheap real
-models. Its three standing worlds use the Desktop product renderer in Chromium:
-local runtime, managed cloud/E2B, and self-hosted. Packaged/native Desktop,
-bundled-sidecar lifecycle, keychain/config persistence, clean installation, and
-relaunch belong to Tier 4. Hosted Web joins selected parity journeys after the
-Web/Desktop unification. Before a target row can become `implemented` or
-`blocking`, the machine manifest must assign its concrete lane. A `planned` row
-has no execution claim. No mapped row silently inherits a local or cloud lane,
-and matrices enumerate only routes valid for that target.
+Tier 3 tests the deployed candidate with real AnyHarness binaries, real E2B, real provider handshakes where supported, Stripe test mode, and cheap real models. Its three standing worlds use the Desktop product renderer in Chromium: local runtime, managed cloud/E2B, and self-hosted. Packaged/native Desktop, bundled-sidecar lifecycle, keychain/config persistence, clean installation, and relaunch belong to Tier 4. Hosted Web joins selected parity journeys after the Web/Desktop unification. Before a target row can become `implemented` or `blocking`, the machine manifest must assign its concrete lane. A `planned` row has no execution claim. No mapped row silently inherits a local or cloud lane, and matrices enumerate only routes valid for that target.
 
 ### Identity, surfaces, and workspace lifecycle
 
@@ -458,10 +388,7 @@ and matrices enumerate only routes valid for that target.
 
 ### Billing golden lifecycle
 
-The Tier 3 billing rows share one run-scoped lifecycle but report independent
-results. Setup may move test clocks or seed a deliberately tiny grant; the
-money movement, provider delivery, metering, gates, and recovery under test
-are real.
+The Tier 3 billing rows share one run-scoped lifecycle but report independent results. Setup may move test clocks or seed a deliberately tiny grant; the money movement, provider delivery, metering, gates, and recovery under test are real.
 
 | ID | Required validation |
 | --- | --- |
@@ -479,9 +406,7 @@ are real.
 
 ### Workflows and automations
 
-The strict workflow matrix is additive: each row must produce durable run,
-step, receipt, audit, and external-effect evidence. Denial is proven by zero
-upstream calls, never by agent prose.
+The strict workflow matrix is additive: each row must produce durable run, step, receipt, audit, and external-effect evidence. Denial is proven by zero upstream calls, never by agent prose.
 
 | ID | Required validation |
 | --- | --- |
@@ -509,20 +434,9 @@ upstream calls, never by agent prose.
 
 ## Tier 4 required manifest
 
-Tier 4 owns one packaged-install and upgrade qualification stage. Its
-independently evidenced standing targets are clean candidate Desktop install,
-production Desktop N-1 to N, and production E2B runtime N-1 to candidate N;
-self-host N-1 to N joins when its bundle/update trigger changed. The Desktop
-targets compose under `T4-DESKTOP-1`, the runtime target under `T4-RUNTIME-1`,
-and applicable agent convergence under `T4-CATALOG-1`. They are separate final
-cells, not separate worlds and not one pass inferred from another.
-[`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) owns their exact
-artifact, fixture, action, and evidence contract.
+Tier 4 owns one packaged-install and upgrade qualification stage. Its independently evidenced standing targets are clean candidate Desktop install, production Desktop N-1 to N, and production E2B runtime N-1 to candidate N; self-host N-1 to N joins when its bundle/update trigger changed. The Desktop targets compose under `T4-DESKTOP-1`, the runtime target under `T4-RUNTIME-1`, and applicable agent convergence under `T4-CATALOG-1`. They are separate final cells, not separate worlds and not one pass inferred from another. [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) owns their exact artifact, fixture, action, and evidence contract.
 
-Every other row below is mandatory when its trigger changed. Nightly may run
-the broadest implemented compatibility set, but the table does not create 27
-always-on deployed permutations. Public artifact integrity remains an
-every-release gate without becoming another upgrade world.
+Every other row below is mandatory when its trigger changed. Nightly may run the broadest implemented compatibility set, but the table does not create 27 always-on deployed permutations. Public artifact integrity remains an every-release gate without becoming another upgrade world.
 
 | ID | Trigger | Required validation |
 | --- | --- | --- |
@@ -573,27 +487,13 @@ Trusted CI emits one immutable qualification artifact containing:
 - zero non-green final-result counters, superseded attempt history, and the
   cleanup result.
 
-Production promotion verifies the evidence signature/attestation, repository,
-workflow identity, `main` ref, SHA, manifest hash, and artifact identities.
-User-supplied JSON or evidence from a different SHA is never accepted.
+Production promotion verifies the evidence signature/attestation, repository, workflow identity, `main` ref, SHA, manifest hash, and artifact identities. User-supplied JSON or evidence from a different SHA is never accepted.
 
-Blind retries that may repeat an external effect are forbidden. After a
-timeout or lost response, the scenario reconciles provider state first; any
-retry uses the same correlation and provider idempotency key. A fresh,
-full-scenario rerun may replace an infrastructure-failed attempt on the same
-artifacts, but both attempts remain in the evidence and the replacement uses a
-new run-scoped world. Sharding may change execution time but cannot change the
-required manifest or allow a partial aggregate to pass.
+Blind retries that may repeat an external effect are forbidden. After a timeout or lost response, the scenario reconciles provider state first; any retry uses the same correlation and provider idempotency key. A fresh, full-scenario rerun may replace an infrastructure-failed attempt on the same artifacts, but both attempts remain in the evidence and the replacement uses a new run-scoped world. Sharding may change execution time but cannot change the required manifest or allow a partial aggregate to pass.
 
 ## Traceability and change control
 
-The machine-readable target inventory and this document contain the same
-scenario ids; CI enforces that equality, uniqueness, tier counts, local link
-integrity, and explicit implementation state. Target presence never counts as
-execution. A row may remain `planned`; a row marked `collected` or `enforced`
-must name its concrete collector, collected test id, required cells, lanes,
-gate, and evidence status, and CI validates that mapping. Full qualification additionally requires
-an execution manifest that validates that:
+The machine-readable target inventory and this document contain the same scenario ids; CI enforces that equality, uniqueness, tier counts, local link integrity, and explicit implementation state. Target presence never counts as execution. A row may remain `planned`; a row marked `collected` or `enforced` must name its concrete collector, collected test id, required cells, lanes, gate, and evidence status, and CI validates that mapping. Full qualification additionally requires an execution manifest that validates that:
 
 - every required id has a collected test implementation;
 - every required lane is present exactly once;
@@ -603,17 +503,11 @@ an execution manifest that validates that:
 - every generated collector pointer exists; and
 - every collected Tier 2/3/4 core scenario maps back to one id here.
 
-A product change that adds a supported plan, provider, auth route, harness,
-model, mode, tool, workspace type, trigger, billing transition, cloud-command
-kind, runtime-config/plugin expansion kind, SDK public resource group, GitHub
-App webhook/lease contract, or upgrade mechanism updates this contract, its
-machine-readable manifest, and the enforcing test in the same PR.
+A product change that adds a supported plan, provider, auth route, harness, model, mode, tool, workspace type, trigger, billing transition, cloud-command kind, runtime-config/plugin expansion kind, SDK public resource group, GitHub App webhook/lease contract, or upgrade mechanism updates this contract, its machine-readable manifest, and the enforcing test in the same PR.
 
 ## Legacy Collector ID Migration
 
-Current collectors predate the target manifest. Until the bidirectional
-collector audit is implemented, they must be ported through this table rather
-than copied or treated as target coverage by name.
+Current collectors predate the target manifest. Until the bidirectional collector audit is implemented, they must be ported through this table rather than copied or treated as target coverage by name.
 
 | Legacy claim | Canonical destination |
 | --- | --- |
@@ -633,11 +527,7 @@ than copied or treated as target coverage by name.
 
 ## Current enforcement exception
 
-Current main can produce strict qualification evidence for an explicitly
-selected exact-head cell set, but production promotion does not yet consume a
-complete release aggregate. A selected-cell pass therefore qualifies only its
-recorded scope; it does not claim that this complete target contract is
-enforced.
+Current main can produce strict qualification evidence for an explicitly selected exact-head cell set, but production promotion does not yet consume a complete release aggregate. A selected-cell pass therefore qualifies only its recorded scope; it does not claim that this complete target contract is enforced.
 
 The runner and the manual qualification worlds now enforce these foundations:
 
@@ -701,7 +591,4 @@ The remaining migration closes these gaps in this order:
 5. complete the hosted-client and Tier 4 target journeys; and
 6. ratchet the enforced baseline upward until every core cell is required.
 
-`continue-on-error` may remain only on explicitly diagnostic callers during
-the migration. It is never allowed on a job or matrix cell whose output is
-consumed as merge, promotion, updater-feed, template-tag, catalog, or runtime
-qualification evidence.
+`continue-on-error` may remain only on explicitly diagnostic callers during the migration. It is never allowed on a job or matrix cell whose output is consumed as merge, promotion, updater-feed, template-tag, catalog, or runtime qualification evidence.
