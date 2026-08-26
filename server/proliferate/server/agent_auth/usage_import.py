@@ -20,7 +20,6 @@ windows never double-count.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from dataclasses import dataclass
@@ -241,18 +240,12 @@ async def run_usage_import(
             # record the row for manual review rather than silently dropping it.
             status = AGENT_USAGE_EVENT_STATUS_NEEDS_REVIEW
             unresolved += 1
-            # A one-way digest of LiteLLM's stored key identifier (the value
-            # used as virtual_key_id below): correlates repeated rows for
-            # manual review without writing any part of the key material.
-            api_key_digest = (
-                hashlib.sha256(entry.api_key.encode()).hexdigest()[:16] if entry.api_key else None
-            )
+            # No key material (or derivative of it) in the log: the persisted
+            # usage-event row carries the full identifier as virtual_key_id,
+            # and litellm_request_id joins this line to that row for review.
             logger.warning(
                 "LiteLLM spend row has an unresolved virtual key",
-                extra={
-                    "litellm_request_id": entry.request_id,
-                    "api_key_digest": api_key_digest,
-                },
+                extra={"litellm_request_id": entry.request_id},
             )
 
         was_inserted = await agent_gateway_store.insert_usage_event_once(

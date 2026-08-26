@@ -156,21 +156,10 @@ async def claim_first_run(
         # still gets cleaned up by the next boot's ensure_setup_token pass.
         await schedule_token_file_cleanup(db)
 
-    logger.info(
-        "Instance claimed: owner %s, organization %r.",
-        _mask_email(normalized_email),
-        organization.name,
-    )
+    # The owner's email is deliberately absent from the log line: the claim
+    # response and the user row carry it, and logs ship to collectors.
+    logger.info("Instance claimed: organization %r.", organization.name)
     return FirstRunClaim(email=normalized_email, organization_name=organization.name)
-
-
-def _mask_email(email: str) -> str:
-    """``p***@example.com`` — enough to recognize the owner, not to harvest."""
-
-    local, _, domain = email.partition("@")
-    if not domain:
-        return "***"
-    return f"{local[:1]}***@{domain}"
 
 
 def _token_file_path() -> Path:
