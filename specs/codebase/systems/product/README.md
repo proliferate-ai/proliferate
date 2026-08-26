@@ -10,8 +10,9 @@ restating folder rules or low-level reusable contracts.
 | System area | Owns | Read |
 | --- | --- | --- |
 | Onboarding | Signed-out to product-ready account handoff, provider readiness, billing/credit readiness, agent auth setup, and first workspace transition. | [onboarding/README.md](onboarding/README.md) |
-| Product auth | Account sign-in, linked providers, email/password, product-readiness gates, reviewer accounts, and auth surface UX. | [auth/README.md](auth/README.md) |
-| Organization invitations | Organization invite links, pending invitation grants, desktop join behavior, and admin member/invite UX. | [organizations/invitations.md](organizations/invitations.md) |
+| Accounts | The `accounts` system: users, sign-in methods, linked identities and grants, sessions/tokens, readiness gates, account-entry side effects. Surface rules in its `auth/README.md` section. | [accounts/README.md](accounts/README.md), [auth/README.md](auth/README.md) |
+| Organizations | The `organizations` system: tenant, membership and roles, invitations and join flow, single-org instance + ADMIN_EMAILS floor, self-registration, team-checkout intents, org-admin usage/limits routes. | [organizations/README.md](organizations/README.md), [organizations/invitations.md](organizations/invitations.md) |
+| Billing | The `billing` system: payer subjects, grants and holds, compute/LLM meters, Stripe money-in, seats, overage exports, enforcement gates, truth surfaces; the 2026-08-25 three-way ruling. | [billing/README.md](billing/README.md) |
 | Pending workspace shell | Pending workspace entry, projected session shell, optimistic prompts, and workspace/session materialization handoff. | [workspaces/pending-shell.md](workspaces/pending-shell.md) |
 | Cloud access / dispatch | Web/Mobile/Desktop cloud workspace access and dispatch UX. | No current system spec; the previous dispatch spec was built on a reverted substrate and removed — a rewrite is planned. |
 | Chat | Chat lifecycle, composer, and transcript behavior. | [chat/README.md](chat/README.md) |

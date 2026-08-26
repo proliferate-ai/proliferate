@@ -82,7 +82,7 @@ source area you are in.
 | System | Touching | Read |
 | --- | --- | --- |
 | Sandbox | sandbox lifecycle/access/content, E2B, sandbox gateway, sandbox GitHub auth | [`specs/FEATURE_DOCS/SANDBOX/`](specs/FEATURE_DOCS/SANDBOX/) |
-| Billing | Stripe, meters, credits, plans, webhooks | [`specs/FEATURE_DOCS/BILLING.md`](specs/FEATURE_DOCS/BILLING.md) |
+| Billing | Stripe, meters, credits, plans, webhooks | [`specs/codebase/systems/product/billing/README.md`](specs/codebase/systems/product/billing/README.md) |
 | Managed runtime | supervisor/worker convergence, enrollment, runtime updates | [`specs/FEATURE_DOCS/MANAGED_RUNTIME.md`](specs/FEATURE_DOCS/MANAGED_RUNTIME.md) |
 | Agent auth | agent credentials, key vault, selections, `state.json` | [`specs/FEATURE_DOCS/AGENT_AUTH.md`](specs/FEATURE_DOCS/AGENT_AUTH.md) |
 | Models | `catalogs/**`, `scripts/agent-catalog/**`, model gateway, probes, LiteLLM | [`specs/FEATURE_DOCS/MODELS.md`](specs/FEATURE_DOCS/MODELS.md) |
