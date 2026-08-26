@@ -31,6 +31,7 @@ class IntegrationToolPolicyError(CloudApiError):
             "approval": self.approval,
         }
 
+
 class IntegrationToolNotAllowed(IntegrationToolPolicyError):
     def __init__(self, *, provider: str, tool: str) -> None:
         super().__init__(

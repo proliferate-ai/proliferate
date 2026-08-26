@@ -125,6 +125,12 @@ reason = "JSX-returning hook imports connected components"
 
 [[exception]]
 rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/access/cloud/owner-context-headers.ts"
+site = "#product/stores/organizations/organization-store"
+reason = "access module imports organization store"
+
+[[exception]]
+rule = "FE-PC-6"
 path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
 site = "#product/components/workspace/chat/input/McpElicitationCard"
 reason = "JSX-returning hook imports connected components"
@@ -225,12 +231,6 @@ rule = "FE-PC-6"
 path = "apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/workspace-status-fixtures.ts"
 site = "#product/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl"
 reason = "domain fixture imports component-owned status type"
-
-[[exception]]
-rule = "FE-PC-6"
-path = "apps/packages/product-client/src/lib/domain/workspaces/cloud/workspace-availability-intent-mapping.ts"
-site = "#product/stores/cloud/workspace-availability-intent-store"
-reason = "domain module imports store-owned intent type"
 
 [[exception]]
 rule = "FE-PC-6"
