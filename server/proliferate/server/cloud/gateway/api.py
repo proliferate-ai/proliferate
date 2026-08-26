@@ -1,0 +1,83 @@
+"""HTTP routes for the cloud sandbox AnyHarness gateway."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Request, WebSocket, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from proliferate.auth.dependencies import current_product_user
+from proliferate.db import session_ops
+from proliferate.db.engine import get_async_session
+from proliferate.db.models.auth import User
+from proliferate.integrations.sentry import clear_server_sentry_user
+from proliferate.server.cloud.gateway.access import (
+    GatewayWebSocketAuthError,
+    accepted_gateway_websocket_subprotocol,
+    authenticate_product_user_for_gateway_websocket,
+    product_token_from_websocket,
+)
+from proliferate.server.cloud.gateway.proxy import (
+    proxy_http_to_anyharness,
+    proxy_websocket_to_anyharness,
+)
+from proliferate.server.cloud.gateway.service import ensure_cloud_sandbox_gateway_access
+
+router = APIRouter(tags=["cloud-sandbox-gateway"])
+
+
+@router.api_route(
+    "/cloud-sandbox/anyharness/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    include_in_schema=False,
+)
+async def proxy_cloud_sandbox_anyharness_http(
+    path: str,
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> object:
+    access = await ensure_cloud_sandbox_gateway_access(db, user)
+    # The upstream response may stream indefinitely. End the shared auth/access
+    # transaction before entering that transport lifetime so it cannot pin a
+    # pool checkout or transaction-scoped sandbox locks.
+    await session_ops.commit_session(db)
+    return await proxy_http_to_anyharness(
+        request,
+        upstream_base_url=access.upstream_base_url,
+        upstream_token=access.upstream_token,
+        path=path,
+    )
+
+
+@router.websocket("/cloud-sandbox/anyharness/{path:path}")
+async def proxy_cloud_sandbox_anyharness_websocket(
+    websocket: WebSocket,
+    path: str,
+    db: AsyncSession = Depends(get_async_session),
+) -> None:
+    # WebSockets never pass through RequestTelemetryMiddleware (BaseHTTPMiddleware
+    # only runs for HTTP), so the Sentry user set during gateway auth must be
+    # cleared here at socket teardown or it bleeds into later, unrelated events
+    # handled on the same worker (cross-user leakage).
+    try:
+        try:
+            user = await authenticate_product_user_for_gateway_websocket(
+                db,
+                product_token_from_websocket(websocket),
+            )
+            access = await ensure_cloud_sandbox_gateway_access(db, user)
+        except GatewayWebSocketAuthError:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        # WebSocket dependencies remain alive until the socket closes. Release
+        # the completed auth/access transaction before starting the proxy pump.
+        await session_ops.commit_session(db)
+        await proxy_websocket_to_anyharness(
+            websocket,
+            upstream_base_url=access.upstream_base_url,
+            upstream_token=access.upstream_token,
+            path=path,
+            accept_subprotocol=accepted_gateway_websocket_subprotocol(websocket),
+        )
+    finally:
+        clear_server_sentry_user()

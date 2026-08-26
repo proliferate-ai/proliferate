@@ -15,4 +15,5 @@ public_surface = [
 
 allowed_importers = [
     "main.py",
+    "repositories",
 ]

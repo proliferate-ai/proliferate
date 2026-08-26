@@ -182,3 +182,23 @@ unrecoverable; only the schema round-trips.
   extracted to `server/agent_auth/state_render.py` before the deletion.
 - The billing reconciler's invariants are recorded in
   `delivery/cull-sweep/notes-billing-reconciler.md` per the earlier ruling.
+
+## Amendment (2026-08-25, coordinator scope hold): the gateway folder survives
+
+`server/proliferate/server/cloud/gateway/` (`proxy.py`, `access.py`,
+`api.py`, `service.py`) is **held out of the part-2 delete set**. The
+proxy/access modules are the only model-agnostic HTTP/SSE/WS forwarding code
+in the tree, and the target architecture keeps a machine-access proxy
+(`runtime_gateway`) — this spec's earlier listing of the gateway as
+dark-delete contradicted the Target Tree's "runtime_gateway ← moved".
+`service.py`'s sandbox-resolution seam (its imports of the deleted
+`cloud_sandboxes` provisioning and the sandbox billing authorizer) is stubbed
+to raise `NotImplementedError` with a `TODO(cull-trail)`; the module is not
+mounted anywhere (the cloud router shell is gone), so the code is dark but
+preserved for the `runtime_gateway` move. Pablo's ruling is pending — a
+follow-up PR deletes the folder if he says delete.
+
+Consequently the acceptance grep changes: `grep -r "server.cloud"
+server/proliferate --include='*.py'` matches only
+`server/proliferate/server/cloud/gateway/` (the held folder's own intra-
+package imports) and nothing else.

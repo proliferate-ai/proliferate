@@ -1,4 +1,14 @@
 import type { Schema } from "./schema.js";
+import type {
+  CloudWorkspaceMaterializationSummary,
+  CloudWorkspaceSummaryWireBase,
+} from "./workspace-compat.js";
+
+export type {
+  CloudWorkspaceMaterializationSummary,
+  CloudWorkspaceSummaryWireBase,
+  RepoRef,
+} from "./workspace-compat.js";
 
 // Narrow string unions — kept hand-written because the server declares these as `str`
 // and the generated types would be too loose (`string`) for UI switch/display logic.
@@ -56,26 +66,6 @@ export interface CloudWorkspaceExecutionTargetSummary {
   online?: boolean | null;
 }
 
-// TODO(cull-trail): the server's cloud workspace surface is deleted, so the
-// ``WorkspaceMaterializationSummary`` wire schema no longer exists. The shape
-// is pinned by hand (from the last generated contract) because the shared
-// workspace domain model (logical workspaces, inventory, reconciliation) still
-// compiles against it; the data sources are gone, so these only describe
-// cached/derived values that are now always absent at runtime.
-export interface CloudWorkspaceMaterializationSummary {
-  id: string;
-  targetKind: "managed_cloud" | "local_desktop";
-  desktopInstallId: string | null;
-  anyharnessWorkspaceId: string | null;
-  worktreePath: string | null;
-  state: "pending" | "hydrating" | "hydrated" | "missing" | "inconsistent" | "failed";
-  generation: number;
-  expectedHeadSha: string | null;
-  observedHeadSha: string | null;
-  observedBranch: string | null;
-  failureCode: string | null;
-  lastReportedAt: string | null;
-}
 export type CloudWorkspaceMaterializationState =
   CloudWorkspaceMaterializationSummary["state"];
 export type CloudWorkspaceMaterializationTargetKind =
@@ -137,16 +127,6 @@ export function isCloudAgentKind(value: string): value is CloudAgentKind {
 }
 
 // Generated type aliases — names preserved so all existing import sites are unchanged.
-// TODO(cull-trail): ``RepoRef`` left the wire contract with the cloud workspace
-// surface; pinned by hand because the workspace domain model still names repos
-// with this shape.
-export interface RepoRef {
-  provider: string;
-  owner: string;
-  name: string;
-  branch: string;
-  baseBranch: string;
-}
 export type BillingPlanInfo           = Schema<"CloudPlanInfo">;
 export type BillingUrlResponse        = Schema<"BillingUrlResponse">;
 export type OverageSettingsResponse   = Schema<"OverageSettingsResponse">;
@@ -237,42 +217,6 @@ interface CloudWorkspaceSummaryAppExtras {
   claimedAt?: string | null;
   claimSourceKind?: string | null;
   billing?: Schema<"WorkspaceBillingSummary"> | null;
-}
-
-// TODO(cull-trail): the server's cloud workspace surface is deleted, so the
-// ``WorkspaceSummary`` wire schema this type derived from no longer exists.
-// The wire base is pinned by hand from the last generated contract (with the
-// prior ``Required<>`` normalization applied): the shared workspace domain
-// model — logical workspaces, inventory, recent-work items, reconciliation —
-// still compiles against this shape, while every data source that produced
-// values of it is gone.
-interface CloudWorkspaceSummaryWireBase {
-  id: string;
-  targetId: string | null;
-  workspaceKind: CloudWorkspaceBackingKind;
-  repoEnvironmentId: string | null;
-  displayName: string;
-  repo: RepoRef | null;
-  productLifecycle: "active" | "archived";
-  selectedMaterializationId: string | null;
-  primaryMaterialization: CloudWorkspaceMaterializationSummary | null;
-  materializations: CloudWorkspaceMaterializationSummary[];
-  cloudAccess: CloudWorkspaceCloudAccessSummary;
-  statusDetail: string | null;
-  lastError: string | null;
-  templateVersion: string | null;
-  updatedAt: string | null;
-  createdAt: string | null;
-  readyAt: string | null;
-  postReadyPhase: "idle";
-  postReadyFilesTotal: number;
-  postReadyFilesApplied: number;
-  postReadyStartedAt: string | null;
-  postReadyCompletedAt: string | null;
-  lastActivityAt: string | null;
-  allowedAgentKinds: string[];
-  readyAgentKinds: string[];
-  anyharnessWorkspaceId: string | null;
 }
 
 export type CloudWorkspaceSummary = CloudWorkspaceSummaryWireBase & {

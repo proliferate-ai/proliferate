@@ -45,7 +45,7 @@ reason = "C-train composition; P1 auth rebuild rewrote keys/selections/state cov
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_enrollment.py"
-max_lines = 887
+max_lines = 850
 reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D train rewrote the suite org-first (D1 proof, floor mirroring, signup shape); C-1 added the both-surfaces poke coverage"
 
 [[max_lines]]

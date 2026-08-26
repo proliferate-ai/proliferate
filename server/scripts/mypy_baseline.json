@@ -837,6 +837,12 @@
       "count": 2
     },
     {
+      "path": "proliferate/server/repositories/models.py",
+      "code": "explicit-any",
+      "message": "Explicit \"Any\" is not allowed",
+      "count": 5
+    },
+    {
       "path": "proliferate/server/seam/workers/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",
