@@ -344,3 +344,148 @@ to = "host"
 [[edge]]
 from = "test"
 to = "lib"
+
+# ---------------------------------------------------------------------------
+# FE-FENCE-002: cloud-compute gate consumption allowlist.
+# ---------------------------------------------------------------------------
+
+[[rule]]
+id = "FE-FENCE-002"
+title = "cloud-compute gate tokens are consumed only by declared consumers"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_frontend_fences.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**"
+
+rule = """A non-test product-client source file may reference `cloudActive` or
+`cloudComputeEnabled` (in code — comments and string literals do not count)
+only if it is declared in the [[cloud_gate_consumer]] baseline below; the
+baseline may only shrink. Test files are exempt (they mock the gate)."""
+alternative = """A control-plane feature (auth, integrations, settings panes,
+anything that talks to the server but not to a sandbox) must gate on
+`authStatus === "authenticated" && controlPlaneReachable` from
+`useCloudAvailabilityState()` instead — the decoupling `shouldSyncLocalAuthState`,
+the settings `authGate`, #2133, and IG-1 all applied. Only a genuinely
+compute-gated surface (cloud workspaces, repo environments, billing) may join
+the baseline, and joining it is a constitution amendment: flag it in the PR
+description and stop for founder review."""
+why = """`cloudActive = cloudComputeEnabled && authenticated` folds in the
+CLOUD_COMPUTE_TEMPORARILY_DISABLED launch kill switch, so it is false for every
+signed-in production user. A control-plane feature that gates on it is dead in
+production. That regression shipped four separate times (shouldSyncLocalAuthState,
+the settings authGate, #2133, IG-1 — see
+delivery/triage/2026-08-25-integrations-agent-auth.md); this baseline makes the
+fifth a visible amendment instead of a silent outage."""
+
+[rule.example]
+bad = """`const { cloudActive } = useCloudAvailabilityState();` gating an
+integrations or auth surface in a file outside the baseline"""
+good = """`const authReady = authStatus === "authenticated" && controlPlaneReachable;`
+for control-plane features; `cloudActive` only in a declared compute-gated consumer"""
+
+# ---------------------------------------------------------------------------
+# FE-FENCE-002 consumer baseline: the measured non-test files whose CODE
+# references a gate token at rule introduction (2026-08-25, IG-1 fixed in the
+# same PR). Permissive by construction, shrink-only; the checker fails on an
+# undeclared consumer AND on a stale row.
+# ---------------------------------------------------------------------------
+
+[[cloud_gate_consumer]]
+path = "components/cloud/CloudGuard.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/feedback/HarnessUpdateToastPresenter.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/settings/panes/BillingPane.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/settings/panes/repo/RepoActionsPane.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/settings/panes/repo/RepoCloudGate.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/settings/panes/repo/RepoConfigurePane.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/settings/panes/repo/RepoEnvironmentPane.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/settings/panes/repo/RepoScopeStates.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/settings/screen/SettingsScreen.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/settings/screen/render-settings-section.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/workspace/repo-setup/CloudRepoActionDialogHost.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/workspace/shell/sidebar/MainSidebar.tsx"
+
+[[cloud_gate_consumer]]
+path = "components/workspace/shell/sidebar/main-sidebar-test-harness.tsx"
+
+[[cloud_gate_consumer]]
+path = "hooks/cloud/derived/use-cloud-availability-state.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/cloud/facade/use-cloud-billing.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/home/derived/use-home-next-repository-selection.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/home/derived/use-home-next-state.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/home/facade/use-home-screen.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/settings/derived/use-settings-repositories.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/settings/workflows/use-cloud-repo-environment-editor.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/workspaces/cache/use-workspace-collections-cache.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/workspaces/cache/use-workspace-selection-cache.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/workspaces/cache/use-workspaces.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/workspaces/derived/use-sidebar-shortcut-targets.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/workspaces/derived/use-workspace-sidebar-state.ts"
+
+[[cloud_gate_consumer]]
+path = "hooks/workspaces/workflows/use-sidebar-repo-availability-actions.ts"
+
+[[cloud_gate_consumer]]
+path = "lib/domain/capabilities/app-capabilities.ts"
+
+[[cloud_gate_consumer]]
+path = "lib/domain/workspaces/cloud/cloud-workspace-creation.ts"
+
+[[cloud_gate_consumer]]
+path = "lib/domain/workspaces/cloud/workspace-availability-commands.ts"
+
+[[cloud_gate_consumer]]
+path = "lib/domain/workspaces/sidebar/sidebar-groups.ts"
+
+[[cloud_gate_consumer]]
+path = "lib/domain/workspaces/sidebar/sidebar-test-fixtures.ts"
+
+[[cloud_gate_consumer]]
+path = "lib/domain/workspaces/sidebar/sidebar-workspace-items.ts"
+
+[[cloud_gate_consumer]]
+path = "pages/WorkspacesPage.tsx"

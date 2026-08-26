@@ -261,7 +261,12 @@ async def get_agent_gateway_capabilities_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AgentGatewayCapabilitiesResponse:
-    gateway_enabled, public_base_url, enrollment_status = await service.get_capabilities(
+    (
+        gateway_enabled,
+        public_base_url,
+        enrollment_status,
+        credits_exhausted,
+    ) = await service.get_capabilities(
         db,
         user_id=user.id,
     )
@@ -270,6 +275,7 @@ async def get_agent_gateway_capabilities_endpoint(
         gateway_enabled=gateway_enabled,
         public_base_url=public_base_url,
         enrollment_status=enrollment_status,
+        credits_exhausted=credits_exhausted,
         verifications=[verification_verdict_payload(record) for record in verdicts],
     )
 

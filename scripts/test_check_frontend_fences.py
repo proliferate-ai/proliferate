@@ -16,6 +16,7 @@ class FenceTestCase(unittest.TestCase):
         self,
         files: dict[str, str],
         baseline: set[tuple[str, str]],
+        gate_baseline: set[str] | None = None,
     ) -> check_module.ScanResult:
         """`files` keys are paths relative to product-client/src."""
         with tempfile.TemporaryDirectory() as directory:
@@ -24,7 +25,11 @@ class FenceTestCase(unittest.TestCase):
                 path = root / SRC_RELATIVE / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content, encoding="utf-8")
-            return check_module.collect_violations(root=root, baseline=baseline)
+            return check_module.collect_violations(
+                root=root,
+                baseline=baseline,
+                gate_baseline=gate_baseline if gate_baseline is not None else set(),
+            )
 
 
 class EdgeBaselineTest(FenceTestCase):
@@ -168,6 +173,89 @@ class SelfPackageExportTest(FenceTestCase):
         )
         self.assertEqual(result.edges_seen, {("hooks", "stores")})
         self.assertEqual(result.violations, [])
+
+
+class CloudGateBaselineTest(FenceTestCase):
+    def test_undeclared_gate_consumer_fails(self) -> None:
+        result = self.scan(
+            {
+                "hooks/use-thing.ts": (
+                    "export function useThing(cloudActive: boolean) {\n"
+                    "  return cloudActive;\n"
+                    "}\n"
+                ),
+            },
+            baseline=set(),
+        )
+        gate = [v for v in result.violations if v.rule_id == check_module.GATE_RULE]
+        self.assertEqual(len(gate), 1)
+        self.assertEqual(
+            gate[0].relative_path, f"{SRC_RELATIVE}/hooks/use-thing.ts"
+        )
+        self.assertIn("undeclared cloud-gate consumer", gate[0].detail)
+        self.assertIn("record:", gate[0].format())
+
+    def test_declared_gate_consumer_is_clean(self) -> None:
+        result = self.scan(
+            {
+                "hooks/use-thing.ts": "export const x = cloudComputeEnabled;\n",
+            },
+            baseline=set(),
+            gate_baseline={"hooks/use-thing.ts"},
+        )
+        self.assertEqual(result.violations, [])
+        self.assertEqual(result.gate_consumers_seen, {"hooks/use-thing.ts"})
+        self.assertEqual(result.stale_gate_consumers, set())
+
+    def test_comment_and_string_mentions_do_not_count(self) -> None:
+        result = self.scan(
+            {
+                "hooks/use-thing.ts": (
+                    "// the old cloudActive coupling was removed here\n"
+                    "/* cloudComputeEnabled folds in the kill switch */\n"
+                    'const key = "cloudActive";\n'
+                    "export const x = key;\n"
+                ),
+            },
+            baseline=set(),
+        )
+        self.assertEqual(result.violations, [])
+        self.assertEqual(result.gate_consumers_seen, set())
+
+    def test_test_files_are_exempt(self) -> None:
+        result = self.scan(
+            {
+                "hooks/use-thing.test.ts": "export const x = cloudActive;\n",
+                "hooks/__tests__/fixture.ts": "export const y = cloudActive;\n",
+            },
+            baseline=set(),
+        )
+        self.assertEqual(result.violations, [])
+        self.assertEqual(result.gate_consumers_seen, set())
+
+    def test_stale_gate_row_is_reported(self) -> None:
+        result = self.scan(
+            {
+                "hooks/use-thing.ts": "export const x = 1;\n",
+            },
+            baseline=set(),
+            gate_baseline={"hooks/use-thing.ts"},
+        )
+        self.assertEqual(result.violations, [])
+        self.assertEqual(result.stale_gate_consumers, {"hooks/use-thing.ts"})
+
+    def test_one_violation_per_undeclared_file(self) -> None:
+        result = self.scan(
+            {
+                "hooks/use-thing.ts": (
+                    "export const a = cloudActive;\n"
+                    "export const b = cloudComputeEnabled;\n"
+                ),
+            },
+            baseline=set(),
+        )
+        gate = [v for v in result.violations if v.rule_id == check_module.GATE_RULE]
+        self.assertEqual(len(gate), 1)
 
 
 class WarnModeTest(unittest.TestCase):

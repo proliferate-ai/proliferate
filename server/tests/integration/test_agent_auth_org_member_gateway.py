@@ -409,6 +409,40 @@ async def test_org_member_state_render_uses_org_enrollment_key(
 
 
 @pytest.mark.asyncio
+async def test_capabilities_reports_credits_exhausted_when_renderer_withholds(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """AA-3: the capabilities flag and the withheld key can never disagree.
+
+    ``get_capabilities`` computes ``credits_exhausted`` from the same
+    predicate the renderer withholds keys on, so the settings surface names
+    "out of credits" exactly when a gateway launch would fail closed with
+    the runtime's generic ``AGENT_ROUTE_SELECTION_MISSING``. Granting credit
+    must flip both back together.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_default_org_budget_usd", "0")
+    user_id = await _create_user(db_session)
+    org_id = await _create_org_with_active_member(db_session, user_id=user_id)
+    org_enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
+
+    _, _, _, credits_exhausted = await gateway_service.get_capabilities(
+        db_session, user_id=user_id
+    )
+    assert credits_exhausted is True
+    assert await is_gateway_budget_available(db_session, user_id) is False
+
+    await _grant(db_session, billing_subject_id=org_enrollment.billing_subject_id, amount="50")
+    _, _, _, credits_exhausted = await gateway_service.get_capabilities(
+        db_session, user_id=user_id
+    )
+    assert credits_exhausted is False
+    assert await is_gateway_budget_available(db_session, user_id) is True
+
+
+@pytest.mark.asyncio
 async def test_every_gateway_key_reader_resolves_the_same_enrollment(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
@@ -451,7 +485,7 @@ async def test_every_gateway_key_reader_resolves_the_same_enrollment(
     assert org_key.virtual_key_id != personal_key.virtual_key_id
 
     # get_capabilities / get_enrollment report the governing enrollment.
-    _, _, status = await gateway_service.get_capabilities(db_session, user_id=user_id)
+    _, _, status, _ = await gateway_service.get_capabilities(db_session, user_id=user_id)
     assert status == governing.sync_status
     reported = await gateway_service.get_enrollment(db_session, user_id=user_id)
     assert reported.id == governing.id

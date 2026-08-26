@@ -223,6 +223,12 @@ class AgentGatewayCapabilitiesResponse(AgentGatewayBaseModel):
     gateway_enabled: bool = Field(alias="gatewayEnabled")
     public_base_url: str | None = Field(alias="publicBaseUrl")
     enrollment_status: str = Field(alias="enrollmentStatus")
+    # Additive AA-3 surface: True exactly when the state renderer is
+    # withholding gateway keys for this user's paying subject (credit
+    # exhausted or unfunded), so the client can say "out of credits" instead
+    # of the runtime's generic selection-missing refusal. Defaulted so older
+    # callers constructing the model are unaffected.
+    credits_exhausted: bool = Field(default=False, alias="creditsExhausted")
     # Additive FR-3 surface: per-harness gateway-enablement verdicts for the
     # governing enrollment. Empty until the verification loop records one.
     verifications: list[AgentGatewayVerificationVerdict] = Field(
