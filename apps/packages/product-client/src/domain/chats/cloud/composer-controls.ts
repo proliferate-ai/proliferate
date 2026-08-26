@@ -1,8 +1,6 @@
 import type { SessionLiveConfigSnapshot } from "@anyharness/sdk";
-import type {
-  CloudHarnessLaunchOptionsResponse,
-  CloudSessionProjection,
-} from "@proliferate/cloud-sdk";
+import type { CloudSessionProjection } from "@proliferate/cloud-sdk";
+import type { CloudHarnessLaunchOptionsResponse } from "./launch-options-model";
 import {
   buildCloudLaunchComposerControls,
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,

@@ -1,5 +1,5 @@
-// Sanitizer coverage for the five PR 7 self-host evidence kinds (GitHub auth,
-// dual-server switch isolation, gateway capability, cloud add-on, and the
+// Sanitizer coverage for the PR 7 self-host evidence kinds (GitHub auth,
+// dual-server switch isolation, gateway capability, and the
 // CloudFormation-wrapper posture) — the extended sanitizeSelfHostCellEvidence
 // dispatch inside sanitizeCellEvidence. Mirrors
 // schema.tier2-sanitize.test.ts's structure so this file stays independently
@@ -12,7 +12,6 @@ import { test } from "node:test";
 import {
   sanitizeCellEvidence,
   type SelfHostCfnWrapperEvidenceV1,
-  type SelfHostCloudAddonEvidenceV1,
   type SelfHostGatewayEvidenceV1,
   type SelfHostGithubAuthEvidenceV1,
   type SelfHostSwitchIsolationEvidenceV1,
@@ -109,29 +108,6 @@ function gatewayEvidence(overrides: Partial<SelfHostGatewayEvidenceV1> = {}): Se
   };
 }
 
-function cloudAddonEvidence(overrides: Partial<SelfHostCloudAddonEvidenceV1> = {}): SelfHostCloudAddonEvidenceV1 {
-  return {
-    kind: "selfhost_cloud_addon",
-    artifact_ids: ["server/linux-amd64"],
-    server_version: "0.3.29",
-    anyharness_version: "0.3.29",
-    harness: "claude",
-    api_origin: "sh-run-1.qualification.proliferate.com",
-    controller_runtime_origin: "127.0.0.1:8542",
-    github_app_installation_id_hash: "a".repeat(64),
-    e2b_template_id: "tmpl-abc123",
-    sandbox_id_hash: "b".repeat(64),
-    workspace_id_hash: "c".repeat(64),
-    session_id_hash: "d".repeat(64),
-    turn_completed: true,
-    pause_wake_state_intact: true,
-    disable_truthful: true,
-    base_healthy_after_disable: true,
-    cleanup: selfHostCleanup(),
-    ...overrides,
-  };
-}
-
 function cfnWrapperEvidence(overrides: Partial<SelfHostCfnWrapperEvidenceV1> = {}): SelfHostCfnWrapperEvidenceV1 {
   return {
     kind: "selfhost_cfn_wrapper",
@@ -191,15 +167,6 @@ test("sanitizeCellEvidence redacts a planted secret in selfhost_gateway evidence
   assert.ok(!clean.litellm_image_digest.includes(secret));
 });
 
-test("sanitizeCellEvidence redacts a planted secret in selfhost_cloud_addon evidence", () => {
-  const secret = "e2b_secret_token";
-  const dirty = cloudAddonEvidence({ e2b_template_id: `tmpl-${secret}` });
-  const clean = sanitizeCellEvidence(dirty, [secret]) as SelfHostCloudAddonEvidenceV1;
-  assert.equal(clean.kind, "selfhost_cloud_addon");
-  assert.ok(clean.e2b_template_id.includes("[REDACTED]"));
-  assert.ok(!clean.e2b_template_id.includes(secret));
-});
-
 test("sanitizeCellEvidence redacts a planted secret in selfhost_cfn_wrapper evidence (no base shape)", () => {
   const secret = "cfn-leaked-secret";
   const dirty = cfnWrapperEvidence({ api_origin: `sh-cfn-1-${secret}.qualification.proliferate.com` });
@@ -216,6 +183,5 @@ test("sanitizeCellEvidence leaves clean self-host evidence byte-for-byte identic
   assert.deepEqual(sanitizeCellEvidence(githubAuthEvidence(), []), githubAuthEvidence());
   assert.deepEqual(sanitizeCellEvidence(switchIsolationEvidence(), []), switchIsolationEvidence());
   assert.deepEqual(sanitizeCellEvidence(gatewayEvidence(), []), gatewayEvidence());
-  assert.deepEqual(sanitizeCellEvidence(cloudAddonEvidence(), []), cloudAddonEvidence());
   assert.deepEqual(sanitizeCellEvidence(cfnWrapperEvidence(), []), cfnWrapperEvidence());
 });

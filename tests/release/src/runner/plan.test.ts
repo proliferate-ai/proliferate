@@ -77,7 +77,7 @@ test("--lane staging plans only Tier-3 sandbox cells", async () => {
     leaf("T3-WT-1", ["local", "sandbox"]),
     leaf("T2-BILL", ["local"]),
     leaf("T4-RUNTIME-1", ["sandbox"]),
-    leaf("CLOUD-PROVISION-1", ["sandbox"]),
+    leaf("SANDBOX-ONLY-1", ["sandbox"]),
   ], {
     ...INPUTS,
     targetLane: "staging",
@@ -109,12 +109,12 @@ test("--lane staging rejects a mixed explicit selection when any named scenario 
   );
 });
 
-test("--lane cloud keeps the explicit managed-cloud scenario untouched", async () => {
-  const cells = await buildPlannedCells([leaf("CLOUD-PROVISION-1", ["sandbox"])], {
+test("--lane cloud keeps an explicit sandbox-lane scenario untouched", async () => {
+  const cells = await buildPlannedCells([leaf("SANDBOX-ONLY-1", ["sandbox"])], {
     ...INPUTS,
     targetLane: "cloud",
   });
-  assert.deepEqual(cells.map((cell) => cell.cell_id), ["CLOUD-PROVISION-1/sandbox"]);
+  assert.deepEqual(cells.map((cell) => cell.cell_id), ["SANDBOX-ONLY-1/sandbox"]);
 });
 
 // ── --lane selfhost: the shipped qualification-selfhost entrypoint (PR7-CONTROL-001) ──

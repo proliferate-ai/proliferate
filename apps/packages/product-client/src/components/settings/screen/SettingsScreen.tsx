@@ -241,8 +241,6 @@ export function SettingsScreen({
               integrations: !controlPlaneReachable,
               "organization-integrations": !controlPlaneReachable,
               "agent-api-keys": !controlPlaneReachable,
-              "organization-secrets": !controlPlaneReachable,
-              "personal-secrets": !controlPlaneReachable,
             }}
             onCheckForUpdates={() => { void checkNow(); }}
             updateActionState={{

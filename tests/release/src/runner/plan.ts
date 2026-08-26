@@ -60,8 +60,10 @@ export interface PlanInputs {
  *   - `local`    → only `local` runtime cells (the world-backed local path);
  *   - `staging`  → only `T3-*` sandbox cells (no local runtime; no Tier 2/4);
  *   - `selfhost` → only `selfhost` runtime cells (the self-host world, PR 7).
- * `cloud` and any unspecified target keep every declared lane, so PR 2's
- * explicit `--lane cloud CLOUD-PROVISION-1` selection is untouched.
+ * `cloud` and any unspecified target keep every declared lane. (The PR 2
+ * managed-cloud scenario that motivated the `cloud` passthrough was deleted
+ * with the cloud sandbox stack — cull part 2; the passthrough behavior stays
+ * generic.)
  *
  * The `selfhost` case is what lets the shipped `qualification-selfhost` target
  * select the self-host lane explicitly (`--lane selfhost`) — previously it

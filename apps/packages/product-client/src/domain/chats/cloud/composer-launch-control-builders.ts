@@ -1,4 +1,4 @@
-import type { CloudHarnessLaunchOptionsResponse } from "@proliferate/cloud-sdk";
+import type { CloudHarnessLaunchOptionsResponse } from "./launch-options-model";
 import {
   inferSessionControlPresentation,
   isConfiguredSessionControlKey,

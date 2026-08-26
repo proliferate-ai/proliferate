@@ -12,7 +12,6 @@ import type {
 } from "./types.js";
 import type {
   CellEvidenceV1,
-  SelfHostCloudAddonEvidenceV1,
   SelfHostGatewayEvidenceV1,
   SelfHostGithubAuthEvidenceV1,
 } from "../evidence/schema.js";
@@ -64,20 +63,6 @@ import {
   spendWindowUtc,
   waitForActorEnrollmentSynced,
 } from "../worlds/selfhost/gateway.js";
-import {
-  configureAndEnableCloudAddonProfile,
-  disableCloudAddonProfile,
-  resolveCloudAddonConfig,
-  type CloudAddonConfig,
-  type CloudAddonEnvSource,
-} from "../worlds/selfhost/cloud-addon.js";
-import { ensureCloudSandboxRow } from "../fixtures/cloud-sandbox.js";
-import {
-  killProviderSandbox,
-  pauseProviderSandbox,
-  readProviderSandboxFile,
-  writeProviderSandboxFile,
-} from "../fixtures/e2b-verify.js";
 
 /**
  * SELFHOST-QUAL-1 (frozen tier-3 contract §`SH-GITHUB-AUTH` + §`SH-GATEWAY`).
@@ -114,14 +99,13 @@ export const REPRESENTATIVE_HARNESS = "claude";
 
 export const SH_GITHUB_AUTH = "SH-GITHUB-AUTH";
 export const SH_GATEWAY = "SH-GATEWAY";
-export const SH_CLOUD_ADDON = "SH-CLOUD-ADDON";
 /**
  * Run order (frozen contract "World topology and staging"): GitHub auth first
- * (needs the fixed origin), then the gateway, then the cloud add-on last (it
- * needs the fixed-origin GitHub App callback + the E2B/self-built-template
- * founder inputs, implemented on the post-PR 2 rebase per decision 5).
+ * (needs the fixed origin), then the gateway. The former SH-CLOUD-ADDON cell
+ * was deleted with the cloud sandbox stack (cull part 2) — the server no longer
+ * ships a cloud-workspaces add-on for a self-host box to enable.
  */
-export const SELFHOST_QUAL_CELL_ORDER = [SH_GITHUB_AUTH, SH_GATEWAY, SH_CLOUD_ADDON] as const;
+export const SELFHOST_QUAL_CELL_ORDER = [SH_GITHUB_AUTH, SH_GATEWAY] as const;
 export type SelfHostQualCellName = (typeof SELFHOST_QUAL_CELL_ORDER)[number];
 
 /**
@@ -145,14 +129,6 @@ export const SELFHOST_QUAL_CELL_OPTIONAL_ENV: Record<SelfHostQualCellName, reado
     "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_EMAIL",
   ],
   [SH_GATEWAY]: ["RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY", "RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG"],
-  [SH_CLOUD_ADDON]: [
-    "RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY",
-    "RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME",
-    "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID",
-    "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID",
-    "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET",
-    "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY",
-  ],
 };
 
 /** The fixed serial-lane DNS label the SH-GITHUB-AUTH OAuth callback is registered against. */
@@ -238,17 +214,6 @@ function planForCell(cell: PlannedCellV1): ScenarioPlanStep[] {
         { description: `${prefix} correlate spend to the actor's virtual key on the instance LiteLLM (master key not used)` },
         { description: `${prefix} restart the stack; re-assert capability truth + gateway health persist` },
       ];
-    case SH_CLOUD_ADDON:
-      return [
-        { description: `${prefix} SCAFFOLDED (PR7-CONTROL-009): the enable/disable + capability-truth machinery and offline decision logic exist, but the production provisioning drive (instance-GitHub-App authorize → sandbox → turn → pause/wake) is NOT yet wired — the cell FAILS CLOSED until it is` },
-        { description: `${prefix} preflight the cloud add-on env (E2B key/team/template + instance GitHub App); fail closed if absent` },
-        { description: `${prefix} assert capabilities.cloudWorkspaces is FALSE before enabling the add-on` },
-        { description: `${prefix} write the add-on env block (E2B pair + GitHub App) over SSH; bootstrap --wait; assert cloudWorkspaces TRUE` },
-        { description: `${prefix} [not-yet-wired] authorize the instance GitHub App + provision one personal sandbox/workspace on the self-built template; compare the provisioned immutable template id to the configured one` },
-        { description: `${prefix} [not-yet-wired] run one representative turn; register the provisioned E2B sandbox for durable reap` },
-        { description: `${prefix} [not-yet-wired] pause then wake the sandbox; assert the TURN'S OWN workspace/session state (not an ad-hoc marker) survives intact` },
-        { description: `${prefix} disable the add-on + reconverge; assert cloudWorkspaces drops to FALSE and the base product stays healthy` },
-      ];
     default:
       return [{ description: `${prefix} unknown self-host cell "${name}"` }];
   }
@@ -258,11 +223,9 @@ function planForCell(cell: PlannedCellV1): ScenarioPlanStep[] {
 
 export type SelfHostGithubAuthEvidenceNoCleanup = Omit<SelfHostGithubAuthEvidenceV1, "cleanup">;
 export type SelfHostGatewayEvidenceNoCleanup = Omit<SelfHostGatewayEvidenceV1, "cleanup">;
-export type SelfHostCloudAddonEvidenceNoCleanup = Omit<SelfHostCloudAddonEvidenceV1, "cleanup">;
 export type QualCellEvidenceNoCleanup =
   | SelfHostGithubAuthEvidenceNoCleanup
-  | SelfHostGatewayEvidenceNoCleanup
-  | SelfHostCloudAddonEvidenceNoCleanup;
+  | SelfHostGatewayEvidenceNoCleanup;
 
 export interface SelfHostQualCellResult {
   status: ScenarioDeclarableStatus;
@@ -288,11 +251,6 @@ export interface SelfHostQualDriver {
     world: ReadySelfHostWorld,
     owner: SelfHostOwnerActor,
     env: GatewayEnvSource,
-  ): Promise<SelfHostQualCellResult>;
-  runCloudAddon(
-    world: ReadySelfHostWorld,
-    owner: SelfHostOwnerActor,
-    env: CloudAddonEnvSource,
   ): Promise<SelfHostQualCellResult>;
   closeWorld(world: ReadySelfHostWorld): Promise<SelfHostWorldCleanupEvidence>;
 }
@@ -362,8 +320,6 @@ export const defaultSelfHostQualDriver: SelfHostQualDriver = {
 
   runGateway: (world, owner, env) => runGatewayCell(world, owner, env, defaultGatewayCellOps),
 
-  runCloudAddon: (world, owner, env) => runCloudAddonCell(world, owner, env, defaultCloudAddonCellOps),
-
   closeWorld: (world) => world.close(),
 };
 
@@ -424,9 +380,7 @@ export async function runSelfHostQualCells(
       result =
         cellName === SH_GITHUB_AUTH
           ? await driver.runGithubAuth(world, setup.owner, oauth)
-          : cellName === SH_GATEWAY
-            ? await driver.runGateway(world, setup.owner, env)
-            : await driver.runCloudAddon(world, setup.owner, env);
+          : await driver.runGateway(world, setup.owner, env);
     } catch (error) {
       result = { status: "failed", reason: { code: "scenario_failure", message: describe(error) } };
     }
@@ -840,314 +794,6 @@ export async function enrollActorAndRunGatewayTurn(
   } finally {
     await page.close().catch(() => undefined);
   }
-}
-
-// ── SH-CLOUD-ADDON cell logic (ops injected; decision logic is offline-tested) ──
-
-/**
- * What the production provisioning drive resolves once the add-on is enabled and
- * one personal sandbox/workspace has been materialized through the real product
- * GitHub-authorization path. All ids are RAW here (hashed into evidence by the
- * cell); `providerSandboxId` is the E2B provider id used to reap + pause/wake the
- * separate-account sandbox. `turn.error` (fail closed) rather than a throw keeps
- * a provisioning/turn failure a clean red — never a false green.
- */
-export interface CloudAddonProvisionResult {
-  githubAppInstallationId: string;
-  e2bTemplateId: string;
-  sandboxId: string;
-  workspaceId: string;
-  sessionId: string;
-  /** The E2B provider sandbox id, for durable reap + pause/wake (empty if never created). */
-  providerSandboxId: string;
-  turn: { ended: boolean; error?: string };
-}
-
-export interface CloudAddonCellOps {
-  /** Read `/meta` capability truth (`cloudWorkspaces`) pre/post enable + post disable. */
-  fetchCloudWorkspacesCapability(world: ReadySelfHostWorld): Promise<{ agentGateway: boolean; cloudWorkspaces: boolean }>;
-  /** Write the add-on env block + bootstrap the `cloud-workspaces` profile with --wait. */
-  configureAndEnableCloudAddon(world: ReadySelfHostWorld, config: CloudAddonConfig): Promise<void>;
-  /**
-   * Authorize the instance GitHub App + provision one personal sandbox/workspace,
-   * run one turn. `onSandboxCreated` MUST be invoked the moment the E2B provider
-   * sandbox exists — BEFORE any later step that could throw — so the durable reap
-   * is registered even if provisioning/turn crashes mid-flight (SHR-006
-   * register-before-create). It is idempotent; calling it more than once is safe.
-   */
-  provisionAndRunTurn(
-    world: ReadySelfHostWorld,
-    owner: SelfHostOwnerActor,
-    config: CloudAddonConfig,
-    onSandboxCreated: (providerSandboxId: string) => Promise<void>,
-  ): Promise<CloudAddonProvisionResult>;
-  /** Register the provisioned E2B sandbox on the durable ledger for reverse-order reap (SHR-006). */
-  registerSandboxReap(world: ReadySelfHostWorld, providerSandboxId: string, config: CloudAddonConfig): Promise<void>;
-  /** Pause then wake the sandbox; prove the turn's workspace/session state survives intact. */
-  pauseWakeStateIntact(
-    world: ReadySelfHostWorld,
-    owner: SelfHostOwnerActor,
-    providerSandboxId: string,
-    config: CloudAddonConfig,
-  ): Promise<{ intact: boolean; error?: string }>;
-  /** Disable the add-on + reconverge; re-read capability truth + base health. */
-  disableAndReassert(world: ReadySelfHostWorld): Promise<{ cloudWorkspacesFalse: boolean; baseHealthy: boolean }>;
-}
-
-/**
- * SH-CLOUD-ADDON decision logic (frozen tier-3 contract §`SH-CLOUD-ADDON`).
- * Fail-closed at every boundary; a green result requires the full journey:
- * absence-proven → enable → capability flip → real GitHub-authorized provision +
- * turn → pause/wake state intact → disable truthful + base healthy. The
- * provisioned E2B sandbox is registered for durable reap the moment its provider
- * id is known (before the turn is judged) so a later failure still reaps it.
- */
-export async function runCloudAddonCell(
-  world: ReadySelfHostWorld,
-  owner: SelfHostOwnerActor,
-  env: CloudAddonEnvSource,
-  ops: CloudAddonCellOps,
-): Promise<SelfHostQualCellResult> {
-  // Preflight fail-closed: absent founder add-on inputs are a real red, not a skip.
-  const config = resolveCloudAddonConfig(env, world.api.baseUrl);
-  if (!config.ok) {
-    return { status: "failed", reason: { code: "scenario_failure", message: config.reason } };
-  }
-
-  // cloudWorkspaces MUST be literal false before enabling (absence posture proven).
-  const before = await ops.fetchCloudWorkspacesCapability(world);
-  if (before.cloudWorkspaces !== false) {
-    return {
-      status: "failed",
-      reason: {
-        code: "scenario_failure",
-        message: "SH-CLOUD-ADDON: capabilities.cloudWorkspaces was already true before the add-on was enabled (mismatch).",
-      },
-    };
-  }
-
-  await ops.configureAndEnableCloudAddon(world, config.value);
-
-  const after = await ops.fetchCloudWorkspacesCapability(world);
-  if (after.cloudWorkspaces !== true) {
-    return {
-      status: "failed",
-      reason: {
-        code: "scenario_failure",
-        message: "SH-CLOUD-ADDON: capabilities.cloudWorkspaces did not flip to true after enabling the add-on (mismatch).",
-      },
-    };
-  }
-
-  // Register the provider sandbox for durable reap the MOMENT it is created —
-  // before any step that could throw — via the onSandboxCreated callback (SHR-006
-  // register-before-create). Idempotent: guarded so a duplicate id (or a post-hoc
-  // safety net below) registers exactly once.
-  const registeredSandboxIds = new Set<string>();
-  const registerOnce = async (providerSandboxId: string): Promise<void> => {
-    if (!providerSandboxId || registeredSandboxIds.has(providerSandboxId)) {
-      return;
-    }
-    registeredSandboxIds.add(providerSandboxId);
-    await ops.registerSandboxReap(world, providerSandboxId, config.value);
-  };
-
-  const provisioned = await ops.provisionAndRunTurn(world, owner, config.value, registerOnce);
-  // Safety net: if the op returned an id it never announced through the callback
-  // (older/partial implementations), register it now — still before judging the
-  // turn — so a turn/pause failure still tears the sandbox down.
-  await registerOnce(provisioned.providerSandboxId);
-  if (provisioned.turn.error) {
-    return {
-      status: "failed",
-      reason: { code: "scenario_failure", message: `SH-CLOUD-ADDON: provisioning/turn errored: ${provisioned.turn.error}` },
-    };
-  }
-  if (!provisioned.turn.ended) {
-    return {
-      status: "failed",
-      reason: { code: "scenario_failure", message: "SH-CLOUD-ADDON: the provisioned cloud-workspace turn did not end." },
-    };
-  }
-  // The sandbox MUST have been provisioned on the exact configured immutable
-  // self-built template (PR7-CONTROL-009): compare the OBSERVED template id to
-  // the configured one, so a sandbox that materialized on a different/default
-  // template (e.g. a background-materializer orphan) is a red, not a green.
-  if (provisioned.e2bTemplateId !== config.value.e2bTemplateName) {
-    return {
-      status: "failed",
-      reason: {
-        code: "scenario_failure",
-        message:
-          `SH-CLOUD-ADDON: the provisioned sandbox's template "${provisioned.e2bTemplateId}" does not match the ` +
-          `configured self-built template "${config.value.e2bTemplateName}"; refusing to green a wrong-template sandbox.`,
-      },
-    };
-  }
-
-  const pauseWake = await ops.pauseWakeStateIntact(world, owner, provisioned.providerSandboxId, config.value);
-  if (pauseWake.error) {
-    return {
-      status: "failed",
-      reason: { code: "scenario_failure", message: `SH-CLOUD-ADDON: pause/wake errored: ${pauseWake.error}` },
-    };
-  }
-  if (!pauseWake.intact) {
-    return {
-      status: "failed",
-      reason: { code: "scenario_failure", message: "SH-CLOUD-ADDON: sandbox state did not survive a pause/wake cycle." },
-    };
-  }
-
-  const disabled = await ops.disableAndReassert(world);
-  if (!disabled.cloudWorkspacesFalse) {
-    return {
-      status: "failed",
-      reason: {
-        code: "scenario_failure",
-        message: "SH-CLOUD-ADDON: disabling the add-on left capabilities.cloudWorkspaces stale-true (disable not truthful).",
-      },
-    };
-  }
-  if (!disabled.baseHealthy) {
-    return {
-      status: "failed",
-      reason: {
-        code: "scenario_failure",
-        message: "SH-CLOUD-ADDON: the base product was not healthy after the add-on was disabled.",
-      },
-    };
-  }
-
-  const evidence: SelfHostCloudAddonEvidenceNoCleanup = {
-    kind: "selfhost_cloud_addon",
-    artifact_ids: artifactIds(world),
-    server_version: world.artifacts.serverImage.version,
-    anyharness_version: world.artifacts.anyharness.version,
-    harness: "claude",
-    api_origin: hostOf(world.api.baseUrl),
-    controller_runtime_origin: hostOf(world.runtime.baseUrl),
-    github_app_installation_id_hash: sha256Hex(provisioned.githubAppInstallationId),
-    // The OBSERVED template id (proven == the configured one just above), not the
-    // configured value, so evidence records what actually materialized.
-    e2b_template_id: provisioned.e2bTemplateId,
-    sandbox_id_hash: sha256Hex(provisioned.sandboxId),
-    workspace_id_hash: sha256Hex(provisioned.workspaceId),
-    session_id_hash: sha256Hex(provisioned.sessionId),
-    turn_completed: true,
-    pause_wake_state_intact: true,
-    disable_truthful: true,
-    base_healthy_after_disable: true,
-  };
-  return { status: "green", evidence };
-}
-
-/**
- * Default production ops for the SCAFFOLDED SH-CLOUD-ADDON cell (PR7-CONTROL-009).
- * `fetchCloudWorkspacesCapability`/`configureAndEnableCloudAddon`/
- * `disableAndReassert` are REAL and verifiable (enable/disable the box profile,
- * read `/meta` capability truth). `provisionAndRunTurn` is NOT yet wired: the
- * self-host product path (instance-GitHub-App authorize → covered repo_environment
- * → personal sandbox materialize on the self-built template → one turn) has no
- * self-host driver seam (managed-cloud's `seedGithubAuthorizationOnBox` is a
- * managed-cloud-only box seed, and PR 7 does not duplicate PR 2's controllers).
- * So the production op FAILS CLOSED (bounded, secret-free) and the cell can NEVER
- * reach green live today — it is scaffolded, not runnable. The green DECISION
- * logic (enable → capability flip → real-GitHub provision + turn → observed
- * template-id match → pause/wake of the TURN'S OWN session → truthful disable) is
- * proven offline by the fake ops; the live green lands only once the drive + the
- * founder E2B/App inputs exist. It never returns a false green.
- */
-export const defaultCloudAddonCellOps: CloudAddonCellOps = {
-  async fetchCloudWorkspacesCapability(world) {
-    return fetchAgentGatewayCapability(world.api.baseUrl);
-  },
-  async configureAndEnableCloudAddon(world, config) {
-    await configureAndEnableCloudAddonProfile(world.control.ssh, config.block, tmpFileIo());
-  },
-  async provisionAndRunTurn(_world, _owner, _config, _onSandboxCreated) {
-    // SCAFFOLDED (PR7-CONTROL-009): fail closed at the self-host GitHub-App
-    // authorization boundary — no self-host driver seam exists yet. Returning a
-    // bounded turn error keeps this a clean red rather than fabricating a
-    // provisioned workspace. When wired, the live impl MUST: call
-    // `onSandboxCreated(id)` at E2B create time (before it can throw) so the reap
-    // is registered even on a crash; return the OBSERVED `e2bTemplateId` (the cell
-    // asserts it == the configured self-built template); and drive one real turn
-    // whose workspace/session ids are the ones the pause/wake step re-reads.
-    return {
-      githubAppInstallationId: "",
-      e2bTemplateId: "",
-      sandboxId: "",
-      workspaceId: "",
-      sessionId: "",
-      providerSandboxId: "",
-      turn: {
-        ended: false,
-        error:
-          "the self-host instance-GitHub-App authorization + self-built-template provisioning drive is not yet " +
-          "wired (founder-gated live inputs pending); failing closed rather than fabricating a provisioned workspace",
-      },
-    };
-  },
-  async registerSandboxReap(world, providerSandboxId, config) {
-    // Durable reverse-order reap on the shared self-host ledger (SHR-006): the
-    // E2B sandbox is a separate-account resource that outlives the EC2 box, so it
-    // is torn down with the box's OWN E2B key (never the harness's). The E2B probe
-    // (`runProbe`) reads its key from RELEASE_E2E_E2B_API_KEY, so the box key is
-    // injected under THAT var — not E2B_API_KEY, which the probe ignores. The
-    // idempotent provider kill treats an absent sandbox as killed.
-    await world.registerCleanup?.("e2b_sandbox", providerSandboxId, async () => {
-      await killProviderSandbox(providerSandboxId, boxE2bProbeEnv(config));
-    });
-  },
-  async pauseWakeStateIntact(world, owner, providerSandboxId, config) {
-    // SCAFFOLDED interim implementation (PR7-CONTROL-009): this proves the E2B
-    // pause/wake MECHANISM survives a filesystem marker, but the frozen contract
-    // wants the TURN'S OWN workspace/session state proven intact — i.e. after
-    // wake, re-open the session the turn created and confirm its transcript
-    // (the reply) is still there, mirroring SH-BASE-TURN's reopen. That needs the
-    // real provisioned session id (from the not-yet-wired provisionAndRunTurn), so
-    // it is deferred with the rest of the live drive; the marker keeps the
-    // mechanism covered until then. Pause via the E2B SDK backdoor (no product
-    // pause endpoint), wake through the product's own lever. Bounded fail-closed
-    // on any error. The E2B probe env injects the box's key under
-    // RELEASE_E2E_E2B_API_KEY (the var runProbe actually reads).
-    try {
-      const e2bEnv = boxE2bProbeEnv(config);
-      const marker = `sh-cloud-addon-${world.run.run_id}`;
-      await writeProviderSandboxFile(providerSandboxId, "/home/user/.sh-cloud-addon-marker", marker, e2bEnv);
-      await pauseProviderSandbox(providerSandboxId, e2bEnv);
-      await ensureCloudSandboxRow(owner.api);
-      const readBack = await readProviderSandboxFile(providerSandboxId, "/home/user/.sh-cloud-addon-marker", e2bEnv);
-      return { intact: (readBack.content ?? "").trim() === marker };
-    } catch (error) {
-      return { intact: false, error: describe(error) };
-    }
-  },
-  async disableAndReassert(world) {
-    await disableCloudAddonProfile(world.control.ssh, tmpFileIo());
-    // baseHealthy reflects an OBSERVED /health probe: waitForHealth polls
-    // /health and THROWS if it never returns 2xx within the window, so reaching
-    // the line after it means /health was really observed healthy. A thrown
-    // health failure propagates out and the outer cell catch fails the cell (no
-    // false green). This mirrors the gateway cell's restart-persistence check.
-    await waitForHealth(world.api.baseUrl, { timeoutMs: RESTART_HEALTH_TIMEOUT_MS });
-    const baseHealthy = true;
-    const capability = await fetchAgentGatewayCapability(world.api.baseUrl);
-    return { cloudWorkspacesFalse: capability.cloudWorkspaces === false, baseHealthy };
-  },
-};
-
-/**
- * The env the E2B `runProbe` reads its key from is `RELEASE_E2E_E2B_API_KEY`
- * (`requireApiKey`), NOT `E2B_API_KEY` (which it overwrites). A self-host box's
- * sandbox is created under the INSTANCE's own key, so the reap/pause probes must
- * run under that key — injected here under the var the probe actually reads, so
- * the probe hits the box's account (not the harness's sandbox-lane account) and a
- * real leak is reaped instead of silently 404'ing as "already gone".
- */
-function boxE2bProbeEnv(config: CloudAddonConfig): NodeJS.ProcessEnv {
-  return { ...process.env, RELEASE_E2E_E2B_API_KEY: config.block.e2bApiKey };
 }
 
 // ── Small shared helpers ────────────────────────────────────────────────────

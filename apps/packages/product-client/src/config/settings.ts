@@ -2,11 +2,9 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "account",
   "general",
   "appearance",
-  "personal-secrets",
   "integrations",
   "archived-workspaces",
   "organization",
-  "organization-secrets",
   "organization-members",
   "billing",
   "organization-limits",
@@ -32,16 +30,14 @@ export const SETTINGS_DEFAULT_SECTION: SettingsSection = "general";
 export const TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION = false;
 
 // User scope numbering: ⌘1 account, ⌘2 general, ⌘3 appearance,
-// ⌘4 personal secrets, ⌘5 integrations, ⌘6 archived workspaces.
+// ⌘4 integrations, ⌘5 archived workspaces.
 export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "account",
   "general",
   "appearance",
-  "personal-secrets",
   "integrations",
   "archived-workspaces",
   "organization",
-  "organization-secrets",
   "organization-members",
   "billing",
   "organization-limits",
