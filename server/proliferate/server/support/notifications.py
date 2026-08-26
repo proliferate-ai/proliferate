@@ -79,6 +79,10 @@ async def notify_support_report(
     urgent: bool = False,
     notify_me: bool = False,
     correlation: dict[str, object] | None,
+    client_release_id: str | None = None,
+    session_ids: list[str] | None = None,
+    sentry_events: list[dict[str, object]] | None = None,
+    summary: str | None = None,
 ) -> bool:
     webhook_url = settings.support_slack_webhook_url.strip()
     if not webhook_url:
@@ -110,6 +114,10 @@ async def notify_support_report(
         context=context,
         correlation=correlation,
         request_id=get_request_id(),
+        client_release_id=client_release_id,
+        session_ids=session_ids,
+        sentry_events=sentry_events,
+        summary=summary,
     )
     blocks = build_mrkdwn_message_blocks(
         title=plan.title,
