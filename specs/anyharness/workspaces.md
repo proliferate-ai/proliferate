@@ -1,5 +1,7 @@
 # Workspaces
 
+> Ownership: this document is the depth reference for the **workspaces** system spec ([README.md](../codebase/systems/runtime/workspaces/README.md)). Laws, owned state, fences and the checked code map are authoritative there; flow-level detail stays here.
+
 `anyharness-lib/src/domains/workspaces/**` owns execution-surface identity, workspace
 registration from paths, worktree creation, and workspace-derived environment.
 

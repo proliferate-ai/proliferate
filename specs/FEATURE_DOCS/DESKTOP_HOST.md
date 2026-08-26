@@ -1,5 +1,7 @@
 # Desktop Host
 
+> Ownership: this document is the depth reference for the **desktop-host** system spec ([README.md](../codebase/systems/runtime/desktop-host/README.md)). Laws, owned state, fences and the checked code map are authoritative there; flow-level detail stays here.
+
 Read before touching: `apps/desktop/`, `apps/packages/product-client/`, `apps/packages/product-client/src/host/`, `apps/packages/product-client/src/app/ProductClient.tsx`
 
 This doc owns the web bundle ↔ native shell ↔ sidecar seam. It does not own
