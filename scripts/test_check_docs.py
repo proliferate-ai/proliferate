@@ -62,6 +62,7 @@ class DocumentationIntegrityTest(unittest.TestCase):
             "specs/codebase/systems/engineering/delivery/README.md",
             "specs/codebase/systems/engineering/observability/README.md",
             "specs/codebase/systems/engineering/testing/README.md",
+            "specs/codebase/systems/engineering/alerting/README.md",
             "guides/operating/README.md",
             "guides/operating/analytics/README.md",
             "specs/TESTING/manual-release-qa.md",

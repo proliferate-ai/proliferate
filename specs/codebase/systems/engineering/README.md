@@ -24,8 +24,11 @@ from user action to agent to gateways to failure.
   trusted commit on `main`: PR metadata, rollups, the constitution as data,
   generated-artifact and migration discipline, and the multi-agent merge
   train.
-- Alerting, Customer loop — landing tonight as `alerting/`,
-  `customer-loop/`; until each lands,
+- [Alerting and Fix Loop](alerting/README.md) — when a person is
+  interrupted (non-noisy: two severities, Slack for prod, phone only for
+  production-down) and the alert → issue → fix → test path; owns the rule
+  identity files and the runbook.
+- Customer loop — landing tonight as `customer-loop/`; until it lands,
   [`specs/OBSERVABILITY.md`](../../../OBSERVABILITY.md) is the per-PR law.
 
 Retired (2026-08-25, engineering cull PR #2214): the issue-lifecycle system
