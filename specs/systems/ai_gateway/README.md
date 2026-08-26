@@ -125,7 +125,7 @@ Failure modes: LiteLLM unreachable at enrollment → `sync_status=failed`, backf
 | This spec says | Prod today | The change |
 | --- | --- | --- |
 | Its own folder `server/ai_gateway/` with its own MANIFEST | Gateway files co-resident in `server/agent_auth/`; one manifest claims both systems | The code split (on the agent_auth build list) |
-| A signup grant funds every new org | The one-per-GitHub-identity `free_cloud_allocation` guard permanently blocks the grant when a prior account holds the claim — the founder org has been unfunded since creation (2026-08-26 renderer trace) | An allocation transfer/regrant path (admin primitive exists); consider surfacing "grant blocked by a previous account" in words at signup |
+| A signup grant funds every new org | The grant can silently never run: the founder org had no allocation row at all from creation to 2026-08-26 (cause in the signup path, unfound; fixed with a $25 admin grant) | Find the signup-hook miss; alert on orgs with zero grants after signup |
 | Verification runs | `agent_gateway_verification_enabled=false` | Enable once config.yaml settles |
 | Per-run virtual keys with envelope budgets | Keys are per (member, harness); budgets are org team + member cap | Open ruling (PR #2247 discussion): mint per run at placement — the only shape where the proxy hard-stops a runaway fan-out mid-run |
 | `ai_magic` routes through the gateway | Three direct endpoints, spend unattributed | After per-run keys (open ruling) |

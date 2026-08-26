@@ -618,7 +618,7 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 
 | This spec says | Prod today | The change |
 | --- | --- | --- |
-| Refusals name their cause in words | An unfunded org renders present-but-empty → launches fail as bare `AGENT_ROUTE_SELECTION_MISSING`. Confirmed live: the account's $2 signup grant never landed (a prior account's one-per-GitHub-identity allocation claim blocks it), so every gateway render withholds keys | Fund the subject (allocation + ledger move via the existing admin primitives, or a manual grant); then the typed-reason refusals |
+| Refusals name their cause in words | An unfunded org renders present-but-empty → launches fail as bare `AGENT_ROUTE_SELECTION_MISSING`. Confirmed live: the signup grant simply never ran for this account (no allocation row was ever created — the signup-hook miss is an open ai_gateway gap), leaving the ledger at $0 | **Funded 2026-08-26** ($25 admin grant via a one-off ECS task; `creditsExhausted` false, keys render again). Remaining: the typed-reason refusals |
 | Selections deliver with cloud gone | Delivery was gated on cloud compute until #2245; the first un-gated delivery applied the fail-closed unfunded doc — why "gateway broke" this week | Landed (#2245); the funding row clears the visible breakage |
 | Vault kinds include `anthropic_subscription`; the wire has a `seat` source | Three kinds; two source kinds | New enum values + `seats.py` + the seat recipe |
 | Zero enabled rows = unconfigured, refuse with words | Zero rows = "native login" by convention; the document omits the harness | Convention retired; native becomes a status-document detection with a mint offer |
@@ -649,7 +649,7 @@ Carried, still true in prod (not deltas): the origin guard · only-forward acks 
 
 *Transitional — deleted at convergence. Seats are the spine (ruled 2026-08-26): the reconstruction happens through seats v1, which pulls refusals, the status document, and rotation in as its parts.*
 
-- [ ] Fund the founder org's billing subject (row 1) — clears the live gateway breakage; no code
+- [x] Fund the founder org's billing subject (row 1) — done 2026-08-26: $25 admin grant, keys render again; re-enable claude's gateway toggle in settings (it was toggled off during debugging)
 - [ ] **Seats v1 for claude, the spine** (rows 3, 11): vault kind, seat selection + wire source, mint capture, seat recipe + strip list, per-seat homes, verification probe — live-test gate **PASSED 2026-08-26** (real token matches the capture rule ✓ · end-to-end session through the installed adapter on seat env alone, ACP handshake to end_turn ✓ · per-seat keychain coexistence via config-dir-hash-suffixed services ✓) — carrying with it:
     - [ ] typed launch refusals with plain words end to end (rows 1, 4)
     - [ ] rotation: cooling on limit error, round-robin, gateway fallback (row 3)
