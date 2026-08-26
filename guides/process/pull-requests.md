@@ -114,6 +114,44 @@ Current mechanical classification has three important edge cases:
 - Paths such as `cloud/sdk/**` match more than one area and block readiness
   until a human explicitly selects the correct affected label or labels.
 
+## Working In Parallel
+
+Many branches build from one `main` at once and one coordinator merges them
+serially. The laws are in the
+[Building Loop spec](../../specs/codebase/systems/engineering/building-loop/README.md);
+the procedure is:
+
+1. **Open with labels.** Use `node scripts/ci-cd/pr-open.mjs --release
+   release:<kind> --title "<type>(<scope>): <change>" --body-file <path>`;
+   it derives every `area:*` label from the diff against `origin/main` with
+   the same classifier the metadata check runs and opens the PR non-draft, so
+   the check never races the labels. Ambiguous paths fail and are named; pass
+   `--area` for the human choice.
+2. **No checks means conflict.** GitHub fires no `pull_request` workflow on a
+   PR that cannot merge into `main`. Rebase; do not close/reopen.
+3. **Regenerate, never hand-merge.** On a rebase conflict in
+   `cloud/sdk/src/generated/**`, `anyharness/sdk/src/generated/**`,
+   `uv.lock`, `Cargo.lock`, `lints/*/ratchets.toml`, or
+   `server/scripts/mypy_baseline.json`: take either side, run the generator
+   or measurement, commit its output.
+4. **Mint migration ids.** New alembic revisions use `alembic revision`'s
+   random id (or `python3 -c 'import uuid;print(uuid.uuid4().hex[:12])'`);
+   never type a sequence-shaped id. The coordinator runs
+   `scripts/ci-cd/check-migration-ids-across-branches.sh` before each merge.
+5. **Downgrades recreate structure**, or the head-to-history downgrade test
+   is pinned to the introducing revision — never skipped.
+6. **Workflow edits need the `workflow` token scope.** `gh auth status` must
+   list `workflow` before pushing a branch that adds or modifies
+   `.github/workflows/**` (deletions pass without it).
+7. **Only the owner pushes.** The coordinator asks; the branch owner rebases
+   and pushes. One merge train per repository; budget about ten minutes per
+   merge when generated files are involved.
+8. **Merge, then delete.** Delete a branch only after the merge API reports
+   success. A deleted head is recovered by recreating the ref at the PR's
+   head SHA and reopening.
+9. **Local Postgres is advisory.** Default local settings exhaust locks under
+   `pytest -n 4`; run `-n 2` or sequential. CI is authoritative.
+
 ## After Review
 
 When review changes the outcome or ownership, update the summary, proof,
