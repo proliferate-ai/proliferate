@@ -3,7 +3,8 @@
 # product-client.toml's job; this file owns the directory→directory edge set).
 # Enforced by scripts/check_frontend_fences.py, introduced in warn mode by the
 # cull-sweep Wave 0
-# (delivery/cull-sweep/delivery-spec-wave0-manifests-and-checkers.md).
+# (delivery/cull-sweep/delivery-spec-wave0-manifests-and-checkers.md) and
+# enforcing since 2026-08-25 (testing system spec, minimum-tonight PR 1).
 #
 # The [[edge]] tables below are FE-FENCE-001's baseline: the measured
 # directory→directory import graph at fence introduction — permissive by

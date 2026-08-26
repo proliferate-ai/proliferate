@@ -2,7 +2,8 @@
 # owns / public surface / allowed importers / spec link (Organization Standard
 # rule 2). Enforced by scripts/check_manifests.py over the server plane,
 # introduced in warn mode by the cull-sweep Wave 0
-# (delivery/cull-sweep/delivery-spec-wave0-manifests-and-checkers.md). The
+# (delivery/cull-sweep/delivery-spec-wave0-manifests-and-checkers.md), enforcing
+# since 2026-08-25 (testing system spec, minimum-tonight PR 1). The
 # runtime and client planes do not carry manifests yet; their fence checkers
 # (check_anyharness_fences.py, check_frontend_fences.py) hold their
 # boundaries at the folder grain instead.

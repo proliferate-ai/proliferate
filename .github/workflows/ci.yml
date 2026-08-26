@@ -100,20 +100,20 @@ jobs:
           python3 -m unittest scripts/test_check_anyharness_boundaries.py
           python3 scripts/check_anyharness_boundaries.py
 
-      - name: Check AnyHarness domain fences (warn mode)
+      - name: Check AnyHarness domain fences
         run: |
           python3 -m unittest scripts/test_check_anyharness_fences.py
-          python3 scripts/check_anyharness_fences.py --warn
+          python3 scripts/check_anyharness_fences.py
 
-      - name: Check frontend directory fences (warn mode)
+      - name: Check frontend directory fences
         run: |
           python3 -m unittest scripts/test_check_frontend_fences.py
-          python3 scripts/check_frontend_fences.py --warn
+          python3 scripts/check_frontend_fences.py
 
-      - name: Check system manifests (warn mode)
+      - name: Check system manifests
         run: |
           python3 -m unittest scripts/test_check_manifests.py
-          python3 scripts/check_manifests.py --warn
+          python3 scripts/check_manifests.py
 
       - name: Check session mutation admission
         run: python3 scripts/check_session_mutation_admission.py
