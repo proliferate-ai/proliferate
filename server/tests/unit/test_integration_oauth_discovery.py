@@ -121,8 +121,10 @@ async def test_unsafe_resource_metadata_pointer_is_skipped_not_fetched(
     requests = _install(monkeypatch, _handler)
     result = await discovery.discover_protected_resource_metadata("https://mcp.example.com/mcp")
     assert result.authorization_servers == ("https://auth.example.com",)
-    fetched_hosts = {str(request.url.host) for request in requests}
-    assert fetched_hosts == {"mcp.example.com"}  # the metadata IP was never contacted
+    # Every request went to the validated pinned address with the real
+    # hostname in Host/SNI; the metadata IP was never contacted.
+    assert {str(request.url.host) for request in requests} == set(_PUBLIC_ADDRESS)
+    assert {request.headers["host"] for request in requests} == {"mcp.example.com"}
 
 
 @pytest.mark.asyncio
@@ -133,7 +135,8 @@ async def test_redirects_are_not_followed(monkeypatch: pytest.MonkeyPatch) -> No
     requests = _install(monkeypatch, _handler)
     with pytest.raises(IntegrationOAuthProviderError):
         await discovery.discover_protected_resource_metadata("https://mcp.example.com/mcp")
-    assert all(str(request.url.host) == "mcp.example.com" for request in requests)
+    assert requests  # the origin itself was fetched
+    assert all(str(request.url.host) in _PUBLIC_ADDRESS for request in requests)
 
 
 @pytest.mark.asyncio
@@ -163,7 +166,13 @@ async def test_happy_path_discovery_still_works(monkeypatch: pytest.MonkeyPatch)
             return _json_response(_AUTH_METADATA)
         return httpx.Response(404)
 
-    _install(monkeypatch, _handler)
+    requests = _install(monkeypatch, _handler)
     metadata = await discovery.discover_authorization_server_metadata("https://auth.example.com")
     assert metadata.token_endpoint == "https://auth.example.com/token"
     assert metadata.authorization_endpoint == "https://auth.example.com/authorize"
+    # Rebinding defense: the socket target is the address that passed the
+    # check, while Host and SNI still carry the hostname.
+    first = requests[0]
+    assert str(first.url.host) in _PUBLIC_ADDRESS
+    assert first.headers["host"] == "auth.example.com"
+    assert first.extensions.get("sni_hostname") == "auth.example.com"
