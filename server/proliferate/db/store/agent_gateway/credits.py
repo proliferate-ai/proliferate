@@ -99,6 +99,8 @@ async def create_llm_credit_grant(
 async def list_llm_credit_grants(
     db: AsyncSession,
     billing_subject_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> list[LlmCreditGrantRecord]:
     """Every grant row a subject holds, oldest first — expired rows included.
 
@@ -106,18 +108,23 @@ async def list_llm_credit_grants(
     safe when the source ledger provably contains nothing but the reclaiming
     identity's own signup grant, so the caller needs the actual rows (source
     and source_ref), not a sum.
+
+    ``for_update`` locks the returned rows for the transaction. The reclaim
+    passes it on the SOURCE subject: without the lock a grant committed
+    between the purity read and ``move_llm_credit_ledger``'s unfiltered
+    subject-wide UPDATE would be swept along with the move (TOCTOU). It does
+    NOT lock rows that do not exist yet — a brand-new INSERT can still land —
+    which is why the caller also asserts the moved count against what it
+    observed.
     """
-    rows = (
-        (
-            await db.execute(
-                select(LlmCreditGrant)
-                .where(LlmCreditGrant.billing_subject_id == billing_subject_id)
-                .order_by(LlmCreditGrant.created_at, LlmCreditGrant.id)
-            )
-        )
-        .scalars()
-        .all()
+    query = (
+        select(LlmCreditGrant)
+        .where(LlmCreditGrant.billing_subject_id == billing_subject_id)
+        .order_by(LlmCreditGrant.created_at, LlmCreditGrant.id)
     )
+    if for_update:
+        query = query.with_for_update()
+    rows = (await db.execute(query)).scalars().all()
     return [llm_credit_grant_record(row) for row in rows]
 
 

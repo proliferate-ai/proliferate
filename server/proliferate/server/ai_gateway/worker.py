@@ -99,17 +99,26 @@ async def _backfill_loop() -> None:
                 next_zero_grant_check = (
                     time.monotonic() + settings.agent_gateway_zero_grant_check_interval_seconds
                 )
-                zero_grant = await run_zero_grant_check_once(
-                    already_alerted_org_ids=alerted_org_ids
-                )
-                if zero_grant.checked:
-                    logger.info(
-                        "Agent gateway zero-grant check processed enrollments",
-                        extra={
-                            "checked": zero_grant.checked,
-                            "healed": zero_grant.healed,
-                            "alerted": zero_grant.alerted,
-                        },
+                # Its own except, so a crash here is triaged as the guard's and
+                # not mislabelled `enrollment_backfill` — and so it cannot skip
+                # the backfill's own sleep/retry rhythm.
+                try:
+                    zero_grant = await run_zero_grant_check_once(
+                        already_alerted_org_ids=alerted_org_ids
+                    )
+                    if zero_grant.checked:
+                        logger.info(
+                            "Agent gateway zero-grant check processed enrollments",
+                            extra={
+                                "checked": zero_grant.checked,
+                                "healed": zero_grant.healed,
+                                "alerted": zero_grant.alerted,
+                            },
+                        )
+                except Exception as exc:
+                    report_critical(
+                        exc,
+                        tags={"domain": "agent_gateway", "action": "zero_grant_check"},
                     )
         except Exception as exc:
             report_critical(

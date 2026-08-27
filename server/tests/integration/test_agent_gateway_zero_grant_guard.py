@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_FREE_CREDIT_PERIOD_KEY,
+    LLM_CREDIT_SOURCE_ADMIN,
     LLM_CREDIT_SOURCE_FREE_SIGNUP,
     LLM_CREDIT_SOURCE_TOPUP,
 )
@@ -44,6 +45,7 @@ from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.ai_gateway import free_credits
 from proliferate.server.ai_gateway.enrollment import ensure_org_enrollment
 from proliferate.server.ai_gateway.free_credits import (
+    AgentGatewayReclaimLedgerRaced,
     AgentGatewayZeroGrantEnrollments,
     ZeroGrantCheckResult,
     ensure_signup_free_credit_grant,
@@ -437,6 +439,75 @@ async def test_reclaim_refused_when_destination_already_has_free_signup(
     )
 
 
+@pytest.mark.asyncio
+async def test_reclaim_aborts_when_a_grant_lands_in_the_toctou_window(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Safety-panel N1: a grant committed after the purity read aborts the move.
+
+    ``move_llm_credit_ledger`` is an unfiltered subject-wide UPDATE, so money
+    that appears between the vetting reads and the move would be swept along.
+    The purity read takes ``FOR UPDATE`` (which cannot lock a row that does
+    not exist yet), and this belt catches the INSERT case: moved > observed
+    raises, so the whole reclaim rolls back rather than keeping unvetted money.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    github_subject = f"gh-race-{uuid.uuid4().hex[:10]}"
+    orphan_subject_id = await _fabricate_orphan_claim(
+        db_session, github_subject=github_subject, consumed_usd=0.0
+    )
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id, provider_subject=github_subject)
+    await _place_in_org(db_session, user_id=user_id)
+    paged = _capture_report_critical(monkeypatch)
+
+    real_move = store.move_llm_credit_ledger
+
+    async def racing_move(
+        db: AsyncSession,
+        *,
+        from_billing_subject_id: uuid.UUID,
+        to_billing_subject_id: uuid.UUID,
+    ) -> tuple[int, int]:
+        # The window: an admin grant lands on the orphan after the purity read
+        # observed exactly one (the identity's own signup grant).
+        await store.create_llm_credit_grant(
+            db,
+            billing_subject_id=from_billing_subject_id,
+            user_id=None,
+            source=LLM_CREDIT_SOURCE_ADMIN,
+            amount_usd=Decimal("99"),
+            source_ref=f"admin:{uuid.uuid4().hex[:8]}",
+        )
+        return await real_move(
+            db,
+            from_billing_subject_id=from_billing_subject_id,
+            to_billing_subject_id=to_billing_subject_id,
+        )
+
+    monkeypatch.setattr(free_credits.agent_gateway_store, "move_llm_credit_ledger", racing_move)
+
+    with pytest.raises(AgentGatewayReclaimLedgerRaced):
+        await ensure_signup_free_credit_grant(db_session, user_id)
+
+    # The raise happens BEFORE the allocation claim re-points, so the reclaim
+    # is provably incomplete — production's transaction rollback (the worker's
+    # open_async_transaction) is what discards the ledger UPDATE itself.
+    allocation = (
+        await db_session.execute(
+            select(FreeCloudAllocation).where(
+                FreeCloudAllocation.github_provider_user_id == github_subject
+            )
+        )
+    ).scalar_one()
+    assert allocation.billing_subject_id == orphan_subject_id
+    assert len(paged) == 1
+    error, kwargs = paged[0]
+    assert isinstance(error, AgentGatewayReclaimLedgerRaced)
+    assert kwargs["tags"] == {"domain": "agent_gateway", "action": "zero_grant_check"}
+
+
 def _capture_report_critical(
     monkeypatch: pytest.MonkeyPatch,
 ) -> list[tuple[Exception, dict[str, Any]]]:
@@ -638,6 +709,63 @@ async def test_zero_grant_check_pages_once_per_org(
     assert second.alerted == 0
     assert second.alerted_organization_ids == ()
     assert len(calls) == 1  # the repeat pass warned instead of paging again
+    assert alerted == {org_id}
+
+
+@pytest.mark.asyncio
+async def test_healed_org_is_evicted_so_a_re_break_pages_again(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Safety-panel N3: the already-paged set is not add-only for the process.
+
+    An org that pages, then heals, then breaks again must page for the SECOND
+    break too — otherwise one lifetime alert covers every future incident for
+    that org. Healing evicts it from the set.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    calls = _capture_report_critical(monkeypatch)
+    _, org_id = await _pageable_grantless_enrollment(db_session)
+    subject = await ensure_organization_billing_subject(db_session, org_id)
+    alerted: set[uuid.UUID] = set()
+
+    first = await run_zero_grant_check(db_session, already_alerted_org_ids=alerted)
+    assert first.alerted == 1
+    assert alerted == {org_id}
+
+    # Heal it out of the feed (any grant of any source counts as funded).
+    healing_ref = f"admin:{uuid.uuid4().hex[:8]}"
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=subject.id,
+        user_id=None,
+        source=LLM_CREDIT_SOURCE_ADMIN,
+        amount_usd=Decimal("10"),
+        source_ref=healing_ref,
+    )
+    # Funded out of band, the org leaves the feed entirely (checked == 0), which
+    # is exactly the shape that would never appear in healed_organization_ids —
+    # eviction must not depend on in-pass healing alone.
+    healed_pass = await run_zero_grant_check(db_session, already_alerted_org_ids=alerted)
+    assert healed_pass.checked == 0
+    assert healed_pass.alerted == 0
+    assert alerted == set()  # evicted: no longer broken
+
+    # Re-break: the grant goes away again.
+    grant_row = (
+        await db_session.execute(
+            select(LlmCreditGrant).where(LlmCreditGrant.source_ref == healing_ref)
+        )
+    ).scalar_one()
+    await db_session.delete(grant_row)
+    await db_session.flush()
+
+    second = await run_zero_grant_check(db_session, already_alerted_org_ids=alerted)
+
+    assert second.alerted == 1
+    assert second.alerted_organization_ids == (org_id,)
+    assert len(calls) == 2  # one page per break, not one per lifetime
     assert alerted == {org_id}
 
 

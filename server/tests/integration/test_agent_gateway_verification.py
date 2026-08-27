@@ -277,18 +277,23 @@ async def test_errors_below_the_floor_warn_without_paging(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """One flaky key is a warning, never a page (safety-panel MAJOR 3).
+    """A PARTIAL failure below the floor is a warning, never a page (MAJOR 3).
 
     The old per-key report_critical turned a LiteLLM outage into hundreds of
-    fatal alerts per tick; below max(floor, half the checked keys), errors
-    now aggregate into a single warning with counts.
+    fatal alerts per tick. One of two keys failing clears neither paging
+    condition — not the floor, and not the total-outage rule — so it only
+    aggregates into a single warning with counts.
     """
     enrollment_id = await _create_enrollment(db_session)
     await _mint_key(db_session, enrollment_id, "claude")
-    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}})
+    await _mint_key(db_session, enrollment_id, "codex")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}, "codex": {"gpt-5"}})
     _fake_list_models(
         monkeypatch,
-        {"sk-litellm-claude": litellm.LiteLLMIntegrationError("boom", "transient")},
+        {
+            "sk-litellm-claude": litellm.LiteLLMIntegrationError("boom", "transient"),
+            "sk-litellm-codex": ["gpt-5"],
+        },
     )
     paged: list[Exception] = []
     monkeypatch.setattr(
@@ -298,10 +303,47 @@ async def test_errors_below_the_floor_warn_without_paging(
     with caplog.at_level(logging.WARNING, logger="proliferate.server.ai_gateway.verification"):
         result = await verification.run_verification(db_session)
 
+    assert result.checked == 2
     assert result.errored == 1
-    assert paged == []  # below the floor: no fatal alert
+    assert result.ok == 1
+    assert paged == []  # below the floor, and not a total outage: no fatal alert
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert warnings and any(getattr(r, "errored", None) == 1 for r in warnings)
+
+
+@pytest.mark.asyncio
+async def test_total_outage_pages_even_below_the_floor(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A small fleet at 100% failure pages regardless of the floor.
+
+    Safety-panel N2: with ``_ERROR_ALERT_FLOOR`` at 10, a deployment holding
+    nine or fewer active keys would never page even with every single key
+    failing — a total outage reported as a warning. Every-key-errored is now
+    its own paging condition.
+    """
+    enrollment_id = await _create_enrollment(db_session)
+    await _mint_key(db_session, enrollment_id, "claude")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}})
+    _fake_list_models(
+        monkeypatch,
+        {"sk-litellm-claude": litellm.LiteLLMIntegrationError("down", "transient")},
+    )
+    paged: list[tuple[Exception, dict[str, object]]] = []
+    monkeypatch.setattr(
+        verification,
+        "report_critical",
+        lambda error, **kwargs: paged.append((error, kwargs)),
+    )
+
+    result = await verification.run_verification(db_session)
+
+    assert result.checked == 1
+    assert result.errored == 1
+    assert len(paged) == 1  # one aggregated alert, not one per key
+    error, kwargs = paged[0]
+    assert isinstance(error, verification.AgentGatewayVerificationErrors)
+    assert kwargs["tags"] == {"domain": "agent_gateway", "action": "verification"}
 
 
 def test_expected_config_resolves_from_source_tree() -> None:

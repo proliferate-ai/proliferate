@@ -251,9 +251,11 @@ async def record_verification_verdicts(
 
     Errored observations record NO verdict (a transient blip never overwrites
     a last-known-good). Error reporting is aggregated: any errors log one
-    warning with counts; only an outage-shaped tick — ``errored`` at or past
-    ``max(_ERROR_ALERT_FLOOR, ceil(checked / 2))`` — raises ONE
-    ``report_critical``, never one per key.
+    warning with counts, and an outage-shaped tick raises ONE
+    ``report_critical`` (never one per key). Outage-shaped means EITHER every
+    checked key errored — a small fleet at 100% failure is a total outage and
+    must page regardless of the floor — or ``errored`` reached
+    ``max(_ERROR_ALERT_FLOOR, ceil(checked / 2))``.
     """
     expected_map = load_expected_access_groups()
     ok = 0
@@ -285,7 +287,10 @@ async def record_verification_verdicts(
             "Agent gateway verification tick had errored keys",
             extra={"checked": checked, "errored": errored, "sample_error": sample_error},
         )
-    if errored >= max(_ERROR_ALERT_FLOOR, math.ceil(checked / 2)):
+    # A total outage pages whatever the fleet's size: with <= 9 active keys the
+    # floor alone would stay silent at 100% failure.
+    total_outage = checked > 0 and errored == checked
+    if total_outage or errored >= max(_ERROR_ALERT_FLOOR, math.ceil(checked / 2)):
         report_critical(
             AgentGatewayVerificationErrors(
                 f"verification errored on {errored} of {checked} keys; sample: {sample_error}"

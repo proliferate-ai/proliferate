@@ -58,6 +58,16 @@ from proliferate.lib.infra.time.wall_clock import utcnow
 logger = logging.getLogger(__name__)
 
 
+class AgentGatewayReclaimLedgerRaced(Exception):
+    """The orphan's ledger changed between the purity read and the move.
+
+    Raised (not just reported) so the reclaim transaction rolls back: money
+    the preconditions never vetted must not stay moved. A can't-happen guard —
+    the purity read locks the rows it saw, so reaching this means a grant was
+    INSERTed into the window.
+    """
+
+
 class AgentGatewayZeroGrantEnrollments(Exception):
     """Active org enrollments past the cutoff still hold zero credit grants.
 
@@ -159,8 +169,11 @@ async def _reclaim_orphaned_allocation(
     if await organization_store.list_organization_members(db, owner.organization_id):
         return False
     # P2–P4 — the orphan must be provably identity-pure before money moves.
+    # The source read LOCKS the rows it observes: the move below is an
+    # unfiltered subject-wide UPDATE, so a grant committed between this read
+    # and that UPDATE would otherwise be swept along (TOCTOU).
     refusal_reason: str | None = None
-    orphan_grants = await agent_gateway_store.list_llm_credit_grants(db, owner.id)
+    orphan_grants = await agent_gateway_store.list_llm_credit_grants(db, owner.id, for_update=True)
     own_signup_ref = f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{owner.id}"
     ledger_is_pure = not orphan_grants or (
         len(orphan_grants) == 1
@@ -204,6 +217,23 @@ async def _reclaim_orphaned_allocation(
         from_billing_subject_id=owner.id,
         to_billing_subject_id=default_org_subject.id,
     )
+    if moved_grants > len(orphan_grants):
+        # Can't-happen belt behind the FOR UPDATE above: a grant that appeared
+        # after the purity read (an INSERT no row lock can prevent) has just
+        # been moved with money we never vetted. Raise so the whole reclaim
+        # transaction rolls back — nothing moves — and page, because a silent
+        # partial reclaim is exactly the class of bug the preconditions exist
+        # to prevent.
+        error = AgentGatewayReclaimLedgerRaced(
+            f"orphan reclaim observed {len(orphan_grants)} grant(s) on billing "
+            f"subject {owner.id} but moved {moved_grants} to "
+            f"{default_org_subject.id}; rolled back"
+        )
+        report_critical(
+            error,
+            tags={"domain": "agent_gateway", "action": "zero_grant_check"},
+        )
+        raise error
     moved_allocations = await move_agent_gateway_free_credit_allocation(
         db,
         from_billing_subject_id=owner.id,
@@ -341,6 +371,9 @@ async def run_zero_grant_check(
     the caller-owned set is mutated in place, so a worker passing a
     process-lifetime set pages each broken org exactly once per process
     (a restart re-pages once; accepted). Repeat orgs log a warning instead.
+    Orgs that stop being broken are evicted from that set, so an org which
+    breaks, heals, and breaks again pages once per break rather than being
+    silenced for the process's lifetime.
     """
     cutoff = utcnow() - timedelta(seconds=max_age_seconds)
     listed = await agent_gateway_store.list_active_org_enrollments_with_zero_grants(
@@ -349,6 +382,10 @@ async def run_zero_grant_check(
         limit=limit,
     )
     if not listed:
+        # Nothing is broken: every org previously paged has since been funded
+        # (in-pass or out of band), so the whole suppression set is stale.
+        if already_alerted_org_ids is not None:
+            already_alerted_org_ids.clear()
         return ZeroGrantCheckResult(
             checked=0,
             healed=0,
@@ -390,7 +427,22 @@ async def run_zero_grant_check(
     pageable_org_ids = sorted(
         {e.organization_id for e in pageable if e.organization_id is not None}, key=str
     )
+    healed_org_ids = tuple(
+        sorted({e.organization_id for e in healed if e.organization_id is not None}, key=str)
+    )
     known = already_alerted_org_ids if already_alerted_org_ids is not None else set()
+    # An org that is no longer broken must leave the suppression set, so a later
+    # RE-break pages once more instead of being silenced for the process's life.
+    # Healing in this pass is one way; healing out of band (an admin grant, a
+    # top-up) is the other — such an org simply stops appearing as pageable. So
+    # when this pass saw the WHOLE backlog (the feed was not truncated at the
+    # limit), absence from `pageable_org_ids` proves funded and evicts. When the
+    # feed WAS truncated, absence proves nothing (the org may sit beyond the
+    # limit window), so only in-pass heals evict.
+    if len(listed) < limit:
+        known.difference_update(known - set(pageable_org_ids))
+    else:
+        known.difference_update(healed_org_ids)
     new_org_ids = tuple(org_id for org_id in pageable_org_ids if org_id not in known)
     repeat_org_ids = tuple(org_id for org_id in pageable_org_ids if org_id in known)
     if new_org_ids:
@@ -424,8 +476,6 @@ async def run_zero_grant_check(
         checked=len(listed),
         healed=len(healed),
         alerted=len(new_org_ids),
-        healed_organization_ids=tuple(
-            sorted({e.organization_id for e in healed if e.organization_id is not None}, key=str)
-        ),
+        healed_organization_ids=healed_org_ids,
         alerted_organization_ids=new_org_ids,
     )
