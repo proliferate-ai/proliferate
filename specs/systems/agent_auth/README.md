@@ -53,6 +53,20 @@ Native harness login is not a method: it is an onboarding detection that offers 
 - **Refusals speak plain words.** Every typed error names its cause and what to do; a bare error code never reaches a human.
 - **Credential material exists in two places only** — the vault at rest, the launch materialization in flight. Never logs.
 
+**Fence enforcement** — who may import this system is machine-held, not convention:
+
+| Boundary | Held by |
+| --- | --- |
+| Rust: which domains may import `agent_auth` | [lints/anyharness/fences.toml](../../../lints/anyharness/fences.toml) — the domain is a node in the fence graph; its edge list is the Doors tables in machine form (AH-FENCE-001, shrink-only baseline that must equal reality exactly), and no sibling domain reaches its store (AH-FENCE-002) |
+| Rust: layer direction inside the cell (api never imports live; live imports domain) | [scripts/check_anyharness_boundaries.py](../../../scripts/check_anyharness_boundaries.py) |
+| Server: which modules may import `server/agent_auth/` | `lints/server/fences.toml` — same record shape and shrink-only rule as the anyharness and frontend fences |
+| Server: the vault and selection stores | `NamedStoreBoundary` rows in [scripts/check_server_boundaries.py](../../../scripts/check_server_boundaries.py) — credential-bearing store symbols are owner-locked to this system's modules |
+| Frontend: panes reach this system only through `lib/access` | [scripts/check_frontend_boundaries.py](../../../scripts/check_frontend_boundaries.py) (the FE-ACCESS rules) with [lints/frontend/fences.toml](../../../lints/frontend/fences.toml) |
+| The wire document | the contract fixture, pinned by tests on both sides — a shape change fails whichever side didn't move |
+| Credentials never in logs | [scripts/check_agent_auth_secret_logs.py](../../../scripts/check_agent_auth_secret_logs.py) |
+
+Two rules of the road are held by review, not machinery: *couriers carry, never interpret* and *panes render documents and add nothing*. A violation there is a review finding, not a checker failure.
+
 ## 1 · Cells
 
 ### server `agent_auth` — the choices half
@@ -700,6 +714,7 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 | One ack row per (user, surface) | Same | v1 explicitly assumes one machine per surface; multi-desktop reconciliation rides the environments rebuild |
 | `org_agent_policy` gains `seat` in the allowed-routes vocabulary | Vocabulary is {gateway, api_key, native} | One vocabulary value; no shape change |
 | The status document replaces `authState` on the agents projection | `authState` ships beside the legacy ladder fields | Replace the field; `credentialState`/`readiness` stay harnesses' |
+| Who may import this system is machine-pinned per the enforcement table | Rust: fenced only as part of the `agents` domain (coarse — the checker can't tell a consumer of `launch_facts` from one poking mint internals); server: no domain import fence exists and the vault/selection stores carry no `NamedStoreBoundary` lock | Store locks are a standalone small PR; `lints/server/fences.toml` rides the ai_gateway code split; the `agent_auth` fence node with its pinned edge list rides Wave 3 |
 
 Carried, still true in prod (not deltas): the origin guard · only-forward acks · the contract fixture pin · the per-harness recipes and ambient sanitization · the restart-running-sessions offer after an applied auth change · the registry mirror drift tests · opencode's per-slot detector gap · the `azure_openai` cells pending live verification for codex and claude · native-auth harness settings never reaching the runtime (the settings rider covers the pane, not the launch) · cursor's native credential is detected from `~/.cursor/cli-config.json` (a file — the registry's `cursor-keychain` discovery name is historical).
 
@@ -717,4 +732,5 @@ Carried, still true in prod (not deltas): the origin guard · only-forward acks 
 - [ ] The API defaults `surface` to `local`; the column stays for cloud's return (ruled 2026-08-26)
 - [ ] ai_gateway code split out of `server/agent_auth/`; recompose the remainder (row 9)
 - [ ] Grok: a managed install recipe, or drop CLI-login from its catalog entry (row 12)
+- [ ] Fence teeth (the enforcement table, last delta row): `NamedStoreBoundary` locks for the vault + selection stores (standalone, anytime) · `lints/server/fences.toml` with the ai_gateway split · the `agent_auth` fence node at Wave 3
 - [ ] Wave 3: the Rust consolidation (row 10) · Phase 2: codex seats (refreshing-file shape, single lease, sync-back)

@@ -317,7 +317,7 @@ Failure modes: LiteLLM unreachable at enrollment → `sync_status=failed`, backf
 
 - [x] Claude 5 family added to the direct-Anthropic model list — PR #2249 (the first funded launch 403'd on `claude-sonnet-5`; lands on the next release run)
 - [ ] Refresh the codex model list the same way (gpt-5.2-era entries; codex's current default is newer — the same 403 is waiting)
-- [ ] Code split into `server/ai_gateway/` + manifest + recompose (with agent_auth's build list)
+- [ ] Code split into `server/ai_gateway/` + manifest + recompose (with agent_auth's build list) — `lints/server/fences.toml` lands with it, pinning who may import this folder and `server/agent_auth/` (enforcement table in [agent_auth §0](../agent_auth/README.md))
 - [ ] Find the signup-hook miss that let an org reach day 8 with zero grants; alert on zero-grant orgs (delta row 2 — the founder org itself is already fixed)
 - [ ] Enable verification once config.yaml settles
 - [ ] Per-run keys + envelopes (pending the ruling) · then ai_magic through the gateway
