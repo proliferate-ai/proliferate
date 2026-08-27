@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
+use crate::app::test_support::lock_env;
 use crate::domains::agents::installer::manifest::{record_entries, role_name, ManifestArtifact};
 use crate::domains::agents::model::ArtifactRole;
 use crate::persistence::Db;
@@ -87,6 +88,11 @@ fn claude_model_scoped_snapshot() -> crate::domains::agents::live_ports::ProbeSn
 
 #[test]
 fn state_machine_preserves_last_good_and_discards_stale_completion() {
+    // `begin_probe`/`record_*` compare basis revisions, and
+    // `compute_harness_basis_revision` hashes process-global inputs (PATH
+    // walks, `CLAUDE_CODE_EXECUTABLE`) that other tests mutate under
+    // `lock_env` — hold the same lock or the basis flips mid-test.
+    let _env = lock_env();
     let home = TestRuntimeHome::new("last-good");
     let service =
         HarnessLaunchOptionsService::new(Db::open_in_memory().unwrap(), home.path().to_path_buf());
@@ -122,6 +128,9 @@ fn state_machine_preserves_last_good_and_discards_stale_completion() {
 
 #[test]
 fn validation_is_exact_and_never_authors_a_fallback() {
+    // Same basis coupling as the state-machine test above: validation reads
+    // the recorded snapshot back, so the env-derived basis must not move.
+    let _env = lock_env();
     let home = TestRuntimeHome::new("validation");
     let service =
         HarnessLaunchOptionsService::new(Db::open_in_memory().unwrap(), home.path().to_path_buf());
