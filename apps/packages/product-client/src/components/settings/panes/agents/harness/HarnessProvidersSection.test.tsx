@@ -67,8 +67,23 @@ function makeEditor(overrides: Partial<HarnessAuthEditorApi> = {}): HarnessAuthE
 }
 
 describe("HarnessProvidersSection", () => {
+  it("takes its harness kind from the caller, never a hardcoded opencode", () => {
+    // The section mounts on isMultiSourceHarness(kind), derived from
+    // registry.json's authCardinality — so a DATA-ONLY registry change adds a
+    // harness here, and a literal would have shown it opencode's document,
+    // badge, and route readback.
+    const { container } = render(
+      <HarnessProvidersSection harnessKind="future-multi" editor={makeEditor()} />,
+    );
+
+    const section = container.querySelector("[data-harness-auth-section]");
+    expect(section?.getAttribute("data-harness-auth-section")).toBe("future-multi");
+    expect(section?.getAttribute("data-harness-selected-route"))
+      .toBe("future-multi:cli");
+  });
+
   it("shows a pending trigger instead of letting the modal pop in blank late", async () => {
-    render(<HarnessProvidersSection editor={makeEditor()} />);
+    render(<HarnessProvidersSection harnessKind="opencode" editor={makeEditor()} />);
 
     const trigger = screen.getByRole("button", { name: /configure/i }) as HTMLButtonElement;
     expect(trigger.disabled).toBe(false);
@@ -100,7 +115,7 @@ describe("HarnessProvidersSection", () => {
       "./HarnessProvidersSection"
     );
 
-    render(<SectionWithRejectingImport editor={makeEditor()} />);
+    render(<SectionWithRejectingImport harnessKind="opencode" editor={makeEditor()} />);
 
     const trigger = screen.getByRole("button", { name: /configure/i }) as HTMLButtonElement;
     fireEvent.click(trigger);
