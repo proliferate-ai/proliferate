@@ -12,13 +12,14 @@ reads applied only when the ack carries the CURRENT (sequence, fingerprint).
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from tests.integration.test_agent_auth_delivery_ack import (
@@ -274,3 +275,209 @@ class TestSequenceGovernance:
             env_var_name="ANTHROPIC_AUTH_TOKEN",
         )
         assert {r["applied"] for r in await _list_selections(client, headers)} == {False}
+
+
+class TestBumpIsOneStatement:
+    """The bump's returned sequence always belongs to the fingerprint it stored.
+
+    "Equal sequence means identical content" is what the runtime's
+    equal-sequence acceptance and the idempotent re-ack rely on, so the bump is
+    ONE statement: an unconditional ON CONFLICT DO UPDATE whose SET decides
+    (``CASE WHEN fingerprint IS DISTINCT FROM :fp THEN sequence + 1 ELSE
+    sequence END``) and which therefore always returns the row it wrote. No
+    second statement re-reads the counter, so no interleaving can pair a
+    sequence with a fingerprint it was not stored with.
+    """
+
+    @pytest.mark.asyncio
+    async def test_unchanged_fingerprint_holds_and_changed_fingerprint_advances(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        user_id, _ = await _authed_user(client)
+        uid = uuid.UUID(user_id)
+
+        async def bump(fingerprint: str) -> int:
+            return await agent_gateway_store.bump_render_sequence_if_changed(
+                db_session, user_id=uid, surface="local", fingerprint=fingerprint
+            )
+
+        # Insert arm, then the held arm twice, then a real change, then a
+        # revert: reverting is still a change, so it advances (the sequence is
+        # monotonic, never content-addressed).
+        assert await bump("fp-a") == 1
+        assert await bump("fp-a") == 1
+        assert await bump("fp-a") == 1
+        assert await bump("fp-b") == 2
+        assert await bump("fp-a") == 3
+
+        row = await agent_gateway_store.get_render_sequence(
+            db_session, user_id=uid, surface="local"
+        )
+        assert row is not None
+        assert (row.sequence, row.fingerprint) == (3, "fp-a")
+
+    @pytest.mark.asyncio
+    async def test_held_arm_leaves_rendered_at_untouched(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # "A no-op render changes neither" (spec §2) reaches the timestamps too:
+        # rendered_at names the render that MOVED the row, so the held arm must
+        # not restamp it even though the statement now always updates.
+        user_id, _ = await _authed_user(client)
+        uid = uuid.UUID(user_id)
+
+        async def rendered_at() -> object:
+            return (
+                await db_session.execute(
+                    text(
+                        "SELECT rendered_at FROM agent_auth_render_sequence "
+                        "WHERE user_id = :user_id AND surface = 'local'"
+                    ),
+                    {"user_id": uid},
+                )
+            ).scalar_one()
+
+        await agent_gateway_store.bump_render_sequence_if_changed(
+            db_session, user_id=uid, surface="local", fingerprint="fp-a"
+        )
+        first = await rendered_at()
+        await agent_gateway_store.bump_render_sequence_if_changed(
+            db_session, user_id=uid, surface="local", fingerprint="fp-a"
+        )
+        assert await rendered_at() == first
+
+        await agent_gateway_store.bump_render_sequence_if_changed(
+            db_session, user_id=uid, surface="local", fingerprint="fp-b"
+        )
+        assert await rendered_at() != first
+
+    @pytest.mark.asyncio
+    async def test_concurrent_renders_never_share_a_sequence(
+        self, client: AsyncClient, db_session: AsyncSession, test_engine: object
+    ) -> None:
+        # Two concurrent renders on one scope, in separate sessions: one
+        # re-renders the stored content (the would-be held arm) and one carries
+        # changed content. Whichever interleaving wins, the two renders must NOT
+        # come back with the same sequence -- that would be two different
+        # documents claiming one sequence number, and the runtime would accept
+        # the loser's content as the winner's. The persisted row must end up
+        # holding the higher sequence together with THAT render's fingerprint.
+        # (The two-statement form upheld this too -- ON CONFLICT DO UPDATE locks
+        # the conflicting row before evaluating its WHERE, so the re-read could
+        # not move. This pins the property so it survives the next rewrite.)
+        user_id, _ = await _authed_user(client)
+        uid = uuid.UUID(user_id)
+        session_factory = async_sessionmaker(test_engine, expire_on_commit=False)  # type: ignore[call-overload]
+
+        async def render(fingerprint: str) -> int:
+            async with session_factory() as session:
+                sequence = await agent_gateway_store.bump_render_sequence_if_changed(
+                    session, user_id=uid, surface="local", fingerprint=fingerprint
+                )
+                await session.commit()
+                return sequence
+
+        seeded = await render("fp-seed")
+
+        held, moved = await asyncio.gather(render("fp-seed"), render("fp-moved"))
+        assert held != moved
+        assert {held, moved} in ({seeded, seeded + 1}, {seeded + 1, seeded + 2})
+
+        row = await agent_gateway_store.get_render_sequence(
+            db_session, user_id=uid, surface="local"
+        )
+        assert row is not None
+        assert row.sequence == max(held, moved)
+        assert row.fingerprint == ("fp-seed" if held > moved else "fp-moved")
+
+
+class TestRenderingGetsMustCommit:
+    """``GET /state`` and ``GET /selections`` are WRITE endpoints.
+
+    The render bumps the persisted counter, so both plain GETs depend on
+    ``get_async_session`` committing (``db/engine.py``). If either ever stops
+    committing -- a read replica, a "GETs don't commit" refactor -- the served
+    sequence and the persisted counter desynchronise and every legitimate ack
+    is rejected as "from the future". These tests fail loudly there instead.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_state_commits_the_bumped_sequence_for_an_independent_session(
+        self, client: AsyncClient, test_engine: object
+    ) -> None:
+        user_id, headers = await _authed_user(client)
+        key = await _create_key(client, headers)
+        await _put_api_key_selection(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            api_key_id=key["id"],
+            env_var_name="ANTHROPIC_API_KEY",
+        )
+        served = (await _get_state(client, headers, "local")).json()
+
+        # A session that shares no transaction with the request: it can only see
+        # the counter if the GET's session committed it.
+        session_factory = async_sessionmaker(test_engine, expire_on_commit=False)  # type: ignore[call-overload]
+        async with session_factory() as session:
+            row = await agent_gateway_store.get_render_sequence(
+                session, user_id=uuid.UUID(user_id), surface="local"
+            )
+        assert row is not None
+        assert (row.sequence, row.fingerprint) == (served["sequence"], served["fingerprint"])
+
+        # The consequence, end to end: the ack of the served pair is in bounds.
+        acked = await _ack_state(
+            client,
+            headers,
+            surface="local",
+            sequence=served["sequence"],
+            fingerprint=served["fingerprint"],
+        )
+        assert acked.status_code == 200, acked.text
+
+    @pytest.mark.asyncio
+    async def test_list_selections_commits_the_sequence_its_render_bumped(
+        self, client: AsyncClient, test_engine: object
+    ) -> None:
+        # The selections read is the render that DISCOVERS a vault-side change
+        # (revoking a pool seat touches no selection row and renders nothing),
+        # so its bump is the one most easily lost to a non-committing session.
+        user_id, headers = await _authed_user(client)
+        seat = await _mint_seat(client, headers)
+        put = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[{"sourceKind": "seat"}],
+        )
+        assert put.status_code == 200, put.text
+        served = (await _get_state(client, headers, "local")).json()
+        acked = await _ack_state(
+            client,
+            headers,
+            surface="local",
+            sequence=served["sequence"],
+            fingerprint=served["fingerprint"],
+        )
+        assert acked.status_code == 200, acked.text
+
+        revoked = await client.delete(f"/v1/cloud/agent-auth/keys/{seat['id']}", headers=headers)
+        assert revoked.status_code == 200, revoked.text
+
+        # This GET is the render that moves the counter; it must persist it.
+        assert {r["applied"] for r in await _list_selections(client, headers)} == {False}
+        session_factory = async_sessionmaker(test_engine, expire_on_commit=False)  # type: ignore[call-overload]
+        async with session_factory() as session:
+            row = await agent_gateway_store.get_render_sequence(
+                session, user_id=uuid.UUID(user_id), surface="local"
+            )
+        assert row is not None
+        assert row.sequence == served["sequence"] + 1
+
+        # And the counter moved exactly once: the next render is a no-op, so
+        # GET /state serves the sequence the selections read already persisted.
+        after = (await _get_state(client, headers, "local")).json()
+        assert after["sequence"] == served["sequence"] + 1
