@@ -67,7 +67,7 @@ Native harness login is not a method: it is an onboarding detection that offers 
         - The courier pulls and acks; the ack is what lets the pane say "applied" truthfully.
     - The seat-usage read — the latest window samples per seat.
         - The settings meters render it.
-    - Three importable functions — the renderer (`render_agent_auth_state`), `resolve_headless` (target), `seat_usage_probe` (target).
+    - The importable functions — the renderer pair (`render_agent_auth_state` / `build_agent_auth_state`), `resolve_headless`, `seat_usage_probe`.
         - The renderer is called only by this system's own routes; `resolve_headless` by automations at run placement; nothing else imports anything else.
 - **Consumes:** ai_gateway — `is_gateway_budget_available` at render, plus the renderer's gateway inputs (the public proxy base URL and the enrollment's per-harness virtual-key map, as opaque values) · the registry mirror constants · encryption at rest · org membership for policy routes.
 
@@ -273,7 +273,7 @@ sequenceDiagram
     CO->>RT: push document (origin-stamped)
     RT->>RT: apply to machine + poke probe for changed harnesses
     RT-->>CO: applied receipt
-    CO->>SV: ack (revision + fingerprint)
+    CO->>SV: ack (sequence + fingerprint)
     SV-->>U: selection shows applied
 ```
 
@@ -306,7 +306,7 @@ sequenceDiagram
     RT->>CO: hand off token and wipe the buffer
     CO->>SV: save to vault (kind anthropic_subscription)
     SV->>SV: row created - re-render, re-deliver (flow 1)
-    RT->>RT: apply + verification probe on the seat
+    RT->>RT: apply, then the launch probe runs under the seat's home
     RT-->>U: status document shows the seat as verified
 ```
 
@@ -327,7 +327,7 @@ sequenceDiagram
     participant SESS as session-launch path
     participant RT as runtime agent_auth
     participant H as harness process
-    SESS->>RT: launch_facts(harness, workspace)
+    SESS->>RT: launch_facts(harness, context)
     RT->>RT: load applied doc (origin guard) - resolve profile - pick source - render recipes
     RT-->>SESS: env to set + env to strip + files (or a typed plain-words refusal)
     SESS->>H: spawn with the answer applied LAST
@@ -336,7 +336,7 @@ sequenceDiagram
 The decision logic, since this flow carries the most:
 
 ```text
-launch_facts(harness, ws):
+launch_facts(harness, ctx):
   entry = applied doc[harness]                 # origin guard checked at load
   no entry            → Err(NoConfiguredSource)      # "Claude Code isn't set up — pick a method in Settings"
   sources empty       → Err(SourceUnsatisfied{why})  # "out of LLM credits — top up" / "key revoked"
@@ -357,7 +357,7 @@ Triggered by the probe engine's closed event set: app start, an applied auth cha
 ```mermaid
 sequenceDiagram
     autonumber
-    participant EV as event (startup, auth-apply, install, login-exit, backoff-expiry, refresh)
+    participant EV as event (startup, auth-apply, install, login-terminal exit, backoff-expiry, refresh)
     participant RT as runtime agent_auth
     participant H as harness process
     participant UI as settings UI
@@ -405,12 +405,12 @@ sequenceDiagram
 
 ### Cell 1 · server `agent_auth`
 
-Full file tree (today's disk; `⇒` = ruled move, rides the build list):
+Full file tree (final layout — today's locations live in the delta table):
 
 ```text
 server/proliferate/
 ├── constants/agent_gateway.py            closed vocabularies, registry mirrors, STATE_VERSION
-├── db/models/agent_gateway.py            the tables (per-table ownership; enrollment/usage/credit tables ⇒ ai_gateway)
+├── db/models/agent_gateway.py            the agent_auth tables (the gateway tables are ai_gateway's)
 ├── db/store/agent_gateway/               the agent_auth stores (the gateway stores are ai_gateway's)
 │   ├── records.py · mappers.py           typed records; DesiredAuthSource
 │   ├── api_keys.py                       vault CRUD, encryption at rest, decrypt for render
@@ -452,10 +452,10 @@ PUT  /selections/{harness}?surface=
 
 GET  /state?surface=
   → state.json v2 + riders { fingerprint, harness_settings }   # same renderer for every caller
-POST /state/ack?surface=          { sequence, fingerprint }   # (wire names revision/fingerprint until the rename lands)
+POST /state/ack?surface=          { sequence, fingerprint }
   → the ack row · 400 invalid_agent_auth_delivery_ack          # only-forward; future acks refused
 
-Every error above shares one envelope: { "detail": { code, message, ...fields } } — code is the
+Every error on this surface shares one envelope: { "detail": { code, message, ...fields } } — code is the
 typed value shown per route, message is the plain-words copy, extra fields are named per code.
 
 GET  /seats/usage
@@ -485,7 +485,7 @@ Cell-local invariants: single-source harnesses (claude, codex, grok, cursor) all
 
 ### Cell 2 · runtime `agent_auth`
 
-Full file tree (today inside `domains/agents/`; `⇒ domains/agent_auth/` is the ruled Wave-3 consolidation):
+Full file tree (final layout — today's locations live in the delta table):
 
 ```text
 anyharness/crates/anyharness-lib/src/
@@ -542,10 +542,8 @@ pub fn methods(harness: &str) -> Vec<MethodRow>   // {kind, available, seat_id?,
 
 pub fn status(harness: &str) -> StatusDoc
 pub fn subscribe_status() -> impl Stream<Item = StatusDoc>
-pub fn poke(event: ProbeEvent)  // today: Startup | InstallCompleted | AuthApplied | LoginTerminal
-                                //        | LiveContradiction | Manual
-                                // target adds: BackoffExpired | FirstDetected, and AuthApplied
-                                // gains a changed-harness set (today it is the widest possible apply)
+pub fn poke(event: ProbeEvent)  // Startup | InstallCompleted | AuthApplied{changed} | LoginTerminal
+                                // | LiveContradiction | Manual | BackoffExpired | FirstDetected
 
 pub fn start_login(harness: &str, variant: LoginVariant) -> TerminalHandle  // Native | MintSeat
 ```
@@ -557,7 +555,6 @@ PUT    /v1/agent-auth/state                    apply a document (sequence-guarde
 POST   /v1/agents/{kind}/launch-options/refresh   the manual-refresh poke (409 PROBE_ENGINE_NOT_OWNER for non-owners)
 POST   /v1/agents/login-terminals              create a login terminal (mint_seat is a request variant — target)
 GET|DELETE /v1/agents/login-terminals/{id}     terminal lifecycle · GET …/{id}/ws streams it
-── target routes (delta: the status/methods surface) ──
 GET    /v1/agent-auth/status                   → StatusDoc[] (all harnesses) · ?harness= for one
 GET    /v1/agent-auth/status/stream            SSE — one event per status-document change (polling the GET is the fallback where SSE is unavailable)
 GET    /v1/agent-auth/methods?harness=         → MethodRow[]
@@ -579,7 +576,8 @@ The per-harness recipe table — the one place "every harness has its own way of
 - **claude · seat** — env only: set `CLAUDE_CODE_OAUTH_TOKEN` + `CLAUDE_CONFIG_DIR` → that seat's own dir (`claude-config-<seat>/`), which also neutralizes `apiKeyHelper` and ambient settings.
 - **claude · api_key / provider_config** — the named env var, or the provider env set: Bedrock = `CLAUDE_CODE_USE_BEDROCK=1` + `AWS_BEARER_TOKEN_BEDROCK` + `AWS_REGION`; Azure/Foundry = claude's Foundry vars (cell pending live verification).
 - **codex · gateway** — one file + two vars: write `config.toml` into a sequence-keyed `codex-home-<seq>/` declaring the single provider (`proliferate`, `base_url` suffixed `/v1`, `env_key = "PROLIFERATE_GATEWAY_KEY"`, `wire_api = "responses"`, **no model pin**); set `CODEX_HOME` → that dir + `PROLIFERATE_GATEWAY_KEY` = the scoped key.
-- **codex · api_key** — the named env var only. Seat route is phase 2 (the refreshing-file shape).
+- **codex · api_key** — the named env var. Seat route is phase 2 (the refreshing-file shape).
+- **codex · provider_config** — a typed config renders an `[model_providers.azure]` block into `config.toml` (`wire_api = "responses"`, `env_key` naming the vault-delivered var); the codex × azure cell stays registry-`pending` until live-verified.
 - **opencode · gateway** — one file + three vars: write `opencode.json` (adds only the `proliferate` provider: `apiKey: "{env:PROLIFERATE_GATEWAY_KEY}"` + the exact live gateway model list from the plan seam); set `XDG_CONFIG_HOME` → the isolated dir, `OPENCODE_CONFIG` → the file path, `PROLIFERATE_GATEWAY_KEY` = the scoped key. **`XDG_DATA_HOME` stays ambient on purpose** — coexistence with native provider logins is opencode's model.
 - **opencode · api_key** — the named env var, additive beside gateway and native.
 - **grok · gateway** — env only: `HOME` → sequence-keyed `grok-home-<seq>/`, `GROK_MODELS_BASE_URL` (proxy), `XAI_API_KEY` (the scoped key).
@@ -649,7 +647,7 @@ apps/packages/product-client/src/
 ```
 
 ```ts
-useHarnessStatus(kind)   // subscribes the status document; returns { methods, applied, probe: {verdict, at, stale}, coolingUntil }
+useHarnessStatus(kind)   // subscribes the status document; returns { methods, applied, nextSeatId, rotate, probe: {verdict, at, stale}, coolingUntil }
 useMethods(kind)         // the method picker's truth; returns MethodRow[] straight from door 2
 useSeatUsage()           // the meters; returns the latest sample per seat
 ```
@@ -658,7 +656,7 @@ useSeatUsage()           // the meters; returns the latest sample per seat
 
 - **Subscription is the default.** `useHarnessStatus` subscribes on mount (settings pane, onboarding card, composer badge) and renders every push; there is no client polling loop. Where the stream is unavailable, the hook falls back to re-reading on the invalidation boundaries below.
 - **Opening the agents settings pane** re-reads status and methods, and forces a fresh usage sample for visible seats (the pane-open probe).
-- **After a login terminal closes**, the runtime has already poked itself (`LoginExit`); the frontend just re-reads — it never issues its own poke here.
+- **After a login terminal closes**, the runtime has already poked itself (`LoginTerminal`); the frontend just re-reads — it never issues its own poke here.
 - **After a selection or vault mutation acks**, the query set invalidates and re-reads: selection PUT → selections + state + status; key create/revoke → keys + selections + status; seat mint → keys + status + usage.
 - **Manual refresh** is the one user-facing poke: the refresh affordance calls the runtime's refresh route, renders `queued`/`running` inline, and — on failure — shows the backoff line with the next-attempt countdown, never an eternal spinner.
 - **A stale status renders as stale**, not as loading: the last observation stays visible with a "re-checking" marker while the runtime re-probes (the dims-never-extinguishes rule, rendered).
@@ -682,8 +680,6 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 | Refusals name their cause in words | An unfunded org renders present-but-empty → launches fail as bare `AGENT_ROUTE_SELECTION_MISSING`. Confirmed live: the signup grant simply never ran for this account (no allocation row was ever created — the signup-hook miss is an open ai_gateway gap), leaving the ledger at $0 | **Funded 2026-08-26** ($25 admin grant via a one-off ECS task; `creditsExhausted` false, keys render again). Remaining: the typed-reason refusals |
 | Selections deliver with cloud gone | Delivery was gated on cloud compute until #2245; the first un-gated delivery applied the fail-closed unfunded doc — why "gateway broke" this week | Landed (#2245); the funding row clears the visible breakage |
 | Vault kinds include `anthropic_subscription`; the wire has a `seat` source | Three kinds; two source kinds | New enum values + `seats.py` + the seat recipe |
-| Zero enabled rows = unconfigured, refuse with words | Zero rows = "native login" by convention; the document omits the harness | Convention retired; native becomes a status-document detection with a mint offer |
-| `revision` = content hash | `revision` = ms-epoch render timestamp | Content hash; and the launch-options basis stops folding the global revision (`launch_options/basis.rs:67-72` — today every push invalidates every harness's options) |
 | Probe engine self-recovers (`BackoffExpired`, `FirstDetected`); status served stale-marked | Closed event set with no self-recovery; a missed probe darkens the harness until manual retry | Two new events + serve-stale store |
 | `status/` is the single machine truth; the frontend derives nothing | `agent-auth-evidence.ts` re-derives state client-side; `auth_state.rs` ships beside the legacy ladder | The status module absorbs the derivation; the evidence file is deleted |
 | `seat_usage_sample` + the usage probe + meters | — | New |
@@ -694,7 +690,7 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 | Grok authenticates, or doesn't offer login | The registry declares `grok login` AND a managed install — but the managed artifact is the ACP sidecar (`grok-launcher`), grok has no native artifact, and login resolution searches native → managed `grok` → PATH, so every rung misses | Ship the vendor `grok` CLI in the managed install (or teach login resolution the launcher name), or drop the login declaration |
 | The headless ladder exists | Selections are per-user only; org policy only restricts | Creator-credentials at v1; org default when the first team org lands (ruled 2026-08-26) |
 | `surface` stays in the schema; the API defaults it to `local` and the UI never shows it until cloud machines return | `?surface=` is a live parameter on every route; cloud rows may exist from the pre-cull era | Default the parameter, hide the dimension, keep the column (ruled 2026-08-26) |
-| Delivery ordered by `sequence`, content identified by `fingerprint` (rider-only) | `revision` is one ms-epoch number doing both jobs, in-document; `acked_revision` is the ack column | Rename revision → sequence in the document AND the contract fixture; rename `acked_revision` → `acked_sequence`; drop the equal-revision clause |
+| Delivery ordered by `sequence`, content identified by `fingerprint` (rider-only) | `revision` is one ms-epoch number doing both jobs, in-document; `acked_revision` is the ack column | Rename revision → sequence in the document AND the contract fixture; rename `acked_revision` → `acked_sequence`; drop the equal-revision clause; the launch-options basis stops folding the global document revision (`launch_options/basis.rs:67-72` — today every push invalidates every harness's options) |
 | The local API grows `GET /status`, `GET /status/stream`, `GET /methods`; the server grows `GET /seats/usage` + `POST /seats/{id}/limit-hit`; events grow `agent_seat_minted/limit_hit/rotated` | None of these exist | The seats + status build items |
 | Importable renderer keeps its names | `render_agent_auth_state` / `build_agent_auth_state` in `state_render.py` | No rename — the spec uses the real names; `resolve_headless` and `seat_usage_probe` are new |
 | Probe events gain `BackoffExpired`, `FirstDetected`, and a changed-set on `AuthApplied` | `PokeReason` is Startup · InstallCompleted · AuthApplied (widest apply) · LoginTerminal · LiveContradiction · Manual | Two new variants + per-harness targeting |

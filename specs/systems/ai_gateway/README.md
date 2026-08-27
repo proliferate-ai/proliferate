@@ -80,7 +80,14 @@ CREATE TABLE agent_gateway_enrollment (
     last_error_message             text,
     created_at                     timestamptz NOT NULL,
     updated_at                     timestamptz NOT NULL,
-    revoked_at                     timestamptz               -- soft revocation; unique-per-active-subject partial indexes
+    revoked_at                     timestamptz,              -- soft revocation
+    CHECK (subject_kind IN ('organization','user')),
+    CHECK (sync_status IN ('pending','synced','failed')),
+    CHECK (budget_status IN ('ok','exhausted','limit_reached')),
+    -- subject shape: user_id NOT NULL for BOTH kinds (an org enrollment is one per (member, org))
+    CHECK (user_id IS NOT NULL AND (subject_kind != 'organization' OR organization_id IS NOT NULL))
+    -- + partial unique indexes: one ACTIVE (revoked_at IS NULL) enrollment per user-kind subject,
+    --   and one per (organization_id, user_id) for org-kind
 );
 
 -- One access-group-scoped virtual key per (enrollment, gateway-capable harness).
@@ -99,7 +106,9 @@ CREATE TABLE agent_gateway_enrollment_key (
     verified_at                    timestamptz,
     created_at                     timestamptz NOT NULL,
     updated_at                     timestamptz NOT NULL,
-    revoked_at                     timestamptz
+    revoked_at                     timestamptz,
+    UNIQUE (enrollment_id, harness_kind)
+    -- + the active-scope partial unique (revoked_at IS NULL)
 );
 
 -- One imported LiteLLM spend-log row. litellm_request_id is UNIQUE — the
@@ -117,13 +126,14 @@ CREATE TABLE agent_llm_usage_event (
     prompt_tokens       bigint NOT NULL DEFAULT 0,
     completion_tokens   bigint NOT NULL DEFAULT 0,
     total_tokens        bigint NOT NULL DEFAULT 0,
-    cost_usd            numeric,                             -- margin already applied at import
+    cost_usd            numeric(18,8),                       -- margin already applied at import
     status              varchar(32) NOT NULL,                -- 'imported'
     workspace_id        varchar(255),                        -- attribution riders when LiteLLM metadata carries them
     session_id          varchar(255),
     occurred_at         timestamptz NOT NULL,
     imported_at         timestamptz NOT NULL,
     raw_metadata_json   text
+    -- + (subject, occurred_at) attribution indexes per owner column; user/org FKs SET NULL on delete
 );
 
 -- One credit-side ledger entry. Remaining credit = active grants − imported cost.
@@ -131,11 +141,12 @@ CREATE TABLE llm_credit_grant (
     id                  uuid PRIMARY KEY,
     billing_subject_id  uuid NOT NULL,
     user_id             uuid,
-    source              varchar(32) NOT NULL,                -- signup | topup | admin
-    amount_usd          numeric(12,4) NOT NULL,
+    source              varchar(32) NOT NULL,                -- free_signup | topup | admin | seat_pool
+    amount_usd          numeric(12,4) NOT NULL CHECK (amount_usd >= 0),
     created_at          timestamptz NOT NULL,
     expires_at          timestamptz,
-    source_ref          varchar(255)                         -- e.g. the Stripe invoice, or an admin grant tag
+    source_ref          varchar(255) UNIQUE                  -- the Stripe invoice / admin tag; the UNIQUE is
+                                                             -- top-up idempotency: replaying returns the existing grant
 );
 
 -- The single-row importer cursor. Advances only after the batch commits.
@@ -143,10 +154,12 @@ CREATE TABLE agent_llm_usage_import_cursor (
     id                    varchar(16) PRIMARY KEY,           -- 'default'
     last_seen_occurred_at timestamptz,
     last_polled_at        timestamptz,
-    status                varchar(32) NOT NULL,              -- idle | polling | failed
+    status                varchar(32) NOT NULL,              -- idle | error
     last_error_code       varchar(128),
     last_error_message    text,
-    metadata_json         text
+    metadata_json         text,
+    created_at            timestamptz NOT NULL,
+    updated_at            timestamptz NOT NULL
 );
 ```
 
@@ -174,6 +187,7 @@ Every entry has one shape — and this file is the harness-to-model map; no clie
 Triggered by signup or an org-membership change. **Account creation never waits on LiteLLM.**
 
 - `signup_hook` schedules after commit → a durable enrollment row lands first (`pending`).
+- A signup with no default org yet defers (returns without a row); the backfill's membership discovery enrolls it on a later tick.
 - The LiteLLM shape follows: team `org-<uuid>`, user `org-<org>-user-<uuid>`, per-harness keys.
 - Success → `synced`; any LiteLLM failure → `failed`, retried by the backfill loop on its interval.
 - `migration.py` converges pre-org residue first on every tick — never inline in alembic.
@@ -203,7 +217,7 @@ sequenceDiagram
 
 - Remaining credit = active grants − imported cost, mirrored onto the LiteLLM team budget (`_remaining_credit_budget_raw`).
 - Zero remaining: the mirror hits zero (the proxy blocks at its layer), `budget_status=exhausted`, `is_gateway_budget_available` turns false, and agent_auth withholds gateway sources at render — the refusal names the reason. There is no per-key disable verb; the mirror and the withhold are the mechanism.
-- A top-up (Stripe, through billing) records a grant and `reactivate_subject_if_credited` re-budgets; the import tick reactivates too (org caps: `limit_reached` → raise → next tick).
+- A top-up (Stripe, through billing) records a grant — idempotent by `source_ref` — and `reactivate_subject_if_credited` re-budgets; the auto path buys exactly one pack (`agent_gateway_topup_amount_usd`) when the threshold crosses. The import tick reactivates too (org caps: `limit_reached` → raise → next tick).
 
 ### Flow 4 — Usage import
 
@@ -227,8 +241,8 @@ server/proliferate/
 ├── db/store/agent_gateway/
 │   ├── enrollments.py · enrollment_keys.py     row CRUD, key hashes
 │   ├── credits.py                              grants, ledger moves, remaining credit
-│   ├── usage.py                                idempotent usage insert, cursor, cost projections
-│   └── records.py · mappers.py                 record types
+│   └── usage.py                                idempotent usage insert, cursor, cost projections
+│       (records.py · mappers.py are agent_auth's — consumed here for record types)
 ├── integrations/litellm/                       vendor leaf: admin + spend-log client
 ├── server/ai_gateway/
 │   ├── signup_hook.py                          after-commit enrollment scheduling
@@ -255,7 +269,7 @@ The HTTP surface, with bodies (`/v1/cloud/agent-gateway/…`, product-user beare
 GET /capabilities
   → { gatewayEnabled, publicBaseUrl, enrollmentStatus,
       creditsExhausted,          # true exactly when the renderer is withholding keys — the AA-3 plain-words surface
-      verifications: [ { harnessKind, status, delta? } ] }
+      verifications: [ { harnessKind, status, delta?: { reason, models }, verifiedAt? } ] }   # delta only when misconfigured
 GET /enrollment
   → { id, subjectKind, litellmTeamId, syncStatus, lastErrorCode, createdAt, updatedAt }
 ```
