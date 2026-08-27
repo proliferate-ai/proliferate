@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentLoginTerminalRecord } from "@anyharness/sdk";
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
 import { useMintAgentSeat } from "@proliferate/cloud-sdk-react";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import {
+  claimAgentMintToken,
+  closeAgentLoginTerminal,
+  getAgentLoginTerminal,
+  startAgentLoginTerminal,
+} from "#product/lib/access/anyharness/agents";
 
 /**
  * The seat-mint flow (seats v1, agent_auth spec §3 flow 2), client side:
@@ -88,7 +93,7 @@ export function useSeatMintWorkflow(options: {
 
   const closeTerminal = useCallback(async (terminalId: string) => {
     try {
-      await getAnyHarnessClient(toClientConnection(connection)).agents.closeLoginTerminal(terminalId);
+      await closeAgentLoginTerminal(toClientConnection(connection), terminalId);
     } catch {
       // Best effort; the runtime reaps exited PTYs.
     }
@@ -97,13 +102,13 @@ export function useSeatMintWorkflow(options: {
   const beginPolling = useCallback((terminalId: string) => {
     stopPolling();
     activeTerminalRef.current = terminalId;
-    const client = getAnyHarnessClient(toClientConnection(connection));
+    const clientConnection = toClientConnection(connection);
     let settled = false;
     const tick = async () => {
       if (settled) return;
       let record: AgentLoginTerminalRecord;
       try {
-        record = await client.agents.getLoginTerminal(terminalId);
+        record = await getAgentLoginTerminal(clientConnection, terminalId);
       } catch {
         // A vanished terminal (runtime restart) is a failed mint.
         settled = true;
@@ -124,7 +129,7 @@ export function useSeatMintWorkflow(options: {
         try {
           // The one-time handoff: the runtime wipes its buffer as it serves
           // this. The token lives only in this scope.
-          const { token } = await client.agents.claimMintToken(terminalId);
+          const { token } = await claimAgentMintToken(clientConnection, terminalId);
           const seat = await mintSeat.mutateAsync({
             value: token,
             kind: "anthropic_subscription",
@@ -187,7 +192,8 @@ export function useSeatMintWorkflow(options: {
     labelsRef.current = labels;
     setState({ phase: "starting", terminal: null, message: null, error: null });
     try {
-      const response = await getAnyHarnessClient(toClientConnection(connection)).agents.startLoginTerminal(
+      const response = await startAgentLoginTerminal(
+        toClientConnection(connection),
         harnessKind,
         "mint_seat",
       );

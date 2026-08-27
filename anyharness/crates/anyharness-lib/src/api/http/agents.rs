@@ -22,9 +22,8 @@ use crate::app::AppState;
 use crate::domains::agents::auth::login_terminal::{
     close_agent_login_terminal as close_agent_login_terminal_session,
     get_agent_login_terminal as get_agent_login_terminal_session,
-    start_agent_login_terminal_session, AgentLoginVariant as DomainLoginVariant,
+    start_agent_login_terminal_session, AgentLoginVariant as DomainLoginVariant, MintClaimError,
 };
-use crate::live::terminals::MintClaimError;
 use crate::domains::agents::auth_state::AuthRuntimeInputs;
 use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 

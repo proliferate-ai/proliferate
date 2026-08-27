@@ -16,12 +16,12 @@
 //!   logs. The buffer is wiped on handoff (claim) and on every error path.
 //! - Single-flight per harness: the live service's guard, not this machine.
 
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crate::live::terminals::{
     AgentLoginTerminalRecord as LiveAgentLoginTerminalRecord, AgentLoginTerminalService,
-    AgentLoginTerminalStatus as LiveAgentLoginTerminalStatus, MintTerminalOptions,
-    StartAgentLoginTerminalOptions,
+    AgentLoginTerminalStatus as LiveAgentLoginTerminalStatus, StartAgentLoginTerminalOptions,
 };
 
 use crate::domains::agents::runtime::{AgentLoginStart, AgentRuntime, AgentRuntimeError};
@@ -168,6 +168,27 @@ fn agent_login_terminal_from_live(
 /// matching line" rule needs a window in which a later, better line can still
 /// arrive).
 pub const MINT_CAPTURE_GRACE: Duration = Duration::from_secs(60);
+
+/// Marks a login terminal as a seat-mint terminal (seats v1): the live
+/// service attaches a [`MintCapture`] to its output, enforces single-flight
+/// per harness kind, and removes `scratch_dir` (the isolated mint dir) on
+/// every terminal teardown path. Domain-owned vocabulary; the live service
+/// consumes it.
+#[derive(Debug, Clone)]
+pub struct MintTerminalOptions {
+    pub scratch_dir: PathBuf,
+}
+
+/// Why a mint-token claim returned nothing. Domain-owned so transport
+/// handlers map it without reaching into the live layer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MintClaimError {
+    /// Unknown terminal, or a terminal that is not a mint terminal.
+    NotFound,
+    /// The capture is not (or no longer) claimable; carries its state so the
+    /// route can say which.
+    NotReady(MintCaptureStatus),
+}
 
 /// The capture's externally visible lifecycle (mirrored onto the contract's
 /// `AgentMintCaptureStatus`).

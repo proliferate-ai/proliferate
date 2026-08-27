@@ -8,6 +8,7 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 use tokio::sync::{broadcast, Mutex, RwLock};
 
 use crate::domains::agents::auth::login_terminal::{MintCapture, MintCaptureStatus};
+pub use crate::domains::agents::auth::login_terminal::{MintClaimError, MintTerminalOptions};
 use crate::domains::terminals::model::{ResizeTerminalOptions, TerminalOutputEvent};
 use crate::process_env::remove_runtime_private_pty_env;
 
@@ -35,15 +36,6 @@ pub struct AgentLoginTerminalRecord {
     /// Present only on a mint (seat-capture) terminal; computed at read time
     /// from the in-memory capture — never persisted anywhere.
     pub mint_status: Option<MintCaptureStatus>,
-}
-
-/// Marks a login terminal as a seat-mint terminal (seats v1): the service
-/// attaches a [`MintCapture`] to its output, enforces single-flight per
-/// harness kind, and removes `scratch_dir` (the isolated mint dir) on every
-/// terminal teardown path.
-#[derive(Debug, Clone)]
-pub struct MintTerminalOptions {
-    pub scratch_dir: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -82,16 +74,6 @@ impl MintState {
             let _ = std::fs::remove_dir_all(dir);
         }
     }
-}
-
-/// Why a mint-token claim returned nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MintClaimError {
-    /// Unknown terminal, or a terminal that is not a mint terminal.
-    NotFound,
-    /// The capture is not (or no longer) claimable; carries its state so the
-    /// route can say which.
-    NotReady(MintCaptureStatus),
 }
 
 type AgentLoginPtyRef = Arc<Mutex<AgentLoginPty>>;
