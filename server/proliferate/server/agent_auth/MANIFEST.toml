@@ -5,7 +5,7 @@
 
 name = "agent_auth"
 spec = "specs/systems/agent_auth/README.md"
-owns = "Agent credential selections, key vault, gateway enrollment, budgets and top-ups, and org agent-model policy: the agent-auth system's control-plane home."
+owns = "Agent credential selections, key vault, state rendering and delivery acks, and org agent policy: the agent-auth system's control-plane home."
 
 public_surface = [
     "proliferate.server.agent_auth.api",
@@ -14,8 +14,5 @@ public_surface = [
 ]
 
 allowed_importers = [
-    "accounts",
-    "billing",
     "main.py",
-    "organizations",
 ]

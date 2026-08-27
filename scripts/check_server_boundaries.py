@@ -39,6 +39,7 @@ OWNED_RULE_IDS = (
     "SRV-STORE-3",
     "SRV-STORE-4",
     "SRV-STORE-5",
+    "SRV-STORE-8",
     "SRV-DOMAIN-1",
     "SRV-DOMAIN-2",
     "SRV-DOMAIN-3",
@@ -131,9 +132,43 @@ class NamedStoreBoundary:
     store_module: str
     protected_symbols: frozenset[str]
     owner_label: str
-    product_owner_prefix: tuple[str, ...]
+    product_owner_prefixes: tuple[tuple[str, ...], ...]
     persistence_owner_paths: frozenset[str]
     owner_service_hint: str
+    rule_id: str = "SRV-STORE-5"
+    detail_noun: str = "store mutation"
+
+
+_AGENT_AUTH_VAULT_SYMBOLS = frozenset(
+    {
+        "create_agent_api_key",
+        "create_agent_provider_config",
+        "get_agent_api_key_decrypted",
+        "get_agent_provider_config_decrypted",
+        "revoke_agent_api_key",
+    }
+)
+_AGENT_AUTH_SELECTION_SYMBOLS = frozenset(
+    {
+        "clear_auth_selections",
+        "put_auth_selections",
+        "touch_auth_selection_revisions",
+    }
+)
+_AGENT_AUTH_OWNER_PREFIXES = (
+    ("server", "proliferate", "server", "agent_auth"),
+    ("server", "proliferate", "server", "ai_gateway"),
+)
+# The store package's own files that reference the protected symbols: the
+# defining submodules and the package __init__ that re-exports them. Nothing
+# outside db/store/agent_gateway/ belongs here.
+_AGENT_AUTH_PERSISTENCE_OWNER_PATHS = frozenset(
+    {
+        "server/proliferate/db/store/agent_gateway/__init__.py",
+        "server/proliferate/db/store/agent_gateway/api_keys.py",
+        "server/proliferate/db/store/agent_gateway/selections.py",
+    }
+)
 
 
 NAMED_STORE_BOUNDARIES: dict[str, NamedStoreBoundary] = {
@@ -157,11 +192,13 @@ NAMED_STORE_BOUNDARIES: dict[str, NamedStoreBoundary] = {
             }
         ),
         owner_label="Organization",
-        product_owner_prefix=(
-            "server",
-            "proliferate",
-            "server",
-            "organizations",
+        product_owner_prefixes=(
+            (
+                "server",
+                "proliferate",
+                "server",
+                "organizations",
+            ),
         ),
         persistence_owner_paths=frozenset(
             {
@@ -181,11 +218,13 @@ NAMED_STORE_BOUNDARIES: dict[str, NamedStoreBoundary] = {
             }
         ),
         owner_label="Organization",
-        product_owner_prefix=(
-            "server",
-            "proliferate",
-            "server",
-            "organizations",
+        product_owner_prefixes=(
+            (
+                "server",
+                "proliferate",
+                "server",
+                "organizations",
+            ),
         ),
         persistence_owner_paths=frozenset(
             {
@@ -194,6 +233,44 @@ NAMED_STORE_BOUNDARIES: dict[str, NamedStoreBoundary] = {
             }
         ),
         owner_service_hint="proliferate.server.organizations.service",
+    ),
+    # Agent-auth credential locks (SRV-STORE-8): the vault and selection
+    # stores' decrypt accessors and write gates are owner-locked to the
+    # agent_auth/ai_gateway systems per the fence-enforcement table in
+    # specs/systems/agent_auth/README.md §0. The package __init__ re-exports
+    # every one of these symbols, so the union is protected under the package
+    # module as well as under each submodule.
+    "proliferate.db.store.agent_gateway": NamedStoreBoundary(
+        store_module="proliferate.db.store.agent_gateway",
+        protected_symbols=frozenset(
+            _AGENT_AUTH_VAULT_SYMBOLS | _AGENT_AUTH_SELECTION_SYMBOLS
+        ),
+        owner_label="Agent auth",
+        product_owner_prefixes=_AGENT_AUTH_OWNER_PREFIXES,
+        persistence_owner_paths=_AGENT_AUTH_PERSISTENCE_OWNER_PATHS,
+        owner_service_hint="proliferate.server.agent_auth.service",
+        rule_id="SRV-STORE-8",
+        detail_noun="credential-bearing store symbol",
+    ),
+    "proliferate.db.store.agent_gateway.api_keys": NamedStoreBoundary(
+        store_module="proliferate.db.store.agent_gateway.api_keys",
+        protected_symbols=frozenset(_AGENT_AUTH_VAULT_SYMBOLS),
+        owner_label="Agent auth",
+        product_owner_prefixes=_AGENT_AUTH_OWNER_PREFIXES,
+        persistence_owner_paths=_AGENT_AUTH_PERSISTENCE_OWNER_PATHS,
+        owner_service_hint="proliferate.server.agent_auth.service",
+        rule_id="SRV-STORE-8",
+        detail_noun="credential-bearing store symbol",
+    ),
+    "proliferate.db.store.agent_gateway.selections": NamedStoreBoundary(
+        store_module="proliferate.db.store.agent_gateway.selections",
+        protected_symbols=frozenset(_AGENT_AUTH_SELECTION_SYMBOLS),
+        owner_label="Agent auth",
+        product_owner_prefixes=_AGENT_AUTH_OWNER_PREFIXES,
+        persistence_owner_paths=_AGENT_AUTH_PERSISTENCE_OWNER_PATHS,
+        owner_service_hint="proliferate.server.agent_auth.service",
+        rule_id="SRV-STORE-8",
+        detail_noun="credential-bearing store symbol",
     ),
 }
 
@@ -821,7 +898,10 @@ class NamedCrossDomainWriteChecker(ast.NodeVisitor):
             relative = self.path.relative_to(self.repo_root)
         except ValueError:
             return False
-        if _starts_with(relative.parts, boundary.product_owner_prefix):
+        if any(
+            _starts_with(relative.parts, prefix)
+            for prefix in boundary.product_owner_prefixes
+        ):
             return True
         return relative.as_posix() in boundary.persistence_owner_paths
 
@@ -837,13 +917,13 @@ class NamedCrossDomainWriteChecker(ast.NodeVisitor):
         anchor = self.anchors.get(id(node), MODULE_ANCHOR)
         self.violations.append(
             Violation(
-                rule_id="SRV-STORE-5",
+                rule_id=boundary.rule_id,
                 path=self.path,
                 lineno=getattr(node, "lineno", 1),
                 site=f"{anchor}::write:{qualified_symbol}",
                 detail=(
                     f"{qualified_symbol} is a protected {boundary.owner_label} "
-                    "store mutation; cross-domain callers must use "
+                    f"{boundary.detail_noun}; cross-domain callers must use "
                     f"{boundary.owner_service_hint}"
                 ),
             )

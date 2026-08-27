@@ -16,7 +16,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import session_ops as db_session
-from proliferate.server.agent_auth.enrollment import (
+from proliferate.server.ai_gateway.enrollment import (
     ensure_org_enrollment,
     ensure_signup_enrollment,
 )

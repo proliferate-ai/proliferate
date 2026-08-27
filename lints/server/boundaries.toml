@@ -286,6 +286,32 @@ bad = "organization_store.bind_team_checkout_session(...)  # from a billing serv
 good = "await organization_service.bind_team_checkout_session(...)"
 
 [[rule]]
+id = "SRV-STORE-8"
+title = "Credential-bearing store symbols are owner-locked"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/**"
+
+rule = """The agent-auth vault and selection stores' credential-bearing
+symbols (the decrypt accessors and write gates named in the checker's
+NamedStoreBoundary rows for proliferate.db.store.agent_gateway) may be
+referenced only from the owning systems (server/agent_auth, server/ai_gateway)
+and the store package itself — per the fence-enforcement table in
+specs/systems/agent_auth/README.md §0."""
+alternative = """Consume the owning system's service surface
+(proliferate.server.agent_auth.service) instead of reaching the store."""
+why = """Credential custody: a decrypt accessor or vault write reached from
+outside the owning system is an exfiltration or laundering path the agent_auth
+spec forbids; the lock makes that fence machine-held rather than review-held.
+Introduced with zero violations and, as law, admits no exceptions."""
+
+[rule.example]
+bad = "from proliferate.db.store.agent_gateway.api_keys import get_agent_api_key_decrypted  # in a billing service"
+good = "await agent_auth_service.get_agent_state(...)  # the owning service's surface"
+
+[[rule]]
 id = "SRV-DOMAIN-1"
 title = "Domain modules are pure"
 owner = "server"
