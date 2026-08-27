@@ -13,6 +13,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    REAL,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -270,6 +271,48 @@ class AgentAuthHarnessSettings(Base):
         default=utcnow,
         onupdate=utcnow,
     )
+
+
+class SeatUsageSample(Base):
+    """One usage-probe observation per seat (agent_auth spec §2, flow 5).
+
+    Written only by the seat usage probe — flow 5's soft signal. **Advisory
+    only, never a launch gate**: the settings meters read it; nothing in the
+    launch/render path may (an import-scan test in
+    ``test_agent_seat_usage_probe.py`` enforces the law). ``util_*`` are 0..1
+    fractions from the ``anthropic-ratelimit-unified-{5h,7d}-utilization``
+    response headers, account-global. A failed probe records a
+    ``probe_failed`` row with every observation column NULL — absence of data
+    is recorded honestly, never a guessed number.
+    """
+
+    __tablename__ = "seat_usage_sample"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('allowed', 'limited', 'probe_failed')",
+            name="ck_seat_usage_sample_status",
+        ),
+        # Beyond the spec DDL (performance only): the latest-per-seat read and
+        # the writer's 30-day prune both walk (api_key_id, sampled_at).
+        Index("ix_seat_usage_sample_key_sampled", "api_key_id", "sampled_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # CASCADE (the spec DDL names only the reference): vault rows cascade with
+    # their user, so samples must ride along or user deletion trips this FK
+    # through agent_api_key's own cascade.
+    api_key_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agent_api_key.id", ondelete="CASCADE"),
+    )
+    sampled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    util_5h: Mapped[float | None] = mapped_column(REAL, nullable=True)
+    util_7d: Mapped[float | None] = mapped_column(REAL, nullable=True)
+    reset_5h: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reset_7d: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # five_hour | seven_day — the window nearer its cap (NULL when the probe
+    # failed or the utilizations tie; the pane emphasizes only a real signal).
+    binding_window: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(Text)
 
 
 class AgentGatewayEnrollment(Base):

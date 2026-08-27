@@ -208,6 +208,15 @@ export const HARNESS_PANE_COPY = {
   seatEmptyList: "No Claude.ai logins yet.",
   seatRemove: "Remove",
   seatRemoveError: "Could not remove the seat.",
+  // Slice 4 — the per-seat usage meters (5h/7d bars, flow 5's soft signal).
+  seatUsageFiveHourLabel: "5-hour",
+  seatUsageSevenDayLabel: "7-day",
+  seatUsagePercent: (percent: number) => `${percent}%`,
+  seatUsageResets: (when: string) => `resets ${when}`,
+  seatUsageNoSample: "No usage data yet.",
+  seatUsageProbeFailed: "Usage check failed",
+  seatUsageCheckedAgo: (ago: string) => `checked ${ago}`,
+  seatUsageLimited: "Limit reached",
   // §1 — the exit to the vendor tool's own documentation.
   docsLink: "Docs",
   // Gateway enrollment in flight (header badge, warning tone).

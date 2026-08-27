@@ -112,6 +112,26 @@ class AgentGatewayEnrollmentKeyRecord:
 
 
 @dataclass(frozen=True)
+class SeatUsageSampleRecord:
+    """One seat usage-probe observation (agent_auth spec §2, flow 5).
+
+    Advisory only — meters and rotation hints, never a launch gate. A
+    ``probe_failed`` row carries NULL in every observation field; ``util_*``
+    are 0..1 fractions. Never carries any credential material.
+    """
+
+    id: int
+    api_key_id: UUID
+    sampled_at: datetime
+    util_5h: float | None
+    util_7d: float | None
+    reset_5h: datetime | None
+    reset_7d: datetime | None
+    binding_window: str | None
+    status: str
+
+
+@dataclass(frozen=True)
 class OrgAgentPolicyRecord:
     organization_id: UUID
     allowed_routes_json: str | None

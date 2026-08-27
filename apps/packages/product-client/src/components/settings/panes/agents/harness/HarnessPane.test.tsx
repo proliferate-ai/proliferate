@@ -124,6 +124,10 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useMintAgentSeat: () => ({ mutateAsync: mintSeatMutate, isPending: false }),
   useRevokeAgentApiKey: () => ({ mutate: revokeKeyMutate, isPending: false }),
   useUpsertAgentModelOverride: () => ({ mutate: overrideMutate, isPending: false }),
+  // Slice 4 meters: the pane tests exercise selection flows, not the bars —
+  // an empty usage set renders the honest no-sample state inside seat rows.
+  useSeatUsage: () => ({ data: [], isLoading: false }),
+  useRefreshSeatUsage: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 // The local surface reads the RUNTIME's composed observation

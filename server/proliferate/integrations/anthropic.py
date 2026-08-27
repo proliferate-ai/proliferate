@@ -14,6 +14,61 @@ class AnthropicIntegrationError(Exception):
         return self.message
 
 
+_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
+# Subscription OAuth credentials ride the Authorization header (never
+# x-api-key) and require the OAuth beta flag.
+_OAUTH_BETA = "oauth-2025-04-20"
+# The cheapest current model — the probe pays one output token for headers.
+_USAGE_PROBE_MODEL = "claude-haiku-4-5"
+
+
+async def probe_subscription_usage(
+    *,
+    oauth_token: str,
+    timeout_seconds: float = 15.0,
+) -> tuple[int, dict[str, str]]:
+    """One-token ``/v1/messages`` request under a subscription OAuth token.
+
+    The agent_auth seat usage probe (flow 5's soft signal) calls this for the
+    response's ``anthropic-ratelimit-unified-*`` headers; the body is never
+    returned. Secret hygiene: ``oauth_token`` exists in the request headers
+    only — it is never logged here (this module logs nothing) and never
+    appears in an exception (transport failures raise a status-only error;
+    HTTP error statuses do NOT raise, because a 429's headers still carry the
+    utilization the caller wants).
+
+    Returns ``(http_status, headers)`` with header names lower-cased.
+    """
+    payload = {
+        "model": _USAGE_PROBE_MODEL,
+        "max_tokens": 1,
+        "messages": [{"role": "user", "content": "."}],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            response = await client.post(
+                _MESSAGES_URL,
+                headers={
+                    "anthropic-version": "2023-06-01",
+                    "anthropic-beta": _OAUTH_BETA,
+                    "content-type": "application/json",
+                    "authorization": f"Bearer {oauth_token}",
+                },
+                json=payload,
+            )
+    except httpx.HTTPError as exc:
+        # Deliberately message-free of request detail: an httpx transport
+        # error's text names the URL at most, never headers, and this wrapper
+        # adds nothing that could carry the token.
+        raise AnthropicIntegrationError(
+            status_code=599,
+            message="Anthropic usage probe failed before a response arrived.",
+        ) from exc
+    return response.status_code, {
+        key.lower(): value for key, value in response.headers.items()
+    }
+
+
 async def generate_message_text(
     *,
     api_key: str,

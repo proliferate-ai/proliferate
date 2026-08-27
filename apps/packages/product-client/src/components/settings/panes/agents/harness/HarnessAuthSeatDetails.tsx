@@ -1,11 +1,16 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
-import { useRevokeAgentApiKey } from "@proliferate/cloud-sdk-react";
+import {
+  useRefreshSeatUsage,
+  useRevokeAgentApiKey,
+  useSeatUsage,
+} from "@proliferate/cloud-sdk-react";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { AgentLoginTerminalPanel } from "#product/components/agents/AgentLoginTerminalPanel";
+import { SeatUsageMeter } from "#product/components/settings/panes/agents/harness/HarnessSeatUsageMeter";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { useSeatMintWorkflow } from "#product/hooks/agents/workflows/use-seat-mint-workflow";
@@ -15,9 +20,11 @@ import { useToastStore } from "#product/stores/toast/toast-store";
  * The Claude.ai logins section, single-seat subset (seats v1 — Auth Options
  * v2 design, the slice-1 cut): the seat list with labels, the "Add a
  * Claude.ai login" affordance, the mint sheet (email + optional plan tier,
- * defaulting server-side to "Max seat N"), and the inline waiting-for-sign-in
- * row with the mint terminal. Meters, serving-now/next-up tags, and the
- * rotate switch are later slices.
+ * defaulting server-side to "Max seat N"), the inline waiting-for-sign-in
+ * row with the mint terminal, and — slice 4 — the per-seat 5h/7d usage
+ * meters inside each seat row (opening the pane forces one fresh sample,
+ * flow 5's pane-open poke). Serving-now/next-up tags and the rotate switch
+ * are later slices; the meters block stays additive inside the row for them.
  *
  * Seat identity is user-entered by design: a setup-token carries no profile
  * scope, so the system can learn neither email nor plan on its own.
@@ -31,6 +38,17 @@ export function SeatDetails({ editor }: { editor: HarnessAuthEditorApi }) {
 
   const seats = (editor.apiKeysQuery.data ?? []).filter(
     (key) => key.kind === "anthropic_subscription" && key.status === "active",
+  );
+
+  const usageQuery = useSeatUsage(seats.length > 0);
+  const refreshUsage = useRefreshSeatUsage().mutate;
+  useEffect(() => {
+    // The pane-open poke (flow 5): a settings-pane open forces one fresh
+    // sample per seat; the server's freshness floor keeps re-mounts cheap.
+    refreshUsage();
+  }, [refreshUsage]);
+  const usageBySeat = new Map(
+    (usageQuery.data ?? []).map((sample) => [sample.apiKeyId, sample]),
   );
 
   const handleSeatAdded = useCallback((seat: AgentApiKey) => {
@@ -97,6 +115,7 @@ export function SeatDetails({ editor }: { editor: HarnessAuthEditorApi }) {
               </span>
             </span>
           }
+          description={<SeatUsageMeter sample={usageBySeat.get(seat.id)} />}
         >
           <Button
             type="button"

@@ -682,7 +682,7 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 | Vault kinds include `anthropic_subscription`; the wire has a `seat` source | Three kinds; two source kinds | **Landed (slice 1, mint & run)**: the enum values, `seats.py`, the pool-expanding renderer arm, and the claude seat recipe ship |
 | Probe engine self-recovers (`BackoffExpired`, `FirstDetected`); status served stale-marked | Closed event set with no self-recovery; a missed probe darkens the harness until manual retry | Two new events + serve-stale store |
 | `status/` is the single machine truth; the frontend derives nothing | `agent-auth-evidence.ts` re-derives state client-side; `auth_state.rs` ships beside the legacy ladder | The status module absorbs the derivation; the evidence file is deleted |
-| `seat_usage_sample` + the usage probe + meters | — | New |
+| `seat_usage_sample` + the usage probe + meters | — | **Landed (slice 4, meters)**: the table, the probe loop (`seats.py` / `seat_usage_probe`, active/idle cadence + failure backoff, 30-day prune), `GET /seats/usage` + the pane-open refresh, and the per-seat 5h/7d pane meters |
 | ai_gateway is its own folder and spec | Gateway code co-resident in `server/agent_auth/` and `db/store/agent_gateway/`; its spec was `model-gateway.md` in this folder | Spec moved to [ai_gateway](../ai_gateway/README.md) (this PR); the code split rides the build list |
 | The runtime cell lives in `domains/agent_auth/` | `route_auth/`, `auth/`, `auth_state.rs`, `launch_probe/` sit inside `domains/agents/`; no `status/` module exists (`auth_state.rs` carries the derivation) | Wave-3 move + the status module |
 | `server/agent_auth/` holds only agent_auth files; `seats.py` exists | Nine ai_gateway files co-resident (api.py also hosts the /agent-gateway routes; budget.py consumed at render); no seats.py | The ai_gateway code split + seats v1 |
@@ -712,7 +712,7 @@ Carried, still true in prod (not deltas): the origin guard · only-forward acks 
     - [ ] typed launch refusals with plain words end to end (rows 1, 4) — partially: since slice 1 the launch refusal speaks plain words naming the cause family and the action; the typed per-cause reasons ride the status module
     - [ ] rotation: cooling on limit error, round-robin, gateway fallback (row 3)
     - [ ] the status module; frontend subscribe migration; delete the client derivation (row 7)
-    - [ ] the usage probe + `seat_usage_sample` + settings meters (row 8)
+    - [x] the usage probe + `seat_usage_sample` + settings meters (row 8) — **slice 4 (meters) landed**
 - [ ] Alongside, not gating: content-hash revision + content-hash launch-options basis + probe recovery events + serve-stale status (rows 5, 6)
 - [ ] The API defaults `surface` to `local`; the column stays for cloud's return (ruled 2026-08-26)
 - [ ] ai_gateway code split out of `server/agent_auth/`; recompose the remainder (row 9)
