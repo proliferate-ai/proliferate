@@ -44,9 +44,11 @@ from proliferate.db.models.billing import BillingSubject
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.billing_subjects import (
+    count_agent_gateway_free_credit_allocations_for_subject,
     ensure_agent_gateway_free_credit_allocation,
     ensure_organization_billing_subject,
     get_agent_gateway_free_credit_allocation_owner,
+    get_linked_github_provider_user_id,
     move_agent_gateway_free_credit_allocation,
 )
 from proliferate.integrations.sentry import report_critical
@@ -88,6 +90,7 @@ async def _reclaim_orphaned_allocation(
     db: AsyncSession,
     *,
     user_id: UUID,
+    github_provider_user_id: str,
     default_org_subject: BillingSubject,
 ) -> bool:
     """Reclaim the identity's free-credit claim from a deleted account's orphan.
@@ -101,37 +104,95 @@ async def _reclaim_orphaned_allocation(
     skipped — and because a SYNCED enrollment is never revisited by the
     backfill, the skip was permanent.
 
-    Reclaims ONLY under exactly these conditions, checked in order:
+    Reclaims ONLY when the move is PROVABLY identity-pure — every
+    precondition below must hold, because ``move_llm_credit_ledger`` moves a
+    SUBJECT's whole ledger, not one identity's slice:
 
-    1. the identity's allocation exists and is owned by a DIFFERENT subject
-       than the caller's default org (otherwise there is nothing to reclaim);
-    2. that owner is an organization-kind billing subject (a personal-kind
-       claimant is pre-migration residue the D-3 migration converges — never
-       reclaimed here); and
-    3. the owning organization has ZERO active memberships — the orphan an
-       account deletion leaves behind. A live second account on the same
-       identity keeps at least one active membership in its claiming org, so
-       it still gets nothing: the anti-abuse dedupe is behaving correctly
-       there.
+    P1. the identity's allocation is owned by a DIFFERENT subject than the
+        caller's default org, that owner is an organization-kind billing
+        subject (a personal-kind claimant is pre-migration residue the D-3
+        migration converges — never reclaimed here), and the owning org has
+        ZERO active memberships. A live second account on the same identity
+        keeps an active membership in its claiming org, so it still gets
+        nothing — the anti-abuse dedupe behaving correctly, refused silently.
+    P2. the orphan's ledger holds NOTHING but the identity's own signup
+        grant: zero grant rows, or exactly one with ``source == free_signup``
+        and ``source_ref == free_signup:<orphan-subject-id>``. Any topup /
+        admin / seat_pool row means real paid money whose ownership cannot be
+        proven to be this identity's — refuse.
+    P3. the orphan holds exactly ONE agent-gateway free-credit allocation and
+        it is THIS identity's — a second human's claim riding the same
+        subject must never be dragged along.
+    P4. the destination subject holds no ``free_signup`` grant already — the
+        moved grant's ``source_ref`` rewrite is skipped when the destination
+        ref is taken, and moving anyway would leave two free_signup rows.
 
-    Convergence uses the existing D-3 primitives, in their order: the whole
-    ledger moves first (``move_llm_credit_ledger`` rewrites the free_signup
-    ``source_ref`` onto the destination subject, so the follow-up grant
-    CONVERGES on the moved grant instead of duplicating it — and both grant
-    and usage sides move, preserving the remaining balance), then the
-    allocation claim re-points. Returns True when the claim now belongs to
-    ``default_org_subject`` and the caller may retry the reserve.
+    A P1 failure is the normal dedupe path and stays silent. An orphan that
+    fails P2–P4 is refused with ONE ``logger.error`` naming the ids and the
+    reason — the manual-resolution path, deliberately non-paging.
+
+    Under P1–P4 the D-3 primitives are exactly correct, in their order: the
+    whole ledger moves first (``move_llm_credit_ledger`` rewrites the
+    free_signup ``source_ref`` onto the destination so the follow-up grant
+    CONVERGES instead of duplicating, usage debits riding along), then the
+    allocation claim re-points — identity-filtered, defense in depth on top
+    of P3. Returns True when the caller may retry the reserve.
     """
     owner = await get_agent_gateway_free_credit_allocation_owner(
         db,
-        user_id=user_id,
+        github_provider_user_id=github_provider_user_id,
         period_key=AGENT_GATEWAY_FREE_CREDIT_PERIOD_KEY,
     )
+    # P1 — anything short of an orphaned org-kind claimant is not a reclaim
+    # shape at all: silent refusal, the dedupe (or D-3) owns it.
     if owner is None or owner.id == default_org_subject.id:
         return False
     if owner.kind != BILLING_SUBJECT_KIND_ORGANIZATION or owner.organization_id is None:
         return False
     if await organization_store.list_organization_members(db, owner.organization_id):
+        return False
+    # P2–P4 — the orphan must be provably identity-pure before money moves.
+    refusal_reason: str | None = None
+    orphan_grants = await agent_gateway_store.list_llm_credit_grants(db, owner.id)
+    own_signup_ref = f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{owner.id}"
+    ledger_is_pure = not orphan_grants or (
+        len(orphan_grants) == 1
+        and orphan_grants[0].source == LLM_CREDIT_SOURCE_FREE_SIGNUP
+        and orphan_grants[0].source_ref == own_signup_ref
+    )
+    if not ledger_is_pure:
+        refusal_reason = "orphan_ledger_not_identity_pure"
+    elif (
+        await count_agent_gateway_free_credit_allocations_for_subject(
+            db, billing_subject_id=owner.id
+        )
+        != 1
+        or await count_agent_gateway_free_credit_allocations_for_subject(
+            db,
+            billing_subject_id=owner.id,
+            github_provider_user_id=github_provider_user_id,
+        )
+        != 1
+    ):
+        refusal_reason = "orphan_holds_foreign_allocations"
+    elif any(
+        grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP
+        for grant in await agent_gateway_store.list_llm_credit_grants(
+            db, default_org_subject.id
+        )
+    ):
+        refusal_reason = "destination_already_has_free_signup"
+    if refusal_reason is not None:
+        logger.error(
+            "Agent gateway orphan reclaim refused; manual resolution required",
+            extra={
+                "reason": refusal_reason,
+                "user_id": str(user_id),
+                "orphan_billing_subject_id": str(owner.id),
+                "orphan_organization_id": str(owner.organization_id),
+                "default_org_billing_subject_id": str(default_org_subject.id),
+            },
+        )
         return False
     moved_grants, moved_usage = await agent_gateway_store.move_llm_credit_ledger(
         db,
@@ -142,6 +203,7 @@ async def _reclaim_orphaned_allocation(
         db,
         from_billing_subject_id=owner.id,
         to_billing_subject_id=default_org_subject.id,
+        github_provider_user_id=github_provider_user_id,
     )
     logger.info(
         "Agent gateway free-credit claim reclaimed from orphaned org subject",
@@ -194,12 +256,16 @@ async def ensure_signup_free_credit_grant(
     )
     if not reserved:
         # No linked GitHub identity, or the allocation belongs to another
-        # billing subject. When that other subject is an orphan a deleted
-        # account left behind, the claim is reclaimed and the reserve
-        # retried; every other claimant shape means no credit here.
+        # billing subject. When that other subject is a PROVABLY identity-pure
+        # orphan a deleted account left behind, the claim is reclaimed and the
+        # reserve retried; every other claimant shape means no credit here.
+        github_provider_user_id = await get_linked_github_provider_user_id(db, user_id)
+        if github_provider_user_id is None:
+            return False
         if not await _reclaim_orphaned_allocation(
             db,
             user_id=user_id,
+            github_provider_user_id=github_provider_user_id,
             default_org_subject=subject,
         ):
             return False

@@ -96,6 +96,31 @@ async def create_llm_credit_grant(
     return llm_credit_grant_record(row)
 
 
+async def list_llm_credit_grants(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+) -> list[LlmCreditGrantRecord]:
+    """Every grant row a subject holds, oldest first — expired rows included.
+
+    The orphan reclaim's ledger-purity probe reads this: an auto-move is only
+    safe when the source ledger provably contains nothing but the reclaiming
+    identity's own signup grant, so the caller needs the actual rows (source
+    and source_ref), not a sum.
+    """
+    rows = (
+        (
+            await db.execute(
+                select(LlmCreditGrant)
+                .where(LlmCreditGrant.billing_subject_id == billing_subject_id)
+                .order_by(LlmCreditGrant.created_at, LlmCreditGrant.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [llm_credit_grant_record(row) for row in rows]
+
+
 async def move_llm_credit_ledger(
     db: AsyncSession,
     *,

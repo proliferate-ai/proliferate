@@ -14,6 +14,7 @@ in-flight signups alone.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -27,6 +28,7 @@ from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_FREE_CREDIT_PERIOD_KEY,
     LLM_CREDIT_SOURCE_FREE_SIGNUP,
+    LLM_CREDIT_SOURCE_TOPUP,
 )
 from proliferate.constants.billing import (
     FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
@@ -273,6 +275,164 @@ async def test_reclaim_does_not_fire_when_claiming_org_is_live(
     assert first_balance.granted_usd == Decimal("5")
     second_balance = await store.get_remaining_credit_usd(db_session, second_subject.id)
     assert second_balance.granted_usd == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_reclaim_refused_when_orphan_holds_paid_topup(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """P2: an orphan holding real paid money is never auto-drained.
+
+    A $50 top-up on the orphan subject means the ledger is not provably the
+    identity's own signup grant — the reclaim refuses with the non-paging
+    manual-resolution error and moves NOTHING (the panel's probe showed the
+    old code moving the $50 onto the new org).
+    """
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    github_subject = f"gh-topup-{uuid.uuid4().hex[:10]}"
+    orphan_subject_id = await _fabricate_orphan_claim(
+        db_session, github_subject=github_subject, consumed_usd=2.0
+    )
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=orphan_subject_id,
+        user_id=None,
+        source=LLM_CREDIT_SOURCE_TOPUP,
+        amount_usd=Decimal("50"),
+        source_ref=f"topup:{uuid.uuid4().hex[:8]}",
+    )
+
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id, provider_subject=github_subject)
+    org_id = await _place_in_org(db_session, user_id=user_id)
+
+    with caplog.at_level(logging.ERROR, logger="proliferate.server.ai_gateway.free_credits"):
+        assert await ensure_signup_free_credit_grant(db_session, user_id) is False
+
+    # Nothing moved: the paid credit stays on the orphan, the new org has $0,
+    # and the claim is untouched.
+    orphan_balance = await store.get_remaining_credit_usd(db_session, orphan_subject_id)
+    assert orphan_balance.granted_usd == Decimal("55")
+    assert orphan_balance.used_usd == Decimal("2")
+    new_subject = await ensure_organization_billing_subject(db_session, org_id)
+    new_balance = await store.get_remaining_credit_usd(db_session, new_subject.id)
+    assert new_balance.granted_usd == Decimal("0")
+    allocation = (
+        await db_session.execute(
+            select(FreeCloudAllocation).where(
+                FreeCloudAllocation.github_provider_user_id == github_subject
+            )
+        )
+    ).scalar_one()
+    assert allocation.billing_subject_id == orphan_subject_id
+    assert any(
+        getattr(record, "reason", None) == "orphan_ledger_not_identity_pure"
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_reclaim_refused_when_second_humans_allocation_rides_the_orphan(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """P3: a second human's claim on the same orphan subject blocks the move.
+
+    Moving the subject would drag the other identity's allocation history
+    with it (the panel's probe showed exactly that, permanently breaking the
+    second human's own grant with no alert). Refused; both claims untouched.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    github_subject = f"gh-a-{uuid.uuid4().hex[:10]}"
+    other_subject = f"gh-b-{uuid.uuid4().hex[:10]}"
+    orphan_subject_id = await _fabricate_orphan_claim(
+        db_session, github_subject=github_subject, consumed_usd=1.0
+    )
+    db_session.add(
+        FreeCloudAllocation(
+            allocation_kind=FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+            github_provider_user_id=other_subject,
+            billing_subject_id=orphan_subject_id,
+            user_id=uuid.uuid4(),
+            period_key=AGENT_GATEWAY_FREE_CREDIT_PERIOD_KEY,
+            status="active",
+        )
+    )
+    await db_session.flush()
+
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id, provider_subject=github_subject)
+    await _place_in_org(db_session, user_id=user_id)
+
+    with caplog.at_level(logging.ERROR, logger="proliferate.server.ai_gateway.free_credits"):
+        assert await ensure_signup_free_credit_grant(db_session, user_id) is False
+
+    # Both identities' claims still sit on the orphan; the ledger is intact.
+    for identity in (github_subject, other_subject):
+        allocation = (
+            await db_session.execute(
+                select(FreeCloudAllocation).where(
+                    FreeCloudAllocation.github_provider_user_id == identity
+                )
+            )
+        ).scalar_one()
+        assert allocation.billing_subject_id == orphan_subject_id
+    orphan_balance = await store.get_remaining_credit_usd(db_session, orphan_subject_id)
+    assert orphan_balance.granted_usd == Decimal("5")
+    assert any(
+        getattr(record, "reason", None) == "orphan_holds_foreign_allocations"
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_reclaim_refused_when_destination_already_has_free_signup(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """P4: a destination already holding free_signup never receives a second.
+
+    With the destination ref taken, move_llm_credit_ledger's source_ref
+    rewrite is skipped and the orphan's grant row would land beside the
+    existing one — two free_signup rows (the panel's double-free_signup
+    probe). Refused instead; each subject keeps exactly its own row.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    github_subject = f"gh-dest-{uuid.uuid4().hex[:10]}"
+    orphan_subject_id = await _fabricate_orphan_claim(
+        db_session, github_subject=github_subject, consumed_usd=0.5
+    )
+
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id, provider_subject=github_subject)
+    org_id = await _place_in_org(db_session, user_id=user_id)
+    dest_subject = await ensure_organization_billing_subject(db_session, org_id)
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=dest_subject.id,
+        user_id=None,
+        source=LLM_CREDIT_SOURCE_FREE_SIGNUP,
+        amount_usd=Decimal("5"),
+        source_ref=f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{dest_subject.id}",
+    )
+
+    with caplog.at_level(logging.ERROR, logger="proliferate.server.ai_gateway.free_credits"):
+        assert await ensure_signup_free_credit_grant(db_session, user_id) is False
+
+    grants = await _free_signup_grants_for_subjects(
+        db_session, [orphan_subject_id, dest_subject.id]
+    )
+    by_subject = {grant.billing_subject_id for grant in grants}
+    assert len(grants) == 2  # one each — never two on the destination
+    assert by_subject == {orphan_subject_id, dest_subject.id}
+    assert any(
+        getattr(record, "reason", None) == "destination_already_has_free_signup"
+        for record in caplog.records
+    )
 
 
 def _capture_report_critical(
