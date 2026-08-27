@@ -32,6 +32,9 @@ pub(crate) fn write(endpoint: &str, capability: &str) {
         return;
     }
     let payload = serde_json::json!({ "endpoint": endpoint, "capability": capability });
+    // Temp-write + rename: a reader never sees a partial file, and the mode
+    // applies at creation whatever a pre-existing file carried.
+    let temp = path.with_extension("json.tmp");
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]
@@ -39,13 +42,14 @@ pub(crate) fn write(endpoint: &str, capability: &str) {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    if let Ok(mut file) = options.open(&path) {
-        let _ = file.write_all(payload.to_string().as_bytes());
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-        }
+    let Ok(mut file) = options.open(&temp) else { return };
+    if file.write_all(payload.to_string().as_bytes()).is_err() {
+        let _ = std::fs::remove_file(&temp);
+        return;
+    }
+    drop(file);
+    if std::fs::rename(&temp, &path).is_err() {
+        let _ = std::fs::remove_file(&temp);
     }
 }
 

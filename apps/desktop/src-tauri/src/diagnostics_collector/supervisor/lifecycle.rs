@@ -453,6 +453,9 @@ impl DiagnosticsCollectorSupervisor {
     }
 
     pub(super) fn publish_degraded(&self, classification: &'static str, retry_exhausted: bool) {
+        // No ready generation exists any more; the tail's discovery point
+        // must not outlive what it describes.
+        super::super::descriptor_file::remove();
         self.fallback.set_active(true);
         let (generation, state) = self
             .inner

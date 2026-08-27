@@ -116,13 +116,9 @@ impl Filters {
             match line.level {
                 Some(level) if level >= min => {}
                 Some(_) => return Verdict::Filtered,
-                None => {
-                    if self.session.is_none() {
-                        // A text line has no level; without a session filter
-                        // it stays (levels are advisory), with one it is
-                        // already counted below.
-                    }
-                }
+                // A line with no level (a continuation, a bare text line)
+                // is not level-filtered: levels are advisory for text.
+                None => {}
             }
         }
         if let Some(session) = &self.session {
@@ -188,9 +184,19 @@ pub fn parse_sink_line(source: &str, raw: &str) -> LogLine {
             };
         }
     }
+    // The tracing text format (what the Rust sinks write in local dev):
+    // `2026-08-27T10:00:01.123456Z  INFO target: message`. The leading
+    // timestamp and level are what --since and the merge need; the session
+    // filter still cannot hold onto a text line and says so.
+    let mut tokens = raw.split_whitespace();
+    let timestamp = tokens
+        .next()
+        .and_then(|token| DateTime::parse_from_rfc3339(token).ok())
+        .map(|value| value.with_timezone(&Utc));
+    let level = timestamp.and(tokens.next().and_then(Level::parse));
     LogLine {
-        timestamp: None,
-        level: None,
+        timestamp,
+        level,
         source: source.to_owned(),
         session_id: None,
         text: raw.to_owned(),
@@ -272,7 +278,7 @@ pub fn render(line: &LogLine) -> String {
     let session = line
         .session_id
         .as_deref()
-        .map(|id| format!(" ({})", &id[..id.len().min(8)]))
+        .map(|id| format!(" ({})", id.chars().take(8).collect::<String>()))
         .unwrap_or_default();
     format!("{time} {level:5} [{}]{session} {}", line.source, line.text)
 }
@@ -311,38 +317,80 @@ pub fn sink_paths(root: &Path, runtime_home: &Path) -> Vec<(String, PathBuf)> {
 
 fn read_descriptor(root: &Path) -> Option<DescriptorFile> {
     let raw = std::fs::read_to_string(root.join("diagnostics/collector.json")).ok()?;
-    serde_json::from_str(&raw).ok()
+    let descriptor: DescriptorFile = serde_json::from_str(&raw).ok()?;
+    // Symmetric with the desktop's own client: the capability travels only
+    // to the loopback surface it was minted for, whatever the file says.
+    if !descriptor.endpoint.starts_with("http://127.0.0.1:") {
+        return None;
+    }
+    Some(descriptor)
 }
 
+/// The session filter's input domain is closed to UUID shape before it
+/// reaches a query string or a URL.
+pub fn valid_session_id(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() == 36
+        && bytes.iter().enumerate().all(|(index, byte)| match index {
+            8 | 13 | 18 | 23 => *byte == b'-',
+            _ => byte.is_ascii_hexdigit(),
+        })
+}
+
+/// Backfill: every retained record inside the window, oldest-first, paged on
+/// the retention cursor. Returns the records and the highest cursor seen, so
+/// follow mode resumes exactly where backfill ended instead of replaying the
+/// store from zero.
 fn collector_backfill(
     descriptor: &DescriptorFile,
     session: Option<&str>,
-) -> Result<Vec<serde_json::Value>, String> {
+    since: Option<DateTime<Utc>>,
+) -> Result<(Vec<serde_json::Value>, u64), String> {
     let client = reqwest::blocking::Client::new();
-    let mut url = format!(
-        "{}/v1/records?schema_version=1.1&limit=500",
-        descriptor.endpoint.trim_end_matches('/')
-    );
-    if let Some(session) = session {
-        url.push_str(&format!("&session_id={session}"));
+    let mut records = Vec::new();
+    let mut cursor: Option<u64> = None;
+    loop {
+        let mut url = format!(
+            "{}/v1/records?schema_version=1.1&limit=500",
+            descriptor.endpoint.trim_end_matches('/')
+        );
+        if let Some(session) = session {
+            url.push_str(&format!("&session_id={session}"));
+        }
+        if let Some(since) = since {
+            url.push_str(&format!(
+                "&source_time_from={}",
+                since.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+            ));
+        }
+        if let Some(cursor) = cursor {
+            url.push_str(&format!("&after_cursor={cursor}"));
+        }
+        let page: serde_json::Value = client
+            .get(url)
+            .bearer_auth(&descriptor.capability)
+            .timeout(Duration::from_secs(5))
+            .send()
+            .map_err(|e| format!("collector unreachable: {e}"))?
+            .error_for_status()
+            .map_err(|e| format!("collector refused: {e}"))?
+            .json()
+            .map_err(|e| format!("collector page unreadable: {e}"))?;
+        if let Some(batch) = page.get("records").and_then(|v| v.as_array()) {
+            records.extend(batch.iter().cloned());
+        }
+        match page.get("next_cursor").and_then(|v| v.as_u64()) {
+            Some(next) => cursor = Some(next),
+            None => break,
+        }
     }
-    let page: serde_json::Value = client
-        .get(url)
-        .bearer_auth(&descriptor.capability)
-        .timeout(Duration::from_secs(5))
-        .send()
-        .map_err(|e| format!("collector unreachable: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("collector refused: {e}"))?
-        .json()
-        .map_err(|e| format!("collector page unreadable: {e}"))?;
-    Ok(page
-        .get("records")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default())
+    let max_cursor = records
+        .iter()
+        .filter_map(|record| record.get("retention_cursor").and_then(|v| v.as_u64()))
+        .max()
+        .unwrap_or(0);
+    Ok((records, max_cursor))
 }
-
 fn spawn_file_follow(source: String, path: PathBuf, from: u64, tx: mpsc::Sender<LogLine>) {
     std::thread::spawn(move || {
         let mut offset = from;
@@ -355,7 +403,7 @@ fn spawn_file_follow(source: String, path: PathBuf, from: u64, tx: mpsc::Sender<
                 continue;
             };
             if len < offset {
-                offset = 0; // rotated
+                offset = 0; // rotated: start over on the new file
             }
             if len == offset {
                 continue;
@@ -363,12 +411,23 @@ fn spawn_file_follow(source: String, path: PathBuf, from: u64, tx: mpsc::Sender<
             if file.seek(SeekFrom::Start(offset)).is_err() {
                 continue;
             }
-            let mut buffer = String::new();
-            if file.read_to_string(&mut buffer).is_err() {
+            let mut buffer = Vec::new();
+            if file.read_to_end(&mut buffer).is_err() {
                 continue;
             }
-            offset = len;
-            for raw in buffer.lines() {
+            // Only complete lines are consumed; a partially-written final
+            // line waits for its newline rather than being emitted as a
+            // fragment. Non-UTF-8 bytes render lossily instead of stalling
+            // the source.
+            let Some(consumed) = buffer
+                .iter()
+                .rposition(|byte| *byte == b'\n')
+                .map(|i| i + 1)
+            else {
+                continue;
+            };
+            offset += consumed as u64;
+            for raw in String::from_utf8_lossy(&buffer[..consumed]).lines() {
                 if tx.send(parse_sink_line(&source, raw)).is_err() {
                     return;
                 }
@@ -376,47 +435,98 @@ fn spawn_file_follow(source: String, path: PathBuf, from: u64, tx: mpsc::Sender<
         }
     });
 }
-
-fn spawn_collector_follow(descriptor: DescriptorFile, tx: mpsc::Sender<LogLine>) {
+fn spawn_collector_follow(descriptor: DescriptorFile, from_cursor: u64, tx: mpsc::Sender<LogLine>) {
     std::thread::spawn(move || {
         let client = reqwest::blocking::Client::new();
-        let Ok(response) = client
-            .get(format!(
-                "{}/v1/tail?schema_version=1.1",
-                descriptor.endpoint.trim_end_matches('/')
-            ))
-            .bearer_auth(&descriptor.capability)
-            .send()
-            .and_then(reqwest::blocking::Response::error_for_status)
-        else {
-            return;
-        };
-        let reader = BufReader::new(response);
-        for raw in reader.lines() {
-            let Ok(raw) = raw else { return };
-            let Ok(frame) = serde_json::from_str::<serde_json::Value>(&raw) else {
-                continue;
+        let mut cursor = from_cursor;
+        let mut attempts = 0_u32;
+        loop {
+            let connection = client
+                .get(format!(
+                    "{}/v1/tail?schema_version=1.1&after_cursor={cursor}",
+                    descriptor.endpoint.trim_end_matches('/')
+                ))
+                .bearer_auth(&descriptor.capability)
+                .send()
+                .and_then(reqwest::blocking::Response::error_for_status);
+            let response = match connection {
+                Ok(response) => {
+                    attempts = 0;
+                    response
+                }
+                Err(error) => {
+                    attempts += 1;
+                    if attempts == 1 {
+                        eprintln!("(collector stream degraded: {error}; retrying)");
+                    }
+                    if attempts > 10 {
+                        eprintln!("(collector stream gave up after 10 attempts)");
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_secs(2));
+                    continue;
+                }
             };
-            for record in frame
-                .get("records")
-                .and_then(|v| v.as_array())
-                .into_iter()
-                .flatten()
-            {
-                if tx.send(record_line(record)).is_err() {
-                    return;
+            let reader = BufReader::new(response);
+            for raw in reader.lines() {
+                let Ok(raw) = raw else { break };
+                let Ok(frame) = serde_json::from_str::<serde_json::Value>(&raw) else {
+                    continue;
+                };
+                match frame.get("frame").and_then(|v| v.as_str()) {
+                    Some("records") => {
+                        if let Some(next) = frame.get("cursor").and_then(|v| v.as_u64()) {
+                            cursor = next;
+                        }
+                        for record in frame
+                            .get("records")
+                            .and_then(|v| v.as_array())
+                            .into_iter()
+                            .flatten()
+                        {
+                            if tx.send(record_line(record)).is_err() {
+                                return;
+                            }
+                        }
+                    }
+                    Some("lag") => {
+                        let dropped = frame
+                            .get("dropped_frames")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or_default();
+                        if let Some(resume) =
+                            frame.get("resume_after_cursor").and_then(|v| v.as_u64())
+                        {
+                            cursor = resume;
+                        }
+                        eprintln!("(collector stream lagged: {dropped} frames dropped; resuming)");
+                    }
+                    Some("gap") => {
+                        eprintln!("(collector retention gap: some records aged out mid-stream)");
+                    }
+                    _ => {}
                 }
             }
+            // The stream ended (collector stopped or restarted). Say so and
+            // resume from the last cursor: the next ready generation rewrites
+            // the descriptor, but the endpoint usually survives a restart.
+            eprintln!("(collector stream ended; reconnecting)");
+            std::thread::sleep(Duration::from_secs(2));
         }
     });
 }
-
 pub fn run(args: LogsArgs) -> anyhow::Result<()> {
     let now = Utc::now();
+    if let Some(session) = args.session.as_deref() {
+        if !valid_session_id(session) {
+            anyhow::bail!("--session must be a canonical UUID");
+        }
+    }
+    let since = parse_since(&args.since, now).map_err(anyhow::Error::msg)?;
     let filters = Filters {
         session: args.session.clone(),
         min_level: args.level.as_deref().and_then(Level::parse),
-        since: Some(parse_since(&args.since, now).map_err(anyhow::Error::msg)?),
+        since: Some(since),
     };
     let root = discovery_root(args.dir);
     let runtime_home = args
@@ -431,32 +541,52 @@ pub fn run(args: LogsArgs) -> anyhow::Result<()> {
 
     for (source, path) in sink_paths(&root, &runtime_home) {
         match std::fs::File::open(&path) {
-            Ok(file) => {
-                let len = file.metadata().map(|m| m.len()).unwrap_or(0);
-                for raw in BufReader::new(file).lines().map_while(Result::ok) {
-                    let line = parse_sink_line(&source, &raw);
+            Ok(mut file) => {
+                // Backfill exactly the bytes follow mode resumes after: the
+                // last complete line at open time. Bytes appended during the
+                // read belong to the follower, never to both.
+                let mut buffer = Vec::new();
+                let consumed = if file.read_to_end(&mut buffer).is_ok() {
+                    buffer
+                        .iter()
+                        .rposition(|byte| *byte == b'\n')
+                        .map_or(0, |i| i + 1)
+                } else {
+                    0
+                };
+                for raw in String::from_utf8_lossy(&buffer[..consumed]).lines() {
+                    let line = parse_sink_line(&source, raw);
                     sequence += 1;
                     backfill.push((sequence, line));
                 }
-                offsets.push((source, path, len));
+                offsets.push((source, path, consumed as u64));
             }
-            Err(_) => eprintln!("(source absent: {} — {})", source, path.display()),
+            Err(_) => {
+                eprintln!("(source absent: {} — {})", source, path.display());
+                // Follow mode still watches the path: a sink that appears
+                // later (the dev server starting) joins the stream.
+                offsets.push((source, path, 0));
+            }
         }
     }
 
     let descriptor = read_descriptor(&root);
+    let mut collector_cursor = 0_u64;
     match &descriptor {
-        Some(descriptor) => match collector_backfill(descriptor, filters.session.as_deref()) {
-            Ok(records) => {
-                for record in &records {
-                    sequence += 1;
-                    backfill.push((sequence, record_line(record)));
+        Some(descriptor) => {
+            match collector_backfill(descriptor, filters.session.as_deref(), Some(since)) {
+                Ok((records, max_cursor)) => {
+                    collector_cursor = max_cursor;
+                    for record in &records {
+                        sequence += 1;
+                        backfill.push((sequence, record_line(record)));
+                    }
                 }
+                Err(reason) => eprintln!("(collector degraded: {reason})"),
             }
-            Err(reason) => eprintln!("(collector degraded: {reason})"),
-        },
+        }
         None => eprintln!(
-            "(collector absent: no descriptor at {}/diagnostics/collector.json — is the desktop app running?)",
+            "(collector absent: no readable loopback descriptor at {}/diagnostics/collector.json — is the desktop app running?)",
             root.display()
         ),
     }
@@ -482,7 +612,7 @@ pub fn run(args: LogsArgs) -> anyhow::Result<()> {
         spawn_file_follow(source, path, offset, tx.clone());
     }
     if let Some(descriptor) = descriptor {
-        spawn_collector_follow(descriptor, tx.clone());
+        spawn_collector_follow(descriptor, collector_cursor, tx.clone());
     }
     drop(tx);
     for line in rx {
@@ -601,6 +731,43 @@ mod tests {
         assert_eq!(filters.verdict(&old_error), Verdict::Filtered);
         assert_eq!(filters.verdict(&new_info), Verdict::Filtered);
         assert_eq!(filters.verdict(&new_error), Verdict::Pass);
+    }
+
+    #[test]
+    fn the_tracing_text_format_yields_timestamp_and_level() {
+        let line = parse_sink_line(
+            "anyharness",
+            "2026-08-27T10:00:01.123456Z  INFO anyharness_lib::live: session ready",
+        );
+        assert!(
+            line.timestamp.is_some(),
+            "text lines carry their own timestamp"
+        );
+        assert_eq!(line.level, Some(Level::Info));
+        assert!(
+            line.session_id.is_none(),
+            "text cannot carry the session filter"
+        );
+        let continuation = parse_sink_line("anyharness", "    at src/live/mod.rs:42");
+        assert!(
+            continuation.timestamp.is_none(),
+            "stack frames glue to their header"
+        );
+    }
+
+    #[test]
+    fn session_ids_are_uuid_closed_and_render_survives_multibyte() {
+        assert!(valid_session_id("0191d1f0-0000-7000-8000-000000000042"));
+        assert!(!valid_session_id("0191d1f0-0000-7000-8000-00000000004"));
+        assert!(!valid_session_id("'; drop table sessions; --"));
+        let line = LogLine {
+            timestamp: None,
+            level: None,
+            source: "worker".to_owned(),
+            session_id: Some("€€€€€€€€€€".to_owned()),
+            text: "x".to_owned(),
+        };
+        assert!(render(&line).contains("€€€€€€€€"), "char-safe truncation");
     }
 
     #[test]

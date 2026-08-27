@@ -11,7 +11,7 @@ def test_the_five_links_render_from_one_id() -> None:
     links = session_links(SESSION)
     assert set(links) == {"replay", "sentry", "honeycomb", "logs", "support_reports"}
     assert links["replay"] == f"https://app.proliferate.com/sessions/{SESSION}"
-    assert f"session_id%3A{SESSION}" in links["sentry"]
+    assert f"project%3Aproliferate-server%20session_id%3A{SESSION}" in links["sentry"]
     assert "proliferate.session_id" in links["honeycomb"]
     assert SESSION in links["logs"]
     assert "support.report.captured" in links["support_reports"]
@@ -23,6 +23,17 @@ def test_environments_move_the_bases_not_the_shape() -> None:
     assert "/environments/dogfood/" in local["honeycomb"]
     production = session_links(SESSION, environment="production")
     assert "/environments/production/" in production["honeycomb"]
+    staging = session_links(SESSION, environment="staging")
+    assert staging["replay"].startswith("https://staging-app.proliferate.com/")
+
+
+def test_log_groups_follow_the_infra_names() -> None:
+    from proliferate.observability.links import _star_encode
+
+    production = session_links(SESSION, environment="production")
+    assert _star_encode("/ecs/proliferate-prod") in production["logs"]
+    staging = session_links(SESSION, environment="staging")
+    assert _star_encode("/ecs/proliferate-server-staging") in staging["logs"]
 
 
 def test_non_uuid_input_is_refused() -> None:
