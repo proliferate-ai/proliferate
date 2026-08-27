@@ -154,8 +154,14 @@ async def _reclaim_orphaned_allocation(
     INSERT that has not happened yet, so three post-move invariants back them
     up — moved grants never exceed the observed source grants, moved usage
     rows equal the observed source usage rows, and the destination ends with
-    at most one ``free_signup`` row. Any violation raises
-    :class:`AgentGatewayReclaimLedgerRaced` and rolls the reclaim back.
+    at most one ``free_signup`` row.
+
+    Because those invariants can only be evaluated AFTER the move, the whole
+    convergence runs inside a SAVEPOINT (``db.begin_nested``): a violation
+    rolls back exactly these statements on the way out, so the rejection is
+    self-contained and does not depend on any caller's transaction handling.
+    :class:`AgentGatewayReclaimLedgerRaced` then propagates as the SIGNAL —
+    it is what makes the signup path fail closed, not what undoes the money.
 
     A P1 failure is the normal dedupe path and stays silent. An orphan that
     fails P2–P4 is refused with ONE ``logger.error`` naming the ids and the
@@ -239,60 +245,75 @@ async def _reclaim_orphaned_allocation(
             },
         )
         return False
-    moved_grants, moved_usage = await agent_gateway_store.move_llm_credit_ledger(
-        db,
-        from_billing_subject_id=owner.id,
-        to_billing_subject_id=default_org_subject.id,
-    )
-    # Can't-happen belts behind the FOR UPDATE reads above: a row that appeared
-    # after a vetting read (an INSERT no row lock can prevent) has just been
-    # moved, or moved onto, with money we never vetted. Each raises so the whole
-    # reclaim transaction rolls back — nothing moves — and pages, because a
-    # silent partial reclaim is exactly the class of bug the preconditions exist
-    # to prevent.
-    raced: str | None = None
-    if moved_grants > len(orphan_grants):
-        raced = (
-            f"observed {len(orphan_grants)} grant(s) on source {owner.id} but moved {moved_grants}"
+    # The whole convergence — both ledger sides, the invariants that vet them,
+    # and the allocation re-point — runs inside ONE SAVEPOINT. The invariants
+    # are inherently post-move (a moved count cannot be known before the move),
+    # so the mutations must be undoable by THIS code rather than by an outer
+    # transaction boundary: a caller that legitimately catches the exception
+    # (the zero-grant sweep does, to keep sweeping) would otherwise let
+    # `async with db.begin()` exit normally and COMMIT the rejected movement.
+    # `begin_nested` emits ROLLBACK TO SAVEPOINT on the way out, discarding
+    # exactly these statements and leaving the session usable for the caller's
+    # remaining work.
+    async with db.begin_nested():
+        moved_grants, moved_usage = await agent_gateway_store.move_llm_credit_ledger(
+            db,
+            from_billing_subject_id=owner.id,
+            to_billing_subject_id=default_org_subject.id,
         )
-    elif moved_usage != orphan_usage_events:
-        # The debit side moves too, so an imported usage row landing in the
-        # window would ride along unvetted (it would silently reduce the
-        # destination's credit).
-        raced = (
-            f"observed {orphan_usage_events} usage row(s) on source {owner.id} "
-            f"but moved {moved_usage}"
-        )
-    else:
-        destination_signups = [
-            grant
-            for grant in await agent_gateway_store.list_llm_credit_grants(
-                db, default_org_subject.id
-            )
-            if grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP
-        ]
-        if len(destination_signups) > 1:
-            # The F1 shape: a free_signup grant appeared on the DESTINATION in
-            # the window, so the move's source_ref rewrite declined and the
-            # moved row landed beside it — the one place in this path where
-            # money could increase without entitlement.
+        # Can't-happen belts behind the FOR UPDATE reads above: a row that
+        # appeared after a vetting read (an INSERT no row lock can prevent) has
+        # just been moved, or moved onto, with money we never vetted.
+        raced: str | None = None
+        if moved_grants > len(orphan_grants):
             raced = (
-                f"destination {default_org_subject.id} holds "
-                f"{len(destination_signups)} free_signup grants after the move"
+                f"observed {len(orphan_grants)} grant(s) on source {owner.id} "
+                f"but moved {moved_grants}"
             )
-    if raced is not None:
-        error = AgentGatewayReclaimLedgerRaced(f"orphan reclaim raced: {raced}; rolled back")
-        report_critical(
-            error,
-            tags={"domain": "agent_gateway", "action": "orphan_reclaim"},
+        elif moved_usage != orphan_usage_events:
+            # The debit side moves too, so an imported usage row landing in the
+            # window would ride along unvetted (it would silently reduce the
+            # destination's credit).
+            raced = (
+                f"observed {orphan_usage_events} usage row(s) on source {owner.id} "
+                f"but moved {moved_usage}"
+            )
+        else:
+            destination_signups = [
+                grant
+                for grant in await agent_gateway_store.list_llm_credit_grants(
+                    db, default_org_subject.id
+                )
+                if grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP
+            ]
+            if len(destination_signups) > 1:
+                # The F1 shape: a free_signup grant appeared on the DESTINATION
+                # in the window, so the move's source_ref rewrite declined and
+                # the moved row landed beside it — the one place in this path
+                # where money could increase without entitlement.
+                raced = (
+                    f"destination {default_org_subject.id} holds "
+                    f"{len(destination_signups)} free_signup grants after the move"
+                )
+        if raced is not None:
+            error = AgentGatewayReclaimLedgerRaced(f"orphan reclaim raced: {raced}; rolled back")
+            report_critical(
+                error,
+                tags={"domain": "agent_gateway", "action": "orphan_reclaim"},
+            )
+            # Raising exits the savepoint block, which rolls the movement back
+            # BEFORE the exception reaches any caller. The raise then keeps
+            # propagating on purpose: it is the signal (and the signup path's
+            # fail-closed behavior — that path has no catch, so the enrollment
+            # transaction fails and the backfill retries), never the thing that
+            # undoes the money.
+            raise error
+        moved_allocations = await move_agent_gateway_free_credit_allocation(
+            db,
+            from_billing_subject_id=owner.id,
+            to_billing_subject_id=default_org_subject.id,
+            github_provider_user_id=github_provider_user_id,
         )
-        raise error
-    moved_allocations = await move_agent_gateway_free_credit_allocation(
-        db,
-        from_billing_subject_id=owner.id,
-        to_billing_subject_id=default_org_subject.id,
-        github_provider_user_id=github_provider_user_id,
-    )
     logger.info(
         "Agent gateway free-credit claim reclaimed from orphaned org subject",
         extra={
@@ -430,9 +451,10 @@ async def run_zero_grant_check(
 
     A heal whose reclaim trips its own ledger invariant
     (:class:`AgentGatewayReclaimLedgerRaced`) is counted in ``raced`` and the
-    sweep CONTINUES: that race already rolled its money back and already paged
-    under ``orphan_reclaim``, so re-raising would both double-page one incident
-    and let a single org abort the rest of the sweep.
+    sweep CONTINUES: the reclaim's SAVEPOINT has already undone its own
+    mutations and the race already paged under ``orphan_reclaim``, so
+    re-raising would both double-page one incident and let a single org abort
+    the rest of the sweep.
     """
     cutoff = utcnow() - timedelta(seconds=max_age_seconds)
     listed = await agent_gateway_store.list_active_org_enrollments_with_zero_grants(
@@ -459,11 +481,14 @@ async def run_zero_grant_check(
         try:
             await ensure_signup_free_credit_grant(db, enrollment.user_id)
         except AgentGatewayReclaimLedgerRaced:
-            # The reclaim already rolled its own money back and already paged
-            # as `orphan_reclaim`. Swallow it here so the sweep is ONE signal
-            # per incident (letting it reach the worker's guard `except` would
-            # page the same race a second time as `zero_grant_check`) and so a
-            # single raced org cannot abort the rest of the sweep.
+            # Safe to swallow ONLY because the reclaim's SAVEPOINT already
+            # rolled its own mutations back before raising — this catch does
+            # not, and must not, rely on an outer transaction boundary to undo
+            # money (it is inside one that would otherwise COMMIT on a normal
+            # exit). The race already paged as `orphan_reclaim`, so swallowing
+            # keeps the sweep to ONE signal per incident (letting it reach the
+            # worker's guard `except` would page it again as
+            # `zero_grant_check`) and stops one raced org aborting the sweep.
             raced += 1
             logger.warning(
                 "Agent gateway zero-grant heal skipped: orphan reclaim raced",

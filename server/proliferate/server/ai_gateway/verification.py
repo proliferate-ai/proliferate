@@ -183,6 +183,20 @@ def _diff_verdict(
     return AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED, delta
 
 
+def is_outage(*, checked: int, errored: int) -> bool:
+    """Does this tick's error shape clear the outage (pageable) bar?
+
+    Either every checked key errored — a small fleet at 100% failure is a total
+    outage and must page regardless of the floor, since <= 9 keys can never
+    reach it — or ``errored`` reached ``max(_ERROR_ALERT_FLOOR, ceil(checked/2))``.
+    Pure and public so callers (and the loop's own test) can ask the question
+    without re-deriving the rule.
+    """
+    if checked > 0 and errored == checked:
+        return True
+    return errored >= max(_ERROR_ALERT_FLOOR, math.ceil(checked / 2))
+
+
 def _sanitized(exc: Exception, virtual_key: str) -> RuntimeError:
     """A stand-in exception carrying the type name and a key-redacted message.
 
@@ -302,10 +316,7 @@ async def record_verification_verdicts(
             "Agent gateway verification tick had errored keys",
             extra={"checked": checked, "errored": errored, "sample_error": sample_error},
         )
-    # A total outage pages whatever the fleet's size: with <= 9 active keys the
-    # floor alone would stay silent at 100% failure.
-    total_outage = checked > 0 and errored == checked
-    outage_detected = total_outage or errored >= max(_ERROR_ALERT_FLOOR, math.ceil(checked / 2))
+    outage_detected = is_outage(checked=checked, errored=errored)
     # Page the OUTAGE, not every tick of it: a persistent outage would
     # otherwise page on its own interval forever (~96/day at the default). The
     # caller carries the flag and clears it when a tick comes back error-free.

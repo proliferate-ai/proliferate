@@ -25,6 +25,7 @@ from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.integrations import litellm
 from proliferate.server.ai_gateway import verification
+from proliferate.server.ai_gateway.verification import VerificationResult
 from proliferate.server.ai_gateway.worker import start_agent_gateway_verification
 
 
@@ -398,51 +399,60 @@ async def test_persistent_outage_pages_once_then_again_after_recovery(
 
 @pytest.mark.asyncio
 async def test_flapping_provider_is_one_incident_not_two_pages(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Audit F6: the flag releases on an ERROR-FREE tick, not any non-outage one.
 
     Clearing on ``outage_detected`` alone let a provider flapping across the
     outage bar (outage → partial → outage) page twice for a single incident.
-    The loop's rule holds the flag while any errors persist; only a fully
-    error-free tick releases it.
+
+    This drives ``worker._verification_loop`` ITSELF — the seam that owns the
+    flag — rather than re-implementing its rule in the test. A test that copies
+    the expression asserts the copy against itself and would stay green if the
+    production line were reverted; this one fails.
     """
-    enrollment_id = await _create_enrollment(db_session)
-    await _mint_key(db_session, enrollment_id, "claude")
-    await _mint_key(db_session, enrollment_id, "codex")
-    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}, "codex": {"gpt-5"}})
-    paged: list[Exception] = []
-    monkeypatch.setattr(
-        verification, "report_critical", lambda error, **kwargs: paged.append(error)
-    )
-    boom = litellm.LiteLLMIntegrationError("down", "transient")
-    both_down = {"sk-litellm-claude": boom, "sk-litellm-codex": boom}
-    one_down = {"sk-litellm-claude": boom, "sk-litellm-codex": ["gpt-5"]}
-    all_healthy = {"sk-litellm-claude": ["claude-sonnet"], "sk-litellm-codex": ["gpt-5"]}
+    from proliferate.server.ai_gateway import worker
 
-    async def tick(mapping: dict[str, object], flag: bool) -> bool:
-        _fake_list_models(monkeypatch, mapping)
-        targets = await verification.collect_verification_targets(db_session)
-        observations = await verification.probe_verification_targets(targets)
-        result = await verification.record_verification_verdicts(
-            db_session, observations, outage_already_paged=flag
+    # Each scripted tick is (errored, checked): a total outage, a partial
+    # failure that still errors, then a fully error-free pass.
+    script = [(2, 2), (1, 2), (2, 2), (0, 2), (2, 2)]
+    seen_flags: list[bool] = []
+    paged: list[bool] = []
+
+    class _Stop(Exception):
+        pass
+
+    async def fake_run_once(*, outage_already_paged: bool = False) -> VerificationResult:
+        seen_flags.append(outage_already_paged)
+        errored, checked = script[len(seen_flags) - 1]
+        # `outage_detected` comes from PRODUCTION's rule, not a copy of it, and
+        # the page decision mirrors phase 3's (outage and not already paged).
+        outage_detected = verification.is_outage(checked=checked, errored=errored)
+        if outage_detected and not outage_already_paged:
+            paged.append(True)
+        return VerificationResult(
+            checked=checked,
+            ok=checked - errored,
+            misconfigured=0,
+            errored=errored,
+            outage_detected=outage_detected,
         )
-        # The loop's exact rule (worker._verification_loop).
-        return result.outage_detected or (result.errored > 0 and flag)
 
-    # One flapping incident: total outage, partial recovery, total outage again.
-    flag = await tick(both_down, False)
-    assert len(paged) == 1
-    flag = await tick(one_down, flag)  # still erroring — same incident
-    assert flag is True
-    flag = await tick(both_down, flag)
-    assert len(paged) == 1  # ONE page for the whole flap
+    async def fake_sleep(_seconds: float) -> None:
+        if len(seen_flags) >= len(script):
+            raise _Stop
 
-    # A genuinely error-free tick releases the flag; the next outage pages.
-    flag = await tick(all_healthy, flag)
-    assert flag is False
-    flag = await tick(both_down, flag)
-    assert len(paged) == 2
+    monkeypatch.setattr(worker, "run_verification_once", fake_run_once)
+    monkeypatch.setattr(worker.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(_Stop):
+        await worker._verification_loop()
+
+    # The LOOP forwarded the flag: set by the first outage, HELD through the
+    # partial tick (same incident, still erroring), released only by the
+    # error-free tick — so the final outage is a new incident.
+    assert seen_flags == [False, True, True, True, False]
+    assert len(paged) == 2  # one page per incident, not one per outage tick
 
 
 def test_expected_config_resolves_from_source_tree() -> None:

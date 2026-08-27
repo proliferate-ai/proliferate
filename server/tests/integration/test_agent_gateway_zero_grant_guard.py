@@ -22,8 +22,8 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
@@ -36,7 +36,11 @@ from proliferate.constants.billing import (
     FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
 )
 from proliferate.db.models.auth import AuthIdentity, User
-from proliferate.db.models.agent_gateway import AgentGatewayEnrollment, LlmCreditGrant
+from proliferate.db.models.agent_gateway import (
+    AgentGatewayEnrollment,
+    AgentLlmUsageEvent,
+    LlmCreditGrant,
+)
 from proliferate.db.models.billing import FreeCloudAllocation
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store
@@ -491,9 +495,9 @@ async def test_reclaim_aborts_when_a_grant_lands_in_the_toctou_window(
     with pytest.raises(AgentGatewayReclaimLedgerRaced):
         await ensure_signup_free_credit_grant(db_session, user_id)
 
-    # The raise happens BEFORE the allocation claim re-points, so the reclaim
-    # is provably incomplete — production's transaction rollback (the worker's
-    # open_async_transaction) is what discards the ledger UPDATE itself.
+    # The reclaim's SAVEPOINT undid its own ledger movement before the raise
+    # escaped, so the claim never re-points and the source keeps its grant —
+    # no dependence on any caller's transaction handling.
     allocation = (
         await db_session.execute(
             select(FreeCloudAllocation).where(
@@ -502,6 +506,10 @@ async def test_reclaim_aborts_when_a_grant_lands_in_the_toctou_window(
         )
     ).scalar_one()
     assert allocation.billing_subject_id == orphan_subject_id
+    # The savepoint restored the source ledger: its own signup grant is back and
+    # the racing admin grant is gone.
+    source_grants = await store.list_llm_credit_grants(db_session, orphan_subject_id)
+    assert [grant.source for grant in source_grants] == [LLM_CREDIT_SOURCE_FREE_SIGNUP]
     assert len(paged) == 1
     error, kwargs = paged[0]
     assert isinstance(error, AgentGatewayReclaimLedgerRaced)
@@ -562,14 +570,20 @@ async def test_reclaim_aborts_when_destination_gains_free_signup_in_the_window(
     with pytest.raises(AgentGatewayReclaimLedgerRaced) as raised:
         await ensure_signup_free_credit_grant(db_session, user_id)
 
-    # The invariant OBSERVED the two-row state and refused to let the reclaim
-    # complete. The doubled row is still visible in this uncommitted session —
-    # discarding it is precisely what the raise buys, via the caller's
-    # transaction rollback (the worker's open_async_transaction in production);
-    # asserting a rolled-back count here would need a commit the fixture never
-    # makes, and would also discard the fabricated orphan.
+    # The invariant OBSERVED the two-row state and the savepoint then undid the
+    # movement, so the doubled row is gone from this session too — the rejection
+    # is self-contained, not dependent on the caller's transaction handling.
     assert "free_signup grants after the move" in str(raised.value)
     assert str(dest_subject.id) in str(raised.value)
+    dest_signups = [
+        grant
+        for grant in await store.list_llm_credit_grants(db_session, dest_subject.id)
+        if grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP
+    ]
+    # Zero, not one: the racing insert happened INSIDE the savepoint too, so it
+    # is undone along with the move. What matters is that the destination never
+    # keeps a free_signup row it was not entitled to (pre-fix it kept two).
+    assert dest_signups == []
     assert len(paged) == 1
     error, kwargs = paged[0]
     assert isinstance(error, AgentGatewayReclaimLedgerRaced)
@@ -1021,10 +1035,11 @@ async def test_raced_reclaim_pages_once_and_the_sweep_continues(
     assert result.checked == 2
     assert result.raced == 1
     assert healable_org in result.healed_organization_ids
-    # The racing org also reads as healed here: its ledger UPDATE is still
-    # visible in this uncommitted session, and discarding it is what the
-    # reclaim's raise buys via the caller's transaction rollback (the worker's
-    # open_async_transaction). Only the sweep's continuation is asserted.
+    # The savepoint undid the racing org's movement, so it is genuinely still
+    # grantless and must NOT be counted as healed (it read as healed before the
+    # rejection was made self-contained).
+    assert raced_org not in result.healed_organization_ids
+    assert result.healed == 1
     healable_subject = await ensure_organization_billing_subject(db_session, healable_org)
     balance = await store.get_remaining_credit_usd(db_session, healable_subject.id)
     assert balance.granted_usd == Decimal("5")
@@ -1042,6 +1057,132 @@ async def test_raced_reclaim_pages_once_and_the_sweep_continues(
         and isinstance(error, AgentGatewayReclaimLedgerRaced)
         for error, kwargs in paged
     )
+
+
+@pytest.mark.asyncio
+async def test_sweep_rejection_is_durable_across_a_real_commit_boundary(
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The rollback holds through the worker's OWN transaction, end to end.
+
+    This is the property the earlier tests could not observe, and whose absence
+    let a regression through: the sweep catches the raced exception, so the
+    worker's ``async with db.begin()`` exits NORMALLY and commits whatever is
+    still pending. Before the reclaim owned its rollback via SAVEPOINT, that
+    committed the rejected ledger movement — paid grants, usage rows and a
+    doubled free_signup, all durable.
+
+    So this drives ``worker.run_zero_grant_check_once()`` (which opens and
+    COMMITS its own transaction) against a COMMITTED fixture, then asserts from
+    a FRESH session. No assertion may read the fixture session's own view.
+    """
+    from proliferate.db import engine as engine_module
+    from proliferate.server.ai_gateway import worker
+
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    monkeypatch.setattr(engine_module, "async_session_factory", factory)
+
+    github_subject = f"gh-e2e-{uuid.uuid4().hex[:8]}"
+    # Build the whole world and COMMIT it, so the worker's own session sees it.
+    async with factory() as setup:
+        orphan_subject_id = await _fabricate_orphan_claim(
+            setup, github_subject=github_subject, consumed_usd=2.0
+        )
+        raced_user = await _create_user(setup)
+        await _link_github_identity(setup, user_id=raced_user, provider_subject=github_subject)
+        raced_org = await _place_in_org(setup, user_id=raced_user)
+        raced_subject = await ensure_organization_billing_subject(setup, raced_org)
+        raced_enrollment = await ensure_org_enrollment(setup, raced_org, raced_user)
+        await _backdate_enrollment(setup, raced_enrollment.id, hours=2)
+
+        healable_user = await _create_user(setup)
+        await _link_github_identity(setup, user_id=healable_user)
+        healable_org = await _place_in_org(setup, user_id=healable_user)
+        healable_enrollment = await ensure_org_enrollment(setup, healable_org, healable_user)
+        await _backdate_enrollment(setup, healable_enrollment.id, hours=2)
+        await setup.commit()
+
+    paged = _capture_report_critical(monkeypatch)
+    real_move = store.move_llm_credit_ledger
+
+    async def racing_move(
+        db: AsyncSession,
+        *,
+        from_billing_subject_id: uuid.UUID,
+        to_billing_subject_id: uuid.UUID,
+    ) -> tuple[int, int]:
+        await store.create_llm_credit_grant(
+            db,
+            billing_subject_id=from_billing_subject_id,
+            user_id=None,
+            source=LLM_CREDIT_SOURCE_TOPUP,
+            amount_usd=Decimal("50"),
+            source_ref=f"topup:{uuid.uuid4().hex[:8]}",
+        )
+        return await real_move(
+            db,
+            from_billing_subject_id=from_billing_subject_id,
+            to_billing_subject_id=to_billing_subject_id,
+        )
+
+    monkeypatch.setattr(free_credits.agent_gateway_store, "move_llm_credit_ledger", racing_move)
+
+    result = await worker.run_zero_grant_check_once()
+
+    # FRESH session, after the worker's transaction committed: nothing about the
+    # rejected reclaim may have survived. Asserted FIRST — durable money is this
+    # test's headline property, so it should be the assertion that fails if the
+    # rollback stops being self-contained.
+    async with factory() as check:
+        orphan_grants = await store.list_llm_credit_grants(check, orphan_subject_id)
+        assert [grant.source for grant in orphan_grants] == [LLM_CREDIT_SOURCE_FREE_SIGNUP]
+        assert (
+            orphan_grants[0].source_ref == f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{orphan_subject_id}"
+        )
+        orphan_usage = await check.scalar(
+            select(func.count()).where(AgentLlmUsageEvent.billing_subject_id == orphan_subject_id)
+        )
+        assert orphan_usage == 1  # the fabricated debit, still on the source
+
+        allocation = (
+            await check.execute(
+                select(FreeCloudAllocation).where(
+                    FreeCloudAllocation.github_provider_user_id == github_subject
+                )
+            )
+        ).scalar_one()
+        assert allocation.billing_subject_id == orphan_subject_id  # pointer unmoved
+
+        orphan_balance = await store.get_remaining_credit_usd(check, orphan_subject_id)
+        assert orphan_balance.granted_usd == Decimal("5")
+        assert orphan_balance.used_usd == Decimal("2")
+        raced_balance = await store.get_remaining_credit_usd(check, raced_subject.id)
+        assert raced_balance.granted_usd == Decimal("0")  # no free money
+        assert raced_balance.used_usd == Decimal("0")  # no inherited debt
+
+        # The other listed org still healed, durably.
+        healable_subject = await ensure_organization_billing_subject(check, healable_org)
+        healable_balance = await store.get_remaining_credit_usd(check, healable_subject.id)
+        assert healable_balance.granted_usd == Decimal("5")
+
+    assert result.raced == 1
+    assert result.checked == 2
+    # The savepoint made the raced org genuinely still grantless, so the sweep
+    # must not count it as healed.
+    assert raced_org not in result.healed_organization_ids
+    assert healable_org in result.healed_organization_ids
+    assert result.healed == 1
+
+    reclaim_pages = [
+        (error, kwargs)
+        for error, kwargs in paged
+        if isinstance(error, AgentGatewayReclaimLedgerRaced)
+    ]
+    assert len(reclaim_pages) == 1
+    assert reclaim_pages[0][1]["tags"]["action"] == "orphan_reclaim"
 
 
 @pytest.mark.asyncio
