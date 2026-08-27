@@ -34,7 +34,7 @@ class TestAgentAuthStateContractFixture:
         for forbidden in ("provider_hint", "harnessKind", "envVarName", "model_catalog"):
             assert forbidden not in serialized, forbidden
         for entry in fixture["harnesses"]:
-            assert set(entry) <= {"harness_kind", "sources", "settings"}
+            assert set(entry) <= {"harness_kind", "sources", "settings", "unsatisfied_reason"}
             for source in entry["sources"]:
                 assert source["kind"] in ("gateway", "api_key", "provider_config", "seat")
                 if source["kind"] == "gateway":
@@ -57,13 +57,18 @@ class TestAgentAuthStateContractFixture:
     def test_this_renderer_produces_the_fixtures_empty_sources_semantics(self) -> None:
         # The half of the contract this renderer owns TODAY: a selected harness
         # whose sources are all unsatisfiable keeps its entry with an empty list
-        # (the fixture's `grok`), while a harness with no selection row is absent
-        # (the fixture has no `opencode-zen`).
+        # AND names the actual why (the fixture's `grok`), while a harness with
+        # no selection row is absent (the fixture has no `opencode-zen`).
         fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
         fixture_kinds = {entry["harness_kind"] for entry in fixture["harnesses"]}
         assert "grok" in fixture_kinds
         assert "opencode-zen" not in fixture_kinds
+        fixture_grok = next(
+            entry for entry in fixture["harnesses"] if entry["harness_kind"] == "grok"
+        )
 
+        # The fixture's grok scenario: a gateway selection on an account whose
+        # enrollment is still pending and holds no minted key.
         state, _ = agent_auth.render_agent_auth_state(
             _inputs(
                 (_selection(harness="grok", source_kind="gateway"),),
@@ -71,10 +76,13 @@ class TestAgentAuthStateContractFixture:
                 gateway_virtual_key=None,
             )
         )
-        rendered = {entry["harness_kind"]: entry["sources"] for entry in state["harnesses"]}
-        assert rendered == {"grok": []}, (
-            "a selected-but-unsatisfiable harness must keep an empty entry, exactly "
-            "as the fixture's grok does"
+        rendered = {entry["harness_kind"]: entry for entry in state["harnesses"]}
+        assert rendered == {"grok": fixture_grok}, (
+            "a selected-but-unsatisfiable harness must keep an empty entry naming "
+            "the actual why, exactly as the fixture's grok does"
+        )
+        assert fixture_grok["unsatisfied_reason"] == (
+            "managed model access isn't ready on this account yet"
         )
 
     def test_the_fixtures_source_order_is_the_order_this_renderer_emits(self) -> None:
@@ -169,32 +177,38 @@ class TestAgentAuthStateContractFixture:
         assert rendered_keys == fixture_keys
 
     def test_the_fixtures_seat_source_is_what_this_renderer_emits(self) -> None:
-        # Seats v1 (slice 1): claude's fixture entry is one seat source — the
-        # single-seat shape the renderer emits when a pool seat selection meets
-        # one active vault seat. Feed the renderer the fixture's own seat
-        # inputs and require byte-identical output for the claude entry.
+        # Seats (slice 2): claude's fixture entry is the three-seat POOL — the
+        # shape a pool seat selection expands to when the vault holds several
+        # active seats, in vault order (rotation's raw material: the runtime
+        # picks the serving seat, the server supplies the pool). Feed the
+        # renderer the fixture's own seats in vault order and require a
+        # byte-identical claude entry.
         fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
         fixture_claude = next(
             entry for entry in fixture["harnesses"] if entry["harness_kind"] == "claude"
         )
-        assert [source["kind"] for source in fixture_claude["sources"]] == ["seat"]
-        fixture_seat = fixture_claude["sources"][0]
+        assert [source["kind"] for source in fixture_claude["sources"]] == [
+            "seat",
+            "seat",
+            "seat",
+        ]
 
         state, _ = agent_auth.render_agent_auth_state(
             _inputs(
                 (_selection(harness="claude", source_kind="seat"),),
-                seat_values=(
+                seat_values=tuple(
                     (
-                        uuid.UUID(fixture_seat["seat_id"]),
-                        fixture_seat["env"]["CLAUDE_CODE_OAUTH_TOKEN"],
-                    ),
+                        uuid.UUID(source["seat_id"]),
+                        source["env"]["CLAUDE_CODE_OAUTH_TOKEN"],
+                    )
+                    for source in fixture_claude["sources"]
                 ),
             )
         )
         rendered_claude = next(
             entry for entry in state["harnesses"] if entry["harness_kind"] == "claude"
         )
-        assert rendered_claude["sources"] == fixture_claude["sources"]
+        assert rendered_claude == fixture_claude
 
     def test_the_fixtures_provider_config_source_is_a_resolved_env_map(self) -> None:
         # §4.3's ruling: opencode's third source demonstrates additive

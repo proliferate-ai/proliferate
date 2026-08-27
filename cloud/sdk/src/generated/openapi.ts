@@ -942,6 +942,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-auth/seats/{key_id}/limit-hit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Seat Limit Hit Endpoint
+         * @description Relay a runtime-observed seat limit hit (agent_auth spec §3 flow 5).
+         *
+         *     The courier reports the hard signal upward fire-and-forget: cooling and
+         *     the rotation decision stay runtime-local, this route only feeds the
+         *     meters and the audit events (``agent_seat_limit_hit``, plus
+         *     ``agent_seat_rotated`` when another active seat means rotation follows).
+         *     404 for a foreign, vanished, or non-seat key; 204 with no body on success.
+         */
+        post: operations["report_seat_limit_hit_endpoint_v1_cloud_agent_auth_seats__key_id__limit_hit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-auth/selections": {
         parameters: {
             query?: never;
@@ -2410,6 +2436,8 @@ export interface components {
             harness_kind: string;
             /** Sources */
             sources: components["schemas"]["AgentAuthStateSource"][];
+            /** Unsatisfied Reason */
+            unsatisfied_reason?: string | null;
             /** Settings */
             settings?: {
                 [key: string]: unknown;
@@ -2695,6 +2723,24 @@ export interface components {
             value: {
                 [key: string]: string;
             };
+        };
+        /**
+         * AgentSeatLimitHitRequest
+         * @description The courier's relay of a runtime-observed seat limit hit (spec §3 flow 5).
+         *
+         *     ``window`` is which utilization window bound (null when the provider error
+         *     did not say); ``resetAt`` is the reset time the error carried. Cooling is
+         *     runtime-local and never waits on this report — the route only feeds the
+         *     meters and the audit events.
+         */
+        AgentSeatLimitHitRequest: {
+            /** Window */
+            window?: ("five_hour" | "seven_day") | null;
+            /**
+             * Resetat
+             * Format: date-time
+             */
+            resetAt: string;
         };
         /** AnalyticsAcceptedResponse */
         AnalyticsAcceptedResponse: {
@@ -6893,6 +6939,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentApiKeyResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_seat_limit_hit_endpoint_v1_cloud_agent_auth_seats__key_id__limit_hit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSeatLimitHitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

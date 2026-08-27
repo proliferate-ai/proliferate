@@ -1184,7 +1184,7 @@ class TestOldAgentGatewayRoutesAreGone:
         clean, loud failure.
         """
         _, headers = await _authed_user(client)
-        organization_id = uuid.uuid4()
+        org = uuid.uuid4()
         for path, method in (
             ("/v1/cloud/agent-gateway/keys", "get"),
             ("/v1/cloud/agent-gateway/keys", "post"),
@@ -1193,12 +1193,9 @@ class TestOldAgentGatewayRoutesAreGone:
             ("/v1/cloud/agent-gateway/selections", "get"),
             ("/v1/cloud/agent-gateway/selections/claude", "put"),
             ("/v1/cloud/agent-gateway/state", "get"),
-            (f"/v1/cloud/organizations/{organization_id}/agent-gateway/policy", "get"),
-            (f"/v1/cloud/organizations/{organization_id}/agent-gateway/policy", "put"),
-            (
-                f"/v1/cloud/organizations/{organization_id}/agent-gateway/policy/violations",
-                "get",
-            ),
+            (f"/v1/cloud/organizations/{org}/agent-gateway/policy", "get"),
+            (f"/v1/cloud/organizations/{org}/agent-gateway/policy", "put"),
+            (f"/v1/cloud/organizations/{org}/agent-gateway/policy/violations", "get"),
         ):
             response = await getattr(client, method)(path, headers=headers)
             assert response.status_code == 404, f"{method} {path}"
@@ -1235,6 +1232,7 @@ class TestOldAgentGatewayRoutesAreGone:
             ),
             ("POST", "/v1/cloud/agent-auth/keys"),
             ("POST", "/v1/cloud/agent-auth/keys/provider-config"),
+            ("POST", "/v1/cloud/agent-auth/seats/{key_id}/limit-hit"),
             ("POST", "/v1/cloud/agent-auth/state/ack"),
             ("PUT", "/v1/cloud/agent-auth/selections/{harness_kind}"),
             ("PUT", "/v1/cloud/organizations/{organization_id}/agent-auth/policy"),

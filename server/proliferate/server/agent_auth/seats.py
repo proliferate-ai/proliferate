@@ -11,20 +11,27 @@ learn neither email nor plan on its own).
 No probe loop lives here: verification is the ordinary launch probe, run
 runtime-side under the seat's isolated home after the next delivery applies
 (spec §3 flow 2's "Verification is the ordinary launch probe"). Usage probing
-and rotation are later slices.
+is a later slice; slice 2 adds the limit-hit intake (the courier's relay of a
+runtime-observed limit error — the audit half of rotation, spec §3 flow 5's
+hard signal; the rotation *decision* stays runtime-local).
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION,
+    AGENT_API_KEY_STATUS_ACTIVE,
+    AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS,
+    AGENT_AUTH_SOURCE_SEAT,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import AgentApiKeyRecord
+from proliferate.server.agent_auth.budget import get_gateway_enrollment_for_user
 from proliferate.server.api_errors import CloudApiError
 from proliferate.server.event_logging import log_cloud_event
 
@@ -130,3 +137,86 @@ async def create_seat(
         api_key_id=str(record.id),
     )
     return record
+
+
+async def _seat_harness_kind(db: AsyncSession, *, user_id: UUID) -> str:
+    """The harness a limit hit belongs to, derived from the caller's selections.
+
+    The wire report carries no harness (the seat is account-global), so the
+    hit is attributed to the harness kind of the caller's ENABLED seat
+    selections. None, or more than one distinct kind, falls back to the one
+    seat-capable kind — seats are claude-only this slice
+    (``AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS``), so the fallback cannot
+    misattribute.
+    """
+    selections = await agent_gateway_store.list_auth_selections(db, user_id=user_id)
+    kinds = {
+        selection.harness_kind
+        for selection in selections
+        if selection.enabled and selection.source_kind == AGENT_AUTH_SOURCE_SEAT
+    }
+    if len(kinds) == 1:
+        return next(iter(kinds))
+    return AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS[0]
+
+
+async def report_seat_limit_hit(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    api_key_id: UUID,
+    window: str | None,
+    reset_at: datetime,
+) -> None:
+    """Record a runtime-observed seat limit hit (spec §3 flow 5, hard signal).
+
+    The courier relays the hit fire-and-forget; cooling is runtime-local and
+    never waits on this. The server never picks the next seat — when another
+    active seat exists the runtime will rotate, so ``agent_seat_rotated`` is
+    logged beside the hit, carrying the seat rotated AWAY FROM. Events carry
+    ids only, never token material.
+    """
+    keys = await agent_gateway_store.list_agent_api_keys(db, user_id=user_id, include_revoked=True)
+    hit = next((record for record in keys if record.id == api_key_id), None)
+    if hit is None or hit.kind != AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION:
+        # Foreign, vanished, and non-seat keys are indistinguishable to the
+        # caller — one 404 in the surface's standard envelope.
+        raise CloudApiError(
+            "agent_api_key_not_found",
+            "Seat not found.",
+            status_code=404,
+        )
+
+    harness_kind = await _seat_harness_kind(db, user_id=user_id)
+    # Org attribution follows the gateway payer law's default-org resolution;
+    # omitted when the caller has no enrollment (log_cloud_event drops None).
+    enrollment = await get_gateway_enrollment_for_user(db, user_id)
+    organization_id = (
+        str(enrollment.organization_id)
+        if enrollment is not None and enrollment.organization_id is not None
+        else None
+    )
+
+    log_cloud_event(
+        "agent_seat_limit_hit",
+        user_id=str(user_id),
+        organization_id=organization_id,
+        api_key_id=str(api_key_id),
+        harness_kind=harness_kind,
+        window=window,
+        reset_at=reset_at.isoformat(),
+    )
+    has_other_active_seat = any(
+        record.id != api_key_id
+        and record.kind == AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION
+        and record.status == AGENT_API_KEY_STATUS_ACTIVE
+        for record in keys
+    )
+    if has_other_active_seat:
+        log_cloud_event(
+            "agent_seat_rotated",
+            user_id=str(user_id),
+            organization_id=organization_id,
+            api_key_id=str(api_key_id),
+            harness_kind=harness_kind,
+        )
