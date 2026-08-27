@@ -1,0 +1,164 @@
+# Component-library doctrine — the mechanical half of specs/DESIGN_SYSTEM.md,
+# enforced by scripts/check_component_library.py (recorded 2026-08-26: the
+# last checker outside rules-as-data). The checker keys its internal slugs and
+# its shrink-only ledger (scripts/component_library_allowlist.json — count +
+# justification per site, fails in both directions like the appearance census)
+# on the slug; the record id below is what its diagnostics cite.
+
+[[rule]]
+id = "PROD-COMPLIB-1"
+title = "No hand-rolled overlay or control roles"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_component_library.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/**, apps/web/src/**, apps/mobile/src/**"
+
+rule = """A raw element must not carry role="dialog|menu|listbox|tooltip|button"
+(literal or conditional spelling); those shapes are owned by the library."""
+alternative = """Compose the library component that owns the shape — ModalShell,
+PopoverButton, DropdownMenu, Tooltip, Button."""
+why = """A hand-written role re-implements an overlay or control the library already
+owns and forks its keyboard, focus, and dismissal contract (DESIGN_SYSTEM.md review
+check 3). Survivors that predate the rule are named one by one in the allowlist with
+the reason each still stands."""
+
+[rule.example]
+bad = "<div role=\"dialog\">…</div> in a feature component"
+good = "<ModalShell …>…</ModalShell>"
+
+[[rule]]
+id = "PROD-COMPLIB-2"
+title = "Every sanctioned component has a consumer"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_component_library.py"
+mode = "lint"
+scope = "specs/DESIGN_SYSTEM.md (the sanctioned index)"
+
+rule = """Every row of the sanctioned index must have at least one call site that is
+not itself, a test, or a playground surface."""
+alternative = """Retire the row, or add an `incubating:` note naming the in-flight
+consumer — the note expires after one release."""
+why = """A sanctioned component with zero consumers is dead vocabulary — the exact
+failure the index exists to catch, where feature code hand-rolls the shape instead."""
+
+[rule.example]
+bad = "an index row for `Toolbar` while nothing imports primitives/toolbar.tsx"
+good = "the row is struck, or a consumer lands with it"
+
+[[rule]]
+id = "PROD-COMPLIB-3"
+title = "Sanctioned components carry a JSDoc contract"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_component_library.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/primitives/**, apps/packages/product-client/src/components/patterns/**"
+
+rule = """Each sanctioned component must carry a non-empty `/** … */` block at its
+definition (glyph modules excepted: their index row documents the set)."""
+alternative = """Write the contract at the definition; the index row names the shape,
+the JSDoc states what it promises."""
+why = """Without the block, the index row is the only place the contract is written
+down, and it drifts from the code it describes."""
+
+[rule.example]
+bad = "export function Tooltip(…) with no doc block above it"
+good = "/** Anchored hover/focus label; never interactive. */ export function Tooltip(…)"
+
+[[rule]]
+id = "PROD-COMPLIB-4"
+title = "Index rows link files that exist"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_component_library.py"
+mode = "lint"
+scope = "specs/DESIGN_SYSTEM.md (the sanctioned index)"
+
+rule = """Every sanctioned-index row must link a file that exists."""
+alternative = """Strike the row in the commit that removes the file, or fix the link."""
+why = """The index is the closed set; a row pointing at nothing is a phantom member."""
+
+[rule.example]
+bad = "| `Chip` | [chip.tsx](../apps/…/chip.tsx) | … | with the file deleted"
+good = "the row leaves with the file"
+
+[[rule]]
+id = "PROD-COMPLIB-5"
+title = "Incubating notes expire after one release"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_component_library.py"
+mode = "lint"
+scope = "specs/DESIGN_SYSTEM.md (the sanctioned index)"
+
+rule = """An `incubating:` note on an index row may not outlive one release."""
+alternative = """Strike the note once the named slice landed, or retire the
+component."""
+why = """By definition the note names an in-flight PR; a note that outlives its
+release is a dead row wearing an excuse."""
+
+[rule.example]
+bad = "incubating: PR #1200 — three releases later"
+good = "the note is gone and the consumer exists, or the row is retired"
+
+[[rule]]
+id = "PROD-COMPLIB-6"
+title = "Every module in a library tier is indexed or named as support"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_component_library.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/primitives/**, apps/packages/product-client/src/components/patterns/**"
+
+rule = """A module inside a library tier directory must have an index row, or be a
+named support module (NON_COMPONENT_TIER_FILES / support directories), or be a
+private part of an indexed component imported only from its own folder."""
+alternative = """Add the row (and its JSDoc), move the module to a support directory,
+or name it in NON_COMPONENT_TIER_FILES with the reason it is not a component."""
+why = """The index is the closed set; without this rule a component can be dropped
+into primitives/ with no row and inherit no documentation requirement either."""
+
+[rule.example]
+bad = "primitives/badge.tsx with no index row and no support-file entry"
+good = "an index row for `Badge`, or the file listed as support with a reason"
+
+[[rule]]
+id = "PROD-COMPLIB-7"
+title = "Library patterns do not import feature code"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_component_library.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/primitives/patterns/**"
+
+rule = """A kit member under primitives/patterns/ must not import from
+components/**."""
+alternative = """Patterns take ReactNode slots; the feature composes the pattern, not
+the reverse."""
+why = """Doctrine D3 (placement): library code that reaches up into feature code is
+no longer library code, and the dependency direction inverts silently."""
+
+[rule.example]
+bad = "primitives/patterns/list/Row.tsx importing components/chat/Avatar"
+good = "Row takes a `leading: ReactNode` slot; chat passes its Avatar"
+
+[[rule]]
+id = "PROD-COMPLIB-8"
+title = "Kit directories have index rows"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_component_library.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/primitives/patterns/**"
+
+rule = """A kit directory under primitives/patterns/ must have at least one
+sanctioned-index row placing its members in it."""
+alternative = """Add the rows for the kit's members, or remove the directory."""
+why = """A kit directory without index rows is unsanctioned vocabulary that looks
+sanctioned by its address."""
+
+[rule.example]
+bad = "primitives/patterns/cards/ with no `cards/` rows in the index"
+good = "index rows for the kit's members under the patterns tier"

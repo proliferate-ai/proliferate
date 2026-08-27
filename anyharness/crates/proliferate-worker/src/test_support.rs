@@ -135,7 +135,10 @@ pub(crate) fn events(timeline: &Timeline) -> Vec<CapturedEvent> {
 }
 
 /// The index in the shared timeline of the first step matching a predicate.
-pub(crate) fn position(timeline: &Timeline, mut matches: impl FnMut(&Step) -> bool) -> Option<usize> {
+pub(crate) fn position(
+    timeline: &Timeline,
+    mut matches: impl FnMut(&Step) -> bool,
+) -> Option<usize> {
     steps(timeline).iter().position(matches)
 }
 
@@ -283,10 +286,10 @@ impl InstrumentedServer {
                 let (method, path) = request_line(&raw);
                 let line = format!("{method} {path}");
                 thread_hits.lock().unwrap().push(line.clone());
-                timeline
-                    .lock()
-                    .unwrap()
-                    .push(Step::Request { server: label, line });
+                timeline.lock().unwrap().push(Step::Request {
+                    server: label,
+                    line,
+                });
                 let (status, body) = routes
                     .iter()
                     .find(|(route_method, route_path, _, _)| {

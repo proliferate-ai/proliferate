@@ -158,7 +158,6 @@ def measure_importers(base: Path, folders: list[Path]) -> dict[Path, set[str]]:
 
 def collect_violations(root: Path | None = None) -> list[Violation]:
     base = Path(root).resolve() if root is not None else REPO_ROOT
-    server_root = base.joinpath(*SERVER_RELATIVE)
     folders = system_folders(base)
     violations: list[Violation] = []
     valid: list[Path] = []

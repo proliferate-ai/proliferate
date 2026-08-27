@@ -1796,12 +1796,11 @@ def _declares_binding_in_scope(
                     break
                 cursor += 1
             declarator = tokens[declarator_start:cursor]
-            if binding in _binding_names_in_pattern(declarator, {binding}):
-                if not any(
-                    token.value == "import" and token.start in tracked_import_starts
-                    for token in declarator
-                ):
-                    return True
+            if binding in _binding_names_in_pattern(declarator, {binding}) and not any(
+                token.value == "import" and token.start in tracked_import_starts
+                for token in declarator
+            ):
+                return True
             if cursor >= len(tokens) or tokens[cursor].value == ";":
                 break
             cursor += 1
@@ -3156,4 +3155,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except ValueError as error:
         print(error, file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(2) from error

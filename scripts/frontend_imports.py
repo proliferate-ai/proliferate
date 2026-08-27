@@ -1288,9 +1288,12 @@ def _function_return_annotation_contains_import(tokens: list[Token], import_inde
         # later arrow after the candidate means the earlier one belonged to
         # the declared return type.
         top_level_arrows = _top_level_arrow_indices(tokens, colon_index + 1, import_index)
-        if top_level_arrows and not _parameter_list_has_declaration_owner(tokens, open_index):
-            if not _has_later_arrow_before_statement_end(tokens, import_index):
-                continue
+        if (
+            top_level_arrows
+            and not _parameter_list_has_declaration_owner(tokens, open_index)
+            and not _has_later_arrow_before_statement_end(tokens, import_index)
+        ):
+            continue
         return True
     return False
 
@@ -2478,9 +2481,10 @@ def _punctuator_at(tokens: list[Token], index: int, value: str) -> bool:
 def _last_top_level_punctuator(tokens: list[Token], value: str) -> int | None:
     top_level = set(_constant_top_level_indices(tokens))
     for index in range(len(tokens) - len(value), -1, -1):
-        if all(index + offset in top_level for offset in range(len(value))):
-            if _punctuator_at(tokens, index, value):
-                return index
+        if all(index + offset in top_level for offset in range(len(value))) and _punctuator_at(
+            tokens, index, value
+        ):
+            return index
     return None
 
 
@@ -2570,7 +2574,7 @@ def _constant_primitive(tokens: list[Token]) -> object:
                 return None
 
     if tokens and all(token.value.isdigit() or token.value == "." for token in tokens):
-        if any(left.end != right.start for left, right in zip(tokens, tokens[1:])):
+        if any(left.end != right.start for left, right in zip(tokens, tokens[1:], strict=False)):
             return _UNKNOWN_CONSTANT
         value = "".join(token.value for token in tokens)
         if value.count(".") <= 1 and value.replace(".", "").isdigit():
@@ -2637,13 +2641,12 @@ def _constant_expression_value(tokens: list[Token]) -> object:
             return _UNKNOWN_CONSTANT
         if isinstance(left, str) or isinstance(right, str):
             return _javascript_string(left) + _javascript_string(right)
-        if isinstance(left, (int, float, bool)) or left is None:
-            if isinstance(right, (int, float, bool)) or right is None:
-                left_number = 0 if left is None else int(left) if isinstance(left, bool) else left
-                right_number = (
-                    0 if right is None else int(right) if isinstance(right, bool) else right
-                )
-                return left_number + right_number
+        if (isinstance(left, (int, float, bool)) or left is None) and (
+            isinstance(right, (int, float, bool)) or right is None
+        ):
+            left_number = 0 if left is None else int(left) if isinstance(left, bool) else left
+            right_number = 0 if right is None else int(right) if isinstance(right, bool) else right
+            return left_number + right_number
         return _UNKNOWN_CONSTANT
 
     return _constant_primitive(tokens)

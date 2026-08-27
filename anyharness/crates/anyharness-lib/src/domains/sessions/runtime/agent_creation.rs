@@ -317,8 +317,8 @@ impl SessionRuntime {
             let _ = handle.close().await;
         }
         self.acp_manager.remove_session(session_id).await;
-        self.session_service
-            .delete_session(session_id)}
+        self.session_service.delete_session(session_id)
+    }
 }
 
 fn map_ordinary_start_error(error: StartNewAgentSessionError) -> CreateOrdinaryAgentSessionError {

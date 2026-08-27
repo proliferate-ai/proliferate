@@ -291,11 +291,11 @@ jobs:
 
       - name: Ruff check
         if: needs.changes.outputs.relevant != 'false'
-        run: uv run --python 3.12 --frozen --extra dev ruff check proliferate/ tests/
+        run: uv run --python 3.12 --frozen --extra dev ruff check proliferate/ tests/ scripts/
 
       - name: Ruff format check
         if: needs.changes.outputs.relevant != 'false'
-        run: uv run --python 3.12 --frozen --extra dev ruff format --check proliferate/ tests/
+        run: uv run --python 3.12 --frozen --extra dev ruff format --check proliferate/ tests/ scripts/
 
       - name: Mypy diagnostic ratchet
         if: needs.changes.outputs.relevant != 'false'

@@ -1,0 +1,30 @@
+# Native-tool debt records — suppressions of a real clippy lint, declared here
+# so the suppression is visible constitution rather than a silent config line.
+# A record here is `status = "leaks"` with a tracking issue; closing it means
+# fixing the sites and flipping the lint back on in the root Cargo.toml.
+
+[[rule]]
+id = "AH-CLIPPY-1"
+title = "No mutex guard held across an await"
+owner = "anyharness"
+status = "leaks"
+gap = "#2276"
+enforced_by = "review"
+mode = "review"
+scope = "anyharness/crates/**, apps/desktop/src-tauri/**"
+
+rule = """A synchronous MutexGuard must not be held across an `.await` point
+(clippy `await_holding_lock`)."""
+alternative = """Drop the guard before the await — scope the critical section in a
+block that ends before `.await` — or use an async-aware mutex where the critical
+section genuinely spans the await."""
+why = """A guard held across an await can deadlock the runtime the moment the
+awaited task needs the same lock. 123 sites fire today (inventory 2026-08-26);
+each fix is a lock-scope restructure in the runtime that is the product, so the
+lint is `allow`ed in `[workspace.lints.clippy]` (root Cargo.toml) with this record
+as the tracked debt and #2276 as the queued careful pass — never a silent
+suppression. Ruled 2026-08-26 (lint wiring)."""
+
+[rule.example]
+bad = "let guard = state.lock().unwrap(); client.send(&guard.payload).await;"
+good = "let payload = { state.lock().unwrap().payload.clone() }; client.send(&payload).await;"

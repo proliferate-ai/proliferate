@@ -415,7 +415,7 @@ const ORBIT_DELAYS = [
         and must not be the one spelling the ownership gate cannot see."""
         for declaration in ("backdrop-filter", "-webkit-backdrop-filter"):
             with self.subTest(declaration=declaration):
-                source = ".some-panel {\n  %s: blur(24px);\n}\n" % declaration
+                source = f".some-panel {{\n  {declaration}: blur(24px);\n}}\n"
                 self.assertEqual(
                     [
                         violation.rule_id
@@ -427,7 +427,7 @@ const ORBIT_DELAYS = [
     def test_authored_backdrop_filter_in_product_source_covers_both_spellings(self) -> None:
         for declaration in ("backdrop-filter", "-webkit-backdrop-filter"):
             with self.subTest(declaration=declaration):
-                source = 'const style = { cssText: "%s: blur(8px)" };\n' % declaration
+                source = f'const style = {{ cssText: "{declaration}: blur(8px)" }};\n'
                 self.assertEqual(
                     [violation.rule_id for violation in check_source(Path("Panel.tsx"), source)],
                     ["PROD-SCALE-27"],

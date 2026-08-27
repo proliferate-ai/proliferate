@@ -257,7 +257,8 @@ async fn create_coding_workspace(
     let workspace_name = result
         .workspace
         .path
-        .split('/').rfind(|segment| !segment.is_empty())
+        .split('/')
+        .rfind(|segment| !segment.is_empty())
         .map(str::to_string);
     Ok(json!({
         "coworkWorkspaceId": result.managed_workspace.public_id,

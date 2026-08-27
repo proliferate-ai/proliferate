@@ -20,9 +20,7 @@ use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use super::LiveSessionManager;
-use crate::live::sessions::actor::command::{
-    ConditionalUnloadOutcome, UnloadRetainedReason,
-};
+use crate::live::sessions::actor::command::{ConditionalUnloadOutcome, UnloadRetainedReason};
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
 
 #[cfg(test)]

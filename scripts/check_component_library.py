@@ -130,6 +130,21 @@ REGISTRY_ROW_RE = re.compile(
 )
 INCUBATING_RE = re.compile(r"\bincubating:", re.IGNORECASE)
 
+# Each mechanical check is a `[[rule]]` record in lints/product/component-library.toml
+# (PROD-COMPLIB-*); the slug stays the checker's internal key and the allowlist's,
+# the record id is what a diagnostic cites.
+RECORD_IDS = {
+    "hand-rolled-overlay-role": "PROD-COMPLIB-1",
+    "dead-library-component": "PROD-COMPLIB-2",
+    "missing-library-jsdoc": "PROD-COMPLIB-3",
+    "registry-row-without-file": "PROD-COMPLIB-4",
+    "expired-incubating-note": "PROD-COMPLIB-5",
+    "tier-file-without-registry-row": "PROD-COMPLIB-6",
+    "kit-imports-feature-code": "PROD-COMPLIB-7",
+    "kit-directory-without-registry-rows": "PROD-COMPLIB-8",
+}
+RECORD_PATH = "lints/product/component-library.toml"
+
 ALLOWLIST_RULES = {
     "hand-rolled-overlay-role": "handRolledOverlayRoles",
     "dead-library-component": "deadLibraryComponents",
@@ -145,7 +160,11 @@ class Violation:
     message: str
 
     def format(self) -> str:
-        return f"{self.relative_path}:{self.lineno}: [{self.rule_id}] {self.message}"
+        record = RECORD_IDS.get(self.rule_id, "PROD-COMPLIB-?")
+        return (
+            f"{self.relative_path}:{self.lineno}: [{record} {self.rule_id}] {self.message} "
+            f"({RECORD_PATH})"
+        )
 
 
 @dataclass(frozen=True)
@@ -655,7 +674,8 @@ def main(argv: list[str] | None = None) -> int:
         seen = observed.get((rule_id, relative_path), 0)
         if seen < entry.count:
             stale.append(
-                f"{relative_path}:1: [{rule_id}] stale allowance (observed {seen}, "
+                f"{relative_path}:1: [{RECORD_IDS.get(rule_id, 'PROD-COMPLIB-?')} {rule_id}] "
+                f"stale allowance (observed {seen}, "
                 f"allowed {entry.count}); the allowlist only shrinks — delete the entry "
                 f"in the commit that fixed the site"
             )

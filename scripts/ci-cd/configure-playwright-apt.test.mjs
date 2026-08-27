@@ -266,8 +266,8 @@ test("guards every hosted Playwright dependency install in its own run block", a
   assert.equal(installs.length, 1, "hosted --with-deps call-site census changed");
   assert.equal(
     helpers.length,
-    2,
-    "one hosted --with-deps call and Cargo need one helper each",
+    3,
+    "one hosted --with-deps call and the two Cargo jobs (cargo-check, rust-lint) need one helper each",
   );
   assert.deepEqual(
     new Map(
@@ -319,15 +319,28 @@ test("guards every hosted Playwright dependency install in its own run block", a
 test("guards Cargo Tauri apt dependencies before the unchanged install commands", async () => {
   const path = join(WORKFLOWS_ROOT, "ci.yml");
   const lines = (await readFile(path, "utf8")).split("\n");
+  // Two Cargo jobs compile the Tauri crates on hosted runners — the test lane
+  // and the rust-lint lane (clippy builds every target too) — so each carries
+  // its own guarded Tauri apt step, and the census expects exactly one per job.
   const cargoJobs = lines
     .map((line, index) => ({ line, index }))
-    .filter(({ line }) => line === "  cargo-check:");
+    .filter(({ line }) => line === "  cargo-check:" || line === "  rust-lint:");
   const tauriSteps = lines
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.trim() === "- name: Install system deps (Tauri)");
 
-  assert.equal(cargoJobs.length, 1, "expected exactly one cargo-check job");
-  assert.equal(tauriSteps.length, 1, "expected exactly one Tauri dependency step");
+  assert.equal(cargoJobs.length, 2, "expected the cargo-check and rust-lint jobs");
+  assert.equal(tauriSteps.length, 2, "expected one Tauri dependency step per Cargo job");
+
+  for (const { index: cargoJobIndex, line: jobLine } of cargoJobs) {
+    const nextJobIndex = lines.findIndex(
+      (line, index) => index > cargoJobIndex && /^  [a-z0-9-]+:$/.test(line),
+    );
+    const inJob = tauriSteps.filter(
+      ({ index }) => index > cargoJobIndex && (nextJobIndex === -1 || index < nextJobIndex),
+    );
+    assert.equal(inJob.length, 1, `${jobLine.trim()} needs exactly one Tauri dependency step`);
+  }
 
   const [{ index: cargoJobIndex }] = cargoJobs;
   const [{ index: tauriStepIndex }] = tauriSteps;

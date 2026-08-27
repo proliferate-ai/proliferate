@@ -84,7 +84,8 @@ impl WorkspaceStore {
                 [id],
                 map_checkpoint,
             )
-            .optional()})
+            .optional()
+        })
     }
 
     /// The unexpired checkpoint captured at a `(session_id, turn_id)` boundary,
@@ -113,7 +114,8 @@ impl WorkspaceStore {
                 params![session_id, turn_id],
                 map_checkpoint,
             )
-            .optional()})
+            .optional()
+        })
     }
 
     /// Backfill the `turn_id` a turn-start checkpoint was captured against, once
@@ -172,7 +174,8 @@ impl WorkspaceStore {
                  ORDER BY created_at DESC, id DESC"
             ))?;
             let rows = stmt.query_map([workspace_id], map_checkpoint)?;
-            rows.collect::<rusqlite::Result<Vec<_>>>()})
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+        })
     }
 
     /// Workspace ids holding at least one unexpired checkpoint.
@@ -182,7 +185,8 @@ impl WorkspaceStore {
                 "SELECT DISTINCT workspace_id FROM workspace_checkpoints WHERE expired_at IS NULL",
             )?;
             let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-            rows.collect::<rusqlite::Result<Vec<_>>>()})
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+        })
     }
 
     /// Workspace ids holding ANY checkpoint row (expired or not). The retention
@@ -193,7 +197,8 @@ impl WorkspaceStore {
             let mut stmt =
                 conn.prepare("SELECT DISTINCT workspace_id FROM workspace_checkpoints")?;
             let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-            rows.collect::<rusqlite::Result<Vec<_>>>()})
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+        })
     }
 
     /// Delete every checkpoint row for a workspace. Purge calls this only after

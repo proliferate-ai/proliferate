@@ -129,12 +129,14 @@ pub(super) fn install_agent_process_from_pin(
             package_subdir,
             executable_relpath,
         } => {
-            if let Some(reporter) = reporter { reporter.report(
+            if let Some(reporter) = reporter {
+                reporter.report(
                     &ArtifactRole::AgentProcess,
                     InstallProgressPhase::Installing,
                     0,
                     None,
-                ) }
+                )
+            }
             let package = format!("git+{repo}#{git_ref}");
             install_managed_npm_package(
                 &package,
@@ -152,12 +154,14 @@ pub(super) fn install_agent_process_from_pin(
             )
         }
         ResolvedPinSource::Npm { package, args, .. } => {
-            if let Some(reporter) = reporter { reporter.report(
+            if let Some(reporter) = reporter {
+                reporter.report(
                     &ArtifactRole::AgentProcess,
                     InstallProgressPhase::Installing,
                     0,
                     None,
-                ) }
+                )
+            }
             let executable_relpath = format!("node_modules/.bin/{executable_name}");
             install_managed_npm_package(
                 package,
@@ -203,12 +207,14 @@ pub(super) fn install_agent_process_from_pin(
                 }
                 make_executable(&exec_path)?;
                 let downloaded = target.download_size_bytes.unwrap_or(0);
-                if let Some(reporter) = reporter { reporter.report(
+                if let Some(reporter) = reporter {
+                    reporter.report(
                         &ArtifactRole::AgentProcess,
                         InstallProgressPhase::Finalizing,
                         downloaded,
                         target.download_size_bytes,
-                    ) }
+                    )
+                }
                 let staged_launcher = managed_dir.join(format!(".{}-launcher.next", kind.as_str()));
                 let _ = std::fs::remove_file(&staged_launcher);
                 generate_launcher_script(

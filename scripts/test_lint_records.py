@@ -129,9 +129,9 @@ class LoaderTests(unittest.TestCase):
         )
 
     def test_review_mode_exempts_enforced_by_from_the_file_check(self) -> None:
-        # `mode = "review"` is the documented escape hatch (lints/server/gaps.toml):
-        # no checker exists yet, so `enforced_by = "review"` is a sentinel, not
-        # a path, and must not be required to resolve to a file.
+        # `mode = "review"` is the documented escape hatch (the agent_auth
+        # review-mode records): no checker exists yet, so `enforced_by = "review"`
+        # is a sentinel, not a path, and must not be required to resolve to a file.
         reviewed = VALID_RULE.replace(
             'enforced_by = "scripts/check_server_boundaries.py"', 'enforced_by = "review"'
         ).replace('mode = "lint"', 'mode = "review"')
@@ -206,9 +206,11 @@ class MainFloorTests(unittest.TestCase):
 
     def test_missing_lints_tree_fails(self) -> None:
         root = self._lints_root({})
-        with mock.patch.object(lint_records, "LINTS_ROOT", root / "gone"):
-            with self.assertRaises(SystemExit) as ctx:
-                lint_records.main()
+        with (
+            mock.patch.object(lint_records, "LINTS_ROOT", root / "gone"),
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            lint_records.main()
         self.assertIn("no rule records found", str(ctx.exception))
 
     def test_owner_with_zero_records_fails(self) -> None:
@@ -219,9 +221,11 @@ class MainFloorTests(unittest.TestCase):
                 "frontend": self._rule_for("frontend", "FE-TEST-1"),
             }
         )
-        with mock.patch.object(lint_records, "LINTS_ROOT", root):
-            with self.assertRaises(SystemExit) as ctx:
-                lint_records.main()
+        with (
+            mock.patch.object(lint_records, "LINTS_ROOT", root),
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            lint_records.main()
         self.assertIn("owners with zero rule records: product", str(ctx.exception))
 
     def test_all_four_owners_present_passes(self) -> None:

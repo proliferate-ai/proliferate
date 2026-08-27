@@ -90,7 +90,10 @@ pub enum RouteAuthError {
     #[error("{harness_kind} isn't set up — pick a method in Settings → Agents")]
     NoConfiguredSource { harness_kind: String },
     #[error("agent-auth source for '{harness_kind}' is incomplete: {detail}")]
-    SelectionIncomplete { harness_kind: String, detail: String },
+    SelectionIncomplete {
+        harness_kind: String,
+        detail: String,
+    },
     #[error("agent-auth route for '{harness_kind}' is unsupported: {detail}")]
     UnsupportedRoute {
         harness_kind: String,

@@ -252,7 +252,8 @@ class Rgb:
     b: float
 
     def hex(self) -> str:
-        return f"#{round(max(0.0, min(255.0, self.r))):02x}{round(max(0.0, min(255.0, self.g))):02x}{round(max(0.0, min(255.0, self.b))):02x}"
+        channels = (round(max(0.0, min(255.0, channel))) for channel in (self.r, self.g, self.b))
+        return "#" + "".join(f"{channel:02x}" for channel in channels)
 
 
 class Unresolvable(Exception):

@@ -9,3 +9,6 @@ description = "Frozen wire contract for the Supervisor-owned runtime update mail
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[lints]
+workspace = true

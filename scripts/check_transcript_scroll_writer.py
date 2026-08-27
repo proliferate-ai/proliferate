@@ -155,4 +155,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except ValueError as error:
         print(error, file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(2) from error

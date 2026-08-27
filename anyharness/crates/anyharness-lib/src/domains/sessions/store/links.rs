@@ -178,7 +178,8 @@ impl SessionStore {
                 )",
                 params![session_id, relation.as_str()],
                 |row| row.get(0),
-            )})
+            )
+        })
     }
 
     /// Does this session parent a link that holds a durable wake schedule
@@ -207,7 +208,8 @@ impl SessionStore {
                 )",
                 params![session_id, SessionLinkRelation::Subagent.as_str()],
                 |row| row.get(0),
-            )})
+            )
+        })
     }
 
     pub fn find_parent_by_inbound_link_relation(
@@ -228,7 +230,8 @@ impl SessionStore {
                 params![session_id, relation.as_str()],
                 map_session,
             )
-            .optional()})
+            .optional()
+        })
     }
 }
 

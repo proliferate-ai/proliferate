@@ -221,7 +221,8 @@ impl CoworkStore {
                  SET closed_at = COALESCE(closed_at, ?1)
                  WHERE parent_session_id = ?2",
                 params![closed_at, parent_session_id],
-            )})
+            )
+        })
     }
 
     pub fn insert_coding_session_link_with_workspace_limit(

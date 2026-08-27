@@ -83,9 +83,15 @@ EXTENSIONS = {".ts", ".tsx"}
 # are the only source exceptions; generated CSS defaults are outside the scanned
 # roots and are drift-locked against these tables by appearance-css-drift.test.ts.
 FIXED_TEXT_SOURCE_EXCEPTIONS = {
-    "apps/packages/product-client/src/lib/domain/preferences/appearance.ts": "canonical UI, readable-code, window-zoom, and glyph ladders",
-    "apps/packages/product-client/src/lib/domain/preferences/appearance.test.ts": "exact canonical appearance-ramp pins",
-    "apps/packages/product-client/src/lib/domain/preferences/appearance-css-drift.test.ts": "exact generated-token drift pins",
+    "apps/packages/product-client/src/lib/domain/preferences/appearance.ts": (
+        "canonical UI, readable-code, window-zoom, and glyph ladders"
+    ),
+    "apps/packages/product-client/src/lib/domain/preferences/appearance.test.ts": (
+        "exact canonical appearance-ramp pins"
+    ),
+    "apps/packages/product-client/src/lib/domain/preferences/appearance-css-drift.test.ts": (
+        "exact generated-token drift pins"
+    ),
 }
 GLYPH_SOURCE_EXCEPTIONS: dict[str, str] = {}
 STATUS_DOT_SOURCE_EXCEPTIONS: dict[str, str] = {}
@@ -455,10 +461,8 @@ def raw_hex_is_allowed(path: Path, source: str, match: re.Match[str]) -> bool:
         line,
         re.IGNORECASE,
     )
-    if digits.isdigit() and len(digits) in {3, 4} and not color_bearing:
-        # PR/issue identifiers such as #737 and #1042 are not CSS colors.
-        return True
-    return False
+    # PR/issue identifiers such as #737 and #1042 are not CSS colors.
+    return bool(digits.isdigit() and len(digits) in {3, 4} and not color_bearing)
 
 
 def foreground_alpha_percent(raw_alpha: str) -> float:
@@ -747,7 +751,8 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
                     UNOWNED_BACKDROP_RULE,
                     path,
                     line_number(source, match.start()),
-                    f"{matched_text(match)} declared by `{' '.join(selector.split()).lstrip('} ')}`",
+                    f"{matched_text(match)} declared by "
+                    f"`{' '.join(selector.split()).lstrip('} ')}`",
                 )
             )
 

@@ -1753,7 +1753,8 @@ fn coding_workspace_slug(value: &str) -> Option<String> {
 
 fn coding_workspace_name_from_branch(branch_name: &str) -> Option<String> {
     branch_name
-        .split('/').rfind(|segment| !segment.trim().is_empty())
+        .split('/')
+        .rfind(|segment| !segment.trim().is_empty())
         .and_then(coding_workspace_slug)
 }
 

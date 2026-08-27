@@ -219,8 +219,7 @@ impl SessionStore {
                      )
                      ORDER BY seq ASC",
                 )?;
-                let rows =
-                    stmt.query_map(params![session_id, event_limit], map_event)?;
+                let rows = stmt.query_map(params![session_id, event_limit], map_event)?;
                 return rows.collect();
             }
 
@@ -270,8 +269,7 @@ impl SessionStore {
                  )
                  ORDER BY seq ASC",
             )?;
-            let rows =
-                stmt.query_map(params![session_id, before_seq, limit], map_event)?;
+            let rows = stmt.query_map(params![session_id, before_seq, limit], map_event)?;
             rows.collect()
         })
     }
@@ -408,8 +406,7 @@ impl SessionStore {
                  )
                  ORDER BY seq ASC",
             )?;
-            let rows =
-                stmt.query_map(params![session_id, after_seq, limit], map_event)?;
+            let rows = stmt.query_map(params![session_id, after_seq, limit], map_event)?;
             rows.collect()
         })
     }
@@ -428,8 +425,7 @@ impl SessionStore {
                  ORDER BY seq ASC
                  LIMIT ?3",
             )?;
-            let rows =
-                stmt.query_map(params![session_id, after_seq, limit], map_event)?;
+            let rows = stmt.query_map(params![session_id, after_seq, limit], map_event)?;
             rows.collect()
         })
     }

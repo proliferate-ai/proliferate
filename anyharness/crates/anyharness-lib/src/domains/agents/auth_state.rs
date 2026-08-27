@@ -27,7 +27,9 @@
 //! `Option` placeholders filled by later rungs. Modeling the types now is what
 //! lets the derivation handle them without a later shape change.
 
-use crate::domains::agents::model::{CliAuthState, CredentialState, ResolvedAgent, ResolvedAgentStatus};
+use crate::domains::agents::model::{
+    CliAuthState, CredentialState, ResolvedAgent, ResolvedAgentStatus,
+};
 
 // ---------------------------------------------------------------------------
 // Facts: orthogonal, surface-agnostic
@@ -156,8 +158,7 @@ pub enum LoginHandoff {
 }
 
 /// The full orthogonal fact struct for one harness in one scope.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct AgentAuthFacts {
     /// The harness's artifacts resolved as installed.
     pub installed: bool,
@@ -175,7 +176,6 @@ pub struct AgentAuthFacts {
     pub gateway: Option<GatewayHealth>,
     pub handoff: Option<LoginHandoff>,
 }
-
 
 // ---------------------------------------------------------------------------
 // Derived state

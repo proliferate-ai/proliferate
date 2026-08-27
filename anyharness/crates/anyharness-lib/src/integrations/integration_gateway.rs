@@ -58,6 +58,7 @@ impl IntegrationGatewayConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     /// Temp runtime home that removes its directory when dropped.
     struct TempRuntimeHome {

@@ -44,19 +44,19 @@ impl CollectorCore {
             *versions.entry(stored.version).or_default() += 1;
             if record_matches(&accepted, &query.filters)
                 && stored.cursor > after
-                    && page_records.len() < usize::from(query.limit)
-                    && !page_full
+                && page_records.len() < usize::from(query.limit)
+                && !page_full
+            {
+                if page_records.is_empty()
+                    || page_bytes.saturating_add(stored.encoded.len())
+                        <= self.limits.query_page_bytes
                 {
-                    if page_records.is_empty()
-                        || page_bytes.saturating_add(stored.encoded.len())
-                            <= self.limits.query_page_bytes
-                    {
-                        page_bytes = page_bytes.saturating_add(stored.encoded.len());
-                        page_records.push(accepted);
-                    } else {
-                        page_full = true;
-                    }
+                    page_bytes = page_bytes.saturating_add(stored.encoded.len());
+                    page_records.push(accepted);
+                } else {
+                    page_full = true;
                 }
+            }
         }
         let mut gaps = Vec::new();
         if let Some(gap) = eviction_gap(

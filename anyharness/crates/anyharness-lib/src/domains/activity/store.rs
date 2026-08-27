@@ -4,8 +4,8 @@ use anyharness_contract::v1::FeedKind;
 use rusqlite::{params, types::Type, Connection, OptionalExtension, Row};
 
 use super::model::{
-    ActivityProcessRecord, ActivitySubagentRecord, FeedBindingRecord, FeedOwnerKind,
-    FeedTransport, ProcessRunStatus, SubagentRunStatus,
+    ActivityProcessRecord, ActivitySubagentRecord, FeedBindingRecord, FeedOwnerKind, FeedTransport,
+    ProcessRunStatus, SubagentRunStatus,
 };
 use crate::domains::sessions::model::SessionEventRecord;
 use crate::persistence::Db;
@@ -224,10 +224,14 @@ impl ActivityStore {
                 params![feed_id],
                 map_feed_binding,
             )
-            .optional()})
+            .optional()
+        })
     }
 
-    pub fn upsert_feed_binding(tx: &Connection, record: &FeedBindingRecord) -> rusqlite::Result<()> {
+    pub fn upsert_feed_binding(
+        tx: &Connection,
+        record: &FeedBindingRecord,
+    ) -> rusqlite::Result<()> {
         let (transport_kind, path, thread_id, url) = transport_to_db(&record.transport);
         tx.execute(
             "INSERT INTO feed_bindings (
@@ -284,8 +288,10 @@ impl ActivityStore {
         session_ids: &[String],
     ) -> anyhow::Result<HashMap<String, (Vec<ActivityProcessRecord>, Vec<ActivitySubagentRecord>)>>
     {
-        let mut grouped: HashMap<String, (Vec<ActivityProcessRecord>, Vec<ActivitySubagentRecord>)> =
-            HashMap::new();
+        let mut grouped: HashMap<
+            String,
+            (Vec<ActivityProcessRecord>, Vec<ActivitySubagentRecord>),
+        > = HashMap::new();
         if session_ids.is_empty() {
             return Ok(grouped);
         }
