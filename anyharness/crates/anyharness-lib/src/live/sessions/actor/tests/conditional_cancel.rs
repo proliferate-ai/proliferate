@@ -54,6 +54,7 @@ mod completion_wake;
 mod completion_wake_outcomes;
 mod product_context;
 mod queue_drain;
+mod seat_usage_limit;
 mod terminal_fence;
 mod unload;
 
