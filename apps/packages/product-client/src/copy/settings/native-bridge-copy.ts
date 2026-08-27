@@ -6,8 +6,6 @@ export const NATIVE_BRIDGE_COPY = {
   title: (displayName: string) => `${displayName} is using your own login`,
   body: (displayName: string) =>
     `Agents now pick an auth method in Proliferate. Your existing ${displayName} `
-    + "login keeps working until you act on this. Pick a method below — or "
-    + "dismiss, which means launches will require a configured method once "
-    + "managed auth becomes required.",
+    + "login keeps working — choosing a method below is optional.",
   dismiss: "Dismiss",
 } as const;
