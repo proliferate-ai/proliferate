@@ -40,11 +40,10 @@ from .privacy import (
     TAG_VALIDATORS,
     _project_breadcrumb,
     _project_outbound_event,
-    canonical_uuid,
     environment_value,
     project_extra_value,
-    release_value,
 )
+from .scalars import canonical_uuid, release_value
 
 _sentry_initialized = False
 _report_critical_logger = logging.getLogger("proliferate.critical")
