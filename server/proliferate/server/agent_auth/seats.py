@@ -416,19 +416,24 @@ async def seat_usage_probe(
             parsed = parse_seat_usage_headers(http_status, headers)
         except AnthropicIntegrationError:
             parsed = _PROBE_FAILED
-    record = await seat_usage_store.insert_seat_usage_sample(
-        db,
-        api_key_id=api_key_id,
-        status=parsed.status,
-        util_5h=parsed.util_5h,
-        util_7d=parsed.util_7d,
-        reset_5h=parsed.reset_5h,
-        reset_7d=parsed.reset_7d,
-        binding_window=parsed.binding_window,
-    )
-    await seat_usage_store.prune_seat_usage_samples(
-        db, older_than=utcnow() - _SAMPLE_RETENTION
-    )
+    # A savepoint per seat write: if the insert itself fails (e.g. the seat's
+    # user was hard-deleted between the roster read and here, tripping the
+    # FK), only THIS seat's write rolls back — the session stays usable and
+    # the tick's earlier samples survive.
+    async with db.begin_nested():
+        record = await seat_usage_store.insert_seat_usage_sample(
+            db,
+            api_key_id=api_key_id,
+            status=parsed.status,
+            util_5h=parsed.util_5h,
+            util_7d=parsed.util_7d,
+            reset_5h=parsed.reset_5h,
+            reset_7d=parsed.reset_7d,
+            binding_window=parsed.binding_window,
+        )
+        await seat_usage_store.prune_seat_usage_samples(
+            db, older_than=utcnow() - _SAMPLE_RETENTION
+        )
     return record
 
 

@@ -218,6 +218,86 @@ class TestSeatUsageApi:
         assert second_pass.skipped == 1
         assert fake.calls == 1
 
+    async def test_decrypt_failure_records_probe_failed_for_that_seat_only(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # A corrupt ciphertext / rotated key is one seat's probe failure —
+        # never a crash, and never the other seats' problem.
+        from proliferate.db.store import agent_gateway as store_pkg
+
+        _, headers = await _authed_user(client)
+        poisoned = await _mint_seat(client, headers, email="poisoned@example.com")
+        healthy = await _mint_seat(
+            client, headers, email="healthy@example.com", token=SEAT_TOKEN + "B"
+        )
+        real_decrypt = store_pkg.get_agent_seat_decrypted_for_probe
+
+        async def decrypt_or_explode(db, *, api_key_id):  # type: ignore[no-untyped-def]
+            if str(api_key_id) == poisoned:
+                raise ValueError("simulated ciphertext corruption")
+            return await real_decrypt(db, api_key_id=api_key_id)
+
+        monkeypatch.setattr(
+            store_pkg, "get_agent_seat_decrypted_for_probe", decrypt_or_explode
+        )
+        fake = _FakeProbe()
+        monkeypatch.setattr(seats_module, "probe_subscription_usage", fake)
+
+        result = await run_seat_usage_probe_pass(db_session)
+        await db_session.commit()
+        assert (result.probed, result.failed) == (2, 1)
+        poisoned_samples = await seat_usage_store.recent_seat_usage_samples(
+            db_session, api_key_id=uuid.UUID(poisoned)
+        )
+        assert [s.status for s in poisoned_samples] == ["probe_failed"]
+        healthy_samples = await seat_usage_store.recent_seat_usage_samples(
+            db_session, api_key_id=uuid.UUID(healthy)
+        )
+        assert [s.status for s in healthy_samples] == ["allowed"]
+
+    async def test_unexpected_probe_crash_skips_the_seat_not_the_pass(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # The last-resort belt: an exception class nobody anticipated (here
+        # smuggled through the header parser) skips that seat and the pass
+        # carries on for everyone else.
+        _, headers = await _authed_user(client)
+        crashing = await _mint_seat(client, headers, email="crashing@example.com")
+        steady = await _mint_seat(
+            client, headers, email="steady@example.com", token=SEAT_TOKEN + "B"
+        )
+        fake = _FakeProbe()
+        monkeypatch.setattr(seats_module, "probe_subscription_usage", fake)
+        real_parse = seats_module.parse_seat_usage_headers
+        crash_key = uuid.UUID(crashing)
+
+        # Crash exactly the crashing seat's parse: the pass probes seats in
+        # roster (vault) order, so route per call using that order.
+        seats = await seats_module.agent_gateway_store.list_active_agent_seats(db_session)
+        calls = iter([seat.id for seat in seats])
+
+        def routed_parse(http_status, headers_map):  # type: ignore[no-untyped-def]
+            seat_id = next(calls)
+            if seat_id == crash_key:
+                raise RuntimeError("simulated surprise")
+            return real_parse(http_status, headers_map)
+
+        monkeypatch.setattr(seats_module, "parse_seat_usage_headers", routed_parse)
+        result = await run_seat_usage_probe_pass(db_session)
+        await db_session.commit()
+        assert result.skipped == 1
+        assert result.probed == 1
+        steady_samples = await seat_usage_store.recent_seat_usage_samples(
+            db_session, api_key_id=uuid.UUID(steady)
+        )
+        assert [s.status for s in steady_samples] == ["allowed"]
+
     async def test_revoked_seats_leave_the_probe_roster(
         self,
         client: AsyncClient,

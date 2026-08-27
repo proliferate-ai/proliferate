@@ -270,6 +270,17 @@ LAUNCH_PATH_MODULES = {
     "server/agent_auth/service.py",
 }
 
+# Files that may SPELL "seat_usage" (or a sentinel) in raw text at all: the
+# importers above plus definition/vocabulary/comment-only sites. Everything
+# else in server/proliferate — the launch path included — may not mention the
+# sample surface in any form.
+TEXT_MENTION_ALLOWED = ALLOWED_IMPORTERS | {
+    "db/store/agent_gateway/records.py",  # defines the record
+    "db/store/agent_gateway/__init__.py",  # the deliberate non-export comment
+    "constants/agent_gateway.py",  # the closed vocabularies
+    "config.py",  # the cadence setting names
+}
+
 SENTINEL_NAMES = {
     "SeatUsageSample",
     "SeatUsageSampleRecord",
@@ -311,19 +322,23 @@ class TestAdvisoryOnlyLaw:
             f"modules must not read it: {violations}"
         )
 
-    def test_launch_path_never_mentions_the_sample_surface_at_all(self) -> None:
-        # Stricter than the import scan for the modules that decide launches:
-        # a raw-text sweep catches what import statements cannot — attribute
-        # access through a package alias, getattr strings, raw SQL naming the
-        # table. The launch/render path may not SPELL "seat_usage" (or any
-        # sentinel) in any form.
-        needles = {*SENTINEL_NAMES, "seat_usage"}
+    def test_no_module_outside_the_allowlist_mentions_the_sample_surface(self) -> None:
+        # Stricter than the import scan, and repo-wide: a raw-text sweep
+        # catches what import statements cannot — attribute access through
+        # the store-package alias (`agent_gateway_store.seat_usage…`),
+        # getattr strings, raw SQL naming the table. NO server module outside
+        # the closed mention-allowlist may spell "seat_usage" (or any
+        # sentinel) in any form, launch path included.
+        needles = {*SENTINEL_NAMES, "seat_usage", "SeatUsageSample"}
         violations = []
-        for rel in sorted(LAUNCH_PATH_MODULES):
-            text = (SERVER_ROOT / rel).read_text(encoding="utf-8")
-            for needle in needles:
-                if needle in text:
-                    violations.append(f"{rel}: {needle}")
+        for path in sorted(SERVER_ROOT.rglob("*.py")):
+            rel = path.relative_to(SERVER_ROOT).as_posix()
+            if rel in TEXT_MENTION_ALLOWED:
+                continue
+            text = path.read_text(encoding="utf-8")
+            hits = sorted(needle for needle in needles if needle in text)
+            if hits:
+                violations.append(f"{rel}: {hits}")
         assert violations == []
 
     def test_sample_surface_is_not_reachable_through_the_store_package(self) -> None:
@@ -345,7 +360,7 @@ class TestAdvisoryOnlyLaw:
         # A moved file silently exits the scan; keep the allowlist honest.
         missing = [
             rel
-            for rel in ALLOWED_IMPORTERS | LAUNCH_PATH_MODULES
+            for rel in TEXT_MENTION_ALLOWED | LAUNCH_PATH_MODULES
             if not (SERVER_ROOT / rel).is_file()
         ]
         assert missing == []
