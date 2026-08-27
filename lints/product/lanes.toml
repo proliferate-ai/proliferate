@@ -207,62 +207,50 @@ pipeline = "pr"
 cadence = "pull_request_target label/readiness events"
 gate_mirrored = false
 
-# deploy-staging.yml — dispatch-only TODAY; the staging-pipeline slice
-# (delivery-spec-staging-pipeline.md) rewires it to green-main→staging
-# tonight; at that merge these rows flip to pipeline = "main".
+# deploy-staging.yml — green main → staging, automatically (the staging-pipeline
+# slice, delivery-spec-staging-pipeline.md, merged 2026-08-27 as #2269)
 [[lane]]
 workflow = "deploy-staging.yml"
 job = "plan"
-pipeline = "dispatch-with-sunset"
-cadence = "manual dispatch (transitional)"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
 gate_mirrored = false
-sunset = "2026-08-28"
-note = "flips to main when the staging-pipeline slice lands"
 
 [[lane]]
 workflow = "deploy-staging.yml"
 job = "deploy-server"
-pipeline = "dispatch-with-sunset"
-cadence = "manual dispatch (transitional)"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
 gate_mirrored = false
-sunset = "2026-08-28"
-note = "flips to main when the staging-pipeline slice lands"
 
 [[lane]]
 workflow = "deploy-staging.yml"
 job = "deploy-litellm"
-pipeline = "dispatch-with-sunset"
-cadence = "manual dispatch (transitional)"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
 gate_mirrored = false
-sunset = "2026-08-28"
-note = "flips to main when the staging-pipeline slice lands"
 
 [[lane]]
 workflow = "deploy-staging.yml"
 job = "deploy-web"
-pipeline = "dispatch-with-sunset"
-cadence = "manual dispatch (transitional)"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
 gate_mirrored = false
-sunset = "2026-08-28"
-note = "flips to main when the staging-pipeline slice lands"
 
 [[lane]]
 workflow = "deploy-staging.yml"
 job = "deploy-desktop"
-pipeline = "dispatch-with-sunset"
-cadence = "manual dispatch (transitional)"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
 gate_mirrored = false
-sunset = "2026-08-28"
-note = "desktop stays dry_run on staging; flips to main with the slice"
+note = "desktop stays dry_run on staging"
 
 [[lane]]
 workflow = "deploy-staging.yml"
 job = "summary"
-pipeline = "dispatch-with-sunset"
-cadence = "manual dispatch (transitional)"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
 gate_mirrored = false
-sunset = "2026-08-28"
-note = "flips to main when the staging-pipeline slice lands"
 
 # release.yml — prod (the transitional daily cron, ruled 2026-08-26; it dies
 # in the PR that makes promote deliberate once the battery stands)
@@ -438,7 +426,7 @@ job = "release-e2e-local"
 pipeline = "dispatch-with-sunset"
 cadence = "manual dispatch (transitional)"
 gate_mirrored = false
-sunset = "2026-08-28"
+sunset = "2026-09-05"
 note = "flips to nightly when the e2e-observable slice lands"
 
 [[lane]]
@@ -447,7 +435,7 @@ job = "release-e2e-staging"
 pipeline = "dispatch-with-sunset"
 cadence = "manual dispatch (transitional)"
 gate_mirrored = false
-sunset = "2026-08-28"
+sunset = "2026-09-05"
 note = "flips to nightly when the e2e-observable slice lands"
 
 [[lane]]
@@ -456,7 +444,7 @@ job = "release-e2e-local-functional"
 pipeline = "dispatch-with-sunset"
 cadence = "manual dispatch (transitional)"
 gate_mirrored = false
-sunset = "2026-08-28"
+sunset = "2026-09-05"
 note = "flips to nightly when the e2e-observable slice lands"
 
 [[lane]]
@@ -465,7 +453,7 @@ job = "release-e2e-selfhost-install"
 pipeline = "dispatch-with-sunset"
 cadence = "manual dispatch (transitional)"
 gate_mirrored = false
-sunset = "2026-08-28"
+sunset = "2026-09-05"
 note = "flips to nightly when the e2e-observable slice lands"
 
 # release-e2e-selfhost.yml — parked posture (PABLO DECIDES: self-host battery)
@@ -642,7 +630,7 @@ workflow = "release-e2e.yml"
 job = "release-e2e-staging"
 owner = "e2e-observable slice"
 reason = "masked-green staging lane; the e2e-observable slice strips this flag tonight — row dies at its merge"
-expires = "2026-08-28"
+expires = "2026-09-05"
 
 [[quarantine]]
 workflow = "release-e2e-selfhost.yml"

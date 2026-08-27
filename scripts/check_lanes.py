@@ -120,6 +120,13 @@ def parse_workflow(path: Path) -> WorkflowFacts:
         stripped = line.strip()
         top = _TOP_KEY_RE.match(line)
         if top:
+            if saw_jobs:
+                # Anything after `jobs:` would silently end job parsing and
+                # under-count the census — refuse rather than guess.
+                raise ValueError(
+                    f"{path.name}:{index}: top-level `{top.group(1)}:` after `jobs:` "
+                    "is unsupported — keep `jobs:` last"
+                )
             section = top.group(1)
             if section == "on":
                 saw_on = True

@@ -175,6 +175,17 @@ class ParserTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             check_lanes.parse_workflow(self.fx.workflows / "nojobs.yml")
 
+    def test_top_level_key_after_jobs_fails_loud(self) -> None:
+        # a trailing top-level block would silently end job parsing and
+        # under-count the census; the parser must refuse instead
+        self.fx.write_workflow(
+            "trailing.yml",
+            "name: x\non:\n  push:\njobs:\n  a:\n    steps: []\nenv:\n  X: 1\n",
+        )
+        with self.assertRaises(ValueError) as ctx:
+            check_lanes.parse_workflow(self.fx.workflows / "trailing.yml")
+        self.assertIn("after `jobs:`", str(ctx.exception))
+
 
 class CensusTests(unittest.TestCase):
     def setUp(self) -> None:
