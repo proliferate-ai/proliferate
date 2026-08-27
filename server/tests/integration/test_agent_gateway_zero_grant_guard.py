@@ -1292,6 +1292,7 @@ async def test_external_committed_racer_keeps_its_grant_and_the_reclaim_backs_ou
         assert allocation.billing_subject_id == orphan_subject_id
 
     # (iv) The sweep recorded the race and did not abort.
+    assert result.checked == 1
     assert result.raced == 1
     # NOT the in-session artifact: the racer's committed $5 genuinely funds this
     # org, so by the time the sweep re-queries it is legitimately no longer
@@ -1307,6 +1308,226 @@ async def test_external_committed_racer_keeps_its_grant_and_the_reclaim_backs_ou
     ]
     assert len(reclaim_pages) == 1
     assert reclaim_pages[0][1]["tags"]["action"] == "orphan_reclaim"
+
+
+@pytest.mark.asyncio
+async def test_hostile_caller_that_catches_and_commits_keeps_no_money(
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The strongest shape: a caller that catches the race AND COMMITS anyway.
+
+    The sweep is only one such caller; this stands in for every catch path,
+    present and future. It opens its own transaction, swallows
+    ``AgentGatewayReclaimLedgerRaced``, writes a marker row, and commits — the
+    exact sequence that turned the last regression into durable money. With the
+    reclaim owning its rollback via SAVEPOINT, the commit carries the marker and
+    the racer's grant but NOT one cent of the rejected movement.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    factory = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    github_subject = f"gh-hostile-{uuid.uuid4().hex[:8]}"
+    async with factory() as setup:
+        orphan_subject_id = await _fabricate_orphan_claim(
+            setup, github_subject=github_subject, consumed_usd=2.0
+        )
+        user_id = await _create_user(setup)
+        await _link_github_identity(setup, user_id=user_id, provider_subject=github_subject)
+        dest_org = await _place_in_org(setup, user_id=user_id)
+        dest_subject = await ensure_organization_billing_subject(setup, dest_org)
+        # An unrelated subject for the post-catch marker write.
+        marker_user = await _create_user(setup)
+        marker_org = await _place_in_org(setup, user_id=marker_user)
+        marker_subject = await ensure_organization_billing_subject(setup, marker_org)
+        await setup.commit()
+
+    paged = _capture_report_critical(monkeypatch)
+    real_move = store.move_llm_credit_ledger
+    racer_ref = f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{dest_subject.id}"
+    marker_ref = f"admin:marker-{uuid.uuid4().hex[:8]}"
+
+    async def racing_move(
+        db: AsyncSession,
+        *,
+        from_billing_subject_id: uuid.UUID,
+        to_billing_subject_id: uuid.UUID,
+    ) -> tuple[int, int]:
+        # COMMIT before delegating: the rewrite's NOT EXISTS guard must SEE this
+        # row, so the source_ref rewrite declines and the two-row state forms.
+        # Committing afterwards would let the rewrite succeed and the test would
+        # pass while proving nothing. Grants only — perturbing the orphan's usage
+        # count would trip the usage invariant first, testing the wrong belt.
+        async with factory() as other:
+            await store.create_llm_credit_grant(
+                other,
+                billing_subject_id=to_billing_subject_id,
+                user_id=None,
+                source=LLM_CREDIT_SOURCE_FREE_SIGNUP,
+                amount_usd=Decimal("5"),
+                source_ref=racer_ref,
+            )
+            await other.commit()
+        return await real_move(
+            db,
+            from_billing_subject_id=from_billing_subject_id,
+            to_billing_subject_id=to_billing_subject_id,
+        )
+
+    monkeypatch.setattr(free_credits.agent_gateway_store, "move_llm_credit_ledger", racing_move)
+
+    swallowed = False
+    async with factory() as hostile, hostile.begin():
+        try:
+            await ensure_signup_free_credit_grant(hostile, user_id)
+        except AgentGatewayReclaimLedgerRaced:
+            swallowed = True
+        # EXTRA 1, the most valuable one: a write AFTER the catch that must
+        # survive the commit. This is the only assertion that would fail if
+        # ROLLBACK TO SAVEPOINT poisoned the session — and a usable session
+        # after the rollback is the sole thing legitimising N-a's
+        # swallow-and-keep-sweeping.
+        await store.create_llm_credit_grant(
+            hostile,
+            billing_subject_id=marker_subject.id,
+            user_id=None,
+            source=LLM_CREDIT_SOURCE_ADMIN,
+            amount_usd=Decimal("1"),
+            source_ref=marker_ref,
+        )
+        # Exiting `begin()` COMMITS — the regression's exact shape.
+
+    # EXTRA 3: if the invariant silently stopped firing, everything below could
+    # still pass; this pins that the race was actually detected.
+    assert swallowed is True
+
+    async with factory() as check:
+        # (i) The destination keeps EXACTLY the racer's row. NOT `== []` like the
+        # internal-racer siblings: that grant was committed by ANOTHER
+        # transaction, so it survives our savepoint rollback and must be left
+        # alone. Only our own moved row had to disappear.
+        dest_refs = [
+            grant.source_ref
+            for grant in await store.list_llm_credit_grants(check, dest_subject.id)
+            if grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP
+        ]
+        assert dest_refs == [racer_ref]
+        # EXTRA 2: the amount, which a row count cannot catch.
+        dest_balance = await store.get_remaining_credit_usd(check, dest_subject.id)
+        assert dest_balance.granted_usd == Decimal("5")
+
+        # (ii) The orphan's own grant came back under the canonical ref, with its
+        # usage row — the movement was undone on both sides.
+        orphan_grants = await store.list_llm_credit_grants(check, orphan_subject_id)
+        assert [grant.source for grant in orphan_grants] == [LLM_CREDIT_SOURCE_FREE_SIGNUP]
+        assert (
+            orphan_grants[0].source_ref == f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{orphan_subject_id}"
+        )
+        orphan_usage = await check.scalar(
+            select(func.count()).where(AgentLlmUsageEvent.billing_subject_id == orphan_subject_id)
+        )
+        assert orphan_usage == 1
+
+        # (iii) The claim never re-pointed.
+        allocation = (
+            await check.execute(
+                select(FreeCloudAllocation).where(
+                    FreeCloudAllocation.github_provider_user_id == github_subject
+                )
+            )
+        ).scalar_one()
+        assert allocation.billing_subject_id == orphan_subject_id
+
+        # EXTRA 1's assertion: the post-catch marker committed, so the session
+        # was fully usable after ROLLBACK TO SAVEPOINT.
+        marker = (
+            await check.execute(
+                select(LlmCreditGrant).where(LlmCreditGrant.source_ref == marker_ref)
+            )
+        ).scalar_one()
+        assert marker.billing_subject_id == marker_subject.id
+
+    reclaim_pages = [
+        (error, kwargs)
+        for error, kwargs in paged
+        if isinstance(error, AgentGatewayReclaimLedgerRaced)
+    ]
+    assert len(reclaim_pages) == 1
+    assert reclaim_pages[0][1]["tags"]["action"] == "orphan_reclaim"
+
+
+@pytest.mark.asyncio
+async def test_signup_path_fails_closed_when_an_external_racer_funds_the_source(
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The no-catch path: the exception escapes and the caller's own commit dies.
+
+    The signup path (``ensure_org_enrollment`` → hook) has no catch, so the
+    raise reaches the transaction boundary and rolls it back — the blessed
+    fail-closed behavior. Here the external racer commits a TOP-UP on the
+    SOURCE, so it is the source-grants invariant that fires: the paid money
+    stays where it was, and the destination gets nothing.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    factory = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    github_subject = f"gh-nocatch-{uuid.uuid4().hex[:8]}"
+    async with factory() as setup:
+        orphan_subject_id = await _fabricate_orphan_claim(
+            setup, github_subject=github_subject, consumed_usd=0.0
+        )
+        user_id = await _create_user(setup)
+        await _link_github_identity(setup, user_id=user_id, provider_subject=github_subject)
+        dest_org = await _place_in_org(setup, user_id=user_id)
+        dest_subject = await ensure_organization_billing_subject(setup, dest_org)
+        await setup.commit()
+
+    _capture_report_critical(monkeypatch)
+    real_move = store.move_llm_credit_ledger
+
+    async def racing_move(
+        db: AsyncSession,
+        *,
+        from_billing_subject_id: uuid.UUID,
+        to_billing_subject_id: uuid.UUID,
+    ) -> tuple[int, int]:
+        # Committed BEFORE the move (trap 1) and on the SOURCE, as a top-up, so
+        # the source-grants invariant is the one under test.
+        async with factory() as other:
+            await store.create_llm_credit_grant(
+                other,
+                billing_subject_id=from_billing_subject_id,
+                user_id=None,
+                source=LLM_CREDIT_SOURCE_TOPUP,
+                amount_usd=Decimal("50"),
+                source_ref=f"topup:{uuid.uuid4().hex[:8]}",
+            )
+            await other.commit()
+        return await real_move(
+            db,
+            from_billing_subject_id=from_billing_subject_id,
+            to_billing_subject_id=to_billing_subject_id,
+        )
+
+    monkeypatch.setattr(free_credits.agent_gateway_store, "move_llm_credit_ledger", racing_move)
+
+    # No catch anywhere: the raise escapes `begin()`, which rolls the caller's
+    # transaction back — the signup path's fail-closed behavior.
+    with pytest.raises(AgentGatewayReclaimLedgerRaced):
+        async with factory() as caller:
+            async with caller.begin():
+                await ensure_signup_free_credit_grant(caller, user_id)
+
+    async with factory() as check:
+        dest_balance = await store.get_remaining_credit_usd(check, dest_subject.id)
+        assert dest_balance.granted_usd == Decimal("0")  # nothing was handed over
+        # The racer's committed top-up survives on the source, beside the
+        # orphan's own signup grant: 5 + 50.
+        orphan_balance = await store.get_remaining_credit_usd(check, orphan_subject_id)
+        assert orphan_balance.granted_usd == Decimal("55")
 
 
 @pytest.mark.asyncio
