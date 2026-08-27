@@ -21,8 +21,7 @@ name: Release E2E (tier 3)
 #   - The local lane needs a way to drive real agents. In CI there is no native
 #     agent CLI login, so it routes through the LLM gateway with
 #     RELEASE_E2E_GATEWAY_TEST_KEY. With no key the job skips itself cleanly
-#     (::notice::), the same pattern the tier-2 billing suite uses for
-#     STRIPE_TEST_SECRET_KEY.
+#     (::notice::).
 #   - The sandbox lane additionally needs an E2B team (E2B_API_KEY repo secret,
 #     mapped to RELEASE_E2E_E2B_API_KEY) AND a publicly reachable server URL for
 #     E2B to deliver webhooks to — a locally booted server on 127.0.0.1 needs a
@@ -480,7 +479,7 @@ jobs:
       # T3-INT-1's audit-readback probe (tests/release/scripts/integration_audit_probe.py)
       # runs via `uv run python …` to read the cloud_integration_tool_call_event
       # row back from the run's own Postgres — the same `spawn("uv", …)` idiom the
-      # tier-2/tier-3/self-host jobs use. Without uv on PATH the probe dies
+      # tier-3/self-host jobs use. Without uv on PATH the probe dies
       # `spawn uv ENOENT` after a fully successful MCP tool call. Match the sibling
       # jobs (uv + python 3.12, the script's requires-python).
       - uses: astral-sh/setup-uv@v7
@@ -835,7 +834,7 @@ jobs:
           RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG: ${{ vars.RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG }}
           # SH-CLOUD-ADDON (SELFHOST-QUAL-1): the instance's own E2B account +
           # self-built template + cloud add-on GitHub App (distinct from the
-          # managed-cloud RELEASE_E2E_CLOUD_GITHUB_APP_* set).
+          # Qualification environment's RELEASE_E2E_CLOUD_GITHUB_APP_* set).
           RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY: ${{ secrets.RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY }}
           RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME: ${{ vars.RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME }}
           RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID: ${{ vars.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID }}
