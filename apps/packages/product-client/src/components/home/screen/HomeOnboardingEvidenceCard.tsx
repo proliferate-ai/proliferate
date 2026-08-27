@@ -15,8 +15,9 @@ import type {
  * diagnostic line are the runtime's status document, verbatim. Every
  * NON-launchable state carries an affordance — the most specific next action the
  * document can name, else the generic route to the agent pane — so no state the
- * card shows is a dead end; a stale document shows its LAST OBSERVATION with a
- * re-checking marker rather than an eternal spinner.
+ * card shows is a dead end; a stale document shows its LAST OBSERVATION with
+ * the ruled stale marker ("last checked <age> ago — retrying", founder-ruled
+ * 2026-08-27) rather than an eternal spinner.
  */
 function AuthSetupEvidenceRow({
   badge,
@@ -64,7 +65,7 @@ function AuthSetupEvidenceRow({
       </div>
       {badge.detail ? (
         // The document's own diagnostic: the evidence age that makes green mean
-        // something, and/or the re-checking marker (stale renders as stale, never
+        // something, or the ruled stale marker (stale renders as stale, never
         // as loading — the badge above is the last observation). Nothing is
         // printed here that the document does not state.
         <span

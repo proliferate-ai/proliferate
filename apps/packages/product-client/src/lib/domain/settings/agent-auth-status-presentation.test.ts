@@ -116,13 +116,16 @@ describe("statusEvidenceLine", () => {
     ).toBe("verified 2m ago");
   });
 
-  it("survives staleness — the last observation keeps its age", () => {
+  it("yields to the stale marker while a re-probe runs (ruled 2026-08-27)", () => {
+    // The observation's age is not lost — it moves into the stale marker
+    // ("last checked 2m ago — retrying"), so the evidence line stays silent
+    // rather than printing the same age twice.
     expect(
       statusEvidenceLine(
         facts({ probe: { verdict: "verified", at: OBSERVED_AT, stale: true } }),
         NOW,
       ),
-    ).toBe("verified 2m ago");
+    ).toBeNull();
   });
 
   it("is null on a non-green status, and on an unparseable timestamp", () => {
@@ -136,14 +139,41 @@ describe("statusEvidenceLine", () => {
   });
 });
 
-describe("statusRecheckingMarker", () => {
-  it("marks a stale document and nothing else", () => {
+describe("statusRecheckingMarker — the ruled stale wording (2026-08-27)", () => {
+  it("states the observation's age and the retry on a stale document", () => {
     expect(
       statusRecheckingMarker(
         facts({ probe: { verdict: "verified", at: OBSERVED_AT, stale: true } }),
+        NOW,
+      ),
+    ).toBe("last checked 2m ago — retrying");
+    // The wording applies to any stale observation, not only a green one.
+    expect(
+      statusRecheckingMarker(
+        facts({ probe: { verdict: "failed", at: OBSERVED_AT, stale: true } }),
+        NOW,
+      ),
+    ).toBe("last checked 2m ago — retrying");
+  });
+
+  it("keeps the honest plain marker when nothing was ever observed", () => {
+    expect(
+      statusRecheckingMarker(
+        facts({ probe: { verdict: "unverified", at: null, stale: true } }),
+        NOW,
       ),
     ).toBe("re-checking");
-    expect(statusRecheckingMarker(facts())).toBeNull();
-    expect(statusRecheckingMarker(facts({ probe: null }))).toBeNull();
+    // An unparseable timestamp is not an age either — never fake one.
+    expect(
+      statusRecheckingMarker(
+        facts({ probe: { verdict: "verified", at: "not a date", stale: true } }),
+        NOW,
+      ),
+    ).toBe("re-checking");
+  });
+
+  it("marks a stale document and nothing else", () => {
+    expect(statusRecheckingMarker(facts(), NOW)).toBeNull();
+    expect(statusRecheckingMarker(facts({ probe: null }), NOW)).toBeNull();
   });
 });

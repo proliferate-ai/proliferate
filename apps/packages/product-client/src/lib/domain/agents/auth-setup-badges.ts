@@ -29,7 +29,8 @@ import {
  *
  * - green (a dated observation) — launchable;
  * - a stale document — the dimmed light. Its last observation is on screen with
- *   a re-checking marker, and a stale document with NOTHING observed is terminal
+ *   the ruled stale marker ("last checked <age> ago — retrying", founder-ruled
+ *   2026-08-27), and a stale document with NOTHING observed is terminal
  *   too: an unobserved harness is an actionable row, never an eternal pending,
  *   because the card cannot see whether a queued probe will ever run;
  * - failed, unverified, nothing-applied — actionable, each carrying the most
@@ -141,7 +142,7 @@ function resolveActionLabel(
   return null;
 }
 
-/** The evidence age and/or the re-checking marker — the document's own lines. */
+/** The evidence age or the stale marker — the document's own lines. */
 function resolveDetail(status: AgentAuthStatusDoc): string | null {
   const facts = { applied: status.applied ?? null, probe: status.probe };
   const lines = [statusEvidenceLine(facts), statusRecheckingMarker(facts)].filter(

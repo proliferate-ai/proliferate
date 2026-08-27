@@ -16,8 +16,9 @@ import {
  * There is no local fallback and no readiness-based green: the label and tone
  * come from the document's `probe`/`applied`, green carries its evidence age
  * ("verified 2m ago"), a stale document keeps its LAST OBSERVATION on screen
- * with a re-checking marker (never a spinner, never "loading"), and a harness
- * the runtime holds no document for reads neutrally and gates nothing.
+ * with the ruled stale marker ("last checked 2m ago — retrying", founder-ruled
+ * 2026-08-27 — never a spinner, never "loading", never a countdown), and a
+ * harness the runtime holds no document for reads neutrally and gates nothing.
  */
 export function HarnessAuthEvidenceBadge({
   status,

@@ -126,12 +126,13 @@ describe("deriveOnboardingAgentBadge — the status document, verbatim", () => {
       }),
     );
 
-    // The light dims, it never goes out: green with its age survives the
-    // pending re-probe, and the re-checking marker is what says so.
+    // The light dims, it never goes out: green survives the pending re-probe,
+    // and the ruled stale marker (2026-08-27) carries the observation's age.
     expect(badge.launchable).toBe(true);
     expect(badge.tone).toBe("success");
     expect(badge.rechecking).toBe(true);
     expect(badge.pending).toBe(false);
+    expect(badge.detail).toMatch(/^last checked \d+[smhd] ago — retrying$/);
   });
 
   it("makes a stale FAILED observation terminal with its last words on screen", () => {
@@ -151,6 +152,8 @@ describe("deriveOnboardingAgentBadge — the status document, verbatim", () => {
     // Terminal, so the card completes rather than waiting on a probe forever.
     expect(badge.terminal).toBe(true);
     expect(badge.pending).toBe(false);
+    // The ruled stale wording (2026-08-27) applies to any stale observation.
+    expect(badge.detail).toMatch(/^last checked \d+[smhd] ago — retrying$/);
   });
 
   it("makes stale with NOTHING observed actionable, not an eternal pending", () => {

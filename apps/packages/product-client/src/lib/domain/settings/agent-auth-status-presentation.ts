@@ -85,14 +85,19 @@ export function formatEvidenceAge(seconds: number): string {
 
 /**
  * The evidence line on a green badge, e.g. "verified 2m ago" — the age that
- * makes green mean something. Null when the status is not green or the
- * observation carries no parseable timestamp.
+ * makes green mean something. It speaks for the green NON-stale case only
+ * (founder-ruled 2026-08-27, backoff display): while a re-probe runs the
+ * observation's age belongs to the stale marker ("last checked <age> ago —
+ * retrying"), so stating it here too would print the same age twice. Null when
+ * the status is not green, the document is stale, or the observation carries no
+ * parseable timestamp.
  */
 export function statusEvidenceLine(
   status: HarnessStatusFacts,
   now: number = Date.now(),
 ): string | null {
   if (!isStatusGreen(status)) return null;
+  if (status.probe?.stale === true) return null;
   const at = status.probe?.at;
   if (!at) return null;
   const observedAt = Date.parse(at);
@@ -103,14 +108,25 @@ export function statusEvidenceLine(
 }
 
 /**
- * The re-checking marker (spec §4 cell 4: "a stale status renders as stale, not
- * as loading" — the last observation stays visible while the runtime
- * re-probes). Null when the document is not stale.
+ * The stale marker (spec §4 cell 4: "a stale status renders as stale, not as
+ * loading" — the last observation stays visible while the runtime re-probes).
+ *
+ * Founder-ruled 2026-08-27 (backoff display): WITH an observation the marker is
+ * "last checked <age> ago — retrying" — the age from `probe.at` via the one age
+ * formatter, no countdown, no next-attempt wire field, no timer. With NOTHING
+ * observed (or no parseable timestamp) there is no age to state honestly, so
+ * the marker stays the plain "re-checking". Null when the document is not
+ * stale.
  */
 export function statusRecheckingMarker(
   status: HarnessStatusFacts,
+  now: number = Date.now(),
 ): string | null {
-  return status.probe?.stale === true
-    ? HARNESS_PANE_COPY.authBadgeRechecking
-    : null;
+  const probe = status.probe;
+  if (probe?.stale !== true) return null;
+  const observedAt = probe.at ? Date.parse(probe.at) : Number.NaN;
+  if (Number.isNaN(observedAt)) return HARNESS_PANE_COPY.authBadgeRechecking;
+  return HARNESS_PANE_COPY.authStaleLastChecked(
+    formatEvidenceAge((now - observedAt) / 1000),
+  );
 }

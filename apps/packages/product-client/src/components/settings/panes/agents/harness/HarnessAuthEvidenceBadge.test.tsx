@@ -82,12 +82,14 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
       />,
     );
 
-    // The last observation stays on screen, WITH its age, next to a
-    // re-checking marker. The light dims; it never goes out.
+    // The last observation stays on screen, its age carried by the ruled stale
+    // marker (founder-ruled 2026-08-27: "last checked <age> ago — retrying").
+    // The light dims; it never goes out.
     expect(screen.getByText("Authenticated")).toBeTruthy();
-    expect(screen.getByText("verified 2m ago")).toBeTruthy();
     expect(document.querySelector("[data-harness-rechecking]")?.textContent)
-      .toBe("re-checking");
+      .toBe("last checked 2m ago — retrying");
+    // The age is said once, in the marker — the evidence line yields to it.
+    expect(document.querySelector("[data-harness-evidence-age]")).toBeNull();
     expect(badgeElement()?.getAttribute("data-harness-probe-stale")).toBe("true");
     expect(isGreen()).toBe(true);
   });
@@ -104,7 +106,8 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
     );
 
     expect(screen.getByText("Not authenticated")).toBeTruthy();
-    expect(document.querySelector("[data-harness-rechecking]")).toBeTruthy();
+    expect(document.querySelector("[data-harness-rechecking]")?.textContent)
+      .toBe("last checked 2m ago — retrying");
   });
 
   it("renders an unknown harness neutrally and gates nothing", () => {

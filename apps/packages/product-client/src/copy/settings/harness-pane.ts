@@ -245,9 +245,15 @@ export const HARNESS_PANE_COPY = {
   // all reads "Waiting for status" — neutral, and it gates nothing.
   authBadgeWaitingStatus: "Waiting for status",
   authBadgeNotVerified: "Not verified",
-  // The dims-never-extinguishes marker: a stale document keeps its last
-  // observation on screen and says a re-probe is running. Never a spinner.
+  // The dims-never-extinguishes marker for a stale document with NOTHING
+  // observed: there is no age to state, only that a re-probe is running.
+  // Never a spinner.
   authBadgeRechecking: "re-checking",
+  // Founder-ruled 2026-08-27 (backoff display): a stale document WITH an
+  // observation states the observation's age and that the runtime is retrying.
+  // This wording class WINS over the §4-cell-4 countdown — no countdown, no
+  // next-attempt field, no timer.
+  authStaleLastChecked: (age: string) => `last checked ${age} ago — retrying`,
   authEvidenceVerifiedAgo: (age: string) => `verified ${age} ago`,
   // API key detail — the three configuration paths.
   segmentPasteKey: "Paste key",

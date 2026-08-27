@@ -25,7 +25,8 @@ export const HOME_SCREEN_LABELS = {
   // already on this machine can be captured as a portable seat.
   authSetupUseLoginAction: "Use your existing login",
   // The dims-never-extinguishes line and the evidence age are the DOCUMENT's own
-  // words (HARNESS_PANE_COPY.authBadgeRechecking / authEvidenceVerifiedAgo), said
-  // once and reused here rather than restated in Home's voice.
+  // words (HARNESS_PANE_COPY.authStaleLastChecked / authBadgeRechecking /
+  // authEvidenceVerifiedAgo), said once and reused here rather than restated in
+  // Home's voice.
   authSetupOpenAgents: "Open agent settings",
 } as const;

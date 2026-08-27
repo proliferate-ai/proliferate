@@ -186,8 +186,9 @@ describe("HomeOnboardingCards state-bound setup card", () => {
           terminal: true,
           launchable: false,
           rechecking: true,
-          // The DOCUMENT's own marker, not a card-local placeholder.
-          detail: "re-checking",
+          // The DOCUMENT's own marker (founder-ruled 2026-08-27 wording), not a
+          // card-local placeholder.
+          detail: "last checked 2m ago — retrying",
         }),
       ]),
     });
@@ -199,7 +200,7 @@ describe("HomeOnboardingCards state-bound setup card", () => {
     expect(line).toBeTruthy();
     // Not sr-only: the dimming is visible text, not a hidden hint.
     expect(line?.className).not.toContain("sr-only");
-    expect(line?.textContent).toBe("re-checking");
+    expect(line?.textContent).toBe("last checked 2m ago — retrying");
     // A stale row is terminal and shows no spinner. Selected on the Spinner's
     // own `data-loading-spinner` hook (D-R13): the old `.animate-spin` selector
     // named a Tailwind class this app's Spinner never emits — it renders
@@ -217,15 +218,15 @@ describe("HomeOnboardingCards state-bound setup card", () => {
           harnessKind: "claude",
           label: "Authenticated",
           rechecking: true,
-          // Green carries its evidence age; the re-check rides beside it, never
-          // instead of it.
-          detail: "verified 2m ago · re-checking",
+          // The ruled stale marker (2026-08-27) carries the last observation's
+          // age; it rides beside the green badge, never instead of it.
+          detail: "last checked 2m ago — retrying",
         }),
       ]),
     });
 
     expect(screen.getByText("Authenticated")).toBeTruthy();
-    expect(screen.getByText("verified 2m ago · re-checking")).toBeTruthy();
+    expect(screen.getByText("last checked 2m ago — retrying")).toBeTruthy();
     expect(container.querySelector("[data-agent-onboarding-rechecking]")).toBeTruthy();
     // Launchable: nothing to action, so no affordance is offered.
     expect(screen.queryByText(HOME_SCREEN_LABELS.authSetupOpenAgents)).toBeNull();
