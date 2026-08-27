@@ -405,14 +405,20 @@ mod tests {
 
         write_state_json(
             home.path(),
-            &state_doc(1, serde_json::json!([codex_entry("sk-vk-1"), grok_entry("xai-1")])),
+            &state_doc(
+                1,
+                serde_json::json!([codex_entry("sk-vk-1"), grok_entry("xai-1")]),
+            ),
         );
         let baseline = compute_harness_basis_revision(home.path(), "codex");
 
         // Sequence moved, codex's entry byte-identical → basis unchanged.
         write_state_json(
             home.path(),
-            &state_doc(2, serde_json::json!([codex_entry("sk-vk-1"), grok_entry("xai-1")])),
+            &state_doc(
+                2,
+                serde_json::json!([codex_entry("sk-vk-1"), grok_entry("xai-1")]),
+            ),
         );
         assert_eq!(
             compute_harness_basis_revision(home.path(), "codex"),
@@ -423,7 +429,10 @@ mod tests {
         // Only grok's entry changed → codex's basis still unchanged.
         write_state_json(
             home.path(),
-            &state_doc(3, serde_json::json!([codex_entry("sk-vk-1"), grok_entry("xai-2")])),
+            &state_doc(
+                3,
+                serde_json::json!([codex_entry("sk-vk-1"), grok_entry("xai-2")]),
+            ),
         );
         assert_eq!(
             compute_harness_basis_revision(home.path(), "codex"),
@@ -434,7 +443,10 @@ mod tests {
         // Codex's own entry changed → the basis moves.
         write_state_json(
             home.path(),
-            &state_doc(4, serde_json::json!([codex_entry("sk-vk-2"), grok_entry("xai-2")])),
+            &state_doc(
+                4,
+                serde_json::json!([codex_entry("sk-vk-2"), grok_entry("xai-2")]),
+            ),
         );
         assert_ne!(
             compute_harness_basis_revision(home.path(), "codex"),

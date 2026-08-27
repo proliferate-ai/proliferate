@@ -69,7 +69,11 @@ pub fn probe_auth_material(
     runtime_home: &Path,
     harness_kind: &str,
 ) -> Result<ProbeAuthMaterial, RouteAuthError> {
-    probe_auth_material_for_server(runtime_home, harness_kind, current_server_origin().as_deref())
+    probe_auth_material_for_server(
+        runtime_home,
+        harness_kind,
+        current_server_origin().as_deref(),
+    )
 }
 
 /// Core of [`probe_auth_material`], parameterized on the current server origin so

@@ -53,11 +53,7 @@ fn mint_scratch(home: &Path) -> PathBuf {
     dir
 }
 
-fn start_options(
-    home: &Path,
-    scratch: &Path,
-    script: &str,
-) -> StartAgentLoginTerminalOptions {
+fn start_options(home: &Path, scratch: &Path, script: &str) -> StartAgentLoginTerminalOptions {
     StartAgentLoginTerminalOptions {
         kind: "claude".to_string(),
         title: "Add a Claude.ai login".to_string(),
@@ -141,7 +137,10 @@ async fn seat_mint_store_render_launch_roundtrip() {
         .await
         .expect("claim the captured token");
     assert_eq!(claimed, token);
-    assert!(!scratch.exists(), "the mint scratch dir must be removed on handoff");
+    assert!(
+        !scratch.exists(),
+        "the mint scratch dir must be removed on handoff"
+    );
     assert_eq!(
         service.claim_mint_token(&record.id).await,
         Err(MintClaimError::NotReady(MintCaptureStatus::Consumed)),
@@ -413,12 +412,18 @@ async fn claim_purges_the_replay_buffer() {
         .lookup_terminal(&record.id)
         .await
         .expect("terminal handle");
-    let (frames, _rx) = handle.subscribe_output(None).await.expect("subscribe after claim");
+    let (frames, _rx) = handle
+        .subscribe_output(None)
+        .await
+        .expect("subscribe after claim");
     assert!(
         !frames_contain(&frames, &token),
         "the one-time handoff must purge the replay copy of the token"
     );
-    service.close_terminal(&record.id).await.expect("close second");
+    service
+        .close_terminal(&record.id)
+        .await
+        .expect("close second");
     let _ = std::fs::remove_dir_all(home);
 }
 
@@ -494,6 +499,9 @@ async fn mint_is_single_flight_per_harness() {
         "the replacement is a real new terminal"
     );
 
-    service.close_terminal(&third.id).await.expect("close third");
+    service
+        .close_terminal(&third.id)
+        .await
+        .expect("close third");
     let _ = std::fs::remove_dir_all(home);
 }

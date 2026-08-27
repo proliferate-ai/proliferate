@@ -540,13 +540,14 @@ mod tests {
     /// Cowork creation shares the exact launch-value refusal.
     #[test]
     fn unsupported_model_uses_the_single_refusal() {
-        let error =
-            CoworkCreateThreadError::CreateSession(CreateAndStartSessionError::LaunchValueUnsupported {
+        let error = CoworkCreateThreadError::CreateSession(
+            CreateAndStartSessionError::LaunchValueUnsupported {
                 agent_kind: "claude".to_string(),
                 key: "model".to_string(),
                 value: "opus[1m]".to_string(),
                 state: crate::domains::agents::launch_options::HarnessLaunchOptionsState::Observed,
-            });
+            },
+        );
 
         let mapped = super::map_create_cowork_thread_error(error);
         assert_eq!(mapped.status(), StatusCode::BAD_REQUEST);

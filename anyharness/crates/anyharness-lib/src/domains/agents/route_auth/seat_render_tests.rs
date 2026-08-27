@@ -27,7 +27,10 @@ fn claude_seat_sets_token_and_per_seat_dir_and_strips_the_ambient_list() {
         7,
         vec![harness(
             "claude",
-            vec![seat_source("11111111-2222-4333-8444-555555555555", "sk-ant-oat01-seat-token")],
+            vec![seat_source(
+                "11111111-2222-4333-8444-555555555555",
+                "sk-ant-oat01-seat-token",
+            )],
         )],
     ));
 
@@ -46,7 +49,10 @@ fn claude_seat_sets_token_and_per_seat_dir_and_strips_the_ambient_list() {
         config_dir.contains("claude-config-11111111-2222-4333-8444-555555555555"),
         "per-seat dir, not the shared claude-config: {config_dir}"
     );
-    assert!(std::path::Path::new(config_dir).is_dir(), "seat home materialized");
+    assert!(
+        std::path::Path::new(config_dir).is_dir(),
+        "seat home materialized"
+    );
 
     // The strip list: every Anthropic selector this route did not set, plus
     // the rerouting flags.

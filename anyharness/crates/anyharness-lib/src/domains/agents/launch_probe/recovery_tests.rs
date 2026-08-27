@@ -69,10 +69,7 @@ async fn backoff_expiry_re_probes_without_a_manual_poke() {
     // The harness heals itself between attempts; the ONLY thing that may
     // re-probe it is the failure-armed BackoffExpired timer.
     runner.set_behavior(FakeBehavior::Ok);
-    wait_until("the backoff-expiry poke re-probes", || {
-        runner.count() >= 2
-    })
-    .await;
+    wait_until("the backoff-expiry poke re-probes", || runner.count() >= 2).await;
     wait_until("the recovered observation lands", || {
         launch_options
             .read("opencode")

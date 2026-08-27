@@ -197,13 +197,9 @@ fn all_seats_cooling_falls_back_with_reason() {
         "the Display names the earliest reset: {error}"
     );
     // The create-time preview produces the same refusal.
-    let preview = launch_route_selection_failure_rotated_for_server(
-        seat_only.path(),
-        "claude",
-        &store,
-        None,
-    )
-    .expect("preview refuses too");
+    let preview =
+        launch_route_selection_failure_rotated_for_server(seat_only.path(), "claude", &store, None)
+            .expect("preview refuses too");
     assert_eq!(preview.code(), "AGENT_ROUTE_ALL_SEATS_COOLING");
 }
 
@@ -256,22 +252,36 @@ fn limit_error_marks_seat_cooling_until_reset() {
     let now_epoch_s = now();
     let carried_reset = now_epoch_s + 4_000;
 
-    let observation = classify_seat_usage_limit_error(&format!(
-        "Claude AI usage limit reached|{carried_reset}"
-    ))
-    .expect("classified");
+    let observation =
+        classify_seat_usage_limit_error(&format!("Claude AI usage limit reached|{carried_reset}"))
+            .expect("classified");
     let cooling_until = observation
         .reset_at_epoch_s
         .unwrap_or_else(|| next_five_hour_window_top(now_epoch_s));
-    store.mark_cooling("seat-a", "claude", cooling_until, Some(observation.window), now_epoch_s);
-    assert_eq!(store.cooling_until("seat-a", now_epoch_s), Some(carried_reset));
+    store.mark_cooling(
+        "seat-a",
+        "claude",
+        cooling_until,
+        Some(observation.window),
+        now_epoch_s,
+    );
+    assert_eq!(
+        store.cooling_until("seat-a", now_epoch_s),
+        Some(carried_reset)
+    );
 
     let observation =
         classify_seat_usage_limit_error("5-hour limit reached ∙ resets 3pm").expect("classified");
     let cooling_until = observation
         .reset_at_epoch_s
         .unwrap_or_else(|| next_five_hour_window_top(now_epoch_s));
-    store.mark_cooling("seat-b", "claude", cooling_until, Some(observation.window), now_epoch_s);
+    store.mark_cooling(
+        "seat-b",
+        "claude",
+        cooling_until,
+        Some(observation.window),
+        now_epoch_s,
+    );
     assert_eq!(
         store.cooling_until("seat-b", now_epoch_s),
         Some(next_five_hour_window_top(now_epoch_s))
@@ -367,7 +377,11 @@ fn last_served_advances_only_on_successful_spawn() {
 
     store.confirm_served("claude", "seat-a", now());
     assert_eq!(store.last_served("claude").as_deref(), Some("seat-a"));
-    assert_eq!(launch(&home, &store), "seat-b", "confirm advanced the wheel");
+    assert_eq!(
+        launch(&home, &store),
+        "seat-b",
+        "confirm advanced the wheel"
+    );
 }
 
 /// The frozen refusal copy, pinned exactly. The `{time}` piece is produced by
@@ -434,7 +448,10 @@ fn refusal_copy_is_pinned_exactly() {
 #[test]
 fn refusal_codes_and_route_auth_error_mapping() {
     assert_eq!(
-        LaunchRefusal::NoConfiguredSource { harness: "x".into() }.code(),
+        LaunchRefusal::NoConfiguredSource {
+            harness: "x".into()
+        }
+        .code(),
         "AGENT_AUTH_NOT_CONFIGURED"
     );
     assert_eq!(

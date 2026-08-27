@@ -174,7 +174,11 @@ pub(crate) fn all_seats_cooling_copy(earliest_reset_epoch_s: i64) -> String {
 /// Format a reset instant for refusal copy, in the machine's LOCAL time:
 /// same local day as now → "3:05 PM"; a different day → "Aug 27, 3:05 PM".
 pub(crate) fn format_reset_time(reset_epoch_s: i64) -> String {
-    format_reset_time_in(reset_epoch_s, chrono::Utc::now().timestamp(), &chrono::Local)
+    format_reset_time_in(
+        reset_epoch_s,
+        chrono::Utc::now().timestamp(),
+        &chrono::Local,
+    )
 }
 
 /// The injectable core of [`format_reset_time`]: `now` and the timezone are
@@ -335,7 +339,10 @@ mod tests {
             .unwrap()
             .timestamp();
         // In UTC these are the same day...
-        assert_eq!(format_reset_time_in(evening_utc, now, &chrono::Utc), "8:00 PM");
+        assert_eq!(
+            format_reset_time_in(evening_utc, now, &chrono::Utc),
+            "8:00 PM"
+        );
         // ...in IST the reset is already tomorrow (01:30 AM, Aug 27).
         assert_eq!(
             format_reset_time_in(evening_utc, now, &ist),

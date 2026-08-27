@@ -152,7 +152,10 @@ impl LaunchProbeService {
 
     fn record_failure(&self, harness_kind: &str, slot: &Arc<HarnessSlot>, now: DateTime<Utc>) {
         let next_attempt_at = {
-            let mut state = slot.state.lock().expect("launch-options probe slot poisoned");
+            let mut state = slot
+                .state
+                .lock()
+                .expect("launch-options probe slot poisoned");
             state.last_attempt_at = Some(now);
             state.consecutive_failures = state.consecutive_failures.saturating_add(1);
             let attempt = state.consecutive_failures;

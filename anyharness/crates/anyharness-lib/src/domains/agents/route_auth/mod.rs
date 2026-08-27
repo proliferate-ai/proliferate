@@ -121,7 +121,10 @@ pub enum RouteAuthError {
         earliest_reset_epoch_s: i64,
     },
     #[error("agent-auth source for '{harness_kind}' is incomplete: {detail}")]
-    SelectionIncomplete { harness_kind: String, detail: String },
+    SelectionIncomplete {
+        harness_kind: String,
+        detail: String,
+    },
     #[error("agent-auth route for '{harness_kind}' is unsupported: {detail}")]
     UnsupportedRoute {
         harness_kind: String,

@@ -46,8 +46,7 @@ pub async fn put_agent_auth_state(
             "AGENT_AUTH_STATE_REJECTED",
         ));
     }
-    let outcome =
-        apply_state_file(&state.runtime_home, &document).map_err(map_route_auth_error)?;
+    let outcome = apply_state_file(&state.runtime_home, &document).map_err(map_route_auth_error)?;
     // Auth-applied poke, per-harness targeted (spec §4, "Probe targeting":
     // `AuthApplied{changed}`): an apply re-probes ONLY the harnesses whose
     // entry actually changed — appeared, disappeared, or differs — so a push
@@ -166,10 +165,7 @@ mod tests {
     #[test]
     fn auth_applied_targets_changed_harnesses_only() {
         let home = TempHome::new("changed-set");
-        let first = document(
-            1,
-            &[("claude", &["gateway"]), ("grok", &["api_key"])],
-        );
+        let first = document(1, &[("claude", &["gateway"]), ("grok", &["api_key"])]);
         let outcome = apply_state_file(home.path(), &first).expect("first apply");
         // The first apply against an absent file: everything appeared.
         assert_eq!(outcome.changed_harnesses, vec!["claude", "grok"]);
