@@ -31,7 +31,54 @@ const COOL_INK = "26, 28, 31"; // #1a1c1f
 const warm = (a: number) => `rgba(${WARM_INK}, ${a})`;
 const cool = (a: number) => `rgba(${COOL_INK}, ${a})`;
 
+/** Codex-reference ink (#0d0d0d), from the reference UI's own light tokens. */
+const CODEX_INK = "13, 13, 13";
+const codex = (a: number) => `rgba(${CODEX_INK}, ${a})`;
+
 export const themeProfiles: Readonly<Record<string, ThemeProfile>> = {
+  /**
+   * CODEX. Very white but clean, after the reference UI: #0d0d0d ink, a
+   * near-white #f9f9f9 rail separated by a hairline rather than a plane
+   * step, quiet borders, airy state washes, white bordered composer with a
+   * soft ambient lift. Reference values: text #0d0d0d / #5d5d5d, sidebar
+   * #f9f9f9, message surface #f4f4f4 (the bubble fill needs a
+   * `--color-user-message-surface` token at fold-in; today it rides bg-card).
+   */
+  codex: {
+    intent: "very white, hairline-separated, quiet — after the reference UI",
+    tokens: {
+      "--color-foreground": "#0d0d0d",
+      "--color-primary": "#0d0d0d",
+      "--color-surface-under": "#f9f9f9",
+      "--color-sidebar": "#f9f9f9",
+      "--color-sidebar-background": "#f9f9f9",
+      "--color-surface-editor": "#fafafa",
+      "--color-composer-background": "#ffffff",
+      "--color-border-light": codex(0.115),
+      "--color-border": codex(0.13),
+      "--color-border-heavy": codex(0.16),
+      "--color-input": codex(0.17),
+      "--color-foreground-secondary": codex(0.64),
+      "--color-muted-foreground": codex(0.64),
+      "--color-foreground-tertiary": codex(0.6),
+      "--color-faint": codex(0.6),
+      "--color-sidebar-foreground": codex(0.88),
+      "--color-sidebar-muted-foreground": codex(0.6),
+      "--color-surface-elevated-secondary": codex(0.04),
+      "--color-muted": codex(0.04),
+      "--color-surface-control": codex(0.04),
+      "--color-hover": codex(0.05),
+      "--color-selected": codex(0.065),
+      "--color-active": codex(0.08),
+      "--color-user-message-border": codex(0.08),
+      "--elevation-subtle": `0 1px 2px ${codex(0.04)}`,
+      "--elevation-popover": `0 0 0 0.5px ${codex(0.05)}, 0 4px 16px ${codex(0.08)}`,
+      "--elevation-modal": `0 24px 48px ${codex(0.16)}`,
+      "--elevation-composer": `0 0 0 1px ${codex(0.1)}, 0 2px 12px ${codex(0.06)}`,
+      "--elevation-user-message": `0 1px 2px ${codex(0.03)}`,
+    },
+  },
+
   /**
    * A — PAPER. Warm the entire neutral field: warm ink, warm planes, so the
    * product reads like print rather than a spreadsheet. Same 3-plane model.
