@@ -81,7 +81,9 @@ pub enum NativeBridgeSeedOutcome {
 pub fn native_bridge_path(runtime_home: &Path) -> PathBuf {
     NATIVE_BRIDGE_FILE_RELATIVE_PATH
         .iter()
-        .fold(runtime_home.to_path_buf(), |path, segment| path.join(segment))
+        .fold(runtime_home.to_path_buf(), |path, segment| {
+            path.join(segment)
+        })
 }
 
 /// The four states the on-disk bridge file can be in. Every public read maps
@@ -178,7 +180,9 @@ pub fn launch_native_grant(runtime_home: &Path, harness_kind: &str) -> bool {
 }
 
 /// The harnesses still flagged, sorted; empty when the bridge was never seeded.
-pub fn pending_native_bridge_harnesses(runtime_home: &Path) -> Result<BTreeSet<String>, RouteAuthError> {
+pub fn pending_native_bridge_harnesses(
+    runtime_home: &Path,
+) -> Result<BTreeSet<String>, RouteAuthError> {
     Ok(load_native_bridge(runtime_home)?
         .map(|bridge| bridge.harnesses)
         .unwrap_or_default())
@@ -301,8 +305,7 @@ pub fn seed_native_bridge_at_startup(runtime_home: &Path) {
     // Loaded lazily INSIDE the seed's lock (see `seed_native_bridge_once`), so
     // the document consulted is the one persisted at decision time.
     let load_applied = || {
-        match super::load_effective_state(runtime_home, super::current_server_origin().as_deref())
-        {
+        match super::load_effective_state(runtime_home, super::current_server_origin().as_deref()) {
             Ok(state) => state,
             Err(error) => {
                 // A document the launcher cannot read is native for the

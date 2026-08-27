@@ -1,12 +1,15 @@
+// This crate is the macOS-native desktop product: on other targets its cfg'd
+// regions (collector seam, sidecar, support snapshots, cloud-worker commands)
+// compile out and orphan their imports/helpers — crate-wide conditional allow,
+// ratified by Pablo on PR #2293; the macOS side keeps every warning, and the
+// Linux CI job stays the clippy authority for the cross-platform half.
+#![cfg_attr(not(target_os = "macos"), allow(unused_imports, dead_code))]
+
 mod agent_seed_env;
 mod app_config;
 mod commands;
 mod desktop_telemetry_mode;
 pub mod diagnostics;
-// The macOS-native collector seam: on other targets its cfg'd paths compile
-// out and their imports/helpers go unused — module-level allow, not 12
-// per-import cfgs that break on the next refactor. Linux CI is the authority.
-#[cfg_attr(not(target_os = "macos"), allow(unused_imports, dead_code))]
 pub mod diagnostics_collector;
 mod editors;
 mod quit_flow;

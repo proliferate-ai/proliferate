@@ -310,7 +310,8 @@ mod tests {
         let _env_lock = env_lock();
         let grok = descriptor_for_kind("grok");
         let runtime_home = make_temp_dir("anyharness-login-managed-grok-shim-test");
-        let managed_dir = artifact_root(&runtime_home, &AgentKind::Grok, &ArtifactRole::AgentProcess);
+        let managed_dir =
+            artifact_root(&runtime_home, &AgentKind::Grok, &ArtifactRole::AgentProcess);
         let launcher_path = managed_dir.join("grok-launcher");
         let shim_path = managed_dir.join("node_modules").join(".bin").join("grok");
         std::fs::create_dir_all(shim_path.parent().expect("shim parent"))
@@ -326,7 +327,10 @@ mod tests {
 
         assert_eq!(resolved.command.program, shim_path.display().to_string());
         assert_eq!(resolved.command.args, vec!["login".to_string()]);
-        assert_ne!(resolved.command.program, launcher_path.display().to_string());
+        assert_ne!(
+            resolved.command.program,
+            launcher_path.display().to_string()
+        );
         assert!(resolved.env.iter().any(|(key, value)| key == "PATH"
             && value.starts_with(shim_path.parent().unwrap().to_str().unwrap())));
 

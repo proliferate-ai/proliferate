@@ -113,7 +113,7 @@ SERVER_TEST_ENV = {
     "CLOUD_SECRET_KEY": "test-cloud-secret",
 }
 
-CARGO_FMT = "cargo fmt --check"
+CARGO_FMT = "cargo fmt --all --check"
 # Mirrors ci.yml § "CI/CD config checks" — the node test suites that pin the
 # workflows and release tooling.
 CICD_CONFIG_TESTS: tuple[tuple[str, str], ...] = (
@@ -456,10 +456,17 @@ def build_checks(
                 crates = sorted(crates_for_paths(scope.rust_paths, repo))
                 target = " ".join(f"-p {c}" for c in crates) if crates else "--workspace"
             # Gating since the lint-wiring slice: -D warnings under the
-            # workspace allow-list in the root Cargo.toml — byte-identical
-            # semantics to ci.yml's rust-lint job (scoped to touched crates
-            # here for speed; the job runs --workspace --all-targets).
-            checks.append(Check("rust: clippy", f"cargo clippy {target} -- -D warnings"))
+            # workspace allow-list in the root Cargo.toml — same semantics as
+            # ci.yml's rust-lint job, including --all-targets (a test-target
+            # warning must fail here, not first in CI) and --keep-going (every
+            # failing crate reports in one run); scoped to touched crates for
+            # speed where the diff allows.
+            checks.append(
+                Check(
+                    "rust: clippy",
+                    f"cargo clippy {target} --all-targets --keep-going -- -D warnings",
+                )
+            )
             if have_nextest:
                 checks.append(Check("rust: nextest", f"cargo nextest run {target}"))
             else:

@@ -26,9 +26,7 @@ class FenceTestCase(unittest.TestCase):
                 path = root / PACKAGE_RELATIVE / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content, encoding="utf-8")
-            return check_module.collect_violations(
-                root=root, baseline=baseline, systems=systems
-            )
+            return check_module.collect_violations(root=root, baseline=baseline, systems=systems)
 
 
 class EdgeBaselineTest(FenceTestCase):
@@ -57,13 +55,10 @@ class EdgeBaselineTest(FenceTestCase):
         self.assertEqual(len(result.violations), 1)
         violation = result.violations[0]
         self.assertEqual(violation.rule_id, check_module.EDGE_RULE)
-        self.assertEqual(
-            violation.relative_path, f"{PACKAGE_RELATIVE}/server/billing/foo.py"
-        )
+        self.assertEqual(violation.relative_path, f"{PACKAGE_RELATIVE}/server/billing/foo.py")
         self.assertEqual(
             violation.site,
-            f"{PACKAGE_RELATIVE}/server/billing/foo.py"
-            "::proliferate.server.agent_auth.service",
+            f"{PACKAGE_RELATIVE}/server/billing/foo.py::proliferate.server.agent_auth.service",
         )
         self.assertIn("billing -> agent_auth", violation.detail)
         self.assertIn("record:", violation.format())
@@ -89,8 +84,7 @@ class EdgeBaselineTest(FenceTestCase):
         self.assertEqual(result.edges_seen, {("billing", "agent_auth")})
         self.assertEqual(
             result.violations[0].site,
-            f"{PACKAGE_RELATIVE}/server/billing/foo.py"
-            "::proliferate.server.agent_auth",
+            f"{PACKAGE_RELATIVE}/server/billing/foo.py::proliferate.server.agent_auth",
         )
 
     def test_stale_baseline_edge_is_reported(self) -> None:
@@ -157,9 +151,7 @@ class ImporterLabelTest(FenceTestCase):
     def test_code_outside_server_is_labeled_by_first_segment(self) -> None:
         result = self.scan(
             {
-                "background/tasks.py": (
-                    "from proliferate.server.ai_gateway.worker import loop\n"
-                ),
+                "background/tasks.py": ("from proliferate.server.ai_gateway.worker import loop\n"),
             },
             baseline=set(),
         )
@@ -191,10 +183,7 @@ class FingerprintTest(FenceTestCase):
             baseline=set(),
         )
         sites = sorted(violation.site for violation in result.violations)
-        prefix = (
-            f"{PACKAGE_RELATIVE}/server/billing/foo.py"
-            "::proliferate.server.agent_auth.service"
-        )
+        prefix = f"{PACKAGE_RELATIVE}/server/billing/foo.py::proliferate.server.agent_auth.service"
         self.assertEqual(sites, [prefix, f"{prefix}#2"])
 
     def test_comment_reference_is_ignored(self) -> None:
@@ -216,9 +205,7 @@ class RealTreeTest(unittest.TestCase):
         lints/server/fences.toml equals the measured import graph exactly —
         zero undeclared edges and zero stale rows on the actual repo."""
         result = check_module.collect_violations()
-        self.assertEqual(
-            [violation.format() for violation in result.violations], []
-        )
+        self.assertEqual([violation.format() for violation in result.violations], [])
         self.assertEqual(result.stale_edges, set())
         self.assertNotEqual(result.edges_seen, set())
 
