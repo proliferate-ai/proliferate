@@ -22,7 +22,7 @@ use super::{
 struct NoPlanResolver;
 
 impl GatewayModelResolve for NoPlanResolver {
-    fn resolve_gateway_models(&self, _harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+    fn resolve_gateway_models(&self, _harness_kind: &str, _sequence: i64) -> GatewayModelPlan {
         GatewayModelPlan::default()
     }
 }
@@ -44,7 +44,7 @@ fn claude_state(sources: Vec<Value>, settings: Option<Value>) -> Value {
     if let Some(settings) = settings {
         entry["settings"] = settings;
     }
-    json!({ "version": 2, "revision": 7, "harnesses": [entry] })
+    json!({ "version": 2, "sequence": 7, "harnesses": [entry] })
 }
 
 fn store() -> SeatCoolingStore {
@@ -463,7 +463,7 @@ fn refusal_codes_and_route_auth_error_mapping() {
 
     let with_reason = RouteAuthError::SelectionMissing {
         harness_kind: "grok".into(),
-        revision: 1,
+        sequence: 1,
         reason: Some("managed model access isn't ready on this account yet".into()),
     };
     assert_eq!(
@@ -475,7 +475,7 @@ fn refusal_codes_and_route_auth_error_mapping() {
     );
     let without_reason = RouteAuthError::SelectionMissing {
         harness_kind: "grok".into(),
-        revision: 1,
+        sequence: 1,
         reason: None,
     };
     assert_eq!(

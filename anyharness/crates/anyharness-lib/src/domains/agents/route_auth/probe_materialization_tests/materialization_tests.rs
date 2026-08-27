@@ -133,7 +133,7 @@ fn a_native_harness_materializes_the_empty_delta() {
     // No state.json at all: the fresh-desktop shape.
     let material = material_for(&home, "opencode").expect("material");
     assert!(material.is_native());
-    assert_eq!(material.state_revision, 0);
+    assert_eq!(material.state_sequence, 0);
 
     let materialized = materialize_for_probe(home.path(), "opencode", &material, &plan_with(&[]))
         .expect("materialize");
@@ -150,38 +150,38 @@ fn a_native_harness_materializes_the_empty_delta() {
 /// GC isolation, with the corrected assertion.
 ///
 /// Two halves. (1) A probe's own GC deletes nothing: the scratch is fresh, so
-/// "greatest revision strictly below current" finds no candidate, and the three
-/// live dirs are untouched. (2) A subsequent LAUNCH at revision 8 over live
-/// `{5,6,7}` deletes **both 5 AND 6**, not just 5: `gc_old_revision_dirs` runs
-/// BEFORE the revision-8 dir is created, so the revisions present are `[5,6,7]`,
-/// `previous_revision` is 7, and everything strictly below 7 goes. The keep-window
+/// "greatest sequence strictly below current" finds no candidate, and the three
+/// live dirs are untouched. (2) A subsequent LAUNCH at sequence 8 over live
+/// `{5,6,7}` deletes **both 5 AND 6**, not just 5: `gc_old_sequence_dirs` runs
+/// BEFORE the sequence-8 dir is created, so the sequences present are `[5,6,7]`,
+/// `previous_sequence` is 7, and everything strictly below 7 goes. The keep-window
 /// is current-plus-previous relative to what is ON DISK, not to the incoming
-/// revision.
+/// sequence.
 #[test]
-fn probe_gc_is_a_no_op_and_the_launch_gc_keeps_only_the_previous_on_disk_revision() {
+fn probe_gc_is_a_no_op_and_the_launch_gc_keeps_only_the_previous_on_disk_sequence() {
     let home = TempHome::new("gc-isolation");
     home.write_state_json(&state(
         7,
         json!([{ "harness_kind": "codex", "sources": [gateway_source(VK)] }]),
     ));
-    for revision in [5, 6, 7] {
-        std::fs::create_dir_all(home.path().join(format!("agent-auth/codex-home-{revision}")))
-            .expect("seed live revision dir");
+    for sequence in [5, 6, 7] {
+        std::fs::create_dir_all(home.path().join(format!("agent-auth/codex-home-{sequence}")))
+            .expect("seed live sequence dir");
     }
 
     let material = material_for(&home, "codex").expect("material");
     let materialized = materialize_for_probe(home.path(), "codex", &material, &plan_with(&["m"]))
         .expect("materialize");
 
-    for revision in [5, 6, 7] {
+    for sequence in [5, 6, 7] {
         assert!(
             home.path()
-                .join(format!("agent-auth/codex-home-{revision}"))
+                .join(format!("agent-auth/codex-home-{sequence}"))
                 .is_dir(),
-            "the probe's GC must delete no live revision dir (codex-home-{revision})"
+            "the probe's GC must delete no live sequence dir (codex-home-{sequence})"
         );
     }
-    let scratch_revision_dirs: Vec<String> =
+    let scratch_sequence_dirs: Vec<String> =
         std::fs::read_dir(materialized.scratch.root().join("agent-auth"))
             .expect("read scratch agent-auth")
             .flatten()
@@ -189,12 +189,12 @@ fn probe_gc_is_a_no_op_and_the_launch_gc_keeps_only_the_previous_on_disk_revisio
             .filter(|name| name.starts_with("codex-home-"))
             .collect();
     assert_eq!(
-        scratch_revision_dirs,
+        scratch_sequence_dirs,
         vec!["codex-home-7".to_string()],
-        "the scratch holds exactly the probed revision"
+        "the scratch holds exactly the probed sequence"
     );
 
-    // Now a launch at revision 8, which DOES garbage-collect.
+    // Now a launch at sequence 8, which DOES garbage-collect.
     home.write_state_json(&state(
         8,
         json!([{ "harness_kind": "codex", "sources": [gateway_source(VK)] }]),
@@ -229,7 +229,7 @@ fn probe_gc_is_a_no_op_and_the_launch_gc_keeps_only_the_previous_on_disk_revisio
     );
 }
 
-/// The claude hazard: `claude-config/` is deliberately NOT revision-keyed,
+/// The claude hazard: `claude-config/` is deliberately NOT sequence-keyed,
 /// so every running claude session shares it. A probe must never write there.
 #[test]
 fn a_claude_probe_never_touches_the_shared_live_config_dir() {
@@ -381,7 +381,7 @@ fn a_state_file_from_another_server_yields_no_gateway_material() {
     let home = TempHome::new("origin-guard");
     home.write_state_json(&json!({
         "version": 2,
-        "revision": 9,
+        "sequence": 9,
         "issuing_server_origin": "https://other.example",
         "harnesses": [{ "harness_kind": "claude", "sources": [gateway_source(VK)] }],
     }));

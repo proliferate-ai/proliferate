@@ -148,7 +148,7 @@ fn per_seat_config_dirs_are_distinct_across_seats() {
     let dir_b = second.set.get("CLAUDE_CONFIG_DIR").expect("dir b");
     assert_ne!(dir_a, dir_b);
     // Both seat homes exist: the first seat's dir survives the switch (its
-    // keychain material must not be swept by a document revision).
+    // keychain material must not be swept by a document sequence).
     assert!(std::path::Path::new(dir_a).is_dir());
     assert!(std::path::Path::new(dir_b).is_dir());
 }

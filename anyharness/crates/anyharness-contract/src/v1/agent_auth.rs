@@ -7,6 +7,7 @@ use utoipa::ToSchema;
 pub struct ApplyAgentAuthStateResponse {
     /// True when the document was persisted to the runtime's state file.
     pub applied: bool,
-    /// The persisted document's revision.
-    pub revision: i64,
+    /// The persisted document's sequence (monotonic per surface; the server
+    /// bumps it on every content-changing render).
+    pub sequence: i64,
 }

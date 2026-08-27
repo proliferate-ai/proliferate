@@ -49,9 +49,9 @@ impl LaunchProbeService {
         };
         let plan_producer = self.plan_producer.clone();
         let plan_harness = harness_kind.to_string();
-        let plan_revision = material.state_revision;
+        let plan_sequence = material.state_sequence;
         let plan = tokio::task::spawn_blocking(move || {
-            plan_producer.resolve_gateway_models_blocking(&plan_harness, plan_revision)
+            plan_producer.resolve_gateway_models_blocking(&plan_harness, plan_sequence)
         })
         .await
         .unwrap_or_default();

@@ -44,7 +44,7 @@ fn opencode_gateway_writes_config_with_live_models() {
     assert_eq!(providers, vec!["proliferate"]);
 
     // XDG_CONFIG_HOME is isolated (our injected provider config stays
-    // revision-keyed and deterministic). XDG_DATA_HOME is NOT overridden —
+    // sequence-keyed and deterministic). XDG_DATA_HOME is NOT overridden —
     // opencode resolves auth at the real ~/.local/share/opencode/auth.json so
     // natively-logged-in providers coexist with the gateway provider.
     let xdg_config = rendered

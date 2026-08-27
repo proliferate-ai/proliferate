@@ -121,7 +121,7 @@ impl LaunchRefusal {
                 earliest_reset_epoch_s: *earliest_reset_epoch_s,
             }),
             RouteAuthError::MalformedStateFile { .. }
-            | RouteAuthError::StaleStateRevision { .. }
+            | RouteAuthError::StaleStateSequence { .. }
             | RouteAuthError::SelectionIncomplete { .. }
             | RouteAuthError::UnsupportedRoute { .. }
             | RouteAuthError::UnknownHarness { .. }

@@ -6,10 +6,10 @@ use super::*;
 
 use crate::domains::agents::route_auth::state::{AuthSource, HarnessAuth, STATE_VERSION};
 
-fn state(revision: i64, harnesses: Vec<HarnessAuth>) -> AgentAuthState {
+fn state(sequence: i64, harnesses: Vec<HarnessAuth>) -> AgentAuthState {
     AgentAuthState {
         version: STATE_VERSION,
-        revision,
+        sequence,
         user_id: None,
         issuing_server_origin: None,
         harnesses,
@@ -93,7 +93,7 @@ fn no_state_file_is_native() {
 
 #[test]
 fn missing_harness_falls_back_to_native() {
-    // codex configured (bumps the global revision) must NOT block claude,
+    // codex configured (bumps the global sequence) must NOT block claude,
     // which the user never configured — claude resolves Native.
     let state = state(
         7,
@@ -110,10 +110,10 @@ fn missing_harness_falls_back_to_native() {
 /// silent-degradation bug as intended behavior. A desktop user with a native
 /// claude login whose gateway budget exhausts would have had the launch
 /// silently succeed against their personal Anthropic account. It now asserts
-/// the typed refusal, carrying the revision so the UI can say which document
+/// the typed refusal, carrying the sequence so the UI can say which document
 /// generation was dead.
 #[test]
-fn empty_sources_fails_closed_with_the_revision() {
+fn empty_sources_fails_closed_with_the_sequence() {
     let state = state(4, vec![harness("claude", vec![])]);
 
     let error = resolve_profile(Some(&state), "claude").expect_err("must fail closed");
@@ -122,7 +122,7 @@ fn empty_sources_fails_closed_with_the_revision() {
         error,
         RouteAuthError::SelectionMissing {
             ref harness_kind,
-            revision: 4,
+            sequence: 4,
             reason: None,
         } if harness_kind == "claude"
     ));
@@ -130,7 +130,7 @@ fn empty_sources_fails_closed_with_the_revision() {
 }
 
 /// The document's `unsatisfied_reason` rides into the refusal, and the
-/// Display speaks it verbatim (no "(state revision N)" suffix — the revision
+/// Display speaks it verbatim (no "(state sequence N)" suffix — the sequence
 /// stays a struct field for logs only).
 #[test]
 fn unsatisfied_reason_reaches_the_refusal_and_its_display() {
@@ -151,7 +151,7 @@ fn unsatisfied_reason_reaches_the_refusal_and_its_display() {
     );
 
     // Without a carried reason the family sentence stands, still without the
-    // revision suffix.
+    // sequence suffix.
     let bare = resolve_profile(Some(&state(4, vec![harness("claude", vec![])])), "claude")
         .expect_err("must fail closed");
     assert_eq!(
@@ -302,7 +302,7 @@ fn single_gateway_source_resolves() {
     match profile {
         AgentRuntimeAuthProfile::Sources(sources) => {
             assert_eq!(sources.harness_kind, "claude");
-            assert_eq!(sources.revision, 3);
+            assert_eq!(sources.sequence, 3);
             assert_eq!(sources.sources.len(), 1);
             assert_eq!(
                 sources.sources[0],

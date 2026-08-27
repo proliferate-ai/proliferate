@@ -36,10 +36,10 @@ pub enum AgentRuntimeAuthProfile {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessSources {
     pub harness_kind: String,
-    /// The state revision that produced these sources — carried so switch-time
+    /// The state sequence that produced these sources — carried so switch-time
     /// materialization (codex/grok/opencode isolated dirs) can key directory
     /// names and GC stale ones.
-    pub revision: i64,
+    pub sequence: i64,
     pub sources: Vec<ResolvedSource>,
     /// The seat-rotation toggle, from the document's `settings["rotate"]`:
     /// `true` when absent or not a bool (rotation is the default), `false`
@@ -137,7 +137,7 @@ pub fn resolve_profile(
     if entry.sources.is_empty() {
         return Err(RouteAuthError::SelectionMissing {
             harness_kind: harness_kind.to_string(),
-            revision: state.revision,
+            sequence: state.sequence,
             reason: clamp_unsatisfied_reason(entry.unsatisfied_reason.as_deref()),
         });
     }
@@ -155,7 +155,7 @@ pub fn resolve_profile(
         .unwrap_or(true);
     Ok(AgentRuntimeAuthProfile::Sources(HarnessSources {
         harness_kind: harness_kind.to_string(),
-        revision: state.revision,
+        sequence: state.sequence,
         sources,
         rotate,
     }))

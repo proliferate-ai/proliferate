@@ -30,8 +30,8 @@ fn api_key_source(env_var_name: &str, value: &str) -> serde_json::Value {
     json!({ "kind": "api_key", "env_var_name": env_var_name, "value": value })
 }
 
-fn state(revision: i64, harnesses: serde_json::Value) -> serde_json::Value {
-    json!({ "version": 2, "revision": revision, "harnesses": harnesses })
+fn state(sequence: i64, harnesses: serde_json::Value) -> serde_json::Value {
+    json!({ "version": 2, "sequence": sequence, "harnesses": harnesses })
 }
 
 fn material_for(home: &TempHome, harness: &str) -> Result<ProbeAuthMaterial, RouteAuthError> {

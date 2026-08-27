@@ -3,22 +3,22 @@
 //! config, grok HOME).
 //!
 //! This is the APPLY half of the two-phase render (contract §4): [`render`]
-//! produces pure [`FileSpec`]s (which family, which revision, what bytes) and
+//! produces pure [`FileSpec`]s (which family, which sequence, what bytes) and
 //! the launcher hands each here to be written. Path computation is shared with
-//! the render layer via the pure [`revision_dir_path`] / [`claude_config_dir_path`]
+//! the render layer via the pure [`sequence_dir_path`] / [`claude_config_dir_path`]
 //! helpers, so the env vars render sets and the dirs applied here always agree.
 //!
 //! [`render`]: super::render
 //!
-//! Bookkeeping is filesystem-only: the applied revision is carried in the
+//! Bookkeeping is filesystem-only: the applied sequence is carried in the
 //! directory name (`codex-home-<rev>`, `grok-home-<rev>`, ...), so no new
 //! SQLite table is introduced. Each materialization garbage-collects sibling
-//! dirs for *stale* revisions, then writes the current revision's dir
+//! dirs for *stale* sequences, then writes the current sequence's dir
 //! idempotently.
 //!
-//! Cleanup is deliberately conservative: the current revision's dir AND the
-//! immediately-previous revision's dir are always kept, so in-flight processes
-//! launched under the prior revision keep reading valid isolated state.
+//! Cleanup is deliberately conservative: the current sequence's dir AND the
+//! immediately-previous sequence's dir are always kept, so in-flight processes
+//! launched under the prior sequence keep reading valid isolated state.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,7 +27,7 @@ use super::RouteAuthError;
 
 const ROUTE_AUTH_DIR: &str = "agent-auth";
 
-/// Directory family prefixes; the applied revision is appended (`-<rev>`).
+/// Directory family prefixes; the applied sequence is appended (`-<rev>`).
 pub(super) const CODEX_HOME_PREFIX: &str = "codex-home";
 pub(super) const GROK_HOME_PREFIX: &str = "grok-home";
 pub(super) const OPENCODE_CONFIG_PREFIX: &str = "opencode-config";
@@ -35,16 +35,16 @@ pub(super) const OPENCODE_CONFIG_PREFIX: &str = "opencode-config";
 /// Isolated CLAUDE_CONFIG_DIR family. Claude Code reads `~/.claude` (settings,
 /// cached credentials) unless CLAUDE_CONFIG_DIR points elsewhere; an ambient
 /// `~/.claude` can otherwise defeat the env sanitization the claude adapter
-/// performs. This dir is stable (not revision-keyed) — it holds no
-/// revision-specific content; the launch env vars are authoritative each launch.
+/// performs. This dir is stable (not sequence-keyed) — it holds no
+/// sequence-specific content; the launch env vars are authoritative each launch.
 const CLAUDE_CONFIG_DIR_NAME: &str = "claude-config";
 
 /// Per-seat CLAUDE_CONFIG_DIR family (`claude-config-<seat>/`, seats v1).
-/// Keyed by the seat's vault entry id, NOT by revision: the dir's identity is
+/// Keyed by the seat's vault entry id, NOT by sequence: the dir's identity is
 /// the seat, so keychain entries the CLI writes there (config-dir-hashed
-/// service names) stay stable across document revisions, and two seats never
-/// share credential state. Never GC'd by the revision sweep (its suffix is a
-/// UUID, not a revision); a revoked seat's dir is inert — the launch env is
+/// service names) stay stable across document sequences, and two seats never
+/// share credential state. Never GC'd by the sequence sweep (its suffix is a
+/// UUID, not a sequence); a revoked seat's dir is inert — the launch env is
 /// authoritative and simply stops pointing at it.
 const CLAUDE_SEAT_CONFIG_DIR_PREFIX: &str = "claude-config-";
 
@@ -63,17 +63,17 @@ pub(super) const OPENCODE_XDG_DATA_SUBDIR: &str = "xdg-data";
 /// tags the spec; apply runs the matching recipe.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathFamily {
-    /// Stable (not revision-keyed) CLAUDE_CONFIG_DIR; no content file.
+    /// Stable (not sequence-keyed) CLAUDE_CONFIG_DIR; no content file.
     ClaudeConfig,
     /// Seat-keyed CLAUDE_CONFIG_DIR (`claude-config-<seat>/`, seats v1); no
     /// content file. Keyed by the seat's vault entry id so keychain state the
-    /// CLI writes there stays per-seat and revision-stable.
+    /// CLI writes there stays per-seat and sequence-stable.
     ClaudeSeatConfig { seat_id: String },
-    /// Revision-keyed CODEX_HOME with a `config.toml` (a ROUTED codex launch).
+    /// Sequence-keyed CODEX_HOME with a `config.toml` (a ROUTED codex launch).
     CodexHome,
-    /// Revision-keyed OpenCode dir with `opencode.json` + XDG subdirs.
+    /// Sequence-keyed OpenCode dir with `opencode.json` + XDG subdirs.
     OpencodeConfig,
-    /// Revision-keyed grok HOME; no content file.
+    /// Sequence-keyed grok HOME; no content file.
     GrokHome,
 }
 
@@ -83,7 +83,7 @@ pub enum PathFamily {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileSpec {
     pub path_family: PathFamily,
-    pub revision: i64,
+    pub sequence: i64,
     pub contents: Option<Vec<u8>>,
 }
 
@@ -91,11 +91,11 @@ fn route_auth_root(runtime_home: &Path) -> PathBuf {
     runtime_home.join(ROUTE_AUTH_DIR)
 }
 
-/// Pure: the revision-keyed dir path for a family (no I/O). Shared by the render
+/// Pure: the sequence-keyed dir path for a family (no I/O). Shared by the render
 /// layer (to set env vars) and apply (to create + write). Must match the path
-/// [`prepare_revision_dir`] creates.
-pub(super) fn revision_dir_path(runtime_home: &Path, prefix: &str, revision: i64) -> PathBuf {
-    route_auth_root(runtime_home).join(format!("{prefix}-{revision}"))
+/// [`prepare_sequence_dir`] creates.
+pub(super) fn sequence_dir_path(runtime_home: &Path, prefix: &str, sequence: i64) -> PathBuf {
+    route_auth_root(runtime_home).join(format!("{prefix}-{sequence}"))
 }
 
 /// Pure: the stable CLAUDE_CONFIG_DIR path (no I/O).
@@ -128,9 +128,9 @@ fn sanitize_path_component(value: &str) -> String {
         .collect()
 }
 
-/// Apply one [`FileSpec`]: create the isolated dir (revision-keyed families GC
+/// Apply one [`FileSpec`]: create the isolated dir (sequence-keyed families GC
 /// stale siblings first) and write its config file 0600 where the family has
-/// one. Idempotent per revision.
+/// one. Idempotent per sequence.
 pub(super) fn apply_file_spec(
     runtime_home: &Path,
     spec: &FileSpec,
@@ -141,18 +141,18 @@ pub(super) fn apply_file_spec(
             create_dir(&dir)?;
         }
         PathFamily::ClaudeSeatConfig { seat_id } => {
-            // Seat-keyed, never revision-swept: the dir carries per-seat CLI
+            // Seat-keyed, never sequence-swept: the dir carries per-seat CLI
             // state (keychain service hashing keys off the config-dir path),
-            // so it must survive document revisions unchanged.
+            // so it must survive document sequences unchanged.
             let dir = claude_seat_config_dir_path(runtime_home, seat_id);
             create_dir(&dir)?;
         }
         PathFamily::CodexHome => {
-            let dir = prepare_revision_dir(runtime_home, CODEX_HOME_PREFIX, spec.revision)?;
+            let dir = prepare_sequence_dir(runtime_home, CODEX_HOME_PREFIX, spec.sequence)?;
             write_private_file(&dir.join(CODEX_CONFIG_FILE_NAME), spec_contents(spec)?)?;
         }
         PathFamily::OpencodeConfig => {
-            let dir = prepare_revision_dir(runtime_home, OPENCODE_CONFIG_PREFIX, spec.revision)?;
+            let dir = prepare_sequence_dir(runtime_home, OPENCODE_CONFIG_PREFIX, spec.sequence)?;
             write_private_file(
                 &dir.join(OPENCODE_CONFIG_FILE_NAME),
                 spec_contents(spec)?,
@@ -162,7 +162,7 @@ pub(super) fn apply_file_spec(
             }
         }
         PathFamily::GrokHome => {
-            prepare_revision_dir(runtime_home, GROK_HOME_PREFIX, spec.revision)?;
+            prepare_sequence_dir(runtime_home, GROK_HOME_PREFIX, spec.sequence)?;
         }
     }
     Ok(())
@@ -185,35 +185,35 @@ fn create_dir(dir: &Path) -> Result<(), RouteAuthError> {
     })
 }
 
-/// Create (idempotently) the revision-keyed directory for a family, removing
-/// any sibling dirs of the same family carrying a stale revision.
-fn prepare_revision_dir(
+/// Create (idempotently) the sequence-keyed directory for a family, removing
+/// any sibling dirs of the same family carrying a stale sequence.
+fn prepare_sequence_dir(
     runtime_home: &Path,
     prefix: &str,
-    revision: i64,
+    sequence: i64,
 ) -> Result<PathBuf, RouteAuthError> {
     let root = route_auth_root(runtime_home);
     create_dir(&root)?;
-    gc_old_revision_dirs(&root, prefix, revision)?;
-    let dir = revision_dir_path(runtime_home, prefix, revision);
+    gc_old_sequence_dirs(&root, prefix, sequence)?;
+    let dir = sequence_dir_path(runtime_home, prefix, sequence);
     create_dir(&dir)?;
     Ok(dir)
 }
 
-/// Garbage-collect `<prefix>-<rev>` sibling dirs, KEEPING the current revision's
-/// dir and the immediately-previous revision's dir. Only dirs strictly older
-/// than the immediately-previous revision are removed.
+/// Garbage-collect `<prefix>-<rev>` sibling dirs, KEEPING the current sequence's
+/// dir and the immediately-previous sequence's dir. Only dirs strictly older
+/// than the immediately-previous sequence are removed.
 ///
-/// Why keep the immediately-previous dir: a session launched under revision N-1
-/// may still be running when revision N is materialized. Its isolated home
+/// Why keep the immediately-previous dir: a session launched under sequence N-1
+/// may still be running when sequence N is materialized. Its isolated home
 /// (`codex-home-<N-1>`, `grok-home-<N-1>`, ...) must remain intact so the
-/// in-flight process finishes on the old state. Dirs we cannot parse a revision
-/// from, and any revision >= current (shouldn't normally occur), are left
+/// in-flight process finishes on the old state. Dirs we cannot parse a sequence
+/// from, and any sequence >= current (shouldn't normally occur), are left
 /// untouched as well.
-fn gc_old_revision_dirs(
+fn gc_old_sequence_dirs(
     root: &Path,
     prefix: &str,
-    current_revision: i64,
+    current_sequence: i64,
 ) -> Result<(), RouteAuthError> {
     let entries = match fs::read_dir(root) {
         Ok(entries) => entries,
@@ -225,7 +225,7 @@ fn gc_old_revision_dirs(
         }
     };
     let stale_prefix = format!("{prefix}-");
-    let mut revisions: Vec<(i64, PathBuf)> = Vec::new();
+    let mut sequences: Vec<(i64, PathBuf)> = Vec::new();
     for entry in entries.flatten() {
         let name = entry.file_name();
         let Some(name) = name.to_str() else { continue };
@@ -235,19 +235,19 @@ fn gc_old_revision_dirs(
         let Ok(rev) = rev_str.parse::<i64>() else {
             continue;
         };
-        revisions.push((rev, entry.path()));
+        sequences.push((rev, entry.path()));
     }
-    // Immediately-previous revision = greatest revision strictly below current.
-    let Some(previous_revision) = revisions
+    // Immediately-previous sequence = greatest sequence strictly below current.
+    let Some(previous_sequence) = sequences
         .iter()
         .map(|(rev, _)| *rev)
-        .filter(|rev| *rev < current_revision)
+        .filter(|rev| *rev < current_sequence)
         .max()
     else {
         return Ok(());
     };
-    for (rev, path) in revisions {
-        if rev < previous_revision {
+    for (rev, path) in sequences {
+        if rev < previous_sequence {
             let _ = fs::remove_dir_all(path);
         }
     }

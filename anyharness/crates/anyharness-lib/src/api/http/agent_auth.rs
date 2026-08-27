@@ -26,7 +26,7 @@ use crate::domains::agents::route_auth::{
     responses(
         (status = 200, description = "State persisted", body = ApplyAgentAuthStateResponse),
         (status = 400, description = "Payload rejected; persisted state unchanged", body = anyharness_contract::v1::ProblemDetails),
-        (status = 409, description = "Stale revision; persisted state unchanged", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Stale sequence; persisted state unchanged", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "agent-auth"
 )]
@@ -40,9 +40,9 @@ pub async fn put_agent_auth_state(
             "AGENT_AUTH_STATE_REJECTED",
         )
     })?;
-    if document.revision < 0 {
+    if document.sequence < 0 {
         return Err(ApiError::bad_request(
-            "agent-auth state revision must be >= 0",
+            "agent-auth state sequence must be >= 0",
             "AGENT_AUTH_STATE_REJECTED",
         ));
     }
@@ -62,7 +62,7 @@ pub async fn put_agent_auth_state(
     );
     Ok(Json(ApplyAgentAuthStateResponse {
         applied: true,
-        revision: document.revision,
+        sequence: document.sequence,
     }))
 }
 
@@ -108,7 +108,7 @@ fn applied_harness_kinds(document: &AgentAuthState) -> Vec<String> {
 /// State-route mapping: ONE mapper with the sessions API
 /// (`sessions_errors::map_route_auth_error`, exhaustive, refusal family
 /// rendered through the `LaunchRefusal` vocabulary). Only
-/// `StaleStateRevision` can actually arise from
+/// `StaleStateSequence` can actually arise from
 /// `apply_state_file`/`clear_state_file`; delegating rather than mirroring
 /// is what makes "the two mappers can never disagree" structural.
 fn map_route_auth_error(error: RouteAuthError) -> ApiError {
@@ -122,7 +122,7 @@ mod tests {
     fn document(harnesses: &[(&str, &[&str])]) -> AgentAuthState {
         let json = serde_json::json!({
             "version": 2,
-            "revision": 9,
+            "sequence": 9,
             "harnesses": harnesses
                 .iter()
                 .map(|(kind, source_kinds)| serde_json::json!({

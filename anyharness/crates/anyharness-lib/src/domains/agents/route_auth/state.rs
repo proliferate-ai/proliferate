@@ -126,10 +126,13 @@ pub struct AgentAuthState {
     /// Wire schema version. Must equal [`STATE_VERSION`]; any other value (or a
     /// version-less v1 file) is rejected as malformed on load.
     pub version: i64,
-    /// Monotonic revision. Any selection/key mutation bumps it; used for
-    /// stale-push protection ([`apply_state_file`]) and revision-keyed
-    /// materialization dirs.
-    pub revision: i64,
+    /// Monotonic sequence, per surface. The server bumps it on ANY render whose
+    /// content changed (selection/key mutations, virtual-key rotation — all of
+    /// it); a no-op render changes nothing. Used for stale-push protection
+    /// ([`apply_state_file`]) and sequence-keyed materialization dirs. Content
+    /// identity is the `fingerprint`, a `GET /state` rider that never reaches
+    /// this document.
+    pub sequence: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
     /// The origin (`scheme://host[:port]`) of the control-plane server that
@@ -210,23 +213,24 @@ pub fn load_state_file(runtime_home: &Path) -> Result<Option<AgentAuthState>, Ro
 /// sandboxes). The write is atomic and 0600 via the shared route-auth private
 /// file helper.
 ///
-/// Stale-write protection: a payload whose revision is BELOW the persisted
-/// file's revision is rejected (a delayed push must never roll live
-/// selections back). Equal revisions are accepted — content is authoritative
-/// (e.g. a virtual-key rotation changes the file without a revision bump). A
-/// malformed on-disk file carries no trustworthy revision and is healed by
-/// any valid push.
+/// Stale-write protection: a payload whose sequence is BELOW the persisted
+/// file's sequence is rejected (a delayed push must never roll live
+/// selections back). An equal sequence is an idempotent re-push of the same
+/// document — by governance the server bumps the sequence on ANY content
+/// change, virtual-key rotation included, so equal sequence means identical
+/// content. A malformed on-disk file carries no trustworthy sequence and is
+/// healed by any valid push.
 pub fn apply_state_file(runtime_home: &Path, state: &AgentAuthState) -> Result<(), RouteAuthError> {
     let path = state_file_path(runtime_home);
-    let persisted_revision = match load_state_from_path(&path) {
-        Ok(existing) => existing.map(|existing| existing.revision),
+    let persisted_sequence = match load_state_from_path(&path) {
+        Ok(existing) => existing.map(|existing| existing.sequence),
         Err(RouteAuthError::MalformedStateFile { .. }) => None,
         Err(error) => return Err(error),
     };
-    if let Some(current) = persisted_revision {
-        if state.revision < current {
-            return Err(RouteAuthError::StaleStateRevision {
-                incoming: state.revision,
+    if let Some(current) = persisted_sequence {
+        if state.sequence < current {
+            return Err(RouteAuthError::StaleStateSequence {
+                incoming: state.sequence,
                 current,
             });
         }
@@ -245,7 +249,7 @@ pub fn apply_state_file(runtime_home: &Path, state: &AgentAuthState) -> Result<(
 
 /// Clear the delivered route state and return the runtime to native auth.
 ///
-/// Clearing is a separate operation from revisioned replacement because native
+/// Clearing is a separate operation from sequenceed replacement because native
 /// auth is represented by the absence of route state at the runtime. Making
 /// the reset explicit avoids weakening stale-write protection for ordinary
 /// state documents.
@@ -346,7 +350,7 @@ mod tests {
         // no trustworthy shape for this render plane: reject as malformed.
         let home = TempHome::new("state-v1");
         home.write_state_raw(
-            br#"{ "revision": 3, "selections": [ { "harness": "claude", "route": "native" } ] }"#,
+            br#"{ "sequence": 3, "selections": [ { "harness": "claude", "route": "native" } ] }"#,
         );
         let error = load_state_file(home.path()).expect_err("v1 rejected");
         assert!(matches!(error, RouteAuthError::MalformedStateFile { .. }));
@@ -357,7 +361,7 @@ mod tests {
         let home = TempHome::new("state-badver");
         home.write_state_json(&serde_json::json!({
             "version": 1,
-            "revision": 3,
+            "sequence": 3,
             "harnesses": []
         }));
         let error = load_state_file(home.path()).expect_err("bad version");
@@ -368,7 +372,7 @@ mod tests {
     fn round_trip_serde_preserves_sources() {
         let state = AgentAuthState {
             version: STATE_VERSION,
-            revision: 42,
+            sequence: 42,
             user_id: Some("user-1".into()),
             issuing_server_origin: None,
             harnesses: vec![
@@ -404,7 +408,7 @@ mod tests {
     fn sources_lookup_distinguishes_absent_from_present_but_empty() {
         let state = AgentAuthState {
             version: STATE_VERSION,
-            revision: 5,
+            sequence: 5,
             user_id: None,
             issuing_server_origin: None,
             harnesses: vec![
@@ -442,7 +446,7 @@ mod tests {
 
     #[test]
     fn empty_harnesses_field_defaults() {
-        let json = r#"{ "version": 2, "revision": 0 }"#;
+        let json = r#"{ "version": 2, "sequence": 0 }"#;
         let state: AgentAuthState = serde_json::from_str(json).expect("parse");
         assert!(state.harnesses.is_empty());
         // No stamp on this (legacy) shape either.
@@ -451,7 +455,7 @@ mod tests {
 
     #[test]
     fn issuing_server_origin_round_trips_and_is_absent_by_default() {
-        let json = r#"{ "version": 2, "revision": 0, "issuing_server_origin": "https://proliferate.corp.example" }"#;
+        let json = r#"{ "version": 2, "sequence": 0, "issuing_server_origin": "https://proliferate.corp.example" }"#;
         let state: AgentAuthState = serde_json::from_str(json).expect("parse");
         assert_eq!(
             state.issuing_server_origin,
@@ -464,7 +468,7 @@ mod tests {
     fn stamped_state(origin: Option<&str>) -> AgentAuthState {
         AgentAuthState {
             version: STATE_VERSION,
-            revision: 1,
+            sequence: 1,
             user_id: None,
             issuing_server_origin: origin.map(str::to_string),
             harnesses: vec![],
@@ -506,10 +510,10 @@ mod tests {
         assert!(state.matches_server_origin(None));
     }
 
-    fn state_with_revision(revision: i64) -> AgentAuthState {
+    fn state_with_sequence(sequence: i64) -> AgentAuthState {
         AgentAuthState {
             version: STATE_VERSION,
-            revision,
+            sequence,
             user_id: Some("user-1".into()),
             issuing_server_origin: None,
             harnesses: vec![HarnessAuth {
@@ -524,7 +528,7 @@ mod tests {
     #[test]
     fn apply_state_file_writes_private_and_round_trips() {
         let home = TempHome::new("apply-write");
-        let state = state_with_revision(7);
+        let state = state_with_sequence(7);
         apply_state_file(home.path(), &state).expect("apply");
         let loaded = load_state_file(home.path()).expect("load").expect("state");
         assert_eq!(loaded, state);
@@ -540,60 +544,60 @@ mod tests {
     }
 
     #[test]
-    fn apply_state_file_rejects_lower_revision_and_keeps_file() {
+    fn apply_state_file_rejects_lower_sequence_and_keeps_file() {
         let home = TempHome::new("apply-stale");
-        apply_state_file(home.path(), &state_with_revision(5)).expect("apply");
-        let error = apply_state_file(home.path(), &state_with_revision(4)).expect_err("stale");
+        apply_state_file(home.path(), &state_with_sequence(5)).expect("apply");
+        let error = apply_state_file(home.path(), &state_with_sequence(4)).expect_err("stale");
         assert!(matches!(
             error,
-            RouteAuthError::StaleStateRevision {
+            RouteAuthError::StaleStateSequence {
                 incoming: 4,
                 current: 5
             }
         ));
         assert_eq!(error.code(), "AGENT_ROUTE_STATE_STALE");
         let loaded = load_state_file(home.path()).expect("load").expect("state");
-        assert_eq!(loaded.revision, 5);
+        assert_eq!(loaded.sequence, 5);
     }
 
     #[test]
-    fn apply_state_file_accepts_equal_and_higher_revisions() {
+    fn apply_state_file_accepts_equal_and_higher_sequences() {
         let home = TempHome::new("apply-monotonic");
-        apply_state_file(home.path(), &state_with_revision(5)).expect("apply");
-        // Equal revision: content is authoritative (vkey rotation case).
-        let mut rotated = state_with_revision(5);
-        rotated.harnesses[0].harness_kind = "codex".into();
-        apply_state_file(home.path(), &rotated).expect("equal revision");
-        apply_state_file(home.path(), &state_with_revision(6)).expect("higher revision");
+        apply_state_file(home.path(), &state_with_sequence(5)).expect("apply");
+        // Equal sequence: an idempotent re-push of the same document. (Rotated
+        // content at an equal sequence is no longer a legal input — the server
+        // bumps the sequence on ANY content change, key rotation included.)
+        apply_state_file(home.path(), &state_with_sequence(5)).expect("equal sequence re-push");
+        apply_state_file(home.path(), &state_with_sequence(6)).expect("higher sequence");
         let loaded = load_state_file(home.path()).expect("load").expect("state");
-        assert_eq!(loaded.revision, 6);
+        assert_eq!(loaded.sequence, 6);
     }
 
     #[test]
     fn apply_state_file_heals_a_malformed_file() {
         let home = TempHome::new("apply-heal");
         home.write_state_raw(b"{ not json");
-        apply_state_file(home.path(), &state_with_revision(3)).expect("heal");
+        apply_state_file(home.path(), &state_with_sequence(3)).expect("heal");
         let loaded = load_state_file(home.path()).expect("load").expect("state");
-        assert_eq!(loaded.revision, 3);
+        assert_eq!(loaded.sequence, 3);
     }
 
     #[test]
-    fn clear_state_file_resets_revision_lineage_for_native_then_new_route() {
+    fn clear_state_file_resets_sequence_lineage_for_native_then_new_route() {
         let home = TempHome::new("clear-native");
-        apply_state_file(home.path(), &state_with_revision(7)).expect("apply gateway state");
+        apply_state_file(home.path(), &state_with_sequence(7)).expect("apply gateway state");
 
         clear_state_file(home.path()).expect("clear to native");
         assert!(load_state_file(home.path())
             .expect("load cleared state")
             .is_none());
 
-        apply_state_file(home.path(), &state_with_revision(1)).expect("apply new route lineage");
+        apply_state_file(home.path(), &state_with_sequence(1)).expect("apply new route lineage");
         assert_eq!(
             load_state_file(home.path())
                 .expect("load replacement")
                 .expect("replacement state")
-                .revision,
+                .sequence,
             1
         );
     }

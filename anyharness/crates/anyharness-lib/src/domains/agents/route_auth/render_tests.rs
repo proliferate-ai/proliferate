@@ -27,7 +27,7 @@ const OPENCODE_LIVE_MODELS: &[&str] = &[
 struct HarnessPlanResolver;
 
 impl GatewayModelResolve for HarnessPlanResolver {
-    fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+    fn resolve_gateway_models(&self, harness_kind: &str, _sequence: i64) -> GatewayModelPlan {
         match harness_kind {
             "opencode" => GatewayModelPlan {
                 models: OPENCODE_LIVE_MODELS.iter().map(|m| m.to_string()).collect(),
@@ -43,15 +43,15 @@ impl GatewayModelResolve for HarnessPlanResolver {
 struct FixedResolver(GatewayModelPlan);
 
 impl GatewayModelResolve for FixedResolver {
-    fn resolve_gateway_models(&self, _harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+    fn resolve_gateway_models(&self, _harness_kind: &str, _sequence: i64) -> GatewayModelPlan {
         self.0.clone()
     }
 }
 
-fn v2_state(revision: i64, harnesses: Vec<Value>) -> Value {
+fn v2_state(sequence: i64, harnesses: Vec<Value>) -> Value {
     json!({
         "version": 2,
-        "revision": revision,
+        "sequence": sequence,
         "user_id": "user-1",
         "harnesses": harnesses,
     })
@@ -69,7 +69,7 @@ fn api_key_source(env_var_name: &str, value: &str) -> Value {
     json!({ "kind": "api_key", "env_var_name": env_var_name, "value": value })
 }
 
-/// A single-gateway state for `harness` at revision 42 (keeps the
+/// A single-gateway state for `harness` at sequence 42 (keeps the
 /// `*-home-42` dir-name assertions stable).
 fn gateway_state(kind: &str) -> Value {
     v2_state(42, vec![harness(kind, vec![gateway_source()])])
@@ -316,7 +316,7 @@ fn grok_api_key_sets_exactly_its_var() {
 
 #[test]
 fn absent_harness_renders_native_delta() {
-    // codex configured (revision bumped) must NOT block claude, which the user
+    // codex configured (sequence bumped) must NOT block claude, which the user
     // never configured — claude renders an empty (native) delta.
     let home = TempHome::new("absent-native");
     home.write_state_json(&gateway_state("codex")); // no claude entry
@@ -344,7 +344,7 @@ fn empty_sources_refuse_the_launch_instead_of_rendering_native() {
 
     assert!(matches!(
         &error,
-        RouteAuthError::SelectionMissing { harness_kind, revision: 4, .. } if harness_kind == "claude"
+        RouteAuthError::SelectionMissing { harness_kind, sequence: 4, .. } if harness_kind == "claude"
     ));
     // Nothing was materialized on the way to the refusal.
     assert!(!home.path().join("agent-auth/claude-config").exists());
@@ -382,7 +382,7 @@ fn malformed_state_file_is_typed_error() {
 fn v1_state_file_is_rejected_as_malformed() {
     let home = TempHome::new("v1");
     home.write_state_raw(
-        br#"{ "revision": 3, "selections": [ { "harness": "claude", "route": "native" } ] }"#,
+        br#"{ "sequence": 3, "selections": [ { "harness": "claude", "route": "native" } ] }"#,
     );
     let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect_err("v1 malformed");
     assert_eq!(error.code(), "AGENT_ROUTE_STATE_MALFORMED");
@@ -404,7 +404,7 @@ fn unknown_source_kind_is_typed_error() {
 #[test]
 fn render_is_pure_and_apply_writes_0600_files() {
     // render_profile must touch NO disk: it emits FileSpecs carrying the exact
-    // bytes, and the revision-keyed dir does not exist until the launcher
+    // bytes, and the sequence-keyed dir does not exist until the launcher
     // applies them.
     let home = TempHome::new("two-phase");
     home.write_state_json(&gateway_state("codex"));
@@ -443,10 +443,10 @@ fn render_is_pure_and_apply_writes_0600_files() {
     }
 }
 
-// --- revision-keyed materialization + cleanup ------------------------------
+// --- sequence-keyed materialization + cleanup ------------------------------
 
 #[test]
-fn codex_home_keeps_immediately_previous_and_gcs_older_revision_dirs() {
+fn codex_home_keeps_immediately_previous_and_gcs_older_sequence_dirs() {
     let home = TempHome::new("codex-rev");
 
     let render_rev = |rev: i64| {
@@ -466,7 +466,7 @@ fn codex_home_keeps_immediately_previous_and_gcs_older_revision_dirs() {
     let dir1 = render_rev(1);
     assert!(dir1.exists());
 
-    // Revision 2 — the immediately-previous dir (rev 1) MUST be kept, because a
+    // Sequence 2 — the immediately-previous dir (rev 1) MUST be kept, because a
     // session launched under rev 1 may still be running on it.
     let dir2 = render_rev(2);
     assert!(dir2.exists());
@@ -476,7 +476,7 @@ fn codex_home_keeps_immediately_previous_and_gcs_older_revision_dirs() {
         "immediately-previous codex-home-1 must be kept for in-flight rev-1 sessions"
     );
 
-    // Revision 3 — now rev 1 is older than the immediately-previous (rev 2) and
+    // Sequence 3 — now rev 1 is older than the immediately-previous (rev 2) and
     // is GC'd; rev 2 (immediately-previous) is kept.
     let dir3 = render_rev(3);
     assert!(dir3.exists());

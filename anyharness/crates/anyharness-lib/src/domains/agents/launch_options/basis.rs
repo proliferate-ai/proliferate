@@ -64,12 +64,12 @@ pub fn compute_harness_basis_revision(runtime_home: &Path, harness_kind: &str) -
         hash_field(&mut hasher, b"unregistered-harness");
     }
 
-    let auth_revision = load_state_file(runtime_home)
+    let auth_sequence = load_state_file(runtime_home)
         .ok()
         .flatten()
-        .map(|state| state.revision)
+        .map(|state| state.sequence)
         .unwrap_or(0);
-    hasher.update(auth_revision.to_be_bytes());
+    hasher.update(auth_sequence.to_be_bytes());
 
     let mut revision = String::with_capacity(64);
     for byte in hasher.finalize() {

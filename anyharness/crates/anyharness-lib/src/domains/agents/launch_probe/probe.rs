@@ -137,7 +137,7 @@ impl std::fmt::Debug for ProbeRequest {
         formatter
             .debug_struct("ProbeRequest")
             .field("harness_kind", &self.harness_kind)
-            .field("state_revision", &self.material.state_revision)
+            .field("state_sequence", &self.material.state_sequence)
             .field("plan_model_count", &self.plan.models.len())
             .field("per_probe_timeout", &self.per_probe_timeout)
             .finish()

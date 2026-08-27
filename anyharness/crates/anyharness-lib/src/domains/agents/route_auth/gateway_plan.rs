@@ -10,7 +10,7 @@
 //! shipped seed because that would make the subsequent probe a tautology.
 //!
 //! **Why the memo, and why in memory.** The predecessor cached fetch results in the
-//! `gateway_model_probe` sqlite table keyed on `state.json`'s GLOBAL revision, which
+//! `gateway_model_probe` sqlite table keyed on `state.json`'s GLOBAL sequence, which
 //! made any harness's key rotation invalidate every harness's cached list. The memo
 //! here is keyed per (harness, base URL) with its own short TTL, holds no
 //! credential, and needs no migration when the table goes. A restart costs one
@@ -106,7 +106,7 @@ impl GatewayModelPlanner {
     fn resolve(
         &self,
         harness_kind: &str,
-        _revision: i64,
+        _sequence: i64,
         allow_blocking_fetch: bool,
     ) -> GatewayModelPlan {
         let credentials = self.gateway_credentials(harness_kind);
@@ -231,8 +231,8 @@ fn block_on_fetch(
 
 impl GatewayModelResolve for GatewayModelPlanner {
     /// The LAUNCH path: memo only, never a fetch. See the module note.
-    fn resolve_gateway_models(&self, harness_kind: &str, revision: i64) -> GatewayModelPlan {
-        self.resolve(harness_kind, revision, false)
+    fn resolve_gateway_models(&self, harness_kind: &str, sequence: i64) -> GatewayModelPlan {
+        self.resolve(harness_kind, sequence, false)
     }
 
     fn invalidate_gateway_plan(&self, harness_kind: &str) {
@@ -243,8 +243,8 @@ impl GatewayModelResolve for GatewayModelPlanner {
     fn resolve_gateway_models_blocking(
         &self,
         harness_kind: &str,
-        revision: i64,
+        sequence: i64,
     ) -> GatewayModelPlan {
-        self.resolve(harness_kind, revision, true)
+        self.resolve(harness_kind, sequence, true)
     }
 }

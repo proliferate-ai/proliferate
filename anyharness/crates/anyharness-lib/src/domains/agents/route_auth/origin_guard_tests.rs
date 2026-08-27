@@ -17,7 +17,7 @@ const VK: &str = "sk-virtual-1234";
 struct HarnessPlanResolver;
 
 impl GatewayModelResolve for HarnessPlanResolver {
-    fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+    fn resolve_gateway_models(&self, harness_kind: &str, _sequence: i64) -> GatewayModelPlan {
         let _ = harness_kind;
         GatewayModelPlan::default()
     }
@@ -26,7 +26,7 @@ impl GatewayModelResolve for HarnessPlanResolver {
 fn stamped_gateway_state(kind: &str, issuing_server_origin: Option<&str>) -> serde_json::Value {
     let mut state = json!({
         "version": 2,
-        "revision": 42,
+        "sequence": 42,
         "user_id": "user-1",
         "harnesses": [
             {
@@ -140,7 +140,7 @@ fn absent_current_origin_signal_still_injects_no_regression() {
 fn api_key_state(kind: &str, env_var_name: &str) -> serde_json::Value {
     json!({
         "version": 2,
-        "revision": 7,
+        "sequence": 7,
         "harnesses": [
             {
                 "harness_kind": kind,

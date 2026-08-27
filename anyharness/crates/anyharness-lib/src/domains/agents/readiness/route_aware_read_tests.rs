@@ -61,7 +61,7 @@ impl CredentialGapWorld {
         std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
         std::fs::write(
             state_dir.join("state.json"),
-            r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"grok","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+            r#"{"version":2,"sequence":1,"harnesses":[{"harness_kind":"grok","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
         )
         .expect("write state");
     }
@@ -196,7 +196,7 @@ fn a_route_that_cannot_upgrade_does_not_claim_provenance() {
     std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
     std::fs::write(
         state_dir.join("state.json"),
-        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"claude","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        r#"{"version":2,"sequence":1,"harnesses":[{"harness_kind":"claude","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
     )
     .expect("write state");
 
@@ -217,7 +217,7 @@ fn the_settings_read_only_honors_this_harnesss_route() {
     std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
     std::fs::write(
         state_dir.join("state.json"),
-        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"claude","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        r#"{"version":2,"sequence":1,"harnesses":[{"harness_kind":"claude","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
     )
     .expect("write state");
 
@@ -253,7 +253,7 @@ fn the_settings_read_never_masks_a_missing_binary() {
     std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
     std::fs::write(
         state_dir.join("state.json"),
-        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"claude","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        r#"{"version":2,"sequence":1,"harnesses":[{"harness_kind":"claude","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
     )
     .expect("write state");
 

@@ -1653,7 +1653,7 @@ async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engi
 
     let document = json!({
         "version": 2,
-        "revision": 4,
+        "sequence": 4,
         "harnesses": [
             { "harness_kind": "opencode", "sources": [
                 { "kind": "gateway", "base_url": "https://gw.example", "key": "sk-vk" }] },
@@ -1684,12 +1684,12 @@ async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engi
     let payload: Value = serde_json::from_slice(&body).expect("parse response json");
     assert_eq!(payload["applied"], json!(true));
     assert_eq!(
-        payload["revision"],
+        payload["sequence"],
         json!(4),
         "the apply response must not wait on, or be altered by, a probe"
     );
 
-    // A stale revision is still a typed 409, and pokes nothing new.
+    // A stale sequence is still a typed 409, and pokes nothing new.
     let stale = app
         .clone()
         .oneshot(
@@ -1698,7 +1698,7 @@ async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engi
                 .uri("/v1/agent-auth/state")
                 .header(header::AUTHORIZATION, "Bearer secret-token")
                 .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(json!({ "version": 2, "revision": 1, "harnesses": [] }).to_string()))
+                .body(Body::from(json!({ "version": 2, "sequence": 1, "harnesses": [] }).to_string()))
                 .expect("expected request"),
         )
         .await
@@ -1797,7 +1797,7 @@ async fn agent_auth_state_routes_never_probe_while_the_automatic_engine_is_suppr
     // spawn a real probe against.
     let document = json!({
         "version": 2,
-        "revision": 1,
+        "sequence": 1,
         "harnesses": [
             { "harness_kind": "opencode", "sources": [
                 { "kind": "gateway", "base_url": "https://gw.example", "key": "sk-vk" }] },

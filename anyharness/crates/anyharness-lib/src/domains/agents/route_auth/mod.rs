@@ -67,10 +67,10 @@ pub enum RouteAuthError {
     #[error("agent-auth state file is malformed ({path}): {detail}")]
     MalformedStateFile { path: PathBuf, detail: String },
     #[error(
-        "stale agent-auth state push: incoming revision {incoming} is below \
-         the persisted revision {current}"
+        "stale agent-auth state push: incoming sequence {incoming} is below \
+         the persisted sequence {current}"
     )]
-    StaleStateRevision { incoming: i64, current: i64 },
+    StaleStateSequence { incoming: i64, current: i64 },
     /// The harness has an entry in the document whose sources could not be
     /// satisfied — a selection the machine cannot honor. Constructed by
     /// [`resolve_profile`] and refused at both create and launch, per
@@ -95,11 +95,11 @@ pub enum RouteAuthError {
     /// plain-words cause when it knows one — after `profile.rs` clamps it to
     /// short, word-shaped text (an over-long or token-shaped value is dropped
     /// to the family sentence, since this Display reaches shipped logs).
-    /// `revision` stays for logs/tracing but no longer rides the Display copy.
+    /// `sequence` stays for logs/tracing but no longer rides the Display copy.
     #[error("{}", refusal::source_unsatisfied_copy(harness_kind, reason.as_deref()))]
     SelectionMissing {
         harness_kind: String,
-        revision: i64,
+        sequence: i64,
         reason: Option<String>,
     },
     /// Rotation is off and the pinned seat is cooling (a live limit error was
@@ -138,7 +138,7 @@ impl RouteAuthError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::MalformedStateFile { .. } => "AGENT_ROUTE_STATE_MALFORMED",
-            Self::StaleStateRevision { .. } => "AGENT_ROUTE_STATE_STALE",
+            Self::StaleStateSequence { .. } => "AGENT_ROUTE_STATE_STALE",
             Self::SelectionMissing { .. } => "AGENT_ROUTE_SELECTION_MISSING",
             Self::SeatCooling { .. } => "AGENT_ROUTE_SEAT_COOLING",
             Self::AllSeatsCooling { .. } => "AGENT_ROUTE_ALL_SEATS_COOLING",
@@ -228,9 +228,9 @@ fn resolve_launch_route_auth_for_server(
     current_server_origin: Option<&str>,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     let state = load_effective_state(runtime_home, current_server_origin)?;
-    let revision = state.as_ref().map(|state| state.revision).unwrap_or(0);
+    let sequence = state.as_ref().map(|state| state.sequence).unwrap_or(0);
     let profile = resolve_profile(state.as_ref(), harness_kind)?;
-    let plan = resolver.resolve_gateway_models(harness_kind, revision);
+    let plan = resolver.resolve_gateway_models(harness_kind, sequence);
     let rendered = render_profile(&profile, harness_kind, &plan, runtime_home)?;
     for spec in &rendered.files {
         materialize::apply_file_spec(runtime_home, spec)?;
@@ -362,12 +362,12 @@ fn resolve_launch_route_auth_rotated_for_server(
     current_server_origin: Option<&str>,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     let state = load_effective_state(runtime_home, current_server_origin)?;
-    let revision = state.as_ref().map(|state| state.revision).unwrap_or(0);
+    let sequence = state.as_ref().map(|state| state.sequence).unwrap_or(0);
     let mut profile = resolve_profile(state.as_ref(), harness_kind)?;
     if let AgentRuntimeAuthProfile::Sources(sources) = &mut profile {
         apply_rotation_seam(sources, store)?;
     }
-    let plan = resolver.resolve_gateway_models(harness_kind, revision);
+    let plan = resolver.resolve_gateway_models(harness_kind, sequence);
     let rendered = render_profile(&profile, harness_kind, &plan, runtime_home)?;
     for spec in &rendered.files {
         materialize::apply_file_spec(runtime_home, spec)?;
