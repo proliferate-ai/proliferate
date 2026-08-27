@@ -329,9 +329,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Setup Rust stable
+      - name: Setup Rust (the rust-toolchain.toml pin)
         uses: dtolnay/rust-toolchain@stable
         with:
+          # Match the repo pin so the action's install IS the toolchain the
+          # rustup proxies resolve — one download, no shadow stable.
+          toolchain: 1.98.0
           components: rustfmt, clippy
 
       - name: Setup sccache
