@@ -110,8 +110,13 @@ fn set_dir_mtime_back(path: &Path, by: std::time::Duration) -> bool {
     matches!(output, Ok(output) if output.status.success())
 }
 
-/// `touch -t` wants `[[CC]YY]MMDDhhmm[.ss]`.
+/// `touch -t` wants `[[CC]YY]MMDDhhmm[.ss]` — interpreted in LOCAL time, so the
+/// stamp must be formatted in local time too. Formatting the UTC wall clock here
+/// used to push the mtime hours into the FUTURE in any west-of-UTC timezone,
+/// making `elapsed()` fail and the "aged" leg silently un-age the directory.
 fn format_touch_stamp(unix_seconds: i64) -> String {
     let time = chrono::DateTime::from_timestamp(unix_seconds, 0).unwrap_or_default();
-    time.format("%Y%m%d%H%M.%S").to_string()
+    time.with_timezone(&chrono::Local)
+        .format("%Y%m%d%H%M.%S")
+        .to_string()
 }
