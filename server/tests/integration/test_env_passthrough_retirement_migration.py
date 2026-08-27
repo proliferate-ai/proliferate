@@ -86,9 +86,7 @@ async def test_env_passthrough_rows_are_deleted_and_the_shape_resealed() -> None
                 # Synthesize the drifted database: the CHECK gone, a legacy
                 # env-passthrough row stored.
                 await conn.execute(
-                    text(
-                        f"ALTER TABLE agent_auth_selection DROP CONSTRAINT {_CONSTRAINT}"
-                    )
+                    text(f"ALTER TABLE agent_auth_selection DROP CONSTRAINT {_CONSTRAINT}")
                 )
                 legacy_id = await _insert_selection(
                     conn,
@@ -136,10 +134,7 @@ async def test_env_passthrough_rows_are_deleted_and_the_shape_resealed() -> None
             async with engine.begin() as conn:
                 count = (
                     await conn.execute(
-                        text(
-                            "SELECT count(*) FROM agent_auth_selection "
-                            "WHERE id = :id"
-                        ),
+                        text("SELECT count(*) FROM agent_auth_selection WHERE id = :id"),
                         {"id": kept_id},
                     )
                 ).scalar_one()
