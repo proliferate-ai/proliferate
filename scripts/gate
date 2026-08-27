@@ -264,6 +264,54 @@ def tool_exists(tool: str) -> bool:
     return which(tool) is not None
 
 
+def _has_tomllib(python: str) -> bool:
+    try:
+        proc = subprocess.run(
+            [python, "-c", "import tomllib"], capture_output=True, check=False
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0
+
+
+def pick_engine_python(prober=_has_tomllib) -> str | None:
+    """The interpreter the checker engines run with.
+
+    CI pins Python 3.12; locally `python3` may resolve to the system 3.9 (no
+    tomllib), which every lint engine imports. Prefer the interpreter running
+    the gate, then any modern python3.x on PATH, then bare python3 — first one
+    that can `import tomllib` wins. None means no usable interpreter exists.
+    """
+    from shutil import which
+
+    candidates: list[str] = [sys.executable]
+    for name in ("python3.13", "python3.12", "python3.11", "python3"):
+        path = which(name)
+        if path:
+            candidates.append(path)
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        if prober(candidate):
+            return candidate
+    return None
+
+
+def engine_argv(cmd: str, engine_python: str | None) -> list[str]:
+    """The argv for a check — `python3 …` commands run with the picked engine.
+
+    The COMMAND STRING stays the CI-mirrored `python3 …` (that is what gets
+    printed and re-run); only the resolved interpreter differs, exactly as
+    CI's setup-python step resolves `python3` to its pinned 3.12.
+    """
+    argv = shlex.split(cmd)
+    if argv and argv[0] == "python3" and engine_python:
+        argv[0] = engine_python
+    return argv
+
+
 def nextest_installed() -> bool:
     """cargo-nextest is a separate binary; without it `cargo nextest` is a usage error."""
     try:
@@ -435,7 +483,7 @@ def changed_files(repo: Path) -> tuple[list[str], str | None]:
     return sorted(paths), warning
 
 
-def run_check(check: Check, repo: Path) -> tuple[str, float]:
+def run_check(check: Check, repo: Path, engine_python: str | None = None) -> tuple[str, float]:
     if check.cmd is None:
         return "skipped", 0.0
     cwd = repo / check.cwd if check.cwd else repo
@@ -443,7 +491,7 @@ def run_check(check: Check, repo: Path) -> tuple[str, float]:
     if check.env_defaults:
         env = {**check.env_defaults, **os.environ}  # exported values win
     start = time.monotonic()
-    proc = subprocess.run(shlex.split(check.cmd), cwd=cwd, env=env, check=False)
+    proc = subprocess.run(engine_argv(check.cmd, engine_python), cwd=cwd, env=env, check=False)
     return ("ok" if proc.returncode == 0 else "FAIL"), time.monotonic() - start
 
 
@@ -473,6 +521,16 @@ def main(argv: list[str] | None = None) -> int:
     else:
         scope = classify(paths)
 
+    engine_python = pick_engine_python()
+    if engine_python is None:
+        print(
+            "[gate] WARNING: no python3 ≥3.11 found (the lint engines need tomllib); "
+            "engine checks will fail — install python3.12. CI is authoritative.",
+            file=sys.stderr,
+        )
+    elif not _has_tomllib("python3"):
+        print(f"[gate] engines: {engine_python} (PATH python3 lacks tomllib; engines need ≥3.11)")
+
     postgres_up, redis_up = services_reachable()
     checks = build_checks(
         scope,
@@ -495,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
     failures: list[Check] = []
     loud_skips: list[Check] = []
     for check in checks:
-        status, seconds = run_check(check, REPO)
+        status, seconds = run_check(check, REPO, engine_python)
         if status == "ok":
             print(f"[gate] {check.name} … ok ({seconds:.1f}s)")
         elif status == "skipped":

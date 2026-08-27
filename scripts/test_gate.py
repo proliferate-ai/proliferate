@@ -226,6 +226,37 @@ class BuildChecksTests(unittest.TestCase):
         self.assertTrue(any(c.name.startswith("checker tests:") for c in checks))
 
 
+class EnginePythonTests(unittest.TestCase):
+    def test_prefers_first_candidate_with_tomllib(self):
+        probed = []
+
+        def prober(python):
+            probed.append(python)
+            return python.endswith("3.12")
+
+        # sys.executable is probed first; our fake prober rejects it unless 3.12.
+        result = gate.pick_engine_python(prober=prober)
+        if result is not None:
+            self.assertTrue(result.endswith("3.12"))
+        self.assertGreaterEqual(len(probed), 1)
+
+    def test_returns_none_when_nothing_has_tomllib(self):
+        self.assertIsNone(gate.pick_engine_python(prober=lambda p: False))
+
+    def test_engine_argv_rewrites_only_python3_prefix(self):
+        self.assertEqual(
+            gate.engine_argv("python3 scripts/check_docs.py", "/opt/py312")[0], "/opt/py312"
+        )
+        self.assertEqual(
+            gate.engine_argv("python3 -m unittest scripts/test_gate.py", "/opt/py312")[:3],
+            ["/opt/py312", "-m", "unittest"],
+        )
+        self.assertEqual(gate.engine_argv("cargo fmt --check", "/opt/py312")[0], "cargo")
+        self.assertEqual(
+            gate.engine_argv("python3 scripts/check_docs.py", None)[0], "python3"
+        )
+
+
 class MirrorRuleTests(unittest.TestCase):
     """Every gate command string appears in the CI workflow that runs it."""
 
