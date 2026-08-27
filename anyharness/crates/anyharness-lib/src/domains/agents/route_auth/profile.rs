@@ -138,12 +138,7 @@ pub fn resolve_profile(
         return Err(RouteAuthError::SelectionMissing {
             harness_kind: harness_kind.to_string(),
             revision: state.revision,
-            reason: entry
-                .unsatisfied_reason
-                .as_deref()
-                .map(str::trim)
-                .filter(|reason| !reason.is_empty())
-                .map(str::to_string),
+            reason: clamp_unsatisfied_reason(entry.unsatisfied_reason.as_deref()),
         });
     }
     let mut sources = Vec::with_capacity(entry.sources.len());
@@ -218,6 +213,47 @@ fn resolve_source(
             detail: format!("unknown agent-auth source kind '{unknown}'"),
         }),
     }
+}
+
+/// The longest `unsatisfied_reason` a refusal will speak verbatim. The
+/// server's vocabulary is a handful of short plain sentences (the longest is
+/// well under 100 chars); anything longer is not one of them.
+const MAX_UNSATISFIED_REASON_CHARS: usize = 200;
+
+/// A run of this many `[A-Za-z0-9_-]` characters reads as a token, not words.
+const TOKEN_RUN_CHARS: usize = 32;
+
+/// Clamp the document's `unsatisfied_reason` before it rides into
+/// [`RouteAuthError::SelectionMissing`], whose Display reaches tracing, the
+/// 409 body, and the UI copy. The document is server-authored, but this is
+/// the last hop before shipped logs, so the value is accepted only when it
+/// is short and word-shaped: at most [`MAX_UNSATISFIED_REASON_CHARS`], and
+/// neither containing `sk-` nor any [`TOKEN_RUN_CHARS`]-long token run.
+/// Anything else is treated as absent — the cause-family sentence stands.
+fn clamp_unsatisfied_reason(raw: Option<&str>) -> Option<String> {
+    let reason = raw.map(str::trim).filter(|reason| !reason.is_empty())?;
+    if reason.chars().count() > MAX_UNSATISFIED_REASON_CHARS || looks_token_shaped(reason) {
+        return None;
+    }
+    Some(reason.to_string())
+}
+
+fn looks_token_shaped(reason: &str) -> bool {
+    if reason.contains("sk-") {
+        return true;
+    }
+    let mut run = 0usize;
+    for ch in reason.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+            run += 1;
+            if run >= TOKEN_RUN_CHARS {
+                return true;
+            }
+        } else {
+            run = 0;
+        }
+    }
+    false
 }
 
 fn require_field(

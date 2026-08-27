@@ -162,6 +162,28 @@ fn unsatisfied_reason_reaches_the_refusal_and_its_display() {
     );
 }
 
+/// The reason a refusal ends up carrying for a raw document value.
+fn carried_reason(raw: &str) -> Option<String> {
+    let mut entry = harness("claude", vec![]);
+    entry.unsatisfied_reason = Some(raw.to_string());
+    match resolve_profile(Some(&state(1, vec![entry])), "claude") {
+        Err(RouteAuthError::SelectionMissing { reason, .. }) => reason,
+        other => panic!("expected SelectionMissing, got {other:?}"),
+    }
+}
+
+/// The clamp before shipped logs: the frozen vocabulary passes verbatim; an
+/// over-long or token-shaped value is treated as absent (family fallback).
+#[test]
+fn unsatisfied_reason_is_clamped_to_short_plain_words() {
+    let words = "its Claude.ai login was removed or signed out";
+    assert_eq!(carried_reason(words).as_deref(), Some(words));
+    assert_eq!(carried_reason(&"a ".repeat(101)), None); // 202 chars, plain words
+    assert_eq!(carried_reason("sk-ant-oat01-leaked"), None); // `sk-` prefix
+    assert_eq!(carried_reason(&"A1".repeat(16)), None); // a 32-char token run
+    assert!(carried_reason(&"A1".repeat(15)).is_some()); // 30 chars: still words
+}
+
 // --- settings["rotate"] parse ------------------------------------------
 
 fn sources_of(state: &AgentAuthState, harness_kind: &str) -> HarnessSources {

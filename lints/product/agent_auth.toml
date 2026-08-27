@@ -1,7 +1,8 @@
 # Agent-auth cross-surface rules (PROD-AGENTAUTH-*). Reserved family segment:
 # AGENTAUTH (see lints/README.md "Rule ID allocation"). This file holds the one
-# rule that spans owners — the secret-log ban covers both the server cloud
-# gateway and the AnyHarness render/snapshot planes, so it lives with the
+# rule that spans owners — the secret-log ban covers the server cloud gateway,
+# the AnyHarness render plane, and the seat plane (the cooling ledger plus the
+# live session tree that observes seat limits), so it lives with the
 # cross-owner records. The B20 custody item from the Agent Auth ADR.
 
 [[rule]]
@@ -11,26 +12,31 @@ owner = "product"
 status = "law"
 enforced_by = "scripts/check_agent_auth_secret_logs.py"
 mode = "lint"
-scope = "server/proliferate/server/agent_auth/**, server/proliferate/db/store/agent_gateway/**, server/proliferate/db/models/agent_gateway.py, server/proliferate/db/models/cloud/**, server/proliferate/lib/infra/encryption/**, anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**, anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/**"
+scope = "server/proliferate/server/agent_auth/**, server/proliferate/db/store/agent_gateway/**, server/proliferate/db/models/agent_gateway.py, server/proliferate/lib/infra/encryption/**, anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**, anyharness/crates/anyharness-lib/src/domains/agents/seat_cooling/**, anyharness/crates/anyharness-lib/src/live/sessions/**"
 
 rule = """A structured-log or tracing call in the agent-auth surfaces must not
 contain a live secret identifier. Three shapes are banned: the provider env-var
 secret names (PROLIFERATE_GATEWAY_KEY, ANTHROPIC_AUTH_TOKEN, XAI_API_KEY,
-CURSOR_API_KEY, OPENAI_API_KEY); the raw secret bindings `virtual_key`,
-`value_ciphertext`, and `api_key`; and attribute access of a secret field —
-`<receiver>.key`, `.token`, or `.api_key` — which is how the minted key actually
-flows (`minted.key`)."""
-alternative = """Log the opaque handle (`virtual_key_id`, `.token_id`), a
-redacted hint, or a boolean presence flag instead of the secret. A reviewed
-redaction site that must name the binding carries an inline
+CURSOR_API_KEY, OPENAI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY,
+AWS_BEARER_TOKEN_BEDROCK, ANTHROPIC_FOUNDRY_API_KEY, AZURE_API_KEY); the raw
+secret bindings `virtual_key`, `value_ciphertext`, `api_key`, and the seat-pool
+bindings `seat_values` / `seat_source`; and attribute access of a secret field —
+`<receiver>.key`, `.token`, `.api_key`, or `.env` — which is how the minted key
+actually flows (`minted.key`) and how a seat or provider-config profile carries
+its token (`seat.env`)."""
+alternative = """Log the opaque handle (`virtual_key_id`, `.token_id`,
+`seat_id`), a redacted hint, or a boolean presence flag instead of the secret. A
+reviewed redaction site that must name the binding carries an inline
 `agent-auth:allow-secret-log` pragma inside the call."""
-why = """These surfaces move minted gateway keys and decrypted provider
-credentials through their hot paths; a single credential written to a log ships
-to the collector and is leaked irreversibly the moment the line runs. The check
-is deliberately narrow: `_id`/`.token_id` handles, `virtual_key_ciphertext`
-column names, and `.keys()` iteration stay silent, and bare `token`/`value`
-words are not flagged — only the named secret bindings and the
-`.key`/`.token`/`.api_key` attribute form are. (Agent Auth ADR custody item
+why = """These surfaces move minted gateway keys, seat OAuth tokens, and
+decrypted provider credentials through their hot paths; a single credential
+written to a log ships to the collector and is leaked irreversibly the moment
+the line runs. The check is deliberately narrow: `_id`/`.token_id`/`seat_id`
+handles, `.env_var_name`, `virtual_key_ciphertext` column names, and `.keys()`
+iteration stay silent, and bare `token`/`value` words are not flagged — only
+the named secret bindings and the `.key`/`.token`/`.api_key`/`.env` attribute
+form are. Every scanned root must exist on disk, so a refactor that moves a
+surface cannot silently drop it from coverage. (Agent Auth ADR custody item
 B20.)"""
 
 [rule.example]

@@ -40,6 +40,27 @@ class RecordCoverageTest(unittest.TestCase):
         self.assertIn("lints/product/agent_auth.toml", diagnostic)
 
 
+class ScannedRootsTest(unittest.TestCase):
+    def test_every_scanned_root_exists(self) -> None:
+        # A root that vanishes in a refactor is coverage that vanishes with it:
+        # `iter_source_files` skips missing roots silently, so this is the
+        # only thing that notices.
+        missing = [
+            root for root, _ in checker.SCANNED_ROOTS if not (checker.REPO_ROOT / root).exists()
+        ]
+        self.assertEqual(missing, [])
+
+    def test_seat_plane_is_scanned(self) -> None:
+        roots = {root for root, _ in checker.SCANNED_ROOTS}
+        self.assertIn("anyharness/crates/anyharness-lib/src/domains/agents/seat_cooling", roots)
+        self.assertIn("anyharness/crates/anyharness-lib/src/live/sessions", roots)
+
+    def test_scope_record_names_every_scanned_root(self) -> None:
+        scope = checker.RULES.rule(checker.RULE_ID).scope
+        for root, _ in checker.SCANNED_ROOTS:
+            self.assertIn(root, scope)
+
+
 class SecretInLogRejected(unittest.TestCase):
     def test_raw_virtual_key_python(self) -> None:
         self.assertTrue(hit('logger.info("minted %s", virtual_key)'))
@@ -83,8 +104,41 @@ class SecretInLogRejected(unittest.TestCase):
     def test_token_attribute_access(self) -> None:
         self.assertTrue(hit('logger.info("delivering %s", credential.token)'))
 
+    def test_seat_env_map_attribute_access(self) -> None:
+        # The seat token lives INSIDE `SeatProfile.env`; debug-printing the map
+        # ships it whole. This is the seat-plane shape the guard must catch.
+        self.assertTrue(hit('tracing::warn!(?seat.env, "seat limit hit");', suffix=".rs"))
+
+    def test_provider_config_env_map_in_python(self) -> None:
+        self.assertTrue(hit('logger.info("resolved env %s", profile.env)'))
+
+    def test_seat_env_names(self) -> None:
+        for name in (
+            "CLAUDE_CODE_OAUTH_TOKEN",
+            "ANTHROPIC_API_KEY",
+            "AWS_BEARER_TOKEN_BEDROCK",
+            "ANTHROPIC_FOUNDRY_API_KEY",
+            "AZURE_API_KEY",
+        ):
+            with self.subTest(name=name):
+                self.assertTrue(hit(f'info!("set {name}={{}}", value);', suffix=".rs"))
+
+    def test_seat_pool_bindings(self) -> None:
+        self.assertTrue(hit('logger.debug("pool %s", seat_values)'))
+        self.assertTrue(hit('debug!(?seat_source, "seat source");', suffix=".rs"))
+
 
 class SafeSitesAccepted(unittest.TestCase):
+    def test_env_var_name_is_not_the_env_map(self) -> None:
+        # `.env_var_name` is the public NAME of the variable, not the map that
+        # holds its value — the `_` blocks the `.env` boundary.
+        self.assertFalse(hit('info!(%profile.env_var_name, "binding");', suffix=".rs"))
+
+    def test_std_env_path_is_not_an_attribute(self) -> None:
+        self.assertFalse(hit('warn!("origin {:?}", std::env::var("HOME"));', suffix=".rs"))
+
+    def test_seat_id_handle_is_safe(self) -> None:
+        self.assertFalse(hit('tracing::warn!(%seat.seat_id, "seat cooling");', suffix=".rs"))
     def test_opaque_handle_is_safe(self) -> None:
         self.assertFalse(hit('logger.info("minted %s", virtual_key_id)'))
 

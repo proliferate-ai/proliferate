@@ -4,8 +4,10 @@
 
 The agent-auth surfaces move real provider secrets and minted gateway keys
 through their hot paths: the cloud enrollment/migration/topup flows in
-``server/proliferate/server/agent_auth`` and the AnyHarness render and
-model-snapshot planes under ``route_auth`` / ``model_snapshot``. A single
+``server/proliferate/server/agent_auth``, the AnyHarness render plane under
+``route_auth``, and the seat plane — ``seat_cooling`` (the per-seat limit
+ledger) plus the live session tree under ``live/sessions``, whose turn path
+observes seat limits with the resolved seat profile in hand. A single
 ``logger.info("minted %s", virtual_key)`` or ``tracing::warn!(%value_ciphertext,
 ...)`` writes a live credential into logs that ship to a collector — an
 irreversible leak the moment it runs.
@@ -17,30 +19,42 @@ one:
 
   - the provider env-var secret NAMES a rendered source binds
     (``PROLIFERATE_GATEWAY_KEY``, ``ANTHROPIC_AUTH_TOKEN``, ``XAI_API_KEY``,
-    ``CURSOR_API_KEY``, ``OPENAI_API_KEY``) — logging the name is how the value
-    next to it slips in;
+    ``CURSOR_API_KEY``, ``OPENAI_API_KEY``, the seat's
+    ``CLAUDE_CODE_OAUTH_TOKEN``, ``ANTHROPIC_API_KEY``, and the provider-config
+    names ``AWS_BEARER_TOKEN_BEDROCK``, ``ANTHROPIC_FOUNDRY_API_KEY``,
+    ``AZURE_API_KEY``) — logging the name is how the value next to it slips in;
   - the raw secret variable names ``virtual_key`` (the minted key itself, as
-    opposed to the safe ``virtual_key_id`` handle), ``value_ciphertext``, and the
-    bare ``api_key`` binding;
+    opposed to the safe ``virtual_key_id`` handle), ``value_ciphertext``, the
+    bare ``api_key`` binding, and the seat-pool bindings ``seat_values`` (the
+    producer's ``(seat_id, token)`` tuples) and ``seat_source`` (a seat source
+    row, token inside);
   - ATTRIBUTE ACCESS of a secret field — ``<receiver>.key`` / ``.token`` /
-    ``.api_key`` — because the live minted key actually flows as
-    ``minted.key`` (``MintedVirtualKey``), not through a ``virtual_key`` local.
-    A word-boundary at the tail keeps this narrow and free of the obvious
-    false positives: ``.keys()`` iteration is NOT ``.key`` (the ``s`` blocks the
-    boundary), and the safe ``.token_id`` handle is NOT ``.token`` (the ``_``
-    blocks the boundary), exactly as ``virtual_key_id`` is safe from
-    ``virtual_key``. An audit of every ``.key``/``.token``/``.api_key`` access and
-    every log call under the scanned roots on both this branch and the live
+    ``.api_key`` / ``.env`` — because the live minted key actually flows as
+    ``minted.key`` (``MintedVirtualKey``), not through a ``virtual_key`` local,
+    and a seat or provider-config profile carries its token INSIDE its ``.env``
+    map (``SeatProfile.env``, ``ProviderConfigProfile.env``), so
+    ``tracing::warn!(?seat.env)`` ships the whole map. A word-boundary at the
+    tail keeps this narrow and free of the obvious false positives: ``.keys()``
+    iteration is NOT ``.key`` (the ``s`` blocks the boundary), the safe
+    ``.token_id`` handle is NOT ``.token`` and ``.env_var_name`` is NOT ``.env``
+    (the ``_`` blocks the boundary), exactly as ``virtual_key_id`` is safe from
+    ``virtual_key``; ``std::env::var`` is ``::``-pathed, not an attribute. An
+    audit of every ``.key``/``.token``/``.api_key`` access and every log call
+    under the scanned roots on both this branch and the live
     ``r4-gateway-verification`` gateway code found ZERO legitimate secret-field
     attribute access inside a log call, so no receiver-name allowlist is needed;
     the only real ``minted.key`` sites are non-log ``upsert_enrollment_key``
-    keyword args. Bare ``token``/``value`` words are deliberately NOT matched —
-    they are far too common (``value.keys()``, plain ``token`` counters) to flag
-    without absurd noise; only the attribute form and the ``value_ciphertext``
-    binding are caught. As a lexical guard it also stays silent on
-    non-idiomatic forms (``minted["key"]`` subscripts, ``getattr(minted,
-    "key")``, spaced or line-split attribute access); none appear in the real
-    code, and review remains the backstop for those shapes.
+    keyword args, and the ``.env`` arm is clean over the whole
+    ``anyharness-lib/src/live`` tree. Bare ``token``/``value`` words are
+    deliberately NOT matched — they are far too common (``value.keys()``, plain
+    ``token`` counters) to flag without absurd noise; only the attribute form
+    and the ``value_ciphertext`` binding are caught. As a lexical guard it also
+    stays silent on non-idiomatic forms (``minted["key"]`` subscripts,
+    ``getattr(minted, "key")``, spaced or line-split attribute access); none
+    appear in the real code, and review remains the backstop for those shapes.
+
+Every scanned root must exist on disk (the self-test pins this): a root that
+quietly vanishes in a refactor is coverage that quietly vanishes with it.
 
 An intentional, reviewed redaction site marks itself with an inline pragma
 ``agent-auth:allow-secret-log`` inside the call; that one call is exempt. The
@@ -73,21 +87,26 @@ OWNED_RULE_IDS = frozenset(
 
 # (root, suffixes) — Python cloud gateway surface, the ciphertext/plaintext
 # custody planes (store + models + encryption, where ``value_ciphertext`` and
-# the decrypt paths actually live), and the Rust render + snapshot planes.
+# the decrypt paths actually live), the Rust render plane, and the seat plane:
+# the cooling ledger plus the live session tree (its turn path observes seat
+# limits with the resolved seat env in scope). The whole `live/sessions` tree
+# is scanned rather than just `actor/turn` because the checker is clean over
+# it and the seat profile reaches more than the turn actor (launch, refusal
+# rendering, diagnostics). Every root must exist — see the self-test.
 SCANNED_ROOTS: list[tuple[str, frozenset[str]]] = [
     ("server/proliferate/server/agent_auth", frozenset({".py"})),
     ("server/proliferate/db/store/agent_gateway", frozenset({".py"})),
     ("server/proliferate/db/models/agent_gateway.py", frozenset({".py"})),
-    ("server/proliferate/db/models/cloud", frozenset({".py"})),
     ("server/proliferate/lib/infra/encryption", frozenset({".py"})),
     (
         "anyharness/crates/anyharness-lib/src/domains/agents/route_auth",
         frozenset({".rs"}),
     ),
     (
-        "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot",
+        "anyharness/crates/anyharness-lib/src/domains/agents/seat_cooling",
         frozenset({".rs"}),
     ),
+    ("anyharness/crates/anyharness-lib/src/live/sessions", frozenset({".rs"})),
 ]
 
 SKIPPED_DIR_NAMES = {"node_modules", "dist", "build", "target", "__pycache__"}
@@ -104,8 +123,10 @@ LOG_OPENER = re.compile(
 # The secret identifiers. `virtual_key_id` is a safe opaque handle, so the raw
 # `virtual_key` is matched on a word boundary alone — the boundary cannot fall
 # between `key` and `_id`, so the handle is never a hit. The attribute form
-# `<receiver>.(key|token|api_key)` catches the live `minted.key` flow; the tail
-# `\b` keeps `.keys()` (the `s`) and the safe `.token_id` handle (the `_`) out.
+# `<receiver>.(key|token|api_key|env)` catches the live `minted.key` flow and
+# the seat/provider-config `.env` map (the token lives inside it); the tail
+# `\b` keeps `.keys()` (the `s`), the safe `.token_id` handle and
+# `.env_var_name` (the `_`) out.
 SECRET_IDENTIFIER = re.compile(
     r"(?:"
     r"PROLIFERATE_GATEWAY_KEY"
@@ -113,10 +134,17 @@ SECRET_IDENTIFIER = re.compile(
     r"|XAI_API_KEY"
     r"|CURSOR_API_KEY"
     r"|OPENAI_API_KEY"
+    r"|CLAUDE_CODE_OAUTH_TOKEN"
+    r"|ANTHROPIC_API_KEY"
+    r"|AWS_BEARER_TOKEN_BEDROCK"
+    r"|ANTHROPIC_FOUNDRY_API_KEY"
+    r"|AZURE_API_KEY"
     r"|\bvalue_ciphertext\b"
     r"|\bvirtual_key\b"
     r"|\bapi_key\b"
-    r"|\b\w+\.(?:key|token|api_key)\b"
+    r"|\bseat_values\b"
+    r"|\bseat_source\b"
+    r"|\b\w+\.(?:key|token|api_key|env)\b"
     r")"
 )
 
@@ -245,9 +273,10 @@ def main() -> int:
         print(violation.format())
         print()
     print(
-        "\nLog the opaque handle (virtual_key_id), a redacted hint, or a boolean —"
-        "\nnever the minted key, the ciphertext, or a provider secret env var. A"
-        "\nreviewed redaction site may carry an inline `agent-auth:allow-secret-log`."
+        "\nLog the opaque handle (virtual_key_id, seat_id), a redacted hint, or a"
+        "\nboolean — never the minted key, the ciphertext, a seat/provider `.env`"
+        "\nmap, or a provider secret env var. A reviewed redaction site may carry"
+        "\nan inline `agent-auth:allow-secret-log`."
     )
     return 1
 

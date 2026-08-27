@@ -91,8 +91,10 @@ pub enum RouteAuthError {
     /// no input a correct runtime could construct it from.
     ///
     /// `reason` is the document's `unsatisfied_reason` — the server's typed
-    /// plain-words cause when it knows one. `revision` stays for logs/tracing
-    /// but no longer rides the Display copy.
+    /// plain-words cause when it knows one — after `profile.rs` clamps it to
+    /// short, word-shaped text (an over-long or token-shaped value is dropped
+    /// to the family sentence, since this Display reaches shipped logs).
+    /// `revision` stays for logs/tracing but no longer rides the Display copy.
     #[error("{}", selection_missing_display(harness_kind, reason.as_deref()))]
     SelectionMissing {
         harness_kind: String,
