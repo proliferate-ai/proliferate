@@ -55,17 +55,16 @@ export const themeProfiles: Readonly<Record<string, ThemeProfile>> = {
       // carry the structure instead, as in the reference UI.
       "--color-surface-under": "#ffffff",
       "--color-sidebar": "#ffffff",
-      // The rail backdrop keeps a real tint: it paints the right panel
-      // (panes render on it), which should sit visibly below the white
-      // chat. The header seam involved --color-sidebar only, so this
-      // stays independent.
-      "--color-sidebar-background": "#f5f5f5",
+      "--color-sidebar-background": "#ffffff",
       "--color-surface-editor": "#fafafa",
       "--color-composer-background": "#ffffff",
-      "--color-border-light": codex(0.115),
-      "--color-border": codex(0.13),
-      "--color-border-heavy": codex(0.16),
-      "--color-input": codex(0.17),
+      // Stronger than the first cut: with every plane white, the hairlines
+      // are the only structure, so they must actually read (the panel
+      // divider was invisible at 13%).
+      "--color-border-light": codex(0.125),
+      "--color-border": codex(0.15),
+      "--color-border-heavy": codex(0.19),
+      "--color-input": codex(0.2),
       "--color-foreground-secondary": codex(0.64),
       "--color-muted-foreground": codex(0.64),
       "--color-foreground-tertiary": codex(0.6),

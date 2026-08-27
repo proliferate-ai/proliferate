@@ -44,9 +44,13 @@
           el.setAttribute("data-theme-profile", profile);
         }
         apply();
-        new MutationObserver(function () {
+        // Pin light only through app boot (initializeTheme forces dark at
+        // startup); after that, let the Appearance setting win so Dark works.
+        var observer = new MutationObserver(function () {
           if (el.getAttribute("data-mode") !== "light") apply();
-        }).observe(el, { attributes: true, attributeFilter: ["data-mode"] });
+        });
+        observer.observe(el, { attributes: true, attributeFilter: ["data-mode"] });
+        setTimeout(function () { observer.disconnect(); }, 3000);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
