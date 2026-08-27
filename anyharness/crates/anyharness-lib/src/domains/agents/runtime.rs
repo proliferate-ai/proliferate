@@ -12,8 +12,8 @@ use super::installer::reconcile::execution::{
 };
 use super::installer::seed::AgentSeedStore;
 use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
-use super::model::*;
 use super::launch_probe::{LaunchProbeService, PokeReason};
+use super::model::*;
 use super::readiness::service::resolve_agent;
 use super::registry::built_in_registry;
 
@@ -30,6 +30,12 @@ pub struct AgentRuntime {
     /// an engine — which would take a filesystem lock on a temp home and sweep it.
     /// `None` means "no pokes", never "probe anyway".
     launch_probe: Option<Arc<LaunchProbeService>>,
+    /// The status-document service, threaded into reconcile jobs so each
+    /// completed install composes the harness's status document (its FIRST row
+    /// for a post-boot install — the poke above cannot promise one: it is
+    /// refused outright for a manual-refresh-only harness). `Option` for the
+    /// same constructibility reason as the engine; `None` means "no refresh".
+    agent_status: Option<Arc<super::status::AgentStatusService>>,
 }
 
 /// Which surface this runtime is serving. The auto-install pass needs it for
@@ -155,6 +161,7 @@ impl AgentRuntime {
             catalog_service,
             surface,
             launch_probe: None,
+            agent_status: None,
         }
     }
 
@@ -163,6 +170,17 @@ impl AgentRuntime {
     /// without one is a legitimate configuration (every reconcile test).
     pub fn with_launch_probe(mut self, launch_probe: Arc<LaunchProbeService>) -> Self {
         self.launch_probe = Some(launch_probe);
+        self
+    }
+
+    /// Attach the status-document service, for the reconcile jobs' per-install
+    /// `InstallCompleted` refresh. Attached (not constructor-injected) for the
+    /// same acyclicity reason as [`AgentRuntime::with_launch_probe`].
+    pub fn with_agent_status(
+        mut self,
+        agent_status: Arc<super::status::AgentStatusService>,
+    ) -> Self {
+        self.agent_status = Some(agent_status);
         self
     }
 
@@ -393,6 +411,7 @@ impl AgentRuntime {
                 Some(self.seed_store.clone()),
                 Some(self.catalog_service.clone()),
                 self.launch_probe.clone(),
+                self.agent_status.clone(),
                 self.surface,
                 AgentReconcileAdmission::ReuseCompatible,
             )
@@ -430,6 +449,7 @@ impl AgentRuntime {
                     Some(self.seed_store.clone()),
                     Some(self.catalog_service.clone()),
                     self.launch_probe.clone(),
+                    self.agent_status.clone(),
                     self.surface,
                     AgentReconcileAdmission::RequireIdle,
                 )

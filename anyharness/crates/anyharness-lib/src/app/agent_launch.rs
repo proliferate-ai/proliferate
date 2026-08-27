@@ -81,7 +81,13 @@ pub(super) fn build_agent_stack(
         // cursor-in-cloud carve-out, and reading it at the decision point
         // would put a process-global read inside the reconcile loop.
         RuntimeSurface::from_env(),
-    );
+    )
+    // The status service is attached UNCONDITIONALLY — unlike the poke engine
+    // below, which is suppressed under cfg(test) because a poke spawns a real
+    // harness process. Composing a status document is sqlite+fs work with no
+    // process side effects, and a reconcile-driven install must compose the
+    // harness's first row in every wiring (the HTTP install door already does).
+    .with_agent_status(agent_status_service.clone());
     // The agent runtime carries the engine for its startup and
     // install-completed pokes. Attached rather than constructor-injected
     // because the engine needs the catalog service the runtime also takes;

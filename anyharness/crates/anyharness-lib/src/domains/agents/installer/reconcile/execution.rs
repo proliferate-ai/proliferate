@@ -7,18 +7,19 @@ use uuid::Uuid;
 
 use super::{reconcile_agent_with_progress, AgentReconcileOutcome, AgentReconcileResult};
 use crate::domains::agents::catalog::service::{ActiveCatalog, AgentCatalogService};
-use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
-use crate::domains::agents::installer::progress::{
-    InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
-};
 use crate::domains::agents::installer::auto_install::{
     auto_install_decision_with_escape_hatch, AgentInstallFacts,
 };
+use crate::domains::agents::installer::progress::{
+    InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
+};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
+use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::agents::model::{AgentDescriptor, AgentKind, ArtifactRole, ResolvedArtifact};
 use crate::domains::agents::readiness::service::resolve_agent_unrouted;
 use crate::domains::agents::runtime::RuntimeSurface;
+use crate::domains::agents::status::{AgentStatusService, RefreshCause};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileJobStatus {
@@ -136,6 +137,9 @@ impl AgentReconcileService {
         // exactly as `agent_seed_store` and `catalog` are, and `None` in tests for
         // the same reason: a job that pokes nothing must stay constructible.
         launch_probe: Option<Arc<LaunchProbeService>>,
+        // The status-document service (`refresh_status_after_install`): same
+        // threading and same `None`-in-tests convention as the poke engine.
+        agent_status: Option<Arc<AgentStatusService>>,
         surface: RuntimeSurface,
         admission: AgentReconcileAdmission,
     ) -> Result<AgentReconcileJobSnapshot, AgentReconcileStartError> {
@@ -223,6 +227,7 @@ impl AgentReconcileService {
                 progress,
                 agent_seed_store,
                 launch_probe,
+                agent_status,
             )
             .await;
         });
@@ -261,6 +266,7 @@ async fn run_reconcile_job(
     progress: Arc<std::sync::Mutex<Vec<AgentInstallComponentProgress>>>,
     agent_seed_store: Option<AgentSeedStore>,
     launch_probe: Option<Arc<LaunchProbeService>>,
+    agent_status: Option<Arc<AgentStatusService>>,
 ) {
     // Defense in depth around the single visible job slot: even if future
     // callers change admission policy, blocking installers never mutate the
@@ -420,16 +426,15 @@ async fn run_reconcile_job(
         // guarantor of probe-after-install ordering:
         // the startup poke returns at admission and so cannot promise it, while this
         // fires after the one harness that just converged, naming only that harness.
-        //
-        // Only on `Completed`. A `Failed` install leaves the previous binary in place
-        // and nothing to re-observe; a `Skipped` one installed nothing at all. Poking
-        // either would spend a real harness spawn to re-confirm unchanged state.
+        // Only on `Completed` — see `probe_after_install` for why, and
+        // `refresh_status_after_install` for the status half riding the same gate.
         if probe_after_install(terminal_phase) {
             LaunchProbeService::poke_optional(
                 &launch_probe,
                 kind.as_str(),
                 PokeReason::InstallCompleted,
             );
+            refresh_status_after_install(&agent_status, kind.as_str());
         }
 
         let _ = update_job(&jobs, &job_id, |job| {
@@ -524,6 +529,25 @@ fn probe_after_install(phase: InstallProgressPhase) -> bool {
 #[cfg(test)]
 pub(crate) fn probe_after_install_for_test(phase: InstallProgressPhase) -> bool {
     probe_after_install(phase)
+}
+
+/// Compose the harness's status document after a completed install — the
+/// reconcile door's twin of the HTTP install door's `InstallCompleted` refresh.
+/// The poke is refused outright for a manual-refresh-only harness (cursor), so
+/// without this a reconcile-driven install (boot pass, `POST /v1/agents/reconcile`)
+/// left the harness with NO status row until the next restart's startup pass.
+/// Blocking work (sqlite + fs), on the blocking pool, not awaited.
+fn refresh_status_after_install(
+    agent_status: &Option<Arc<AgentStatusService>>,
+    harness_kind: &str,
+) {
+    let Some(status) = agent_status.clone() else {
+        return;
+    };
+    let harness_kind = harness_kind.to_string();
+    tokio::task::spawn_blocking(move || {
+        status.refresh(&harness_kind, RefreshCause::InstallCompleted);
+    });
 }
 
 fn finish_agent_components(

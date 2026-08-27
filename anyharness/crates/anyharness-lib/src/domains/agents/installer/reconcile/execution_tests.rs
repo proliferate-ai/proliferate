@@ -47,7 +47,9 @@ async fn compatible_admission_reuses_active_job() {
             Vec::new(),
             None,
             None,
-            // No probe engine: these assert admission, not probing.
+            // No probe engine, no status service: these assert admission, not
+            // probing or composition.
+            None,
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -91,7 +93,9 @@ async fn reinstall_request_is_rejected_while_non_reinstall_job_runs() {
             vec![AgentKind::Codex],
             None,
             None,
-            // No probe engine: these assert admission, not probing.
+            // No probe engine, no status service: these assert admission, not
+            // probing or composition.
+            None,
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -163,7 +167,9 @@ async fn empty_registry_job_completes() {
             Vec::new(),
             None,
             None,
-            // No probe engine: these assert admission, not probing.
+            // No probe engine, no status service: these assert admission, not
+            // probing or composition.
+            None,
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -203,7 +209,9 @@ async fn reconcile_job_remains_queued_while_another_disk_writer_runs() {
             vec![AgentKind::Codex],
             None,
             None,
-            // No probe engine: these assert admission, not probing.
+            // No probe engine, no status service: these assert admission, not
+            // probing or composition.
+            None,
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -250,7 +258,9 @@ async fn installed_only_skips_uninstalled_agents() {
             Vec::new(),
             None,
             None,
-            // No probe engine: these assert admission, not probing.
+            // No probe engine, no status service: these assert admission, not
+            // probing or composition.
+            None,
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -315,7 +325,9 @@ async fn full_reconcile_is_rejected_while_installed_only_job_runs() {
             Vec::new(),
             None,
             None,
-            // No probe engine: these assert admission, not probing.
+            // No probe engine, no status service: these assert admission, not
+            // probing or composition.
+            None,
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -365,7 +377,9 @@ async fn installed_only_reuses_in_flight_installed_only_job() {
             Vec::new(),
             None,
             None,
-            // No probe engine: these assert admission, not probing.
+            // No probe engine, no status service: these assert admission, not
+            // probing or composition.
+            None,
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
@@ -443,7 +457,9 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
             Vec::new(),
             None,
             Some(catalog.clone()),
-            // No probe engine: these assert admission, not probing.
+            // No probe engine, no status service: these assert admission, not
+            // probing or composition.
+            None,
             None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::RequireIdle,
@@ -494,7 +510,10 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
         .and_then(|job| job.catalog.as_ref())
         .and_then(|catalog| catalog.pin_overrides("codex"))
         .expect("fresh job codex pins");
-    assert_eq!(used_pins.agent_process.as_deref(), Some(active_pin.as_str()));
+    assert_eq!(
+        used_pins.agent_process.as_deref(),
+        Some(active_pin.as_str())
+    );
     assert!(matches!(
         used_pins.agent_process_source,
         Some(ResolvedPinSource::Git { git_ref, .. }) if git_ref == active_git_ref
@@ -506,3 +525,6 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
 
 #[path = "surface_threading_tests.rs"]
 mod surface_threading;
+
+#[path = "install_status_refresh_tests.rs"]
+mod install_status_refresh;
