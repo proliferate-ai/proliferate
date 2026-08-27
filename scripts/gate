@@ -65,6 +65,7 @@ ALWAYS_ENGINES: tuple[tuple[str, str], ...] = (
     ("manifests", "python3 scripts/check_manifests.py"),
     ("session mutation admission", "python3 scripts/check_session_mutation_admission.py"),
     ("update flow", "python3 scripts/check_update_flow_lints.py"),
+    ("lane census", "python3 scripts/check_lanes.py"),
     ("docs", "python3 scripts/check_docs.py"),
 )
 
@@ -84,6 +85,7 @@ SCRIPTS_PROOFS: tuple[tuple[str, str], ...] = (
     ("checker tests: server fences", "python3 -m unittest scripts/test_check_server_fences.py"),
     ("checker tests: manifests", "python3 -m unittest scripts/test_check_manifests.py"),
     ("checker tests: docs", "python3 -m unittest scripts/test_check_docs.py"),
+    ("checker tests: lane census", "python3 -m unittest scripts/test_check_lanes.py"),
     ("checker tests: gate", "python3 -m unittest scripts/test_gate.py"),
     (
         "checker tests: server boundary checker",
