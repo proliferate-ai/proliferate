@@ -48,6 +48,7 @@ describe("streamAgentAuthStatus", () => {
       streamAgentAuthStatus({
         baseUrl: "http://runtime.test/",
         authToken: "token",
+        fetch: undefined,
         onEvent: (document) => documents.push(document),
         onOpen: opened,
         onClose: resolve,
@@ -78,6 +79,7 @@ describe("streamAgentAuthStatus", () => {
       streamAgentAuthStatus({
         baseUrl: "http://runtime.test",
         authToken: "token",
+        fetch: undefined,
         onEvent: () => {},
         onClose: resolve,
         onError: reject,
@@ -93,6 +95,31 @@ describe("streamAgentAuthStatus", () => {
     expect(init.headers.get("authorization")).toBe("Bearer token");
   });
 
+  it("uses the CONNECTION's fetch, never the module-global one", async () => {
+    // The cloud surface's override is the only thing that attaches the sandbox
+    // gateway's authorization header. Dropping it here 401s the stream, and the
+    // hook behind it has no polling fallback — the badge would simply freeze.
+    const provided = streamOf(`event: agent_auth_status\ndata: ${SNAPSHOT}\n\n`);
+    const global = vi.fn(async () =>
+      new Response("global fetch must not be used", { status: 401 })) as typeof fetch;
+    globalThis.fetch = global;
+    const documents: Array<{ harness_kind: string }> = [];
+
+    await new Promise<void>((resolve, reject) => {
+      streamAgentAuthStatus({
+        baseUrl: "http://runtime.test",
+        fetch: provided,
+        onEvent: (document) => documents.push(document),
+        onClose: resolve,
+        onError: reject,
+      });
+    });
+
+    expect(provided).toHaveBeenCalledOnce();
+    expect(global).not.toHaveBeenCalled();
+    expect(documents.map((document) => document.harness_kind)).toEqual(["claude"]);
+  });
+
   it("ignores frames of any other event name", async () => {
     globalThis.fetch = streamOf(
       `event: heartbeat\ndata: {"harness_kind":"claude"}\n\n`,
@@ -103,6 +130,7 @@ describe("streamAgentAuthStatus", () => {
     await new Promise<void>((resolve, reject) => {
       streamAgentAuthStatus({
         baseUrl: "http://runtime.test",
+        fetch: undefined,
         onEvent: (document) => documents.push(document),
         onClose: resolve,
         onError: reject,
@@ -123,6 +151,7 @@ describe("streamAgentAuthStatus", () => {
     await new Promise<void>((resolve) => {
       streamAgentAuthStatus({
         baseUrl: "http://runtime.test",
+        fetch: undefined,
         onEvent: (document) => documents.push(document),
         onError: errored,
         onClose: resolve,
@@ -139,6 +168,7 @@ describe("streamAgentAuthStatus", () => {
     const error = await new Promise<Error>((resolve) => {
       streamAgentAuthStatus({
         baseUrl: "http://runtime.test",
+        fetch: undefined,
         onEvent: () => {},
         onError: resolve,
       });
@@ -156,6 +186,7 @@ describe("streamAgentAuthStatus", () => {
 
     const handle = streamAgentAuthStatus({
       baseUrl: "http://runtime.test",
+      fetch: undefined,
       onEvent: () => {},
       onError: errored,
     });

@@ -10,6 +10,16 @@ export interface AgentAuthStatusStreamOptions {
   baseUrl: string;
   authToken?: string;
   headers?: HeadersInit;
+  /**
+   * The connection's transport. REQUIRED (though it may be `undefined`, meaning
+   * "the module-global `fetch`") so that forgetting to thread a host's override
+   * through is a type error rather than a silent fall-back to the global.
+   *
+   * This is not a test seam: on the cloud surface the override IS the only thing
+   * that attaches the sandbox gateway's `authorization` header, so a stream that
+   * quietly used the global `fetch` would 401 with no polling fallback behind it.
+   */
+  fetch: typeof globalThis.fetch | undefined;
   /** One call per document: the connect snapshot, then one per change. */
   onEvent: (document: AgentAuthStatusDoc) => void;
   onError?: (error: Error) => void;
@@ -40,6 +50,7 @@ export function streamAgentAuthStatus(
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
   const url = `${baseUrl}/v1/agent-auth/status/stream`;
   const controller = new AbortController();
+  const fetchImpl = options.fetch ?? globalThis.fetch;
 
   void (async () => {
     try {
@@ -53,7 +64,7 @@ export function streamAgentAuthStatus(
         headers.set("authorization", `Bearer ${options.authToken}`);
       }
 
-      const response = await fetch(url, {
+      const response = await fetchImpl(url, {
         method: "GET",
         headers,
         signal: controller.signal,

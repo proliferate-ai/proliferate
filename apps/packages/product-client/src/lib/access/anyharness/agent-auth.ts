@@ -67,6 +67,14 @@ export function getHarnessAuthMethods(
  * bearer-authed, so this is the SDK's fetch-based SSE helper rather than
  * `EventSource` (which cannot carry a header) — the same transport the session
  * stream uses.
+ *
+ * The WHOLE connection is threaded, `fetch` included: on the cloud surface the
+ * context's transport override is the only thing that attaches the sandbox
+ * gateway's `authorization` header (there is no `authToken` there), so a stream
+ * opened on the module-global `fetch` 401s and the pane's badge freezes at the
+ * first read — the hook behind this has no polling fallback by design.
+ * `AgentAuthStatusStreamOptions.fetch` is a REQUIRED key for exactly that
+ * reason: dropping it again is a type error, not a silent excess property.
  */
 export function openHarnessAuthStatusStream(
   connection: AnyHarnessClientConnection,
@@ -80,6 +88,7 @@ export function openHarnessAuthStatusStream(
   return streamAgentAuthStatus({
     baseUrl: connection.runtimeUrl,
     authToken: connection.authToken ?? undefined,
+    fetch: connection.fetch,
     ...handlers,
   });
 }
