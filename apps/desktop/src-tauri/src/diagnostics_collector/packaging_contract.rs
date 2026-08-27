@@ -34,32 +34,36 @@ mod tests {
 
     #[test]
     fn only_primary_or_complete_explicit_inputs_stage_real_binaries() {
-        assert_eq!(
-            should_stage_real_binaries(false, [true, true, true, true], true),
+        assert!(should_stage_real_binaries(
+            false,
+            [true, true, true, true],
             true
-        );
-        assert_eq!(
-            should_stage_real_binaries(true, [false, false, false, false], true),
+        ));
+        assert!(should_stage_real_binaries(
+            true,
+            [false, false, false, false],
             true
-        );
+        ));
         assert!(!should_stage_real_binaries(
             false,
             [false, false, false, false],
             true
         ));
-        assert_eq!(
-            should_stage_real_binaries(false, [false, false, false, false], false),
+        assert!(!should_stage_real_binaries(
+            false,
+            [false, false, false, false],
             false
-        );
+        ));
         assert!(!should_stage_real_binaries(
             false,
             [true, true, true, false],
             true
         ));
-        assert_eq!(
-            should_stage_real_binaries(false, [true, false, false, false], false),
+        assert!(!should_stage_real_binaries(
+            false,
+            [true, false, false, false],
             false
-        );
+        ));
     }
 
     #[test]

@@ -25,21 +25,21 @@ fn verify_artifact_accepts_matching_sha_but_rejects_flipped_byte() {
     let via_good = verify_artifact(&data, &good_sha, "not-a-signature", PUBKEY);
     assert!(matches!(
         via_good.unwrap_err().code,
-        OwnedUpdaterErrorCode::UpdaterArtifactHashMismatch
+        OwnedUpdaterErrorCode::ArtifactHashMismatch
     ));
 
     // Corrupt artifact: flip a byte; sha256 gate must reject before minisign.
     let mut corrupt = data.clone();
     corrupt[0] ^= 0xff;
     let err = verify_artifact(&corrupt, &good_sha, "not-a-signature", PUBKEY).unwrap_err();
-    assert_eq!(err.code, OwnedUpdaterErrorCode::UpdaterArtifactHashMismatch);
+    assert_eq!(err.code, OwnedUpdaterErrorCode::ArtifactHashMismatch);
     assert!(err.message.contains("sha256 mismatch"), "{}", err.message);
 }
 
 #[test]
 fn verify_signature_rejects_garbage() {
     let err = verify_signature(b"data", "###not-base64###", PUBKEY).unwrap_err();
-    assert_eq!(err.code, OwnedUpdaterErrorCode::UpdaterArtifactHashMismatch);
+    assert_eq!(err.code, OwnedUpdaterErrorCode::ArtifactHashMismatch);
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn validated_version_accepts_sane_and_rejects_traversal() {
     // Rejections use the check-failed code.
     assert_eq!(
         validated_version("../x").unwrap_err().code,
-        OwnedUpdaterErrorCode::UpdaterCheckFailed
+        OwnedUpdaterErrorCode::CheckFailed
     );
 }
 

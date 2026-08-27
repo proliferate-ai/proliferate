@@ -19,11 +19,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 try:
-    from scripts.frontend_imports import ImportStatement, collect_module_specifiers
     from scripts import lint_records
+    from scripts.frontend_imports import ImportStatement, collect_module_specifiers
 except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
-    from frontend_imports import ImportStatement, collect_module_specifiers
     import lint_records
+    from frontend_imports import ImportStatement, collect_module_specifiers
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -214,6 +214,7 @@ RULE_ORDER = [
     "FE-STRUCT-7",
     "FE-SIZE-1",
 ]
+
 
 def rule_title(rule_id: str) -> str:
     return RULES.rule(rule_id).title
@@ -546,10 +547,7 @@ def product_client_domain_raw_capability_names(
     if source == "@proliferate/cloud-sdk":
         return imported_names & PRODUCT_CLIENT_DOMAIN_RAW_CLOUD_CLIENT_IMPORTS
     if source == "@anyharness/sdk":
-        return (
-            imported_names
-            & PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS
-        )
+        return imported_names & PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS
     return set()
 
 
@@ -593,9 +591,7 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
             return "ProductClient primitives must not import higher ProductClient layers"
         if source.startswith("@proliferate/product-client"):
             return "ProductClient primitives must not import the connected ProductClient surface"
-        if source.startswith("@proliferate/cloud-sdk") or source.startswith(
-            "@anyharness/sdk"
-        ):
+        if source.startswith("@proliferate/cloud-sdk") or source.startswith("@anyharness/sdk"):
             return "ProductClient primitives must not import SDK clients or contracts"
         if source.startswith("@tanstack/react-query"):
             return "ProductClient primitives must not import query clients"
@@ -608,9 +604,7 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
         if source.startswith("."):
             return None
         if source in {"@proliferate/cloud-sdk", "@anyharness/sdk"}:
-            raw_capabilities = product_client_domain_raw_capability_names(
-                source, statement
-            )
+            raw_capabilities = product_client_domain_raw_capability_names(source, statement)
             if raw_capabilities:
                 return (
                     "ProductClient domain may import SDK data contracts, not raw "
@@ -619,7 +613,9 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
                 )
         if source == "@proliferate/cloud-sdk":
             if statement.runtime_imported_names:
-                return "ProductClient domain may import Cloud SDK contract types, not runtime values"
+                return (
+                    "ProductClient domain may import Cloud SDK contract types, not runtime values"
+                )
             return None
         if source == "@anyharness/sdk":
             forbidden_runtime = (

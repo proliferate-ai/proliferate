@@ -1,0 +1,694 @@
+#!/usr/bin/env python3
+"""The pre-push gate: change-scoped local mirror of the merge gate.
+
+Contract (frozen in delivery/testing-cicd/delivery-spec-make-gate.md, target
+spec section: specs/engineering/ci-cd/pipelines.md § "Pipeline — pre-push"):
+
+- Scope by `git diff` against merge-base(HEAD, origin/main), plus staged and
+  unstaged changes. `--all` forces every plane.
+- MIRROR RULE: every command the gate runs is the same string the
+  corresponding CI step runs (test_gate.py pins the strings against the
+  workflow files themselves). The one documented divergence: the mypy ratchet
+  runs `--compare-ref origin/main` locally where CI's step passes its
+  event-specific `--github-event-base`.
+- Output is machine-legible, one line per check:
+      [gate] <name> … ok (<s>s) | FAIL | skipped(<reason>)
+  Every FAIL prints the exact command to re-run. Missing tools and missing
+  local services degrade to LOUD skips, never failures — CI is authoritative
+  (testing law: local parallelism is bounded; CI is authoritative).
+- The commit hook formats; this gate checks. Never bypass with --no-verify:
+  the gate exists to save you the CI round-trip, not to be outrun.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import shlex
+import socket
+import subprocess
+import sys
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+
+# ---------------------------------------------------------------------------
+# Mirrored command strings.
+#
+# ALWAYS_ENGINES mirrors ci.yml § "Repo shape checks" — the checker ENGINES
+# only. The unittest halves of those steps prove the checkers, not the change,
+# and run only when scripts/** is touched (SCRIPTS_PROOFS below).
+# ---------------------------------------------------------------------------
+
+ALWAYS_ENGINES: tuple[tuple[str, str], ...] = (
+    ("lint records", "python3 scripts/lint_records.py"),
+    ("max lines", "python3 scripts/check_max_lines.py"),
+    ("migration heads", "python3 scripts/check_migration_heads.py"),
+    ("anyharness old paths", "python3 scripts/check_anyharness_old_paths.py"),
+    ("server old paths", "python3 scripts/check_server_old_paths.py"),
+    ("worker structure", "python3 scripts/check_proliferate_worker_structure.py"),
+    ("frontend boundaries", "python3 scripts/check_frontend_boundaries.py"),
+    ("appearance scaling", "python3 scripts/check_appearance_scaling.py"),
+    ("design attribution", "python3 scripts/check_design_attribution.py"),
+    ("toast copy", "python3 scripts/check_toast_copy.py"),
+    ("agent-auth secret logs", "python3 scripts/check_agent_auth_secret_logs.py"),
+    ("frontend structure", "python3 scripts/report_frontend_structure.py --strict --summary-only"),
+    ("transcript scroll writer", "python3 scripts/check_transcript_scroll_writer.py"),
+    ("component library", "python3 scripts/check_component_library.py"),
+    ("server boundaries", "python3 scripts/check_server_boundaries.py"),
+    ("anyharness boundaries", "python3 scripts/check_anyharness_boundaries.py"),
+    ("anyharness fences", "python3 scripts/check_anyharness_fences.py"),
+    ("frontend fences", "python3 scripts/check_frontend_fences.py"),
+    ("server fences", "python3 scripts/check_server_fences.py"),
+    ("manifests", "python3 scripts/check_manifests.py"),
+    ("session mutation admission", "python3 scripts/check_session_mutation_admission.py"),
+    ("update flow", "python3 scripts/check_update_flow_lints.py"),
+    ("docs", "python3 scripts/check_docs.py"),
+)
+
+SCRIPTS_PROOFS: tuple[tuple[str, str], ...] = (
+    ("checker tests: lint records", "python3 -m unittest scripts/test_lint_records.py"),
+    ("checker tests: server old paths", "python3 -m unittest scripts/test_check_server_old_paths.py"),
+    ("checker tests: frontend boundaries", "python3 -m unittest scripts/test_check_frontend_boundaries.py"),
+    ("checker tests: mobile export", "python3 -m unittest scripts/test_check_mobile_product_client_export.py"),
+    ("checker tests: appearance scaling", "python3 -m unittest scripts/test_check_appearance_scaling.py"),
+    ("checker tests: design attribution", "python3 -m unittest scripts/test_check_design_attribution.py"),
+    ("checker tests: toast copy", "python3 -m unittest scripts/test_check_toast_copy.py"),
+    ("checker tests: secret logs", "python3 -m unittest scripts/test_check_agent_auth_secret_logs.py"),
+    ("checker tests: component library", "python3 -m unittest scripts/test_check_component_library.py"),
+    ("checker tests: anyharness boundaries", "python3 -m unittest scripts/test_check_anyharness_boundaries.py"),
+    ("checker tests: anyharness fences", "python3 -m unittest scripts/test_check_anyharness_fences.py"),
+    ("checker tests: frontend fences", "python3 -m unittest scripts/test_check_frontend_fences.py"),
+    ("checker tests: server fences", "python3 -m unittest scripts/test_check_server_fences.py"),
+    ("checker tests: manifests", "python3 -m unittest scripts/test_check_manifests.py"),
+    ("checker tests: docs", "python3 -m unittest scripts/test_check_docs.py"),
+    ("checker tests: gate", "python3 -m unittest scripts/test_gate.py"),
+    (
+        "checker tests: server boundary checker",
+        "uv run --python 3.12 --with pytest==9.1.1 "
+        "pytest --noconftest -p no:cacheprovider -c /dev/null -q "
+        "server/tests/unit/test_server_boundary_checker.py "
+        "server/tests/unit/test_server_boundary_checker_named_writes.py",
+    ),
+)
+
+SERVER_RUFF_CHECK = "uv run --python 3.12 --frozen --extra dev ruff check proliferate/ tests/"
+SERVER_RUFF_FORMAT = "uv run --python 3.12 --frozen --extra dev ruff format --check proliferate/ tests/"
+# Local form of CI's "Mypy diagnostic ratchet" step (whose --github-event-base
+# flag is CI-event-specific by design; same checker, same baseline).
+SERVER_MYPY = (
+    "uv run --python 3.12 --frozen --extra dev "
+    "python scripts/check_mypy_baseline.py --compare-ref origin/main"
+)
+SERVER_PYTEST_PREFIX = "uv run --python 3.12 --frozen --extra dev pytest -q -n 2"
+# Mirrors server-ci.yml's test-job `env:` block verbatim — the same values the
+# local compose stack uses, so tests boot identically here and in CI. Applied
+# as defaults only: an already-exported variable (e.g. a second worktree's
+# alternate port) wins.
+SERVER_TEST_ENV = {
+    "DATABASE_URL": "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate",
+    "JWT_SECRET": "test-jwt-secret",
+    "CLOUD_SECRET_KEY": "test-cloud-secret",
+}
+
+CARGO_FMT = "cargo fmt --all --check"
+# Mirrors ci.yml § "CI/CD config checks" — the node test suites that pin the
+# workflows and release tooling.
+CICD_CONFIG_TESTS: tuple[tuple[str, str], ...] = (
+    ("ci-cd config tests", "node --test scripts/ci-cd/*.test.mjs"),
+    ("ops script tests", "node --test scripts/ops/*.test.mjs"),
+    ("dev-launch test", "node --test scripts/dev-background-launch.test.mjs"),
+)
+
+SHARED_TYPECHECK = "pnpm shared:typecheck"
+WEB_TYPECHECK = "pnpm web:typecheck"
+DESKTOP_TSC = "pnpm --filter proliferate exec tsc --noEmit"
+MOBILE_TYPECHECK = "pnpm --filter @proliferate/mobile typecheck"
+SDK_TYPECHECK = "pnpm --filter @anyharness/sdk typecheck"
+SDK_REACT_TYPECHECK = "pnpm --filter @anyharness/sdk-react typecheck"
+# The design package's own build IS the theme-equality law: tsc → generate →
+# check (absorbed from the retired pre-commit hook; see the delivery spec).
+DESIGN_BUILD = "pnpm --filter @proliferate/design build"
+PC_VITEST_RELATED_PREFIX = "pnpm --filter @proliferate/product-client exec vitest related --run"
+
+POSTGRES_PORT = 5432
+REDIS_PORT = 6379
+
+
+# ---------------------------------------------------------------------------
+# Pure logic (unit-tested by scripts/test_gate.py)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Scope:
+    """What the diff touches, as the gate's planes see it."""
+
+    server: bool = False
+    server_domains: set[str] = field(default_factory=set)
+    server_changed_tests: list[str] = field(default_factory=list)
+    rust_paths: list[str] = field(default_factory=list)
+    rust_workspace: bool = False
+    scripts: bool = False
+    cicd: bool = False
+    unmapped: list[str] = field(default_factory=list)
+    shared_frontend: bool = False
+    product_client_srcs: list[str] = field(default_factory=list)
+    design: bool = False
+    web: bool = False
+    desktop: bool = False
+    mobile: bool = False
+    sdk: bool = False
+    sdk_react: bool = False
+    docs: bool = False
+
+    def any_frontend(self) -> bool:
+        return self.shared_frontend or self.web or self.desktop or self.mobile
+
+
+ROOT_FRONTEND_MANIFESTS = ("package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml")
+
+
+def classify(paths: list[str]) -> Scope:
+    scope = Scope()
+    for p in paths:
+        hit = False
+        parts = p.split("/")
+        if p.startswith("server/"):
+            hit = scope.server = True
+            if p.startswith("server/proliferate/server/") and len(parts) >= 4:
+                domain = parts[3]
+                if domain == "cloud" and len(parts) >= 5 and not parts[4].endswith(".py"):
+                    scope.server_domains.add(parts[4])
+                elif not domain.endswith(".py"):
+                    scope.server_domains.add(domain)
+            if (
+                p.startswith(("server/tests/unit/", "server/tests/integration/"))
+                and parts[-1].startswith("test_")
+                and p.endswith(".py")
+            ):
+                scope.server_changed_tests.append(p.removeprefix("server/"))
+        if p.endswith(".rs") or (
+            p.startswith(("anyharness/crates/", "apps/desktop/src-tauri/"))
+            and not p.endswith((".ts", ".tsx", ".json", ".md"))
+        ):
+            hit = True
+            scope.rust_paths.append(p)
+        if p in ("Cargo.toml", "Cargo.lock"):
+            hit = scope.rust_workspace = True
+        if p.startswith("scripts/") and (p.endswith(".py") or parts[-1] == "gate"):
+            hit = scope.scripts = True
+        if p.startswith("scripts/") and p.endswith(".mjs"):
+            hit = scope.cicd = True
+        if p in ROOT_FRONTEND_MANIFESTS or (len(parts) == 1 and p.startswith("tsconfig")):
+            # A dependency/workspace-graph change: the shared typecheck is the canary.
+            hit = scope.shared_frontend = True
+        if p.startswith("apps/packages/") or p.startswith("cloud/sdk"):
+            hit = scope.shared_frontend = True
+        if p.startswith("apps/packages/product-client/src/"):
+            scope.product_client_srcs.append(p)
+        if p.startswith("apps/packages/design/"):
+            scope.design = True
+        if p.startswith("apps/web/"):
+            hit = scope.web = True
+        if p.startswith("apps/desktop/") and not p.startswith("apps/desktop/src-tauri/"):
+            hit = scope.desktop = True
+        if p.startswith("apps/mobile/"):
+            hit = scope.mobile = True
+        if p.startswith("anyharness/sdk/"):
+            hit = scope.sdk = True
+        if p.startswith("anyharness/sdk-react/"):
+            hit = scope.sdk_react = True
+        if p.startswith((".github/", "lints/", "fixtures/", "catalogs/")):
+            hit = True  # governed by the always-set engines (census, records, docs)
+        if p.startswith(("specs/", "delivery/", "guides/")) or p.endswith(".md"):
+            hit = scope.docs = True
+        if not hit:
+            scope.unmapped.append(p)
+    return scope
+
+
+def crate_name(cargo_toml_text: str) -> str | None:
+    """The [package] name from a Cargo.toml, no toml dependency."""
+    in_package = False
+    for line in cargo_toml_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            in_package = stripped == "[package]"
+            continue
+        if in_package and stripped.startswith("name"):
+            _, _, value = stripped.partition("=")
+            return value.strip().strip('"').strip("'") or None
+    return None
+
+
+def crates_for_paths(rust_paths: list[str], repo: Path) -> set[str]:
+    """Map each touched Rust path to its crate by walking up to a Cargo.toml."""
+    names: set[str] = set()
+    for p in rust_paths:
+        current = (repo / p).parent
+        while current != repo and current != current.parent:
+            manifest = current / "Cargo.toml"
+            if manifest.is_file():
+                name = crate_name(manifest.read_text(encoding="utf-8", errors="replace"))
+                if name:
+                    names.add(name)
+                break
+            current = current.parent
+    return names
+
+
+def server_test_files(domains: set[str], repo: Path) -> list[str]:
+    """Test files (repo-relative to server/) whose names mention a touched domain."""
+    hits: list[str] = []
+    for tier in ("unit", "integration"):
+        tier_dir = repo / "server" / "tests" / tier
+        if not tier_dir.is_dir():
+            continue
+        for f in sorted(tier_dir.rglob("test_*.py")):
+            stem = f.stem
+            if any(domain in stem for domain in domains):
+                hits.append(str(f.relative_to(repo / "server")))
+    return sorted(hits)
+
+
+def pc_relative(srcs: list[str]) -> list[str]:
+    prefix = "apps/packages/product-client/"
+    return [s[len(prefix):] for s in srcs if s.startswith(prefix)]
+
+
+def services_reachable(host: str = "localhost", timeout: float = 0.5) -> tuple[bool, bool]:
+    # "localhost" so getaddrinfo covers both 127.0.0.1 and ::1 bindings.
+    def probe(port: int) -> bool:
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except OSError:
+            return False
+
+    return probe(POSTGRES_PORT), probe(REDIS_PORT)
+
+
+def tool_exists(tool: str) -> bool:
+    from shutil import which
+
+    return which(tool) is not None
+
+
+def _has_tomllib(python: str) -> bool:
+    try:
+        proc = subprocess.run(
+            [python, "-c", "import tomllib"], capture_output=True, check=False
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0
+
+
+def pick_engine_python(prober=_has_tomllib) -> str | None:
+    """The interpreter the checker engines run with.
+
+    CI pins Python 3.12; locally `python3` may resolve to the system 3.9 (no
+    tomllib), which every lint engine imports. Prefer the interpreter running
+    the gate, then any modern python3.x on PATH, then bare python3 — first one
+    that can `import tomllib` wins. None means no usable interpreter exists.
+    """
+    from shutil import which
+
+    candidates: list[str] = [sys.executable]
+    for name in ("python3.13", "python3.12", "python3.11", "python3"):
+        path = which(name)
+        if path:
+            candidates.append(path)
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        if prober(candidate):
+            return candidate
+    return None
+
+
+def engine_argv(cmd: str, engine_python: str | None) -> list[str]:
+    """The argv for a check — `python3 …` commands run with the picked engine.
+
+    The COMMAND STRING stays the CI-mirrored `python3 …` (that is what gets
+    printed and re-run); only the resolved interpreter differs, exactly as
+    CI's setup-python step resolves `python3` to its pinned 3.12.
+    """
+    argv = shlex.split(cmd)
+    if argv and argv[0] == "python3" and engine_python:
+        argv[0] = engine_python
+    return argv
+
+
+def nextest_installed() -> bool:
+    """cargo-nextest is a separate binary; without it `cargo nextest` is a usage error."""
+    try:
+        proc = subprocess.run(
+            ["cargo", "nextest", "--version"], capture_output=True, text=True, check=False
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# Check assembly
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Check:
+    name: str
+    cmd: str | None  # None => pre-decided skip
+    cwd: str | None = None  # repo-relative; None = repo root
+    skip_reason: str | None = None
+    loud: bool = False  # print the skip in bold with a banner
+    env_defaults: dict[str, str] | None = None  # applied only where unset
+    advisory: bool = False  # run + report, never fail (e.g. fmt until its CI job exists)
+
+
+def build_checks(
+    scope: Scope,
+    *,
+    repo: Path,
+    postgres_up: bool,
+    redis_up: bool,
+    have_uv: bool,
+    have_pnpm: bool,
+    have_cargo: bool,
+    have_nextest: bool = True,
+) -> list[Check]:
+    checks: list[Check] = []
+
+    for name, cmd in ALWAYS_ENGINES:
+        checks.append(Check(name, cmd))
+
+    if scope.scripts:
+        for name, cmd in SCRIPTS_PROOFS:
+            if cmd.startswith("uv ") and not have_uv:
+                checks.append(Check(name, None, skip_reason="uv not found", loud=True))
+            else:
+                checks.append(Check(name, cmd))
+
+    if scope.cicd:
+        for name, cmd in CICD_CONFIG_TESTS:
+            checks.append(Check(name, cmd))
+
+    if scope.server:
+        if not have_uv:
+            checks.append(Check("server: ruff+mypy+tests", None, skip_reason="uv not found", loud=True))
+        else:
+            checks.append(Check("server: ruff check", SERVER_RUFF_CHECK, cwd="server"))
+            checks.append(Check("server: ruff format", SERVER_RUFF_FORMAT, cwd="server"))
+            checks.append(Check("server: mypy ratchet", SERVER_MYPY, cwd="server"))
+            files = sorted(
+                set(server_test_files(scope.server_domains, repo))
+                | set(scope.server_changed_tests)
+            )
+            if not files:
+                checks.append(
+                    Check(
+                        "server: tests",
+                        None,
+                        skip_reason="no domain-mapped tests for this diff — CI runs the full suite",
+                        loud=True,
+                    )
+                )
+            elif not (postgres_up and redis_up):
+                down = " + ".join(
+                    n for n, up in (("postgres:5432", postgres_up), ("redis:6379", redis_up)) if not up
+                )
+                checks.append(
+                    Check(
+                        f"server: tests ({len(files)} files)",
+                        None,
+                        skip_reason=f"{down} unreachable — CI is authoritative",
+                        loud=True,
+                    )
+                )
+            else:
+                checks.append(
+                    Check(
+                        f"server: tests ({len(files)} files)",
+                        f"{SERVER_PYTEST_PREFIX} {' '.join(files)}",
+                        cwd="server",
+                        env_defaults=SERVER_TEST_ENV,
+                    )
+                )
+
+    if scope.rust_paths or scope.rust_workspace:
+        if not have_cargo:
+            checks.append(Check("rust", None, skip_reason="cargo not found", loud=True))
+        else:
+            # Gating since the lint-wiring slice: the tree is normalized under
+            # the rust-toolchain.toml pin and ci.yml's rust-lint job runs the
+            # same `cargo fmt --check` — the mirror rule holds in both
+            # directions.
+            checks.append(Check("rust: fmt", CARGO_FMT))
+            if scope.rust_workspace:
+                target = "--workspace"
+            else:
+                crates = sorted(crates_for_paths(scope.rust_paths, repo))
+                target = " ".join(f"-p {c}" for c in crates) if crates else "--workspace"
+            # Gating since the lint-wiring slice: -D warnings under the
+            # workspace allow-list in the root Cargo.toml — same semantics as
+            # ci.yml's rust-lint job, including --all-targets (a test-target
+            # warning must fail here, not first in CI) and --keep-going (every
+            # failing crate reports in one run); scoped to touched crates for
+            # speed where the diff allows.
+            checks.append(
+                Check(
+                    "rust: clippy",
+                    f"cargo clippy {target} --all-targets --keep-going -- -D warnings",
+                )
+            )
+            if have_nextest:
+                checks.append(Check("rust: nextest", f"cargo nextest run {target}"))
+            else:
+                checks.append(
+                    Check(
+                        "rust: nextest",
+                        None,
+                        skip_reason="cargo-nextest not installed (cargo install cargo-nextest) — CI is authoritative",
+                        loud=True,
+                    )
+                )
+
+    if scope.any_frontend() or scope.sdk or scope.sdk_react:
+        if not have_pnpm:
+            checks.append(Check("frontend", None, skip_reason="pnpm not found", loud=True))
+        else:
+            if scope.shared_frontend:
+                checks.append(Check("frontend: shared typecheck", SHARED_TYPECHECK))
+            if scope.product_client_srcs:
+                rel = pc_relative(scope.product_client_srcs)
+                checks.append(
+                    Check(
+                        "frontend: product-client vitest related",
+                        f"{PC_VITEST_RELATED_PREFIX} {' '.join(rel)}",
+                    )
+                )
+            if scope.design:
+                checks.append(Check("frontend: design theme equality", DESIGN_BUILD))
+            if scope.web:
+                checks.append(Check("frontend: web typecheck", WEB_TYPECHECK))
+            if scope.desktop:
+                checks.append(Check("frontend: desktop tsc", DESKTOP_TSC))
+            if scope.mobile:
+                checks.append(Check("frontend: mobile typecheck", MOBILE_TYPECHECK))
+            if scope.sdk:
+                checks.append(Check("frontend: sdk typecheck", SDK_TYPECHECK))
+            if scope.sdk_react:
+                checks.append(Check("frontend: sdk-react typecheck", SDK_REACT_TYPECHECK))
+
+    # scope.docs needs no extra check: `docs` (check_docs.py) is in the
+    # always-set, which is the very check the docs rule names.
+    return checks
+
+
+# ---------------------------------------------------------------------------
+# Execution
+# ---------------------------------------------------------------------------
+
+
+def changed_files(repo: Path) -> tuple[list[str], str | None]:
+    """Union of committed-vs-merge-base, staged, and unstaged paths."""
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", *args], cwd=repo, capture_output=True, text=True, check=False
+        )
+
+    merge_base = git("merge-base", "HEAD", "origin/main")
+    warning = None
+    paths: set[str] = set()
+    if merge_base.returncode == 0:
+        base = merge_base.stdout.strip()
+        diff = git("diff", "--name-only", f"{base}..HEAD")
+        paths.update(line for line in diff.stdout.splitlines() if line)
+    else:
+        warning = "origin/main unresolvable — running the always-set only; fetch and re-run for full scoping"
+    for args in (
+        ("diff", "--name-only", "--cached"),
+        ("diff", "--name-only"),
+        # New files not yet staged still scope a by-hand run (ignored files excluded).
+        ("ls-files", "--others", "--exclude-standard"),
+    ):
+        out = git(*args)
+        paths.update(line for line in out.stdout.splitlines() if line)
+    return sorted(paths), warning
+
+
+def apply_engine_availability(checks: list[Check], engine_python: str | None) -> list[Check]:
+    """No usable interpreter for the engines → their checks become loud skips."""
+    if engine_python is not None:
+        return checks
+    adjusted: list[Check] = []
+    for check in checks:
+        if check.cmd is not None and check.cmd.startswith("python3 "):
+            adjusted.append(
+                Check(
+                    check.name,
+                    None,
+                    skip_reason="python3 ≥3.11 unavailable (engines need tomllib) — install python3.12; CI is authoritative",
+                    loud=True,
+                )
+            )
+        else:
+            adjusted.append(check)
+    return adjusted
+
+
+def run_check(
+    check: Check, repo: Path, engine_python: str | None = None
+) -> tuple[str, float, str]:
+    """Returns (status, seconds, note). status ∈ ok | FAIL | skipped."""
+    if check.cmd is None:
+        return "skipped", 0.0, ""
+    cwd = repo / check.cwd if check.cwd else repo
+    env = None
+    if check.env_defaults:
+        env = {**check.env_defaults, **os.environ}  # exported values win
+    start = time.monotonic()
+    if check.advisory:
+        proc = subprocess.run(
+            engine_argv(check.cmd, engine_python),
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        elapsed = time.monotonic() - start
+        if proc.returncode == 0:
+            return "ok", elapsed, ""
+        diffs = sum(
+            1
+            for line in (proc.stdout or "").splitlines() + (proc.stderr or "").splitlines()
+            if line.startswith("Diff in ")
+        )
+        detail = f"{diffs} unformatted files; " if diffs else f"exit {proc.returncode}; "
+        return "ok", elapsed, f"advisory: {detail}not gating until its CI job lands"
+    if "*" in check.cmd:
+        # Mirrored CI strings with globs (node --test scripts/…/*.test.mjs) need a shell.
+        proc = subprocess.run(check.cmd, cwd=cwd, env=env, shell=True, check=False)
+    else:
+        proc = subprocess.run(
+            engine_argv(check.cmd, engine_python), cwd=cwd, env=env, check=False
+        )
+    return ("ok" if proc.returncode == 0 else "FAIL"), time.monotonic() - start, ""
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="The pre-push gate (see module docstring).")
+    parser.add_argument("--all", action="store_true", help="force every plane regardless of the diff")
+    parser.add_argument("--list", action="store_true", help="print the checks the diff selects, run nothing")
+    args = parser.parse_args(argv)
+
+    # Agents read the gate through pipes: keep per-check lines arriving in
+    # order with the subprocess output, not block-buffered until exit.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(line_buffering=True)
+
+    paths, warning = changed_files(REPO)
+    if warning and not args.all:
+        print(f"[gate] WARNING: {warning}", file=sys.stderr)
+        scope = Scope()
+    elif args.all:
+        scope = classify(paths)
+        scope.server = True
+        scope.rust_workspace = True
+        scope.scripts = True
+        scope.shared_frontend = scope.web = scope.desktop = scope.mobile = True
+        scope.sdk = scope.sdk_react = scope.design = scope.docs = True
+    else:
+        scope = classify(paths)
+
+    engine_python = pick_engine_python()
+    if engine_python is not None and not _has_tomllib("python3"):
+        print(f"[gate] engines: {engine_python} (PATH python3 lacks tomllib; engines need ≥3.11)")
+
+    postgres_up, redis_up = services_reachable()
+    checks = build_checks(
+        scope,
+        repo=REPO,
+        postgres_up=postgres_up,
+        redis_up=redis_up,
+        have_uv=tool_exists("uv"),
+        have_pnpm=tool_exists("pnpm"),
+        have_cargo=tool_exists("cargo"),
+        have_nextest=tool_exists("cargo") and nextest_installed(),
+    )
+    checks = apply_engine_availability(checks, engine_python)
+
+    if scope.unmapped and not args.all:
+        shown = " ".join(scope.unmapped[:8])
+        more = f" (+{len(scope.unmapped) - 8} more)" if len(scope.unmapped) > 8 else ""
+        print(f"[gate] unmapped paths (always-set only): {shown}{more}")
+
+    if args.list:
+        for check in checks:
+            detail = check.cmd or f"skipped({check.skip_reason})"
+            print(f"[gate] {check.name} :: {detail}")
+        return 0
+
+    started = time.monotonic()
+    failures: list[Check] = []
+    loud_skips: list[Check] = []
+    for check in checks:
+        status, seconds, note = run_check(check, REPO, engine_python)
+        if status == "ok" and note:
+            print(f"[gate] {check.name} … ok ({seconds:.1f}s) — {note}")
+        elif status == "ok":
+            print(f"[gate] {check.name} … ok ({seconds:.1f}s)")
+        elif status == "skipped":
+            print(f"[gate] {check.name} … skipped({check.skip_reason})")
+            if check.loud:
+                loud_skips.append(check)
+        else:
+            print(f"[gate] {check.name} … FAIL")
+            print(f"[gate]   re-run: {check.cmd}" + (f"   (cwd: {check.cwd})" if check.cwd else ""))
+            failures.append(check)
+
+    total = time.monotonic() - started
+    print(f"[gate] {len(checks)} checks in {total:.0f}s — "
+          f"{len(failures)} failed, {len(loud_skips)} loudly skipped")
+    for check in loud_skips:
+        print("[gate] " + "!" * 62)
+        print(f"[gate] !! NOT RUN: {check.name} — {check.skip_reason}")
+        print("[gate] " + "!" * 62)
+    if failures:
+        print("[gate] RED. Fix the failures above (each lists its re-run command),")
+        print("[gate] or verify in CI — never push with --no-verify.")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

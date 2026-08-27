@@ -246,12 +246,14 @@ async fn killed_collector_sends_new_generation_ready_over_the_child_bridge() {
 
     // The initial bootstrap frame carries the current generation and its
     // capability descriptor.
-    let bootstrap = receive_frame_until::<ParentFrame>(
-        &child,
-        Instant::now() + Duration::from_secs(2),
-    )
-    .expect("bootstrap frame");
-    assert_eq!(bootstrap.descriptors.len(), 1, "bootstrap carries the capability");
+    let bootstrap =
+        receive_frame_until::<ParentFrame>(&child, Instant::now() + Duration::from_secs(2))
+            .expect("bootstrap frame");
+    assert_eq!(
+        bootstrap.descriptors.len(),
+        1,
+        "bootstrap carries the capability"
+    );
     let (old_generation, old_boot) = match bootstrap.frame {
         ParentFrame::Bootstrap {
             initial_state:
@@ -265,7 +267,10 @@ async fn killed_collector_sends_new_generation_ready_over_the_child_bridge() {
         other => panic!("expected a ready bootstrap, got {other:?}"),
     };
     let old_capability = read_capability(bootstrap.descriptors.into_iter().next().unwrap());
-    assert!(!old_capability.is_empty(), "bootstrap capability is readable");
+    assert!(
+        !old_capability.is_empty(),
+        "bootstrap capability is readable"
+    );
 
     supervisor
         .kill_current_process_for_test()
@@ -425,7 +430,8 @@ fn death_certificate_distinguishes_clean_exit_from_signal() {
         Some(ArgumentValueV1::Integer(i64::from(libc::SIGKILL)))
     );
 
-    let uninspected = super::death_certificate::CollectorDeathCertificate::new("health_unavailable", None);
+    let uninspected =
+        super::death_certificate::CollectorDeathCertificate::new("health_unavailable", None);
     let uninspected_record = certificate_record(uninspected);
     assert_eq!(
         argument(&uninspected_record, "trigger"),

@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 use crate::domains::agents::installer::seed;
 use crate::domains::agents::model::{AgentDescriptor, AgentKind, ArtifactRole};
 use crate::domains::agents::readiness::paths::{
-    artifact_root, managed_registry_binary_for_names, managed_registry_npm_binary_for_names,
+    artifact_root, managed_npm_binary_for_names, managed_registry_binary_for_names,
+    managed_registry_npm_binary_for_names,
 };
 use crate::domains::agents::readiness::service::resolve_agent_unrouted;
 use crate::integrations::agent_cli::executable::{find_in_path, is_valid_executable};
@@ -97,6 +98,28 @@ fn managed_login_command(
     }
 
     if let Some(path) = managed_registry_binary_for_names(
+        runtime_home,
+        &descriptor.kind,
+        &[login.command.program.as_str()],
+    ) {
+        let prefixes = login_path_prefixes(runtime_home, &descriptor.kind, &path);
+        return Some(AgentLoginCommand {
+            program: path.display().to_string(),
+            args: login.command.args.clone(),
+        })
+        .map(|command| (command, prefixes));
+    }
+
+    // The managed npm tree's own vendor shim (`agent_process/node_modules/
+    // .bin/<program>`). This is the rung grok's login lives on: its managed
+    // artifact is the npm package `@xai-official/grok`, whose single binary is
+    // both the ACP sidecar (`grok agent stdio`, what `grok-launcher` bakes)
+    // and the interactive CLI (`grok login`). The launcher cannot serve login
+    // — its args are fixed — so the shim beside it is what runs here. The
+    // rung is deliberately NOT the launcher name (agent_auth delta row:
+    // "teach login resolution the launcher name" would exec `grok agent
+    // stdio login`).
+    if let Some(path) = managed_npm_binary_for_names(
         runtime_home,
         &descriptor.kind,
         &[login.command.program.as_str()],
@@ -273,6 +296,45 @@ mod tests {
         assert_eq!(resolved.command.program, binary_path.display().to_string());
         assert!(resolved.env.iter().any(|(key, value)| key == "PATH"
             && value.starts_with(binary_path.parent().unwrap().to_str().unwrap())));
+
+        let _ = std::fs::remove_dir_all(runtime_home);
+    }
+
+    /// The grok login chain (agent_auth delta row): the managed install is
+    /// `npm install --prefix agent_process @xai-official/grok`, which writes
+    /// the vendor shim at `agent_process/node_modules/.bin/grok` beside the
+    /// generated `grok-launcher`. With only the launcher and the shim on disk
+    /// — no native artifact, no `registry_binary`, no legacy `registry_npm`
+    /// tree, nothing on PATH — resolution must land on the shim, never on
+    /// the launcher (whose baked `agent stdio` args make `login` impossible).
+    #[test]
+    fn resolve_login_command_finds_the_managed_npm_vendor_shim_not_the_launcher() {
+        let _env_lock = env_lock();
+        let grok = descriptor_for_kind("grok");
+        let runtime_home = make_temp_dir("anyharness-login-managed-grok-shim-test");
+        let managed_dir =
+            artifact_root(&runtime_home, &AgentKind::Grok, &ArtifactRole::AgentProcess);
+        let launcher_path = managed_dir.join("grok-launcher");
+        let shim_path = managed_dir.join("node_modules").join(".bin").join("grok");
+        std::fs::create_dir_all(shim_path.parent().expect("shim parent"))
+            .expect("create managed npm bin dir");
+        std::fs::write(&launcher_path, "#!/bin/sh\nexec grok agent stdio \"$@\"\n")
+            .expect("write launcher");
+        make_executable(&launcher_path).expect("make launcher executable");
+        std::fs::write(&shim_path, "#!/bin/sh\nexit 0\n").expect("write shim");
+        make_executable(&shim_path).expect("make shim executable");
+        let _guard = PathEnvGuard::clear();
+
+        let resolved = resolve_login_command(&grok, &runtime_home).expect("resolve login");
+
+        assert_eq!(resolved.command.program, shim_path.display().to_string());
+        assert_eq!(resolved.command.args, vec!["login".to_string()]);
+        assert_ne!(
+            resolved.command.program,
+            launcher_path.display().to_string()
+        );
+        assert!(resolved.env.iter().any(|(key, value)| key == "PATH"
+            && value.starts_with(shim_path.parent().unwrap().to_str().unwrap())));
 
         let _ = std::fs::remove_dir_all(runtime_home);
     }

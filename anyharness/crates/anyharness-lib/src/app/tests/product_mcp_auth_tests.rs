@@ -135,8 +135,7 @@ async fn expired_capability_token_is_forbidden_once_the_session_closes() {
         tools_list_body(),
     )
     .await
-    .err()
-    .expect("expired token with a closed session must be rejected");
+    .expect_err("expired token with a closed session must be rejected");
 
     // 403 and a cause-naming detail: 401 would send MCP clients into OAuth
     // discovery and mask the real failure behind a parse error.
@@ -169,8 +168,7 @@ async fn missing_capability_token_is_forbidden_with_named_cause() {
         tools_list_body(),
     )
     .await
-    .err()
-    .expect("missing token must be rejected");
+    .expect_err("missing token must be rejected");
 
     assert_eq!(error.status(), axum::http::StatusCode::FORBIDDEN);
     assert!(error
@@ -201,8 +199,7 @@ async fn garbage_capability_token_is_forbidden_even_for_an_open_session() {
         tools_list_body(),
     )
     .await
-    .err()
-    .expect("garbage token must be rejected even though the session is open");
+    .expect_err("garbage token must be rejected even though the session is open");
 
     assert_eq!(error.status(), axum::http::StatusCode::FORBIDDEN);
     assert!(error

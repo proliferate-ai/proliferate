@@ -122,7 +122,9 @@ export function clearDesktopSentryUser(): void {
 
 export function setDesktopSentryTag(key: string, value: string): void {
   if (!sentryInitialized) return;
-  Sentry.setTag(key, value);
+  // An empty value clears the tag (the vendor drops tags set to undefined),
+  // per the ProductTelemetry.setTag contract.
+  Sentry.setTag(key, value === "" ? undefined : value);
 }
 
 export function addDesktopSentryBreadcrumb(

@@ -579,15 +579,13 @@ fn current_view(shutdown_armed: bool) -> TerminalCollectorView<'static> {
     }
 }
 
-fn delayed_write(
+async fn delayed_write(
     active: Arc<AtomicUsize>,
     maximum: Arc<AtomicUsize>,
-) -> impl Future<Output = Result<(), io::Error>> {
-    async move {
-        let concurrent = active.fetch_add(1, Ordering::AcqRel) + 1;
-        maximum.fetch_max(concurrent, Ordering::AcqRel);
-        tokio::time::sleep(Duration::from_millis(5)).await;
-        active.fetch_sub(1, Ordering::AcqRel);
-        Ok(())
-    }
+) -> Result<(), io::Error> {
+    let concurrent = active.fetch_add(1, Ordering::AcqRel) + 1;
+    maximum.fetch_max(concurrent, Ordering::AcqRel);
+    tokio::time::sleep(Duration::from_millis(5)).await;
+    active.fetch_sub(1, Ordering::AcqRel);
+    Ok(())
 }

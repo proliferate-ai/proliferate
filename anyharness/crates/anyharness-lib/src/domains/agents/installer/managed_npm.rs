@@ -130,9 +130,7 @@ pub(crate) fn managed_npm_install_issue(package: &str, managed_dir: &Path) -> Op
         return Some("Managed agent package is out of date. Reinstall this agent to update the bundled ACP adapter.".into());
     }
 
-    let Some(expected_version) = npm_package_version(package) else {
-        return None;
-    };
+    let expected_version = npm_package_version(package)?;
     if !is_pinned_registry_version(&expected_version) {
         return None;
     }

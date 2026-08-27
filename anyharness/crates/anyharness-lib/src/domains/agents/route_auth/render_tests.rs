@@ -31,7 +31,6 @@ impl GatewayModelResolve for HarnessPlanResolver {
         match harness_kind {
             "opencode" => GatewayModelPlan {
                 models: OPENCODE_LIVE_MODELS.iter().map(|m| m.to_string()).collect(),
-                ..Default::default()
             },
             _ => GatewayModelPlan::default(),
         }
@@ -82,7 +81,8 @@ fn claude_gateway_sets_base_url_token_and_sanitizes_ambient() {
     let home = TempHome::new("claude-gw");
     home.write_state_json(&gateway_state("claude"));
 
-    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
 
     assert_eq!(
         rendered.set.get("ANTHROPIC_BASE_URL").unwrap(),
@@ -148,11 +148,15 @@ fn claude_api_key_sets_its_var_and_still_sanitizes_ambient() {
         )],
     ));
 
-    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
 
     assert_eq!(rendered.set.get("ANTHROPIC_API_KEY").unwrap(), "sk-raw");
     assert_eq!(rendered.set.len(), 1, "the api_key recipe stays generic");
-    assert!(rendered.files.is_empty(), "no config file for an api_key route");
+    assert!(
+        rendered.files.is_empty(),
+        "no config file for an api_key route"
+    );
 
     // The rerouting flags go, so the selected key is what the CLI actually uses.
     for key in [
@@ -169,7 +173,9 @@ fn claude_api_key_sets_its_var_and_still_sanitizes_ambient() {
     // The var THIS route set is kept; the other selectors it did not set are
     // removed so an ambient value cannot shadow the chosen credential.
     assert!(!rendered.remove.contains(&"ANTHROPIC_API_KEY".to_string()));
-    assert!(rendered.remove.contains(&"ANTHROPIC_AUTH_TOKEN".to_string()));
+    assert!(rendered
+        .remove
+        .contains(&"ANTHROPIC_AUTH_TOKEN".to_string()));
     assert!(rendered.remove.contains(&"ANTHROPIC_BASE_URL".to_string()));
 }
 
@@ -229,7 +235,10 @@ fn a_non_claude_api_key_route_adds_no_removals() {
     let home = TempHome::new("codex-key-no-sanitize");
     home.write_state_json(&v2_state(
         1,
-        vec![harness("codex", vec![api_key_source("OPENAI_API_KEY", "sk-raw")])],
+        vec![harness(
+            "codex",
+            vec![api_key_source("OPENAI_API_KEY", "sk-raw")],
+        )],
     ));
 
     let rendered =
@@ -245,7 +254,8 @@ fn claude_gateway_sanitize_only_strips_vars_it_did_not_set() {
     // set → kept; ANTHROPIC_API_KEY is not set → removed.
     let home = TempHome::new("claude-sanitize");
     home.write_state_json(&gateway_state("claude"));
-    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
     assert!(rendered.remove.contains(&"ANTHROPIC_API_KEY".to_string()));
     assert!(!rendered.remove.contains(&"ANTHROPIC_BASE_URL".to_string()));
     assert!(!rendered
@@ -260,7 +270,8 @@ fn codex_gateway_materializes_config_toml_and_sets_env() {
     let home = TempHome::new("codex-gw");
     home.write_state_json(&gateway_state("codex"));
 
-    let rendered = resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("render");
 
     let codex_home = rendered.set.get("CODEX_HOME").expect("CODEX_HOME");
     assert!(codex_home.contains("codex-home-42"));
@@ -271,7 +282,10 @@ fn codex_gateway_materializes_config_toml_and_sets_env() {
     let config = std::fs::read_to_string(std::path::Path::new(codex_home).join("config.toml"))
         .expect("read config.toml");
     assert!(config.contains("model_provider = \"proliferate\""));
-    assert!(!config.contains("model ="), "route config must not author a model: {config}");
+    assert!(
+        !config.contains("model ="),
+        "route config must not author a model: {config}"
+    );
     assert!(config.contains("base_url = \"https://llm.proliferate.ai/v1\""));
     assert!(config.contains("env_key = \"PROLIFERATE_GATEWAY_KEY\""));
     assert!(config.contains("wire_api = \"responses\""));
@@ -282,10 +296,14 @@ fn codex_api_key_sets_exactly_its_var() {
     let home = TempHome::new("codex-key");
     home.write_state_json(&v2_state(
         1,
-        vec![harness("codex", vec![api_key_source("OPENAI_API_KEY", "sk-openai")])],
+        vec![harness(
+            "codex",
+            vec![api_key_source("OPENAI_API_KEY", "sk-openai")],
+        )],
     ));
 
-    let rendered = resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("render");
     assert_eq!(rendered.set.get("OPENAI_API_KEY").unwrap(), "sk-openai");
     assert!(!rendered.set.contains_key("CODEX_HOME"));
     assert!(rendered.remove.is_empty());
@@ -299,7 +317,8 @@ fn grok_gateway_sets_models_base_url_and_isolated_home() {
     let home = TempHome::new("grok-gw");
     home.write_state_json(&gateway_state("grok"));
 
-    let rendered = resolve_launch_route_auth(home.path(), "grok", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "grok", &HarnessPlanResolver).expect("render");
     assert_eq!(
         rendered.set.get("GROK_MODELS_BASE_URL").unwrap(),
         "https://llm.proliferate.ai/v1"
@@ -313,9 +332,13 @@ fn grok_api_key_sets_exactly_its_var() {
     let home = TempHome::new("grok-key");
     home.write_state_json(&v2_state(
         1,
-        vec![harness("grok", vec![api_key_source("XAI_API_KEY", "xai-raw")])],
+        vec![harness(
+            "grok",
+            vec![api_key_source("XAI_API_KEY", "xai-raw")],
+        )],
     ));
-    let rendered = resolve_launch_route_auth(home.path(), "grok", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "grok", &HarnessPlanResolver).expect("render");
     assert_eq!(rendered.set.get("XAI_API_KEY").unwrap(), "xai-raw");
     assert!(!rendered.set.contains_key("HOME"));
 }
@@ -329,7 +352,8 @@ fn absent_harness_renders_native_delta() {
     let home = TempHome::new("absent-native");
     home.write_state_json(&gateway_state("codex")); // no claude entry
 
-    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
     assert!(rendered.set.is_empty());
     assert!(rendered.remove.is_empty());
     assert!(rendered.files.is_empty());
@@ -361,7 +385,8 @@ fn empty_sources_refuse_the_launch_instead_of_rendering_native() {
 #[test]
 fn missing_state_file_is_native_empty_delta() {
     let home = TempHome::new("missing");
-    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
     assert!(rendered.set.is_empty());
     assert!(rendered.remove.is_empty());
 }
@@ -382,7 +407,8 @@ fn native_codex_inherits_its_own_home_without_materialization() {
 fn malformed_state_file_is_typed_error() {
     let home = TempHome::new("broken");
     home.write_state_raw(b"{{{ not json");
-    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect_err("malformed");
+    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver)
+        .expect_err("malformed");
     assert_eq!(error.code(), "AGENT_ROUTE_STATE_MALFORMED");
 }
 
@@ -392,7 +418,8 @@ fn v1_state_file_is_rejected_as_malformed() {
     home.write_state_raw(
         br#"{ "revision": 3, "selections": [ { "harness": "claude", "route": "native" } ] }"#,
     );
-    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect_err("v1 malformed");
+    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver)
+        .expect_err("v1 malformed");
     assert_eq!(error.code(), "AGENT_ROUTE_STATE_MALFORMED");
 }
 
@@ -403,7 +430,8 @@ fn unknown_source_kind_is_typed_error() {
         1,
         vec![harness("claude", vec![json!({ "kind": "bogus" })])],
     ));
-    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect_err("unknown kind");
+    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver)
+        .expect_err("unknown kind");
     assert_eq!(error.code(), "AGENT_ROUTE_UNSUPPORTED");
 }
 
@@ -435,9 +463,10 @@ fn render_is_pure_and_apply_writes_0600_files() {
 
     // The launcher entry point applies the specs, writing the config file 0600
     // with the exact bytes the render produced.
-    let applied = resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("apply");
-    let config_file = std::path::Path::new(applied.set.get("CODEX_HOME").unwrap())
-        .join("config.toml");
+    let applied =
+        resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("apply");
+    let config_file =
+        std::path::Path::new(applied.set.get("CODEX_HOME").unwrap()).join("config.toml");
     assert!(config_file.is_file());
     assert_eq!(std::fs::read(&config_file).unwrap(), *contents);
     #[cfg(unix)]
@@ -505,10 +534,7 @@ fn unknown_harness_in_state_is_typed_error() {
     // A gateway source under a harness kind AgentKind cannot parse — the gateway
     // recipe needs a known harness, so render rejects it.
     let home = TempHome::new("unknown-harness");
-    home.write_state_json(&v2_state(
-        1,
-        vec![harness("bogus", vec![gateway_source()])],
-    ));
+    home.write_state_json(&v2_state(1, vec![harness("bogus", vec![gateway_source()])]));
     let state = load_state_file(home.path()).expect("load").expect("state");
     let profile = resolve_profile(Some(&state), "bogus").expect("resolve");
     let error = render_profile(&profile, "bogus", &GatewayModelPlan::default(), home.path())

@@ -1,0 +1,8 @@
+# The one Rust toolchain, everywhere (the mirror rule for rust, 2026-08-27):
+# rustup respects this file for every local cargo invocation, and CI's rustup
+# proxies auto-install it, so `make gate`, the pre-push hook, and the rust-lint
+# job can never disagree about what rustfmt/clippy say. Bump deliberately, in
+# its own PR, together with the reformat/refix that bump implies.
+[toolchain]
+channel = "1.98.0"
+components = ["rustfmt", "clippy"]

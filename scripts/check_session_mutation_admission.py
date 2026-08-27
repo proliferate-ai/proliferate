@@ -68,7 +68,9 @@ ROUTER_FILES = [
     HTTP_DIR / "workflow_runs.rs",
 ]
 MUTATING = ("post", "put", "patch", "delete")
-ADMIT_RE = re.compile(r"admit_session_mutation|admit_review_parent_session|admit_plan_session|admit_all_workspace_sessions")
+ADMIT_RE = re.compile(
+    r"admit_session_mutation|admit_review_parent_session|admit_plan_session|admit_all_workspace_sessions"
+)
 # The enumerated effect surfaces a fenced handler may only touch AFTER
 # admission. This is a syntactic ordering ratchet over known runtime/service
 # fields, not a full effect analysis — the behavioral proof is the admission
@@ -99,7 +101,9 @@ BARE_HANDLER_REF_RE = re.compile(r"\b(post|put|patch|delete)\(\s*([a-z_0-9]+)\s*
 # left over is routed into `unresolved` so it FAILS LOUDLY.
 ANY_HANDLER_REF_RE = re.compile(r"\b(post|put|patch|delete)\(\s*([A-Za-z_0-9:]+)\s*[),]")
 IMPORT_GROUP_RE = re.compile(r"([a-z_0-9]+)::\{([^{}]*)\}", re.S)
-CLASS_LINE_RE = re.compile(r"^([a-z_0-9]+::[a-z_0-9]+)\s+(fenced|derived-safe|read-like|cosmetic|creation|workspace-scoped|workflow-plane)\s+(.+)$")
+CLASS_LINE_RE = re.compile(
+    r"^([a-z_0-9]+::[a-z_0-9]+)\s+(fenced|derived-safe|read-like|cosmetic|creation|workspace-scoped|workflow-plane)\s+(.+)$"
+)
 
 
 def collect_mutating_handlers() -> set[str]:
@@ -121,9 +125,7 @@ def collect_mutating_handlers() -> set[str]:
             if fn in qualified:
                 continue
             module = import_map.get(fn)
-            if module is None and re.search(
-                rf"\bfn {re.escape(fn)}\s*\(", text
-            ):
+            if module is None and re.search(rf"\bfn {re.escape(fn)}\s*\(", text):
                 # A sub-router file registering a handler it defines itself
                 # (e.g. workflow_runs.rs's `put(put_workflow_run)`): the
                 # handler's module is the scanned file's own module name.
@@ -170,7 +172,9 @@ def load_classification() -> dict[str, tuple[str, str]]:
             continue
         match = CLASS_LINE_RE.match(line)
         if not match:
-            raise SystemExit(f"{CLASSIFICATION_PATH.name}:{lineno}: expected 'module::fn class reason'")
+            raise SystemExit(
+                f"{CLASSIFICATION_PATH.name}:{lineno}: expected 'module::fn class reason'"
+            )
         key, cls, reason = match.groups()
         if key in entries:
             raise SystemExit(f"{CLASSIFICATION_PATH.name}:{lineno}: duplicate entry {key}")

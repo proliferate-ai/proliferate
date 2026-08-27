@@ -28,3 +28,6 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 sentry = { workspace = true, features = ["test"] }
+
+[lints]
+workspace = true

@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from proliferate.integrations.litellm import LiteLLMSpendLogEntry
-from proliferate.server.agent_auth.usage_import import (
+from proliferate.server.ai_gateway.usage_import import (
     _overlap_window_start,
     _parse_occurred_at,
 )

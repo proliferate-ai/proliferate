@@ -85,7 +85,6 @@ impl WorkspaceStore {
                 map_checkpoint,
             )
             .optional()
-            .map_err(Into::into)
         })
     }
 
@@ -116,7 +115,6 @@ impl WorkspaceStore {
                 map_checkpoint,
             )
             .optional()
-            .map_err(Into::into)
         })
     }
 
@@ -177,7 +175,6 @@ impl WorkspaceStore {
             ))?;
             let rows = stmt.query_map([workspace_id], map_checkpoint)?;
             rows.collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(Into::into)
         })
     }
 
@@ -189,7 +186,6 @@ impl WorkspaceStore {
             )?;
             let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
             rows.collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(Into::into)
         })
     }
 
@@ -202,7 +198,6 @@ impl WorkspaceStore {
                 conn.prepare("SELECT DISTINCT workspace_id FROM workspace_checkpoints")?;
             let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
             rows.collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(Into::into)
         })
     }
 

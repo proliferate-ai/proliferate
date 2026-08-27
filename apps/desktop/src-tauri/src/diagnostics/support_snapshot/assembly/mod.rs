@@ -293,7 +293,7 @@ fn apply_pre_package_caps(
         let item_limit = container_limit(group.container(), collector_records);
         if used_items
             .checked_add(count)
-            .map_or(true, |total| total > item_limit)
+            .is_none_or(|total| total > item_limit)
         {
             if matches!(group.container(), ContainerKey::Collector) {
                 accounting.add_omission(
@@ -324,7 +324,7 @@ fn apply_pre_package_caps(
             .ok_or(SupportAssemblyError::InvalidSourceAccounting)?;
         if used_bytes
             .checked_add(bytes)
-            .map_or(true, |total| total > byte_limit)
+            .is_none_or(|total| total > byte_limit)
         {
             accounting.add_omission(
                 group.evidence_source(),
@@ -342,7 +342,7 @@ fn apply_pre_package_caps(
         }
         if let Some((bucket, limit, reason)) = session_byte_bucket(group.container()) {
             let used = session_bytes.get(&bucket).copied().unwrap_or(0);
-            if used.checked_add(bytes).map_or(true, |total| total > limit) {
+            if used.checked_add(bytes).is_none_or(|total| total > limit) {
                 accounting.note_source_cap(
                     SupportEvidenceSourceV1::SessionLedger,
                     count,
@@ -430,7 +430,7 @@ fn apply_session_serialized_caps(
                 }
                 | AtomValue::SessionRaw {
                     selection_index, ..
-                } => oversized_session.map_or(true, |index| *selection_index == index),
+                } => oversized_session.is_none_or(|index| *selection_index == index),
                 _ => false,
             })
         });

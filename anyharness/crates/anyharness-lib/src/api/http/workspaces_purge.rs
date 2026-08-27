@@ -10,7 +10,9 @@ use axum::{
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::workspaces::deletion::purge::{WorkspacePurgeError, WorkspacePurgeOutcome as ServiceWorkspacePurgeOutcome};
+use crate::domains::workspaces::deletion::purge::{
+    WorkspacePurgeError, WorkspacePurgeOutcome as ServiceWorkspacePurgeOutcome,
+};
 
 /// The result of the up-front workspace-destruction admission snapshot: the
 /// held permits (dropped at end of the destructive operation) PLUS the SET of
@@ -120,6 +122,7 @@ pub(crate) mod purge_barriers {
 
     static BARRIERS: StdMutex<Option<HashMap<String, PurgeBarrier>>> = StdMutex::new(None);
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn install(workspace_id: &str, barrier: PurgeBarrier) {
         BARRIERS
             .lock()
@@ -128,6 +131,7 @@ pub(crate) mod purge_barriers {
             .insert(workspace_id.to_string(), barrier);
     }
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn clear(workspace_id: &str) {
         if let Some(map) = BARRIERS.lock().expect("purge barrier lock").as_mut() {
             map.remove(workspace_id);
@@ -260,8 +264,7 @@ mod tests {
 
         let workspace_path_string = workspace_path.to_string_lossy().into_owned();
         let state = test_state(runtime_home, &repo_root);
-        let workspace =
-            workspace_record("workspace-http-active", "active", &workspace_path_string);
+        let workspace = workspace_record("workspace-http-active", "active", &workspace_path_string);
         let store = WorkspaceStore::new(state.db.clone());
         store.insert(&workspace).expect("insert workspace");
 
@@ -275,7 +278,10 @@ mod tests {
             .find_by_id(&workspace.id)
             .expect("find workspace")
             .is_none());
-        assert!(!workspace_path.exists(), "the worktree checkout must be removed");
+        assert!(
+            !workspace_path.exists(),
+            "the worktree checkout must be removed"
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]

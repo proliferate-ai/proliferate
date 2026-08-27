@@ -79,7 +79,10 @@ fn provider_managed_with_no_slot_credentials_is_missing_env_not_ready() {
         }],
     };
 
-    assert_eq!(detect_credentials(&auth, &home), CredentialState::MissingEnv);
+    assert_eq!(
+        detect_credentials(&auth, &home),
+        CredentialState::MissingEnv
+    );
 
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -143,7 +146,10 @@ fn detects_opencode_api_oauth_and_wellknown_auth() {
         std::fs::write(opencode_dir.join("auth.json"), auth_json).expect("write auth json");
 
         assert!(
-            matches!(detect_opencode_local_auth(&home), LocalAuthDetection::Present),
+            matches!(
+                detect_opencode_local_auth(&home),
+                LocalAuthDetection::Present
+            ),
             "Expected Present for: {auth_json}"
         );
 
@@ -213,7 +219,10 @@ fn valid_claude_oauth_yields_ready_via_local_auth() {
     assert_eq!(detect_credentials(&auth, &home), CredentialState::Ready);
     // Slot-level should be ReadyViaLocalAuth
     let (_, slots) = detect_auth_slots(&auth, &home);
-    assert_eq!(slots[0].credential_state, CredentialState::ReadyViaLocalAuth);
+    assert_eq!(
+        slots[0].credential_state,
+        CredentialState::ReadyViaLocalAuth
+    );
 
     let _ = std::fs::remove_dir_all(&home);
 }

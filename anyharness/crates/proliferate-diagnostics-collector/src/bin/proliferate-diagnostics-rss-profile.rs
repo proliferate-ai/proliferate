@@ -609,7 +609,7 @@ async fn ingest_writer(
         let mut records = Vec::with_capacity(batch_records as usize);
         for record_index in 0..batch_records {
             let global = attempted.fetch_add(1, Ordering::Relaxed) + 1;
-            let oversized = global % u64::from(profile.stress.oversized_record_every) == 0;
+            let oversized = global.is_multiple_of(u64::from(profile.stress.oversized_record_every));
             expected_rejections += u16::from(oversized);
             records.push(detailed_record(
                 &format!("rss-writer-{writer}"),

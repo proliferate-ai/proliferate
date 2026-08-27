@@ -38,9 +38,15 @@ pub(in crate::live::sessions::actor) fn trace_session_variant(
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::live::sessions::actor) enum ConfigFailureStage {
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     RequestedModel,
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     RequestedMode,
     DirectModelSetter,
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     InitialLiveConfig,
     RestoreLiveConfig,
     PostPreferencesLiveConfig,

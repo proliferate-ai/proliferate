@@ -78,7 +78,9 @@ fn download_binary_inner(
     }
 
     let total = expected_size.or(observed_size);
-    reporter.map(|reporter| reporter.report(role, InstallProgressPhase::Downloading, 0, total));
+    if let Some(reporter) = reporter {
+        reporter.report(role, InstallProgressPhase::Downloading, 0, total)
+    }
 
     let mut destination = std::fs::File::create(dest)?;
     let mut downloaded = 0u64;
@@ -95,9 +97,9 @@ fn download_binary_inner(
         }
         destination.write_all(&buffer[..read])?;
         downloaded = downloaded.saturating_add(read as u64);
-        reporter.map(|reporter| {
+        if let Some(reporter) = reporter {
             reporter.report(role, InstallProgressPhase::Downloading, downloaded, total)
-        });
+        }
     }
     destination.flush()?;
 
@@ -171,14 +173,14 @@ pub(super) fn download_binary_verified(
 ) -> Result<(), InstallError> {
     download_binary(url, dest, expected_size, reporter, role)?;
     let downloaded = std::fs::metadata(dest)?.len();
-    reporter.map(|reporter| {
+    if let Some(reporter) = reporter {
         reporter.report(
             role,
             InstallProgressPhase::Verifying,
             downloaded,
             expected_size.or(Some(downloaded)),
         )
-    });
+    }
     verify_sha256(url, dest, expected_sha256)
 }
 
@@ -212,14 +214,14 @@ pub(super) fn download_and_extract_archive_verified(
     }
 
     let downloaded = std::fs::metadata(&archive_path)?.len();
-    reporter.map(|reporter| {
+    if let Some(reporter) = reporter {
         reporter.report(
             role,
             InstallProgressPhase::Extracting,
             downloaded,
             expected_size.or(Some(downloaded)),
         )
-    });
+    }
 
     let is_zip = url.ends_with(".zip");
     let extract = if is_zip {
@@ -315,14 +317,14 @@ pub(super) fn download_and_extract_archive_tree_verified(
     }
 
     let downloaded = std::fs::metadata(&archive_path)?.len();
-    reporter.map(|reporter| {
+    if let Some(reporter) = reporter {
         reporter.report(
             role,
             InstallProgressPhase::Extracting,
             downloaded,
             expected_size.or(Some(downloaded)),
         )
-    });
+    }
 
     let is_zip = url.ends_with(".zip");
     let extract = if is_zip {

@@ -224,13 +224,10 @@ impl FrameObserver {
             .fork_wire
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(position) = observation
+        let position = observation
             .pending_client_responses
             .iter()
-            .position(|pending| &pending.id == response_id)
-        else {
-            return None;
-        };
+            .position(|pending| &pending.id == response_id)?;
         observation
             .pending_client_responses
             .remove(position)

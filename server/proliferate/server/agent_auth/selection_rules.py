@@ -74,6 +74,27 @@ def validate_auth_selection_set(
                 raise SelectionRuleError(
                     f"Invalid env var name {name!r}: must match {ENV_VAR_NAME_RE.pattern}."
                 )
+            # The retired env-passthrough form (agent_auth spec ruling,
+            # decision "Does env-var passthrough survive as a method?" —
+            # deleted): a selection naming an env var WITHOUT a vault row,
+            # meaning "use whatever value the machine's own environment holds
+            # for that name". First-class plain-words rejection here — THE
+            # validator — so the write path refuses it by name instead of the
+            # store's generic shape error. The store's write gate and the
+            # ck_agent_auth_selection_api_key_shape CHECK stay behind it as
+            # the DB-coherence belt; the cleanup migration
+            # (retire_env_passthrough_selections) removed any stored rows.
+            if source.api_key_id is None:
+                named = (
+                    f"Naming the environment variable {name!r} alone"
+                    if name
+                    else "Naming an environment variable alone"
+                )
+                raise SelectionRuleError(
+                    f"{named} isn't supported anymore — the machine's own value "
+                    "never reaches the launch. Save the key itself and select "
+                    "it in the harness's Authentication section."
+                )
 
     # Cardinality gates the ENABLED set only; disabled rows never launch.
     # The single-source radio counts KINDS, not rows (agent_auth spec §4 cell

@@ -97,7 +97,7 @@ impl FakeRuntime {
     /// Pins the downstream child-status response to deterministic bounded
     /// values whose `captured_at` is canonical UTC `Z` text. It is applied only
     /// after the real permit was issued and consumed.
-
+    ///
     /// Injects a typed capture/issuance result for terminal-mapper and race
     /// tests only. It is never used by the successful begin/finish/stage proof.
     pub(super) fn fail_capture_with(&self, error: CaptureError) {
@@ -229,7 +229,6 @@ impl CoordinatorRuntime for FakeRuntime {
             }
         })
     }
-
 
     fn before_finish_publication(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         let gate = Arc::clone(&self.finish_publication);

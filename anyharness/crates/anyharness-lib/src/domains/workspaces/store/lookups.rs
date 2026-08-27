@@ -13,7 +13,7 @@ impl WorkspaceStore {
             conn.query_row(
                 &format!("SELECT {WORKSPACE_COLUMNS} FROM workspaces WHERE path = ?1 ORDER BY created_at ASC, id ASC LIMIT 1"),
                 [path],
-                |row| map_row(row),
+                map_row,
             )
             .optional()
         })
@@ -28,7 +28,7 @@ impl WorkspaceStore {
                  ORDER BY created_at ASC, id ASC LIMIT 1"
                 ),
                 [path],
-                |row| map_row(row),
+                map_row,
             )
             .optional()
         })
@@ -47,7 +47,7 @@ impl WorkspaceStore {
                  ORDER BY created_at ASC, id ASC LIMIT 1"
                 ),
                 params![path, excluded_id],
-                |row| map_row(row),
+                map_row,
             )
             .optional()
         })
@@ -67,7 +67,7 @@ impl WorkspaceStore {
                  ORDER BY created_at ASC, id ASC LIMIT 1"
                 ),
                 params![path, kind.as_str(), excluded_id],
-                |row| map_row(row),
+                map_row,
             )
             .optional()
         })
@@ -86,7 +86,7 @@ impl WorkspaceStore {
                  ORDER BY created_at ASC, id ASC LIMIT 1"
                 ),
                 params![path, kind.as_str()],
-                |row| map_row(row),
+                map_row,
             )
             .optional()
         })
@@ -105,7 +105,7 @@ impl WorkspaceStore {
                  ORDER BY created_at ASC, id ASC LIMIT 1"
                 ),
                 params![path, kind.as_str()],
-                |row| map_row(row),
+                map_row,
             )
             .optional()
         })
@@ -132,7 +132,7 @@ impl WorkspaceStore {
                  LIMIT 1"
                 ),
                 params![path, kind.as_str()],
-                |row| map_row(row),
+                map_row,
             )
             .optional()
         })
@@ -143,7 +143,7 @@ impl WorkspaceStore {
             conn.query_row(
                 &format!("SELECT {WORKSPACE_COLUMNS} FROM workspaces WHERE id = ?1"),
                 [id],
-                |row| map_row(row),
+                map_row,
             )
             .optional()
         })

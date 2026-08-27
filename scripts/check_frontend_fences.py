@@ -136,12 +136,7 @@ def is_test_relative_path(src_relative: str) -> bool:
     shipped source only."""
     parts = src_relative.split("/")
     name = parts[-1]
-    return (
-        "__tests__" in parts
-        or "test" in parts
-        or ".test." in name
-        or ".stories." in name
-    )
+    return "__tests__" in parts or "test" in parts or ".test." in name or ".stories." in name
 
 
 def code_only_lines(text: str, *, jsx: bool) -> list[str]:
@@ -155,9 +150,7 @@ def code_only_lines(text: str, *, jsx: bool) -> list[str]:
     return "".join(masked).splitlines()
 
 
-def resolve_target_top(
-    specifier: str, source_dir: PurePosixPath, tops: set[str]
-) -> str | None:
+def resolve_target_top(specifier: str, source_dir: PurePosixPath, tops: set[str]) -> str | None:
     """The top-level directory a specifier lands in, or None if it leaves src.
 
     Handles the in-package spellings: the `#product/` alias, the self-package

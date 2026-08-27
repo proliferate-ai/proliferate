@@ -145,11 +145,17 @@ fn host_ambient_env_var_counts_only_when_non_empty() {
     }
     {
         let _ambient = AmbientVarGuard::set(LADDER_VAR, "  ");
-        assert_eq!(detect_credentials(&auth, &home), CredentialState::MissingEnv);
+        assert_eq!(
+            detect_credentials(&auth, &home),
+            CredentialState::MissingEnv
+        );
     }
     {
         let _ambient = AmbientVarGuard::remove(LADDER_VAR);
-        assert_eq!(detect_credentials(&auth, &home), CredentialState::MissingEnv);
+        assert_eq!(
+            detect_credentials(&auth, &home),
+            CredentialState::MissingEnv
+        );
     }
 
     let _ = std::fs::remove_dir_all(&home);
@@ -344,7 +350,10 @@ fn all_required_slots_rejects_an_empty_value_in_any_slot() {
         CredentialState::MissingEnv
     );
 
-    env.insert("ANYHARNESS_LADDER_B".to_string(), "sk-also-real".to_string());
+    env.insert(
+        "ANYHARNESS_LADDER_B".to_string(),
+        "sk-also-real".to_string(),
+    );
     assert_eq!(
         detect_credentials_with_env(&auth, &home, &env),
         CredentialState::Ready
@@ -422,4 +431,3 @@ fn provider_managed_follows_its_slot_ladder_under_the_tightened_ladder() {
 
     let _ = std::fs::remove_dir_all(&home);
 }
-

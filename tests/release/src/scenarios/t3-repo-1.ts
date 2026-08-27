@@ -20,7 +20,7 @@ import {
 
 /**
  * T3-REPO-1 — repo settings take effect, both lanes.
- * specs/engineering/testing/scenarios.md#T3-REPO-1
+ * tests/release/core-release-scenario-manifest.json#T3-REPO-1
  *
  * `PUT /repositories/{owner}/{repo}/environment` (default branch + setup
  * script) is `current_product_user`-gated for BOTH lanes, and behind that, the
@@ -55,7 +55,7 @@ import {
 export const t3Repo1: ScenarioDefinition = {
   id: "T3-REPO-1",
   title: "repo settings take effect, both lanes",
-  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-REPO-1",
+  registryFlowRef: "tests/release/core-release-scenario-manifest.json#T3-REPO-1",
   lanes: ["local", "sandbox"],
   // Empty like every sibling local scenario: the world-backed LOCAL-1 path
   // needs no pre-run server/durable-user env (the world boots its own), so a
@@ -86,7 +86,7 @@ export const t3Repo1: ScenarioDefinition = {
     if (ctx.runtimeLane === "local" && isWorldBackedRun(ctx)) {
       await runLocal1WorkspaceLeaf(ctx, {
         scenarioId: "T3-REPO-1",
-        registryFlowRef: "specs/engineering/testing/tier-3-scenario-contract.md#local-1",
+        registryFlowRef: "delivery/testing-cicd/archive/tier-3-scenario-contract.md#local-1",
       });
       return;
     }

@@ -203,11 +203,7 @@ pub(super) fn map_assignment(row: &rusqlite::Row) -> rusqlite::Result<ReviewAssi
     let launch_status: String = row.get("launch_verification_status")?;
     let control_values_json: String = row.get("control_values_json")?;
     let control_values = serde_json::from_str(&control_values_json).map_err(|error| {
-        rusqlite::Error::FromSqlConversionFailure(
-            0,
-            rusqlite::types::Type::Text,
-            Box::new(error),
-        )
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(error))
     })?;
     let status: String = row.get("status")?;
     Ok(ReviewAssignmentRecord {

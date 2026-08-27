@@ -118,7 +118,7 @@ function wrapperCell(): PlannedCellV1 {
   return {
     cell_id: WRAPPER_CELL_ID,
     scenario_id: SELFHOST_CFN_1_ID,
-    registry_flow_ref: "specs/engineering/testing/tier-3-scenario-contract.md#sh-cfn-wrapper",
+    registry_flow_ref: "delivery/testing-cicd/archive/tier-3-scenario-contract.md#sh-cfn-wrapper",
     runtime_lane: "selfhost",
     dimensions: { cell: SH_CFN_WRAPPER, harness: "claude" },
     required_env: [],

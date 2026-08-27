@@ -31,6 +31,13 @@ jobs:
           python3 -m unittest scripts/test_lint_records.py
           python3 scripts/lint_records.py
 
+      # The checker engines are linted and formatted like every other Python in
+      # the repository (scripts/ruff.toml; ruff pinned to the server's version).
+      - name: Ruff over the checker engines
+        run: |
+          uvx ruff@0.16.2 check scripts/
+          uvx ruff@0.16.2 format --check scripts/
+
       - name: Check max source file length
         run: python3 scripts/check_max_lines.py
 
@@ -110,6 +117,11 @@ jobs:
           python3 -m unittest scripts/test_check_frontend_fences.py
           python3 scripts/check_frontend_fences.py
 
+      - name: Check server domain fences
+        run: |
+          python3 -m unittest scripts/test_check_server_fences.py
+          python3 scripts/check_server_fences.py
+
       - name: Check system manifests
         run: |
           python3 -m unittest scripts/test_check_manifests.py
@@ -125,6 +137,11 @@ jobs:
         run: |
           python3 -m unittest scripts/test_check_docs.py
           python3 scripts/check_docs.py
+
+      # The pre-push gate's scoping logic + its mirror-rule pins (every gate
+      # command string must appear in the workflow that runs it in CI).
+      - name: Test the pre-push gate
+        run: python3 -m unittest scripts/test_gate.py
 
   terraform-validate:
     name: Terraform validate (server/infra)
@@ -230,8 +247,9 @@ jobs:
       - name: Smoke deploy surface detector
         run: node scripts/ci-cd/detect-deploy-surfaces.mjs --base HEAD --head HEAD
 
-  # candidate-build-handoff moved to ci-heavy-lanes.yml (dispatch-only) in the
-  # 2026-08 engineering cull — it protects the parked qualification corridor.
+  # candidate-build-handoff was demoted off the per-PR path in the 2026-08
+  # engineering cull and deleted with the dispatch-only heavy-lanes workflow
+  # (it protected the parked qualification corridor).
 
   cargo-check:
     name: Cargo check & test
@@ -289,6 +307,49 @@ jobs:
       # evaluated without this step.
       - name: Cargo test internal diagnostics export
         run: cargo nextest run -p proliferate-diagnostics-collector --features internal-dogfood-export --no-fail-fast
+
+  # The Rust plane's formatting and bug-pattern gate (ruled 2026-08-26): rustfmt
+  # and clippy with warnings denied, under the ONE toolchain rust-toolchain.toml
+  # pins for CI and local alike (the mirror rule). The clippy allow-list is the
+  # workspace constitution in the root Cargo.toml `[workspace.lints.clippy]`,
+  # nowhere else.
+  rust-lint:
+    name: Rust lint (rustfmt + clippy)
+    runs-on: ubuntu-latest
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install system deps (Tauri)
+        run: |
+          sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup Rust (the rust-toolchain.toml pin)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Match the repo pin so the action's install IS the toolchain the
+          # rustup proxies resolve — one download, no shadow stable.
+          toolchain: 1.98.0
+          components: rustfmt, clippy
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: rustfmt
+        run: cargo fmt --all --check
+
+      - name: clippy (warnings are errors)
+        # --keep-going: report every failing crate in one run — without it a
+        # parallel build aborts at the first red crate and multi-crate failures
+        # surface one round at a time.
+        run: cargo clippy --workspace --all-targets --keep-going -- -D warnings
 
   sdk-build:
     name: Build SDK
@@ -412,9 +473,9 @@ jobs:
       - name: Build web
         run: pnpm web:build
 
-  # login-budget moved to ci-heavy-lanes.yml (dispatch-only) in the 2026-08
-  # engineering cull — the lane, its script, and the dependabot posthog pin are
-  # slated to die together in the product cull (Cull Plan PR-5).
+  # login-budget was demoted off the per-PR path in the 2026-08 engineering
+  # cull and deleted with the dispatch-only heavy-lanes workflow — its script
+  # and the dependabot posthog pin die in the product cull (Cull Plan PR-5).
 
   # Housekeeping that "Test product client"
   # does not need (typecheck, the python-only checks, and the two other
@@ -510,12 +571,11 @@ jobs:
       - name: Test product client
         run: pnpm --filter @proliferate/product-client exec vitest run --shard=${{ matrix.shard }}/4
 
-  # scroll-physics and workflow-definition-lifecycle moved to
-  # ci-heavy-lanes.yml (dispatch-only) in the 2026-08 engineering cull.
-  # Scroll-physics' structural half stays enforced per-PR by repo-shape's
-  # check_transcript_scroll_writer.py; workflow-definition-lifecycle tested a
-  # surface mid gen-2 rebuild (its per-PR fail-closed gate is accepted-lost
-  # while demoted). Re-gating either is the step-3 CI/CD spec's decision.
+  # scroll-physics and workflow-definition-lifecycle were demoted off the
+  # per-PR path in the 2026-08 engineering cull; their dispatch-only
+  # heavy-lanes workflow was deleted and both suites re-home in the upcoming
+  # nightly slice. Scroll-physics' structural half stays enforced per-PR by
+  # repo-shape's check_transcript_scroll_writer.py.
 
   # ---------------------------------------------------------------------------
   # THE REQUIRED STATUS CHECKS FOR `main`.
@@ -555,12 +615,6 @@ jobs:
   #     list. Adding one back is not extra safety, it is a name that can rot.
   #
   # Deliberately NOT required, with reasons:
-  #   intent-tests (provisional) / intent-billing (provisional)
-  #       continue-on-error by design; dispatch-only since the 2026-08 cull
-  #       (they no longer run on PRs at all).
-  #   CI Heavy Lanes (ci-heavy-lanes.yml)
-  #       dispatch-only demotions from this file (2026-08 cull); re-gating is a
-  #       step-3 CI/CD-spec decision.
   #   docker / self-hosted-release-assets (Build Server Artifacts)
   #       release-only, and no longer in Server CI at all: they moved to
   #       _build-server.yml, which release.yml calls directly so a release does
@@ -572,7 +626,7 @@ jobs:
   #       third-party.
   #
   # Any change to the set of required checks belongs in this comment and in
-  # specs/engineering/shipping/release-delivery.md, in the same commit.
+  # specs/engineering/ci-cd/release-delivery.md, in the same commit.
   # ---------------------------------------------------------------------------
 
   # ---------------------------------------------------------------------------
@@ -615,6 +669,7 @@ jobs:
       - terraform-validate
       - ci-cd-config
       - cargo-check
+      - rust-lint
       - sdk-build
       - desktop-frontend
       - mobile-typecheck

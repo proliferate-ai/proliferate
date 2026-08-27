@@ -319,7 +319,11 @@ fn dirty_submodule_raises_notice_and_loses_inner_state_as_a_bound() {
     // committing — otherwise this only passes where a global git identity
     // happens to be configured (e.g. locally), not in CI.
     configure_identity(&repo.path().join("sub"));
-    fs::write(repo.path().join("sub/extra.txt"), "dirty inside submodule\n").unwrap();
+    fs::write(
+        repo.path().join("sub/extra.txt"),
+        "dirty inside submodule\n",
+    )
+    .unwrap();
     run(&repo.path().join("sub"), &["add", "extra.txt"]);
     run(&repo.path().join("sub"), &["commit", "-m", "dirty commit"]);
 
@@ -364,7 +368,10 @@ fn skip_worktree_bit_survives_content_but_not_the_bit_as_a_bound() {
     // is legitimately NOT expected to match here.
     let repo = TempDirGuard::new("rt-skip-worktree");
     init_repo(repo.path());
-    run(repo.path(), &["update-index", "--skip-worktree", "README.md"]);
+    run(
+        repo.path(),
+        &["update-index", "--skip-worktree", "README.md"],
+    );
     fs::write(repo.path().join("README.md"), "content still on disk\n").unwrap();
 
     let snap = snapshot_workspace(repo.path()).expect("snapshot_workspace");
@@ -378,7 +385,10 @@ fn skip_worktree_bit_survives_content_but_not_the_bit_as_a_bound() {
     );
     // Bound: the skip-worktree bit itself does not survive the round trip.
     let flags = stdout(repo.path(), &["ls-files", "-v"]);
-    assert!(!flags.starts_with('S'), "skip-worktree bit unexpectedly survived: {flags}");
+    assert!(
+        !flags.starts_with('S'),
+        "skip-worktree bit unexpectedly survived: {flags}"
+    );
 }
 
 #[test]
@@ -393,7 +403,10 @@ fn intent_to_add_entry_returns_untracked() {
     restore_snapshot(repo.path(), &snap).expect("restore_snapshot");
 
     let status = status_porcelain(repo.path());
-    assert!(status.contains("?? planned.txt"), "expected untracked, got: {status}");
+    assert!(
+        status.contains("?? planned.txt"),
+        "expected untracked, got: {status}"
+    );
 }
 
 #[test]
@@ -404,7 +417,8 @@ fn unborn_embedded_repo_captures_cleanly_with_partial_capture_notice() {
     fs::create_dir_all(&unborn).unwrap();
     run(&unborn, &["init"]);
 
-    let snap = snapshot_workspace(repo.path()).expect("capture must succeed despite unborn embedded repo");
+    let snap =
+        snapshot_workspace(repo.path()).expect("capture must succeed despite unborn embedded repo");
     use crate::adapters::git::types::SnapshotNotice;
     assert!(snap.notices.iter().any(|notice| matches!(
         notice,
@@ -450,7 +464,11 @@ fn unreadable_tracked_file_captures_cleanly_and_restores_staged_content_as_a_bou
 fn non_invertible_clean_filter_rewrites_content_as_a_documented_bound() {
     let repo = TempDirGuard::new("rt-clean-filter");
     init_repo(repo.path());
-    fs::write(repo.path().join(".gitattributes"), "*.ipynb filter=stripout\n").unwrap();
+    fs::write(
+        repo.path().join(".gitattributes"),
+        "*.ipynb filter=stripout\n",
+    )
+    .unwrap();
     run(repo.path(), &["add", ".gitattributes"]);
     run(
         repo.path(),
@@ -461,7 +479,11 @@ fn non_invertible_clean_filter_rewrites_content_as_a_documented_bound() {
         ],
     );
     run(repo.path(), &["config", "filter.stripout.smudge", "cat"]);
-    fs::write(repo.path().join("notebook.ipynb"), "cell with OUTPUT data\n").unwrap();
+    fs::write(
+        repo.path().join("notebook.ipynb"),
+        "cell with OUTPUT data\n",
+    )
+    .unwrap();
 
     let snap = snapshot_workspace(repo.path()).expect("snapshot_workspace");
     wipe_worktree(repo.path());
@@ -470,7 +492,10 @@ fn non_invertible_clean_filter_rewrites_content_as_a_documented_bound() {
     // Bound: the clean filter rewrote the content on capture; the round
     // trip reproduces the REWRITTEN content, not the original.
     let restored = fs::read_to_string(repo.path().join("notebook.ipynb")).unwrap();
-    assert!(restored.contains("STRIPPED"), "expected filter rewrite, got: {restored}");
+    assert!(
+        restored.contains("STRIPPED"),
+        "expected filter rewrite, got: {restored}"
+    );
 }
 
 #[test]

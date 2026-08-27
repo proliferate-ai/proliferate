@@ -118,7 +118,7 @@ fn diff_line_ops<'a>(old_lines: &'a [&'a str], new_lines: &'a [&'a str]) -> Vec<
 
     let mut ops = old_lines[..prefix_len]
         .iter()
-        .map(|line| LineDiffOp::Equal(*line))
+        .map(|line| LineDiffOp::Equal(line))
         .collect::<Vec<_>>();
     ops.extend(diff_middle_lines(
         &old_lines[prefix_len..old_suffix_start],
@@ -127,7 +127,7 @@ fn diff_line_ops<'a>(old_lines: &'a [&'a str], new_lines: &'a [&'a str]) -> Vec<
     ops.extend(
         old_lines[old_suffix_start..]
             .iter()
-            .map(|line| LineDiffOp::Equal(*line)),
+            .map(|line| LineDiffOp::Equal(line)),
     );
     ops
 }
@@ -140,20 +140,20 @@ fn diff_middle_lines<'a>(
     if old_lines.is_empty() {
         return new_lines
             .iter()
-            .map(|line| LineDiffOp::Insert(*line))
+            .map(|line| LineDiffOp::Insert(line))
             .collect();
     }
     if new_lines.is_empty() {
         return old_lines
             .iter()
-            .map(|line| LineDiffOp::Delete(*line))
+            .map(|line| LineDiffOp::Delete(line))
             .collect();
     }
     if old_lines.len().saturating_mul(new_lines.len()) > MAX_LCS_CELLS {
         return old_lines
             .iter()
-            .map(|line| LineDiffOp::Delete(*line))
-            .chain(new_lines.iter().map(|line| LineDiffOp::Insert(*line)))
+            .map(|line| LineDiffOp::Delete(line))
+            .chain(new_lines.iter().map(|line| LineDiffOp::Insert(line)))
             .collect();
     }
 
@@ -190,12 +190,12 @@ fn diff_middle_lines<'a>(
     ops.extend(
         old_lines[old_index..]
             .iter()
-            .map(|line| LineDiffOp::Delete(*line)),
+            .map(|line| LineDiffOp::Delete(line)),
     );
     ops.extend(
         new_lines[new_index..]
             .iter()
-            .map(|line| LineDiffOp::Insert(*line)),
+            .map(|line| LineDiffOp::Insert(line)),
     );
     ops
 }

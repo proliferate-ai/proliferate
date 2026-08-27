@@ -36,7 +36,7 @@ from proliferate.permissions import (
     OwnerContext,
     OwnerSelection,
 )
-from proliferate.server.agent_auth.signup_hook import (
+from proliferate.server.ai_gateway.signup_hook import (
     schedule_agent_gateway_org_enrollment,
 )
 from proliferate.server.billing.seat_reconciliation import (

@@ -6,7 +6,7 @@ use tokio::time::Instant;
 
 use super::capture::CaptureError;
 
-pub(super) trait CoordinatorRuntime: Send + Sync {
+pub(crate) trait CoordinatorRuntime: Send + Sync {
     fn utc_now(&self) -> DateTime<Utc>;
     fn instant_now(&self) -> Instant;
     fn new_id(&self) -> String;

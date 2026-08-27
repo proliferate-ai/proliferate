@@ -317,9 +317,7 @@ impl SessionRuntime {
             let _ = handle.close().await;
         }
         self.acp_manager.remove_session(session_id).await;
-        self.session_service
-            .delete_session(session_id)
-            .map_err(Into::into)
+        self.session_service.delete_session(session_id)
     }
 }
 

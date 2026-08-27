@@ -87,7 +87,6 @@ mod tests {
         fn resolve_gateway_models(&self, _harness_kind: &str, _revision: i64) -> GatewayModelPlan {
             GatewayModelPlan {
                 models: vec!["only-what-render-needs".to_string()],
-                ..Default::default()
             }
         }
     }

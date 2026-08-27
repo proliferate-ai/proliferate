@@ -128,9 +128,8 @@ fn merge_file_change_part(previous: ContentPart, next: ContentPart) -> ContentPa
     };
 
     let merged_patch = patch.or(previous_patch);
-    let merged_open_target = if merged_patch.is_some() {
-        Some(FileOpenTarget::Diff)
-    } else if matches!(open_target, Some(FileOpenTarget::Diff))
+    let merged_open_target = if merged_patch.is_some()
+        || matches!(open_target, Some(FileOpenTarget::Diff))
         || matches!(previous_open_target, Some(FileOpenTarget::Diff))
     {
         Some(FileOpenTarget::Diff)

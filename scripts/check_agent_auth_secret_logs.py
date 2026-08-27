@@ -4,7 +4,8 @@
 
 The agent-auth surfaces move real provider secrets and minted gateway keys
 through their hot paths: the cloud enrollment/migration/topup flows in
-``server/proliferate/server/agent_auth`` and the AnyHarness render and
+``server/proliferate/server/agent_auth`` and
+``server/proliferate/server/ai_gateway`` and the AnyHarness render and
 model-snapshot planes under ``route_auth`` / ``model_snapshot``. A single
 ``logger.info("minted %s", virtual_key)`` or ``tracing::warn!(%value_ciphertext,
 ...)`` writes a live credential into logs that ship to a collector — an
@@ -67,15 +68,14 @@ from scripts import lint_records  # noqa: E402  (path shim must precede the impo
 CHECKER = "scripts/check_agent_auth_secret_logs.py"
 RULE_ID = "PROD-AGENTAUTH-001"
 RULES = lint_records.load("product")
-OWNED_RULE_IDS = frozenset(
-    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
-)
+OWNED_RULE_IDS = frozenset(rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER)
 
 # (root, suffixes) — Python cloud gateway surface, the ciphertext/plaintext
 # custody planes (store + models + encryption, where ``value_ciphertext`` and
 # the decrypt paths actually live), and the Rust render + snapshot planes.
 SCANNED_ROOTS: list[tuple[str, frozenset[str]]] = [
     ("server/proliferate/server/agent_auth", frozenset({".py"})),
+    ("server/proliferate/server/ai_gateway", frozenset({".py"})),
     ("server/proliferate/db/store/agent_gateway", frozenset({".py"})),
     ("server/proliferate/db/models/agent_gateway.py", frozenset({".py"})),
     ("server/proliferate/db/models/cloud", frozenset({".py"})),

@@ -39,8 +39,7 @@ impl GoalStore {
         // rows: skipping a cleared head would fall back to an older,
         // still-uncleared terminal row and resurrect a goal the user cleared
         // two goals ago. A cleared head is authoritative — no current goal.
-        Ok(Self::find_latest_tx(tx, session_id)?
-            .filter(|goal| goal.status != GoalStatus::Cleared))
+        Ok(Self::find_latest_tx(tx, session_id)?.filter(|goal| goal.status != GoalStatus::Cleared))
     }
 
     /// The single most-recent goal row for the session, regardless of status

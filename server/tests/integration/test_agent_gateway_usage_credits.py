@@ -28,14 +28,14 @@ from proliferate.db.store.billing_subjects import (
     ensure_personal_billing_subject,
 )
 from proliferate.integrations.litellm import LiteLLMSpendLogEntry
-from proliferate.server.agent_auth import enrollment as enrollment_service
-from proliferate.server.agent_auth import usage_import as usage_import_service
-from proliferate.server.agent_auth.enrollment import (
+from proliferate.server.ai_gateway import enrollment as enrollment_service
+from proliferate.server.ai_gateway import usage_import as usage_import_service
+from proliferate.server.ai_gateway.enrollment import (
     ensure_org_enrollment,
     ensure_signup_enrollment,
 )
-from proliferate.server.agent_auth.free_credits import ensure_signup_free_credit_grant
-from proliferate.server.agent_auth.usage_import import (
+from proliferate.server.ai_gateway.free_credits import ensure_signup_free_credit_grant
+from proliferate.server.ai_gateway.usage_import import (
     is_gateway_budget_available,
     run_usage_import,
 )

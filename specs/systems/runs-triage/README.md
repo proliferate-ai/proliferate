@@ -84,7 +84,7 @@ apps/packages/product-client/src/
 - Contract: the run row model consumed by chat and header tabs is a single
   exported type with one test fixture set.
 - Manual: the delegated-work and workflow rows of
-  [manual-release-qa.md](../../engineering/testing/manual-release-qa.md).
+  [manual-release-qa.md](../../../guides/deploying/manual-release-qa.md).
 
 ## Current gaps
 

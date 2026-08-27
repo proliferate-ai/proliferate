@@ -175,36 +175,6 @@ fn canonicalize_best_effort(path: &Path) -> PathBuf {
         .unwrap_or_else(|_| path.to_path_buf())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::parse_worktree_registrations;
-    use crate::adapters::git::types::GitWorktreeRestoreError;
-
-    #[test]
-    fn parser_rejects_duplicate_path_fields() {
-        let error = parse_worktree_registrations(
-            b"worktree /one\0worktree /two\0HEAD abc\0branch refs/heads/main\0\0",
-        )
-        .expect_err("duplicate paths must be ambiguous");
-        assert!(matches!(
-            error,
-            GitWorktreeRestoreError::AmbiguousState { .. }
-        ));
-    }
-
-    #[test]
-    fn parser_preserves_locked_and_prunable_state() {
-        let rows = parse_worktree_registrations(
-            b"worktree /missing\0HEAD abc\0branch refs/heads/feature/x\0locked reason\0prunable reason\0\0",
-        )
-        .expect("parse registration");
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].branch.as_deref(), Some("feature/x"));
-        assert!(rows[0].locked);
-        assert!(rows[0].prunable);
-    }
-}
-
 /// Returns whether the target path's own stale registration must be pruned
 /// before the restore proceeds. `prune_target_registration` widens that to
 /// the target registrations that would otherwise refuse (a registration on
@@ -292,4 +262,34 @@ pub(super) fn validate_missing_target_registrations(
         });
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_worktree_registrations;
+    use crate::adapters::git::types::GitWorktreeRestoreError;
+
+    #[test]
+    fn parser_rejects_duplicate_path_fields() {
+        let error = parse_worktree_registrations(
+            b"worktree /one\0worktree /two\0HEAD abc\0branch refs/heads/main\0\0",
+        )
+        .expect_err("duplicate paths must be ambiguous");
+        assert!(matches!(
+            error,
+            GitWorktreeRestoreError::AmbiguousState { .. }
+        ));
+    }
+
+    #[test]
+    fn parser_preserves_locked_and_prunable_state() {
+        let rows = parse_worktree_registrations(
+            b"worktree /missing\0HEAD abc\0branch refs/heads/feature/x\0locked reason\0prunable reason\0\0",
+        )
+        .expect("parse registration");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].branch.as_deref(), Some("feature/x"));
+        assert!(rows[0].locked);
+        assert!(rows[0].prunable);
+    }
 }

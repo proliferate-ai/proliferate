@@ -232,7 +232,10 @@ fn unstage_patch_removes_hunk_from_index_without_touching_worktree() {
     GitService::unstage_patch(repo.path(), &format!("{staged_patch}\n")).expect("unstage patch");
 
     // Index no longer has the change
-    assert_eq!(git_stdout(repo.path(), ["diff", "--cached", "--name-only"]), "");
+    assert_eq!(
+        git_stdout(repo.path(), ["diff", "--cached", "--name-only"]),
+        ""
+    );
     // Worktree still has the edit
     assert_eq!(
         fs::read_to_string(repo.path().join("file.txt")).unwrap(),

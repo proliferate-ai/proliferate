@@ -30,7 +30,6 @@ COPY apps/packages/design/package.json apps/packages/design/
 COPY apps/packages/product-client/package.json apps/packages/product-client/
 COPY server/artifact-runtime/package.json server/artifact-runtime/
 COPY apps/web/package.json apps/web/
-COPY tests/intent/package.json tests/intent/
 COPY tests/release/package.json tests/release/
 
 # product-client runs a `prepare` lifecycle script during install; copy just
@@ -78,6 +77,13 @@ COPY server/alembic.ini .
 # package; invoked directly as `python /app/scripts/<name>.py`.
 COPY server/scripts/ scripts/
 COPY catalogs/ catalogs/
+# The verification loop's expected-set source (agent-auth.md FR-3): the
+# reviewed LiteLLM config rides BOTH images — the LiteLLM image serves it as
+# the proxy's model map, and this server image reads it to diff each key's
+# observed model list against its declared access groups
+# (server/proliferate/server/ai_gateway/verification.py resolves it at
+# /app/litellm/config.yaml). Absent, the loop degrades to presence-only checks.
+COPY server/litellm/config.yaml litellm/config.yaml
 # Copied so the server can report a real version even when built without the
 # version build args below (the app walks up to find a VERSION file).
 COPY VERSION ./VERSION

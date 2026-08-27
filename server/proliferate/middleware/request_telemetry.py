@@ -9,7 +9,7 @@ from proliferate.integrations.sentry import (
     set_server_sentry_correlation_context,
     set_server_sentry_tag,
 )
-from proliferate.integrations.sentry.privacy import canonical_uuid
+from proliferate.integrations.sentry.scalars import canonical_uuid
 from proliferate.middleware.request_context import (
     get_correlation_context,
     get_request_id,

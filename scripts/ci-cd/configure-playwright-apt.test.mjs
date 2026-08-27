@@ -239,27 +239,9 @@ test("rejects unknown two-stanza shapes without modifying the file", async (cont
 
 test("guards every hosted Playwright dependency install in its own run block", async () => {
   const expectedCommandsByWorkflow = new Map([
-    [
-      // The three browser-installing lanes moved from ci.yml to the
-      // dispatch-only ci-heavy-lanes.yml in the 2026-08 engineering cull.
-      ".github/workflows/ci-heavy-lanes.yml",
-      [
-        "pnpm exec playwright install --with-deps chromium",
-        "pnpm --filter @proliferate/product-client exec playwright install --with-deps chromium webkit",
-        "pnpm -C tests/intent exec playwright install --with-deps chromium",
-      ],
-    ],
-    [
-      ".github/workflows/intent-tests.yml",
-      [
-        "pnpm -C tests/intent exec playwright install --with-deps chromium",
-        "pnpm -C tests/intent exec playwright install --with-deps chromium",
-      ],
-    ],
-    [
-      ".github/workflows/release-e2e.yml",
-      ["pnpm -C tests/intent exec playwright install --with-deps chromium"],
-    ],
+    // The 2026-08 CI cull deleted the other hosted browser-installing lanes
+    // (the intent suite, the dispatch-only heavy lanes, and release-e2e.yml's
+    // tier-2 job); this smoke lane is the one hosted --with-deps call-site left.
     [
       ".github/workflows/self-host-smoke.yml",
       ["npx playwright install --with-deps chromium"],
@@ -281,11 +263,11 @@ test("guards every hosted Playwright dependency install in its own run block", a
     }
   }
 
-  assert.equal(installs.length, 7, "hosted --with-deps call-site census changed");
+  assert.equal(installs.length, 1, "hosted --with-deps call-site census changed");
   assert.equal(
     helpers.length,
-    8,
-    "seven hosted --with-deps calls and Cargo need one helper each",
+    3,
+    "one hosted --with-deps call and the two Cargo jobs (cargo-check, rust-lint) need one helper each",
   );
   assert.deepEqual(
     new Map(
@@ -337,15 +319,28 @@ test("guards every hosted Playwright dependency install in its own run block", a
 test("guards Cargo Tauri apt dependencies before the unchanged install commands", async () => {
   const path = join(WORKFLOWS_ROOT, "ci.yml");
   const lines = (await readFile(path, "utf8")).split("\n");
+  // Two Cargo jobs compile the Tauri crates on hosted runners — the test lane
+  // and the rust-lint lane (clippy builds every target too) — so each carries
+  // its own guarded Tauri apt step, and the census expects exactly one per job.
   const cargoJobs = lines
     .map((line, index) => ({ line, index }))
-    .filter(({ line }) => line === "  cargo-check:");
+    .filter(({ line }) => line === "  cargo-check:" || line === "  rust-lint:");
   const tauriSteps = lines
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.trim() === "- name: Install system deps (Tauri)");
 
-  assert.equal(cargoJobs.length, 1, "expected exactly one cargo-check job");
-  assert.equal(tauriSteps.length, 1, "expected exactly one Tauri dependency step");
+  assert.equal(cargoJobs.length, 2, "expected the cargo-check and rust-lint jobs");
+  assert.equal(tauriSteps.length, 2, "expected one Tauri dependency step per Cargo job");
+
+  for (const { index: cargoJobIndex, line: jobLine } of cargoJobs) {
+    const nextJobIndex = lines.findIndex(
+      (line, index) => index > cargoJobIndex && /^  [a-z0-9-]+:$/.test(line),
+    );
+    const inJob = tauriSteps.filter(
+      ({ index }) => index > cargoJobIndex && (nextJobIndex === -1 || index < nextJobIndex),
+    );
+    assert.equal(inJob.length, 1, `${jobLine.trim()} needs exactly one Tauri dependency step`);
+  }
 
   const [{ index: cargoJobIndex }] = cargoJobs;
   const [{ index: tauriStepIndex }] = tauriSteps;

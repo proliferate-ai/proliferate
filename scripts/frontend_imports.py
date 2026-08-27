@@ -139,9 +139,7 @@ def _decode_prefilter_character(
     if escaped == "\r":
         return (
             None,
-            index + 3
-            if index + 2 < len(raw) and raw[index + 2] == "\n"
-            else index + 2,
+            index + 3 if index + 2 < len(raw) and raw[index + 2] == "\n" else index + 2,
         )
     if escaped == "x" and index + 3 < len(raw):
         digits = raw[index + 2 : index + 4]
@@ -151,9 +149,7 @@ def _decode_prefilter_character(
         if index + 2 < len(raw) and raw[index + 2] == "{":
             close = raw.find("}", index + 3)
             digits = raw[index + 3 : close] if close >= 0 else ""
-            if digits and all(
-                char in "0123456789abcdefABCDEF" for char in digits
-            ):
+            if digits and all(char in "0123456789abcdefABCDEF" for char in digits):
                 value = int(digits, 16)
                 if value <= 0x10FFFF:
                     return chr(value), close + 1
@@ -203,9 +199,7 @@ def could_contain_literal_sequence(text: str, target: str) -> bool:
         while cursor < len(text):
             if template_fragment:
                 if text[cursor] == "`" or (
-                    text[cursor] == "$"
-                    and cursor + 1 < len(text)
-                    and text[cursor + 1] == "{"
+                    text[cursor] == "$" and cursor + 1 < len(text) and text[cursor + 1] == "{"
                 ):
                     break
             elif text[cursor] == quote:
@@ -217,8 +211,7 @@ def could_contain_literal_sequence(text: str, target: str) -> bool:
             possible = {
                 offset
                 for offset in possible
-                if offset + consumed < len(target)
-                and target[offset + consumed] == value
+                if offset + consumed < len(target) and target[offset + consumed] == value
             }
             if not possible:
                 return False, set()
@@ -298,9 +291,7 @@ class _TypeScriptLexer:
         # TypeScript's postfix non-null assertion leaves `/` as division,
         # while prefix logical negation still permits a regular expression.
         if previous == "!":
-            return not self._is_postfix_non_null(
-                previous_index, segment_token_start
-            )
+            return not self._is_postfix_non_null(previous_index, segment_token_start)
 
         # The lexer stores punctuation one character at a time. Reconstitute
         # an adjacent postfix increment/decrement here so its trailing slash
@@ -309,13 +300,9 @@ class _TypeScriptLexer:
             previous in {"+", "-"}
             and previous_index > segment_token_start
             and self.tokens[previous_index - 1].value == previous
-            and self.tokens[previous_index - 1].end
-            == self.tokens[previous_index].start
-            and self._token_ends_expression(
-                previous_index - 2, segment_token_start
-            )
-            and self.tokens[previous_index - 2].lineno
-            == self.tokens[previous_index - 1].lineno
+            and self.tokens[previous_index - 1].end == self.tokens[previous_index].start
+            and self._token_ends_expression(previous_index - 2, segment_token_start)
+            and self.tokens[previous_index - 2].lineno == self.tokens[previous_index - 1].lineno
         ):
             return False
 
@@ -324,9 +311,7 @@ class _TypeScriptLexer:
         # as property names still end an ordinary member expression.
         if previous in {"in", "instanceof", "typeof"}:
             return not self._is_property_name(previous_index)
-        if previous == "of" and self._is_contextual_for_of(
-            previous_index, segment_token_start
-        ):
+        if previous == "of" and self._is_contextual_for_of(previous_index, segment_token_start):
             return True
 
         if previous in {
@@ -359,16 +344,10 @@ class _TypeScriptLexer:
             "await",
         }:
             return True
-        if (
-            len(self.tokens) >= 2
-            and self.tokens[-2].value == "="
-            and previous == ">"
-        ):
+        if len(self.tokens) >= 2 and self.tokens[-2].value == "=" and previous == ">":
             return True
         if previous != ")":
-            return previous == "}" and self._closing_brace_ends_block(
-                segment_token_start
-            )
+            return previous == "}" and self._closing_brace_ends_block(segment_token_start)
 
         # A regex may begin the statement controlled by `if (...)`, `while
         # (...)`, and similar constructs. A close parenthesis in an ordinary
@@ -381,19 +360,19 @@ class _TypeScriptLexer:
             elif value == "(":
                 depth -= 1
                 if depth == 0:
-                    return (
-                        cursor > segment_token_start
-                        and self.tokens[cursor - 1].value
-                        in {"for", "if", "switch", "while", "with"}
-                    )
+                    return cursor > segment_token_start and self.tokens[cursor - 1].value in {
+                        "for",
+                        "if",
+                        "switch",
+                        "while",
+                        "with",
+                    }
         return False
 
     def _is_property_name(self, index: int) -> bool:
         return index > 0 and self.tokens[index - 1].value == "."
 
-    def _token_ends_expression(
-        self, index: int, segment_token_start: int
-    ) -> bool:
+    def _token_ends_expression(self, index: int, segment_token_start: int) -> bool:
         if index < segment_token_start:
             return False
         token = self.tokens[index]
@@ -419,16 +398,12 @@ class _TypeScriptLexer:
             "yield",
         }
 
-    def _is_postfix_non_null(
-        self, index: int, segment_token_start: int
-    ) -> bool:
+    def _is_postfix_non_null(self, index: int, segment_token_start: int) -> bool:
         return index > segment_token_start and self._token_ends_expression(
             index - 1, segment_token_start
         )
 
-    def _is_contextual_for_of(
-        self, of_index: int, segment_token_start: int
-    ) -> bool:
+    def _is_contextual_for_of(self, of_index: int, segment_token_start: int) -> bool:
         if self._is_property_name(of_index):
             return False
 
@@ -536,18 +511,13 @@ class _TypeScriptLexer:
                     function_index = next(
                         (
                             candidate
-                            for candidate in range(
-                                cursor - 1, segment_token_start - 1, -1
-                            )
+                            for candidate in range(cursor - 1, segment_token_start - 1, -1)
                             if self.tokens[candidate].value == "function"
                         ),
                         None,
                     )
-                    return (
-                        function_index is not None
-                        and self._keyword_starts_declaration(
-                            function_index, segment_token_start
-                        )
+                    return function_index is not None and self._keyword_starts_declaration(
+                        function_index, segment_token_start
                     )
         return False
 
@@ -564,9 +534,7 @@ class _TypeScriptLexer:
                 return False
         return True
 
-    def _is_function_body_open(
-        self, function_index: int, candidate_open: int
-    ) -> bool:
+    def _is_function_body_open(self, function_index: int, candidate_open: int) -> bool:
         parameter_open: int | None = None
         angle_depth = 0
         for cursor in range(function_index + 1, candidate_open):
@@ -639,9 +607,7 @@ class _TypeScriptLexer:
                 saw_complete_type = True
         return False
 
-    def _keyword_starts_declaration(
-        self, keyword_index: int, segment_token_start: int
-    ) -> bool:
+    def _keyword_starts_declaration(self, keyword_index: int, segment_token_start: int) -> bool:
         cursor = keyword_index - 1
         while cursor >= segment_token_start and self.tokens[cursor].value in {
             "abstract",
@@ -735,9 +701,7 @@ class _TypeScriptLexer:
             return True
         return bool(self.text[cursor:tag_end].strip())
 
-    def _scan_jsx_tag(
-        self, index: int, lineno: int
-    ) -> tuple[int, int, bool, bool]:
+    def _scan_jsx_tag(self, index: int, lineno: int) -> tuple[int, int, bool, bool]:
         closing = self.text.startswith("</", index)
         cursor = index + (2 if closing else 1)
         last_nonspace = ""
@@ -748,9 +712,7 @@ class _TypeScriptLexer:
                 last_nonspace = "quoted"
                 continue
             if current == "{" and not closing:
-                cursor, lineno = self._scan_code(
-                    cursor + 1, lineno, stop_on_closing_brace=True
-                )
+                cursor, lineno = self._scan_code(cursor + 1, lineno, stop_on_closing_brace=True)
                 last_nonspace = "expression"
                 continue
             if current == ">":
@@ -770,13 +732,15 @@ class _TypeScriptLexer:
         while index < self.length and depth:
             current = self.text[index]
             if current == "{":
-                index, lineno = self._scan_code(
-                    index + 1, lineno, stop_on_closing_brace=True
-                )
+                index, lineno = self._scan_code(index + 1, lineno, stop_on_closing_brace=True)
                 continue
-            if current == "<" and index + 1 < self.length and (
-                self.text[index + 1] in {"/", ">"}
-                or _is_identifier_start(self.text[index + 1])
+            if (
+                current == "<"
+                and index + 1 < self.length
+                and (
+                    self.text[index + 1] in {"/", ">"}
+                    or _is_identifier_start(self.text[index + 1])
+                )
             ):
                 index, lineno, closing, self_closing = self._scan_jsx_tag(index, lineno)
                 if closing:
@@ -828,11 +792,7 @@ class _TypeScriptLexer:
                     self.tokens.insert(
                         template_token_start,
                         Token(
-                            (
-                                "constant_template"
-                                if constant
-                                else "computed_template"
-                            ),
+                            ("constant_template" if constant else "computed_template"),
                             "".join(cooked) if constant else "",
                             start_line,
                             start,
@@ -845,12 +805,8 @@ class _TypeScriptLexer:
                 cooked.append(_decode_javascript_string("".join(raw)))
                 raw = []
                 expression_token_start = len(self.tokens)
-                index, lineno = self._scan_code(
-                    index + 2, lineno, stop_on_closing_brace=True
-                )
-                expression_value = _constant_expression_value(
-                    self.tokens[expression_token_start:]
-                )
+                index, lineno = self._scan_code(index + 2, lineno, stop_on_closing_brace=True)
+                expression_value = _constant_expression_value(self.tokens[expression_token_start:])
                 if expression_value is _UNKNOWN_CONSTANT:
                     constant = False
                 else:
@@ -917,8 +873,7 @@ class _TypeScriptLexer:
 
             escaped_start = _decode_identifier_escape(self.text, index)
             if _is_identifier_start(char) or (
-                escaped_start is not None
-                and _is_identifier_start(escaped_start[0])
+                escaped_start is not None and _is_identifier_start(escaped_start[0])
             ):
                 start = index
                 start_line = lineno
@@ -936,17 +891,12 @@ class _TypeScriptLexer:
                         index += 1
                         continue
                     escaped_part = _decode_identifier_escape(self.text, index)
-                    if (
-                        escaped_part is not None
-                        and _is_identifier_part(escaped_part[0])
-                    ):
+                    if escaped_part is not None and _is_identifier_part(escaped_part[0]):
                         value.append(escaped_part[0])
                         index = escaped_part[1]
                         continue
                     break
-                self.tokens.append(
-                    Token("identifier", "".join(value), start_line, start, index)
-                )
+                self.tokens.append(Token("identifier", "".join(value), start_line, start, index))
                 continue
 
             if char == "{" and stop_on_closing_brace:
@@ -970,9 +920,7 @@ def tokenize_typescript(text: str, *, jsx: bool = True) -> list[Token]:
     return _TypeScriptLexer(text, jsx=jsx).scan()
 
 
-def _statement_end(
-    tokens: list[Token], source_index: int, *, import_equals: bool
-) -> int:
+def _statement_end(tokens: list[Token], source_index: int, *, import_equals: bool) -> int:
     """Return the grammar end of one static import/re-export statement."""
 
     cursor = source_index + 1
@@ -1020,9 +968,7 @@ def _all_named_bindings_are_types(tokens: list[Token]) -> bool:
     if current:
         entries.append(current)
     return bool(entries) and all(
-        len(entry) >= 2
-        and entry[0].value == "type"
-        and entry[1].value != "as"
+        len(entry) >= 2 and entry[0].value == "type" and entry[1].value != "as"
         for entry in entries
     )
 
@@ -1038,9 +984,7 @@ def _is_type_only_tokens(tokens: list[Token], keyword: str) -> bool:
     return _all_named_bindings_are_types(tokens)
 
 
-def _matching_pairs(
-    tokens: list[Token], opener: str, closer: str
-) -> dict[int, int]:
+def _matching_pairs(tokens: list[Token], opener: str, closer: str) -> dict[int, int]:
     stack: list[int] = []
     pairs: dict[int, int] = {}
     for index, token in enumerate(tokens):
@@ -1082,9 +1026,7 @@ def _type_sequence_reaches_import(
         if index:
             previous = sequence[index - 1]
             previous_continues = previous.value in continuation_after or (
-                previous.value == ">"
-                and index >= 2
-                and sequence[index - 2].value == "="
+                previous.value == ">" and index >= 2 and sequence[index - 2].value == "="
             )
             token_continues = token.value in continuation_before or (
                 token.value == "="
@@ -1107,9 +1049,7 @@ def _type_sequence_reaches_import(
         previous = sequence[-1]
         import_token = tokens[import_index]
         previous_continues = previous.value in continuation_after or (
-            previous.value == ">"
-            and len(sequence) >= 2
-            and sequence[-2].value == "="
+            previous.value == ">" and len(sequence) >= 2 and sequence[-2].value == "="
         )
         if (
             import_token.lineno > previous.lineno
@@ -1121,13 +1061,8 @@ def _type_sequence_reaches_import(
     return True
 
 
-def _type_alias_reaches_import(
-    tokens: list[Token], type_index: int, import_index: int
-) -> bool:
-    if (
-        type_index + 1 >= import_index
-        or tokens[type_index + 1].kind != "identifier"
-    ):
+def _type_alias_reaches_import(tokens: list[Token], type_index: int, import_index: int) -> bool:
+    if type_index + 1 >= import_index or tokens[type_index + 1].kind != "identifier":
         return False
 
     # The import may occur in a type-parameter default/constraint before the
@@ -1164,9 +1099,7 @@ def _type_alias_reaches_import(
     return _type_sequence_reaches_import(tokens, equals_index + 1, import_index)
 
 
-def _is_function_parameter_list(
-    tokens: list[Token], open_index: int, close_index: int
-) -> bool:
+def _is_function_parameter_list(tokens: list[Token], open_index: int, close_index: int) -> bool:
     owner_index = open_index - 1
     if owner_index < 0:
         return False
@@ -1197,9 +1130,7 @@ def _is_function_parameter_list(
         header_start = brace_open - 1
         while header_start >= 0 and tokens[header_start].value not in {";", "{", "}"}:
             header_start -= 1
-        header_values = {
-            token.value for token in tokens[header_start + 1 : brace_open]
-        }
+        header_values = {token.value for token in tokens[header_start + 1 : brace_open]}
         if header_values & {"class", "interface"}:
             return True
 
@@ -1215,7 +1146,8 @@ def _is_function_parameter_list(
             previous_token = tokens[cursor - 1]
             if (
                 tokens[cursor].lineno > previous_token.lineno
-                and previous_token.value not in {
+                and previous_token.value
+                not in {
                     "(",
                     "[",
                     "{",
@@ -1256,19 +1188,13 @@ def _is_function_parameter_list(
         elif not nesting:
             if value in {";", "}"}:
                 return False
-            if (
-                value == "="
-                and cursor + 1 < len(tokens)
-                and tokens[cursor + 1].value == ">"
-            ):
+            if value == "=" and cursor + 1 < len(tokens) and tokens[cursor + 1].value == ">":
                 return True
         cursor += 1
     return False
 
 
-def _top_level_segment_start(
-    tokens: list[Token], start_index: int, end_index: int
-) -> int:
+def _top_level_segment_start(tokens: list[Token], start_index: int, end_index: int) -> int:
     """Return the start of the comma-delimited segment owning end_index."""
 
     segment_start = start_index
@@ -1301,10 +1227,7 @@ def _top_level_annotation_colon(
             nesting.pop()
         elif not nesting:
             if value == "=":
-                if (
-                    cursor + 1 < import_index
-                    and tokens[cursor + 1].value == ">"
-                ):
+                if cursor + 1 < import_index and tokens[cursor + 1].value == ">":
                     continue
                 return None
             if value == ":" and colon_index is None:
@@ -1316,25 +1239,19 @@ def _top_level_annotation_colon(
     return colon_index
 
 
-def _parameter_annotation_contains_import(
-    tokens: list[Token], import_index: int
-) -> bool:
+def _parameter_annotation_contains_import(tokens: list[Token], import_index: int) -> bool:
     for open_index, close_index in _matching_pairs(tokens, "(", ")").items():
         if not (open_index < import_index < close_index):
             continue
         if not _is_function_parameter_list(tokens, open_index, close_index):
             continue
-        segment_start = _top_level_segment_start(
-            tokens, open_index + 1, import_index
-        )
+        segment_start = _top_level_segment_start(tokens, open_index + 1, import_index)
         if _top_level_annotation_colon(tokens, segment_start, import_index) is not None:
             return True
     return False
 
 
-def _interface_property_contains_import(
-    tokens: list[Token], import_index: int
-) -> bool:
+def _interface_property_contains_import(tokens: list[Token], import_index: int) -> bool:
     # Every executable-looking import inside an interface body is necessarily
     # part of a type member/signature. Use the declared interface body rather
     # than the innermost brace so nested object types remain covered.
@@ -1350,9 +1267,7 @@ def _interface_property_contains_import(
     return False
 
 
-def _function_return_annotation_contains_import(
-    tokens: list[Token], import_index: int
-) -> bool:
+def _function_return_annotation_contains_import(tokens: list[Token], import_index: int) -> bool:
     parens = _matching_pairs(tokens, "(", ")")
     for open_index, close_index in parens.items():
         colon_index = close_index + 1
@@ -1364,9 +1279,7 @@ def _function_return_annotation_contains_import(
             continue
         if not _is_function_parameter_list(tokens, open_index, close_index):
             continue
-        if not _type_annotation_prefix_reaches_import(
-            tokens, colon_index + 1, import_index
-        ):
+        if not _type_annotation_prefix_reaches_import(tokens, colon_index + 1, import_index):
             continue
 
         # A top-level arrow can either be part of a function return type or be
@@ -1374,14 +1287,13 @@ def _function_return_annotation_contains_import(
         # declarations/methods have no outer arrow. For arrow functions, a
         # later arrow after the candidate means the earlier one belonged to
         # the declared return type.
-        top_level_arrows = _top_level_arrow_indices(
-            tokens, colon_index + 1, import_index
-        )
-        if top_level_arrows and not _parameter_list_has_declaration_owner(
-            tokens, open_index
+        top_level_arrows = _top_level_arrow_indices(tokens, colon_index + 1, import_index)
+        if (
+            top_level_arrows
+            and not _parameter_list_has_declaration_owner(tokens, open_index)
+            and not _has_later_arrow_before_statement_end(tokens, import_index)
         ):
-            if not _has_later_arrow_before_statement_end(tokens, import_index):
-                continue
+            continue
         return True
     return False
 
@@ -1429,11 +1341,7 @@ def _type_annotation_prefix_reaches_import(
             nesting.append(value)
             saw_complete_type = True
         elif value in matching:
-            if (
-                value == ">"
-                and cursor > start_index
-                and tokens[cursor - 1].value == "="
-            ):
+            if value == ">" and cursor > start_index and tokens[cursor - 1].value == "=":
                 saw_complete_type = True
                 continue
             if not nesting or nesting[-1] != matching[value]:
@@ -1452,9 +1360,7 @@ def _type_annotation_prefix_reaches_import(
     return True
 
 
-def _top_level_arrow_indices(
-    tokens: list[Token], start_index: int, end_index: int
-) -> list[int]:
+def _top_level_arrow_indices(tokens: list[Token], start_index: int, end_index: int) -> list[int]:
     nesting: list[str] = []
     matching = {")": "(", "]": "[", "}": "{", ">": "<"}
     arrows: list[int] = []
@@ -1474,9 +1380,7 @@ def _top_level_arrow_indices(
     return arrows
 
 
-def _parameter_list_has_declaration_owner(
-    tokens: list[Token], open_index: int
-) -> bool:
+def _parameter_list_has_declaration_owner(tokens: list[Token], open_index: int) -> bool:
     for cursor in range(open_index - 1, -1, -1):
         if tokens[cursor].value in {";", "{", "}"}:
             break
@@ -1494,14 +1398,11 @@ def _parameter_list_has_declaration_owner(
     while header_start >= 0 and tokens[header_start].value not in {";", "{", "}"}:
         header_start -= 1
     return any(
-        token.value in {"class", "interface"}
-        for token in tokens[header_start + 1 : brace_open]
+        token.value in {"class", "interface"} for token in tokens[header_start + 1 : brace_open]
     )
 
 
-def _has_later_arrow_before_statement_end(
-    tokens: list[Token], import_index: int
-) -> bool:
+def _has_later_arrow_before_statement_end(tokens: list[Token], import_index: int) -> bool:
     # Dynamic import's own parentheses are balanced before any relevant outer
     # arrow. Looking to the next semicolon is sufficient to distinguish a
     # function-valued return annotation from the arrow's runtime body.
@@ -1513,9 +1414,7 @@ def _has_later_arrow_before_statement_end(
     return False
 
 
-def _class_property_contains_import(
-    tokens: list[Token], import_index: int
-) -> bool:
+def _class_property_contains_import(tokens: list[Token], import_index: int) -> bool:
     containing_class_bodies: list[tuple[int, int]] = []
     for open_index, close_index in _matching_pairs(tokens, "{", "}").items():
         if not (open_index < import_index < close_index):
@@ -1523,10 +1422,7 @@ def _class_property_contains_import(
         header_start = open_index - 1
         while header_start >= 0 and tokens[header_start].value not in {";", "{", "}"}:
             header_start -= 1
-        if any(
-            token.value == "class"
-            for token in tokens[header_start + 1 : open_index]
-        ):
+        if any(token.value == "class" for token in tokens[header_start + 1 : open_index]):
             containing_class_bodies.append((open_index, close_index))
     if not containing_class_bodies:
         return False
@@ -1576,9 +1472,7 @@ def _class_property_contains_import(
     )
 
 
-def _declaration_annotation_contains_import(
-    tokens: list[Token], import_index: int
-) -> bool:
+def _declaration_annotation_contains_import(tokens: list[Token], import_index: int) -> bool:
     declaration_index: int | None = None
     for cursor in range(import_index - 1, -1, -1):
         if tokens[cursor].value == ";":
@@ -1588,13 +1482,8 @@ def _declaration_annotation_contains_import(
             break
     if declaration_index is None:
         return False
-    declarator_start = _top_level_segment_start(
-        tokens, declaration_index + 1, import_index
-    )
-    return (
-        _top_level_annotation_colon(tokens, declarator_start, import_index)
-        is not None
-    )
+    declarator_start = _top_level_segment_start(tokens, declaration_index + 1, import_index)
+    return _top_level_annotation_colon(tokens, declarator_start, import_index) is not None
 
 
 def _generic_call_import_is_type(
@@ -1613,10 +1502,7 @@ def _generic_call_import_is_type(
     # Import types require their literal/options grammar. An asserted module
     # expression remains a runtime dynamic import even when the literal under
     # the assertion is statically discoverable.
-    if any(
-        token.value in {"as", "satisfies"}
-        for token in tokens[import_open + 1 : import_close]
-    ):
+    if any(token.value in {"as", "satisfies"} for token in tokens[import_open + 1 : import_close]):
         return False
 
     # A direct `.Name` is an import-type qualifier. Once grouping has closed
@@ -1639,9 +1525,7 @@ def _generic_call_import_is_type(
     return True
 
 
-def _generic_argument_contains_import(
-    tokens: list[Token], import_index: int
-) -> bool:
+def _generic_argument_contains_import(tokens: list[Token], import_index: int) -> bool:
     for open_index, close_index in _matching_pairs(tokens, "<", ">").items():
         if not (open_index < import_index < close_index):
             continue
@@ -1668,9 +1552,7 @@ def _generic_argument_contains_import(
         header_start = open_index - 1
         while header_start >= 0 and tokens[header_start].value not in {";", "{", "}"}:
             header_start -= 1
-        header_values = {
-            token.value for token in tokens[header_start + 1 : open_index]
-        }
+        header_values = {token.value for token in tokens[header_start + 1 : open_index]}
         if header_values & {"implements", "interface", "type"}:
             return True
         type_operator_index = next(
@@ -1691,9 +1573,7 @@ def _generic_argument_contains_import(
 
         # Type parameters on class/function/arrow declarations use constraints
         # or defaults before an import type.
-        inner_prefix = {
-            token.value for token in tokens[open_index + 1 : import_index]
-        }
+        inner_prefix = {token.value for token in tokens[open_index + 1 : import_index]}
         if inner_prefix & {"extends", "="} and (
             header_values & {"class", "function", "interface", "type"}
             or owner is None
@@ -1745,27 +1625,30 @@ def _generic_argument_contains_import(
         # Instantiation expressions (`const C = Factory<Type>`) and generic
         # type references end at a delimiter/member operator. A comparison has
         # a right-hand value after `>` and is deliberately not accepted here.
-        if owner is not None and owner.kind == "identifier" and after in {
-            None,
-            ";",
-            ",",
-            ")",
-            "]",
-            "}",
-            ".",
-            "?",
-            "!",
-            "[",
-            "as",
-            "satisfies",
-        }:
+        if (
+            owner is not None
+            and owner.kind == "identifier"
+            and after
+            in {
+                None,
+                ";",
+                ",",
+                ")",
+                "]",
+                "}",
+                ".",
+                "?",
+                "!",
+                "[",
+                "as",
+                "satisfies",
+            }
+        ):
             return True
     return False
 
 
-def _type_operator_reaches_import(
-    tokens: list[Token], import_index: int
-) -> bool:
+def _type_operator_reaches_import(tokens: list[Token], import_index: int) -> bool:
     """Recognize nested types owned by `as`, `satisfies`, or `implements`."""
 
     for operator_index in range(import_index - 1, -1, -1):
@@ -1784,9 +1667,7 @@ def _type_operator_reaches_import(
             token.value == "class" for token in tokens[:operator_index]
         ):
             continue
-        if not _type_sequence_reaches_import(
-            tokens, operator_index + 1, import_index
-        ):
+        if not _type_sequence_reaches_import(tokens, operator_index + 1, import_index):
             continue
 
         nesting: list[str] = []
@@ -1803,16 +1684,16 @@ def _type_operator_reaches_import(
             elif not nesting:
                 if token_value == "extends":
                     saw_conditional_extends = True
-                elif token_value in {",", ";", "="}:
-                    break
-                elif token_value in {"+", "-", "*", "/", "%", "^"}:
-                    break
-                elif token_value in {"?", ":"} and not saw_conditional_extends:
-                    break
                 elif (
-                    token_value in {"&", "|"}
-                    and cursor + 1 < import_index
-                    and tokens[cursor + 1].value == token_value
+                    token_value in {",", ";", "="}
+                    or token_value in {"+", "-", "*", "/", "%", "^"}
+                    or token_value in {"?", ":"}
+                    and not saw_conditional_extends
+                    or (
+                        token_value in {"&", "|"}
+                        and cursor + 1 < import_index
+                        and tokens[cursor + 1].value == token_value
+                    )
                 ):
                     break
         else:
@@ -1874,8 +1755,8 @@ def _dynamic_import_binding_facts(
         pattern = _assignment_pattern(tokens, equals_index)
         if pattern:
             if pattern[0].value == "{":
-                pattern_imported, pattern_local, pattern_namespaces = (
-                    _destructuring_import_facts(pattern)
+                pattern_imported, pattern_local, pattern_namespaces = _destructuring_import_facts(
+                    pattern
                 )
                 imported.update(pattern_imported)
                 local.update(pattern_local)
@@ -1890,9 +1771,7 @@ def _dynamic_import_binding_facts(
     # Promise-style dynamic imports expose callback destructuring just as an
     # awaited destructure does. These names are deliberately not added to the
     # global local-binding set because their scope is only the callback.
-    then_imported, scoped_bindings = _then_callback_import_facts(
-        tokens, import_index, close_index
-    )
+    then_imported, scoped_bindings = _then_callback_import_facts(tokens, import_index, close_index)
     imported.update(then_imported)
     return (
         frozenset(imported),
@@ -1960,9 +1839,7 @@ def _binding_names_from_pattern(tokens: list[Token]) -> set[str]:
         equals_index = _top_level_token_index(entry, "=")
         if colon_index is not None:
             end = equals_index if equals_index is not None else len(entry)
-            bindings.update(
-                _binding_names_from_pattern(entry[colon_index + 1 : end])
-            )
+            bindings.update(_binding_names_from_pattern(entry[colon_index + 1 : end]))
         elif entry and entry[0].kind == "identifier":
             bindings.add(entry[0].value)
     return bindings
@@ -2007,9 +1884,7 @@ def _destructuring_import_facts(
 
         if colon_index is not None:
             end = equals_index if equals_index is not None else len(entry)
-            local.update(
-                _binding_names_from_pattern(entry[colon_index + 1 : end])
-            )
+            local.update(_binding_names_from_pattern(entry[colon_index + 1 : end]))
         elif entry[0].kind == "identifier":
             local.add(entry[0].value)
     return imported, local, namespaces
@@ -2070,9 +1945,7 @@ def _can_open_transparent_group(tokens: list[Token], open_index: int) -> bool:
     }
 
 
-def _type_assertion_open_before(
-    tokens: list[Token], expression_start: int
-) -> int | None:
+def _type_assertion_open_before(tokens: list[Token], expression_start: int) -> int | None:
     """Return an angle-bracket assertion immediately before an expression."""
 
     close_index = expression_start - 1
@@ -2083,10 +1956,7 @@ def _type_assertion_open_before(
     ):
         return None
     for open_index in range(close_index - 1, -1, -1):
-        if (
-            tokens[open_index].kind != "punctuation"
-            or tokens[open_index].value != "<"
-        ):
+        if tokens[open_index].kind != "punctuation" or tokens[open_index].value != "<":
             continue
         if _type_argument_close(tokens, open_index) != close_index:
             continue
@@ -2130,9 +2000,7 @@ def _transparent_expression_span(
                 close_index is not None
                 and end_index + 2 <= close_index
                 and tokens[end_index + 1].value in {"as", "satisfies"}
-                and _looks_like_assertion_type(
-                    tokens[end_index + 2 : close_index]
-                )
+                and _looks_like_assertion_type(tokens[end_index + 2 : close_index])
             ):
                 start_index = open_index
                 end_index = close_index
@@ -2251,16 +2119,21 @@ def _then_callback_import_facts(
         prefix -= 1
     while prefix >= 0 and tokens[prefix].value == "(":
         previous = tokens[prefix - 1] if prefix else None
-        if previous is not None and previous.kind == "identifier" and previous.value not in {
-            "await",
-            "case",
-            "delete",
-            "return",
-            "throw",
-            "typeof",
-            "void",
-            "yield",
-        }:
+        if (
+            previous is not None
+            and previous.kind == "identifier"
+            and previous.value
+            not in {
+                "await",
+                "case",
+                "delete",
+                "return",
+                "throw",
+                "typeof",
+                "void",
+                "yield",
+            }
+        ):
             break
         grouping_count += 1
         prefix -= 1
@@ -2323,11 +2196,7 @@ def _then_callback_import_facts(
                 nesting.append(value)
             elif value in matching and nesting and nesting[-1] == matching[value]:
                 nesting.pop()
-            elif (
-                not nesting
-                and value == "="
-                and tokens[cursor + 1].value == ">"
-            ):
+            elif not nesting and value == "=" and tokens[cursor + 1].value == ">":
                 arrow_index = cursor
                 break
             cursor += 1
@@ -2351,8 +2220,7 @@ def _then_callback_import_facts(
                 elif (
                     expression_token.value in matching
                     and expression_nesting
-                    and expression_nesting[-1]
-                    == matching[expression_token.value]
+                    and expression_nesting[-1] == matching[expression_token.value]
                 ):
                     expression_nesting.pop()
                 elif expression_token.value == "," and not expression_nesting:
@@ -2398,9 +2266,7 @@ def _static_import_facts(
     local: set[str] = set()
     namespaces: set[str] = set()
     clause = tokens[1:source_index]
-    declaration_type_only = _is_type_only_tokens(
-        tokens[: source_index + 1], keyword
-    )
+    declaration_type_only = _is_type_only_tokens(tokens[: source_index + 1], keyword)
 
     if import_equals:
         if clause and clause[0].value == "type":
@@ -2439,12 +2305,8 @@ def _static_import_facts(
             None,
         )
         if named_open is not None:
-            named_close = max(
-                index for index, token in enumerate(clause) if token.value == "}"
-            )
-            for entry in _split_top_level_entries(
-                clause[named_open + 1 : named_close]
-            ):
+            named_close = max(index for index, token in enumerate(clause) if token.value == "}")
+            for entry in _split_top_level_entries(clause[named_open + 1 : named_close]):
                 entry_type_only = bool(
                     entry
                     and entry[0].value == "type"
@@ -2489,15 +2351,10 @@ def _static_import_facts(
                 runtime_imported.add("*")
 
     if named_open is not None:
-        named_close = max(
-            index for index, token in enumerate(clause) if token.value == "}"
-        )
+        named_close = max(index for index, token in enumerate(clause) if token.value == "}")
         for entry in _split_top_level_entries(clause[named_open + 1 : named_close]):
             entry_type_only = bool(
-                entry
-                and entry[0].value == "type"
-                and len(entry) >= 2
-                and entry[1].value != "as"
+                entry and entry[0].value == "type" and len(entry) >= 2 and entry[1].value != "as"
             )
             if entry_type_only:
                 entry = entry[1:]
@@ -2507,11 +2364,7 @@ def _static_import_facts(
             if not declaration_type_only and not entry_type_only:
                 runtime_imported.add(entry[0].value)
             as_index = next(
-                (
-                    index
-                    for index, token in enumerate(entry[1:], start=1)
-                    if token.value == "as"
-                ),
+                (index for index, token in enumerate(entry[1:], start=1) if token.value == "as"),
                 None,
             )
             if as_index is not None and as_index + 1 < len(entry):
@@ -2625,14 +2478,13 @@ def _punctuator_at(tokens: list[Token], index: int, value: str) -> bool:
     return True
 
 
-def _last_top_level_punctuator(
-    tokens: list[Token], value: str
-) -> int | None:
+def _last_top_level_punctuator(tokens: list[Token], value: str) -> int | None:
     top_level = set(_constant_top_level_indices(tokens))
     for index in range(len(tokens) - len(value), -1, -1):
-        if all(index + offset in top_level for offset in range(len(value))):
-            if _punctuator_at(tokens, index, value):
-                return index
+        if all(index + offset in top_level for offset in range(len(value))) and _punctuator_at(
+            tokens, index, value
+        ):
+            return index
     return None
 
 
@@ -2655,11 +2507,7 @@ def _constant_conditional_indices(
                 question_index = index
             else:
                 nested += 1
-        elif (
-            token.kind == "punctuation"
-            and token.value == ":"
-            and question_index is not None
-        ):
+        elif token.kind == "punctuation" and token.value == ":" and question_index is not None:
             if nested:
                 nested -= 1
             else:
@@ -2681,18 +2529,10 @@ def _strip_constant_transparency(tokens: list[Token]) -> list[Token]:
         ):
             tokens = tokens[1:-1]
             continue
-        if (
-            tokens
-            and tokens[-1].kind == "punctuation"
-            and tokens[-1].value == "!"
-        ):
+        if tokens and tokens[-1].kind == "punctuation" and tokens[-1].value == "!":
             tokens = tokens[:-1]
             continue
-        if (
-            tokens
-            and tokens[0].kind == "punctuation"
-            and tokens[0].value == "<"
-        ):
+        if tokens and tokens[0].kind == "punctuation" and tokens[0].value == "<":
             close_index = _type_argument_close(tokens, 0)
             if (
                 close_index is not None
@@ -2734,7 +2574,7 @@ def _constant_primitive(tokens: list[Token]) -> object:
                 return None
 
     if tokens and all(token.value.isdigit() or token.value == "." for token in tokens):
-        if any(left.end != right.start for left, right in zip(tokens, tokens[1:])):
+        if any(left.end != right.start for left, right in zip(tokens, tokens[1:], strict=False)):
             return _UNKNOWN_CONSTANT
         value = "".join(token.value for token in tokens)
         if value.count(".") <= 1 and value.replace(".", "").isdigit():
@@ -2779,9 +2619,7 @@ def _constant_expression_value(tokens: list[Token]) -> object:
             return _UNKNOWN_CONSTANT
         if operator == "??":
             return (
-                _constant_expression_value(tokens[operator_index + 2 :])
-                if left is None
-                else left
+                _constant_expression_value(tokens[operator_index + 2 :]) if left is None else left
             )
         if operator == "||":
             return (
@@ -2803,13 +2641,12 @@ def _constant_expression_value(tokens: list[Token]) -> object:
             return _UNKNOWN_CONSTANT
         if isinstance(left, str) or isinstance(right, str):
             return _javascript_string(left) + _javascript_string(right)
-        if isinstance(left, (int, float, bool)) or left is None:
-            if isinstance(right, (int, float, bool)) or right is None:
-                left_number = 0 if left is None else int(left) if isinstance(left, bool) else left
-                right_number = (
-                    0 if right is None else int(right) if isinstance(right, bool) else right
-                )
-                return left_number + right_number
+        if (isinstance(left, (int, float, bool)) or left is None) and (
+            isinstance(right, (int, float, bool)) or right is None
+        ):
+            left_number = 0 if left is None else int(left) if isinstance(left, bool) else left
+            right_number = 0 if right is None else int(right) if isinstance(right, bool) else right
+            return left_number + right_number
         return _UNKNOWN_CONSTANT
 
     return _constant_primitive(tokens)
@@ -2855,27 +2692,27 @@ def _looks_like_assertion_type(tokens: list[Token]) -> bool:
             continue
         if token.kind == "identifier" and value == "extends":
             saw_extends = True
-        elif token.kind == "punctuation" and value in {
-            ",",
-            ";",
-            "+",
-            "-",
-            "*",
-            "/",
-            "%",
-        }:
-            return False
-        elif token.kind == "identifier" and value == "instanceof":
-            return False
-        elif token.kind == "punctuation" and value == "=" and not (
-            index + 1 < len(tokens) and tokens[index + 1].value == ">"
+        elif (
+            token.kind == "punctuation"
+            and value
+            in {
+                ",",
+                ";",
+                "+",
+                "-",
+                "*",
+                "/",
+                "%",
+            }
+            or token.kind == "identifier"
+            and value == "instanceof"
+            or token.kind == "punctuation"
+            and value == "="
+            and not (index + 1 < len(tokens) and tokens[index + 1].value == ">")
         ):
             return False
         elif token.kind == "punctuation" and value in {"&", "|", "?"}:
-            if (
-                index + 1 < len(tokens)
-                and tokens[index + 1].value == value
-            ):
+            if index + 1 < len(tokens) and tokens[index + 1].value == value:
                 return False
             if value == "?" and not saw_extends:
                 return False
@@ -2923,9 +2760,7 @@ def _collect_imports_from_tokens(
                     local_bindings,
                     namespace_bindings,
                     scoped_bindings,
-                ) = (
-                    _dynamic_import_binding_facts(tokens, index)
-                )
+                ) = _dynamic_import_binding_facts(tokens, index)
                 if type_only:
                     local_bindings = frozenset()
                     namespace_bindings = frozenset()
@@ -2934,15 +2769,11 @@ def _collect_imports_from_tokens(
                 imports.append(
                     ImportStatement(
                         source=source_token.value,
-                        statement=text[token.start:end],
+                        statement=text[token.start : end],
                         lineno=token.lineno,
                         type_only=type_only,
                         imported_names=imported_names,
-                        runtime_imported_names=(
-                            frozenset()
-                            if type_only
-                            else imported_names
-                        ),
+                        runtime_imported_names=(frozenset() if type_only else imported_names),
                         local_bindings=local_bindings,
                         namespace_bindings=namespace_bindings,
                         scoped_bindings=scoped_bindings,
@@ -2970,10 +2801,7 @@ def _collect_imports_from_tokens(
             export_clause = index + 1
             if export_clause < len(tokens) and tokens[export_clause].value == "type":
                 export_clause += 1
-            if (
-                export_clause >= len(tokens)
-                or tokens[export_clause].value not in {"{", "*"}
-            ):
+            if export_clause >= len(tokens) or tokens[export_clause].value not in {"{", "*"}:
                 index += 1
                 continue
 
@@ -2984,10 +2812,7 @@ def _collect_imports_from_tokens(
         else:
             if keyword == "import":
                 equals_cursor = index + 1
-                if (
-                    equals_cursor < len(tokens)
-                    and tokens[equals_cursor].value == "type"
-                ):
+                if equals_cursor < len(tokens) and tokens[equals_cursor].value == "type":
                     equals_cursor += 1
                 if (
                     equals_cursor + 4 < len(tokens)
@@ -3015,9 +2840,7 @@ def _collect_imports_from_tokens(
             index += 1
             continue
 
-        end = _statement_end(
-            tokens, source_index, import_equals=import_equals
-        )
+        end = _statement_end(tokens, source_index, import_equals=import_equals)
         statement_tokens = tokens[index : source_index + 1]
         (
             imported_names,
@@ -3033,7 +2856,7 @@ def _collect_imports_from_tokens(
         imports.append(
             ImportStatement(
                 source=tokens[source_index].value,
-                statement=text[token.start:end],
+                statement=text[token.start : end],
                 lineno=token.lineno,
                 type_only=_is_type_only_tokens(statement_tokens, keyword),
                 imported_names=imported_names,
@@ -3081,10 +2904,7 @@ def collect_module_specifiers(path: Path, text: str) -> list[ImportStatement]:
     for index, token in enumerate(tokens):
         call_open: int | None = None
         call_start_index = index
-        if (
-            token.kind == "identifier"
-            and token.value == "require"
-        ):
+        if token.kind == "identifier" and token.value == "require":
             expression_start, expression_end = _transparent_expression_span(
                 tokens, index, index, parens
             )
@@ -3095,10 +2915,7 @@ def collect_module_specifiers(path: Path, text: str) -> list[ImportStatement]:
                     expression_end,
                     allow_optional_call=True,
                 )
-        elif (
-            token.kind == "identifier"
-            and token.value in {"vi", "jest"}
-        ):
+        elif token.kind == "identifier" and token.value in {"vi", "jest"}:
             receiver_start, receiver_end = _transparent_expression_span(
                 tokens, index, index, parens
             )
@@ -3124,16 +2941,14 @@ def collect_module_specifiers(path: Path, text: str) -> list[ImportStatement]:
         close_index = parens.get(call_open)
         if close_index is None:
             continue
-        source_token = _literal_dynamic_import_source(
-            tokens, call_open, close_index
-        )
+        source_token = _literal_dynamic_import_source(tokens, call_open, close_index)
         if source_token is None:
             continue
         end = tokens[close_index].end
         augmented.append(
             ImportStatement(
                 source=source_token.value,
-                statement=text[tokens[call_start_index].start:end],
+                statement=text[tokens[call_start_index].start : end],
                 lineno=tokens[call_start_index].lineno,
                 type_only=False,
                 imported_names=frozenset({"*"}),

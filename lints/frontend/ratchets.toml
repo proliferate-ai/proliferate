@@ -8,12 +8,16 @@
 
 [[max_lines]]
 path = "apps/desktop/src-tauri/src/diagnostics/support_snapshot/artifact_store/unix_fs.rs"
-max_lines = 658
+# 658 -> 662 (2026-08-27 lint wiring): the mode_t-typed mask fix carries a
+# platform comment at each of its three sites — not new debt.
+max_lines = 662
 reason = "Support snapshot artifact store's Unix filesystem layer: private-by-construction root creation, metadata repair, and the O_NOFOLLOW open/read/write paths share the same permission constants and repair state machine, and the mkdir-mode hardening this slice adds is only meaningful next to the repair it guards. Split into unix_fs/{root,entry}.rs when a second artifact kind lands."
 
 [[max_lines]]
 path = "apps/desktop/src-tauri/src/diagnostics/support_snapshot/scrub/patterns.rs"
-max_lines = 610
+# 610 -> 613 (2026-08-27 lint wiring): the needless_range_loop rewrite keeps the
+# boundary==end tail-call explicit with a comment — not new debt.
+max_lines = 613
 reason = "Support export scrub pattern table: the labelled, unlabelled-scheme, environment-assignment, provider-prefix, and opaque-catch-all rules form one ordered redaction pipeline whose precedence is load-bearing and pinned by the scrub tests, so a rule family cannot move without moving that order with it. Split into scrub/patterns/{labelled,unlabelled,opaque}.rs when a sixth rule family lands."
 
 [[max_lines]]
@@ -28,8 +32,8 @@ reason = "home screen suite: unified-composer/target-persistence coverage joined
 
 [[max_lines]]
 path = "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.test.tsx"
-max_lines = 1270
-reason = "C-train composition: C-2 ack-status UI coverage joins the B-4 cut; P3 runtime catalog extends All-Models coverage + add-key modal flow + switch disambiguation + surface store mock + ProductHost test-host wiring + authenticated-without-cloud-compute BYOK gating cases + C3 model-snapshot status mock stub + review-fix refresh mutation stub + C1 cursor api_key/CLI method + CURSOR_API_KEY persistence cases; F-040 dropped the client-refresh-with-payload cases (no callable cloud refresh remains); agent-auth.md §5 provider-picker two-write assertion (vault api_key + one selection row) replaces the prefill-only case; the §1–§7 pane rebuild adds the collapsed-model-list expansion helper; review-fix non-orphaning provider-picker cases (PUT-failure revoke + rollback, close-only-after-PUT, bound-env-var pass-through, key-shaped env var for multi-field providers); PR-review fixes add the P0 anonymous-local Authenticate-gate regression, the P1-a supportsLogin&&canRunLogin regression, and the P1-b gateway-capabilities-pending loading-state regression; design-handoff v2 rewrite (cards + merged header badge + providers section + saved-keys segment); seats v1 seat method card/selection/mint-sheet cases + mint mocks"
+max_lines = 1272
+reason = "C-train composition: C-2 ack-status UI coverage joins the B-4 cut; P3 runtime catalog extends All-Models coverage + add-key modal flow + switch disambiguation + surface store mock + ProductHost test-host wiring + authenticated-without-cloud-compute BYOK gating cases + C3 model-snapshot status mock stub + review-fix refresh mutation stub + C1 cursor api_key/CLI method + CURSOR_API_KEY persistence cases; F-040 dropped the client-refresh-with-payload cases (no callable cloud refresh remains); agent-auth.md §5 provider-picker two-write assertion (vault api_key + one selection row) replaces the prefill-only case; the §1–§7 pane rebuild adds the collapsed-model-list expansion helper; review-fix non-orphaning provider-picker cases (PUT-failure revoke + rollback, close-only-after-PUT, bound-env-var pass-through, key-shaped env var for multi-field providers); PR-review fixes add the P0 anonymous-local Authenticate-gate regression, the P1-a supportsLogin&&canRunLogin regression, and the P1-b gateway-capabilities-pending loading-state regression; design-handoff v2 rewrite (cards + merged header badge + providers section + saved-keys segment); +2: slice 6a's sdk-react mock learns useAnyHarnessCacheScopeKey for the native-bridge prompt; seats v1 seat method card/selection/mint-sheet cases + mint mocks"
 
 [[max_lines]]
 path = "apps/packages/product-client/src/domain/chats/cloud/transcript-view.test.ts"

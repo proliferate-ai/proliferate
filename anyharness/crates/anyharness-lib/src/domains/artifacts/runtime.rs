@@ -187,6 +187,96 @@ fn cleanup_temp_file(path: &Path) {
     let _ = std::fs::remove_file(path);
 }
 
+fn commit_create(
+    content_temp: &Path,
+    target_path: &Path,
+    manifest_temp: &Path,
+    manifest_path: &Path,
+) -> Result<(), ArtifactError> {
+    if let Some(parent) = target_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| ArtifactError::Io(error.to_string()))?;
+    }
+    std::fs::rename(content_temp, target_path)
+        .map_err(|error| ArtifactError::Io(error.to_string()))?;
+    if let Err(error) = std::fs::rename(manifest_temp, manifest_path) {
+        let _ = std::fs::remove_file(target_path);
+        return Err(ArtifactError::Io(error.to_string()));
+    }
+    Ok(())
+}
+
+fn commit_update(
+    content_temp: Option<&Path>,
+    target_path: &Path,
+    manifest_temp: &Path,
+    manifest_path: &Path,
+) -> Result<(), ArtifactError> {
+    let backup_path = if let Some(content_temp) = content_temp {
+        if let Some(parent) = target_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| ArtifactError::Io(error.to_string()))?;
+        }
+        let backup_path = temp_path_for(target_path)?;
+        if target_path.exists() {
+            std::fs::rename(target_path, &backup_path)
+                .map_err(|error| ArtifactError::Io(error.to_string()))?;
+        }
+        if let Err(error) = std::fs::rename(content_temp, target_path) {
+            if backup_path.exists() {
+                let _ = std::fs::rename(&backup_path, target_path);
+            }
+            return Err(ArtifactError::Io(error.to_string()));
+        }
+        Some(backup_path)
+    } else {
+        None
+    };
+
+    if let Err(error) = std::fs::rename(manifest_temp, manifest_path) {
+        if let Some(backup_path) = backup_path.as_ref() {
+            let _ = std::fs::remove_file(target_path);
+            if backup_path.exists() {
+                let _ = std::fs::rename(backup_path, target_path);
+            }
+        }
+        return Err(ArtifactError::Io(error.to_string()));
+    }
+
+    if let Some(backup_path) = backup_path {
+        cleanup_temp_file(&backup_path);
+    }
+    Ok(())
+}
+
+fn commit_delete(
+    target_path: &Path,
+    manifest_temp: &Path,
+    manifest_path: &Path,
+) -> Result<(), ArtifactError> {
+    let backup_path = if target_path.exists() {
+        let backup_path = temp_path_for(target_path)?;
+        std::fs::rename(target_path, &backup_path)
+            .map_err(|error| ArtifactError::Io(error.to_string()))?;
+        Some(backup_path)
+    } else {
+        None
+    };
+
+    if let Err(error) = std::fs::rename(manifest_temp, manifest_path) {
+        if let Some(backup_path) = backup_path.as_ref() {
+            if backup_path.exists() {
+                let _ = std::fs::rename(backup_path, target_path);
+            }
+        }
+        return Err(ArtifactError::Io(error.to_string()));
+    }
+
+    if let Some(backup_path) = backup_path {
+        cleanup_temp_file(&backup_path);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,94 +382,4 @@ mod tests {
             let _ = std::fs::remove_dir_all(&self.path);
         }
     }
-}
-
-fn commit_create(
-    content_temp: &Path,
-    target_path: &Path,
-    manifest_temp: &Path,
-    manifest_path: &Path,
-) -> Result<(), ArtifactError> {
-    if let Some(parent) = target_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| ArtifactError::Io(error.to_string()))?;
-    }
-    std::fs::rename(content_temp, target_path)
-        .map_err(|error| ArtifactError::Io(error.to_string()))?;
-    if let Err(error) = std::fs::rename(manifest_temp, manifest_path) {
-        let _ = std::fs::remove_file(target_path);
-        return Err(ArtifactError::Io(error.to_string()));
-    }
-    Ok(())
-}
-
-fn commit_update(
-    content_temp: Option<&Path>,
-    target_path: &Path,
-    manifest_temp: &Path,
-    manifest_path: &Path,
-) -> Result<(), ArtifactError> {
-    let backup_path = if let Some(content_temp) = content_temp {
-        if let Some(parent) = target_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|error| ArtifactError::Io(error.to_string()))?;
-        }
-        let backup_path = temp_path_for(target_path)?;
-        if target_path.exists() {
-            std::fs::rename(target_path, &backup_path)
-                .map_err(|error| ArtifactError::Io(error.to_string()))?;
-        }
-        if let Err(error) = std::fs::rename(content_temp, target_path) {
-            if backup_path.exists() {
-                let _ = std::fs::rename(&backup_path, target_path);
-            }
-            return Err(ArtifactError::Io(error.to_string()));
-        }
-        Some(backup_path)
-    } else {
-        None
-    };
-
-    if let Err(error) = std::fs::rename(manifest_temp, manifest_path) {
-        if let Some(backup_path) = backup_path.as_ref() {
-            let _ = std::fs::remove_file(target_path);
-            if backup_path.exists() {
-                let _ = std::fs::rename(backup_path, target_path);
-            }
-        }
-        return Err(ArtifactError::Io(error.to_string()));
-    }
-
-    if let Some(backup_path) = backup_path {
-        cleanup_temp_file(&backup_path);
-    }
-    Ok(())
-}
-
-fn commit_delete(
-    target_path: &Path,
-    manifest_temp: &Path,
-    manifest_path: &Path,
-) -> Result<(), ArtifactError> {
-    let backup_path = if target_path.exists() {
-        let backup_path = temp_path_for(target_path)?;
-        std::fs::rename(target_path, &backup_path)
-            .map_err(|error| ArtifactError::Io(error.to_string()))?;
-        Some(backup_path)
-    } else {
-        None
-    };
-
-    if let Err(error) = std::fs::rename(manifest_temp, manifest_path) {
-        if let Some(backup_path) = backup_path.as_ref() {
-            if backup_path.exists() {
-                let _ = std::fs::rename(backup_path, target_path);
-            }
-        }
-        return Err(ArtifactError::Io(error.to_string()));
-    }
-
-    if let Some(backup_path) = backup_path {
-        cleanup_temp_file(&backup_path);
-    }
-    Ok(())
 }

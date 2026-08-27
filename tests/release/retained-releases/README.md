@@ -3,7 +3,7 @@
 This directory is the durable, immutable store of retained-release receipts:
 the exact production N-1 artifact identities Tier 4 update qualification
 starts from
-([`tier-4-scenario-contract.md`](../../../specs/engineering/testing/tier-4-scenario-contract.md)
+([`tier-4-scenario-contract.md`](../../../delivery/testing-cicd/archive/tier-4-scenario-contract.md)
 "Artifact Identity"). Local runs and GitHub Actions read the identical
 committed receipt — same checkout, same bytes, same logical retained set.
 

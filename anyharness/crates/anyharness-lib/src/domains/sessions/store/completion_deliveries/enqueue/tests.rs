@@ -17,7 +17,10 @@ use crate::persistence::Db;
 pub(super) const CLAIMED_AT: &str = "2026-08-11T00:02:00Z";
 pub(super) const RETRY_AT: &str = "2026-08-11T00:02:02Z";
 
-pub(super) fn claim(store: &CompletionDeliveryStore, lease_token: &str) -> CompletionDeliveryRecord {
+pub(super) fn claim(
+    store: &CompletionDeliveryStore,
+    lease_token: &str,
+) -> CompletionDeliveryRecord {
     store
         .claim_next_due(CLAIMED_AT, "2026-08-11T00:02:30Z", lease_token)
         .expect("claim")

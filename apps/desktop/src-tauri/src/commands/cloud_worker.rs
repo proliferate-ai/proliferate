@@ -397,7 +397,7 @@ fn worker_identity_exists(path: &Path) -> Result<bool, String> {
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     ) {
         Ok(connection) => connection,
-        Err(error) if matches!(error, rusqlite::Error::SqliteFailure(_, _)) => return Ok(false),
+        Err(rusqlite::Error::SqliteFailure(_, _)) => return Ok(false),
         Err(error) => {
             return Err(format!(
                 "Failed to inspect worker identity at {}: {error}",
@@ -441,6 +441,9 @@ fn acquire_worker_database_lock(database_path: &Path) -> Result<WorkerDatabaseLo
         .read(true)
         .write(true)
         .create(true)
+        // Lock files are contended by design; never truncate — another holder
+        // may have it open, and the byte content is unused.
+        .truncate(false)
         .open(&lock_path)
         .map_err(|error| {
             format!(

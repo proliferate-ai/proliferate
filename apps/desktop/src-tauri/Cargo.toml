@@ -1,6 +1,6 @@
 [package]
 name = "proliferate"
-version = "0.4.27"
+version = "0.4.29"
 edition.workspace = true
 
 [features]
@@ -67,3 +67,6 @@ objc2-foundation = { version = "0.3.2", features = [
   "NSProcessInfo",
   "NSString",
 ] }
+
+[lints]
+workspace = true

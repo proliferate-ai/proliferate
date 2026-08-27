@@ -89,7 +89,7 @@ fn omitted_bytes_are_zero_and_limit_uncertain_may_return_no_item() {
         validate_endpoint(
             "2026-08-12T00:00:00Z",
             EndpointCaptureState::Omitted,
-            Some(EndpointFailureReason::SessionTimeout),
+            Some(EndpointFailureReason::Timeout),
             1,
             &omitted,
             EVENTS_PER_SESSION,
@@ -109,7 +109,7 @@ fn omitted_bytes_are_zero_and_limit_uncertain_may_return_no_item() {
         validate_endpoint(
             "2026-08-12T00:00:00Z",
             EndpointCaptureState::LimitUncertain,
-            Some(EndpointFailureReason::SessionWindowLimitUncertain),
+            Some(EndpointFailureReason::WindowLimitUncertain),
             0,
             &uncertain,
             EVENTS_PER_SESSION,

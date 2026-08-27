@@ -33,7 +33,11 @@ async fn commands_return_projections_and_map_the_error_codes() {
         "docTemplates": [],
     }));
     let (status, projection) = fixture
-        .request(Method::PUT, &format!("/v1/workflow-runs/{run_id}"), Some(body))
+        .request(
+            Method::PUT,
+            &format!("/v1/workflow-runs/{run_id}"),
+            Some(body),
+        )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{projection}");
 
@@ -116,7 +120,11 @@ async fn fail_redo_answers_with_the_superseded_row_and_its_replacement() {
     let run_id = run_uuid(0x22);
     let body = fixture.snapshot(single_node_definition("blocking turn"));
     let (status, projection) = fixture
-        .request(Method::PUT, &format!("/v1/workflow-runs/{run_id}"), Some(body))
+        .request(
+            Method::PUT,
+            &format!("/v1/workflow-runs/{run_id}"),
+            Some(body),
+        )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{projection}");
     let wedged_row_id = projection["nodes"][0]["id"].as_str().expect("row id");
@@ -167,7 +175,11 @@ async fn flip_type_flips_a_pending_node_and_the_flip_governs_the_advance() {
         "docTemplates": [],
     }));
     let (status, projection) = fixture
-        .request(Method::PUT, &format!("/v1/workflow-runs/{run_id}"), Some(body))
+        .request(
+            Method::PUT,
+            &format!("/v1/workflow-runs/{run_id}"),
+            Some(body),
+        )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{projection}");
     let ship_row_id = projection["nodes"]
@@ -220,7 +232,11 @@ async fn undo_advance_and_resume_map_the_illegal_and_missing_codes() {
     let run_id = run_uuid(0x24);
     let body = fixture.snapshot(single_node_definition("blocking turn"));
     let (status, projection) = fixture
-        .request(Method::PUT, &format!("/v1/workflow-runs/{run_id}"), Some(body))
+        .request(
+            Method::PUT,
+            &format!("/v1/workflow-runs/{run_id}"),
+            Some(body),
+        )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{projection}");
 
@@ -276,7 +292,11 @@ async fn cancel_answers_with_the_cancelled_projection_and_disposes_the_running_s
     let run_id = run_uuid(0x27);
     let body = fixture.snapshot(single_node_definition("blocking turn"));
     let (status, projection) = fixture
-        .request(Method::PUT, &format!("/v1/workflow-runs/{run_id}"), Some(body))
+        .request(
+            Method::PUT,
+            &format!("/v1/workflow-runs/{run_id}"),
+            Some(body),
+        )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{projection}");
     let wedged_row_id = projection["nodes"][0]["id"].as_str().expect("row id");
@@ -330,7 +350,11 @@ async fn adhoc_nodes_launch_beside_the_chain_via_the_route() {
     let run_id = run_uuid(0x26);
     let body = fixture.snapshot(single_node_definition("blocking turn"));
     let (status, projection) = fixture
-        .request(Method::PUT, &format!("/v1/workflow-runs/{run_id}"), Some(body))
+        .request(
+            Method::PUT,
+            &format!("/v1/workflow-runs/{run_id}"),
+            Some(body),
+        )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{projection}");
     let anchor_row_id = projection["nodes"][0]["id"].as_str().expect("row id");

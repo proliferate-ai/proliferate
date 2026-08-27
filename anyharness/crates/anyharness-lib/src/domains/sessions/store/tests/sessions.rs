@@ -34,13 +34,7 @@ fn insert_or_find_by_id_reuses_the_original_session_row() {
     let basis_revision = || "basis-1".to_string();
     assert!(matches!(
         store
-            .insert_or_find_by_id(
-                &original,
-                &intent,
-                "claude",
-                &basis_revision,
-                &selection,
-            )
+            .insert_or_find_by_id(&original, &intent, "claude", &basis_revision, &selection,)
             .expect("insert original session"),
         (
             super::super::idempotent_create::InsertSessionByIdOutcome::Inserted,
@@ -51,13 +45,7 @@ fn insert_or_find_by_id_reuses_the_original_session_row() {
     let mut replay = original.clone();
     replay.agent_kind = "codex".to_string();
     let existing = store
-        .insert_or_find_by_id(
-            &replay,
-            &intent,
-            "claude",
-            &basis_revision,
-            &selection,
-        )
+        .insert_or_find_by_id(&replay, &intent, "claude", &basis_revision, &selection)
         .expect("find original session");
     let (
         super::super::idempotent_create::InsertSessionByIdOutcome::Existing {

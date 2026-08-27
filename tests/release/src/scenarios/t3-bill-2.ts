@@ -9,7 +9,7 @@ import { runBillingProbe, type DrainGrantsResult, type MeterRecords } from "../f
 
 /**
  * T3-BILL-2 — exhaustion gates: compute and LLM independently, no bypasses.
- * specs/engineering/testing/scenarios.md#T3-BILL-2
+ * tests/release/core-release-scenario-manifest.json#T3-BILL-2
  *
  * Drive the org's credits to exhaustion (grant manipulation allowed as *setup*
  * — the enforcement under test is the real deployed gate), then assert:
@@ -49,7 +49,7 @@ import { runBillingProbe, type DrainGrantsResult, type MeterRecords } from "../f
 export const t3Bill2: ScenarioDefinition = {
   id: "T3-BILL-2",
   title: "exhaustion gates — compute and LLM independently, no bypasses",
-  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-BILL-2",
+  registryFlowRef: "tests/release/core-release-scenario-manifest.json#T3-BILL-2",
   lanes: ["sandbox"],
   requiredEnv: [
     "RELEASE_E2E_SERVER_URL",

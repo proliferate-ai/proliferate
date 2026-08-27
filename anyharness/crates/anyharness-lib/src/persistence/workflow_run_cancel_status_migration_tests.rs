@@ -214,7 +214,10 @@ fn the_rebuild_admits_cancelled_status_and_preserves_existing_rows() {
          )",
         [],
     );
-    assert!(rejected.is_err(), "an unrecognized status must stay illegal");
+    assert!(
+        rejected.is_err(),
+        "an unrecognized status must stay illegal"
+    );
 }
 
 #[test]
@@ -225,18 +228,21 @@ fn the_rebuild_preserves_indexes_and_restores_clean_foreign_key_enforcement() {
 
     run_migrations(&mut conn).expect("apply 0070");
 
-    assert!(index_names(&conn, "workflow_runs").contains(&"idx_workflow_runs_workspace_id".to_string()));
     assert!(
-        index_names(&conn, "workflow_run_nodes")
-            .contains(&"idx_workflow_run_nodes_run_id".to_string())
+        index_names(&conn, "workflow_runs").contains(&"idx_workflow_runs_workspace_id".to_string())
     );
+    assert!(index_names(&conn, "workflow_run_nodes")
+        .contains(&"idx_workflow_run_nodes_run_id".to_string()));
 
     let foreign_keys_enabled: bool = conn
         .query_row("PRAGMA foreign_keys", [], |row| {
             row.get::<_, i64>(0).map(|value| value != 0)
         })
         .expect("query foreign key state");
-    assert!(foreign_keys_enabled, "foreign key enforcement must be restored");
+    assert!(
+        foreign_keys_enabled,
+        "foreign key enforcement must be restored"
+    );
 
     let fk_violations: i64 = conn
         .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {

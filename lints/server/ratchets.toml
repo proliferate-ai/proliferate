@@ -19,6 +19,11 @@ max_lines = 650
 reason = "THE renderer (agent_auth spec §4 cell 1): one file owns the full-desired-state document — gateway/api_key/provider_config source arms, the provider-config translation table, and seats v1's pool-expansion arm (_render_seat_sources: vault-order expansion, pinning, the claude-only defense) plus the input assembly; splitting the arms apart would split the one place the wire shape is decided"
 
 [[max_lines]]
+path = "server/proliferate/db/store/billing_subjects.py"
+max_lines = 761
+reason = "slice 5 signup-grant fix adds get_agent_gateway_free_credit_allocation_owner — the orphan-reclaim read resolving which subject holds a GitHub identity's free-credit claim today — beside the allocation helpers it reads; the safety-panel fix adds the identity-purity reads (public identity getter, per-subject allocation count with identity filter) and the identity-filtered allocation move; a billing-subject store split waits for the billing store taxonomy pass"
+
+[[max_lines]]
 path = "server/proliferate/db/store/organizations.py"
 max_lines = 721
 reason = "D1 adds get_default_organization_for_user (earliest active membership = signup placement org, the v1 payer law); SG09 review restores the collision-ladder and race-backstop rationale; SSO cull removed JIT membership persistence and slug login resolution; split pending with the org-store taxonomy pass"
@@ -34,14 +39,9 @@ max_lines = 665
 reason = "W-F2 period-boundary gate adds one guard clause (a billing_reason check plus its drop report and the hold-clear that must still run) to _handle_invoice_paid; the reporter and its context assembly live in webhook_drops.py. W-F5 drop visibility: the intake path was already 595/600 before this change, so threading the Stripe event id through the five handlers and adding one report call per silent early return cannot fit under the cap. The drop vocabulary, levels, paid-detection, and all per-reason context assembly were split out to webhook_drops.py to keep the growth to call sites only; splitting the handlers themselves is deferred to the billing service taxonomy pass rather than done inside an observability-only fix. Adversarial-review fix pass (MAJOR 1) adds a two-line reporter call at the dispatch fall-through's 13th silent drop (unhandled_event_type); billing error normalization changes only the direct error import"
 
 [[max_lines]]
-path = "server/proliferate/server/agent_auth/enrollment.py"
+path = "server/proliferate/server/ai_gateway/enrollment.py"
 max_lines = 630
 reason = "C-train composition re-attaches C-1 both-surface sync-completion pokes; D train: org-only ensure_signup_enrollment + per-(org,member) LiteLLM identity + fingerprint-driven per-key re-mint; shrank again when ensure_user_enrollment died (D-3), split pending"
-
-[[max_lines]]
-path = "server/proliferate/server/agent_auth/service.py"
-max_lines = 808
-reason = "delivery-ack hardening (server-bounded ack revision + trust-boundary docs) nudged the gateway service over the 800 server-layer cap; split pending with the service taxonomy pass; typed-config write gate threads the registry providerConfig vocabulary into the store put and pins R5's azure field set ; +21: FR-3 adds get_verification_verdicts reading the governing enrollment's per-harness gateway-enablement verdicts for the additive capabilities surface; PRO-129 splits put_harness_settings out to a dedicated harness_settings.py module (settings are not auth), pulling the file back down to 820"
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_api.py"
@@ -50,8 +50,13 @@ reason = "C-train composition; P1 auth rebuild rewrote keys/selections/state cov
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_enrollment.py"
-max_lines = 850
-reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D train rewrote the suite org-first (D1 proof, floor mirroring, signup shape); C-1 added the both-surfaces poke coverage"
+max_lines = 895
+reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D train rewrote the suite org-first (D1 proof, floor mirroring, signup shape); C-1 added the both-surfaces poke coverage; slice 5 adds the founder-org regression (one ensure_org_enrollment call leaves BOTH the enrollment row and the free_signup grant row — the grant is not a separable hook)"
+
+[[max_lines]]
+path = "server/tests/integration/test_agent_gateway_zero_grant_guard.py"
+max_lines = 1590
+reason = "slice 5's reclaim + guard proofs, then the safety-panel probes committed as regressions: paid-top-up orphan, second human's allocation on the orphan, destination-already-funded, non-paging classifications (no identity / invitee org), page-once-per-org, and the loop-cadence test; the re-audit round adds the TOCTOU abort (a grant landing in the window between the purity read and the ledger move) and the page/heal/re-break eviction proof; the third audit adds the destination-side window abort (the only place money could increase without entitlement), the usage-side window abort, and the truncated-feed eviction proof — each needs the full orphan+enrollment fixture plus a racing-move seam; the fourth pass adds the sweep-continues-after-a-race proof (two orgs, one racing, one healable); the rollback-regression repair adds the end-to-end durability proof, which needs its own committed fixture (own session factory, real worker entrypoint, fresh-session assertions) because the property it protects — that a rejected reclaim survives the worker's COMMIT — is invisible to a rolled-back fixture; the fifth pass adds its external-racer sibling (a SEPARATE session that COMMITS inside the window), the only shape that distinguishes rolling back our own write from rolling back the whole window, joined by a HOSTILE-CALLER probe (own transaction, catches the race, writes a marker, commits — standing in for every catch path present and future, with the post-catch marker proving the session survives ROLLBACK TO SAVEPOINT) and a no-catch signup-path probe; splits with the suite taxonomy pass"
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_migration.py"

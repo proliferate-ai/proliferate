@@ -7,10 +7,8 @@ use anyharness_contract::v1::{
     AgentAuthLoginHandoff, AgentAuthNextAction, AgentAuthProbeLifecycle, AgentAuthProbePhase,
     AgentAuthSelectionFact, AgentAuthStateSummary, AgentCliAuthState, AgentCredentialState,
     AgentInstallProgress, AgentInstallProgressComponent, AgentInstallProgressPhase,
-    AgentInstallState,
-    AgentLoginTerminalRecord, AgentLoginTerminalStatus, AgentMintCaptureStatus,
-    AgentReadinessState, AgentReconcileSummary,
-    AgentSummary, ArtifactStatus, InstallAgentRequest,
+    AgentInstallState, AgentLoginTerminalRecord, AgentLoginTerminalStatus, AgentMintCaptureStatus,
+    AgentReadinessState, AgentReconcileSummary, AgentSummary, ArtifactStatus, InstallAgentRequest,
     ReconcileAgentResult, ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
 };
 

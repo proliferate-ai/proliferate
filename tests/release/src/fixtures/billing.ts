@@ -3,7 +3,7 @@ import path from "node:path";
 
 /**
  * Billing fixture for T3-BILL-1 / T3-BILL-2
- * (specs/engineering/testing/scenarios.md).
+ * (tests/release/core-release-scenario-manifest.json).
  *
  * `ORG_COMPUTE_ATTRIBUTION_FIXED` is the single flag governing the compute
  * attribution assertion, mirroring `GITHUB_LINK_GATE_WORKAROUND_ACTIVE` in

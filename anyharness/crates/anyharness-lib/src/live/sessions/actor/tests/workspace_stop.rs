@@ -445,7 +445,7 @@ async fn stop_and_await_kills_the_real_process_group_including_a_git_grandchild(
 }
 
 /// The spec's native-resume soak, reduced to what tier 1 can prove without a
-/// real agent CLI or a live model (`specs/engineering/testing/standard.md`'s hard gate rule bars
+/// real agent CLI or a live model (`specs/engineering/testing/README.md`'s hard gate rule bars
 /// both from the merge gate): that the KILL escalation `stop_and_await`
 /// falls through to when TERM is ignored CAN truncate the dummy agent's
 /// own append-only output file mid-record, leaving a torn trailing line -

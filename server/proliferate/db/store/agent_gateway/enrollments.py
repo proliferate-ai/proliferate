@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -18,7 +20,7 @@ from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_SYNC_STATUS_PENDING,
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
 )
-from proliferate.db.models.agent_gateway import AgentGatewayEnrollment
+from proliferate.db.models.agent_gateway import AgentGatewayEnrollment, LlmCreditGrant
 from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.agent_gateway.enrollment_keys import revoke_enrollment_keys
 from proliferate.db.store.agent_gateway.mappers import enrollment_record
@@ -336,6 +338,86 @@ async def list_org_memberships_missing_enrollment(
         .limit(limit)
     )
     return [(org_id, user_id) for org_id, user_id in rows.all()]
+
+
+async def list_active_org_enrollments_with_zero_grants(
+    db: AsyncSession,
+    *,
+    older_than: datetime,
+    limit: int = 50,
+) -> list[AgentGatewayEnrollmentRecord]:
+    """Aged active org enrollments whose billing subject holds NO credit grant.
+
+    Feed for the zero-grant guard (ai_gateway spec, slice 5): a SYNCED
+    enrollment is never revisited by the backfill, so a signup whose
+    free-credit grant silently failed to land (e.g. the allocation stranded
+    on a deleted account's orphaned org subject) stays unfunded forever
+    without this sweep. ``older_than`` keeps the in-flight signup path (the
+    enrollment row lands in the same flow as the grant) out of the feed, and
+    zero ``llm_credit_grant`` rows of ANY source — free_signup, topup, admin,
+    seat_pool — is what distinguishes "never funded" from merely exhausted.
+    Newest first: old rows the guard classifies as unhealable must never
+    starve fresh breakage out of the ``limit`` window.
+    """
+    has_any_grant = (
+        select(LlmCreditGrant.id)
+        .where(LlmCreditGrant.billing_subject_id == AgentGatewayEnrollment.billing_subject_id)
+        .exists()
+    )
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayEnrollment)
+                .where(
+                    AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
+                    AgentGatewayEnrollment.revoked_at.is_(None),
+                    AgentGatewayEnrollment.created_at < older_than,
+                    ~has_any_grant,
+                )
+                .order_by(AgentGatewayEnrollment.created_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [enrollment_record(row) for row in rows]
+
+
+async def list_organization_ids_with_zero_grant_active_enrollments(
+    db: AsyncSession,
+    *,
+    organization_ids: Sequence[UUID],
+) -> list[UUID]:
+    """Which of the given orgs still hold a grantless active org enrollment.
+
+    Targeted companion of ``list_active_org_enrollments_with_zero_grants``,
+    for the zero-grant guard's paging-suppression bookkeeping: when the sweep
+    was TRUNCATED at its limit, an org's absence from the page proves nothing
+    (it may sit beyond the window), so the guard asks directly about the
+    specific orgs it is suppressing. Orgs that come back absent here have
+    been funded — in-pass or out of band — and may leave the suppression set.
+    """
+    if not organization_ids:
+        return []
+    has_any_grant = (
+        select(LlmCreditGrant.id)
+        .where(LlmCreditGrant.billing_subject_id == AgentGatewayEnrollment.billing_subject_id)
+        .exists()
+    )
+    rows = (
+        await db.execute(
+            select(AgentGatewayEnrollment.organization_id)
+            .where(
+                AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
+                AgentGatewayEnrollment.revoked_at.is_(None),
+                AgentGatewayEnrollment.organization_id.in_(tuple(organization_ids)),
+                ~has_any_grant,
+            )
+            .distinct()
+        )
+    ).scalars()
+    return [organization_id for organization_id in rows.all() if organization_id is not None]
 
 
 async def get_enrollment_by_virtual_key_id(

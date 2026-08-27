@@ -30,6 +30,81 @@
         }
       }
     },
+    "/v1/agent-auth/native-bridge": {
+      "get": {
+        "tags": [
+          "agent-auth"
+        ],
+        "operationId": "get_native_bridge",
+        "responses": {
+          "200": {
+            "description": "Harnesses still carrying the native-migration legacy flag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeBridgeResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Bridge file unreadable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent-auth/native-bridge/{kind}": {
+      "delete": {
+        "tags": [
+          "agent-auth"
+        ],
+        "summary": "The dismiss-to-configure act of the one-time prompt: drop one harness's\nlegacy flag so its next launch follows the real convention. Idempotent —\na harness without a flag answers 204 too.",
+        "operationId": "dismiss_native_bridge",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Harness kind",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Legacy flag cleared (or was not held)"
+          },
+          "400": {
+            "description": "Unknown harness kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Bridge file could not be written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agent-auth/state": {
       "put": {
         "tags": [
@@ -14241,6 +14316,27 @@
           },
           "updatedAt": {
             "type": "string"
+          }
+        }
+      },
+      "NativeBridgeResponse": {
+        "type": "object",
+        "description": "The native-migration bridge (agent_auth spec, delta row \"Zero rows =\nunconfigured, with a migration for today's native users\"): which harnesses\non this machine still carry the legacy flag that keeps their launches on\nthe harness's own login until the one-time prompt is acted on.",
+        "required": [
+          "seeded",
+          "harnesses"
+        ],
+        "properties": {
+          "harnesses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Harness kinds whose legacy flag is still pending, sorted."
+          },
+          "seeded": {
+            "type": "boolean",
+            "description": "True once the one-time seed pass (the runtime-side migration) has run\non this runtime home. False on a runtime that has not started with\nbridge-aware code yet."
           }
         }
       },

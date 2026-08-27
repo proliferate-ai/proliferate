@@ -168,13 +168,17 @@ mod tests {
     fn evaluate_health_requires_2xx() {
         assert!(evaluate_health(b"HTTP/1.1 200 OK\r\n\r\n", None));
         assert!(evaluate_health(b"HTTP/1.0 204 No Content\r\n\r\n", None));
-        assert!(!evaluate_health(b"HTTP/1.1 503 Service Unavailable\r\n\r\n", None));
+        assert!(!evaluate_health(
+            b"HTTP/1.1 503 Service Unavailable\r\n\r\n",
+            None
+        ));
         assert!(!evaluate_health(b"garbage", None));
     }
 
     #[test]
     fn evaluate_health_matches_version_when_present() {
-        let ok = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"version\":\"0.2.16\"}";
+        let ok =
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"version\":\"0.2.16\"}";
         assert!(evaluate_health(ok, Some("0.2.16")));
         assert!(!evaluate_health(ok, Some("0.2.15")));
         // 2xx without a recognizable version field is accepted.

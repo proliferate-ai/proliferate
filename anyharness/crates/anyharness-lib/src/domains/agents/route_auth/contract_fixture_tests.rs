@@ -3,7 +3,7 @@
 //! Python produces `fixtures/contracts/agent-auth-state/v2.json`
 //! (`materialize/agent_auth.py::render_agent_auth_state`); this side asserts we
 //! parse it and resolve it to the profiles the fixture's README claims. Per
-//! `specs/engineering/testing/standard.md`, changing the shape means changing the
+//! `specs/engineering/testing/README.md`, changing the shape means changing the
 //! fixture, which breaks whichever side has not caught up — the point is that the
 //! break is mechanical rather than a runtime surprise in a sandbox.
 //!
@@ -180,7 +180,10 @@ fn the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles() {
                 ResolvedSource::ProviderConfig(profile) => {
                     assert_eq!(profile.config_kind, "aws_bedrock");
                     assert_eq!(
-                        profile.env.get("AWS_BEARER_TOKEN_BEDROCK").map(String::as_str),
+                        profile
+                            .env
+                            .get("AWS_BEARER_TOKEN_BEDROCK")
+                            .map(String::as_str),
                         Some("bedrock-raw-0006")
                     );
                     assert_eq!(
@@ -215,7 +218,10 @@ fn the_contract_fixture_drives_a_real_launch_render() {
     .expect("the fixture must render a claude launch");
 
     assert_eq!(
-        rendered.set.get("CLAUDE_CODE_OAUTH_TOKEN").map(String::as_str),
+        rendered
+            .set
+            .get("CLAUDE_CODE_OAUTH_TOKEN")
+            .map(String::as_str),
         Some("sk-ant-oat01-Kx3mQ9rT5vW7yZ1aB2cD4eF6gH8jL0nP-seatAA"),
         "the seat's token, verbatim from the env map"
     );

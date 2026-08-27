@@ -69,9 +69,7 @@ def load_allowlist() -> dict[str, AllowEntry]:
 def is_test_file(relative_path: str) -> bool:
     name = Path(relative_path).name
     return (
-        name.endswith(".test.ts")
-        or name.endswith(".test.tsx")
-        or "/__tests__/" in relative_path
+        name.endswith(".test.ts") or name.endswith(".test.tsx") or "/__tests__/" in relative_path
     )
 
 
@@ -104,9 +102,7 @@ def main() -> int:
     ruleset = lint_records.load("frontend")
     rule = ruleset.rule(RULE_ID)
     if rule.enforced_by != CHECKER:
-        raise ValueError(
-            f"{RULE_ID}.enforced_by is {rule.enforced_by!r}, expected {CHECKER!r}"
-        )
+        raise ValueError(f"{RULE_ID}.enforced_by is {rule.enforced_by!r}, expected {CHECKER!r}")
 
     allowlist = load_allowlist()
     writers = iter_writer_files()
@@ -138,10 +134,7 @@ def main() -> int:
         return 0
 
     if diagnostics:
-        print(
-            "Scroll-position writers with no [[transcript_scroll_writer]] "
-            "allowlist entry:"
-        )
+        print("Scroll-position writers with no [[transcript_scroll_writer]] allowlist entry:")
         for diagnostic in diagnostics:
             print(diagnostic)
             print()
@@ -162,4 +155,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except ValueError as error:
         print(error, file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(2) from error

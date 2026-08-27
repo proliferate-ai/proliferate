@@ -22,11 +22,7 @@ pub struct RollbackPlan {
 }
 
 impl RollbackPlan {
-    pub fn new(
-        component: impl Into<String>,
-        active_path: PathBuf,
-        previous_path: PathBuf,
-    ) -> Self {
+    pub fn new(component: impl Into<String>, active_path: PathBuf, previous_path: PathBuf) -> Self {
         Self {
             component: component.into(),
             active_path,
@@ -41,10 +37,7 @@ impl RollbackPlan {
         if !self.previous_path.exists() {
             return Err(SupervisorError::Rollback {
                 component: self.component.clone(),
-                source: io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "no previous binary to restore",
-                ),
+                source: io::Error::new(io::ErrorKind::NotFound, "no previous binary to restore"),
             });
         }
         fs::rename(&self.previous_path, &self.active_path).map_err(|source| {
