@@ -249,10 +249,7 @@ mod tests {
             map_stop_reason(Completed, Some("max_turn_requests")),
             TurnStopReason::HarnessCap
         );
-        assert_eq!(
-            map_stop_reason(Completed, None),
-            TurnStopReason::CleanEndTurn
-        );
+        assert_eq!(map_stop_reason(Completed, None), TurnStopReason::CleanEndTurn);
         // The empty-turn reclassification: the only Failed that ends with a
         // clean end_turn stop (turn/finish.rs) is the zero-activity turn.
         assert_eq!(

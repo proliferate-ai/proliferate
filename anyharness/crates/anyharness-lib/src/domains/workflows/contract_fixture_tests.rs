@@ -12,8 +12,7 @@ use serde_json::Value;
 use super::definition::{InvocationSnapshot, WorkflowDefinition};
 
 fn fixtures_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../fixtures/contracts/workflow-definition")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/contracts/workflow-definition")
 }
 
 fn load(name: &str) -> Value {
@@ -27,8 +26,9 @@ fn load(name: &str) -> Value {
 fn valid_v2_fixtures_parse_and_validate() {
     for name in ["v2-full.json", "v2-minimal.json"] {
         let record = load(name);
-        let definition: WorkflowDefinition = serde_json::from_value(record["definition"].clone())
-            .unwrap_or_else(|error| panic!("{name}: definition must parse: {error}"));
+        let definition: WorkflowDefinition =
+            serde_json::from_value(record["definition"].clone())
+                .unwrap_or_else(|error| panic!("{name}: definition must parse: {error}"));
         definition
             .validate()
             .unwrap_or_else(|error| panic!("{name}: definition must validate: {error:?}"));
@@ -78,8 +78,8 @@ fn invalid_v2_fixtures_are_rejected_at_their_declared_layer() {
                 assert!(parsed.is_err(), "{name}: shape reject must fail to parse");
             }
             "structure" => {
-                let definition = parsed
-                    .unwrap_or_else(|error| panic!("{name}: structure reject must parse: {error}"));
+                let definition =
+                    parsed.unwrap_or_else(|error| panic!("{name}: structure reject must parse: {error}"));
                 assert!(
                     definition.validate().is_err(),
                     "{name}: structure reject must fail validate()"

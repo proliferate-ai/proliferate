@@ -243,7 +243,11 @@ async fn tail_file_loop(path: String, tx: mpsc::Sender<FeedFrame>) {
         }
 
         use tokio::io::AsyncSeekExt;
-        if file.seek(std::io::SeekFrom::Start(offset)).await.is_err() {
+        if file
+            .seek(std::io::SeekFrom::Start(offset))
+            .await
+            .is_err()
+        {
             continue;
         }
         let mut buf = vec![0u8; TAIL_READ_CHUNK];
@@ -355,8 +359,10 @@ mod tests {
 
     #[tokio::test]
     async fn tail_file_streams_existing_then_appended_bytes() {
-        let path =
-            std::env::temp_dir().join(format!("anyharness-feed-tail-{}.txt", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!(
+            "anyharness-feed-tail-{}.txt",
+            uuid::Uuid::new_v4()
+        ));
         tokio::fs::write(&path, b"hello").await.expect("seed file");
 
         let (service, binding) = feed_service_with_binding(FeedTransport::TailFile {

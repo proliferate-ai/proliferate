@@ -45,7 +45,8 @@ pub(in crate::live::sessions::actor) fn action_capabilities_from_acp(
     let fork_capability = agent_capabilities.session_capabilities.fork.as_ref();
     let fork = agent_capabilities.load_session && fork_capability.is_some();
     let targeted_fork_meta = fork_capability.and_then(|capability| capability.meta.as_ref());
-    let advertised_target = targeted_fork_meta.and_then(parse_anyharness_targeted_fork_extension);
+    let advertised_target =
+        targeted_fork_meta.and_then(parse_anyharness_targeted_fork_extension);
     let targeted_fork = fork
         && agent_kind == AgentKind::Claude.as_str()
         && advertised_target == Some(TargetedForkExtensionTarget::MessageId);
@@ -55,7 +56,11 @@ pub(in crate::live::sessions::actor) fn action_capabilities_from_acp(
             advertised_target = advertised_target
                 .map(TargetedForkExtensionTarget::as_str)
                 .unwrap_or("none"),
-            dispatch_status = targeted_fork_dispatch_status(agent_kind, fork, advertised_target,),
+            dispatch_status = targeted_fork_dispatch_status(
+                agent_kind,
+                fork,
+                advertised_target,
+            ),
             "classified ACP targeted fork capability"
         );
     }
@@ -304,9 +309,8 @@ mod tests {
         let agent_capabilities = acp::schema::AgentCapabilities::new()
             .load_session(true)
             .session_capabilities(session_capabilities);
-        let mut init_response =
-            acp::schema::InitializeResponse::new(acp::schema::ProtocolVersion::V1)
-                .agent_capabilities(agent_capabilities);
+        let mut init_response = acp::schema::InitializeResponse::new(acp::schema::ProtocolVersion::V1)
+            .agent_capabilities(agent_capabilities);
         init_response.meta = top_level_meta.map(init_meta);
         init_response
     }
@@ -364,13 +368,12 @@ mod tests {
             ("opencode", "message_id"),
             ("unknown-agent", "message_id"),
         ] {
-            let init_response =
-                init_response_with_fork(Some(strict_targeted_fork_capability(target)), None);
-            let capabilities = action_capabilities_from_acp(agent_kind, &init_response);
-            assert!(
-                capabilities.fork,
-                "base fork missing for {agent_kind}+{target}"
+            let init_response = init_response_with_fork(
+                Some(strict_targeted_fork_capability(target)),
+                None,
             );
+            let capabilities = action_capabilities_from_acp(agent_kind, &init_response);
+            assert!(capabilities.fork, "base fork missing for {agent_kind}+{target}");
             assert!(
                 !capabilities.targeted_fork,
                 "unexpected readiness for {agent_kind}+{target}"
@@ -402,7 +405,11 @@ mod tests {
     fn targeted_fork_observability_labels_are_bounded() {
         assert_eq!(bounded_agent_family("private-agent-value"), "unknown");
         assert_eq!(
-            targeted_fork_dispatch_status("codex", true, Some(TargetedForkExtensionTarget::TurnId),),
+            targeted_fork_dispatch_status(
+                "codex",
+                true,
+                Some(TargetedForkExtensionTarget::TurnId),
+            ),
             "adapter_target_mismatch"
         );
         assert_eq!(
@@ -420,8 +427,7 @@ mod tests {
                     "targetedFork": {"fileEffects": "none", "target": "message_id"},
                 },
             }))));
-        let session_capabilities =
-            acp::schema::SessionCapabilities::new().fork(Some(fork_capability));
+        let session_capabilities = acp::schema::SessionCapabilities::new().fork(Some(fork_capability));
         let agent_capabilities = acp::schema::AgentCapabilities::new()
             .load_session(false)
             .session_capabilities(session_capabilities);

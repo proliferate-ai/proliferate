@@ -36,9 +36,7 @@ fn a_managed_install_alongside_a_path_copy_leaves_the_path_copy_untouched() {
     // straight off the descriptor so this test tracks whichever shape the
     // registry actually declares for grok.
     let AgentProcessInstallSpec::RegistryBacked {
-        fallback: AgentProcessFallback::BinaryHint {
-            candidate_binaries, ..
-        },
+        fallback: AgentProcessFallback::BinaryHint { candidate_binaries, .. },
         ..
     } = &grok.agent_process.install
     else {
@@ -63,10 +61,7 @@ fn a_managed_install_alongside_a_path_copy_leaves_the_path_copy_untouched() {
     // the artifact an in-flight session would have spawned against.
     let before = resolve_agent_unrouted(&grok, &runtime_home);
     assert_eq!(before.agent_process.source.as_deref(), Some("path"));
-    assert_eq!(
-        before.agent_process.path.as_deref(),
-        Some(path_binary.as_path())
-    );
+    assert_eq!(before.agent_process.path.as_deref(), Some(path_binary.as_path()));
 
     // 2. A reconcile installs a managed copy alongside it (R2.0: no longer
     // skipped just because a PATH copy exists).
@@ -97,10 +92,7 @@ fn a_managed_install_alongside_a_path_copy_leaves_the_path_copy_untouched() {
         Some("managed"),
         "the next resolve must prefer the newly installed managed copy over the PATH copy"
     );
-    assert_eq!(
-        after.agent_process.path.as_deref(),
-        Some(managed_binary.as_path())
-    );
+    assert_eq!(after.agent_process.path.as_deref(), Some(managed_binary.as_path()));
 
     let _ = std::fs::remove_dir_all(&runtime_home);
     let _ = std::fs::remove_dir_all(&path_bin_dir);

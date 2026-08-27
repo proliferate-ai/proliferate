@@ -289,7 +289,8 @@ mod tests {
     }
 
     fn scratch(name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!("{name}-{}", uuid::Uuid::new_v4()));
+        let path =
+            std::env::temp_dir().join(format!("{name}-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&path).expect("scratch dir");
         path
     }
@@ -328,20 +329,11 @@ mod tests {
         // POSIX inode semantics: no kill, no wait.
         let mut old_bytes = String::new();
         held.read_to_string(&mut old_bytes).expect("read held fd");
-        assert!(
-            old_bytes.contains("/bin/echo-old"),
-            "old inode content survives"
-        );
+        assert!(old_bytes.contains("/bin/echo-old"), "old inode content survives");
 
         // No staged/previous residue is left behind after a clean promotion.
-        assert!(
-            !dir.join(".claude-launcher.next").exists(),
-            "no staged residue"
-        );
-        assert!(
-            !dir.join(".claude-launcher.previous").exists(),
-            "no previous residue"
-        );
+        assert!(!dir.join(".claude-launcher.next").exists(), "no staged residue");
+        assert!(!dir.join(".claude-launcher.previous").exists(), "no previous residue");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

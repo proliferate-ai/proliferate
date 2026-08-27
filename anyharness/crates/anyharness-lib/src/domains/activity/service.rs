@@ -6,8 +6,8 @@ use anyharness_contract::v1::{
 };
 
 use super::model::{
-    ActivityProcessRecord, ActivitySubagentRecord, FeedBindingRecord, FeedOwnerKind, FeedTransport,
-    ProcessRunStatus, SubagentRunStatus,
+    ActivityProcessRecord, ActivitySubagentRecord, FeedBindingRecord, FeedOwnerKind,
+    FeedTransport, ProcessRunStatus, SubagentRunStatus,
 };
 use super::store::ActivityStore;
 use super::wire::{
@@ -95,14 +95,8 @@ impl ActivityService {
                 (
                     session_id,
                     (
-                        processes
-                            .iter()
-                            .map(ActivityProcessRecord::to_contract)
-                            .collect(),
-                        subagents
-                            .iter()
-                            .map(ActivitySubagentRecord::to_contract)
-                            .collect(),
+                        processes.iter().map(ActivityProcessRecord::to_contract).collect(),
+                        subagents.iter().map(ActivitySubagentRecord::to_contract).collect(),
                     ),
                 )
             })
@@ -377,9 +371,7 @@ fn bind_feed(
         owner_kind,
         owner_id: owner_id.to_string(),
         transport: transport_from_wire(transport_wire),
-        created_at: existing
-            .map(|binding| binding.created_at)
-            .unwrap_or_else(|| now.clone()),
+        created_at: existing.map(|binding| binding.created_at).unwrap_or_else(|| now.clone()),
         updated_at: now,
     };
     ActivityStore::upsert_feed_binding(tx, &record)?;

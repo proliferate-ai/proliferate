@@ -297,11 +297,7 @@ async fn purge_converges_on_an_archived_workspace_whose_checkout_is_already_gone
     harness.seed_archive_refs("workspace-archived");
     let session_store = SessionStore::new(harness.state.db.clone());
     session_store
-        .insert(&session_record(
-            "session-archived",
-            "workspace-archived",
-            None,
-        ))
+        .insert(&session_record("session-archived", "workspace-archived", None))
         .expect("insert session");
     assert!(!path.exists());
     assert_eq!(harness.archive_ref_names("workspace-archived").len(), 3);
@@ -425,17 +421,11 @@ async fn purge_deletes_all_three_session_artifact_classes_and_the_row_dies_last(
         }
     );
     // Class 1: the native JSONL rollout file is gone.
-    assert!(
-        !rollout_path.exists(),
-        "native JSONL rollout must be deleted"
-    );
+    assert!(!rollout_path.exists(), "native JSONL rollout must be deleted");
     // Class 2: the session graph row is gone.
     assert!(!harness.session_row_exists(session_id));
     // Class 3: the prompt attachment directory is gone.
-    assert!(
-        !attachment_dir.exists(),
-        "attachment directory must be deleted"
-    );
+    assert!(!attachment_dir.exists(), "attachment directory must be deleted");
     // The row itself, deleted last of all.
     assert!(!harness.workspace_row_exists("workspace-artifacts"));
 }
@@ -500,10 +490,7 @@ async fn purge_enqueues_the_deferred_gc_even_when_the_inline_gc_is_skipped() {
         .await
         .expect("purge while a sibling flow holds the repo root");
 
-    let deferred = harness
-        .state
-        .workspace_archive_service
-        .deferred_gc_for_tests();
+    let deferred = harness.state.workspace_archive_service.deferred_gc_for_tests();
     assert!(
         deferred.iter().any(|path| path == &harness.repo_root),
         "a skipped inline gc must still enqueue the repo root for the sweep's follow-up gc: {deferred:?}"
@@ -539,10 +526,7 @@ async fn purge_runs_the_inline_gc_and_still_enqueues_the_deferred_gc_when_the_re
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
 
-    let deferred = harness
-        .state
-        .workspace_archive_service
-        .deferred_gc_for_tests();
+    let deferred = harness.state.workspace_archive_service.deferred_gc_for_tests();
     assert!(
         deferred.iter().any(|path| path == &harness.repo_root),
         "the purge-time gc reclaims essentially nothing for the deleted snapshot; the sweep's \

@@ -76,10 +76,7 @@ impl std::fmt::Display for WorkspacePurgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ControlledByWorkflow { run_id } => {
-                write!(
-                    f,
-                    "session execution is controlled by workflow run {run_id}"
-                )
+                write!(f, "session execution is controlled by workflow run {run_id}")
             }
             Self::SessionAppearedAfterAdmission { session_id } => write!(
                 f,
@@ -167,11 +164,7 @@ impl WorkspacePurgeService {
         // TERM-ignoring archive script needs — purge is strictly more
         // destructive than the cleanup it cancels, so pre-empting is always
         // correct.
-        if self
-            .archive
-            .cancel_phase2(workspace_id)
-            .await_completion()
-            .await
+        if self.archive.cancel_phase2(workspace_id).await_completion().await
             == Phase2CancelOutcome::TimedOut
         {
             tracing::warn!(
@@ -338,8 +331,7 @@ impl WorkspacePurgeService {
             let target = repo_root.clone();
             let workspace_id = workspace_id.to_string();
             tokio::spawn(async move {
-                let result =
-                    tokio::task::spawn_blocking(move || GitService::gc_repo(&target)).await;
+                let result = tokio::task::spawn_blocking(move || GitService::gc_repo(&target)).await;
                 match result {
                     Ok(Ok(())) => {}
                     Ok(Err(error)) => tracing::error!(

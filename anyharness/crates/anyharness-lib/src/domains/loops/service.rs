@@ -162,9 +162,7 @@ impl LoopService {
                 // Native crons own their own cadence — the emulated scheduler
                 // fields never apply to them.
                 max_fires: existing.as_ref().and_then(|existing| existing.max_fires),
-                next_fire_at_ms: existing
-                    .as_ref()
-                    .and_then(|existing| existing.next_fire_at_ms),
+                next_fire_at_ms: existing.as_ref().and_then(|existing| existing.next_fire_at_ms),
                 created_at: existing
                     .as_ref()
                     .map(|existing| existing.created_at.clone())
@@ -281,10 +279,7 @@ impl LoopService {
         }
         // Cap active emulated loops per session. Only a NEW loop counts — an
         // edit reuses an existing loop_id and must always be allowed through.
-        if self
-            .store
-            .find_one(&context.session_id, &spec.loop_id)?
-            .is_none()
+        if self.store.find_one(&context.session_id, &spec.loop_id)?.is_none()
             && self.store.list_active_emulated(&context.session_id)?.len()
                 >= MAX_ACTIVE_EMULATED_LOOPS
         {
@@ -406,8 +401,11 @@ impl LoopService {
                 let next_fire_at_ms = if retire {
                     None
                 } else {
-                    super::schedule::next_fire_at_ms(&existing.to_contract().schedule, fired_at_ms)
-                        .ok()
+                    super::schedule::next_fire_at_ms(
+                        &existing.to_contract().schedule,
+                        fired_at_ms,
+                    )
+                    .ok()
                 };
                 let status = if retire {
                     LoopStatus::Cleared
@@ -483,9 +481,7 @@ impl LoopService {
         for wire in wires {
             let mut ctx = context.clone();
             ctx.next_seq = seq;
-            let batch = self
-                .apply_upsert(ctx, wire, false)
-                .map_err(LoopIngestError::Store)?;
+            let batch = self.apply_upsert(ctx, wire, false).map_err(LoopIngestError::Store)?;
             seq += batch.envelopes.len() as i64;
             envelopes.extend(batch.envelopes);
         }

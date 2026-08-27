@@ -10,7 +10,8 @@ use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{
-    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceSurface,
 };
 use crate::domains::workspaces::options::{
     CreateWorkspaceFromOptionsInput, WorkspaceCreationMode, WorkspaceOptionRuntime,

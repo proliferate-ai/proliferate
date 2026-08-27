@@ -12,12 +12,12 @@ use url::form_urlencoded;
 
 use super::http::{
     agent_auth::{delete_agent_auth_state, put_agent_auth_state},
-    agent_launch_options, agents, auth as http_auth, catalogs, cowork, files, git, goals, health,
-    hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
-    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
-    sessions_prompt, sessions_resume, subagents, terminals, workflow_runs, workspaces,
-    workspaces_lifecycle, workspaces_purge, workspaces_restore, workspaces_setup,
-    workspaces_worktrees, worktrees,
+    agent_launch_options, agents, auth as http_auth, catalogs, cowork,
+    files, git, goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay,
+    repo_roots, reviews, sessions, sessions_config, sessions_events, sessions_fork,
+    sessions_interactions, sessions_lifecycle, sessions_prompt, sessions_resume, subagents,
+    terminals, workflow_runs, workspaces, workspaces_lifecycle, workspaces_purge,
+    workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;

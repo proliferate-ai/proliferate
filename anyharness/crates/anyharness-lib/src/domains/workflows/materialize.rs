@@ -27,10 +27,7 @@ pub struct PlannedContextDoc {
 
 /// Plan the context docs for a validated snapshot: one per template, filename
 /// from the one `NN-slug.md` law over the chain order `validate()` returned.
-pub fn plan_context_docs(
-    snapshot: &InvocationSnapshot,
-    chain: &[String],
-) -> Vec<PlannedContextDoc> {
+pub fn plan_context_docs(snapshot: &InvocationSnapshot, chain: &[String]) -> Vec<PlannedContextDoc> {
     snapshot
         .definition
         .doc_templates

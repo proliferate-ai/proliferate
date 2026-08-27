@@ -494,10 +494,7 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
         .and_then(|job| job.catalog.as_ref())
         .and_then(|catalog| catalog.pin_overrides("codex"))
         .expect("fresh job codex pins");
-    assert_eq!(
-        used_pins.agent_process.as_deref(),
-        Some(active_pin.as_str())
-    );
+    assert_eq!(used_pins.agent_process.as_deref(), Some(active_pin.as_str()));
     assert!(matches!(
         used_pins.agent_process_source,
         Some(ResolvedPinSource::Git { git_ref, .. }) if git_ref == active_git_ref

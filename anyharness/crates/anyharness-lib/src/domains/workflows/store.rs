@@ -66,12 +66,8 @@ pub struct CreatedRun {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedSideEffect {
     None,
-    StartNode {
-        node_row_id: String,
-    },
-    DisposeSession {
-        session_id: String,
-    },
+    StartNode { node_row_id: String },
+    DisposeSession { session_id: String },
     /// Ruling L's compound effect: a redo of a RUNNING node first disposes
     /// the session it took over from, then starts the minted replacement.
     DisposeThenStart {
@@ -81,9 +77,7 @@ pub enum ResolvedSideEffect {
     /// Cancel's compound effect: every running row's live session (chain node
     /// plus any concurrently running adhoc rows) is disposed; nothing starts
     /// after, since the run is terminal.
-    DisposeSessions {
-        session_ids: Vec<String>,
-    },
+    DisposeSessions { session_ids: Vec<String> },
 }
 
 #[derive(Debug, Clone)]
@@ -840,8 +834,9 @@ impl WorkflowStore {
     /// Every run row, newest first — the unfiltered list route.
     pub fn all_runs(&self) -> anyhow::Result<Vec<WorkflowRunRecord>> {
         self.db.with_tx_anyhow(|tx| {
-            let mut statement =
-                tx.prepare("SELECT * FROM workflow_runs ORDER BY created_at DESC, rowid DESC")?;
+            let mut statement = tx.prepare(
+                "SELECT * FROM workflow_runs ORDER BY created_at DESC, rowid DESC",
+            )?;
             let runs = statement
                 .query_map([], map_run)?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -849,7 +844,10 @@ impl WorkflowStore {
         })
     }
 
-    pub fn runs_for_workspace(&self, workspace_id: &str) -> anyhow::Result<Vec<WorkflowRunRecord>> {
+    pub fn runs_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Vec<WorkflowRunRecord>> {
         self.db.with_tx_anyhow(|tx| {
             let mut statement = tx.prepare(
                 "SELECT * FROM workflow_runs WHERE workspace_id = ?1

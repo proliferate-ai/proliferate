@@ -59,7 +59,10 @@ pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> Resol
 /// vendor CLI installed and logged in on this machine", which is what the login
 /// flow needs (an enrolled gateway route must not suppress the login command) and
 /// what the install path reports.
-pub fn resolve_agent_unrouted(descriptor: &AgentDescriptor, runtime_home: &Path) -> ResolvedAgent {
+pub fn resolve_agent_unrouted(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+) -> ResolvedAgent {
     resolve_agent_in_scope(descriptor, runtime_home, CredentialEnvScope::HostAmbient)
 }
 

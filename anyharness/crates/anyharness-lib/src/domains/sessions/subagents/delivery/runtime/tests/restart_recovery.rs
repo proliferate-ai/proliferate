@@ -200,3 +200,4 @@ async fn file_backed_closed_open_turn_is_repaired_by_restarted_worker() {
     drop(restarted);
     std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
 }
+

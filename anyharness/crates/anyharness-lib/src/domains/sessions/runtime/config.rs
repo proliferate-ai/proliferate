@@ -9,21 +9,26 @@ use super::{
 };
 
 fn map_live_config_apply_result(
-    result: Result<ConfigApplyState, LiveSessionCommandError<SetConfigOptionCommandError>>,
+    result: Result<
+        ConfigApplyState,
+        LiveSessionCommandError<SetConfigOptionCommandError>,
+    >,
 ) -> Result<ConfigApplyState, SetSessionConfigOptionError> {
     match result {
         Ok(apply_state) => Ok(apply_state),
-        Err(LiveSessionCommandError::ActorUnavailable) => Err(
-            SetSessionConfigOptionError::Internal(anyhow::anyhow!("session actor channel closed")),
-        ),
+        Err(LiveSessionCommandError::ActorUnavailable) => {
+            Err(SetSessionConfigOptionError::Internal(anyhow::anyhow!(
+                "session actor channel closed"
+            )))
+        }
         Err(LiveSessionCommandError::ResponseDropped) => {
             Err(SetSessionConfigOptionError::Internal(anyhow::anyhow!(
                 "session actor dropped config update response"
             )))
         }
-        Err(LiveSessionCommandError::Rejected(SetConfigOptionCommandError::Rejected(detail))) => {
-            Err(SetSessionConfigOptionError::Rejected(detail))
-        }
+        Err(LiveSessionCommandError::Rejected(SetConfigOptionCommandError::Rejected(
+            detail,
+        ))) => Err(SetSessionConfigOptionError::Rejected(detail)),
     }
 }
 

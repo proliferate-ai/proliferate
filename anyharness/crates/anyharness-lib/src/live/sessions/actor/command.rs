@@ -283,7 +283,8 @@ pub(in crate::live::sessions) enum SessionCommand {
     /// is process-local actor state.
     SidedoorTargetedFork {
         vendor_message_id: String,
-        respond_to: oneshot::Sender<Result<SidedoorForkCommandResult, SidedoorForkCommandError>>,
+        respond_to:
+            oneshot::Sender<Result<SidedoorForkCommandResult, SidedoorForkCommandError>>,
     },
     CloseNativeSession {
         native_session_id: String,

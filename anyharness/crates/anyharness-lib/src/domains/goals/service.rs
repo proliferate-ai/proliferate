@@ -139,9 +139,9 @@ impl GoalService {
                 self.apply_native_goal(context, kind, wire, source)
                     .map_err(GoalIngestError::Store)
             }
-            GoalNativeEventKind::Cleared => self
-                .apply_native_clear(context)
-                .map_err(GoalIngestError::Store),
+            GoalNativeEventKind::Cleared => {
+                self.apply_native_clear(context).map_err(GoalIngestError::Store)
+            }
         }
     }
 
@@ -161,19 +161,14 @@ impl GoalService {
                 } else {
                     GoalNativeEventKind::Updated
                 };
-                self.ingest_native_event_from(
-                    context,
-                    kind,
-                    Some(wire),
-                    GoalIngestSource::Reconcile,
-                )
+                self.ingest_native_event_from(context, kind, Some(wire), GoalIngestSource::Reconcile)
             }
             None => {
                 let current = self.store.find_current(&context.session_id)?;
                 match current {
-                    Some(goal) if !goal.status.is_terminal() => self
-                        .apply_native_clear(context)
-                        .map_err(GoalIngestError::Store),
+                    Some(goal) if !goal.status.is_terminal() => {
+                        self.apply_native_clear(context).map_err(GoalIngestError::Store)
+                    }
                     other => Ok(GoalEventBatch::unchanged(other)),
                 }
             }
@@ -207,10 +202,7 @@ impl GoalService {
                         token_budget: wire.token_budget,
                         tokens_used: wire.tokens_used,
                         time_used_seconds: wire.time_used_seconds,
-                        met_reason: wire
-                            .met_reason
-                            .clone()
-                            .or_else(|| existing.met_reason.clone()),
+                        met_reason: wire.met_reason.clone().or_else(|| existing.met_reason.clone()),
                         iterations: wire.iterations,
                         native: wire.native,
                         pending_op: None,
@@ -331,7 +323,9 @@ fn classify_goal_transition(
         // (`pending_op == Set`), either of which mints a genuinely new goal.
         return match source {
             GoalIngestSource::Reconcile => GoalTransition::Insert,
-            GoalIngestSource::Notification if existing.pending_op == Some(GoalPendingOp::Set) => {
+            GoalIngestSource::Notification
+                if existing.pending_op == Some(GoalPendingOp::Set) =>
+            {
                 GoalTransition::Insert
             }
             GoalIngestSource::Notification => GoalTransition::Drop,

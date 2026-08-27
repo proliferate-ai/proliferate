@@ -28,8 +28,8 @@ fn registry_rejects_empty_discovery_kind() {
         .discovery_kinds
         .push("  ".to_string());
 
-    let error =
-        validate_agent_registry_document(&registry).expect_err("empty discovery kind must fail");
+    let error = validate_agent_registry_document(&registry)
+        .expect_err("empty discovery kind must fail");
 
     assert!(
         error.to_string().contains("has empty discovery kind"),
@@ -111,10 +111,11 @@ fn registry_accepts_valid_direct_archive_and_rejects_bad_sha() {
             size: None,
         },
     );
-    registry.agents[0].agent_process.install = AgentRegistryAgentProcessInstall::DirectArchive {
-        platforms,
-        args: vec!["acp".to_string()],
-    };
+    registry.agents[0].agent_process.install =
+        AgentRegistryAgentProcessInstall::DirectArchive {
+            platforms,
+            args: vec!["acp".to_string()],
+        };
     validate_agent_registry_document(&registry)
         .expect("a well-formed direct_archive install must validate");
 
@@ -128,10 +129,11 @@ fn registry_accepts_valid_direct_archive_and_rejects_bad_sha() {
             size: None,
         },
     );
-    registry.agents[0].agent_process.install = AgentRegistryAgentProcessInstall::DirectArchive {
-        platforms: bad,
-        args: vec![],
-    };
+    registry.agents[0].agent_process.install =
+        AgentRegistryAgentProcessInstall::DirectArchive {
+            platforms: bad,
+            args: vec![],
+        };
     let error = validate_agent_registry_document(&registry)
         .expect_err("a bad direct_archive sha256 must fail");
     assert!(

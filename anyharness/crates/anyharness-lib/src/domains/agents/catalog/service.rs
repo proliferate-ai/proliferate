@@ -181,6 +181,7 @@ impl ActiveCatalog {
             .map(|agent| agent.session.supports_goals)
             .unwrap_or(false)
     }
+
 }
 
 #[cfg(test)]
@@ -206,7 +207,10 @@ mod pin_identity_tests {
         // never converges, forcing a reinstall on every startup reconcile.
         let sha = "3ff484e671de5fe9275d2e7596d683df06b99e14";
         let source = git_source(sha);
-        assert_eq!(pin_identity("0.44.0", Some(&source)), Some(sha.to_string()));
+        assert_eq!(
+            pin_identity("0.44.0", Some(&source)),
+            Some(sha.to_string())
+        );
     }
 
     #[test]

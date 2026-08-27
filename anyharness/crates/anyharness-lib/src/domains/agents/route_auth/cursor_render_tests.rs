@@ -66,10 +66,7 @@ fn cursor_api_key_honors_whatever_var_the_source_names() {
     let rendered =
         resolve_launch_route_auth(home.path(), "cursor", &HarnessPlanResolver).expect("render");
 
-    assert_eq!(
-        rendered.set.get("SOME_OTHER_CURSOR_VAR").unwrap(),
-        "cur-alt"
-    );
+    assert_eq!(rendered.set.get("SOME_OTHER_CURSOR_VAR").unwrap(), "cur-alt");
     assert!(!rendered.set.contains_key("CURSOR_API_KEY"));
 }
 

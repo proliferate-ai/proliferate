@@ -77,11 +77,7 @@ impl GatewayModelFetch for HttpGatewayModelFetch {
 
 impl GatewayModelPlanner {
     pub(crate) fn new(runtime_home: std::path::PathBuf) -> Self {
-        Self::with_parts(
-            runtime_home,
-            Arc::new(HttpGatewayModelFetch),
-            DEFAULT_PLAN_FETCH_TTL,
-        )
+        Self::with_parts(runtime_home, Arc::new(HttpGatewayModelFetch), DEFAULT_PLAN_FETCH_TTL)
     }
 
     pub(super) fn with_parts(
@@ -168,7 +164,10 @@ impl GatewayModelPlanner {
                 Some(models)
             }
             Ok(_) => {
-                tracing::warn!(harness = harness_kind, "gateway served an empty model list");
+                tracing::warn!(
+                    harness = harness_kind,
+                    "gateway served an empty model list"
+                );
                 None
             }
             Err(error) => {

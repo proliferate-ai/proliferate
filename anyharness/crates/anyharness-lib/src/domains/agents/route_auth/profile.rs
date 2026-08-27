@@ -358,10 +358,7 @@ mod tests {
     fn single_gateway_source_resolves() {
         let state = state(
             3,
-            vec![harness(
-                "claude",
-                vec![gateway_source("https://gw", "sk-vk")],
-            )],
+            vec![harness("claude", vec![gateway_source("https://gw", "sk-vk")])],
         );
         let profile = resolve_profile(Some(&state), "claude").expect("resolve");
         match profile {
@@ -530,10 +527,7 @@ mod tests {
                     ResolvedSource::ProviderConfig(profile) => {
                         assert_eq!(profile.config_kind, "aws_bedrock");
                         assert_eq!(
-                            profile
-                                .env
-                                .get("AWS_BEARER_TOKEN_BEDROCK")
-                                .map(String::as_str),
+                            profile.env.get("AWS_BEARER_TOKEN_BEDROCK").map(String::as_str),
                             Some("bedrock-raw")
                         );
                         assert_eq!(
@@ -552,10 +546,7 @@ mod tests {
     fn provider_config_with_empty_env_is_selection_incomplete() {
         let state = state(
             1,
-            vec![harness(
-                "opencode",
-                vec![provider_config_source("aws_bedrock", &[])],
-            )],
+            vec![harness("opencode", vec![provider_config_source("aws_bedrock", &[])])],
         );
         let error = resolve_profile(Some(&state), "opencode").expect_err("empty env");
         assert!(matches!(error, RouteAuthError::SelectionIncomplete { .. }));

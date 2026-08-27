@@ -359,13 +359,7 @@ fn delete_for_removes_exactly_its_own_id_and_leaves_siblings_and_rescue_intact()
     let head = init_repo(repo.path());
     let work_tree = make_tree(repo.path(), "w.txt", "w\n");
     let index_tree = make_tree(repo.path(), "i.txt", "i\n");
-    let snap_a = snapshot(
-        head.clone(),
-        work_tree.clone(),
-        index_tree.clone(),
-        None,
-        None,
-    );
+    let snap_a = snapshot(head.clone(), work_tree.clone(), index_tree.clone(), None, None);
     let snap_b = snapshot(head.clone(), work_tree, index_tree, None, None);
     write_archive_refs(repo.path(), "ws-a", &snap_a).expect("write a");
     write_archive_refs(repo.path(), "ws-b", &snap_b).expect("write b");
@@ -381,10 +375,7 @@ fn delete_for_removes_exactly_its_own_id_and_leaves_siblings_and_rescue_intact()
         .is_some());
 
     let rescue_head = format!("refs/proliferate/rescue/ws-a-{head}/archive-heads");
-    let resolved = stdout(
-        repo.path(),
-        &["show-ref", "--verify", "--hash", &rescue_head],
-    );
+    let resolved = stdout(repo.path(), &["show-ref", "--verify", "--hash", &rescue_head]);
     assert!(
         !resolved.is_empty(),
         "delete_for must leave the rescue family untouched"
@@ -490,13 +481,7 @@ fn delete_all_for_leaves_delete_fors_contract_intact_for_a_sibling_id() {
     let head = init_repo(repo.path());
     let work_tree = make_tree(repo.path(), "w.txt", "w\n");
     let index_tree = make_tree(repo.path(), "i.txt", "i\n");
-    let snap_a = snapshot(
-        head.clone(),
-        work_tree.clone(),
-        index_tree.clone(),
-        None,
-        None,
-    );
+    let snap_a = snapshot(head.clone(), work_tree.clone(), index_tree.clone(), None, None);
     let snap_b = snapshot(head.clone(), work_tree, index_tree, None, None);
     write_archive_refs(repo.path(), "ws-a", &snap_a).expect("write a");
     write_archive_refs(repo.path(), "ws-b", &snap_b).expect("write b");
@@ -510,11 +495,7 @@ fn delete_all_for_leaves_delete_fors_contract_intact_for_a_sibling_id() {
         .is_some());
     let sibling_rescue = format!("refs/proliferate/rescue/ws-b-{head}/archive-heads");
     assert!(
-        !stdout(
-            repo.path(),
-            &["show-ref", "--verify", "--hash", &sibling_rescue]
-        )
-        .is_empty(),
+        !stdout(repo.path(), &["show-ref", "--verify", "--hash", &sibling_rescue]).is_empty(),
         "delete_all_for must not touch a sibling id's rescue family"
     );
 
@@ -525,11 +506,7 @@ fn delete_all_for_leaves_delete_fors_contract_intact_for_a_sibling_id() {
         .expect("resolve_archive_refs")
         .is_none());
     assert!(
-        !stdout(
-            repo.path(),
-            &["show-ref", "--verify", "--hash", &sibling_rescue]
-        )
-        .is_empty(),
+        !stdout(repo.path(), &["show-ref", "--verify", "--hash", &sibling_rescue]).is_empty(),
         "delete_for still leaves rescue names alone; only delete_all_for clears them"
     );
 

@@ -189,22 +189,12 @@ fn render_gateway(
     let kind = parse_harness(harness_kind)?;
     match kind {
         AgentKind::Claude => render_claude_gateway(profile, plan, revision, runtime_home, rendered),
-        AgentKind::Codex => render_codex_gateway(
-            harness_kind,
-            profile,
-            plan,
-            revision,
-            runtime_home,
-            rendered,
-        ),
-        AgentKind::OpenCode => render_opencode_gateway(
-            harness_kind,
-            profile,
-            plan,
-            revision,
-            runtime_home,
-            rendered,
-        ),
+        AgentKind::Codex => {
+            render_codex_gateway(harness_kind, profile, plan, revision, runtime_home, rendered)
+        }
+        AgentKind::OpenCode => {
+            render_opencode_gateway(harness_kind, profile, plan, revision, runtime_home, rendered)
+        }
         AgentKind::Grok => render_grok_gateway(profile, revision, runtime_home, rendered),
         AgentKind::Cursor => Err(RouteAuthError::UnsupportedRoute {
             harness_kind: harness_kind.to_string(),
@@ -316,8 +306,11 @@ fn render_codex_gateway(
     // Isolated CODEX_HOME with a config.toml pointing at the proliferate
     // provider (wire_api=responses). The provider config references
     // PROLIFERATE_GATEWAY_KEY via env_key, so no `codex login` is needed.
-    let codex_home =
-        materialize::revision_dir_path(runtime_home, materialize::CODEX_HOME_PREFIX, revision);
+    let codex_home = materialize::revision_dir_path(
+        runtime_home,
+        materialize::CODEX_HOME_PREFIX,
+        revision,
+    );
     rendered.set("CODEX_HOME", path_string(&codex_home));
     rendered.set("PROLIFERATE_GATEWAY_KEY", &profile.key);
     // Ambient direct-provider keys would let the CLI bypass the provider
@@ -365,7 +358,9 @@ fn render_codex_gateway(
 enum CodexConfigRecipe<'a> {
     /// The managed gateway: a custom OpenAI-compatible provider whose key comes
     /// from `PROLIFERATE_GATEWAY_KEY` in the launch env.
-    Gateway { base_url: &'a str },
+    Gateway {
+        base_url: &'a str,
+    },
     /// Track D: the user's own AWS Bedrock account, via codex's built-in
     /// `amazon-bedrock` provider. The harness owns its no-override default.
     Bedrock,
@@ -438,15 +433,19 @@ fn render_opencode_gateway(
     if plan.models.is_empty() {
         return Err(RouteAuthError::SelectionIncomplete {
             harness_kind: harness_kind.to_string(),
-            detail: "opencode gateway requires a live target model observation".to_string(),
+            detail: "opencode gateway requires a live target model observation"
+                .to_string(),
         });
     }
     // opencode reads config from an explicit file path via OPENCODE_CONFIG. We
     // materialize opencode.json (provider proliferate, openai-compatible,
     // baseURL, apiKey {env:PROLIFERATE_GATEWAY_KEY}, explicit models map) into
     // an isolated dir and point OPENCODE_CONFIG at it.
-    let config_dir =
-        materialize::revision_dir_path(runtime_home, materialize::OPENCODE_CONFIG_PREFIX, revision);
+    let config_dir = materialize::revision_dir_path(
+        runtime_home,
+        materialize::OPENCODE_CONFIG_PREFIX,
+        revision,
+    );
     // Isolate XDG_CONFIG_HOME so opencode reads OUR injected provider config
     // (revision-keyed, deterministic) rather than the user's global
     // ~/.config/opencode. XDG_DATA_HOME is intentionally LEFT AMBIENT so that
@@ -599,7 +598,9 @@ fn render_provider_config(
             rendered.files.push(FileSpec {
                 path_family: PathFamily::CodexHome,
                 revision,
-                contents: Some(codex_config_toml(CodexConfigRecipe::Bedrock).into_bytes()),
+                contents: Some(
+                    codex_config_toml(CodexConfigRecipe::Bedrock).into_bytes(),
+                ),
             });
             Ok(())
         }

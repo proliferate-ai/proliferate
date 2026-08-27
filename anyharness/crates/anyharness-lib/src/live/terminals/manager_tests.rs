@@ -4,7 +4,8 @@ use std::sync::Arc;
 use super::*;
 use crate::domains::terminals::model::{CreateTerminalOptions, TerminalPurpose};
 use crate::domains::workspaces::model::{
-    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceSurface,
 };
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::persistence::Db;
@@ -298,7 +299,11 @@ async fn close_all_for_workspace_kills_several_terminals_within_one_grace_window
             .expect("lookup the terminal we just created");
         handle
             .write_input(
-                format!("trap '' TERM; touch {} ; sleep 300\n", marker.display()).as_bytes(),
+                format!(
+                    "trap '' TERM; touch {} ; sleep 300\n",
+                    marker.display()
+                )
+                .as_bytes(),
             )
             .await
             .expect("write into the interactive shell");
@@ -315,10 +320,7 @@ async fn close_all_for_workspace_kills_several_terminals_within_one_grace_window
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     }
-    assert_eq!(
-        service.list_terminals("workspace-fanout").await.len(),
-        TERMINALS
-    );
+    assert_eq!(service.list_terminals("workspace-fanout").await.len(), TERMINALS);
 
     let started = tokio::time::Instant::now();
     let kills = service

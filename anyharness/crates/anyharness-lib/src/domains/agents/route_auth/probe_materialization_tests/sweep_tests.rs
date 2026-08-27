@@ -63,10 +63,7 @@ fn the_sweep_removes_only_abandoned_and_old_scratch_roots() {
         dead_fresh.is_dir(),
         "a dead pid's FRESH scratch must survive the age gate"
     );
-    assert!(
-        !dead_old.exists(),
-        "a dead pid's old scratch must be removed"
-    );
+    assert!(!dead_old.exists(), "a dead pid's old scratch must be removed");
     assert!(removed.contains(&dead_old));
     if unparseable_aged {
         assert!(

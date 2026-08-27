@@ -15,21 +15,9 @@ fn targeted_fork_taxonomy_maps_to_stable_reasons() {
             StatusCode::BAD_REQUEST,
             "INVALID_FORK_TARGET",
         ),
-        (
-            ForkSessionError::TargetNotFound,
-            StatusCode::NOT_FOUND,
-            "TARGET_NOT_FOUND",
-        ),
-        (
-            ForkSessionError::BoundaryNotCommitted,
-            StatusCode::CONFLICT,
-            "BOUNDARY_NOT_COMMITTED",
-        ),
-        (
-            ForkSessionError::IdempotencyConflict,
-            StatusCode::CONFLICT,
-            "IDEMPOTENCY_CONFLICT",
-        ),
+        (ForkSessionError::TargetNotFound, StatusCode::NOT_FOUND, "TARGET_NOT_FOUND"),
+        (ForkSessionError::BoundaryNotCommitted, StatusCode::CONFLICT, "BOUNDARY_NOT_COMMITTED"),
+        (ForkSessionError::IdempotencyConflict, StatusCode::CONFLICT, "IDEMPOTENCY_CONFLICT"),
         (
             ForkSessionError::NativeOutcomeUnknown,
             StatusCode::CONFLICT,

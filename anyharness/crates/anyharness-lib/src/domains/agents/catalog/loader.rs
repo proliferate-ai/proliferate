@@ -18,8 +18,7 @@ mod tests {
 
     #[test]
     fn parses_and_validates_the_canonical_catalog() {
-        let document =
-            parse_agent_catalog_json(canonical_catalog_json()).expect("catalog must load");
+        let document = parse_agent_catalog_json(canonical_catalog_json()).expect("catalog must load");
 
         assert_eq!(document.schema_version, 2);
         assert_eq!(document.catalog_version, canonical_catalog_version());

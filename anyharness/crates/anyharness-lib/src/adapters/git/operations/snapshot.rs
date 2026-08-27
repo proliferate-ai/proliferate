@@ -63,9 +63,7 @@ impl WorkspaceSnapshot {
     /// The OID `archive-indexes/<id>` is written to (R2-4's symmetric
     /// extension of the same rule).
     pub fn index_tree_ref_oid(&self) -> &str {
-        self.index_tree_anchor
-            .as_deref()
-            .unwrap_or(&self.index_tree)
+        self.index_tree_anchor.as_deref().unwrap_or(&self.index_tree)
     }
 }
 
@@ -82,9 +80,7 @@ pub(super) fn ancestor_repo_guard(workspace_path: &Path) -> Result<(), SnapshotE
         .current_dir(&canonical_workspace)
         .args(["rev-parse", "--show-toplevel"])
         .output()
-        .map_err(|error| {
-            SnapshotError::Internal(anyhow::anyhow!("git rev-parse failed: {error}"))
-        })?;
+        .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git rev-parse failed: {error}")))?;
     if !output.status.success() {
         return Err(hollow());
     }
@@ -101,9 +97,7 @@ fn is_unborn_head(workspace_path: &Path) -> Result<bool, SnapshotError> {
         .current_dir(workspace_path)
         .args(["rev-parse", "--verify", "-q", "HEAD"])
         .output()
-        .map_err(|error| {
-            SnapshotError::Internal(anyhow::anyhow!("git rev-parse HEAD failed: {error}"))
-        })?;
+        .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git rev-parse HEAD failed: {error}")))?;
     Ok(!output.status.success())
 }
 
@@ -135,11 +129,7 @@ pub fn snapshot_workspace(workspace_path: &Path) -> Result<WorkspaceSnapshot, Sn
 
     let index_tree = git_write_tree(workspace_path, None)?;
     let (work_tree, mut notices, temp_index) = capture_work_tree(workspace_path, &index_tree)?;
-    notices.extend(detect_gitlink_notices(
-        workspace_path,
-        &work_tree,
-        &index_tree,
-    ));
+    notices.extend(detect_gitlink_notices(workspace_path, &work_tree, &index_tree));
 
     let has_lfs = detect_lfs_pointers(workspace_path, &temp_index, &work_tree);
     let _ = std::fs::remove_file(&temp_index);
@@ -178,19 +168,16 @@ fn anchor_label(workspace_path: &Path) -> String {
         .unwrap_or_else(|| "workspace".to_string())
 }
 
-fn git_write_tree(
-    workspace_path: &Path,
-    index_file: Option<&Path>,
-) -> Result<String, SnapshotError> {
+fn git_write_tree(workspace_path: &Path, index_file: Option<&Path>) -> Result<String, SnapshotError> {
     let mut cmd = Command::new("git");
     cmd.current_dir(workspace_path);
     if let Some(index_file) = index_file {
         cmd.env("GIT_INDEX_FILE", index_file);
     }
     cmd.arg("write-tree");
-    let output = cmd.output().map_err(|error| {
-        SnapshotError::Internal(anyhow::anyhow!("git write-tree failed to run: {error}"))
-    })?;
+    let output = cmd
+        .output()
+        .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git write-tree failed to run: {error}")))?;
     if output.status.success() {
         return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
     }
@@ -223,10 +210,7 @@ fn capture_work_tree(
     workspace_path: &Path,
     index_tree: &str,
 ) -> Result<(String, Vec<SnapshotNotice>, PathBuf), SnapshotError> {
-    let temp_index = std::env::temp_dir().join(format!(
-        "anyharness-snapshot-index-{}",
-        uuid::Uuid::new_v4()
-    ));
+    let temp_index = std::env::temp_dir().join(format!("anyharness-snapshot-index-{}", uuid::Uuid::new_v4()));
     // Seed by COPYING the real index when one exists: the copy carries git's
     // stat cache, so the `git add -A` below only re-hashes paths whose stat
     // data actually changed. A `read-tree` seed is tree-identical (index_tree
@@ -248,9 +232,7 @@ fn capture_work_tree(
             .env("LC_ALL", "C")
             .args(["ls-files", "-v", "-z"])
             .output()
-            .map_err(|error| {
-                SnapshotError::Internal(anyhow::anyhow!("git ls-files -v failed to run: {error}"))
-            })?;
+            .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git ls-files -v failed to run: {error}")))?;
         let skip_worktree_paths: Vec<String> = flagged
             .stdout
             .split(|byte| *byte == 0)
@@ -267,11 +249,9 @@ fn capture_work_tree(
                 .env("GIT_INDEX_FILE", &temp_index)
                 .args(["update-index", "--no-skip-worktree", "--"])
                 .args(&skip_worktree_paths);
-            let unset = unset.output().map_err(|error| {
-                SnapshotError::Internal(anyhow::anyhow!(
-                    "git update-index --no-skip-worktree failed to run: {error}"
-                ))
-            })?;
+            let unset = unset
+                .output()
+                .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git update-index --no-skip-worktree failed to run: {error}")))?;
             if !unset.status.success() {
                 return Err(SnapshotError::Internal(anyhow::anyhow!(
                     "git update-index --no-skip-worktree failed: {}",
@@ -285,9 +265,7 @@ fn capture_work_tree(
             .env("GIT_INDEX_FILE", &temp_index)
             .args(["read-tree", index_tree])
             .output()
-            .map_err(|error| {
-                SnapshotError::Internal(anyhow::anyhow!("git read-tree failed to run: {error}"))
-            })?;
+            .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git read-tree failed to run: {error}")))?;
         if !seed.status.success() {
             return Err(SnapshotError::Internal(anyhow::anyhow!(
                 "git read-tree failed: {}",
@@ -302,9 +280,7 @@ fn capture_work_tree(
         .env("LC_ALL", "C")
         .args(["add", "-A", "--ignore-errors"])
         .output()
-        .map_err(|error| {
-            SnapshotError::Internal(anyhow::anyhow!("git add failed to run: {error}"))
-        })?;
+        .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git add failed to run: {error}")))?;
     // `--ignore-errors` degrades hard failures to exit 1 with paths skipped;
     // any other nonzero exit is unexpected.
     if !add.status.success() && add.status.code() != Some(1) {
@@ -497,9 +473,7 @@ fn sniff_lfs_pointer_blobs(workspace_path: &Path, tree: &str) -> Option<bool> {
         if kind != "blob" {
             continue;
         }
-        let Ok(size) = size.parse::<u64>() else {
-            continue;
-        };
+        let Ok(size) = size.parse::<u64>() else { continue };
         if size > MAX_POINTER_SIZE {
             continue;
         }
@@ -537,9 +511,7 @@ fn create_anchor_commit(
             &format!("archive snapshot {label}"),
         ])
         .output()
-        .map_err(|error| {
-            SnapshotError::Internal(anyhow::anyhow!("git commit-tree failed to run: {error}"))
-        })?;
+        .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git commit-tree failed to run: {error}")))?;
     if !output.status.success() {
         return Err(SnapshotError::Internal(anyhow::anyhow!(
             "git commit-tree failed: {}",
@@ -571,9 +543,7 @@ fn git_rev_parse(workspace_path: &Path, rev: &str) -> Result<String, SnapshotErr
         .current_dir(workspace_path)
         .args(["rev-parse", rev])
         .output()
-        .map_err(|error| {
-            SnapshotError::Internal(anyhow::anyhow!("git rev-parse failed: {error}"))
-        })?;
+        .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git rev-parse failed: {error}")))?;
     if !output.status.success() {
         return Err(SnapshotError::Internal(anyhow::anyhow!(
             "git rev-parse {rev} failed: {}",

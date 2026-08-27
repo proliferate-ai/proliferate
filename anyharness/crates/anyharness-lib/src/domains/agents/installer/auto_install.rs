@@ -134,7 +134,8 @@ pub fn auto_install_decision_with_escape_hatch(
     installed_only: bool,
     facts: AgentInstallFacts,
 ) -> Result<(), AutoInstallSkip> {
-    if !always_managed_install_enabled() && facts.has_path_artifact && !facts.has_managed_artifact {
+    if !always_managed_install_enabled() && facts.has_path_artifact && !facts.has_managed_artifact
+    {
         return Err(AutoInstallSkip::UserProvidedOnPath);
     }
     auto_install_decision(kind, surface, installed_only, facts)

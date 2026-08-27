@@ -19,8 +19,8 @@ use super::router::build_router;
 use crate::app::{test_support, AppState};
 use crate::domains::repo_roots::model::CreateRepoRootInput;
 use crate::domains::sessions::runtime::prompt_message_actor_tests::{
-    build_state, install_scripted_agent_env, temp_runtime_home, write_scripted_agent, EnvVarGuard,
-    ScriptedAgent,
+    build_state, install_scripted_agent_env, temp_runtime_home, write_scripted_agent,
+    EnvVarGuard, ScriptedAgent,
 };
 use crate::domains::workflows::model::WorkflowRunStatus;
 use crate::domains::workspaces::managed_root::{
@@ -317,10 +317,7 @@ async fn put_places_a_run_idempotently_and_the_wire_shape_holds() {
     let (status, replay) = fixture.request(Method::PUT, &uri, Some(body)).await;
     assert_eq!(status, StatusCode::OK, "{replay}");
     assert_eq!(replay["run"]["id"], json!(run_id));
-    assert_eq!(
-        replay["run"]["workspaceId"],
-        projection["run"]["workspaceId"]
-    );
+    assert_eq!(replay["run"]["workspaceId"], projection["run"]["workspaceId"]);
     assert_eq!(
         replay["nodes"][0]["id"], projection["nodes"][0]["id"],
         "replay returns the stored rows, not fresh ones"
@@ -365,11 +362,7 @@ async fn put_rejects_bad_identities_and_bodies_as_invalid_snapshots() {
 
     // A non-UUID run id never reaches the path/branch laws (Ruling C).
     let (status, problem) = fixture
-        .request(
-            Method::PUT,
-            "/v1/workflow-runs/run-route",
-            Some(body.clone()),
-        )
+        .request(Method::PUT, "/v1/workflow-runs/run-route", Some(body.clone()))
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{problem}");
     assert_eq!(problem["code"], "WORKFLOW_SNAPSHOT_INVALID");
@@ -448,11 +441,7 @@ async fn reads_project_from_rows_and_the_list_envelope_filters() {
     assert_eq!(listed["runs"][0]["id"], json!(run_id));
 
     let (status, empty) = fixture
-        .request(
-            Method::GET,
-            "/v1/workflow-runs?workspace_id=elsewhere",
-            None,
-        )
+        .request(Method::GET, "/v1/workflow-runs?workspace_id=elsewhere", None)
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(empty["runs"].as_array().map(Vec::len), Some(0));
@@ -533,10 +522,7 @@ async fn put_emits_named_acceptance_and_materialization_events() {
         .lines()
         .find(|line| line.contains("anyharness.workflow_workspace_materialized"))
         .expect("named materialization event captured");
-    assert!(
-        materialized_line.contains("doc_count"),
-        "{materialized_line}"
-    );
+    assert!(materialized_line.contains("doc_count"), "{materialized_line}");
     assert!(
         materialized_line.contains(run_id.as_str()),
         "{materialized_line}"

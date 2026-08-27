@@ -2,9 +2,10 @@
 //! ride `?` through agents_errors.rs, wire mapping lives in agents_contract.rs.
 
 use anyharness_contract::v1::{
-    AgentLoginTerminalRecord, AgentSummary, InstallAgentRequest, InstallAgentResponse,
-    LoginCommand, ProblemDetails, ReconcileAgentsRequest, ReconcileAgentsResponse,
-    StartAgentLoginRequest, StartAgentLoginResponse, StartAgentLoginTerminalResponse,
+    AgentLoginTerminalRecord, AgentSummary, InstallAgentRequest,
+    InstallAgentResponse, LoginCommand, ProblemDetails, ReconcileAgentsRequest,
+    ReconcileAgentsResponse, StartAgentLoginRequest, StartAgentLoginResponse,
+    StartAgentLoginTerminalResponse,
 };
 use axum::{
     extract::{Path, State},
@@ -13,8 +14,8 @@ use axum::{
 };
 
 use super::agents_contract::{
-    agent_login_terminal_to_contract, install_request, reconcile_snapshot_to_contract,
-    to_installed_artifact_status, to_summary,
+    agent_login_terminal_to_contract, install_request,
+    reconcile_snapshot_to_contract, to_installed_artifact_status, to_summary,
 };
 use super::error::ApiError;
 use crate::app::AppState;

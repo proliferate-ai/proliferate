@@ -67,10 +67,7 @@ mod tests {
     fn open_statuses_keep_the_capability() {
         for status in ["starting", "idle", "running", "completed", "errored"] {
             assert!(
-                session_record_open_for_capability(
-                    &record("workspace-1", status, None),
-                    "workspace-1"
-                ),
+                session_record_open_for_capability(&record("workspace-1", status, None), "workspace-1"),
                 "status {status:?} should keep the capability",
             );
         }
@@ -100,9 +97,6 @@ mod tests {
     fn dismissed_sessions_keep_the_capability_until_closed() {
         let mut dismissed = record("workspace-1", "idle", None);
         dismissed.dismissed_at = Some("2026-08-16T01:00:00Z".to_string());
-        assert!(session_record_open_for_capability(
-            &dismissed,
-            "workspace-1"
-        ));
+        assert!(session_record_open_for_capability(&dismissed, "workspace-1"));
     }
 }

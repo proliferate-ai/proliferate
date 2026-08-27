@@ -232,9 +232,7 @@ fn every_skip_reason_has_a_distinct_message() {
     let distinct: std::collections::BTreeSet<_> = messages.iter().collect();
     assert_eq!(distinct.len(), messages.len());
     assert!(messages.iter().all(|message| !message.is_empty()));
-    assert!(AutoInstallSkip::UserProvidedOnPath
-        .message()
-        .contains("PATH"));
+    assert!(AutoInstallSkip::UserProvidedOnPath.message().contains("PATH"));
 }
 
 /// Sanity: the `facts` helper and the consts agree, so a future reader editing

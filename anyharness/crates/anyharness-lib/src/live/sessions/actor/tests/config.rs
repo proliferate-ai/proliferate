@@ -222,10 +222,12 @@ fn queue_accepts_live_snapshot_authorized_model_value_outside_raw_options() {
             &snapshot_to_record("session-1", &fable_snapshot).expect("serialize snapshot"),
         )
         .expect("persist Fable live snapshot");
-    assert!(
-        pending_model_is_in_latest_live_snapshot(&store, "session-1", "claude-fable-5")
-            .expect("read latest snapshot")
-    );
+    assert!(pending_model_is_in_latest_live_snapshot(
+        &store,
+        "session-1",
+        "claude-fable-5"
+    )
+    .expect("read latest snapshot"));
 
     let sonnet_snapshot = SessionLiveConfigSnapshot {
         models: vec![HarnessLaunchModel {
@@ -246,10 +248,12 @@ fn queue_accepts_live_snapshot_authorized_model_value_outside_raw_options() {
             &snapshot_to_record("session-1", &sonnet_snapshot).expect("serialize snapshot"),
         )
         .expect("replace live snapshot without Fable");
-    assert!(
-        !pending_model_is_in_latest_live_snapshot(&store, "session-1", "claude-fable-5")
-            .expect("read replacement snapshot")
-    );
+    assert!(!pending_model_is_in_latest_live_snapshot(
+        &store,
+        "session-1",
+        "claude-fable-5"
+    )
+    .expect("read replacement snapshot"));
 }
 
 #[test]

@@ -6,10 +6,7 @@ use serde_json::json;
 use super::service::{ActivityEventContext, ActivityService};
 use super::session_observer::ActivitySessionObserver;
 use super::store::ActivityStore;
-use super::wire::{
-    ActivityProcessStatusWire, ActivityProcessWire, ActivitySubagentStatusWire,
-    ActivitySubagentWire, FeedTransportWire,
-};
+use super::wire::{ActivityProcessStatusWire, ActivityProcessWire, ActivitySubagentStatusWire, ActivitySubagentWire, FeedTransportWire};
 use crate::app::test_support;
 use crate::live::sessions::model::{
     AcpChunkPayload, SessionEventObserver, SessionObservation, SessionObserverContext,
@@ -60,10 +57,7 @@ fn process_wire(id: &str, status: ActivityProcessStatusWire) -> ActivityProcessW
 fn ingest_process_upserted_creates_the_roster_row() {
     let service = test_service();
     let batch = service
-        .ingest_process_upserted(
-            context(1),
-            process_wire("proc-1", ActivityProcessStatusWire::Running),
-        )
+        .ingest_process_upserted(context(1), process_wire("proc-1", ActivityProcessStatusWire::Running))
         .expect("ingest process");
 
     assert_eq!(batch.envelopes.len(), 1);
@@ -74,9 +68,7 @@ fn ingest_process_upserted_creates_the_roster_row() {
     assert_eq!(payload.process.id, "proc-1");
     assert_eq!(payload.process.status, ProcessStatus::Running);
 
-    let processes = service
-        .current_processes("session-1")
-        .expect("load processes");
+    let processes = service.current_processes("session-1").expect("load processes");
     assert_eq!(processes.len(), 1);
     assert_eq!(processes[0].id, "proc-1");
 }
@@ -85,10 +77,7 @@ fn ingest_process_upserted_creates_the_roster_row() {
 fn ingest_process_upserted_transitions_running_to_exited() {
     let service = test_service();
     service
-        .ingest_process_upserted(
-            context(1),
-            process_wire("proc-1", ActivityProcessStatusWire::Running),
-        )
+        .ingest_process_upserted(context(1), process_wire("proc-1", ActivityProcessStatusWire::Running))
         .expect("ingest running");
 
     let mut exited = process_wire("proc-1", ActivityProcessStatusWire::Exited);
@@ -98,9 +87,7 @@ fn ingest_process_upserted_transitions_running_to_exited() {
         .ingest_process_upserted(context(2), exited)
         .expect("ingest exited");
 
-    let processes = service
-        .current_processes("session-1")
-        .expect("load processes");
+    let processes = service.current_processes("session-1").expect("load processes");
     assert_eq!(processes.len(), 1);
     assert_eq!(
         processes[0].status,
@@ -126,17 +113,11 @@ fn ingest_process_upserted_binds_a_stable_feed_ref_across_updates() {
 
     wire.status = ActivityProcessStatusWire::Exited;
     wire.exit_code = Some(0);
-    let second = service
-        .ingest_process_upserted(context(2), wire)
-        .expect("ingest again");
+    let second = service.ingest_process_upserted(context(2), wire).expect("ingest again");
     let SessionEvent::ActivityProcessUpserted(second_payload) = &second.envelopes[0].event else {
         panic!("expected process_upserted event");
     };
-    let second_feed = second_payload
-        .process
-        .feed
-        .clone()
-        .expect("feed ref still present");
+    let second_feed = second_payload.process.feed.clone().expect("feed ref still present");
     assert_eq!(second_feed.feed_id, feed.feed_id);
 }
 
@@ -220,13 +201,8 @@ fn observer_ingests_process_upserted_chunk() {
     );
 
     assert_eq!(effects.persisted_events.len(), 1);
-    assert_eq!(
-        effects.persisted_events[0].event.event_type(),
-        "process_upserted"
-    );
-    let processes = service
-        .current_processes("session-1")
-        .expect("load processes");
+    assert_eq!(effects.persisted_events[0].event.event_type(), "process_upserted");
+    let processes = service.current_processes("session-1").expect("load processes");
     assert_eq!(processes.len(), 1);
     assert!(processes[0].feed.is_some());
     // The fork emits `startedAtMs` (epoch-ms); the contract carries RFC3339.
@@ -261,10 +237,7 @@ fn observer_ingests_subagent_upserted_chunk() {
     );
 
     assert_eq!(effects.persisted_events.len(), 1);
-    assert_eq!(
-        effects.persisted_events[0].event.event_type(),
-        "subagent_upserted"
-    );
+    assert_eq!(effects.persisted_events[0].event.event_type(), "subagent_upserted");
     let agents = service.current_agents("session-1").expect("load agents");
     assert_eq!(agents.len(), 1);
     assert_eq!(
@@ -383,10 +356,7 @@ fn reconcile_roster_upserts_listed_processes_and_agents_with_increasing_seq() {
         .reconcile_roster(
             context(5),
             vec![process_wire("proc-1", ActivityProcessStatusWire::Running)],
-            vec![subagent_wire(
-                "agent-1",
-                ActivitySubagentStatusWire::Running,
-            )],
+            vec![subagent_wire("agent-1", ActivitySubagentStatusWire::Running)],
         )
         .expect("reconcile");
 

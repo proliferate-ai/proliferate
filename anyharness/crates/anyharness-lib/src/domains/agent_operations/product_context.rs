@@ -394,22 +394,13 @@ mod tests {
         let error = resolver
             .resolve_current_instruction("absent")
             .expect_err("missing session must fail closed");
-        assert_eq!(
-            error.class(),
-            AgentProductContextErrorClass::SessionNotFound
-        );
+        assert_eq!(error.class(), AgentProductContextErrorClass::SessionNotFound);
         assert_eq!(
             AgentProductContextErrorClass::SessionNotFound.as_str(),
             "session_not_found"
         );
-        assert_eq!(
-            AgentProductContextErrorClass::CrossWorkspace.as_str(),
-            "cross_workspace"
-        );
-        assert_eq!(
-            AgentProductContextErrorClass::StoreError.as_str(),
-            "store_error"
-        );
+        assert_eq!(AgentProductContextErrorClass::CrossWorkspace.as_str(), "cross_workspace");
+        assert_eq!(AgentProductContextErrorClass::StoreError.as_str(), "store_error");
     }
 
     #[test]

@@ -398,13 +398,11 @@ async fn app_state_launches_and_serves_workspace_mcp_for_an_eligible_session() {
     assert!(observed_claude["options"]["models"]
         .as_array()
         .is_some_and(|models| models.iter().any(|model| model["id"] == "haiku")));
-    assert!(
-        launch_options["result"]["structuredContent"]["presentation"]
-            .as_array()
-            .is_some_and(|harnesses| harnesses
-                .iter()
-                .any(|harness| harness["harnessKind"] == "claude"))
-    );
+    assert!(launch_options["result"]["structuredContent"]["presentation"]
+        .as_array()
+        .is_some_and(|harnesses| harnesses
+            .iter()
+            .any(|harness| harness["harnessKind"] == "claude")));
 
     let config_options = endpoint
         .dispatch(

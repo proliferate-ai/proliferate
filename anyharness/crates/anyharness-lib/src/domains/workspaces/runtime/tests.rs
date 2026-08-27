@@ -6,8 +6,8 @@ use super::test_support::{
 };
 use crate::adapters::git::GitService;
 use crate::domains::repo_roots::store::RepoRootStore;
-use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::branch_refresh::WorkspaceBranchRefreshCoordinator;
+use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceLifecycleState};
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::persistence::Db;

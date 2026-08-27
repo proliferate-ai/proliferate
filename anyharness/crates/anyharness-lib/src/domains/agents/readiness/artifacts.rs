@@ -287,10 +287,7 @@ fn uses_registry_binary_hint(install: &AgentProcessInstallSpec) -> bool {
 pub(super) fn agent_process_has_path_artifact(descriptor: &AgentDescriptor) -> bool {
     match &descriptor.agent_process.install {
         AgentProcessInstallSpec::RegistryBacked {
-            fallback:
-                AgentProcessFallback::BinaryHint {
-                    candidate_binaries, ..
-                },
+            fallback: AgentProcessFallback::BinaryHint { candidate_binaries, .. },
             ..
         } => candidate_binaries
             .iter()

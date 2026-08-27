@@ -189,7 +189,10 @@ fn ingest_cleared_transitions_and_emits_goal_cleared() {
         .ingest_native_event(context(2), GoalNativeEventKind::Cleared, None)
         .expect("ingest cleared");
 
-    assert_eq!(batch.goal.expect("goal record").status, GoalStatus::Cleared);
+    assert_eq!(
+        batch.goal.expect("goal record").status,
+        GoalStatus::Cleared
+    );
     assert_eq!(batch.envelopes.len(), 1);
     assert_eq!(batch.envelopes[0].event.event_type(), "goal_cleared");
     assert!(service
@@ -417,7 +420,10 @@ fn reconcile_null_clears_non_terminal_but_preserves_met() {
         .reconcile_native_state(context(4), None)
         .expect("reconcile null after met");
     assert!(untouched.envelopes.is_empty());
-    assert_eq!(untouched.goal.expect("goal record").status, GoalStatus::Met);
+    assert_eq!(
+        untouched.goal.expect("goal record").status,
+        GoalStatus::Met
+    );
 }
 
 #[test]

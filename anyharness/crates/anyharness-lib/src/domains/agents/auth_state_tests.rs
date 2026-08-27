@@ -77,10 +77,7 @@ fn a_green_trial_never_upgrades_a_non_gateway_credential() {
     let credential = facts.credential.as_ref().expect("byok credential");
     assert_eq!(credential.source, CredentialSource::ApiKeyByok);
     // The trial verifies a gateway key, so a green must NOT attach itself here.
-    assert_eq!(
-        credential.strength,
-        CredentialEvidenceStrength::BarePresence
-    );
+    assert_eq!(credential.strength, CredentialEvidenceStrength::BarePresence);
     assert!(credential.evidence_age_seconds.is_none());
     assert!(
         !derive_agent_auth_state(&facts).display.is_green(),
@@ -98,10 +95,7 @@ fn runtime_fold_marks_expired_on_an_expired_trial() {
     };
     let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
     assert!(facts.expired);
-    assert_eq!(
-        derive_agent_auth_state(&facts).display,
-        AuthDisplay::Expired
-    );
+    assert_eq!(derive_agent_auth_state(&facts).display, AuthDisplay::Expired);
 }
 
 #[test]
@@ -291,10 +285,7 @@ fn probing_when_queued() {
         probe: probe(ProbePhase::Queued, None, false),
         ..base_installed()
     };
-    assert_eq!(
-        derive_agent_auth_state(&facts).display,
-        AuthDisplay::Probing
-    );
+    assert_eq!(derive_agent_auth_state(&facts).display, AuthDisplay::Probing);
 }
 
 #[test]
@@ -501,8 +492,9 @@ fn invariant_every_green_output_carries_dated_evidence() {
                                                                     gateway,
                                                                     handoff: None,
                                                                 };
-                                                                let d =
-                                                                    derive_agent_auth_state(&facts);
+                                                                let d = derive_agent_auth_state(
+                                                                    &facts,
+                                                                );
                                                                 checked += 1;
                                                                 if d.display.is_green() {
                                                                     green_seen += 1;

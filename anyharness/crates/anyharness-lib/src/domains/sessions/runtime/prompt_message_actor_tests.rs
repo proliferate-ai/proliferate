@@ -334,14 +334,8 @@ pub(crate) fn build_state(runtime_home: &Path, db: Db, seed: bool) -> AppState {
             .store()
             .insert(&target)
             .expect("target");
-        state
-            .session_service
-            .store()
-            .seed_empty_launch_intent("caller");
-        state
-            .session_service
-            .store()
-            .seed_empty_launch_intent("target");
+        state.session_service.store().seed_empty_launch_intent("caller");
+        state.session_service.store().seed_empty_launch_intent("target");
     }
     state
 }

@@ -71,14 +71,7 @@ impl MaterializationRuntime {
         destination_path: &str,
     ) -> Result<AcquireRepoRootResult> {
         self.materialization_service
-            .acquire_repo_root(
-                operation_id,
-                provider,
-                owner,
-                name,
-                clone_url,
-                destination_path,
-            )
+            .acquire_repo_root(operation_id, provider, owner, name, clone_url, destination_path)
             .await
     }
 

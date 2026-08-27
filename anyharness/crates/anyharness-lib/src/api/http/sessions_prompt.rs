@@ -125,7 +125,9 @@ pub async fn prompt_session(
 
 const PROMPT_TITLE_MAX_CHARS: usize = 160;
 
-fn prompt_fallback_title(blocks: &[anyharness_contract::v1::PromptInputBlock]) -> Option<String> {
+fn prompt_fallback_title(
+    blocks: &[anyharness_contract::v1::PromptInputBlock],
+) -> Option<String> {
     let text = blocks.iter().find_map(|block| match block {
         anyharness_contract::v1::PromptInputBlock::Text { text } => {
             let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -202,9 +204,11 @@ mod tests {
 
     #[test]
     fn prompt_fallback_title_collapses_whitespace_and_caps_length() {
-        let blocks = vec![anyharness_contract::v1::PromptInputBlock::Text {
-            text: "  Fix\n\nthe   login \tflow  ".to_string(),
-        }];
+        let blocks = vec![
+            anyharness_contract::v1::PromptInputBlock::Text {
+                text: "  Fix\n\nthe   login \tflow  ".to_string(),
+            },
+        ];
         assert_eq!(
             prompt_fallback_title(&blocks).as_deref(),
             Some("Fix the login flow")

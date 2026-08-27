@@ -129,13 +129,7 @@ fn canonical_session_under_old_adapter_fails_closed_negative_control() {
     seed_workspace(&db);
     let store = SessionStore::new(db);
 
-    seed_legacy_fixture(
-        &store,
-        "codex-canonical",
-        "codex",
-        CODEX_CANONICAL,
-        "0.147.0",
-    );
+    seed_legacy_fixture(&store, "codex-canonical", "codex", CODEX_CANONICAL, "0.147.0");
 
     let marker = store
         .find_adapter_marker("codex-canonical")
@@ -158,13 +152,7 @@ fn durable_transcript_renders_regardless_of_marker_outcome() {
     seed_workspace(&db);
     let store = SessionStore::new(db);
 
-    seed_legacy_fixture(
-        &store,
-        "codex-canonical",
-        "codex",
-        CODEX_CANONICAL,
-        "0.147.0",
-    );
+    seed_legacy_fixture(&store, "codex-canonical", "codex", CODEX_CANONICAL, "0.147.0");
 
     let marker = store
         .find_adapter_marker("codex-canonical")

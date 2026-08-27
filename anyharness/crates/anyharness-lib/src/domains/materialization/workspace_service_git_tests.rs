@@ -255,10 +255,7 @@ async fn explicit_busy_destination_with_active_terminal_returns_workspace_busy()
         .await
         .expect_err("destination with an active terminal must fail");
     assert_eq!(error.code(), "WORKSPACE_BUSY");
-    assert_eq!(
-        error.to_string(),
-        "workspace is busy: workspace has active terminals"
-    );
+    assert_eq!(error.to_string(), "workspace is busy: workspace has active terminals");
 
     state
         .terminal_service

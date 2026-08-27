@@ -131,16 +131,12 @@ pub enum ActivitySubagentStatusWire {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FeedTransportWire {
-    TailFile {
-        path: String,
-    },
+    TailFile { path: String },
     AcpChildDemux {
         #[serde(rename = "threadId")]
         thread_id: String,
     },
-    HttpSse {
-        url: String,
-    },
+    HttpSse { url: String },
 }
 
 /// Lenient feed-transport parse. The two forks disagree on the `feed` object's

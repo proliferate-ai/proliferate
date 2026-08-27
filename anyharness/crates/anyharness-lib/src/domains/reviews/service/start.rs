@@ -118,7 +118,12 @@ impl ReviewService {
             .map_err(map_link_error)?;
         let launched = self
             .store
-            .update_assignment_launched(assignment_id, reviewer_session_id, &link.id, launch_status)
+            .update_assignment_launched(
+                assignment_id,
+                reviewer_session_id,
+                &link.id,
+                launch_status,
+            )
             .map_err(ReviewError::Internal)?;
         if !launched {
             self.link_service

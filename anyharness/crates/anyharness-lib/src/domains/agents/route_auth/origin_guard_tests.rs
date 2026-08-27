@@ -125,13 +125,9 @@ fn absent_current_origin_signal_still_injects_no_regression() {
         Some("https://proliferate.corp.example"),
     ));
 
-    let rendered = super::resolve_launch_route_auth_for_server(
-        home.path(),
-        "claude",
-        &HarnessPlanResolver,
-        None,
-    )
-    .expect("render");
+    let rendered =
+        super::resolve_launch_route_auth_for_server(home.path(), "claude", &HarnessPlanResolver, None)
+            .expect("render");
 
     assert_eq!(rendered.set.get("ANTHROPIC_AUTH_TOKEN").unwrap(), VK);
 }

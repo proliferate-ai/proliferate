@@ -197,11 +197,7 @@ mod tests {
             repo.path(),
             &["worktree", "add", "-b", "sibling", &sibling_string, "HEAD"],
         );
-        let registration = repo
-            .path()
-            .join(".git")
-            .join("worktrees")
-            .join("sibling-checkout");
+        let registration = repo.path().join(".git").join("worktrees").join("sibling-checkout");
         assert!(registration.exists(), "fixture must register the sibling");
         // The mid-choreography shape: the checkout is momentarily absent while
         // its registration is still live, which is what makes it prunable.

@@ -104,19 +104,11 @@ fn a_defined_row_resolves_through_the_frozen_definition() {
 fn no_pick_anywhere_falls_back_to_the_app_default() {
     assert_eq!(
         launch_model(&node(None, None), &definition_with_model(None)),
-        (
-            DEFAULT_WORKFLOW_AGENT_KIND.to_string(),
-            None,
-            Default::default()
-        )
+        (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, Default::default())
     );
     assert_eq!(
         launch_model(&node(None, Some("plan")), &definition_with_model(None)),
-        (
-            DEFAULT_WORKFLOW_AGENT_KIND.to_string(),
-            None,
-            Default::default()
-        )
+        (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, Default::default())
     );
 }
 

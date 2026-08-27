@@ -18,9 +18,7 @@ use std::process::Command;
 
 use super::operations::snapshot::snapshot_workspace;
 use super::operations::snapshot_restore::restore_trees;
-use crate::domains::workspaces::archive::refs::{
-    resolve_archive_refs, write_archive_refs, ArchiveRefShape,
-};
+use crate::domains::workspaces::archive::refs::{resolve_archive_refs, write_archive_refs, ArchiveRefShape};
 use uuid::Uuid;
 
 struct TempDirGuard {
@@ -147,12 +145,8 @@ fn round_trip_survives_aggressive_gc() {
     let restore_target = TempDirGuard::new("gc-basic-restore-target");
     let _ = fs::remove_dir_all(restore_target.path());
     add_linked_worktree(source.path(), restore_target.path(), "restored");
-    restore_trees(
-        restore_target.path(),
-        &resolved.work_tree,
-        &resolved.index_tree,
-    )
-    .expect("restore_trees after gc");
+    restore_trees(restore_target.path(), &resolved.work_tree, &resolved.index_tree)
+        .expect("restore_trees after gc");
 
     assert_eq!(status_porcelain(restore_target.path()), before_status);
     // `restore_trees` never touches HEAD; both the archived and restored
@@ -216,31 +210,19 @@ fn lfs_anchored_capture_survives_lfs_prune_and_restores_real_content() {
     run(workspace.path(), &["add", "asset.bin"]);
 
     let snap = snapshot_workspace(workspace.path()).expect("snapshot_workspace");
-    assert!(
-        snap.work_tree_anchor.is_some(),
-        "capture must detect LFS pointers and anchor Twork"
-    );
+    assert!(snap.work_tree_anchor.is_some(), "capture must detect LFS pointers and anchor Twork");
     // R2-4's symmetric extension: the staged tree (identical content here)
     // is anchored too.
-    assert!(
-        snap.index_tree_anchor.is_some(),
-        "R2-4: Tindex must be anchored too"
-    );
+    assert!(snap.index_tree_anchor.is_some(), "R2-4: Tindex must be anchored too");
 
     write_archive_refs(source.path(), "ws-gc-lfs", &snap).expect("write_archive_refs");
     let resolved_before_prune = resolve_archive_refs(source.path(), "ws-gc-lfs")
         .expect("resolve_archive_refs")
         .unwrap();
-    assert_eq!(
-        resolved_before_prune.work_tree_shape,
-        ArchiveRefShape::AnchorCommit
-    );
+    assert_eq!(resolved_before_prune.work_tree_shape, ArchiveRefShape::AnchorCommit);
 
     remove_linked_worktree(source.path(), workspace.path());
-    run(
-        source.path(),
-        &["lfs", "prune", "--force", "--verify-remote=false"],
-    );
+    run(source.path(), &["lfs", "prune", "--force", "--verify-remote=false"]);
 
     let resolved = resolve_archive_refs(source.path(), "ws-gc-lfs")
         .expect("resolve_archive_refs")
@@ -249,18 +231,11 @@ fn lfs_anchored_capture_survives_lfs_prune_and_restores_real_content() {
     let restore_target = TempDirGuard::new("gc-lfs-anchored-restore-target");
     let _ = fs::remove_dir_all(restore_target.path());
     add_linked_worktree(source.path(), restore_target.path(), "restored");
-    restore_trees(
-        restore_target.path(),
-        &resolved.work_tree,
-        &resolved.index_tree,
-    )
-    .expect("restore_trees after lfs prune");
+    restore_trees(restore_target.path(), &resolved.work_tree, &resolved.index_tree)
+        .expect("restore_trees after lfs prune");
 
     let restored = fs::read_to_string(restore_target.path().join("asset.bin")).unwrap();
-    assert_eq!(
-        restored, "large binary payload\n",
-        "the LFS object must survive prune"
-    );
+    assert_eq!(restored, "large binary payload\n", "the LFS object must survive prune");
 }
 
 // See the FOUNDER-FLAGGED CONTRADICTION comment above
@@ -322,10 +297,7 @@ fn suppressing_the_anchor_lets_lfs_prune_destroy_the_object_negative_control() {
     );
 
     remove_linked_worktree(source.path(), workspace.path());
-    run(
-        source.path(),
-        &["lfs", "prune", "--force", "--verify-remote=false"],
-    );
+    run(source.path(), &["lfs", "prune", "--force", "--verify-remote=false"]);
 
     let resolved = resolve_archive_refs(source.path(), "ws-gc-lfs-neg")
         .expect("resolve_archive_refs")
@@ -335,12 +307,8 @@ fn suppressing_the_anchor_lets_lfs_prune_destroy_the_object_negative_control() {
     let restore_target = TempDirGuard::new("gc-lfs-unanchored-restore-target");
     let _ = fs::remove_dir_all(restore_target.path());
     add_linked_worktree(source.path(), restore_target.path(), "restored");
-    restore_trees(
-        restore_target.path(),
-        &resolved.work_tree,
-        &resolved.index_tree,
-    )
-    .expect("restore_trees succeeds mechanically even though the LFS object is gone");
+    restore_trees(restore_target.path(), &resolved.work_tree, &resolved.index_tree)
+        .expect("restore_trees succeeds mechanically even though the LFS object is gone");
 
     // The restore "degrades": the checked-out file is the bare pointer
     // text, not the real payload, because the LFS backing object was

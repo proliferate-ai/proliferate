@@ -7,10 +7,7 @@ use crate::adapters::git::types::SnapshotError;
 /// Restore `workspace_path`'s disk and index to exactly what `snap` captured.
 /// Precondition, owned by the caller's scenario tiers: HEAD already sits at
 /// the archived SHA.
-pub fn restore_snapshot(
-    workspace_path: &Path,
-    snap: &WorkspaceSnapshot,
-) -> Result<(), SnapshotError> {
+pub fn restore_snapshot(workspace_path: &Path, snap: &WorkspaceSnapshot) -> Result<(), SnapshotError> {
     restore_trees(workspace_path, &snap.work_tree, &snap.index_tree)
 }
 
@@ -51,9 +48,7 @@ fn peel_to_tree(workspace_path: &Path, oid: &str) -> Result<String, SnapshotErro
         .current_dir(workspace_path)
         .args(["rev-parse", "--verify", &format!("{oid}^{{tree}}")])
         .output()
-        .map_err(|error| {
-            SnapshotError::Internal(anyhow::anyhow!("git rev-parse failed: {error}"))
-        })?;
+        .map_err(|error| SnapshotError::Internal(anyhow::anyhow!("git rev-parse failed: {error}")))?;
     if !output.status.success() {
         return Err(SnapshotError::Internal(anyhow::anyhow!(
             "could not resolve tree for {oid}: {}",

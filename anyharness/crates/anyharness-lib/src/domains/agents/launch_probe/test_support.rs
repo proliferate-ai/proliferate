@@ -12,7 +12,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::domains::agents::installer::manifest::{record_entries, ManifestArtifact};
-use crate::domains::agents::live_ports::{ProbeAttestation, ProbeModelEntry, ProbeSnapshot};
+use crate::domains::agents::live_ports::{
+    ProbeAttestation, ProbeModelEntry, ProbeSnapshot,
+};
 use crate::domains::agents::route_auth::{GatewayModelPlan, GatewayModelResolve};
 
 use super::probe::{ProbeError, ProbeRequest, ProbeRunner, COMPOSED_AUTH_CONTEXT_LABEL};

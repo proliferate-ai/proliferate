@@ -2,7 +2,8 @@ use super::*;
 use crate::domains::terminals::model::{TerminalCommandOutputMode, TerminalPurpose};
 use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workspaces::model::{
-    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
+    WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceSurface,
 };
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::persistence::Db;

@@ -99,9 +99,7 @@ fn quit_and_settle(workspace_path: &Path, sentinel: ConflictSentinel) {
         ConflictSentinel::Rebase => &["rebase", "--quit"],
         ConflictSentinel::CherryPick | ConflictSentinel::Sequencer => &["cherry-pick", "--quit"],
         ConflictSentinel::Revert => &["revert", "--quit"],
-        ConflictSentinel::Merge | ConflictSentinel::Bisect | ConflictSentinel::UnmergedEntries => {
-            &[]
-        }
+        ConflictSentinel::Merge | ConflictSentinel::Bisect | ConflictSentinel::UnmergedEntries => &[],
     };
     if !quit_args.is_empty() {
         let _ = run_git_ok(workspace_path, quit_args);
@@ -123,8 +121,8 @@ fn quit_and_settle(workspace_path: &Path, sentinel: ConflictSentinel) {
 /// rebase. Must run BEFORE `--quit`, which deletes the state dir.
 fn recover_pre_rebase_branch(workspace_path: &Path) -> Option<String> {
     for state_dir in ["rebase-apply", "rebase-merge"] {
-        let Some(head_name_path) =
-            resolve_worktree_git_path(workspace_path, state_dir).map(|dir| dir.join("head-name"))
+        let Some(head_name_path) = resolve_worktree_git_path(workspace_path, state_dir)
+            .map(|dir| dir.join("head-name"))
         else {
             continue;
         };
@@ -141,10 +139,7 @@ fn recover_pre_rebase_branch(workspace_path: &Path) -> Option<String> {
     None
 }
 
-fn conflict_sentinel_mtime(
-    workspace_path: &Path,
-    sentinel: ConflictSentinel,
-) -> Option<SystemTime> {
+fn conflict_sentinel_mtime(workspace_path: &Path, sentinel: ConflictSentinel) -> Option<SystemTime> {
     let name = match sentinel {
         ConflictSentinel::Merge => "MERGE_HEAD",
         ConflictSentinel::Rebase => {
@@ -186,8 +181,8 @@ pub(super) fn reap_lock_files(workspace_path: &Path, quiesce: &QuiesceReport) {
         let age = SystemTime::now()
             .duration_since(modified)
             .unwrap_or_default();
-        let should_reap = age >= ABANDONED_LOCK_AGE
-            || (quiesce.killed_git > 0 && modified < quiesce.completed_at);
+        let should_reap =
+            age >= ABANDONED_LOCK_AGE || (quiesce.killed_git > 0 && modified < quiesce.completed_at);
         if should_reap {
             let _ = std::fs::remove_file(&path);
         }

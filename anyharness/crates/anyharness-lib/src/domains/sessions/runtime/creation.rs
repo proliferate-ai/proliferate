@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
 use std::time::Instant;
+use std::collections::BTreeMap;
 
 use anyharness_contract::v1::SessionMcpBindingSummary;
 

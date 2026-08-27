@@ -147,10 +147,7 @@ fn the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles() {
                 ResolvedSource::ProviderConfig(profile) => {
                     assert_eq!(profile.config_kind, "aws_bedrock");
                     assert_eq!(
-                        profile
-                            .env
-                            .get("AWS_BEARER_TOKEN_BEDROCK")
-                            .map(String::as_str),
+                        profile.env.get("AWS_BEARER_TOKEN_BEDROCK").map(String::as_str),
                         Some("bedrock-raw-0006")
                     );
                     assert_eq!(

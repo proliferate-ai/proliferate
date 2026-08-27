@@ -27,9 +27,7 @@
 //! `Option` placeholders filled by later rungs. Modeling the types now is what
 //! lets the derivation handle them without a later shape change.
 
-use crate::domains::agents::model::{
-    CliAuthState, CredentialState, ResolvedAgent, ResolvedAgentStatus,
-};
+use crate::domains::agents::model::{CliAuthState, CredentialState, ResolvedAgent, ResolvedAgentStatus};
 
 // ---------------------------------------------------------------------------
 // Facts: orthogonal, surface-agnostic

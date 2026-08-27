@@ -201,7 +201,8 @@ mod tests {
     use crate::domains::sessions::mcp_bindings::product_launch::ProductMcpLaunchPhase;
     use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
     use crate::domains::workspaces::model::{
-        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceSurface,
     };
     use crate::integrations::mcp::product_server::{
         ProductMcpDefinition, ProductMcpPromptPolicy, ProductMcpVisibility,

@@ -48,7 +48,8 @@ fn dump_schema(conn: &Connection) -> rusqlite::Result<String> {
 }
 
 fn schema_snapshot_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../specs/areas/anyharness-db-schema.sql")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../specs/areas/anyharness-db-schema.sql")
 }
 
 fn assert_schema_snapshot_matches(actual: &str, expected: &str) {

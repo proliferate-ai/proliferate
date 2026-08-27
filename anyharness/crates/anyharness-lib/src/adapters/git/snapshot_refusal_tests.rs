@@ -88,19 +88,10 @@ fn diverge(path: &Path) {
 
 fn assert_refuses_and_untouched(path: &Path, before_status: &str, before_head: &str) {
     let probe_error = probe_refusals(path).expect_err("probe_refusals must refuse");
-    assert!(matches!(
-        probe_error,
-        SnapshotError::GitOperationInProgress { .. }
-    ));
+    assert!(matches!(probe_error, SnapshotError::GitOperationInProgress { .. }));
     let capture_error = snapshot_workspace(path).expect_err("snapshot_workspace must refuse");
-    assert!(matches!(
-        capture_error,
-        SnapshotError::GitOperationInProgress { .. }
-    ));
-    assert_eq!(
-        stdout(path, &["status", "--porcelain=v1", "-uall"]),
-        before_status
-    );
+    assert!(matches!(capture_error, SnapshotError::GitOperationInProgress { .. }));
+    assert_eq!(stdout(path, &["status", "--porcelain=v1", "-uall"]), before_status);
     assert_eq!(stdout(path, &["rev-parse", "HEAD"]), before_head);
 }
 
@@ -138,10 +129,7 @@ fn refuses_mid_rebase_merge_backend() {
     init_repo(repo.path());
     diverge(repo.path());
     // `--rebase-merges` forces the "merge" backend (`.git/rebase-merge/`).
-    assert!(!try_run(
-        repo.path(),
-        &["rebase", "--rebase-merges", "main"]
-    ));
+    assert!(!try_run(repo.path(), &["rebase", "--rebase-merges", "main"]));
     assert!(repo.path().join(".git/rebase-merge").exists());
 
     let before_status = stdout(repo.path(), &["status", "--porcelain=v1", "-uall"]);
@@ -169,11 +157,7 @@ fn refuses_mid_revert() {
     init_repo(repo.path());
     fs::write(repo.path().join("file.txt"), "second\n").unwrap();
     run(repo.path(), &["commit", "-am", "second"]);
-    fs::write(
-        repo.path().join("file.txt"),
-        "third, conflicts with revert\n",
-    )
-    .unwrap();
+    fs::write(repo.path().join("file.txt"), "third, conflicts with revert\n").unwrap();
     run(repo.path(), &["commit", "-am", "third"]);
     let second_sha = stdout(repo.path(), &["rev-parse", "HEAD~1"]);
     assert!(!try_run(repo.path(), &["revert", "--no-edit", &second_sha]));
@@ -195,11 +179,7 @@ fn refuses_multi_commit_sequencer() {
     let repo = TempDirGuard::new("refusal-sequencer");
     init_repo(repo.path());
     fs::create_dir_all(repo.path().join(".git/sequencer")).unwrap();
-    fs::write(
-        repo.path().join(".git/sequencer/todo"),
-        "pick deadbeef placeholder\n",
-    )
-    .unwrap();
+    fs::write(repo.path().join(".git/sequencer/todo"), "pick deadbeef placeholder\n").unwrap();
     assert!(repo.path().join(".git/sequencer").exists());
 
     let before_status = stdout(repo.path(), &["status", "--porcelain=v1", "-uall"]);
@@ -266,8 +246,7 @@ fn refuses_unborn_head_via_orphan_worktree() {
 
     let probe_error = probe_refusals(orphan.path()).expect_err("probe_refusals must refuse");
     assert!(matches!(probe_error, SnapshotError::UnbornHead));
-    let capture_error =
-        snapshot_workspace(orphan.path()).expect_err("snapshot_workspace must refuse");
+    let capture_error = snapshot_workspace(orphan.path()).expect_err("snapshot_workspace must refuse");
     assert!(matches!(capture_error, SnapshotError::UnbornHead));
 }
 
@@ -285,23 +264,11 @@ fn conflict_in_sibling_worktree_does_not_refuse_this_one_and_vice_versa() {
 
     run(
         source.path(),
-        &[
-            "worktree",
-            "add",
-            &conflicted.path().display().to_string(),
-            "topic",
-        ],
+        &["worktree", "add", &conflicted.path().display().to_string(), "topic"],
     );
     run(
         source.path(),
-        &[
-            "worktree",
-            "add",
-            "-b",
-            "clean-branch",
-            &clean.path().display().to_string(),
-            "main",
-        ],
+        &["worktree", "add", "-b", "clean-branch", &clean.path().display().to_string(), "main"],
     );
     fs::write(conflicted.path().join("file.txt"), "topic change\n").unwrap();
     run(conflicted.path(), &["commit", "-am", "topic change"]);
@@ -311,12 +278,8 @@ fn conflict_in_sibling_worktree_does_not_refuse_this_one_and_vice_versa() {
     // The clean sibling must not see the other worktree's conflict.
     probe_refusals(clean.path()).expect("sibling worktree's merge must not refuse this one");
     // And the conflicted worktree must still refuse on its own state.
-    let error =
-        probe_refusals(conflicted.path()).expect_err("must still refuse on its own conflict");
-    assert!(matches!(
-        error,
-        SnapshotError::GitOperationInProgress { .. }
-    ));
+    let error = probe_refusals(conflicted.path()).expect_err("must still refuse on its own conflict");
+    assert!(matches!(error, SnapshotError::GitOperationInProgress { .. }));
 }
 
 /// The `GitLocked` mapping is stat-conditional: `write-tree` exits 128 for a
@@ -334,7 +297,8 @@ fn write_tree_exit_128_without_an_index_lock_is_not_reported_as_git_locked() {
         "the negative control requires that no lock file exists"
     );
 
-    let error = snapshot_workspace(repo.path()).expect_err("a corrupt index must fail the capture");
+    let error =
+        snapshot_workspace(repo.path()).expect_err("a corrupt index must fail the capture");
     match error {
         SnapshotError::Internal(_) => {}
         other => panic!("expected the retryable Internal error, got {other:?}"),
@@ -353,15 +317,9 @@ fn ancestor_repo_guard_refuses_a_hollow_checkout_under_a_git_controlled_parent()
     let probe_error = probe_refusals(&nested).expect_err("must refuse a hollow checkout");
     assert!(matches!(probe_error, SnapshotError::HollowCheckout { .. }));
     let capture_error = snapshot_workspace(&nested).expect_err("must refuse a hollow checkout");
-    assert!(matches!(
-        capture_error,
-        SnapshotError::HollowCheckout { .. }
-    ));
+    assert!(matches!(capture_error, SnapshotError::HollowCheckout { .. }));
 
     // The ancestor repository itself must be untouched: nothing snapshotted
     // or restored into the wrong repo.
-    assert_eq!(
-        stdout(parent.path(), &["status", "--porcelain=v1"]),
-        before_status
-    );
+    assert_eq!(stdout(parent.path(), &["status", "--porcelain=v1"]), before_status);
 }

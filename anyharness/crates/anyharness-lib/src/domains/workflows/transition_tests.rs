@@ -995,10 +995,7 @@ fn fail_and_redo_on_paused_adhoc_mints_an_adhoc_replacement() {
         assert_eq!(replacement.anchor_node_row_id.as_deref(), Some("n2"));
         assert_eq!(replacement.replaces_node_row_id.as_deref(), Some("a1"));
         assert_eq!(
-            replacement
-                .model
-                .as_ref()
-                .and_then(|model| model.model_id.as_deref()),
+            replacement.model.as_ref().and_then(|model| model.model_id.as_deref()),
             Some("adhoc-pick")
         );
         assert_eq!(disposed_session_id, None);

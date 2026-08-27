@@ -33,7 +33,9 @@ use std::{
 
 use proliferate_diagnostics_protocol::v1::{
     limits::CURRENT_SCHEMA_VERSION,
-    types::{ConnectionDescriptorV1, ProtectedTokenReferenceV1, TokenReferenceKindV1},
+    types::{
+        ConnectionDescriptorV1, ProtectedTokenReferenceV1, TokenReferenceKindV1,
+    },
 };
 
 use super::{
@@ -147,10 +149,7 @@ async fn wire_generation_ready_reattaches_and_routes_the_abandoned_queue() {
     let inner = super::tests_support::producer(
         DiagnosticsComponent::AnyHarness,
         CollectorAvailability::Ready(Arc::new(old.generation(1))),
-        Some(fallback_writer(
-            &directory,
-            DiagnosticsComponent::AnyHarness,
-        )),
+        Some(fallback_writer(&directory, DiagnosticsComponent::AnyHarness)),
     );
 
     // Boot the producer over the real fd bridge for generation 1 (old fixture).
@@ -185,14 +184,8 @@ async fn wire_generation_ready_reattaches_and_routes_the_abandoned_queue() {
     // Two ordinary records queue behind the stalled in-flight request: a
     // non-empty in-flight set blocks all further dispatch, so they are still
     // resident when the generation advances.
-    assert_eq!(
-        emit(&inner, ordinary("queued-1")),
-        EmitDisposition::Admitted
-    );
-    assert_eq!(
-        emit(&inner, ordinary("queued-2")),
-        EmitDisposition::Admitted
-    );
+    assert_eq!(emit(&inner, ordinary("queued-1")), EmitDisposition::Admitted);
+    assert_eq!(emit(&inner, ordinary("queued-2")), EmitDisposition::Admitted);
     assert!(
         wait_for(|| super::tests_support::queued_sequences(&inner) == vec![2, 3]).await,
         "ordinary records queue behind the stalled request"
@@ -265,39 +258,24 @@ async fn wire_generation_ready_reattaches_and_routes_the_abandoned_queue() {
         .iter()
         .map(|record| record.producer_sequence)
         .collect();
-    assert_eq!(
-        delivered,
-        vec![4],
-        "only the post-swap record reaches the new collector"
-    );
+    assert_eq!(delivered, vec![4], "only the post-swap record reaches the new collector");
 
     let snapshot = inner.snapshot();
     assert_eq!(snapshot.fallback_routed, 3);
-    assert!(
-        !snapshot.delivery_fence_eligible,
-        "an in-flight swap poisons the fence"
-    );
+    assert!(!snapshot.delivery_fence_eligible, "an in-flight swap poisons the fence");
 
     // A stale frame (generation <= current) is ignored: its capability is
     // consumed, the generation does not change, and no new work is dispatched.
     let (_stale_writer, stale_inherited) = capability_channel();
     send_frame_until(
         &parent,
-        &generation_ready(
-            2,
-            new.endpoint(),
-            NEW_COLLECTOR_BOOT,
-            stale_inherited.as_raw_fd(),
-        ),
+        &generation_ready(2, new.endpoint(), NEW_COLLECTOR_BOOT, stale_inherited.as_raw_fd()),
         &[stale_inherited.as_raw_fd()],
         Instant::now() + CHILD_BOOTSTRAP_READ_DEADLINE,
     )
     .expect("stale generation-ready frame");
 
-    assert_eq!(
-        emit(&inner, protected("after-stale")),
-        EmitDisposition::Admitted
-    );
+    assert_eq!(emit(&inner, protected("after-stale")), EmitDisposition::Admitted);
     assert!(
         wait_for(|| new
             .records()

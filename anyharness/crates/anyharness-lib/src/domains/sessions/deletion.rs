@@ -109,10 +109,9 @@ impl SessionDeleteWorkflow {
         // a leftover attachment directory after the durable (DB + JSONL)
         // cleanup has already succeeded is logged, not fatal, matching the
         // old purge's same tolerance for this exact step.
-        let attachment_storage =
-            crate::domains::sessions::attachment_storage::PromptAttachmentStorage::new(
-                runtime_home.to_path_buf(),
-            );
+        let attachment_storage = crate::domains::sessions::attachment_storage::PromptAttachmentStorage::new(
+            runtime_home.to_path_buf(),
+        );
         for session in &sessions {
             if let Err(error) = attachment_storage.delete_session_dir(&session.id) {
                 tracing::warn!(

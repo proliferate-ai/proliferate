@@ -1514,29 +1514,18 @@ async fn launch_probe_status_route_serves_one_composed_observation() {
     let payload: Value = serde_json::from_slice(&body).expect("parse response json");
 
     assert_eq!(payload["harnessKind"], json!("opencode"));
-    assert!(payload["basisRevision"]
-        .as_str()
-        .is_some_and(|value| !value.is_empty()));
+    assert!(payload["basisRevision"].as_str().is_some_and(|value| !value.is_empty()));
     assert_eq!(payload["revision"], json!(0));
     assert!(
         matches!(
             payload["state"].as_str(),
-            Some("detecting")
-                | Some("refreshing")
-                | Some("observed")
-                | Some("observed_empty")
-                | Some("last_good_after_failure")
+            Some("detecting") | Some("refreshing") | Some("observed")
+                | Some("observed_empty") | Some("last_good_after_failure")
                 | Some("failed_without_observation")
         ),
         "state must be the launch-options service's live state"
     );
-    for banned in [
-        "contexts",
-        "authFingerprint",
-        "authContextId",
-        "models",
-        "modes",
-    ] {
+    for banned in ["contexts", "authFingerprint", "authContextId", "models", "modes"] {
         assert!(
             !raw.contains(banned),
             "the composed status body must not carry '{banned}': {raw}"
@@ -1709,9 +1698,7 @@ async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engi
                 .uri("/v1/agent-auth/state")
                 .header(header::AUTHORIZATION, "Bearer secret-token")
                 .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    json!({ "version": 2, "revision": 1, "harnesses": [] }).to_string(),
-                ))
+                .body(Body::from(json!({ "version": 2, "revision": 1, "harnesses": [] }).to_string()))
                 .expect("expected request"),
         )
         .await
@@ -1771,6 +1758,7 @@ async fn the_install_endpoint_keeps_its_error_contract_while_poking() {
         "an unknown harness is still a typed 404, not a poke-induced 500"
     );
 }
+
 
 /// **Guards against the poke-suppression seam regressing silently.**
 /// `automatic_poke_engine` is the ONE handle that decides whether an automatic

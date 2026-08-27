@@ -12,10 +12,7 @@ fn canonical_catalog_parses_with_expected_shape() {
     let catalog = parse_canonical();
 
     assert_eq!(catalog.schema_version, 2);
-    assert_eq!(
-        catalog.catalog_version,
-        canonical_catalog_version().as_str()
-    );
+    assert_eq!(catalog.catalog_version, canonical_catalog_version().as_str());
     let probed_against = catalog.probed_against.as_ref().expect("probedAgainst");
     assert_eq!(
         probed_against.registry_version.as_deref(),
@@ -25,7 +22,10 @@ fn canonical_catalog_parses_with_expected_shape() {
 
     let claude = &catalog.agents[0];
     assert_eq!(claude.kind, "claude");
-    assert_eq!(claude.harness.agent_process.version, "0.66.0-proliferate.2");
+    assert_eq!(
+        claude.harness.agent_process.version,
+        "0.66.0-proliferate.2"
+    );
     assert_eq!(
         claude
             .harness

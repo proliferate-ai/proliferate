@@ -93,7 +93,8 @@ mod tests {
 
     use crate::domains::sessions::model::SessionRecord;
     use crate::domains::workspaces::model::{
-        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceSurface,
     };
     use std::path::{Path, PathBuf};
 

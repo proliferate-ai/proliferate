@@ -104,7 +104,8 @@ mod tests {
         // A second acquire of the SAME id must not resolve while the first is
         // held — it converges by waiting, rather than failing.
         let waiter_locks = locks.clone();
-        let waiter = tokio::spawn(async move { waiter_locks.acquire("op-1").await });
+        let waiter =
+            tokio::spawn(async move { waiter_locks.acquire("op-1").await });
         assert!(
             timeout(Duration::from_millis(30), async {
                 while !waiter.is_finished() {

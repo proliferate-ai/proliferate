@@ -10,9 +10,7 @@ use axum::{
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::workspaces::deletion::purge::{
-    WorkspacePurgeError, WorkspacePurgeOutcome as ServiceWorkspacePurgeOutcome,
-};
+use crate::domains::workspaces::deletion::purge::{WorkspacePurgeError, WorkspacePurgeOutcome as ServiceWorkspacePurgeOutcome};
 
 /// The result of the up-front workspace-destruction admission snapshot: the
 /// held permits (dropped at end of the destructive operation) PLUS the SET of
@@ -262,7 +260,8 @@ mod tests {
 
         let workspace_path_string = workspace_path.to_string_lossy().into_owned();
         let state = test_state(runtime_home, &repo_root);
-        let workspace = workspace_record("workspace-http-active", "active", &workspace_path_string);
+        let workspace =
+            workspace_record("workspace-http-active", "active", &workspace_path_string);
         let store = WorkspaceStore::new(state.db.clone());
         store.insert(&workspace).expect("insert workspace");
 
@@ -276,10 +275,7 @@ mod tests {
             .find_by_id(&workspace.id)
             .expect("find workspace")
             .is_none());
-        assert!(
-            !workspace_path.exists(),
-            "the worktree checkout must be removed"
-        );
+        assert!(!workspace_path.exists(), "the worktree checkout must be removed");
     }
 
     #[tokio::test(flavor = "current_thread")]
