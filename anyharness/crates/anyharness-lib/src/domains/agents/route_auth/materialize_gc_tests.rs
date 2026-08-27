@@ -62,8 +62,9 @@ fn apply(home: &Home, sequence: i64) {
 ///
 /// What leaked is not an empty dir: the `config.toml` inside it is written 0600
 /// by `apply_file_spec` and carries the gateway virtual key that was live at
-/// that revision. The sweep now keeps exactly current + immediately-previous and
-/// reclaims everything else, in EITHER direction of the number space.
+/// that revision. The sweep now keeps current + immediately-previous + in-space
+/// above-current (see the racing-materializer test below) and reclaims
+/// everything else — which is what finally sweeps the out-of-space residue.
 #[test]
 fn a_pre_cutover_ms_epoch_home_is_swept_after_the_sequence_reset() {
     let home = Home::new("ms-epoch-leak");
@@ -98,5 +99,47 @@ fn a_pre_cutover_ms_epoch_home_is_swept_after_the_sequence_reset() {
         home.codex_dirs(),
         vec!["codex-home-10".to_string(), "codex-home-9".to_string()],
         "in-space GC still retains exactly current + previous"
+    );
+}
+
+/// REVIEW FINDING (regression, now fixed): the ms-epoch leak fix above briefly
+/// made the sweep reclaim EVERYTHING above the current sequence — and launch
+/// materialization is not serialized with the apply door (the state-file flock
+/// covers only the state.json writers; `resolve_launch_route_auth[_rotated]_
+/// for_server` reads state.json then calls `apply_file_spec` lock-free). Two
+/// concurrent launches straddling an apply carry sequences N and N+1; if the
+/// STALE one's GC ran after the fresh one's write, it deleted
+/// `codex-home-<N+1>` — the dir the fresh session's env points into — taking
+/// the 0600 `config.toml` the fresh session was about to read with it.
+/// Parallel session starts are a real product shape (workflow lanes).
+///
+/// The sweep now retains in-space dirs above the current sequence (a racing
+/// newer materializer's home), restoring the old `>= current` immunity there,
+/// while out-of-space (ms-epoch) dirs above current are still reclaimed — the
+/// two number spaces are separated by `OUT_OF_SPACE_SEQUENCE_FLOOR`.
+#[test]
+fn a_stale_materializer_cannot_reclaim_a_racing_newer_home() {
+    let home = Home::new("stale-racer");
+
+    // Sequence 41 is applied, then the fresh materializer writes sequence 42.
+    apply(&home, 41);
+    apply(&home, 42);
+    let fresh_config =
+        sequence_dir_path(home.path(), CODEX_HOME_PREFIX, 42).join(CODEX_CONFIG_FILE_NAME);
+    assert!(fresh_config.exists(), "the fresh session's config exists");
+
+    // The STALE materializer — a launch that read state.json before the 42
+    // apply landed — finishes last and runs its GC with current = 41.
+    apply(&home, 41);
+
+    assert_eq!(
+        home.codex_dirs(),
+        vec!["codex-home-41".to_string(), "codex-home-42".to_string()],
+        "a stale sweep must not reclaim the racing newer materializer's home"
+    );
+    assert!(
+        fresh_config.exists(),
+        "the fresh session's 0600 config.toml — the credential its env points \
+         into — survives the stale sweep"
     );
 }

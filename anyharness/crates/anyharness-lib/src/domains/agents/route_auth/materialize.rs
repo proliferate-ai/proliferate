@@ -16,9 +16,11 @@
 //! dirs for *stale* sequences, then writes the current sequence's dir
 //! idempotently.
 //!
-//! Cleanup is deliberately conservative: the current sequence's dir AND the
-//! immediately-previous sequence's dir are always kept, so in-flight processes
-//! launched under the prior sequence keep reading valid isolated state.
+//! Cleanup is deliberately conservative: the current sequence's dir, the
+//! immediately-previous sequence's dir, AND any in-space dir above the current
+//! sequence (a racing newer materializer's home) are always kept, so in-flight
+//! processes launched under another sequence keep reading valid isolated
+//! state. See [`gc_old_sequence_dirs`] for the full retention law.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -198,9 +200,20 @@ fn prepare_sequence_dir(
     Ok(dir)
 }
 
-/// Garbage-collect `<prefix>-<rev>` sibling dirs, KEEPING exactly two: the
-/// current sequence's dir and the immediately-previous sequence's. Every other
-/// sibling is reclaimed.
+/// The fence between the two sequence number spaces this GC can meet on disk.
+/// Post-cutover sequences are small counters (1, 2, 3, …; one bump per applied
+/// document), so no legitimate counter ever approaches a billion. Pre-cutover
+/// `revision` values were ms-since-epoch (~1.75e12 in 2026, and growing), so
+/// every legitimate ms-epoch value exceeds this floor by three orders of
+/// magnitude. Above-current AND at/over the floor ⇒ pre-cutover residue
+/// (reclaim); above-current but under it ⇒ a racing newer materializer's live
+/// home (retain).
+const OUT_OF_SPACE_SEQUENCE_FLOOR: i64 = 1_000_000_000;
+
+/// Garbage-collect `<prefix>-<rev>` sibling dirs, KEEPING: the current
+/// sequence's dir, the immediately-previous sequence's, and any IN-SPACE dir
+/// numbered above the current sequence. Everything else is reclaimed —
+/// including out-of-space dirs above the current sequence.
 ///
 /// Why keep the immediately-previous dir: a session launched under sequence N-1
 /// may still be running when sequence N is materialized. Its isolated home
@@ -208,15 +221,23 @@ fn prepare_sequence_dir(
 /// in-flight process finishes on the old state. Dirs we cannot parse a sequence
 /// from at all are left untouched — they are not ours to name.
 ///
-/// Dirs numbered ABOVE the current sequence are reclaimed too, and that is not a
-/// cosmetic detail. `revision` used to be ms-since-epoch, so a pre-cutover
-/// install has `codex-home-1785…` dirs on disk while `sequence` now counts from
-/// 1; leaving anything `>= current` alone meant those were `>= current` forever
-/// and never swept again. What they hold is not an empty directory: the
-/// `config.toml` inside is written 0600 and carries the gateway virtual key that
-/// was live at that revision. Reclaiming them can in principle delete the home
-/// of a process launched from an out-of-space dir before this sweep ran; a
-/// stranded plaintext credential is the worse of the two.
+/// Why keep in-space dirs ABOVE the current sequence: launch materialization is
+/// NOT serialized with the apply door (the state-file flock covers only the
+/// state.json writers; `resolve_launch_route_auth[_rotated]_for_server` reads
+/// state.json then applies file specs lock-free), so two concurrent launches
+/// straddling an apply can carry sequences N and N+1. If the stale one's GC
+/// runs after the fresh one's write, sweeping `> current` would delete
+/// `codex-home-<N+1>` — the dir the fresh session's env points into. An
+/// in-space above-current dir is therefore a racing newer materializer's home
+/// and is retained; the next materialization at or past it sweeps it normally.
+///
+/// Why OUT-OF-SPACE dirs above current are still reclaimed: `revision` used to
+/// be ms-since-epoch, so a pre-cutover install has `codex-home-1785…` dirs on
+/// disk while `sequence` now counts from 1; leaving anything `>= current`
+/// alone meant those were `>= current` forever and never swept again. What
+/// they hold is not an empty directory: the `config.toml` inside is written
+/// 0600 and carries the gateway virtual key that was live at that revision.
+/// The two spaces are cleanly separable — see [`OUT_OF_SPACE_SEQUENCE_FLOOR`].
 fn gc_old_sequence_dirs(
     root: &Path,
     prefix: &str,
@@ -252,6 +273,11 @@ fn gc_old_sequence_dirs(
         .max();
     for (rev, path) in sequences {
         if rev == current_sequence || Some(rev) == previous_sequence {
+            continue;
+        }
+        // Above current and in-space: a racing newer materializer's live home
+        // (see the doc above) — retained, never reclaimed by a stale sweep.
+        if rev > current_sequence && rev < OUT_OF_SPACE_SEQUENCE_FLOOR {
             continue;
         }
         let _ = fs::remove_dir_all(path);
