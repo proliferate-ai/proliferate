@@ -112,7 +112,9 @@ def _logs_insights_url(query: str, log_group: str) -> str:
         f"~editorString~'{_star_encode(query)}"
         f"~source~(~'{_star_encode(log_group)}))"
     )
-    fragment = quote(detail, safe="").replace("%", "$25")
+    # The console's own escaping: the *XX inner encoding stays literal, the
+    # rest of the ~-object is percent-encoded once and % becomes $25.
+    fragment = quote(detail, safe="*").replace("%", "$25")
     return (
         f"https://{_AWS_REGION}.console.aws.amazon.com/cloudwatch/home?region={_AWS_REGION}"
         f"#logsV2:logs-insights$3FqueryDetail$3D{fragment}"

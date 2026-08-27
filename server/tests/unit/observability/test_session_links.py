@@ -13,8 +13,10 @@ def test_the_five_links_render_from_one_id() -> None:
     assert links["replay"] == f"https://app.proliferate.com/sessions/{SESSION}"
     assert f"project%3Aproliferate-server%20session_id%3A{SESSION}" in links["sentry"]
     assert "proliferate.session_id" in links["honeycomb"]
-    assert SESSION in links["logs"]
-    assert "support.report.captured" in links["support_reports"]
+    from proliferate.observability.links import _star_encode
+
+    assert _star_encode(SESSION) in links["logs"]
+    assert _star_encode("support.report.captured") in links["support_reports"]
 
 
 def test_environments_move_the_bases_not_the_shape() -> None:
