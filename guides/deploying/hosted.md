@@ -1,7 +1,10 @@
 # Hosted Deployments
 
-This procedure covers hosted staging and production. For release trains and
-hotfix coordinators, use [Releases](releases.md). The durable topology is in the
+This procedure covers hosted staging and production. For `release.yml` and
+artifact publication, use [Releases](releases.md). Production authority and
+qualification come from [the CD line](../../specs/engineering/ci-cd/README.md#5--the-cd-line)
+and [the prod pipeline](../../specs/engineering/ci-cd/pipelines.md#pipeline--prod);
+current workflow topology is in the
 [Delivery system](../../specs/engineering/ci-cd/release-delivery.md).
 
 ## Before Dispatch
@@ -17,22 +20,25 @@ Before any real deploy:
 
 1. Resolve the exact commit and confirm it is on `main`.
 2. Confirm CI succeeded for that commit.
-3. Choose detected surfaces, additive `force_surfaces`, or exact
-   `only_surfaces`. Use the workflow input descriptions and generated plan;
-   do not reuse a stale surface list.
+3. Choose surfaces using the selected workflow's inputs: staging accepts
+   `force_surfaces` / `only_surfaces`; Release accepts `surfaces`. Inspect the
+   generated plan and the jobs actually present, not a stale surface list.
 4. Decide whether the run is a plan (`dry_run=true`) or a deploy.
 5. Record the selected SHA and surfaces before approving a protected job.
 
-`force_surfaces` adds lanes to those detected from the diff.
-`only_surfaces` replaces detection with the exact requested set. A dry run
-writes a plan artifact but is not staging or production evidence.
+For staging, `force_surfaces` adds lanes to those detected from the diff and
+`only_surfaces` replaces detection with an exact set. For Release, an explicit
+`surfaces` list replaces detection; `all` leaves selection to change detection.
+A dry run produces a plan, not staging or production evidence.
 
 ## Automatic Staging
 
-A successful `CI` run on `main` starts `Deploy Staging` automatically. The
-coordinator uses the CI commit, waits for matching Server CI when one exists,
-detects affected surfaces, invokes the reusable lanes, and writes
-`deploy-summary-staging`.
+Green push-to-`main` CI starts `Deploy Staging` automatically. Verify that the
+source run belongs to this repository's `main` push, not a pull request or a
+fork. Inspect the coordinator's CI-readiness result for the exact source SHA,
+selected surfaces, reusable deploy jobs, and `deploy-summary-staging`. Manual
+dispatch remains available for redeploys and dry runs; staging is not
+manual-only.
 
 Watch the run through completion. The GitHub run-level SHA for a
 `workflow_run` event can differ from the commit checked out by the deploy jobs;
@@ -52,32 +58,40 @@ Set:
 
 Inspect the plan's resolved head SHA, selection mode, selected surfaces, and
 environment before allowing deployment jobs to proceed. A dry run creates
-`deploy-plan-staging`; only a real successful run creates the staging summary
-that production accepts.
+`deploy-plan-staging`; only a real successful run creates
+`deploy-summary-staging` as deployment evidence.
 
 ## Manual Production Promotion
 
-Use `Promote Production` with:
+Use **Release** (`release.yml`), not the removed `promote-production.yml`.
+Confirm the production instruction and qualification required by
+[the CD line](../../specs/engineering/ci-cd/README.md#5--the-cd-line), then plan
+an exact hosted redeploy, replacing the placeholder with the approved SHA:
 
-- `ref` set to the exact staging-tested SHA on `main`;
-- the intended surface inputs;
-- `require_staging_success=true` for the normal path;
-- `dry_run=false` after reviewing a dry-run plan when one was requested.
+```bash
+gh workflow run release.yml --ref main \
+  -f ref="<approved-main-sha>" -f surfaces=server,litellm,web \
+  -f skip_build=true -f dry_run=true
+```
 
-The normal gate requires a successful, non-dry-run staging summary whose
-`headSha` matches the promoted SHA. The coordinator verifies reachability from
-`main`, then the selected jobs use the production GitHub Environment and
-write `deploy-summary-production`.
+Verify the exact commit reached `main`, the intended staging evidence, and the
+selected surfaces. Repeat with `dry_run=false` only for that authorized
+production action. Use `skip_build=false` when new artifact versions and
+publication are required; see [Releases](releases.md#release-coordinator).
 
-Set `require_staging_success=false` only under explicit direction and record
-that staging was bypassed. For E2B, normal production promotes the immutable
-template already built in staging; the bypass path instead builds and smokes
-the immutable template before moving the production tag.
+`skip_build=true` omits artifact releases, version bumps, tags, and a product
+release page. Hosted lanes still rebuild from the exact source SHA: this is a
+redeploy, not a byte-for-byte promotion of staging artifacts. The current
+coordinator does not require a successful staging summary or accept
+`require_staging_success`; do not infer that qualification happened from a
+green Release run.
 
-The scheduled nightly train has separate zero-touch production jobs after its
-staging jobs. Those jobs stay unattended only if the `Production` environment
-has no required-reviewer gate. They are not the manual promotion procedure;
-see [Releases](releases.md).
+The daily 09:00 UTC production cron still uses this same coordinator during
+the transition described by the CD line. Inspect the workflow's prepare and
+final result summaries, then verify each selected production surface. A
+production Environment approval can hold deploy jobs after prepare has already
+pushed version changes and tags; it is not a dry run and does not hold Desktop
+updater publication. Do not change approval settings to clear a waiting run.
 
 ## Surface Notes
 
@@ -106,10 +120,16 @@ see [Releases](releases.md).
   obtained after every third-party action's main phase. The first-party render
   and background re-image steps remove their private identifier-bearing scratch
   files on every exit before those actions' post-job hooks execute.
-- Worker deployment is a no-op while `WORKERS_DEPLOY_ENABLED=false`. Enabling
-  it before a canonical service and command exist deliberately fails.
-- The nightly and hotfix coordinators have no LiteLLM job. Deploy an exact
-  LiteLLM ref through `Promote Production` with that exact surface selected.
+- Standalone Worker, Mobile, and E2B deploy lanes are not called by these
+  coordinators. Celery worker and Beat rollout is part of the server lane when
+  both services are configured; it is not the retired standalone Worker lane.
+- LiteLLM is a selected surface in both staging and `release.yml`, through
+  `_deploy-litellm.yml`. Verify `LITELLM_DEPLOY_ENABLED=true` in the intended
+  environment; otherwise the lane reports a skip and does not deploy. When
+  enabled, it builds the selected ref, registers a new task-definition revision
+  for the existing LiteLLM service, and rolls that service. Check the registered
+  image identity, task-definition revision, and ECS rollout result; a green
+  switch-only job is not a deployed gateway.
 - Desktop staging builds only. A selected production Desktop lane can publish
   updater/download assets after validating the version and live feed.
 
@@ -139,7 +159,7 @@ Release qualification and evidence requirements belong to
   intended candidate. If source changes, stage and promote the new SHA as a new
   candidate.
 - If `main` advances during a deploy, the completed deployment still represents
-  its original SHA. Promote the newer commit separately before claiming that
-  production matches current `main`.
+  its recorded head SHA. Obtain the required production instruction for a
+  separate release or redeploy before claiming production matches newer `main`.
 - A partial Desktop updater publish requires inspection of the immutable
   versioned manifest before retrying; do not overwrite or delete it blindly.

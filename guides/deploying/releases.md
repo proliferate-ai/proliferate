@@ -1,9 +1,12 @@
 # Releases
 
-This procedure covers release coordinators and artifact publication. Hosted
-staging and manual production promotion are covered by
-[Hosted Deployments](hosted.md). Release qualification belongs to
-[Testing](../../specs/engineering/testing/README.md).
+This procedure operates `release.yml` and the artifact publishers. Hosted
+staging and production redeploys are covered by [Hosted Deployments](hosted.md).
+Before a production run, follow the authority and qualification requirements in
+[the CD line](../../specs/engineering/ci-cd/README.md#5--the-cd-line) and
+[the prod pipeline](../../specs/engineering/ci-cd/pipelines.md#pipeline--prod).
+Artifact identities and current wiring belong to the
+[Delivery system](../../specs/engineering/ci-cd/release-delivery.md).
 
 ## Before Running A Release
 
@@ -17,48 +20,77 @@ staging and manual production promotion are covered by
 5. After the run, verify each selected artifact, deploy summary, and raw product
    GitHub Release independently.
 
-## Nightly Release Train
+## Release Coordinator
 
-`Nightly Release Train` runs on a daily schedule or manually. It detects
-changes since the preceding `release-*` checkpoint unless `only_surfaces`
-selects an exact set. Its prepare job resolves the train, public product, and
-artifact versions; may commit version bumps to `main`; and creates the selected
-train/product/artifact tags.
+Use **Release** (`.github/workflows/release.yml`). It runs on manual dispatch
+and the transitional daily 09:00 UTC cron described in
+[the CD line](../../specs/engineering/ci-cd/README.md#5--the-cd-line).
+Hotfix and deploy-only runs use inputs on this same workflow; the old
+`nightly-release-train.yml`, `hotfix-production.yml`, and
+`promote-production.yml` entrypoints no longer exist.
 
-The version-bump push to `main` authenticates with the `RELEASE_PUSH_TOKEN` repository secret, an admin fine-grained PAT (Contents: Read and write on this repository) that bypasses the required status checks on `main`. The prepare job fails loudly before committing if the secret is missing, and every release including the daily cron fails until it is restored, so renew the PAT before it expires.
+Start with a plan when validating inputs or wiring:
 
-The train then:
+```bash
+gh workflow run release.yml --ref main -f dry_run=true
+```
 
-1. releases selected Runtime/SDK, Server/self-host, and Desktop artifacts;
-2. deploys selected E2B, Server, Worker, Web, and Mobile surfaces to staging;
-3. runs the corresponding production jobs after each staging dependency
-   succeeds; and
-4. publishes the raw product GitHub Release when its selected artifact-release
-   and staging dependencies succeed.
+Inspect the prepare job's selected surfaces, resolved head, versions, and tags.
+After obtaining the production authorization required by the CD line, the
+standard release command is:
 
-The raw product release does **not** depend on nightly production jobs. It can
-appear while production is still running or when production later fails.
-Desktop updater publication is a separate release call directly from prepare:
-it has no staging dependency and no GitHub Environment binding.
+```bash
+gh workflow run release.yml --ref main
+```
 
-Nightly production is zero-touch only while the `Production` GitHub Environment
-does not require a reviewer. The train has no LiteLLM job; use manual
-[production promotion](hosted.md#manual-production-promotion) for an exact
-LiteLLM ref.
+The four dispatch inputs are:
+
+| Input | How to use it |
+| --- | --- |
+| `surfaces` | Default `all` enables change detection since the previous `release-*` checkpoint; it does not force every surface to run. A comma-separated list is an exact override. |
+| `ref` | Default `main`. Use an exact approved commit for a hotfix or redeploy; it must have reached `main`. |
+| `skip_build` | Default `false`. Set `true` for a hosted redeploy without artifact releases, version bumps, tags, or a product release page. Use an explicit surface list; an empty detected selection is rejected. |
+| `dry_run` | Default `false`. Set `true` to compute the plan without committing, tagging, publishing, or deploying. Artifact builds are skipped and deploy lanes receive `enabled: false`; this is wiring proof, not build or runtime proof. |
+
+This coordinator has jobs for `runtime`, `server`, `desktop`, `litellm`, and
+`web`: Runtime/SDK, Server/self-host, and Desktop artifact releases, plus
+Server, LiteLLM, and Web production deploys. The detector also accepts `e2b`,
+`mobile`, and `workers`, but selecting those does not create a release job.
+Use the standalone [E2B template entrypoints](#e2b-template-family) for E2B.
+
+On a build run, prepare may commit version bumps to `main` and create the
+checkpoint, product, and artifact tags. Its version-bump push requires the
+repository's `RELEASE_PUSH_TOKEN`; a missing token fails before that commit is
+pushed. Inspect the plan's final head SHA, which can include this version bump,
+rather than assuming the dispatch SHA is the artifact SHA.
+
+Server and LiteLLM production deploys run from prepare in parallel. Web waits
+for a selected Server deploy to succeed. The raw product GitHub Release waits
+for selected artifact releases, **not** for production deploys. Desktop updater
+publication also starts from prepare and has no staging dependency or GitHub
+Environment binding. Verify those outputs independently; a published release
+page does not prove a successful production rollout.
 
 ## Production Hotfix
 
-`Hotfix Production` is a manual exact-surface path from `main`. Provide the
-exact ref, exact `only_surfaces`, operator-facing reason, version-bump choice,
-and dry-run choice. It prepares the corresponding tags and versions, runs the
-selected artifact and production jobs, and publishes a raw product release
-only when every selected artifact-release and production job succeeds. A
-Runtime-only hotfix waits for its Runtime release even though it has no
-production deploy job.
+Use an exact approved `ref` and an exact `surfaces` list on `release.yml`.
+Replace the placeholder below with the intended commit that reached `main`:
 
-This dependency graph intentionally differs from nightly. It also has no
-LiteLLM job, so use manual production promotion when LiteLLM is the requested
-surface.
+```bash
+gh workflow run release.yml --ref main \
+  -f ref="<approved-main-sha>" -f surfaces=server,litellm -f dry_run=true
+```
+
+Inspect the plan, then repeat with `dry_run=false` only for the authorized
+production action. A hotfix with `skip_build=false` uses the same version,
+artifact, and product-release path as an ordinary release; it is not a separate
+coordinator or a `hotfix-*` ledger.
+
+For a hosted redeploy without new artifact identities, use
+[Manual Production Promotion](hosted.md#manual-production-promotion).
+`skip_build` still rebuilds hosted images from the chosen source SHA; it does
+not promote the bytes previously tested in staging. Desktop and Runtime
+publication require the artifact build path, not a deploy-only run.
 
 ## Desktop
 
@@ -71,7 +103,7 @@ current macOS and Windows matrix and create a draft GitHub Release.
 Updater/download publication is separate:
 
 - a `desktop-v*` tag push publishes it automatically;
-- a reusable production or train call can request it explicitly;
+- a publishing reusable call, including `release.yml`, can request it explicitly;
 - a manual run defaults to not publishing it.
 
 Publishing the GitHub Release alone does not make the updater live. The updater
@@ -90,7 +122,7 @@ the collector must not contain the debug placeholder marker.
 
 Windows (`x86_64-pc-windows-msvc`) returned to the matrix on 2026-08-20, having been removed on 2026-04-13 while the SDK generation step was POSIX-shell only. It is a beta leg, it is deliberately not release-blocking, and it is opt-in only:
 
-- the Windows matrix entry is skipped unless the caller explicitly sets `enable_windows_beta: true`. Every automatic caller (`deploy-staging.yml`, `promote-production.yml`, `hotfix-production.yml` through `_deploy-desktop.yml`, and `nightly-release-train.yml` directly) leaves it at its `false` default, and a plain `desktop-v*` tag push carries no inputs at all, so it also defaults to `false`. Only an explicit `workflow_dispatch` run with `enable_windows_beta: true` builds Windows;
+- the Windows matrix entry is skipped unless the caller explicitly sets `enable_windows_beta: true`. Both automatic callers (`deploy-staging.yml` through `_deploy-desktop.yml`, and `release.yml` directly) leave it at `false`, and a plain `desktop-v*` tag push carries no inputs at all, so it also defaults to `false`. Only an explicit `workflow_dispatch` run with `enable_windows_beta: true` builds Windows;
 - the Windows matrix entry also runs `continue-on-error`, so on the runs where it is enabled, a failed Windows build leaves the macOS release and the updater publish intact;
 - `windows-x86_64` is an `optional` platform in both `scripts/generate-updater-manifest.mjs` and `scripts/generate-desktop-installer-manifest.mjs`, so a release with no Windows artifact publishes without a Windows entry rather than failing;
 - the Windows installer is not Authenticode signed, so first launch shows a SmartScreen warning that the user clicks through. The Tauri updater's minisign signature is a separate mechanism and is applied, so in-app updates still verify;
@@ -114,11 +146,12 @@ or a publishing reusable-workflow call.
 
 ## Server And Self-Host
 
-Server/self-host releases use `server-v<version>`. They publish server and
-LiteLLM GHCR images under the version and rolling `stable` tags; commit-SHA
-GHCR tags are not produced. Manual dispatch is validation-only; GHCR and
-release-asset publication require either a `server-v*` tag push or a publishing
-reusable-workflow call.
+Server/self-host releases use `server-v<version>`. The `release-server` job in
+`release.yml` calls `_build-server.yml` with `publish: true` to publish server
+and LiteLLM GHCR images under the version and rolling `stable` tags, plus the
+self-host assets. Commit-SHA GHCR tags are not produced. `server-ci.yml` is
+validation-only; manually pushing a `server-v*` tag no longer starts a release.
+Use the release coordinator's `server` surface for publication.
 
 The LiteLLM wrapper and the direct local-development service both consume the
 exact upstream coordinate recorded in the Delivery system contract. Treat an
@@ -150,31 +183,34 @@ using the release. Installation and update steps live in
 
 ## E2B Template Family
 
-Three entrypoints operate on one template coordinate family:
+Use the two standalone workflows for the template coordinate family:
 
-- the reusable deploy lane builds and/or promotes during hosted staging and
-  production;
-- `Release Cloud Template` manually builds and smokes immutable
-  `sha-<12>`, then moves rolling `staging`;
-- `Promote Cloud Template` manually re-smokes a selected immutable tag, then
-  moves rolling `production`.
+- `Release Cloud Template` (`release-cloud-template.yml`) manually builds and
+  smokes immutable `sha-<12>`, then moves rolling `staging`;
+- `Promote Cloud Template` (`promote-cloud-template.yml`) manually re-smokes a
+  selected immutable tag, then moves rolling `production`.
 
-These are not three artifact identities. Verify the immutable tag first, then
-verify which rolling tag points to it.
+Neither ordinary staging nor `release.yml` invokes a template deploy lane.
+Verify the immutable tag first, then verify which rolling tag points to it.
+Moving a production tag requires the same explicit production authority.
 
 ## Qualification Workflows
 
-`Release E2E` and `Release E2E — Self-hosting` run on schedules and manually.
-The self-host workflow also exposes a reusable trigger, but no current release
-coordinator calls it. Its artifact-chain job is therefore not a release gate
-today, even though Testing's target requires an every-release gate. Do not
-infer coordinator wiring from the presence of `workflow_call`.
+Use `release-e2e.yml` and `release-e2e-selfhost.yml` for their respective
+qualification surfaces, following the evidence requirements in
+[Testing](../../specs/engineering/testing/release.md) and
+[Manual release QA](manual-release-qa.md). Inspect their triggers and caller
+dependencies at the candidate SHA; the existence of a qualification workflow
+does not prove the release coordinator invoked it. Record the actual run and
+verdict before reporting a candidate as qualified.
 
 ## Raw Product Release And Landing Boundary
 
-The train and hotfix scripts produce a raw GitHub Release ledger from merged PR
-metadata. Verify its tag (`proliferate-v<version>` or the applicable no-version
-`hotfix-*` tag), source SHA, generated notes, and referenced artifact releases.
+The release coordinator produces a raw GitHub Release ledger from merged PR
+metadata on build runs. Verify its `proliferate-v<version>` tag, final source
+SHA, generated notes, and referenced artifact releases. The `release-*` tag is
+only a checkpoint. Deploy-only runs produce no new product release page, and
+no current coordinator mints a `hotfix-*` ledger.
 
 That raw release is the only release ledger. There is no checked-in
 release-manifest publisher/finalizer or landing-changelog publisher (the
