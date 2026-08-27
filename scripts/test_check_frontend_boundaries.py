@@ -34,10 +34,13 @@ class RadixImportBoundaryTest(unittest.TestCase):
                     ),
                 },
             )
-            with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module,
-                "ALL_FRONTEND_SRC_ROOTS",
-                [root / "apps" / "packages" / "product-client" / "src"],
+            with (
+                patch.object(check_module, "REPO_ROOT", root),
+                patch.object(
+                    check_module,
+                    "ALL_FRONTEND_SRC_ROOTS",
+                    [root / "apps" / "packages" / "product-client" / "src"],
+                ),
             ):
                 violations = check_module.find_radix_import_violations()
 
@@ -60,10 +63,13 @@ class RadixImportBoundaryTest(unittest.TestCase):
                     ),
                 },
             )
-            with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module,
-                "ALL_FRONTEND_SRC_ROOTS",
-                [root / "apps" / "packages" / "product-client" / "src"],
+            with (
+                patch.object(check_module, "REPO_ROOT", root),
+                patch.object(
+                    check_module,
+                    "ALL_FRONTEND_SRC_ROOTS",
+                    [root / "apps" / "packages" / "product-client" / "src"],
+                ),
             ):
                 violations = check_module.find_radix_import_violations()
 
@@ -91,8 +97,9 @@ class RadixImportBoundaryTest(unittest.TestCase):
                 root / "apps" / "packages" / "product-client" / "src",
                 root / "apps" / "desktop" / "src",
             ]
-            with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module, "ALL_FRONTEND_SRC_ROOTS", roots
+            with (
+                patch.object(check_module, "REPO_ROOT", root),
+                patch.object(check_module, "ALL_FRONTEND_SRC_ROOTS", roots),
             ):
                 violations = check_module.find_radix_import_violations()
 
@@ -123,8 +130,9 @@ class RadixImportBoundaryTest(unittest.TestCase):
                 },
             )
             roots = [root / "apps" / "desktop" / "src"]
-            with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module, "ALL_FRONTEND_SRC_ROOTS", roots
+            with (
+                patch.object(check_module, "REPO_ROOT", root),
+                patch.object(check_module, "ALL_FRONTEND_SRC_ROOTS", roots),
             ):
                 violations = check_module.find_radix_import_violations()
 
@@ -146,8 +154,9 @@ class RadixImportBoundaryTest(unittest.TestCase):
                 },
             )
             roots = [root / "apps" / "desktop" / "src"]
-            with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module, "ALL_FRONTEND_SRC_ROOTS", roots
+            with (
+                patch.object(check_module, "REPO_ROOT", root),
+                patch.object(check_module, "ALL_FRONTEND_SRC_ROOTS", roots),
             ):
                 violations = check_module.find_radix_import_violations()
 
@@ -263,14 +272,12 @@ class TailwindMergeImportBoundaryTest(unittest.TestCase):
             'require("tailwind-" + "mer" + "ge");\n',
             (
                 r'import("\u0074\u0061\u0069\u006c\u0077\u0069\u006e'
-                r'\u0064\u002d\u006d\u0065\u0072\u0067\u0065");' "\n"
+                r'\u0064\u002d\u006d\u0065\u0072\u0067\u0065");'
+                "\n"
             ),
             'jest.mock("tail" + "wind-" + "merge/" + "default-config");\n',
             'import(`tail${"wind"}-merge`);\n',
-            (
-                'import(("tail" + (true ? "wind" : "unused") + '
-                '"-merge") as string);\n'
-            ),
+            ('import(("tail" + (true ? "wind" : "unused") + "-merge") as string);\n'),
         ]
 
         for source in cases:
@@ -299,9 +306,7 @@ class TailwindMergeImportBoundaryTest(unittest.TestCase):
             self.write_files(
                 root,
                 {
-                    "apps/desktop/src/Candidate.ts": (
-                        'import("tail" + "wind-merge");\n'
-                    ),
+                    "apps/desktop/src/Candidate.ts": ('import("tail" + "wind-merge");\n'),
                 },
             )
             with patch.object(
@@ -323,12 +328,8 @@ class ProductClientPrimitivesTopLevelShapeTest(unittest.TestCase):
             for name in check_module.PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES:
                 (primitives_src / name).mkdir(parents=True)
             (primitives_src / "Button.tsx").write_text("export {};\n", encoding="utf-8")
-            (primitives_src / "popover-surface.ts").write_text(
-                "export {};\n", encoding="utf-8"
-            )
-            with patch.object(
-                check_module, "PRODUCT_CLIENT_PRIMITIVES_SRC", primitives_src
-            ):
+            (primitives_src / "popover-surface.ts").write_text("export {};\n", encoding="utf-8")
+            with patch.object(check_module, "PRODUCT_CLIENT_PRIMITIVES_SRC", primitives_src):
                 violations = check_module.find_primitives_top_level_violations()
 
         self.assertEqual(violations, [])
@@ -339,16 +340,15 @@ class ProductClientPrimitivesTopLevelShapeTest(unittest.TestCase):
             primitives_src = root / "apps/packages/product-client/src/primitives"
             (primitives_src / "patterns").mkdir(parents=True)
             (primitives_src / "kit").mkdir(parents=True)
-            with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module, "PRODUCT_CLIENT_PRIMITIVES_SRC", primitives_src
+            with (
+                patch.object(check_module, "REPO_ROOT", root),
+                patch.object(check_module, "PRODUCT_CLIENT_PRIMITIVES_SRC", primitives_src),
             ):
                 violations = check_module.find_primitives_top_level_violations()
 
                 self.assertEqual(len(violations), 1)
                 violation = violations[0]
-                self.assertEqual(
-                    violation.rule_id, "FE-PC-7"
-                )
+                self.assertEqual(violation.rule_id, "FE-PC-7")
                 self.assertEqual(
                     violation.relative_path,
                     "apps/packages/product-client/src/primitives/kit",
@@ -374,8 +374,9 @@ class ProductClientPrimitivesTopLevelShapeTest(unittest.TestCase):
             primitives_src = root / "apps/packages/product-client/src/primitives"
             primitives_src.mkdir(parents=True)
             (primitives_src / ".DS_Store").write_text("", encoding="utf-8")
-            with patch.object(check_module, "REPO_ROOT", root), patch.object(
-                check_module, "PRODUCT_CLIENT_PRIMITIVES_SRC", primitives_src
+            with (
+                patch.object(check_module, "REPO_ROOT", root),
+                patch.object(check_module, "PRODUCT_CLIENT_PRIMITIVES_SRC", primitives_src),
             ):
                 violations = check_module.find_primitives_top_level_violations()
 
@@ -390,11 +391,14 @@ class WarningInkBoundaryTest(unittest.TestCase):
             product_client_src.mkdir(parents=True)
             (product_client_src / "Sample.tsx").write_text(source, encoding="utf-8")
             empty = root / "empty"
-            with patch.object(check_module, "REPO_ROOT", root), patch.multiple(
-                check_module,
-                PRODUCT_CLIENT_SRC=product_client_src,
-                DESKTOP_SRC=empty,
-                WEB_SRC=empty,
+            with (
+                patch.object(check_module, "REPO_ROOT", root),
+                patch.multiple(
+                    check_module,
+                    PRODUCT_CLIENT_SRC=product_client_src,
+                    DESKTOP_SRC=empty,
+                    WEB_SRC=empty,
+                ),
             ):
                 return check_module.find_warning_ink_violations()
 
@@ -416,9 +420,7 @@ class WarningInkBoundaryTest(unittest.TestCase):
         violations = self.run_rule('const tone = "border-warning/30 bg-warning/10";\n')
 
         self.assertEqual(len(violations), 2)
-        self.assertEqual(
-            {violation.rule_id for violation in violations}, {"FE-UI-3"}
-        )
+        self.assertEqual({violation.rule_id for violation in violations}, {"FE-UI-3"})
 
     def test_solid_fill_is_allowed(self) -> None:
         # Using the fill token AS a fill is correct (OfflineIndicator's banner).
@@ -427,7 +429,7 @@ class WarningInkBoundaryTest(unittest.TestCase):
         self.assertEqual(violations, [])
 
     def test_commented_usage_is_ignored(self) -> None:
-        violations = self.run_rule('// historical note: text-warning was wrong\n')
+        violations = self.run_rule("// historical note: text-warning was wrong\n")
 
         self.assertEqual(violations, [])
 
@@ -469,9 +471,7 @@ class ProductClientPrimitiveStructureTest(unittest.TestCase):
                 violations += structure_module.find_primitive_definitions(files)
 
         self.assertEqual(len(violations), 2)
-        self.assertEqual(
-            {violation.path.name for violation in violations}, {"LocalButton.tsx"}
-        )
+        self.assertEqual({violation.path.name for violation in violations}, {"LocalButton.tsx"})
 
     def test_nested_primitives_preserve_the_former_package_purity_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -762,16 +762,10 @@ class ProductClientBoundaryTest(unittest.TestCase):
             'const x = { as: import("pkg") }',
             'const x = { satisfies: import("pkg") }',
             'object.as(import("pkg"))',
-            (
-                'const ok = (left as any) < '
-                '(import("pkg") as any).Thing > (right as any)'
-            ),
+            ('const ok = (left as any) < (import("pkg") as any).Thing > (right as any)'),
             'left < (import("pkg")).Thing > (right)',
             'left < import("pkg").then(load) > (right)',
-            (
-                'left < (ready ? import("pkg") : fallback).default '
-                '> (right)'
-            ),
+            ('left < (ready ? import("pkg") : fallback).default > (right)'),
             'import type, { Value } from "pkg"',
         ]
         for runtime_source in runtime_expressions:
@@ -811,12 +805,9 @@ class ProductClientBoundaryTest(unittest.TestCase):
     def test_shared_parser_stops_generic_return_types_at_runtime_bodies(self) -> None:
         runtime_sources = [
             'async function load(): Promise<unknown> { return import("function") }',
+            ('class Loader { load(): Record<string, unknown> { return import("class-method") } }'),
             (
-                'class Loader { load(): Record<string, unknown> '
-                '{ return import("class-method") } }'
-            ),
-            (
-                'const loader = { load(): Promise<Result<Value>> '
+                "const loader = { load(): Promise<Result<Value>> "
                 '{ return import("object-method") } };'
             ),
             'const load = (): Promise<unknown> => import("arrow")',
@@ -830,7 +821,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         paired_source = (
             'function load(): Promise<Result<Array<import("contract").Shape>>> {\n'
             '  return import("runtime");\n'
-            '}\n'
+            "}\n"
         )
         paired = collect_imports(Path("Sample.ts"), paired_source)
         self.assertEqual(
@@ -839,14 +830,8 @@ class ProductClientBoundaryTest(unittest.TestCase):
         )
 
         function_type_sources = [
-            (
-                'function read(): () => { value: import("function-type").Thing } '
-                '{ throw failure }'
-            ),
-            (
-                'const read = (): () => { value: import("arrow-type").Thing } '
-                '=> value;'
-            ),
+            ('function read(): () => { value: import("function-type").Thing } { throw failure }'),
+            ('const read = (): () => { value: import("arrow-type").Thing } => value;'),
         ]
         for type_source in function_type_sources:
             with self.subTest(type_source=type_source):
@@ -856,25 +841,24 @@ class ProductClientBoundaryTest(unittest.TestCase):
 
     def test_shared_parser_preserves_semantic_static_and_dynamic_import_facts(self) -> None:
         source = (
-            'import defaultName, { useQuery as query, type Shape, '
+            "import defaultName, { useQuery as query, type Shape, "
             'mutationOptions as useMutation, "getAnyHarnessClient" as make } '
             'from "pkg-a";\n'
             'import * as Namespace from "pkg-b";\n'
             'export { useMutation as mutation } from "pkg-c";\n'
             'export * from "pkg-d";\n'
             'import Equals = require("pkg-e");\n'
-            'const { useQuery: dynamicQuery, other = fallback, ...rest } = '
+            "const { useQuery: dynamicQuery, other = fallback, ...rest } = "
             'await import("pkg-f");\n'
             'const dynamicNamespace: Module = await import("pkg-g");\n'
             'const client = (await import("pkg-h")).getAnyHarnessClient;\n'
             'import("pkg-i").then(async '
-            '({ useInfiniteQuery: query }) => query());\n'
+            "({ useInfiniteQuery: query }) => query());\n"
             'import("pkg-j").then((Query) => Query.useQuery());\n'
         )
 
         statements = {
-            statement.source: statement
-            for statement in collect_imports(Path("Sample.ts"), source)
+            statement.source: statement for statement in collect_imports(Path("Sample.ts"), source)
         }
 
         self.assertEqual(
@@ -934,18 +918,12 @@ class ProductClientBoundaryTest(unittest.TestCase):
             frozenset({"useInfiniteQuery"}),
         )
         self.assertEqual(
-            [
-                (binding.name, binding.namespace)
-                for binding in statements["pkg-i"].scoped_bindings
-            ],
+            [(binding.name, binding.namespace) for binding in statements["pkg-i"].scoped_bindings],
             [("query", False)],
         )
         self.assertEqual(statements["pkg-j"].imported_names, frozenset({"*"}))
         self.assertEqual(
-            [
-                (binding.name, binding.namespace)
-                for binding in statements["pkg-j"].scoped_bindings
-            ],
+            [(binding.name, binding.namespace) for binding in statements["pkg-j"].scoped_bindings],
             [("Query", True)],
         )
 
@@ -1004,13 +982,15 @@ class ProductClientBoundaryTest(unittest.TestCase):
             ],
         )
 
-    def test_shared_parser_handles_asserted_dynamic_literals_and_following_assert_calls(self) -> None:
+    def test_shared_parser_handles_asserted_dynamic_literals_and_following_assert_calls(
+        self,
+    ) -> None:
         source = (
             'const first = import("pkg-a" as const);\n'
             'const second = import(("pkg-b" satisfies string));\n'
-            'const computed = import(source satisfies string);\n'
+            "const computed = import(source satisfies string);\n"
             'import value from "pkg-c"\n'
-            'assert(value)\n'
+            "assert(value)\n"
             'import data from "pkg-d" assert { type: "json" }\n'
         )
 
@@ -1066,17 +1046,15 @@ class ProductClientBoundaryTest(unittest.TestCase):
             files[f"apps/packages/product-client/src/{source_layer}/alias-{index}/Sample.ts"] = (
                 f'import {{ Value }} from "#product/{target_layer}/Value";\n'
             )
-            files[f"apps/packages/product-client/src/{source_layer}/relative-{index}/Sample.ts"] = (
-                f'import {{ Value }} from "../../{target_layer}/Value";\n'
-            )
+            files[
+                f"apps/packages/product-client/src/{source_layer}/relative-{index}/Sample.ts"
+            ] = f'import {{ Value }} from "../../{target_layer}/Value";\n'
 
         with tempfile.TemporaryDirectory() as directory:
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         layer_violations = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-PC-6"
+            violation for violation in violations if violation.rule_id == "FE-PC-6"
         ]
         self.assertEqual(len(layer_violations), 2 * len(forbidden_pairs))
 
@@ -1103,9 +1081,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         layer_violations = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-PC-6"
+            violation for violation in violations if violation.rule_id == "FE-PC-6"
         ]
         self.assertEqual(
             {violation.path.name for violation in layer_violations},
@@ -1145,9 +1121,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         layer_violations = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-PC-6"
+            violation for violation in violations if violation.rule_id == "FE-PC-6"
         ]
         self.assertEqual([violation.lineno for violation in layer_violations], [2, 3])
         self.assertIn("type-only", layer_violations[0].detail)
@@ -1168,11 +1142,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             root = Path(directory).resolve()
             violations = self.run_product_rules(root, files)
 
-        forbidden = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-PC-5"
-        ]
+        forbidden = [violation for violation in violations if violation.rule_id == "FE-PC-5"]
         self.assertEqual(len(forbidden), 2)
         self.assertTrue(all(violation.path.name == "host-import.ts" for violation in forbidden))
 
@@ -1191,11 +1161,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
-        set_state = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-STORE-3"
-        ]
+        set_state = [violation for violation in violations if violation.rule_id == "FE-STORE-3"]
         self.assertEqual(len(set_state), 1)
         self.assertEqual(set_state[0].lineno, 2)
 
@@ -1242,11 +1208,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
-        set_state = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-STORE-3"
-        ]
+        set_state = [violation for violation in violations if violation.rule_id == "FE-STORE-3"]
         self.assertEqual(
             [violation.lineno for violation in set_state],
             [2, 18, 21, 24, 29],
@@ -1271,11 +1233,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
-        set_state = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-STORE-3"
-        ]
+        set_state = [violation for violation in violations if violation.rule_id == "FE-STORE-3"]
         self.assertEqual([violation.lineno for violation in set_state], [5, 11])
 
     def test_store_set_state_handles_unary_loop_parenthesized_and_optional_contexts(self) -> None:
@@ -1304,17 +1262,15 @@ class ProductClientBoundaryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
-        set_state = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-STORE-3"
-        ]
+        set_state = [violation for violation in violations if violation.rule_id == "FE-STORE-3"]
         self.assertEqual(
             [violation.lineno for violation in set_state],
             [5, 11, 15, 16, 17],
         )
 
-    def test_store_set_state_handles_optional_calls_operators_and_later_loop_bindings(self) -> None:
+    def test_store_set_state_handles_optional_calls_operators_and_later_loop_bindings(
+        self,
+    ) -> None:
         files = {
             "apps/packages/product-client/src/hooks/chat/workflows/contexts.ts": (
                 "import { useChatStore } from '#product/stores/chat/chat-store';\n"
@@ -1337,11 +1293,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
-        set_state = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-STORE-3"
-        ]
+        set_state = [violation for violation in violations if violation.rule_id == "FE-STORE-3"]
         self.assertEqual(
             [violation.lineno for violation in set_state],
             [2, 3, 7, 11, 15],
@@ -1411,9 +1363,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         query_violations = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-CACHE-2"
+            violation for violation in violations if violation.rule_id == "FE-CACHE-2"
         ]
         self.assertEqual(len(query_violations), 2)
         self.assertEqual(
@@ -1483,9 +1433,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         runtime_access = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-STORE-2"
+            violation for violation in violations if violation.rule_id == "FE-STORE-2"
         ]
         self.assertEqual(
             {violation.path.name for violation in runtime_access},
@@ -1498,14 +1446,15 @@ class ProductClientBoundaryTest(unittest.TestCase):
             },
         )
 
-    def test_store_import_type_expressions_and_mixed_runtime_imports_are_distinguished(self) -> None:
+    def test_store_import_type_expressions_and_mixed_runtime_imports_are_distinguished(
+        self,
+    ) -> None:
         files = {
             "apps/packages/product-client/src/stores/chat/type-expression.ts": (
                 "type Hook = import('@proliferate/cloud-sdk-react').UseHook;\n"
             ),
             "apps/packages/product-client/src/stores/chat/mixed.ts": (
-                "import runtimeHook, { type HookOptions } "
-                "from '@proliferate/cloud-sdk-react';\n"
+                "import runtimeHook, { type HookOptions } from '@proliferate/cloud-sdk-react';\n"
             ),
             "apps/packages/product-client/src/stores/chat/type-named-runtime.ts": (
                 "import { type as runtimeBinding } from '@anyharness/sdk-react';\n"
@@ -1515,9 +1464,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         runtime_paths = {
-            violation.path.name
-            for violation in violations
-            if violation.rule_id == "FE-STORE-2"
+            violation.path.name for violation in violations if violation.rule_id == "FE-STORE-2"
         }
         self.assertEqual(runtime_paths, {"mixed.ts", "type-named-runtime.ts"})
 
@@ -1553,9 +1500,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         runtime_paths = {
-            violation.path.name
-            for violation in violations
-            if violation.rule_id == "FE-STORE-2"
+            violation.path.name for violation in violations if violation.rule_id == "FE-STORE-2"
         }
         self.assertEqual(
             runtime_paths,
@@ -1565,8 +1510,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
     def test_internal_store_access_has_exactly_one_rule_owner(self) -> None:
         files = {
             "apps/packages/product-client/src/stores/chat/internal-access.ts": (
-                "import { getAnyHarnessClient } "
-                "from '#product/lib/access/anyharness/client';\n"
+                "import { getAnyHarnessClient } from '#product/lib/access/anyharness/client';\n"
             ),
         }
         with tempfile.TemporaryDirectory() as directory:
@@ -1607,9 +1551,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         query_paths = {
-            violation.path.name
-            for violation in violations
-            if violation.rule_id == "FE-CACHE-2"
+            violation.path.name for violation in violations if violation.rule_id == "FE-CACHE-2"
         }
         self.assertEqual(
             query_paths,
@@ -1620,10 +1562,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             for violation in violations
             if violation.path.name == "dynamic-client.ts"
         }
-        self.assertTrue(
-            {"FE-ACCESS-2", "FE-STORE-2"}
-            <= dynamic_client_rules
-        )
+        self.assertTrue({"FE-ACCESS-2", "FE-STORE-2"} <= dynamic_client_rules)
         dynamic_store_rules = [
             violation.rule_id
             for violation in violations
@@ -1637,8 +1576,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
     def test_identifier_sensitive_rules_preserve_export_identity_and_namespace_scope(self) -> None:
         files = {
             "apps/packages/product-client/src/hooks/chat/workflows/alias-safe.ts": (
-                "import { mutationOptions as useMutation } "
-                "from '@tanstack/react-query';\n"
+                "import { mutationOptions as useMutation } from '@tanstack/react-query';\n"
             ),
             "apps/packages/product-client/src/hooks/chat/workflows/alias-real.ts": (
                 "import { useMutation as mutate } from '@tanstack/react-query';\n"
@@ -1654,29 +1592,23 @@ class ProductClientBoundaryTest(unittest.TestCase):
                 "const { useMutation: mutate } = Query;\n"
             ),
             "apps/packages/product-client/src/hooks/chat/workflows/dynamic-then.ts": (
-                "import('@tanstack/react-query').then("
-                "({ useQuery: query }) => query());\n"
+                "import('@tanstack/react-query').then(({ useQuery: query }) => query());\n"
             ),
             "apps/packages/product-client/src/stores/chat/raw-alias-safe.ts": (
-                "import { createTranscriptState as getAnyHarnessClient } "
-                "from '@anyharness/sdk';\n"
+                "import { createTranscriptState as getAnyHarnessClient } from '@anyharness/sdk';\n"
             ),
             "apps/packages/product-client/src/stores/chat/raw-string-name.ts": (
-                "import { 'getAnyHarnessClient' as makeClient } "
-                "from '@anyharness/sdk';\n"
+                "import { 'getAnyHarnessClient' as makeClient } from '@anyharness/sdk';\n"
             ),
             "apps/packages/product-client/src/stores/chat/raw-dynamic-member.ts": (
-                "const makeClient = (await import('@anyharness/sdk'))"
-                ".getAnyHarnessClient;\n"
+                "const makeClient = (await import('@anyharness/sdk')).getAnyHarnessClient;\n"
             ),
         }
         with tempfile.TemporaryDirectory() as directory:
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         query_paths = {
-            violation.path.name
-            for violation in violations
-            if violation.rule_id == "FE-CACHE-2"
+            violation.path.name for violation in violations if violation.rule_id == "FE-CACHE-2"
         }
         self.assertEqual(
             query_paths,
@@ -1700,16 +1632,13 @@ class ProductClientBoundaryTest(unittest.TestCase):
     def test_dynamic_then_bindings_are_checked_only_inside_their_callbacks(self) -> None:
         files = {
             "apps/packages/product-client/src/hooks/chat/workflows/async-query.ts": (
-                "import('@tanstack/react-query').then(async "
-                "({ useQuery: query }) => query());\n"
+                "import('@tanstack/react-query').then(async ({ useQuery: query }) => query());\n"
             ),
             "apps/packages/product-client/src/hooks/chat/workflows/namespace-query.ts": (
-                "import('@tanstack/react-query').then("
-                "Query => Query.useInfiniteQuery());\n"
+                "import('@tanstack/react-query').then(Query => Query.useInfiniteQuery());\n"
             ),
             "apps/packages/product-client/src/hooks/chat/workflows/generic-namespace-query.ts": (
-                "import('@tanstack/react-query').then<void>("
-                "Query => void Query.useMutation());\n"
+                "import('@tanstack/react-query').then<void>(Query => void Query.useMutation());\n"
             ),
             "apps/packages/product-client/src/hooks/chat/workflows/sibling-safe.ts": (
                 "import('@tanstack/react-query').then("
@@ -1733,9 +1662,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         query_paths = {
-            violation.path.name
-            for violation in violations
-            if violation.rule_id == "FE-CACHE-2"
+            violation.path.name for violation in violations if violation.rule_id == "FE-CACHE-2"
         }
         self.assertEqual(
             query_paths,
@@ -1822,9 +1749,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         set_state_paths = {
-            violation.path.name
-            for violation in violations
-            if violation.rule_id == "FE-STORE-3"
+            violation.path.name for violation in violations if violation.rule_id == "FE-STORE-3"
         }
         self.assertEqual(
             set_state_paths,
@@ -1882,8 +1807,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
         purity_rules = [
             violation.rule_id
             for violation in violations
-            if violation.rule_id
-            in {"FE-DOMAIN-1", "FE-DOMAIN-2"}
+            if violation.rule_id in {"FE-DOMAIN-1", "FE-DOMAIN-2"}
         ]
         self.assertEqual(
             purity_rules,
@@ -1895,7 +1819,9 @@ class ProductClientBoundaryTest(unittest.TestCase):
             ],
         )
 
-    def test_for_initializer_imports_and_function_scoped_var_shadows_are_distinguished(self) -> None:
+    def test_for_initializer_imports_and_function_scoped_var_shadows_are_distinguished(
+        self,
+    ) -> None:
         files = {
             "apps/packages/product-client/src/hooks/chat/workflows/for-query.ts": (
                 "async function inspect() {\n"
@@ -1934,9 +1860,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         query_paths = {
-            violation.path.name
-            for violation in violations
-            if violation.rule_id == "FE-CACHE-2"
+            violation.path.name for violation in violations if violation.rule_id == "FE-CACHE-2"
         }
         self.assertEqual(query_paths, {"for-query.ts"})
         set_state = [
@@ -1946,7 +1870,9 @@ class ProductClientBoundaryTest(unittest.TestCase):
         ]
         self.assertEqual(set_state, [("for-store.ts", 3), ("var-store.ts", 6)])
 
-    def test_executable_template_and_jsx_code_is_checked_but_display_text_and_regex_pass(self) -> None:
+    def test_executable_template_and_jsx_code_is_checked_but_display_text_and_regex_pass(
+        self,
+    ) -> None:
         files = {
             "apps/packages/product-client/src/hooks/chat/template.ts": (
                 "const direct = import(`#product/components/Direct`);\n"
@@ -1967,10 +1893,7 @@ class ProductClientBoundaryTest(unittest.TestCase):
             violations = self.run_product_rules(Path(directory).resolve(), files)
 
         relevant = [
-            violation
-            for violation in violations
-            if violation.rule_id
-            in {"FE-PC-6", "FE-PC-5"}
+            violation for violation in violations if violation.rule_id in {"FE-PC-6", "FE-PC-5"}
         ]
         self.assertEqual(len(relevant), 5)
         self.assertEqual(
@@ -2094,12 +2017,15 @@ class ProductClientBoundaryTest(unittest.TestCase):
             )
 
             # Both sites present: the grandfathered one passes, the new one fails.
-            with patch.multiple(
-                check_module,
-                REPO_ROOT=root,
-                tolerated_sites=lambda: ledger,
-                collect_violations=lambda: [listed, unlisted],
-            ), redirect_stdout(StringIO()) as output:
+            with (
+                patch.multiple(
+                    check_module,
+                    REPO_ROOT=root,
+                    tolerated_sites=lambda: ledger,
+                    collect_violations=lambda: [listed, unlisted],
+                ),
+                redirect_stdout(StringIO()) as output,
+            ):
                 self.assertEqual(check_module.main(), 1)
             printed = output.getvalue()
             self.assertIn(rule_id, printed)
@@ -2108,24 +2034,30 @@ class ProductClientBoundaryTest(unittest.TestCase):
             self.assertNotIn("found: listed", printed)
 
             # Listed site repaired, nothing left: its entry is now stale.
-            with patch.multiple(
-                check_module,
-                REPO_ROOT=root,
-                tolerated_sites=lambda: ledger,
-                collect_violations=lambda: [],
-            ), redirect_stdout(StringIO()) as output:
+            with (
+                patch.multiple(
+                    check_module,
+                    REPO_ROOT=root,
+                    tolerated_sites=lambda: ledger,
+                    collect_violations=lambda: [],
+                ),
+                redirect_stdout(StringIO()) as output,
+            ):
                 self.assertEqual(check_module.main(), 1)
             printed = output.getvalue()
             self.assertIn("Stale frontend exception entries:", printed)
             self.assertIn(granted, printed)
 
             # Only the listed site: clean, which is what carry-forward means.
-            with patch.multiple(
-                check_module,
-                REPO_ROOT=root,
-                tolerated_sites=lambda: ledger,
-                collect_violations=lambda: [listed],
-            ), redirect_stdout(StringIO()):
+            with (
+                patch.multiple(
+                    check_module,
+                    REPO_ROOT=root,
+                    tolerated_sites=lambda: ledger,
+                    collect_violations=lambda: [listed],
+                ),
+                redirect_stdout(StringIO()),
+            ):
                 self.assertEqual(check_module.main(), 0)
 
 
@@ -2178,10 +2110,7 @@ class ModuleSpecifierCollectorTest(unittest.TestCase):
             ["import-equals", "common-js", "vitest-mock", "jest-mock"],
         )
         self.assertTrue(
-            all(
-                statement.runtime_imported_names == frozenset({"*"})
-                for statement in statements
-            )
+            all(statement.runtime_imported_names == frozenset({"*"}) for statement in statements)
         )
 
     def test_augmented_collector_accepts_non_null_and_generic_loader_calls(self) -> None:
@@ -2231,9 +2160,12 @@ class ModuleSpecifierCollectorTest(unittest.TestCase):
             '(<typeof require>require)(<string>"angle-require");\n'
             '(<typeof vi>vi).mock(("angle-vi"!));\n'
             '(<typeof jest>jest)!.mock<ModuleShape>(<string>"angle-jest");\n'
-            r'requ\u0069re("escaped-require");' "\n"
-            r'v\u{69}.m\u006fck("escaped-vi");' "\n"
-            r'j\u0065st.mock("escaped-jest");' "\n"
+            r'requ\u0069re("escaped-require");'
+            "\n"
+            r'v\u{69}.m\u006fck("escaped-vi");'
+            "\n"
+            r'j\u0065st.mock("escaped-jest");'
+            "\n"
         )
 
         statements = collect_module_specifiers(Path("Sample.ts"), source)
@@ -2358,9 +2290,7 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
             paths.append(path)
         return paths
 
-    def run_domain_rules(
-        self, root: Path, files: dict[str, str]
-    ) -> list[check_module.Violation]:
+    def run_domain_rules(self, root: Path, files: dict[str, str]) -> list[check_module.Violation]:
         paths = self.write_files(root, files)
         product_src = root / "apps/packages/product-client/src"
         domain_src = product_src / "domain"
@@ -2391,7 +2321,7 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
                 'export { reduceEvents } from "@anyharness/sdk";\n'
                 'import { parseToolBackgroundWork } from "@anyharness/sdk";\n'
                 'import type { Model } from "./model";\n'
-                "const load = () => import(\"@anyharness/sdk\").then("
+                'const load = () => import("@anyharness/sdk").then('
                 "({ deriveCanonicalPlan }) => deriveCanonicalPlan);\n"
             ),
             "apps/packages/product-client/src/domain/workflows/definition-v2.test.ts": (
@@ -2469,9 +2399,7 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
                 boundary_violations = [
                     violation
                     for path in paths
-                    for violation in check_module.find_product_client_domain_violations(
-                        path
-                    )
+                    for violation in check_module.find_product_client_domain_violations(path)
                 ]
             with patch.multiple(
                 structure_module,
@@ -2483,13 +2411,11 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
                     "product-client": product_src,
                 },
             ):
-                structure_violations = (
-                    structure_module.find_forbidden_shared_package_imports(paths)
+                structure_violations = structure_module.find_forbidden_shared_package_imports(
+                    paths
                 )
 
-        expected_paths = {
-            f"raw-client-core-{index}.ts" for index in range(len(raw_names))
-        }
+        expected_paths = {f"raw-client-core-{index}.ts" for index in range(len(raw_names))}
         self.assertEqual(
             {violation.path.name for violation in boundary_violations},
             expected_paths,
@@ -2528,15 +2454,11 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
             f"{prefix}/type-anyharness-module.ts": (
                 'type Sdk = typeof import("@anyharness/sdk");\n'
             ),
-            f"{prefix}/lone-type-runtime.ts": (
-                'import { type } from "@anyharness/sdk";\n'
-            ),
+            f"{prefix}/lone-type-runtime.ts": ('import { type } from "@anyharness/sdk";\n'),
             f"{prefix}/sdk-react.ts": (
                 'import { getAnyHarnessClient } from "@anyharness/sdk-react";\n'
             ),
-            f"{prefix}/self-alias.ts": (
-                'import { model } from "#product/domain/chats/model";\n'
-            ),
+            f"{prefix}/self-alias.ts": ('import { model } from "#product/domain/chats/model";\n'),
             f"{prefix}/self-package.ts": (
                 "import { model } from "
                 '"@proliferate/product-client/internal/domain/chats/model";\n'
@@ -2612,11 +2534,7 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             violations = self.run_domain_rules(Path(directory).resolve(), files)
 
-        escapes = [
-            violation
-            for violation in violations
-            if violation.rule_id == "FE-PC-3"
-        ]
+        escapes = [violation for violation in violations if violation.rule_id == "FE-PC-3"]
         self.assertEqual(len(escapes), 3)
 
     def test_structure_classifier_checks_nested_domain_before_product_client(self) -> None:
@@ -2631,7 +2549,7 @@ class ProductClientDomainBoundaryTest(unittest.TestCase):
                         "import { createTranscriptState, type TranscriptState } "
                         'from "@anyharness/sdk";\n'
                         "import type { FeedWebSocketAuthTransport, "
-                        "SessionMcpTransport } from \"@anyharness/sdk\";\n"
+                        'SessionMcpTransport } from "@anyharness/sdk";\n'
                     ),
                     "apps/packages/product-client/src/domain/raw.ts": (
                         'import { AnyHarnessClient } from "@anyharness/sdk";\n'
@@ -2692,9 +2610,7 @@ class MobileProductClientBoundaryTest(unittest.TestCase):
             paths.append(path)
         return paths
 
-    def run_mobile_rules(
-        self, root: Path, source: str
-    ) -> list[check_module.Violation]:
+    def run_mobile_rules(self, root: Path, source: str) -> list[check_module.Violation]:
         mobile_src = root / "apps/mobile/src"
         product_src = root / "apps/packages/product-client/src"
         domain_src = product_src / "domain"
@@ -2715,9 +2631,7 @@ class MobileProductClientBoundaryTest(unittest.TestCase):
             PRODUCT_CLIENT_SRC=product_src,
             PRODUCT_CLIENT_DOMAIN_SRC=domain_src,
         ):
-            return check_module.find_mobile_product_client_import_violations(
-                mobile_file
-            )
+            return check_module.find_mobile_product_client_import_violations(mobile_file)
 
     def test_mobile_accepts_all_literal_forms_for_one_concrete_domain_file(self) -> None:
         target = "@proliferate/product-client/internal/domain/chats/model"
@@ -2752,20 +2666,20 @@ class MobileProductClientBoundaryTest(unittest.TestCase):
             'import { directory } from "@proliferate/product-client/internal/domain/chats/model/";\n'
             'import { domain } from "../../packages/product-client/src/domain/chats/model";\n'
             'import { view } from "../../packages/product-client/src/components/View";\n'
-            '(<typeof require>require)(<string>'
+            "(<typeof require>require)(<string>"
             '"@proliferate/product-client/internal/components/Angle");\n'
             r'requ\u0069re("@proliferate/product-client/internal/components/Escaped");'
             "\n"
             'require?.("@proliferate/" + '
             '"product-client/internal/components/Optional");\n'
             'void import(`@proliferate/${"product-client"}'
-            '/internal/components/Template`);\n'
-            'void import(true ? '
+            "/internal/components/Template`);\n"
+            "void import(true ? "
             '"@proliferate/product-client/internal/components/Conditional" '
             ': "./local");\n'
             'require("" || '
             '"@proliferate/product-client/internal/components/Logical");\n'
-            'require((0, '
+            "require((0, "
             '"@proliferate/product-client/internal/components/Sequence"));\n'
             '(<typeof vi>vi).mock(("@proliferate/'
             'product-client/internal/components/Asserted"!));\n'
@@ -2798,9 +2712,7 @@ class LucideIconSourceTest(unittest.TestCase):
             with patch.object(check_module, "LUCIDE_SCANNED_MANIFESTS", []):
                 violations = check_module.find_lucide_icon_source_violations([path])
         self.assertEqual([violation.lineno for violation in violations], [1, 2, 3])
-        self.assertTrue(
-            all(violation.rule_id == "LUCIDE_ICON_SOURCE" for violation in violations)
-        )
+        self.assertTrue(all(violation.rule_id == "LUCIDE_ICON_SOURCE" for violation in violations))
 
     def test_reports_a_manifest_dependency_entry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

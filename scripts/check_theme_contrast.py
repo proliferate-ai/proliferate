@@ -70,9 +70,7 @@ from scripts import lint_records  # noqa: E402  (path shim must precede the impo
 
 CHECKER = "scripts/check_theme_contrast.py"
 RULES = lint_records.load("product")
-OWNED_RULE_IDS = frozenset(
-    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
-)
+OWNED_RULE_IDS = frozenset(rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER)
 
 THEME_CSS = REPO_ROOT / "apps" / "packages" / "design" / "dist" / "theme.css"
 # The `path` every PROD-THEME exception entry is filed under: this checker
@@ -254,11 +252,7 @@ class Rgb:
     b: float
 
     def hex(self) -> str:
-        return "#{:02x}{:02x}{:02x}".format(
-            round(max(0.0, min(255.0, self.r))),
-            round(max(0.0, min(255.0, self.g))),
-            round(max(0.0, min(255.0, self.b))),
-        )
+        return f"#{round(max(0.0, min(255.0, self.r))):02x}{round(max(0.0, min(255.0, self.g))):02x}{round(max(0.0, min(255.0, self.b))):02x}"
 
 
 class Unresolvable(Exception):
@@ -450,7 +444,9 @@ class Resolver:
             )
         return composite(color, alpha, backdrop)
 
-    def resolve_with_alpha(self, name: str, seen: frozenset[str] = frozenset()) -> tuple[Rgb, float]:
+    def resolve_with_alpha(
+        self, name: str, seen: frozenset[str] = frozenset()
+    ) -> tuple[Rgb, float]:
         if name in seen:
             raise Unresolvable(f"cyclic token reference at {name}")
         if name not in self.declarations:

@@ -1,0 +1,16 @@
+# Ruff over the checker engines and repo tooling (scripts/**) — the last
+# unlinted Python in the repository (ruled 2026-08-26; see
+# delivery/testing-cicd/delivery-spec-lint-wiring.md and
+# lints/native-tools.md). Mirrors server/pyproject.toml's [tool.ruff] minus
+# ANN: the engines are stdlib scripts, and annotation discipline here is
+# mypy-free convention, not a gate. Version pinned where CI invokes it
+# (uvx ruff@0.16.2 — keep in lockstep with server/uv.lock).
+target-version = "py312"
+line-length = 99
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[lint.per-file-ignores]
+# Checker tests assert on long literal diagnostics.
+"test_*.py" = ["E501"]

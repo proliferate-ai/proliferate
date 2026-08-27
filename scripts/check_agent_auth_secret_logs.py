@@ -68,9 +68,7 @@ from scripts import lint_records  # noqa: E402  (path shim must precede the impo
 CHECKER = "scripts/check_agent_auth_secret_logs.py"
 RULE_ID = "PROD-AGENTAUTH-001"
 RULES = lint_records.load("product")
-OWNED_RULE_IDS = frozenset(
-    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
-)
+OWNED_RULE_IDS = frozenset(rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER)
 
 # (root, suffixes) — Python cloud gateway surface, the ciphertext/plaintext
 # custody planes (store + models + encryption, where ``value_ciphertext`` and

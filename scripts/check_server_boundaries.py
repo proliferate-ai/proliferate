@@ -1067,9 +1067,7 @@ def check_structure(repo_root: Path = REPO_ROOT) -> list[Violation]:
     return violations
 
 
-def disambiguate(
-    violations: list[Violation], repo_root: Path = REPO_ROOT
-) -> list[Violation]:
+def disambiguate(violations: list[Violation], repo_root: Path = REPO_ROOT) -> list[Violation]:
     """Give repeated fingerprints an occurrence ordinal, in file order.
 
     Two hits of the same rule can share a fingerprint — the same matched token
@@ -1086,9 +1084,7 @@ def disambiguate(
         if len(group) == 1:
             out.extend(group)
             continue
-        for ordinal, violation in enumerate(
-            sorted(group, key=lambda item: item.lineno), start=1
-        ):
+        for ordinal, violation in enumerate(sorted(group, key=lambda item: item.lineno), start=1):
             out.append(
                 violation
                 if ordinal == 1

@@ -52,11 +52,7 @@ def main() -> int:
 
     rule = RULES.rule(RULE_ID)
     for path in existing_paths:
-        print(
-            lint_records.render_diagnostic(
-                rule, path, "retired path exists again"
-            )
-        )
+        print(lint_records.render_diagnostic(rule, path, "retired path exists again"))
         print()
     return 1
 

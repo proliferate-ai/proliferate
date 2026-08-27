@@ -60,9 +60,7 @@ STORE_REF_RE = re.compile(
 USE_HEAD_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\b")
 CRATE_GROUP_DOMAIN_RE = re.compile(r"\bdomains\s*::\s*([a-z_][a-z0-9_]*)")
 CRATE_GROUP_STORE_RE = re.compile(r"\bdomains\s*::\s*([a-z_][a-z0-9_]*)\s*::\s*store\b")
-DOMAIN_GROUP_STORE_RE = re.compile(
-    r"crate::domains::([a-z_][a-z0-9_]*)\s*::\s*\{[^;]*\bstore\b"
-)
+DOMAIN_GROUP_STORE_RE = re.compile(r"crate::domains::([a-z_][a-z0-9_]*)\s*::\s*\{[^;]*\bstore\b")
 MAX_STATEMENT_LINES = 100
 
 # A violation's fingerprint is `<enclosing symbol>::<content anchor>` — never a

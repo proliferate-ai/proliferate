@@ -10,11 +10,11 @@ fine-grained `(path, site)` fingerprints — never counts.
 
 from __future__ import annotations
 
+import re
+import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-import re
-import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -29,9 +29,7 @@ LIB_SRC = REPO_ROOT.joinpath(*LIB_SRC_RELATIVE)
 CHECKER = "scripts/check_anyharness_boundaries.py"
 
 RULES = lint_records.load("anyharness")
-OWNED_RULE_IDS = frozenset(
-    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
-)
+OWNED_RULE_IDS = frozenset(rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER)
 
 # Tests point the scan at a fabricated tree via `scan_root(...)` (or by calling
 # `check_file`/`collect_violations` with an explicit root). When no override is
@@ -63,6 +61,7 @@ def scan_root(root: Path | None):
     finally:
         _ROOT_OVERRIDE = previous
 
+
 HTTP_TRANSPORT_ROOTS = {"axum", "headers", "http", "http_body", "tower", "utoipa"}
 PRODUCT_DOMAIN_ROOTS = {"domains"}
 # `acp` used to be its own crate root (`crate::acp::..`) and lived in this set.
@@ -75,9 +74,7 @@ PRODUCT_DOMAIN_ROOTS = {"domains"}
 # set including "acp".
 LIVE_RUNTIME_ROOTS = {"live"}
 PRODUCT_SURFACE_DOMAINS = {"cowork", "mobility", "plans", "plugins", "reviews"}
-DOMAIN_PATH_PREFIXES = (
-    "anyharness/crates/anyharness-lib/src/domains/",
-)
+DOMAIN_PATH_PREFIXES = ("anyharness/crates/anyharness-lib/src/domains/",)
 CORE_DOMAIN_PATH_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/domains/agents/",
     "anyharness/crates/anyharness-lib/src/domains/repo_roots/",
@@ -95,9 +92,7 @@ LIVE_SESSIONS_PRIVATE_MODULES = {
     "interactions",
     "replay",
 }
-SESSION_EVENT_SINK_PREFIXES = (
-    "anyharness/crates/anyharness-lib/src/live/sessions/event_sink/",
-)
+SESSION_EVENT_SINK_PREFIXES = ("anyharness/crates/anyharness-lib/src/live/sessions/event_sink/",)
 TOKEN_RE = re.compile(r"r#[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*|::|[{}(),;*]")
 # `\b` rather than `\s+` after `use`: a statement whose path is pushed to the next
 # line leaves `use` (or `pub use`) alone on the head line, and demanding trailing
@@ -419,9 +414,8 @@ def is_contract_request_response_import(import_path: ImportPath) -> bool:
 
 
 def in_api_or_app(relative_path: str) -> bool:
-    return (
-        is_under(relative_path, "anyharness/crates/anyharness-lib/src/api/")
-        or is_under(relative_path, "anyharness/crates/anyharness-lib/src/app/")
+    return is_under(relative_path, "anyharness/crates/anyharness-lib/src/api/") or is_under(
+        relative_path, "anyharness/crates/anyharness-lib/src/app/"
     )
 
 
@@ -499,9 +493,7 @@ def is_domain_store_or_service_import(import_path: ImportPath) -> bool:
 
 
 def is_domain_store_import(import_path: ImportPath) -> bool:
-    return import_path.starts_with_crate("domains") and has_segment(
-        import_path, STORE_SEGMENTS
-    )
+    return import_path.starts_with_crate("domains") and has_segment(import_path, STORE_SEGMENTS)
 
 
 def should_skip(path: Path) -> bool:
@@ -719,8 +711,7 @@ def check_api_import(
 ) -> None:
     add_import_if(
         violations,
-        import_path.crate_root in LIVE_RUNTIME_ROOTS
-        or is_acp_runtime_import(import_path),
+        import_path.crate_root in LIVE_RUNTIME_ROOTS or is_acp_runtime_import(import_path),
         "AH-API-1",
         path,
         import_path.crate_root_line,
@@ -1024,9 +1015,7 @@ def check_domain_contract_crate_import(
     keeps one stable site even when later leaves are added or removed.
     """
     contract_paths = [
-        import_path
-        for import_path in import_paths
-        if import_path.root == CONTRACT_CRATE_ROOT
+        import_path for import_path in import_paths if import_path.root == CONTRACT_CRATE_ROOT
     ]
     if not contract_paths:
         return
@@ -1078,9 +1067,7 @@ def check_domain_valve_live_reexport(
     if not PUB_USE_START_RE.search(" ".join(line.strip() for line in lines)):
         return
     reexports = [
-        import_path
-        for import_path in import_paths
-        if is_non_model_live_reexport(import_path)
+        import_path for import_path in import_paths if is_non_model_live_reexport(import_path)
     ]
     if not reexports:
         return
@@ -1148,21 +1135,24 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
             # The anchor carries the named type, not the bare crate prefix, so two
             # different inline contract types in one function stay distinct sites.
             anchor = (
-                re.match(r"anyharness_contract(?:::[A-Za-z_][A-Za-z0-9_]*)*", line[match.start() :])
-                .group(0)
+                re.match(
+                    r"anyharness_contract(?:::[A-Za-z_][A-Za-z0-9_]*)*", line[match.start() :]
+                ).group(0)
                 if match
                 else ""
             )
-            add_if(
-                violations, bool(anchor), "AH-CONTRACT-1", path, lineno, anchor, anchor
-            )
+            add_if(violations, bool(anchor), "AH-CONTRACT-1", path, lineno, anchor, anchor)
         if check_policy_purity and not inside_use_statement:
             anchor = first_match(POLICY_IMPURITY_RES, line)
             add_if(violations, bool(anchor), "AH-POLICY-1", path, lineno, anchor, anchor)
         if check_domain_sql:
             anchor = first_match(SQL_RES, line)
             add_if(violations, bool(anchor), "AH-STORE-3", path, lineno, anchor, anchor)
-        anchor = "" if allow_session_private else first_match((SESSION_COMMAND_QUALIFIED_PATH_RE,), line)
+        anchor = (
+            ""
+            if allow_session_private
+            else first_match((SESSION_COMMAND_QUALIFIED_PATH_RE,), line)
+        )
         add_if(violations, bool(anchor), "AH-LIVE-3", path, lineno, anchor, anchor)
         anchor = "" if allow_command_tx else first_match((COMMAND_TX_ACCESS_RE,), line)
         add_if(violations, bool(anchor), "AH-LIVE-4", path, lineno, anchor, anchor)
@@ -1178,9 +1168,7 @@ def check_line_patterns(violations: list[Violation], path: Path) -> None:
         if check_contract_types and not is_use_line:
             match = CONTRACT_REQUEST_RESPONSE_RE.search(line)
             anchor = match.group(1) if match else ""
-            add_if(
-                violations, bool(anchor), "AH-CONTRACT-2", path, lineno, anchor, anchor
-            )
+            add_if(violations, bool(anchor), "AH-CONTRACT-2", path, lineno, anchor, anchor)
 
 
 def check_file(path: Path, root: Path | None = None) -> list[Violation]:
@@ -1237,9 +1225,7 @@ def _check_file(path: Path) -> list[Violation]:
         if in_domains:
             check_domain_contract_crate_import(violations, path, start_line, import_paths)
         if in_live_valve:
-            check_domain_valve_live_reexport(
-                violations, path, start_line, lines, import_paths
-            )
+            check_domain_valve_live_reexport(violations, path, start_line, lines, import_paths)
 
     check_line_patterns(violations, path)
     return violations
@@ -1264,9 +1250,7 @@ def disambiguate(violations: list[Violation]) -> list[Violation]:
         if len(group) == 1:
             out.extend(group)
             continue
-        for ordinal, violation in enumerate(
-            sorted(group, key=lambda item: item.lineno), start=1
-        ):
+        for ordinal, violation in enumerate(sorted(group, key=lambda item: item.lineno), start=1):
             out.append(
                 violation
                 if ordinal == 1

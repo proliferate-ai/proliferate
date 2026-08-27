@@ -9,21 +9,21 @@ diagnostic is rendered from its record, so rule wording lives with the rule.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import json
-from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import unquote
 
 try:
-    from scripts.frontend_imports import collect_module_specifiers
     from scripts import lint_records
+    from scripts.frontend_imports import collect_module_specifiers
 except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
-    from frontend_imports import collect_module_specifiers
     import lint_records
+    from frontend_imports import collect_module_specifiers
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +42,7 @@ def display_path(path: Path, repo_root: Path = REPO_ROOT) -> str:
 
 def diagnostic(rule_id: str, location: str, detail: str) -> str:
     return lint_records.render_diagnostic(RULES.rule(rule_id), location, detail)
+
 
 EXPECTED_METRO_CONDITIONS = {
     "ios": ["react-native"],
@@ -89,15 +90,11 @@ def clean_module_source(source: str) -> str:
     return source.split("?", 1)[0].split("#", 1)[0]
 
 
-def relative_import_targets_product_client(
-    path: Path, source: str, *, repo_root: Path
-) -> bool:
+def relative_import_targets_product_client(path: Path, source: str, *, repo_root: Path) -> bool:
     if not source.startswith("."):
         return False
     resolved = (path.parent / clean_module_source(source)).resolve()
-    product_client_root = (
-        repo_root / "apps" / "packages" / "product-client"
-    ).resolve()
+    product_client_root = (repo_root / "apps" / "packages" / "product-client").resolve()
     try:
         resolved.relative_to(product_client_root)
     except ValueError:
@@ -142,9 +139,7 @@ def validate_mobile_tsconfig(repo_root: Path = REPO_ROOT) -> list[str]:
         return [diagnostic("FE-EXPORT-1", location, "expected a JSON object")]
     compiler_options = config.get("compilerOptions", {})
     if not isinstance(compiler_options, dict):
-        return [
-            diagnostic("FE-EXPORT-1", location, "compilerOptions must be an object")
-        ]
+        return [diagnostic("FE-EXPORT-1", location, "compilerOptions must be an object")]
 
     errors: list[str] = []
     if "baseUrl" in compiler_options:
@@ -152,8 +147,7 @@ def validate_mobile_tsconfig(repo_root: Path = REPO_ROOT) -> list[str]:
             diagnostic(
                 "FE-EXPORT-1",
                 location,
-                "compilerOptions.baseUrl must be absent so Expo cannot "
-                "intercept package exports",
+                "compilerOptions.baseUrl must be absent so Expo cannot intercept package exports",
             )
         )
     if "paths" in compiler_options:
@@ -184,8 +178,7 @@ def load_effective_metro_facts(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
         facts = json.loads(result.stdout)
     except json.JSONDecodeError as error:
         raise ValueError(
-            "apps/mobile/metro.config.js probe did not return valid JSON: "
-            f"{error.msg}"
+            f"apps/mobile/metro.config.js probe did not return valid JSON: {error.msg}"
         ) from error
     if not isinstance(facts, dict):
         raise ValueError("apps/mobile/metro.config.js probe returned a non-object")
@@ -246,9 +239,7 @@ def validate_internal_export(
     internal = exports.get("./internal/*")
     if not isinstance(internal, dict):
         return None, [
-            diagnostic(
-                "FE-EXPORT-4", location, "exports['./internal/*'] must be an object"
-            )
+            diagnostic("FE-EXPORT-4", location, "exports['./internal/*'] must be an object")
         ]
 
     errors: list[str] = []
@@ -284,13 +275,7 @@ def validate_internal_export(
 
 
 def valid_domain_subpath(subpath: str) -> bool:
-    if (
-        not subpath
-        or subpath.endswith("/")
-        or "?" in subpath
-        or "#" in subpath
-        or "\\" in subpath
-    ):
+    if not subpath or subpath.endswith("/") or "?" in subpath or "#" in subpath or "\\" in subpath:
         return False
     return all(part not in {"", ".", ".."} for part in subpath.split("/"))
 
@@ -364,15 +349,11 @@ def validate_mobile_edges(
                     )
                 )
             checked_runtime_targets.add(runtime_target)
-        if (
-            runtime_target not in checked_declaration_targets
-            and not declaration_path.is_file()
-        ):
+        if runtime_target not in checked_declaration_targets and not declaration_path.is_file():
             errors.append(
                 edge.format(
                     "FE-EXPORT-7",
-                    "missing adjacent ProductClient declaration target "
-                    f"{declaration_path}",
+                    f"missing adjacent ProductClient declaration target {declaration_path}",
                     repo_root=repo_root,
                 )
             )
@@ -389,17 +370,13 @@ def check_preflight(
     try:
         errors.extend(validate_mobile_tsconfig(repo_root))
     except ValueError as error:
-        errors.append(
-            diagnostic("FE-EXPORT-1", "apps/mobile/tsconfig.json", str(error))
-        )
+        errors.append(diagnostic("FE-EXPORT-1", "apps/mobile/tsconfig.json", str(error)))
 
     if metro_facts is None:
         try:
             metro_facts = load_effective_metro_facts(repo_root)
         except ValueError as error:
-            errors.append(
-                diagnostic("FE-EXPORT-3", "apps/mobile/metro.config.js", str(error))
-            )
+            errors.append(diagnostic("FE-EXPORT-3", "apps/mobile/metro.config.js", str(error)))
     if metro_facts is not None:
         errors.extend(validate_metro_facts(metro_facts))
 
@@ -462,9 +439,7 @@ def source_map_sources(value: Any) -> tuple[list[str], list[str]]:
                 if not isinstance(source_root, str):
                     note(context, "sourceRoot must be a string")
                     source_root = ""
-                sources.extend(
-                    source_with_root(source_root, source) for source in raw_sources
-                )
+                sources.extend(source_with_root(source_root, source) for source in raw_sources)
         elif sections is None:
             note(context, "source map has neither sources nor sections")
 
@@ -528,11 +503,7 @@ def check_export_maps(export_dir: Path) -> list[str]:
         ]
     map_paths = sorted(export_dir.rglob("*.map"))
     if not map_paths:
-        return [
-            diagnostic(
-                "FE-EXPORT-9", export_dir.as_posix(), "no emitted source maps found"
-            )
-        ]
+        return [diagnostic("FE-EXPORT-9", export_dir.as_posix(), "no emitted source maps found")]
 
     errors: list[str] = []
     product_client_sources = 0
@@ -543,9 +514,7 @@ def check_export_maps(export_dir: Path) -> list[str]:
             errors.append(diagnostic("FE-EXPORT-9", path.as_posix(), str(error)))
             continue
         sources, map_errors = source_map_sources(mapping)
-        errors.extend(
-            diagnostic("FE-EXPORT-9", path.as_posix(), error) for error in map_errors
-        )
+        errors.extend(diagnostic("FE-EXPORT-9", path.as_posix(), error) for error in map_errors)
         for source in sources:
             package_path = classify_product_client_source(source)
             if package_path is None:
@@ -556,8 +525,7 @@ def check_export_maps(export_dir: Path) -> list[str]:
                     diagnostic(
                         "FE-EXPORT-9",
                         path.as_posix(),
-                        "forbidden ProductClient source in Mobile export: "
-                        f"{source!r}",
+                        f"forbidden ProductClient source in Mobile export: {source!r}",
                     )
                 )
 

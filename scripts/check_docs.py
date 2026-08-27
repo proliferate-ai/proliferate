@@ -20,7 +20,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     # Run as `python3 scripts/check_docs.py` from the repo root, sys.path[0] is
@@ -31,9 +30,7 @@ from scripts import lint_records  # noqa: E402  (path shim must precede the impo
 
 CHECKER = "scripts/check_docs.py"
 RULES = lint_records.load("product")
-OWNED_RULE_IDS = frozenset(
-    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
-)
+OWNED_RULE_IDS = frozenset(rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER)
 
 
 @dataclass(frozen=True)
@@ -46,10 +43,7 @@ class Finding:
 
     def format(self) -> str:
         """The record-generated diagnostic: rule, alternative, record path."""
-        return lint_records.render_diagnostic(
-            RULES.rule(self.rule_id), self.location, self.detail
-        )
-
+        return lint_records.render_diagnostic(RULES.rule(self.rule_id), self.location, self.detail)
 
 
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
@@ -178,11 +172,7 @@ def tracked_paths(*patterns: str) -> list[Path]:
         capture_output=True,
         text=True,
     ).stdout
-    return [
-        Path(line)
-        for line in output.splitlines()
-        if line and (ROOT / line).exists()
-    ]
+    return [Path(line) for line in output.splitlines() if line and (ROOT / line).exists()]
 
 
 def visible_markdown_lines(text: str):
@@ -338,9 +328,7 @@ def check_markdown() -> list[Finding]:
                 continue
 
             if not destination.exists():
-                findings.append(
-                    Finding("PROD-DOCS-5", location, f"missing link target {target}")
-                )
+                findings.append(Finding("PROD-DOCS-5", location, f"missing link target {target}"))
                 continue
 
             if not separator or not fragment or destination.suffix.lower() != ".md":
@@ -438,9 +426,7 @@ def check_structured_data() -> list[Finding]:
                 result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
                 if result.returncode:
                     detail = (result.stderr or result.stdout).strip()
-                    findings.append(
-                        Finding("PROD-DOCS-8", location, f"invalid YAML: {detail}")
-                    )
+                    findings.append(Finding("PROD-DOCS-8", location, f"invalid YAML: {detail}"))
                     continue
 
                 try:
@@ -481,9 +467,12 @@ def check_specs_roots() -> list[Finding]:
             relative = path.relative_to(prefix)
         except ValueError:
             continue
-        if len(relative.parts) >= 2 and relative.parts[0] not in SPECS_ROOTS:
-            unexpected.add(relative.parts[0])
-        elif len(relative.parts) == 1 and relative.parts[0] not in SPECS_ROOT_FILES:
+        if (
+            len(relative.parts) >= 2
+            and relative.parts[0] not in SPECS_ROOTS
+            or len(relative.parts) == 1
+            and relative.parts[0] not in SPECS_ROOT_FILES
+        ):
             unexpected.add(relative.parts[0])
 
     allowed = ", ".join(sorted(SPECS_ROOTS) + sorted(SPECS_ROOT_FILES))
@@ -499,10 +488,7 @@ def check_specs_roots() -> list[Finding]:
 
 def main() -> int:
     findings = (
-        check_routing_roots()
-        + check_specs_roots()
-        + check_markdown()
-        + check_structured_data()
+        check_routing_roots() + check_specs_roots() + check_markdown() + check_structured_data()
     )
     if findings:
         print("Documentation integrity check failed:", file=sys.stderr)

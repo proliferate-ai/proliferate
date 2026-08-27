@@ -85,9 +85,7 @@ class LoaderTests(unittest.TestCase):
 
     def test_duplicate_rule_id_fails(self) -> None:
         with self.assertRaises(SystemExit) as ctx:
-            self._load_with(
-                "server", {"a.toml": VALID_RULE, "b.toml": VALID_RULE}
-            )
+            self._load_with("server", {"a.toml": VALID_RULE, "b.toml": VALID_RULE})
         self.assertIn("duplicate rule id", str(ctx.exception))
 
     def test_exception_without_site_fails(self) -> None:
@@ -100,17 +98,13 @@ class LoaderTests(unittest.TestCase):
             """
         )
         with self.assertRaises(SystemExit) as ctx:
-            self._load_with(
-                "server", {"test.toml": VALID_RULE, "exceptions.toml": counted}
-            )
+            self._load_with("server", {"test.toml": VALID_RULE, "exceptions.toml": counted})
         self.assertIn("missing fields", str(ctx.exception))
 
     def test_dangling_exception_rule_fails(self) -> None:
         dangling = VALID_EXCEPTION.replace("SRV-TEST-1", "SRV-GONE-9")
         with self.assertRaises(SystemExit) as ctx:
-            self._load_with(
-                "server", {"test.toml": VALID_RULE, "exceptions.toml": dangling}
-            )
+            self._load_with("server", {"test.toml": VALID_RULE, "exceptions.toml": dangling})
         self.assertIn("unknown rule ids", str(ctx.exception))
 
     def test_enforced_by_missing_file_fails(self) -> None:
@@ -153,9 +147,7 @@ class LoaderTests(unittest.TestCase):
         # `law` is a claim of zero exceptions; a ledger entry makes it a lie.
         law = VALID_RULE.replace('status = "holds"', 'status = "law"')
         with self.assertRaises(SystemExit) as ctx:
-            self._load_with(
-                "server", {"test.toml": law, "exceptions.toml": VALID_EXCEPTION}
-            )
+            self._load_with("server", {"test.toml": law, "exceptions.toml": VALID_EXCEPTION})
         message = str(ctx.exception)
         self.assertIn("SRV-TEST-1", message)
         self.assertIn("status 'law' means zero exceptions", message)
@@ -179,9 +171,7 @@ class LoaderTests(unittest.TestCase):
 
     def test_prose_gap_fails(self) -> None:
         # A gap is an issue reference, not a paragraph; prose belongs in `why`.
-        prose = VALID_RULE.replace(
-            'mode = "lint"', 'mode = "lint"\ngap = "the checker misses X"'
-        )
+        prose = VALID_RULE.replace('mode = "lint"', 'mode = "lint"\ngap = "the checker misses X"')
         with self.assertRaises(SystemExit) as ctx:
             self._load_with("server", {"test.toml": prose})
         message = str(ctx.exception)
@@ -243,9 +233,10 @@ class MainFloorTests(unittest.TestCase):
                 "product": self._rule_for("product", "PROD-TEST-1"),
             }
         )
-        with mock.patch.object(lint_records, "LINTS_ROOT", root), redirect_stdout(
-            StringIO()
-        ) as output:
+        with (
+            mock.patch.object(lint_records, "LINTS_ROOT", root),
+            redirect_stdout(StringIO()) as output,
+        ):
             self.assertEqual(lint_records.main(), 0)
         self.assertIn("4 rules", output.getvalue())
 

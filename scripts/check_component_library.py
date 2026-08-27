@@ -43,15 +43,14 @@ a migration must delete the entry in the commit that fixes the site.
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import posixpath
 import re
 import sys
-from typing import Iterable
-
+from collections import Counter, defaultdict
+from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
@@ -187,9 +186,7 @@ def iter_source_files(roots: Iterable[Path] = SCANNED_ROOTS) -> list[Path]:
         files.extend(
             path
             for path in sorted(root.rglob("*"))
-            if path.is_file()
-            and path.suffix in EXTENSIONS
-            and not path.name.endswith(".d.ts")
+            if path.is_file() and path.suffix in EXTENSIONS and not path.name.endswith(".d.ts")
         )
     return files
 
@@ -422,9 +419,7 @@ def registry_violations(
         consumers = {
             consumer
             for consumer in importers.get(target, set())
-            if consumer != target
-            and not is_test_path(consumer)
-            and not is_playground(consumer)
+            if consumer != target and not is_test_path(consumer) and not is_playground(consumer)
         }
         if not consumers:
             violations.append(
@@ -500,9 +495,7 @@ def tier_file_violations(
             if relative_path in NON_COMPONENT_TIER_FILES:
                 continue
             within = path.relative_to(root).as_posix()
-            if any(
-                within.startswith(directory) for directory in NON_COMPONENT_TIER_DIRECTORIES
-            ):
+            if any(within.startswith(directory) for directory in NON_COMPONENT_TIER_DIRECTORIES):
                 continue
             if path.resolve() in indexed:
                 continue
@@ -512,9 +505,7 @@ def tier_file_violations(
                     for consumer in importers.get(path.resolve(), set())
                     if consumer != path.resolve() and not is_test_path(consumer)
                 }
-                if consumers and all(
-                    consumer.parent == path.parent for consumer in consumers
-                ):
+                if consumers and all(consumer.parent == path.parent for consumer in consumers):
                     continue
             violations.append(
                 Violation(
@@ -535,9 +526,7 @@ def tier_file_violations(
 # --------------------------------------------------------------------------
 
 
-def kit_violations(
-    rows: list[RegistryRow], sources: dict[Path, str]
-) -> list[Violation]:
+def kit_violations(rows: list[RegistryRow], sources: dict[Path, str]) -> list[Violation]:
     violations: list[Violation] = []
     kit_dirs = sorted(
         path for path in PATTERNS_DIR.iterdir() if path.is_dir() and path.name != "__tests__"
@@ -546,7 +535,8 @@ def kit_violations(
     registered_kit_segments = {
         row.link.split("primitives/patterns/", 1)[1].split("/", 1)[0]
         for row in rows
-        if "primitives/patterns/" in row.link and "/" in row.link.split("primitives/patterns/", 1)[1]
+        if "primitives/patterns/" in row.link
+        and "/" in row.link.split("primitives/patterns/", 1)[1]
     }
     for kit_dir in kit_dirs:
         if kit_dir.name not in registered_kit_segments:

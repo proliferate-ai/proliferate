@@ -244,7 +244,9 @@ def check_catalog_construction() -> list[str]:
             location = f"{rel}:{lineno}"
             failures.append(
                 lint_records.render_diagnostic(
-                    rule, location, detail=f"CatalogSyncService::{match.group(1)}(..) outside the allowed construction sites"
+                    rule,
+                    location,
+                    detail=f"CatalogSyncService::{match.group(1)}(..) outside the allowed construction sites",
                 )
             )
     return failures
