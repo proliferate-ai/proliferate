@@ -20,12 +20,30 @@ from scripts import lint_records  # noqa: E402 - repo-root bootstrap above
 
 OLD_PATHS_RULE_ID = "FE-PATHS-1"
 
+PRODUCT_CLIENT = "apps/packages/product-client/src"
+
 BLOCKED_PATHS = (
-    # agent_auth slice 3: the client-side auth-evidence derivation. The runtime's
-    # per-harness status document is the single source of auth truth and the
-    # panes render it verbatim, so a second projection of "what the state means"
-    # is the four-sources-of-truth bug coming back.
-    "apps/packages/product-client/src/lib/domain/settings/agent-auth-evidence.ts",
+    # agent_auth slice 3, the client-side derivation of auth truth. The runtime's
+    # per-harness status document is the single source and the panes render it
+    # verbatim, so a second projection of "what the state means" is the
+    # four-sources-of-truth bug coming back. Each path below held a piece of that
+    # projection and was deleted with it:
+    #
+    # the derived evidence summary (isEvidenceGreen, the next-action fold).
+    f"{PRODUCT_CLIENT}/lib/domain/settings/agent-auth-evidence.ts",
+    # deriveAuthStatus / deriveProvidersStatus — the readiness + cliAuthState
+    # fallback ladder itself, and opencode's unconditional green.
+    f"{PRODUCT_CLIENT}/components/settings/panes/agents/harness/HarnessAuthStatusBadge.tsx",
+    # the client-side rotation projection (the document carries `rotate`,
+    # `next_seat_id`, and `cooling_until`; nothing re-derives them).
+    f"{PRODUCT_CLIENT}/lib/domain/settings/agent-auth-rotation.ts",
+    # the `agentAuthEvidencePanes` flag's module: a flag that chooses between the
+    # document and a derivation is the derivation, kept switchable.
+    f"{PRODUCT_CLIENT}/config/feature-flags.ts",
+    # the ~20s grace-window onboarding step. "The onboarding card is state-bound,
+    # never timed" (spec §4 cell 4): a timer that advances the card is a second,
+    # invisible source of "setup finished".
+    f"{PRODUCT_CLIENT}/hooks/agents/lifecycle/use-auth-setup-onboarding-step.ts",
 )
 
 

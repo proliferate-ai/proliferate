@@ -137,12 +137,15 @@ owner = "frontend"
 status = "law"
 enforced_by = "scripts/check_frontend_old_paths.py"
 mode = "lint"
-scope = "apps/packages/product-client/src/lib/domain/settings/agent-auth-evidence.ts"
+scope = "apps/packages/product-client/src (the agent_auth slice-3 deletions listed in scripts/check_frontend_old_paths.py)"
 
 rule = """A completed frontend path migration must not regain a compatibility
 shim: no source may exist at any path in
-scripts/check_frontend_old_paths.py's BLOCKED_PATHS. The closed path is the
-agent-auth evidence derivation (agent_auth slice 3)."""
+scripts/check_frontend_old_paths.py's BLOCKED_PATHS. The closed paths are the
+agent-auth client-side derivation and everything deleted with it (agent_auth
+slice 3): the evidence summary, the status badge that held
+deriveAuthStatus/deriveProvidersStatus, the rotation projection, the
+agentAuthEvidencePanes flag module, and the timed onboarding step."""
 alternative = """Render the runtime's per-harness status document through the one
 access-layer seam (`useHarnessStatus`), and keep presentation — words, tone, an
 age string — keyed off that document's own fields."""
@@ -150,7 +153,11 @@ why = """agent_auth's worst live bug class was four sources of auth truth: a
 client-side projection of "what this state means" drifts from the machine's, and
 a pane then shows a state the runtime does not hold. The runtime's status
 document is the single source; a second derivation re-opens the bug the deletion
-closed, and the panes' fences cannot see a file nobody imports yet."""
+closed, and the panes' fences cannot see a file nobody imports yet. The ban
+covers every file the deletion removed, not just the one with "evidence" in its
+name: the readiness/cliAuthState fallback ladder itself lived in
+HarnessAuthStatusBadge.tsx, and a flag module or a grace-window timer restores
+the same second source by another route."""
 
 [rule.example]
 bad = "apps/packages/product-client/src/lib/domain/settings/agent-auth-evidence.ts"
