@@ -12,9 +12,9 @@ from __future__ import annotations
 import importlib.util
 import re
 import sys
-from importlib.machinery import SourceFileLoader
 import tempfile
 import unittest
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -103,9 +103,7 @@ class ClassifyTests(unittest.TestCase):
         self.assertTrue(gate.classify(["anyharness/README.md"]).docs)
 
     def test_cicd_mjs_and_root_manifests_have_planes(self):
-        scope = gate.classify(
-            ["scripts/ci-cd/pr-metadata.mjs", "package.json", "pnpm-lock.yaml"]
-        )
+        scope = gate.classify(["scripts/ci-cd/pr-metadata.mjs", "package.json", "pnpm-lock.yaml"])
         self.assertTrue(scope.cicd)
         self.assertTrue(scope.shared_frontend)
         self.assertEqual(scope.unmapped, [])
@@ -116,9 +114,7 @@ class ClassifyTests(unittest.TestCase):
 
     def test_unknown_paths_are_reported_unmapped(self):
         scope = gate.classify(["random/thing.xyz", "scripts/git-hooks/pre-push"])
-        self.assertEqual(
-            scope.unmapped, ["random/thing.xyz", "scripts/git-hooks/pre-push"]
-        )
+        self.assertEqual(scope.unmapped, ["random/thing.xyz", "scripts/git-hooks/pre-push"])
 
 
 class CrateTests(unittest.TestCase):
@@ -228,13 +224,17 @@ class BuildChecksTests(unittest.TestCase):
         checks = gate.build_checks(scope, **self._base_kwargs())
         clippy = next(c for c in checks if c.name.startswith("rust: clippy"))
         self.assertIn("--workspace", clippy.cmd)
-        self.assertNotIn("-D warnings", clippy.cmd)  # info mode until lint-wiring lands
+        # Gating since lint-wiring: same -D warnings semantics as the
+        # rust-lint CI job, under the workspace allow-list.
+        self.assertIn("-D warnings", clippy.cmd)
 
-    def test_rust_fmt_is_advisory_until_its_ci_job_exists(self):
+    def test_rust_fmt_gates_alongside_its_ci_job(self):
+        # The two flips landed together (lint-wiring): the gate's fmt check
+        # and ci.yml's rust-lint fmt step are the same command, both gating.
         scope = gate.classify(["anyharness/crates/anyharness-lib/src/lib.rs"])
         checks = gate.build_checks(scope, **self._base_kwargs())
         fmt = next(c for c in checks if c.name.startswith("rust: fmt"))
-        self.assertTrue(fmt.advisory)
+        self.assertFalse(fmt.advisory)
 
     def test_empty_domain_server_diff_is_a_loud_no_test_note(self):
         scope = gate.classify(["server/proliferate/lib/email.py"])
@@ -300,9 +300,7 @@ class EnginePythonTests(unittest.TestCase):
             ["/opt/py312", "-m", "unittest"],
         )
         self.assertEqual(gate.engine_argv("cargo fmt --check", "/opt/py312")[0], "cargo")
-        self.assertEqual(
-            gate.engine_argv("python3 scripts/check_docs.py", None)[0], "python3"
-        )
+        self.assertEqual(gate.engine_argv("python3 scripts/check_docs.py", None)[0], "python3")
 
 
 class MirrorRuleTests(unittest.TestCase):
@@ -311,9 +309,7 @@ class MirrorRuleTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.ci = _normalized((REPO / ".github" / "workflows" / "ci.yml").read_text())
-        cls.server_ci = _normalized(
-            (REPO / ".github" / "workflows" / "server-ci.yml").read_text()
-        )
+        cls.server_ci = _normalized((REPO / ".github" / "workflows" / "server-ci.yml").read_text())
 
     @classmethod
     def _repo_shape_python3_lines(cls) -> set[str]:
@@ -325,7 +321,7 @@ class MirrorRuleTests(unittest.TestCase):
         for line in raw[start:end].splitlines():
             stripped = line.strip()
             if stripped.startswith("run: "):
-                stripped = stripped[len("run: "):]
+                stripped = stripped[len("run: ") :]
             if stripped.startswith("python3 "):
                 lines.add(stripped)
         return lines

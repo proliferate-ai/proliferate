@@ -445,19 +445,21 @@ def build_checks(
         if not have_cargo:
             checks.append(Check("rust", None, skip_reason="cargo not found", loud=True))
         else:
-            # Advisory until the lint-wiring slice normalizes the workspace and
-            # lands the rust-lint CI job: no CI step runs fmt today, so a hard
-            # local gate would violate the mirror rule and fail on
-            # pre-existing debt (608 diffs measured 2026-08-27).
-            checks.append(Check("rust: fmt (advisory)", CARGO_FMT, advisory=True))
+            # Gating since the lint-wiring slice: the tree is normalized under
+            # the rust-toolchain.toml pin and ci.yml's rust-lint job runs the
+            # same `cargo fmt --check` — the mirror rule holds in both
+            # directions.
+            checks.append(Check("rust: fmt", CARGO_FMT))
             if scope.rust_workspace:
                 target = "--workspace"
             else:
                 crates = sorted(crates_for_paths(scope.rust_paths, repo))
                 target = " ".join(f"-p {c}" for c in crates) if crates else "--workspace"
-            # Info mode until the lint-wiring slice lands the allow-list:
-            # no -D warnings, so warnings alone exit 0; a compile error fails.
-            checks.append(Check("rust: clippy (info mode)", f"cargo clippy {target}"))
+            # Gating since the lint-wiring slice: -D warnings under the
+            # workspace allow-list in the root Cargo.toml — byte-identical
+            # semantics to ci.yml's rust-lint job (scoped to touched crates
+            # here for speed; the job runs --workspace --all-targets).
+            checks.append(Check("rust: clippy", f"cargo clippy {target} -- -D warnings"))
             if have_nextest:
                 checks.append(Check("rust: nextest", f"cargo nextest run {target}"))
             else:

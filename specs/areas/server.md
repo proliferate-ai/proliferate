@@ -160,13 +160,13 @@ Columns are domains and rows are layers. Within a column, API calls service, ser
 | Failure mode | Grid rule | Prevention |
 | --- | --- | --- |
 | Foreign writes corrupt shared state | `SRV-STORE-5` | Only the owner's service writes |
-| Store changes surprise foreign readers | `SRV-STORE-6` | Exact consumer ledger makes reads queryable |
+| Store changes surprise foreign readers | `GAP` #1714 | Target: an exact consumer ledger makes reads queryable — unbuilt gate, no record (the do-nothing gap records were deleted 2026-08-27; a record returns with its engine) |
 | Errors vary by call site | `SRV-ERR-1` | Product errors plus one transport handler |
-| Shared code becomes a junk drawer | `SRV-LIB-1` | Three audiences and a two-consumer entry ticket |
-| Auth decisions hide in orchestration | `SRV-SEAM-1` | Four endpoint-composed boundaries |
-| Background work has divergent failure models | `SRV-BG-1` | One Celery execution model |
-| Service cycles block refactors | `SRV-TOPO-1` | `GAP`: generated graph and acyclic-component gate are documented rules, not gates (#1714) |
-| Third-party packages leak into product code | `SRV-PKG-1` | `GAP`: explicit package-audience map is a documented rule, not a gate (#1714) |
+| Shared code becomes a junk drawer | `GAP` #1714 | Target: three lib/ audiences and a two-consumer entry ticket — unbuilt gate, no record |
+| Auth decisions hide in orchestration | `GAP` #1714 | Target: four endpoint-composed boundaries — unbuilt gate, no record |
+| Background work has divergent failure models | `GAP` #1714 | Target: one Celery execution model — unbuilt gate, no record |
+| Service cycles block refactors | `GAP` #1714 | Target: generated graph and acyclic-component gate — unbuilt gate, no record |
+| Third-party packages leak into product code | `GAP` #1714 | Target: explicit package-audience map — unbuilt gate, no record |
 
 ## Foreign-Read Doctrine
 
