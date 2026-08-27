@@ -317,6 +317,7 @@ export interface ProductTelemetry {
   track(event: ProductEvent): void;
   captureException(error: unknown, context?: ErrorContext): void;
   setUser(user: ProductAuthUser | null): void;
+  /** Set a vendor scope tag. An empty value clears the tag. */
   setTag(key: string, value: string): void;
   /**
    * Host-owned route instrumentation. ProductClient calls this after shared

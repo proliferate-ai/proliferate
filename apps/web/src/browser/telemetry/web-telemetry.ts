@@ -80,7 +80,9 @@ export const webProductTelemetry: ProductTelemetry = {
   },
 
   setTag(key: string, value: string): void {
-    Sentry.setTag(key, value);
+    // An empty value clears the tag (the vendor drops tags set to undefined),
+    // per the ProductTelemetry.setTag contract.
+    Sentry.setTag(key, value === "" ? undefined : value);
   },
 
   routeChanged(change: ProductRouteChange): void {
