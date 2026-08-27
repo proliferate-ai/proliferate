@@ -71,8 +71,12 @@ fn claude_seat_sets_token_and_per_seat_dir_and_strips_the_ambient_list() {
     assert_eq!(rendered.set.len(), 2);
 }
 
-/// Slice 1 has no rotation: the pool's FIRST seat (vault order) serves, and a
-/// later seat's token must not overwrite it. One seat home materializes.
+/// The new seam split: the LAUNCH pipeline picks the seat (rotation, tested
+/// in seat_rotation_tests.rs); render just renders whatever pool it is
+/// handed, first-seat-wins. The UNROTATED entry — what probe/readiness/
+/// materialization callers keep — therefore serves the pool's FIRST seat
+/// deterministically, a later seat's token never overwrites it, one seat
+/// home materializes, and the serving-seat channel names the rendered seat.
 #[test]
 fn claude_seat_pool_serves_the_first_seat_without_rotation() {
     let home = TempHome::new("claude-seat-pool");
@@ -103,6 +107,7 @@ fn claude_seat_pool_serves_the_first_seat_without_rotation() {
             seat_id: "seat-first".into()
         }
     );
+    assert_eq!(rendered.serving_seat_id.as_deref(), Some("seat-first"));
 }
 
 /// Seats are claude-only this slice; every other harness refuses in type.

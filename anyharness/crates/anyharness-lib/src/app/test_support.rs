@@ -39,6 +39,9 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
         observers: Vec::new(),
         permission_advisor: None,
         launch_observation_invalidator: None,
+        seat_cooling: Some(Arc::new(
+            crate::domains::agents::seat_cooling::SeatCoolingStore::new(store.db()),
+        )),
     }
 }
 

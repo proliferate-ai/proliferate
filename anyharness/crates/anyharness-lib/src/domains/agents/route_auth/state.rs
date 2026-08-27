@@ -7,14 +7,12 @@
 //! the render plane re-reads on demand.
 //!
 //! v2 shape (contract §3): a `harnesses[]` list, each entry carrying the
-//! ENABLED `sources[]` for one harness. A source is either a `gateway`
-//! (base_url + key) or an `api_key` (env_var_name + value). No slots, no
-//! providers, no model catalog — the server validated legality before emitting
-//! the sources, so the render plane just composes whatever list it is handed.
+//! ENABLED `sources[]` for one harness (see the `SOURCE_KIND_*` consts). The
+//! server validated legality before emitting the sources, so the render plane
+//! just composes whatever list it is handed.
 //!
 //! Tolerance model:
-//! - file absent          -> `None` (native behavior; local desktop without
-//!   cloud state keeps working)
+//! - file absent          -> `None` (native behavior; local desktop works)
 //! - file present, valid  -> `Some(AgentAuthState)`
 //! - file present, broken -> typed [`RouteAuthError::MalformedStateFile`]
 //!   (this includes a v1 / version-less file: no users exist, so there is no
@@ -47,9 +45,8 @@ pub const SOURCE_KIND_PROVIDER_CONFIG: &str = "provider_config";
 /// already-resolved `env` ruling as `provider_config` (for claude exactly
 /// `{CLAUDE_CODE_OAUTH_TOKEN: <token>}`), plus `seat_id` — the vault entry id,
 /// carried so the runtime can name the serving seat without echoing the token.
-/// The producer expands a pool seat selection into one such source per active
-/// seat, in vault order; the render plane serves the first (rotation is a
-/// later slice).
+/// The producer expands a pool selection into one source per active seat, in
+/// vault order; the launch path rotates over the pool (rotation.rs).
 pub const SOURCE_KIND_SEAT: &str = "seat";
 
 /// Resolve the absolute path of the agent-auth state file for a given
@@ -111,11 +108,16 @@ pub struct HarnessAuth {
     pub harness_kind: String,
     #[serde(default)]
     pub sources: Vec<AuthSource>,
-    /// Retired per-harness settings retained only for state-file wire
-    /// compatibility. Route-auth does not read this field; executable controls
-    /// come from target-observed launch options and live session snapshots.
+    /// Per-harness settings rider. Route-auth reads exactly ONE key: `rotate`
+    /// (bool, default true) — the seat-rotation toggle, parsed by
+    /// `resolve_profile`. Everything else rides through untouched.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Plain-words reason the server attaches when this entry is
+    /// present-but-empty (a selection it could not satisfy). Read into the
+    /// refusal copy; absent when the sources are servable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unsatisfied_reason: Option<String>,
 }
 
 /// The whole declarative state file (contract §3, v2).
@@ -374,6 +376,7 @@ mod tests {
                     harness_kind: "claude".into(),
                     sources: vec![gateway_source("https://llm.proliferate.ai", "sk-vk")],
                     settings: None,
+                    unsatisfied_reason: None,
                 },
                 HarnessAuth {
                     harness_kind: "opencode".into(),
@@ -382,6 +385,7 @@ mod tests {
                         api_key_source("ANTHROPIC_API_KEY", "sk-ant"),
                     ],
                     settings: None,
+                    unsatisfied_reason: None,
                 },
             ],
         };
@@ -408,6 +412,7 @@ mod tests {
                     harness_kind: "codex".into(),
                     sources: vec![api_key_source("OPENAI_API_KEY", "sk-raw")],
                     settings: None,
+                    unsatisfied_reason: None,
                 },
                 // A selected harness whose every source was dropped as
                 // unsatisfiable: the renderer keeps the entry, empty.
@@ -415,6 +420,7 @@ mod tests {
                     harness_kind: "opencode".into(),
                     sources: vec![],
                     settings: None,
+                    unsatisfied_reason: None,
                 },
             ],
         };
@@ -510,6 +516,7 @@ mod tests {
                 harness_kind: "claude".into(),
                 sources: vec![api_key_source("ANTHROPIC_API_KEY", "sk-raw")],
                 settings: None,
+                unsatisfied_reason: None,
             }],
         }
     }

@@ -260,6 +260,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0076_harness_launch_options",
         include_str!("sql/0076_harness_launch_options.sql"),
     ),
+    (
+        "0077_seat_cooling",
+        include_str!("sql/0077_seat_cooling.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

@@ -1,5 +1,4 @@
 use std::{path::PathBuf, sync::Arc};
-
 use anyharness_contract::v1::{
     SessionEvent, SessionEventEnvelope, SessionExecutionPhase, SessionInfoUpdatePayload,
     SubagentTurnCompletedPayload, SubagentTurnOutcome,
@@ -110,6 +109,7 @@ fn test_launch(startup: SessionStartupStrategy) -> SessionLaunch {
         mcp_servers: vec![],
         startup,
         prompts: SystemPromptAppends::default(),
+        serving_seat_id: None,
         last_seq: 0,
     }
 }

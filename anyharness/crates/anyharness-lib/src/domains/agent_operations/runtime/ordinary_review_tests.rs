@@ -129,6 +129,7 @@ fn owner_errors_keep_actionable_codes_and_redact_internal_details() {
                 CreateAndStartSessionError::RouteAuth(RouteAuthError::SelectionMissing {
                     harness_kind: "secret-harness".into(),
                     revision: 7,
+                    reason: None,
                 }),
             )),
             "AGENT_ROUTE_SELECTION_MISSING",

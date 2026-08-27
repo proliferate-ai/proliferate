@@ -215,6 +215,7 @@ async fn spawn_harness_with_capabilities(
         workspace_path: PathBuf::from("/tmp/workspace"),
         mcp_servers: Vec::new(),
         prompts: SystemPromptAppends::default(),
+        serving_seat_id: None,
         event_sink,
         background_work_registry,
         resume_replay_filter: ResumeReplayFilter::disabled(),
