@@ -3,11 +3,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use sentry::protocol::{Breadcrumb, Context as SentryContext, SpanId, TraceId, User, Value};
 
 use super::{
-    anyharness_target_mappings, canonical_session_id, default_release, log_path_for_command,
-    runtime_home_from_install, runtime_home_from_serve, scrub, sentry_event_filter,
-    sentry_event_filter_for_target, sentry_event_mapper, sentry_scope_tags, sentry_user_from_id,
-    stamped_git_sha, suppresses_legacy_file_sink, BundledActivation, SessionIdSpanLayer,
-    RUNTIME_INCIDENT_FINGERPRINT,
+    anyharness_target_mappings, default_release, log_path_for_command, runtime_home_from_install,
+    runtime_home_from_serve, scrub, sentry_event_filter, sentry_event_filter_for_target,
+    sentry_event_mapper, sentry_scope_tags, sentry_user_from_id, stamped_git_sha,
+    suppresses_legacy_file_sink, BundledActivation, RUNTIME_INCIDENT_FINGERPRINT,
 };
 use crate::{
     cli::Commands,
@@ -20,7 +19,7 @@ use anyharness_lib::observability::{
 use proliferate_diagnostics_client::ResolvedRecordName;
 use proliferate_diagnostics_protocol::v1::types::{DetailedKindV1, StandardStreamV1};
 
-fn sentry_test_options() -> sentry::ClientOptions {
+pub(super) fn sentry_test_options() -> sentry::ClientOptions {
     sentry::ClientOptions {
         release: Some("anyharness@test".into()),
         environment: Some("test".into()),
@@ -70,77 +69,6 @@ fn tracing_error_reaches_the_sentry_client() {
         .fingerprint
         .iter()
         .all(|part| part.as_ref() != RUNTIME_INCIDENT_FINGERPRINT));
-}
-
-const SESSION_UUID: &str = "c3f1a8d2-5b47-4e19-9a6c-0d8e2f7b41ca";
-
-fn session_tag_events(emit: impl FnOnce()) -> Vec<sentry::protocol::Event<'static>> {
-    use tracing_subscriber::layer::SubscriberExt;
-    let subscriber = tracing_subscriber::registry()
-        .with(SessionIdSpanLayer)
-        .with(sentry_tracing::layer().event_mapper(sentry_event_mapper));
-    sentry::test::with_captured_events_options(
-        || tracing::subscriber::with_default(subscriber, emit),
-        sentry_test_options(),
-    )
-}
-
-#[test]
-fn error_inside_session_span_carries_the_session_id_tag() {
-    // The field is recorded Display-style (`%id`) at the production call
-    // sites (domains/sessions/runtime, live/sessions/manager), so record it
-    // the same way here.
-    let events = session_tag_events(|| {
-        let id = SESSION_UUID.to_string();
-        let span = tracing::info_span!("session_work", session_id = %id);
-        let _guard = span.enter();
-        let inner = tracing::info_span!("nested_operation");
-        let _inner_guard = inner.enter();
-        tracing::error!("failure inside session work");
-    });
-    assert_eq!(events.len(), 1);
-    assert_eq!(
-        events[0].tags.get("session_id").map(String::as_str),
-        Some(SESSION_UUID),
-        "an ERROR inside a session span must carry the session_id tag"
-    );
-}
-
-#[test]
-fn non_uuid_session_id_never_becomes_a_tag() {
-    let events = session_tag_events(|| {
-        let span = tracing::info_span!("session_work", session_id = "session-01");
-        let _guard = span.enter();
-        tracing::error!("failure inside custom-id session work");
-    });
-    assert_eq!(events.len(), 1);
-    assert!(
-        !events[0].tags.contains_key("session_id"),
-        "a client-supplied custom session id stays local-only"
-    );
-}
-
-#[test]
-fn error_outside_any_session_span_stays_untagged() {
-    let events = session_tag_events(|| {
-        tracing::error!("failure outside session work");
-    });
-    assert_eq!(events.len(), 1);
-    assert!(!events[0].tags.contains_key("session_id"));
-}
-
-#[test]
-fn canonical_session_id_admits_lowercase_uuid_only() {
-    assert_eq!(canonical_session_id(SESSION_UUID), Some(SESSION_UUID));
-    for rejected in [
-        "session-01",
-        "C3F1A8D2-5B47-4E19-9A6C-0D8E2F7B41CA",
-        "c3f1a8d25b474e199a6c0d8e2f7b41ca",
-        "",
-        "c3f1a8d2-5b47-4e19-9a6c-0d8e2f7b41ca-extra",
-    ] {
-        assert_eq!(canonical_session_id(rejected), None, "{rejected}");
-    }
 }
 
 fn emit_ordinary_error_inside_span() -> (TraceId, SpanId) {
