@@ -376,7 +376,7 @@ Two signals, one picture.
 **The usage probe — the soft signal, advisory only, never a launch gate** (the header surface is undocumented, so control never depends on it):
 
 - A one-token request per active seat; the response's rate-limit headers carry live 5-hour and 7-day utilization plus resets, account-global → `seat_usage_sample` → the meters.
-- Cadence is config: `agent_seat_usage_probe_active_interval` (default 5 min while a session runs on the seat) · `_idle_interval` (default 30 min) · off for revoked seats · a settings-pane open forces one sample.
+- Cadence is config: `agent_seat_usage_probe_active_interval` (default 5 min while the seat shows RISING utilization between successive samples — the server-observable trace of a running session; the server never knows which seat serves, so detection lags a fresh burst by up to one idle interval) · `_idle_interval` (default 30 min) · off for revoked seats · a settings-pane open forces one sample (`POST /seats/usage/refresh`, floor-limited).
 - The request rides the same pinned-address egress rules as every outbound call; provider errors record a `probe_failed` sample and back off exponentially to a one-hour cap.
 - Samples older than 30 days are pruned by the writer; the meters read only the latest per seat.
 
@@ -460,6 +460,9 @@ typed value shown per route, message is the plain-words copy, extra fields are n
 
 GET  /seats/usage
   → [ { apiKeyId, util5h, util7d, reset5h, reset7d, bindingWindow, status, sampledAt } ]
+POST /seats/usage/refresh
+  → same shape   # flow 5's pane-open poke: force one fresh sample per seat, then read;
+                 # a per-seat freshness floor keeps pane flapping from amplifying probes
 POST /seats/{key_id}/limit-hit    { window, resetAt }
   → 204        # the courier relays the runtime's observed limit hits; feeds meters + the audit event
 
@@ -655,7 +658,7 @@ useSeatUsage()           // the meters; returns the latest sample per seat
 **When the frontend re-reads and re-probes** — the complete boundary set. The frontend never derives and never probes on its own; it re-reads the status document and, at defined boundaries, asks the runtime to re-check via door 3's poke or the manual-refresh route:
 
 - **Subscription is the default.** `useHarnessStatus` subscribes on mount (settings pane, onboarding card, composer badge) and renders every push; there is no client polling loop. Where the stream is unavailable, the hook falls back to re-reading on the invalidation boundaries below.
-- **Opening the agents settings pane** re-reads status and methods, and forces a fresh usage sample for visible seats (the pane-open probe).
+- **Opening the agents settings pane** re-reads status and methods, and forces a fresh usage sample for visible seats (the pane-open probe). While the seat meters stay visible they re-read the usage samples on a modest interval — a server-fed DB read keeping already-taken samples current, not a probe loop and not a status-document poll (the no-polling law governs the runtime status document).
 - **After a login terminal closes**, the runtime has already poked itself (`LoginTerminal`); the frontend just re-reads — it never issues its own poke here.
 - **After a selection or vault mutation acks**, the query set invalidates and re-reads: selection PUT → selections + state + status; key create/revoke → keys + selections + status; seat mint → keys + status + usage.
 - **Manual refresh** is the one user-facing poke: the refresh affordance calls the runtime's refresh route, renders `queued`/`running` inline, and — on failure — shows the backoff line with the next-attempt countdown, never an eternal spinner.
@@ -682,7 +685,7 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 | Vault kinds include `anthropic_subscription`; the wire has a `seat` source | Three kinds; two source kinds | **Landed (slice 1, mint & run)**: the enum values, `seats.py`, the pool-expanding renderer arm, and the claude seat recipe ship |
 | Probe engine self-recovers (`BackoffExpired`, `FirstDetected`); status served stale-marked | Closed event set with no self-recovery; a missed probe darkens the harness until manual retry | Two new events + serve-stale store |
 | `status/` is the single machine truth; the frontend derives nothing | `agent-auth-evidence.ts` re-derives state client-side; `auth_state.rs` ships beside the legacy ladder | The status module absorbs the derivation; the evidence file is deleted |
-| `seat_usage_sample` + the usage probe + meters | — | New |
+| `seat_usage_sample` + the usage probe + meters | — | **Landed (slice 4, meters)**: the table, the probe loop (`seats.py` / `seat_usage_probe`, active/idle cadence + failure backoff, 30-day prune), `GET /seats/usage` + the pane-open refresh, and the per-seat 5h/7d pane meters |
 | ai_gateway is its own folder and spec | Gateway code co-resident in `server/agent_auth/` and `db/store/agent_gateway/`; its spec was `model-gateway.md` in this folder | Spec moved to [ai_gateway](../ai_gateway/README.md) (this PR); the code split rides the build list |
 | The runtime cell lives in `domains/agent_auth/` | `route_auth/`, `auth/`, `auth_state.rs`, `launch_probe/` sit inside `domains/agents/`; no `status/` module exists (`auth_state.rs` carries the derivation) | Wave-3 move + the status module |
 | `server/agent_auth/` holds only agent_auth files; `seats.py` exists | Nine ai_gateway files co-resident (api.py also hosts the /agent-gateway routes; budget.py consumed at render); no seats.py | The ai_gateway code split + seats v1 |
@@ -712,7 +715,7 @@ Carried, still true in prod (not deltas): the origin guard · only-forward acks 
     - [ ] typed launch refusals with plain words end to end (rows 1, 4) — partially: since slice 1 the launch refusal speaks plain words naming the cause family and the action; the typed per-cause reasons ride the status module
     - [ ] rotation: cooling on limit error, round-robin, gateway fallback (row 3)
     - [ ] the status module; frontend subscribe migration; delete the client derivation (row 7)
-    - [ ] the usage probe + `seat_usage_sample` + settings meters (row 8)
+    - [x] the usage probe + `seat_usage_sample` + settings meters (row 8) — **slice 4 (meters) landed**
 - [ ] Alongside, not gating: content-hash revision + content-hash launch-options basis + probe recovery events + serve-stale status (rows 5, 6)
 - [ ] The API defaults `surface` to `local`; the column stays for cloud's return (ruled 2026-08-26)
 - [ ] ai_gateway code split out of `server/agent_auth/`; recompose the remainder (row 9)

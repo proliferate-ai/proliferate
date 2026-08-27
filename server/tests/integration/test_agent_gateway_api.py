@@ -1223,6 +1223,7 @@ class TestOldAgentGatewayRoutesAreGone:
         assert agent_auth == [
             ("DELETE", "/v1/cloud/agent-auth/keys/{key_id}"),
             ("GET", "/v1/cloud/agent-auth/keys"),
+            ("GET", "/v1/cloud/agent-auth/seats/usage"),
             ("GET", "/v1/cloud/agent-auth/selections"),
             ("GET", "/v1/cloud/agent-auth/state"),
             ("GET", "/v1/cloud/organizations/{organization_id}/agent-auth/policy"),
@@ -1232,6 +1233,9 @@ class TestOldAgentGatewayRoutesAreGone:
             ),
             ("POST", "/v1/cloud/agent-auth/keys"),
             ("POST", "/v1/cloud/agent-auth/keys/provider-config"),
+            # Slice 4 (meters): the pane-open poke — force one fresh usage
+            # sample per seat, behind the per-seat freshness floor.
+            ("POST", "/v1/cloud/agent-auth/seats/usage/refresh"),
             ("POST", "/v1/cloud/agent-auth/seats/{key_id}/limit-hit"),
             ("POST", "/v1/cloud/agent-auth/state/ack"),
             ("PUT", "/v1/cloud/agent-auth/selections/{harness_kind}"),

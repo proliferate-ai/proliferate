@@ -7,10 +7,12 @@ import {
   getAgentGatewayEnrollment,
   getAgentModels,
   getOrgAgentPolicy,
+  getSeatUsage,
   listAgentApiKeys,
   listAuthSelections,
   listOrgAgentPolicyViolations,
   putAuthSelections,
+  refreshSeatUsage,
   revokeAgentApiKey,
   updateOrgAgentPolicy,
   upsertAgentModelOverride,
@@ -26,6 +28,7 @@ import {
   type OrgAgentPolicy,
   type OrgAgentPolicyViolationListResponse,
   type PutAuthSelectionsRequest,
+  type SeatUsageSample,
   type UpdateOrgAgentPolicyRequest,
   type UpsertAgentModelOverrideRequest,
 } from "@proliferate/cloud-sdk";
@@ -41,6 +44,7 @@ import {
   agentGatewayEnrollmentKey,
   agentModelsKey,
   agentModelsRootKey,
+  agentSeatUsageKey,
   orgAgentPolicyKey,
   orgAgentPolicyViolationsKey,
 } from "../lib/query-keys.js";
@@ -112,6 +116,48 @@ export function useRevokeAgentApiKey() {
       // Revoking a key can invalidate api_key selections downstream.
       void queryClient.invalidateQueries({ queryKey: agentAuthSelectionsRootKey() });
       void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
+    },
+  });
+}
+
+// --- Seat usage (flow 5's soft signal — the meters; slice 4) ---------------
+
+/**
+ * The meters read: latest usage-probe sample per active seat. Refetches on a
+ * modest interval while mounted — a cheap DB read (the probe cadence itself
+ * is server-owned; this only keeps the visible bars current with samples the
+ * server already took).
+ */
+export function useSeatUsage(enabled = true) {
+  const client = useCloudClient();
+  return useQuery<SeatUsageSample[]>({
+    queryKey: agentSeatUsageKey(),
+    queryFn: () => getSeatUsage(client),
+    enabled,
+    // Re-read only while a meter is mounted AND the window is focused; the
+    // probe cadence itself is server-owned — this is a cheap DB read that
+    // keeps visible bars current, not a client-side probe loop.
+    refetchInterval: enabled ? 60_000 : false,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/**
+ * The pane-open poke (flow 5: "a settings-pane open forces one fresh
+ * sample"). The response IS the fresh latest-per-seat set, so it lands
+ * straight into the usage query's cache.
+ */
+export function useRefreshSeatUsage() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<SeatUsageSample[], Error, void>({
+    mutationFn: () => refreshSeatUsage(client),
+    onSuccess: async (samples) => {
+      // Cancel any in-flight GET first: a read started before the refresh
+      // committed would otherwise land after setQueryData and clobber the
+      // fresh rows with pre-refresh ones until the next interval tick.
+      await queryClient.cancelQueries({ queryKey: agentSeatUsageKey() });
+      queryClient.setQueryData(agentSeatUsageKey(), samples);
     },
   });
 }

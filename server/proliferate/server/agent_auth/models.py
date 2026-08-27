@@ -27,6 +27,10 @@ from proliferate.db.store.agent_gateway import (
     OrgMemberRouteSelectionRecord,
 )
 
+# From the records module directly: the sample surface is advisory-only and
+# deliberately absent from the store package namespace (import-scan enforced).
+from proliferate.db.store.agent_gateway.records import SeatUsageSampleRecord
+
 if TYPE_CHECKING:
     from proliferate.server.agent_auth.service import OrgAgentPolicySnapshot
 
@@ -331,6 +335,31 @@ class OrgAgentPolicyViolationListResponse(AgentGatewayBaseModel):
     violations: list[OrgAgentPolicyViolation]
 
 
+# seat_usage_sample vocabularies (agent_auth spec §2, flow 5); mirror
+# constants.agent_gateway.SEAT_USAGE_STATUSES / _BINDING_WINDOWS.
+SeatUsageStatus = Literal["allowed", "limited", "probe_failed"]
+SeatUsageBindingWindow = Literal["five_hour", "seven_day"]
+
+
+class SeatUsageSampleResponse(AgentGatewayBaseModel):
+    """One seat's latest usage-probe observation — the meters read.
+
+    Shaped for the pane, no raw header passthrough (spec §4 cell 1's usage
+    read): 0..1 utilization fractions, ISO reset instants, the derived
+    binding window. A ``probe_failed`` row carries null observations — the
+    pane renders a dash and the sample age, never a stale bar.
+    """
+
+    api_key_id: str = Field(alias="apiKeyId")
+    sampled_at: str = Field(alias="sampledAt")
+    util_5h: float | None = Field(default=None, alias="util5h")
+    util_7d: float | None = Field(default=None, alias="util7d")
+    reset_5h: str | None = Field(default=None, alias="reset5h")
+    reset_7d: str | None = Field(default=None, alias="reset7d")
+    binding_window: SeatUsageBindingWindow | None = Field(default=None, alias="bindingWindow")
+    status: SeatUsageStatus
+
+
 # --------------------------------------------------------------------------- #
 # Payload builders
 # --------------------------------------------------------------------------- #
@@ -348,6 +377,19 @@ def api_key_payload(record: AgentApiKeyRecord) -> AgentApiKeyResponse:
         redacted_hint=record.redacted_hint,
         status=record.status,
         created_at=record.created_at.isoformat(),
+    )
+
+
+def seat_usage_sample_payload(record: SeatUsageSampleRecord) -> SeatUsageSampleResponse:
+    return SeatUsageSampleResponse(
+        api_key_id=str(record.api_key_id),
+        sampled_at=record.sampled_at.isoformat(),
+        util_5h=record.util_5h,
+        util_7d=record.util_7d,
+        reset_5h=_iso(record.reset_5h),
+        reset_7d=_iso(record.reset_7d),
+        binding_window=record.binding_window,
+        status=record.status,
     )
 
 
