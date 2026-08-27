@@ -181,20 +181,21 @@ describe("useFirstRunAuthAdoption", () => {
 
     expect(mocks.capabilitiesEnabled).toHaveBeenLastCalledWith(false);
     expect(mocks.selectionsEnabled).toHaveBeenLastCalledWith(false);
-    expect(useAuthSetupOnboardingStore.getState()).toMatchObject({
-      adoptedHarnessKinds: [],
-      adoptionStartedAt: 1_723_456_789,
-    });
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds)
+      .toEqual([]);
     expect(mocks.refetchAgents).not.toHaveBeenCalled();
     expect(mocks.planner).not.toHaveBeenCalled();
     expect(mocks.putMutate).not.toHaveBeenCalled();
     expect(diagnostics).toEqual([]);
 
-    vi.mocked(Date.now).mockReturnValue(1_723_456_790);
+    // The one shot stays one shot. Referential identity is the assertion the
+    // deleted `adoptionStartedAt` timestamp used to make: a second
+    // `recordAdoption` would install a NEW array, equal but not the same.
+    const recorded = useAuthSetupOnboardingStore.getState().adoptedHarnessKinds;
     rerender();
     await flushAdoption();
-    expect(useAuthSetupOnboardingStore.getState().adoptionStartedAt)
-      .toBe(1_723_456_789);
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds)
+      .toBe(recorded);
   });
 
   it("keeps a signed-out user pending and adopts after sign-in", async () => {
@@ -570,8 +571,6 @@ describe("useFirstRunAuthAdoption", () => {
       .toEqual(["claude", "codex"]);
     expect(mocks.putMutate.mock.calls.map(([input]) => input.harnessKind))
       .toEqual(["claude", "codex"]);
-    expect(useAuthSetupOnboardingStore.getState().adoptionStartedAt)
-      .toBe(1_723_456_789);
   });
 
   it("keeps selection-write diagnostics bounded to stage, safe name, and harness", async () => {

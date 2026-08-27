@@ -8,7 +8,6 @@ import {
 } from "#product/lib/workflows/agents/first-run-auth-adoption";
 import type { RendererDiagnosticInput } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
-const SETTLED_AT = 1_723_456_789;
 
 function agent(kind: string): AgentSummary {
   return {
@@ -25,7 +24,6 @@ function createDeps(
   overrides: Partial<RunFirstRunAuthAdoptionDeps> = {},
 ): RunFirstRunAuthAdoptionDeps {
   return {
-    now: vi.fn(() => SETTLED_AT),
     recordAdoption: vi.fn(),
     recordDiagnostic: vi.fn(),
     readFreshAgents: vi.fn(async () => ({
@@ -91,7 +89,7 @@ describe("runFirstRunAuthAdoption", () => {
       selectionCount: 0,
       gatewayEnabled: true,
     });
-    expect(deps.recordAdoption).toHaveBeenCalledWith(["codex"], SETTLED_AT);
+    expect(deps.recordAdoption).toHaveBeenCalledWith(["codex"]);
   });
 
   it("settles a successful fresh empty catalog without a diagnostic or write", async () => {
@@ -102,7 +100,7 @@ describe("runFirstRunAuthAdoption", () => {
       deps,
     );
 
-    expect(deps.recordAdoption).toHaveBeenCalledWith([], SETTLED_AT);
+    expect(deps.recordAdoption).toHaveBeenCalledWith([]);
     expect(deps.recordDiagnostic).not.toHaveBeenCalled();
     expect(deps.writeSelection).not.toHaveBeenCalled();
   });
@@ -124,7 +122,7 @@ describe("runFirstRunAuthAdoption", () => {
       deps,
     );
 
-    expect(deps.recordAdoption).toHaveBeenCalledWith([], SETTLED_AT);
+    expect(deps.recordAdoption).toHaveBeenCalledWith([]);
     expect(deps.recordAdoption).toHaveBeenCalledTimes(1);
     expect(deps.loadPlanner).not.toHaveBeenCalled();
     const diagnostic = vi.mocked(deps.recordDiagnostic).mock.calls[0]![0];
@@ -147,7 +145,7 @@ describe("runFirstRunAuthAdoption", () => {
       deps,
     );
 
-    expect(deps.recordAdoption).toHaveBeenCalledWith([], SETTLED_AT);
+    expect(deps.recordAdoption).toHaveBeenCalledWith([]);
     const diagnostic = vi.mocked(deps.recordDiagnostic).mock.calls[0]![0];
     expect(diagnosticValues(diagnostic)).toEqual({
       failure_stage: "planner_import",
@@ -168,7 +166,7 @@ describe("runFirstRunAuthAdoption", () => {
       deps,
     );
 
-    expect(deps.recordAdoption).toHaveBeenCalledWith([], SETTLED_AT);
+    expect(deps.recordAdoption).toHaveBeenCalledWith([]);
     const diagnostic = vi.mocked(deps.recordDiagnostic).mock.calls[0]![0];
     expect(diagnosticValues(diagnostic)).toEqual({
       failure_stage: "planner",
@@ -191,7 +189,7 @@ describe("runFirstRunAuthAdoption", () => {
       deps,
     );
 
-    expect(deps.recordAdoption).toHaveBeenCalledWith([], SETTLED_AT);
+    expect(deps.recordAdoption).toHaveBeenCalledWith([]);
     expect(deps.recordDiagnostic).not.toHaveBeenCalled();
     expect(deps.writeSelection).not.toHaveBeenCalled();
   });
@@ -223,7 +221,7 @@ describe("runFirstRunAuthAdoption", () => {
     );
 
     expect(recordAdoption).toHaveBeenCalledTimes(1);
-    expect(recordAdoption).toHaveBeenCalledWith(["claude", "codex"], SETTLED_AT);
+    expect(recordAdoption).toHaveBeenCalledWith(["claude", "codex"]);
     expect(calls).toEqual([
       "record:claude,codex",
       "write:claude",
@@ -281,11 +279,9 @@ describe("settleFirstRunAuthAdoptionFailure", () => {
         harnessKind: "must-not-ship",
       },
       {
-        now: () => SETTLED_AT,
-        recordAdoption: (kinds, settledAt) => {
+        recordAdoption: (kinds) => {
           calls.push("settlement");
           expect(kinds).toEqual([]);
-          expect(settledAt).toBe(SETTLED_AT);
         },
         recordDiagnostic,
       },
