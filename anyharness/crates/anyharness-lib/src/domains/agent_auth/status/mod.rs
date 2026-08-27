@@ -40,16 +40,16 @@ use tokio::sync::broadcast;
 pub use store::AgentStatusStore;
 use store::ObservationWrite;
 
-use crate::domains::agents::auth::credentials::detect_cli_auth_state;
-use crate::domains::agents::launch_probe::targets::ProbeTargets;
-use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
+use crate::domains::agent_auth::auth::credentials::detect_cli_auth_state;
+use crate::domains::agent_auth::launch_probe::targets::ProbeTargets;
+use crate::domains::agent_auth::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::agents::model::{AgentKind, CliAuthState};
 use crate::domains::agents::registry;
-use crate::domains::agents::route_auth::profile::{
+use crate::domains::agent_auth::route_auth::profile::{
     resolve_profile, AgentRuntimeAuthProfile, HarnessSources, ResolvedSource,
 };
-use crate::domains::agents::route_auth::rotation::seat_rotation_readout;
-use crate::domains::agents::route_auth::{current_server_origin, load_effective_state};
+use crate::domains::agent_auth::route_auth::rotation::seat_rotation_readout;
+use crate::domains::agent_auth::route_auth::{current_server_origin, load_effective_state};
 use crate::domains::agents::seat_cooling::SeatCoolingStore;
 use crate::persistence::Db;
 

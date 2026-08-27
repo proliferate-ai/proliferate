@@ -2,7 +2,7 @@
 //! seam for the line-count ceiling (the pattern `profile_tests.rs` set).
 
 use super::*;
-use crate::domains::agents::route_auth::test_support::TempHome;
+use crate::domains::agent_auth::route_auth::test_support::TempHome;
 
 fn gateway_source(base_url: &str, key: &str) -> AuthSource {
     AuthSource {

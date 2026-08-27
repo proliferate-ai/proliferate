@@ -1,6 +1,6 @@
 use super::access::map_access_error;
 use super::error::ApiError;
-use crate::domains::agents::route_auth::{LaunchRefusal, RouteAuthError};
+use crate::domains::agent_auth::route_auth::{LaunchRefusal, RouteAuthError};
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::domains::sessions::mcp_bindings::workspace_attachment::{
     WORKSPACE_MCP_ATTACHMENT_CODE, WORKSPACE_MCP_ATTACHMENT_DETAIL,

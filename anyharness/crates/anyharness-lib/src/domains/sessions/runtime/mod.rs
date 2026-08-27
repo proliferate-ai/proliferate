@@ -19,7 +19,7 @@ use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
 use crate::domains::agents::model::ResolvedAgentStatus;
-use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
+use crate::domains::agent_auth::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;

@@ -1302,7 +1302,7 @@ class ShippedLedgerTest(unittest.TestCase):
         }
         prefix = "anyharness/crates/anyharness-lib/src"
 
-        self.assertIn(f"{prefix}/domains/agents/auth/login_terminal.rs", flagged)
+        self.assertIn(f"{prefix}/domains/agent_auth/auth/login_terminal.rs", flagged)
         self.assertNotIn(f"{prefix}/domains/mobility/runtime/mod.rs", flagged)
         self.assertNotIn(f"{prefix}/domains/mobility/service.rs", flagged)
 

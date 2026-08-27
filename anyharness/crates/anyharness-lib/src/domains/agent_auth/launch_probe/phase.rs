@@ -216,7 +216,7 @@ pub(super) fn abandoned_attempt_after(config: &ProbeEngineConfig) -> chrono::Dur
 #[cfg(test)]
 mod tests {
     use super::abandoned_attempt_after;
-    use crate::domains::agents::launch_probe::config::ProbeEngineConfig;
+    use crate::domains::agent_auth::launch_probe::config::ProbeEngineConfig;
     use crate::domains::agents::registry::built_in_registry;
 
     /// The bound must stay DERIVED. Written down as a constant it silently stops

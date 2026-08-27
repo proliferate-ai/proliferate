@@ -8,7 +8,7 @@ use super::artifacts::{
 use super::compatibility::detect_runtime_compatibility_issue;
 use super::overrides::resolve_agent_process_override;
 use super::status::compute_readiness;
-use crate::domains::agents::auth::credentials::{
+use crate::domains::agent_auth::auth::credentials::{
     detect_auth_slots_in_scope, detect_cli_auth_state, CredentialEnvScope,
 };
 use crate::domains::agents::model::*;
@@ -258,7 +258,7 @@ fn apply_launch_route_upgrade(
     // and a readiness sweep must never consult (let alone appear to advance)
     // per-launch seat rotation state. Only the session-launch path rotates.
     if already_ready
-        || !crate::domains::agents::route_auth::launch_route_provides_credentials(
+        || !crate::domains::agent_auth::route_auth::launch_route_provides_credentials(
             runtime_home,
             descriptor.kind.as_str(),
         )

@@ -47,7 +47,7 @@ status = "leaks"
 gap = "#1916"
 enforced_by = "review"
 mode = "review"
-scope = "anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**"
+scope = "anyharness/crates/anyharness-lib/src/domains/agent_auth/route_auth/**"
 
 rule = """A rendered auth state must not present a source as verified/green
 optimistically: a green status requires positive probe evidence for that source;

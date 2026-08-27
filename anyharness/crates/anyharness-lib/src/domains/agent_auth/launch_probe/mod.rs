@@ -57,7 +57,7 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
 
-use crate::domains::agents::route_auth::{self, GatewayModelResolve, RouteAuthError};
+use crate::domains::agent_auth::route_auth::{self, GatewayModelResolve, RouteAuthError};
 
 pub use config::{PokeReason, ProbeEngineConfig, ProbeEngineMode, RefreshError};
 use live_state::{HarnessRuntimeState, LiveState, LiveStateGuard};
@@ -108,7 +108,7 @@ pub struct LaunchProbeService {
     /// marks the harness's document stale, completion writes the verdict.
     /// Event-pushed from here rather than polled from there, so the document
     /// can never claim a probe state the engine doesn't hold.
-    agent_status: Option<Arc<crate::domains::agents::status::AgentStatusService>>,
+    agent_status: Option<Arc<crate::domains::agent_auth::status::AgentStatusService>>,
 }
 
 impl LaunchProbeService {
@@ -182,7 +182,7 @@ impl LaunchProbeService {
 
     pub fn with_agent_status(
         mut self,
-        agent_status: Arc<crate::domains::agents::status::AgentStatusService>,
+        agent_status: Arc<crate::domains::agent_auth::status::AgentStatusService>,
     ) -> Self {
         self.agent_status = Some(agent_status);
         self

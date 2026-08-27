@@ -63,7 +63,7 @@ fn observed_control(id: &str, current_value: &str, values: &[&str]) -> serde_jso
 }
 
 fn claude_model_scoped_snapshot() -> crate::domains::agents::live_ports::ProbeSnapshot {
-    let mut snapshot = crate::domains::agents::launch_probe::test_support::snapshot(
+    let mut snapshot = crate::domains::agent_auth::launch_probe::test_support::snapshot(
         "claude",
         &["opus".to_string(), "fable".to_string()],
     );
@@ -148,7 +148,7 @@ fn validation_is_exact_and_never_authors_a_fallback() {
 
 #[test]
 fn probe_legacy_modes_are_not_advertised_without_a_confirmable_config_control() {
-    let snapshot = crate::domains::agents::launch_probe::test_support::snapshot(
+    let snapshot = crate::domains::agent_auth::launch_probe::test_support::snapshot(
         "codex",
         &["gpt-5.6-sol".to_string()],
     );

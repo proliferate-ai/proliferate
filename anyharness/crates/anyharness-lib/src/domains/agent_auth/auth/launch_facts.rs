@@ -28,8 +28,8 @@ use crate::domains::agents::catalog::sync::active_agent_registry;
 use crate::domains::agents::registry::schema::{
     AgentRegistryAuthSlotEnvVar, AgentRegistryEnvVarKind,
 };
-use crate::domains::agents::route_auth::profile::{AgentRuntimeAuthProfile, ResolvedSource};
-use crate::domains::agents::route_auth::resolve_launch_auth_profile;
+use crate::domains::agent_auth::route_auth::profile::{AgentRuntimeAuthProfile, ResolvedSource};
+use crate::domains::agent_auth::route_auth::resolve_launch_auth_profile;
 
 /// Collect credential facts for classification from the auth profile the
 /// launcher will actually use. Native profiles merge composed workspace env
@@ -545,7 +545,7 @@ mod tests {
     ///   incoherence stays diagnosed and a regression back to it is caught.
     #[test]
     fn gateway_route_classifies_gateway_context_only_with_clean_env() {
-        use crate::domains::agents::auth::context::classify;
+        use crate::domains::agent_auth::auth::context::classify;
         use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
         use crate::domains::agents::model::AgentKind;
         use crate::domains::agents::registry::built_in_registry;
@@ -597,7 +597,7 @@ mod tests {
     /// used to materialize an override-free probe.
     #[test]
     fn api_key_env_fact_activates_anthropic_api() {
-        use crate::domains::agents::auth::context::classify;
+        use crate::domains::agent_auth::auth::context::classify;
         use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
         use crate::domains::agents::model::AgentKind;
         use crate::domains::agents::registry::built_in_registry;

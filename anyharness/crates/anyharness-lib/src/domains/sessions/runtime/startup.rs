@@ -7,7 +7,7 @@ use crate::domains::agents::launch_options::LaunchSelectionUnsupported;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
-use crate::domains::agents::route_auth::resolve_launch_route_auth_rotated;
+use crate::domains::agent_auth::route_auth::resolve_launch_route_auth_rotated;
 use crate::domains::sessions::extensions::{
     SessionInteractionRequestedContext, SessionInteractionResolvedContext, SessionStartedContext,
     SessionTurnFinishedContext,
@@ -304,7 +304,7 @@ impl SessionRuntime {
             self.session_service.store().db(),
         );
         if let Some(error) =
-            crate::domains::agents::route_auth::launch_route_selection_failure_rotated(
+            crate::domains::agent_auth::route_auth::launch_route_selection_failure_rotated(
                 &self.runtime_home,
                 &record.agent_kind,
                 &seat_cooling_store,

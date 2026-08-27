@@ -99,7 +99,7 @@ SCANNED_ROOTS: list[tuple[str, frozenset[str]]] = [
     ("server/proliferate/db/models/agent_gateway.py", frozenset({".py"})),
     ("server/proliferate/lib/infra/encryption", frozenset({".py"})),
     (
-        "anyharness/crates/anyharness-lib/src/domains/agents/route_auth",
+        "anyharness/crates/anyharness-lib/src/domains/agent_auth/route_auth",
         frozenset({".rs"}),
     ),
     (
@@ -110,7 +110,7 @@ SCANNED_ROOTS: list[tuple[str, frozenset[str]]] = [
     # `next_seat_id`) and probe verdicts, and it logs on every persist/read
     # failure path — the same seat plane this guard was extended to cover.
     (
-        "anyharness/crates/anyharness-lib/src/domains/agents/status",
+        "anyharness/crates/anyharness-lib/src/domains/agent_auth/status",
         frozenset({".rs"}),
     ),
     ("anyharness/crates/anyharness-lib/src/live/sessions", frozenset({".rs"})),

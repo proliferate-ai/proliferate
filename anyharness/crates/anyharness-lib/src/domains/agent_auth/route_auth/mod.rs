@@ -1,7 +1,7 @@
 //! Runtime auth-profile ingestion + per-harness launch rendering.
 //!
 //! This is the AnyHarness "render plane" (spec §1) for the LiteLLM agent-auth
-//! model. It is deliberately separate from the kept `agents/auth/` module,
+//! model. It is deliberately separate from the kept `agent_auth/auth/` module,
 //! which owns *native* credential detection and interactive login; this module
 //! owns the declarative *route* selections delivered by the control plane.
 //!

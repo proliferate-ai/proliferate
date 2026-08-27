@@ -189,7 +189,7 @@ impl SessionService {
             self.session_store.db(),
         );
         if let Some(error) =
-            crate::domains::agents::route_auth::launch_route_selection_failure_rotated(
+            crate::domains::agent_auth::route_auth::launch_route_selection_failure_rotated(
                 &self.runtime_home,
                 agent_kind,
                 &seat_cooling_store,

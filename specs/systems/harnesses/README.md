@@ -63,7 +63,7 @@ In-process: `AgentRuntime` ([runtime.rs](../../../anyharness/crates/anyharness-l
 
 **Launch options are observed, never defaulted.** Session create reloads the target observation, exact-validates the caller's opaque selection and stores `ResolvedLaunchIntent` atomically; omitted values stay omitted — no catalog default, alias, or first option fills them ([launch_options/validation.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_options/validation.rs)).
 
-**The probe is override-free.** [launch_probe/](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_probe/mod.rs) detects what the installed binary reports, under a lock, with backoff; it records contradictions rather than resolving them.
+**The probe is override-free.** [launch_probe/](../../../anyharness/crates/anyharness-lib/src/domains/agent_auth/launch_probe/mod.rs) detects what the installed binary reports, under a lock, with backoff; it records contradictions rather than resolving them.
 
 **Cursor never installs in cloud.** It is login-only with no headless credential path, so a cloud install could never reach `Ready` (`RuntimeSurface::Cloud` carve-out in [runtime.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs)).
 
@@ -155,15 +155,15 @@ Client-plane presentation: [components/agents](../../../apps/packages/product-cl
   [catalog/schema_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/schema_tests.rs),
   [registry/validation_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/registry/validation_tests.rs).
 - Launch options and probe: [launch_options/tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_options/tests.rs),
-  [launch_probe/runner_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_probe/runner_tests.rs),
-  [contradiction_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_probe/contradiction_tests.rs),
+  [launch_probe/runner_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_auth/launch_probe/runner_tests.rs),
+  [contradiction_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/agent_auth/launch_probe/contradiction_tests.rs),
   [api/http/agent_launch_options_tests.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agent_launch_options_tests.rs).
 - Release lanes: the managed-agent install/spawn scenarios under
   [tests/release](../../../tests/release) (see [TESTING.md](../../engineering/testing/standard.md)).
 
 ## Known gaps / follow-ups
 
-- `domains/agents/auth` uses contract auth structs end-to-end (recorded
+- `domains/agent_auth/auth` uses contract auth structs end-to-end (recorded
   migration exception in [domains.md](../../areas/anyharness.md)); resolves with
   the agent_auth move.
 - The "agents" name is used for three things (this system, the client's

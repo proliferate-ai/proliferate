@@ -41,6 +41,22 @@ BLOCKED_PATHS = [
     # connection/connection.rs).
     "anyharness/crates/anyharness-lib/src/acp",
     "anyharness/crates/anyharness-lib/src/acp.rs",
+    # Wave-3 agent_auth consolidation (slice 6b) moved the runtime auth cell
+    # out of domains/agents/ into domains/agent_auth/. Same dir + file-module
+    # pairing as the other module-move entries above. auth_state was a file
+    # module (deleted by the slice-3 status work, so it has no new home) with
+    # a #[path]-mounted test file; both .rs shapes are banned so neither can
+    # quietly come back at the retired location.
+    "anyharness/crates/anyharness-lib/src/domains/agents/route_auth",
+    "anyharness/crates/anyharness-lib/src/domains/agents/route_auth.rs",
+    "anyharness/crates/anyharness-lib/src/domains/agents/auth",
+    "anyharness/crates/anyharness-lib/src/domains/agents/auth.rs",
+    "anyharness/crates/anyharness-lib/src/domains/agents/launch_probe",
+    "anyharness/crates/anyharness-lib/src/domains/agents/launch_probe.rs",
+    "anyharness/crates/anyharness-lib/src/domains/agents/status",
+    "anyharness/crates/anyharness-lib/src/domains/agents/status.rs",
+    "anyharness/crates/anyharness-lib/src/domains/agents/auth_state.rs",
+    "anyharness/crates/anyharness-lib/src/domains/agents/auth_state_tests.rs",
 ]
 
 

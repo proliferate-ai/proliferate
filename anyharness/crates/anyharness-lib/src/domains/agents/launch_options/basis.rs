@@ -8,7 +8,7 @@ use crate::domains::agents::installer::manifest::{read_manifest, role_name};
 use crate::domains::agents::model::{ResolvedArtifact, SpawnSpec};
 use crate::domains::agents::readiness::service::resolve_agent_unrouted;
 use crate::domains::agents::registry;
-use crate::domains::agents::route_auth::{current_server_origin, load_effective_state};
+use crate::domains::agent_auth::route_auth::{current_server_origin, load_effective_state};
 
 /// Hash only product-owned launch-option inputs. Workspace/session environment
 /// is deliberately absent from this function and from every caller.
@@ -364,7 +364,7 @@ mod tests {
     }
 
     fn write_state_json(home: &Path, value: &serde_json::Value) {
-        let path = crate::domains::agents::route_auth::state_file_path(home);
+        let path = crate::domains::agent_auth::route_auth::state_file_path(home);
         std::fs::create_dir_all(path.parent().expect("state parent")).expect("create agent-auth");
         std::fs::write(&path, serde_json::to_vec_pretty(value).expect("serialize"))
             .expect("write state");
@@ -463,7 +463,7 @@ mod tests {
         let home = TestDir::new("basis-malformed-absent");
         let absent = compute_harness_basis_revision(home.path(), "codex");
 
-        let path = crate::domains::agents::route_auth::state_file_path(home.path());
+        let path = crate::domains::agent_auth::route_auth::state_file_path(home.path());
         std::fs::create_dir_all(path.parent().expect("state parent")).expect("create agent-auth");
         std::fs::write(&path, b"{ not json").expect("write malformed state");
         assert_eq!(

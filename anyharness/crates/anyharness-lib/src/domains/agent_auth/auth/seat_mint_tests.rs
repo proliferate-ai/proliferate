@@ -17,7 +17,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::domains::agents::route_auth::{
+use crate::domains::agent_auth::route_auth::{
     resolve_launch_route_auth, AgentAuthState, GatewayModelPlan, GatewayModelResolve,
 };
 use crate::live::terminals::{
@@ -164,7 +164,7 @@ async fn seat_mint_store_render_launch_roundtrip() {
         }],
     }))
     .expect("wire document parses");
-    crate::domains::agents::route_auth::apply_state_file(&home, &state).expect("apply");
+    crate::domains::agent_auth::route_auth::apply_state_file(&home, &state).expect("apply");
 
     // Launch: the env carries the token + the per-seat home, strip list applied.
     let rendered =

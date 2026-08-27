@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use crate::domains::agents::installer::manifest::{record_entries, ManifestArtifact};
 use crate::domains::agents::live_ports::{ProbeAttestation, ProbeModelEntry, ProbeSnapshot};
-use crate::domains::agents::route_auth::{GatewayModelPlan, GatewayModelResolve};
+use crate::domains::agent_auth::route_auth::{GatewayModelPlan, GatewayModelResolve};
 
 use super::probe::{ProbeError, ProbeRequest, ProbeRunner, COMPOSED_AUTH_CONTEXT_LABEL};
 use super::targets::ProbeTargets;
@@ -38,7 +38,7 @@ impl TempRuntimeHome {
     }
 
     pub(crate) fn write_state_json(&self, value: &serde_json::Value) {
-        let path = crate::domains::agents::route_auth::state::state_file_path(&self.path);
+        let path = crate::domains::agent_auth::route_auth::state::state_file_path(&self.path);
         std::fs::create_dir_all(path.parent().expect("state parent")).expect("create agent-auth");
         std::fs::write(&path, serde_json::to_vec_pretty(value).expect("serialize"))
             .expect("write state");
@@ -282,7 +282,7 @@ impl ProbeRunner for FakeRunner {
         // against a runner that leaked every root. Doing the real phase-B write makes
         // those assertions able to fail, and it exercises the seam the fake is
         // standing in front of rather than around it.
-        let materialized = crate::domains::agents::route_auth::materialize_for_probe(
+        let materialized = crate::domains::agent_auth::route_auth::materialize_for_probe(
             &request.runtime_home,
             &request.harness_kind,
             &request.material,

@@ -28,7 +28,7 @@ The runtime owns one `harness_launch_option_states` row per harness kind. It is 
 - successful-observation and latest-attempt timestamps; and
 - bounded probe evidence and failure code.
 
-The implementation lives under [`domains/agents/launch_options/`](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_options) and [`domains/agents/launch_probe/`](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_probe).
+The implementation lives under [`domains/agents/launch_options/`](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_options) and [`domains/agent_auth/launch_probe/`](../../../anyharness/crates/anyharness-lib/src/domains/agent_auth/launch_probe).
 
 ### Probe rules
 
@@ -233,7 +233,7 @@ Gateway logs and errors obey the secret-scrubbing rules in [Observability](../..
 | Concern | Owner |
 | --- | --- |
 | Target state, basis, validation | `anyharness-lib/src/domains/agents/launch_options/` |
-| Override-free probe | `anyharness-lib/src/domains/agents/launch_probe/` |
+| Override-free probe | `anyharness-lib/src/domains/agent_auth/launch_probe/` |
 | Create intent | `anyharness-lib/src/domains/sessions/{launch_intent.rs,service/create.rs}` |
 | Startup confirmation | `anyharness-lib/src/live/sessions/actor/` |
 | Active state/mutation | `anyharness-lib/src/domains/sessions/live_config/` |

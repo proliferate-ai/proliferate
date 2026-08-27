@@ -13,7 +13,7 @@ use super::agents_contract::probe_phase_to_contract;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::agents::launch_options as domain;
-use crate::domains::agents::launch_probe::{LivePhaseReading, ProbeEngineMode};
+use crate::domains::agent_auth::launch_probe::{LivePhaseReading, ProbeEngineMode};
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::registry::descriptor;
 
@@ -170,8 +170,8 @@ fn ensure_path_safe_identifier(value: &str, field: &str) -> Result<(), ApiError>
     }
 }
 
-fn refresh_error(error: crate::domains::agents::launch_probe::RefreshError) -> ApiError {
-    use crate::domains::agents::launch_probe::RefreshError;
+fn refresh_error(error: crate::domains::agent_auth::launch_probe::RefreshError) -> ApiError {
+    use crate::domains::agent_auth::launch_probe::RefreshError;
 
     let code = error.code();
     match error {

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use super::{reconcile_agent_with_progress, AgentReconcileOutcome, AgentReconcileResult};
 use crate::domains::agents::catalog::service::{ActiveCatalog, AgentCatalogService};
-use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
+use crate::domains::agent_auth::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::agents::installer::progress::{
     InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
 };

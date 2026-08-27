@@ -16,7 +16,7 @@ use super::{LaunchProbeService, PokeReason, ProbeEngineConfig};
 use crate::domains::agents::launch_options::{
     HarnessLaunchOptionsService, HarnessLaunchOptionsState,
 };
-use crate::domains::agents::status::AgentStatusService;
+use crate::domains::agent_auth::status::AgentStatusService;
 use crate::persistence::Db;
 
 fn engine_with_tiny_backoff(
@@ -135,7 +135,7 @@ async fn a_success_disarms_the_stale_backoff_timer() {
 /// with NO manual poke anywhere.
 #[tokio::test]
 async fn probe_failure_serves_stale_observation() {
-    use crate::domains::agents::status::ProbeVerdict;
+    use crate::domains::agent_auth::status::ProbeVerdict;
 
     let home = TempRuntimeHome::new("serve-stale-observation");
     home.write_manifest("opencode", Some("1.0.0"), Some("sha-1"), "managed");

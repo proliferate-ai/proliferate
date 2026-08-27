@@ -36,7 +36,7 @@ use tokio_util::sync::CancellationToken;
 use crate::domains::agents::live_ports::{probe_agent, ProbeOptions, ProbeSnapshot};
 use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::readiness::service::resolve_agent_unrouted_by_kind;
-use crate::domains::agents::route_auth::{
+use crate::domains::agent_auth::route_auth::{
     self, GatewayModelPlan, ProbeAuthMaterial, RouteAuthError,
 };
 
