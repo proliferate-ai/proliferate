@@ -288,7 +288,7 @@ async def ack_agent_auth_state_endpoint(
     """Record a surface runtime's delivery acknowledgement (the desktop seam).
 
     The desktop calls this after its local runtime's state PUT/DELETE
-    succeeded, echoing the pushed document's ``revision`` and the served
+    succeeded, echoing the pushed document's ``sequence`` and the served
     ``fingerprint`` from ``GET /state``. This stamp is what flips the
     selections read from pending to applied (agent-auth.md "Applied means
     acknowledged"). The cloud surface's twin is stamped server-side by the
@@ -298,7 +298,7 @@ async def ack_agent_auth_state_endpoint(
         db,
         user_id=user.id,
         surface=surface,
-        revision=body.revision,
+        sequence=body.sequence,
         fingerprint=body.fingerprint,
     )
     return delivery_ack_payload(record)

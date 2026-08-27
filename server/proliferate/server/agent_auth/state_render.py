@@ -1,14 +1,14 @@
-"""Agent-auth state materialization into cloud sandboxes (state.json v2).
+"""Agent-auth state rendering (state.json v2).
 
-Writes the declarative AUTH-ONLY contract file that AnyHarness renders into
+Renders the declarative AUTH-ONLY contract document that AnyHarness turns into
 per-harness launch profiles (the agent-auth state.json delivery contract). The
-file lives at ``<anyharness home>/agent-auth/state.json`` (mode 0600):
+runtime persists it at ``<anyharness home>/agent-auth/state.json`` (mode 0600):
 
 .. code-block:: json
 
     {
       "version": 2,
-      "revision": 41,
+      "sequence": 41,
       "user_id": "...",
       "harnesses": [
         {
@@ -58,44 +58,41 @@ never to rename a field. The DB ``source_kind`` for this row is still
 ``api_key`` — the ``provider_config`` distinction exists only on the wire,
 decided at render time by which vault ``kind`` the referenced row has.
 
-Two delivery surfaces share this one renderer: the cloud materialization worker
-writes the ``cloud`` surface into sandboxes, and ``GET /agent-auth/state``
-serves the ``local`` surface to the desktop (which pushes it to its local
-AnyHarness runtime). ``render_agent_auth_state`` operates on pre-scoped inputs;
-``build_agent_auth_state`` loads them for a surface.
+``render_agent_auth_state`` operates on pre-scoped inputs;
+``build_agent_auth_state`` loads them for a surface (``state_inputs.py``).
 
-``revision`` is derived from ``max(updated_at)`` across the surface's selection
-rows (the prior DB rebuild dropped the per-row revision column, so there is no
-persistent counter to bump — see the contract §1 note): it is monotonic across
-edits that keep the scope non-empty, which is what the runtime's stale-push
-protection needs. Content is authoritative — a virtual-key rotation changes the
-file without any row mutation, so change detection uses a sha256 fingerprint of
-the canonical JSON tracked in a server-owned manifest beside the home:
-unchanged fingerprint → no write.
+Delivery governance (agent_auth spec §2 "How delivery is governed"):
+``sequence`` is monotonic per (user, surface) and bumped ONLY by a render
+whose ``harnesses`` content changed — the persisted counter lives in
+``agent_auth_render_sequence`` and moves through one atomic upsert keyed on
+the content hash. Content changes that touch no selection row bump too: a
+vault key or seat revoke, a virtual-key rotation, budget withholding, an
+enrollment reaching synced — they all change what the renderer emits, which
+is the only thing the counter watches. A no-op render changes neither the
+sequence nor the fingerprint. The ``fingerprint`` is the sha256 of the
+canonical ``harnesses`` array ONLY (``agent_auth_harnesses_fingerprint``) —
+a ``GET /state`` response rider, never inside the document.
 
 Empty state (contract §3): a harness ABSENT from ``harnesses`` renders to the
 native delta at the read plane; a harness PRESENT with ``sources: []`` fails the
-launch closed with a typed error. When the whole surface has no selection rows at
-all, the state file and manifest are deleted so the reader finds no file. A
-gateway source whose enrollment is not yet synced, or whose public base URL is
-unconfigured, is dropped (and logged) rather than raised, and a revoked
-``api_key`` source's value simply vanishes at the next pass — one unsatisfiable
-source never aborts the whole reconcile, but it does leave its harness entry
-empty rather than removing it.
+launch closed with a typed error. A gateway source whose enrollment is not yet
+synced, or whose public base URL is unconfigured, is dropped (and logged)
+rather than raised, and a revoked ``api_key`` source's value simply vanishes
+at the next pass — one unsatisfiable source never aborts the whole render,
+but it does leave its harness entry empty rather than removing it.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import logging
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS,
     AGENT_AUTH_SOURCE_API_KEY,
@@ -108,13 +105,20 @@ from proliferate.constants.agent_gateway import (
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import AgentAuthSelectionRecord
-from proliferate.server.agent_auth.budget import (
-    get_gateway_enrollment_for_user,
-    is_gateway_budget_available,
-)
 from proliferate.server.agent_auth.provider_env import (
     translate_provider_config_env as _translate_provider_config_env,
 )
+from proliferate.server.agent_auth.state_inputs import (
+    AgentAuthStateInputs,
+    load_state_inputs,
+)
+
+__all__ = [
+    "AgentAuthStateInputs",
+    "agent_auth_harnesses_fingerprint",
+    "build_agent_auth_state",
+    "render_agent_auth_state",
+]
 
 logger = logging.getLogger("proliferate.cloud.materialization")
 
@@ -131,58 +135,6 @@ UNSATISFIED_SEATS_GONE = "its Claude.ai login was removed or signed out"
 UNSATISFIED_UNSUPPORTED = "this provider configuration isn't supported for this agent"
 
 
-@dataclass(frozen=True)
-class AgentAuthStateInputs:
-    """Everything needed to render the state file, decoupled from the DB.
-
-    ``selections`` are the ENABLED rows for the rendered surface only. ``revision``
-    is precomputed from every row in the surface (enabled or not) so disabling a
-    row still advances it. ``api_key_values`` maps an ``api_key_id`` to its
-    decrypted secret; a revoked or vanished key is simply absent (its source is
-    then dropped).
-
-    ``gateway_virtual_keys`` is a per-harness map (model-gateway.md §Account
-    model, R2): each gateway-capable harness gets its own access-group-scoped
-    key, so there is no longer one shared virtual key for a whole scope. A
-    harness absent from the map (or whose enrollment isn't synced) has an
-    unsatisfiable gateway source.
-
-    ``provider_config_values`` maps an ``api_key_id`` to ``(kind, fields)`` for
-    every ENABLED ``api_key`` selection whose referenced vault entry is a TYPED
-    entry (``aws_bedrock``/``azure_openai``) rather than a bare secret --
-    ``fields`` is the decrypted generic vault field map (D2's vocabulary:
-    ``region``/``bearerToken``/``endpoint``/``deployment``/``apiKey``), not yet
-    translated into any harness's env vars (D3 python brief §4.1/§4.2 --
-    ``_render_provider_config_source`` does that at render time, per selection,
-    since the SAME vault entry can be selected by more than one harness and
-    each harness needs its own translation). A revoked or vanished typed entry
-    is simply absent here too (its source is then dropped, same as
-    ``api_key_values``).
-
-    ``seat_values`` is every ACTIVE seat (``anthropic_subscription``) entry's
-    ``(id, decrypted token)``, **in vault order** (``created_at``) — the order
-    a pool seat row expands in (spec §2's "seat selection shape"). A revoked
-    seat is simply absent, so its source vanishes at the next render pass.
-
-    ``gateway_budget_available`` is the budget predicate's verdict when the
-    load pass consulted ``is_gateway_budget_available`` (``None`` when it was
-    never consulted): ``False`` is how the renderer knows a missing virtual
-    key means budget-withheld rather than an account that isn't ready.
-    """
-
-    user_id: UUID
-    revision: int
-    selections: tuple[AgentAuthSelectionRecord, ...]
-    api_key_values: Mapping[UUID, str]
-    provider_config_values: Mapping[UUID, tuple[str, dict[str, str]]]
-    enrollment_sync_status: str | None
-    gateway_virtual_keys: Mapping[str, str]  # keyed by harness_kind
-    gateway_base_url: str | None
-    harness_settings: Mapping[str, dict[str, object]]  # keyed by harness_kind
-    seat_values: tuple[tuple[UUID, str], ...] = ()
-    gateway_budget_available: bool | None = None
-
-
 def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, object], str]:
     """Render (state, fingerprint) as a v2 document from pre-scoped inputs.
 
@@ -192,11 +144,11 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
     is kept with ``sources: []``, which the runtime reads as "a selection this
     machine cannot honor" and refuses the launch. Only a harness with no
     selection row at all is absent, which the read plane treats as native. The
-    caller deletes the file when ``harnesses`` is empty, i.e. when nothing is
-    selected on this surface at all.
+    fingerprint hashes the ``harnesses`` array only (spec §2): pure content
+    change detection, independent of the sequence stamped into the document.
 
     Never raises for an unsatisfiable source: it is dropped (and logged) so a
-    single bad source can never abort the reconcile and leave stale key material
+    single bad source can never abort the render and leave stale key material
     behind. Dropping a source is not the same as dropping its harness.
     """
     # Every harness the user has SELECTED something for gets a key here, even
@@ -263,15 +215,21 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
 
     state: dict[str, object] = {
         "version": AGENT_AUTH_STATE_VERSION,
-        "revision": inputs.revision,
+        "sequence": inputs.sequence,
         "user_id": str(inputs.user_id),
         "harnesses": harnesses,
     }
-    return state, agent_auth_state_fingerprint(state)
+    return state, agent_auth_harnesses_fingerprint(harnesses)
 
 
-def agent_auth_state_fingerprint(state: Mapping[str, object]) -> str:
-    canonical = json.dumps(state, sort_keys=True, separators=(",", ":"))
+def agent_auth_harnesses_fingerprint(harnesses: Sequence[Mapping[str, object]]) -> str:
+    """sha256 hex of the canonical ``harnesses`` array (spec §2's fingerprint).
+
+    Hashes the content array ONLY — never the envelope — so the fingerprint
+    is pure change detection: stamping a new sequence into the document (or
+    rendering for a different user id) cannot move it.
+    """
+    canonical = json.dumps(list(harnesses), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -418,7 +376,7 @@ def _render_provider_config_source(
 
     Returns ``(None, reason)`` (dropping the source, never raising) for a
     revoked/vanished vault entry or an unsupported (harness_kind, config_kind)
-    combination -- same never-abort-the-reconcile contract as
+    combination -- same never-abort-the-render contract as
     ``_render_api_key_source``/``_render_gateway_source``.
     """
     if selection.api_key_id is None:
@@ -450,138 +408,24 @@ async def build_agent_auth_state(
     *,
     surface: str = AGENT_AUTH_SURFACE_CLOUD,
 ) -> tuple[dict[str, object], str]:
-    """Load the user's auth material for a surface and render (state, fingerprint)."""
-    inputs = await _load_state_inputs(db, user_id=user_id, surface=surface)
-    return render_agent_auth_state(inputs)
+    """Load the user's auth material for a surface and render (state, fingerprint).
 
-
-def _row_revision(row: AgentAuthSelectionRecord) -> int:
-    """Monotonic revision contribution of a row (ms since epoch of updated_at)."""
-    return int(row.updated_at.timestamp() * 1000)
-
-
-async def _load_state_inputs(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    surface: str = AGENT_AUTH_SURFACE_CLOUD,
-) -> AgentAuthStateInputs:
-    all_rows = tuple(
-        await agent_gateway_store.list_auth_selections(db, user_id=user_id, surface=surface)
-    )
-    enabled = tuple(row for row in all_rows if row.enabled)
-    revision = max((_row_revision(row) for row in all_rows), default=0)
-
-    api_key_values: dict[UUID, str] = {}
-    provider_config_values: dict[UUID, tuple[str, dict[str, str]]] = {}
-    for selection in enabled:
-        if selection.source_kind != AGENT_AUTH_SOURCE_API_KEY or selection.api_key_id is None:
-            continue
-        if (
-            selection.api_key_id in api_key_values
-            or selection.api_key_id in provider_config_values
-        ):
-            continue
-        # Try the bare-key fetch first (mirrors `get_agent_api_key_decrypted`'s
-        # kind-scoped query, which already returns None for a typed row) --
-        # fall back to the typed fetch only when the bare one misses, so a
-        # selection referencing either vault shape resolves without the
-        # caller needing to know which shape it is in advance.
-        resolved = await agent_gateway_store.get_agent_api_key_decrypted(
-            db,
-            user_id=user_id,
-            api_key_id=selection.api_key_id,
-        )
-        if resolved is not None:
-            _, value = resolved
-            api_key_values[selection.api_key_id] = value
-            continue
-        typed_resolved = await agent_gateway_store.get_agent_provider_config_decrypted(
-            db,
-            user_id=user_id,
-            api_key_id=selection.api_key_id,
-        )
-        if typed_resolved is not None:
-            record, fields = typed_resolved
-            provider_config_values[selection.api_key_id] = (record.kind, fields)
-
-    enrollment_sync_status: str | None = None
-    gateway_virtual_keys: dict[str, str] = {}
-    gateway_budget_available: bool | None = None
-    gateway_harness_kinds = {
-        selection.harness_kind
-        for selection in enabled
-        if selection.source_kind == AGENT_AUTH_SOURCE_GATEWAY
-    }
-    if gateway_harness_kinds:
-        # v1 payer law (model-gateway.md §Account model): gateway sessions are
-        # governed by the user's DEFAULT org's enrollment, unconditionally —
-        # same resolution `is_gateway_budget_available` uses below, so the
-        # gate and the keys it guards always agree on the paying subject.
-        enrollment = await get_gateway_enrollment_for_user(db, user_id)
-        if enrollment is not None:
-            enrollment_sync_status = enrollment.sync_status
-            if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
-                # Second enforcement wall for exhausted AND unfunded subjects
-                # (the first is the importer disabling the LiteLLM virtual
-                # keys, backstopped by the mirrored team budget sitting at the
-                # exhausted floor): such a subject stops being handed any key
-                # at all, so a lagging or failed key-disable cannot leak
-                # gateway access. The gateway source then renders
-                # unsatisfiable and is dropped; the runtime fails closed at
-                # launch. The verdict rides the inputs so the renderer can
-                # name budget-withheld in the entry's unsatisfied_reason.
-                gateway_budget_available = await is_gateway_budget_available(db, user_id)
-                if gateway_budget_available:
-                    for harness_kind in gateway_harness_kinds:
-                        enrollment_key = await agent_gateway_store.get_active_enrollment_key(
-                            db,
-                            enrollment_id=enrollment.id,
-                            harness_kind=harness_kind,
-                        )
-                        if enrollment_key is None:
-                            continue
-                        decrypted_key = (
-                            await agent_gateway_store.get_enrollment_key_virtual_key_decrypted(
-                                db,
-                                enrollment_key_id=enrollment_key.id,
-                            )
-                        )
-                        if decrypted_key is not None:
-                            gateway_virtual_keys[harness_kind] = decrypted_key
-                else:
-                    logger.warning(
-                        "Withholding gateway virtual keys: LLM credit exhausted "
-                        "or subject unfunded (user=%s, surface=%s)",
-                        user_id,
-                        surface,
-                    )
-
-    seat_values: tuple[tuple[UUID, str], ...] = ()
-    if any(selection.source_kind == AGENT_AUTH_SOURCE_SEAT for selection in enabled):
-        seat_values = tuple(
-            (record.id, token)
-            for record, token in await agent_gateway_store.list_agent_seats_decrypted(
-                db, user_id=user_id
-            )
-        )
-
-    harness_settings = await agent_gateway_store.list_harness_settings_for_surface(
+    The sequence is an output of the render, never an input (spec §2): the
+    content is rendered first, its ``harnesses`` hash is fed to the atomic
+    ``bump_render_sequence_if_changed`` upsert — which advances the persisted
+    per-(user, surface) counter exactly when the hash changed — and the
+    returned sequence is stamped into a second render of the same inputs.
+    Both passes render identical content (the sequence rides the envelope,
+    outside the fingerprint), so a no-op render returns the same (sequence,
+    fingerprint) pair it returned last time.
+    """
+    inputs = await load_state_inputs(db, user_id=user_id, surface=surface)
+    _, fingerprint = render_agent_auth_state(inputs)
+    sequence = await agent_gateway_store.bump_render_sequence_if_changed(
         db,
         user_id=user_id,
         surface=surface,
+        fingerprint=fingerprint,
     )
-
-    return AgentAuthStateInputs(
-        user_id=user_id,
-        revision=revision,
-        selections=enabled,
-        api_key_values=api_key_values,
-        provider_config_values=provider_config_values,
-        enrollment_sync_status=enrollment_sync_status,
-        gateway_virtual_keys=gateway_virtual_keys,
-        gateway_base_url=settings.agent_gateway_litellm_public_base_url or None,
-        harness_settings=harness_settings,
-        seat_values=seat_values,
-        gateway_budget_available=gateway_budget_available,
-    )
+    state, fingerprint = render_agent_auth_state(dataclasses.replace(inputs, sequence=sequence))
+    return state, fingerprint

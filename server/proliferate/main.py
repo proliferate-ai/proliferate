@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 # Retained automation tables must stay registered in SQLAlchemy metadata.
+import proliferate.db.models.agent_auth_delivery  # noqa: F401
 import proliferate.db.models.agent_gateway  # noqa: F401
 import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401

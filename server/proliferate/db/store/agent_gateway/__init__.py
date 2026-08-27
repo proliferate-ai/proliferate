@@ -67,6 +67,7 @@ from proliferate.db.store.agent_gateway.policy import (
 from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
     AgentAuthDeliveryAckRecord,
+    AgentAuthRenderSequenceRecord,
     AgentAuthSelectionRecord,
     AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
@@ -75,6 +76,10 @@ from proliferate.db.store.agent_gateway.records import (
     LlmCreditBalanceRecord,
     LlmCreditGrantRecord,
     OrgAgentPolicyRecord,
+)
+from proliferate.db.store.agent_gateway.render_sequence import (
+    bump_render_sequence_if_changed,
+    get_render_sequence,
 )
 from proliferate.db.store.agent_gateway.selections import (
     AgentApiKeyNotUsableError,
@@ -85,7 +90,6 @@ from proliferate.db.store.agent_gateway.selections import (
     list_enabled_auth_selections,
     list_enabled_selections_referencing_key,
     put_auth_selections,
-    touch_auth_selection_revisions,
 )
 from proliferate.db.store.agent_gateway.usage import (
     advance_usage_import_cursor,
@@ -101,6 +105,7 @@ __all__ = [
     "AgentProviderConfigNotSupportedError",
     "AgentApiKeyRecord",
     "AgentAuthDeliveryAckRecord",
+    "AgentAuthRenderSequenceRecord",
     "AgentAuthSelectionRecord",
     "AgentGatewayEnrollmentKeyRecord",
     "AgentGatewayEnrollmentRecord",
@@ -112,6 +117,7 @@ __all__ = [
     "OrgMemberRouteSelectionRecord",
     "advance_usage_import_cursor",
     "build_redacted_hint",
+    "bump_render_sequence_if_changed",
     "clear_auth_selections",
     "count_topup_grants",
     "create_agent_api_key",
@@ -133,6 +139,7 @@ __all__ = [
     "get_org_agent_policy",
     "get_harness_settings",
     "get_remaining_credit_usd",
+    "get_render_sequence",
     "get_scope_auth_selections",
     "get_usage_import_cursor",
     "insert_usage_event_once",
@@ -170,6 +177,5 @@ __all__ = [
     "set_org_agent_policy",
     "sum_active_grants_usd",
     "sum_usage_cost_usd",
-    "touch_auth_selection_revisions",
     "upsert_enrollment_key",
 ]

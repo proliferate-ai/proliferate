@@ -43,17 +43,38 @@ class AgentAuthSelectionRecord:
 class AgentAuthDeliveryAckRecord:
     """The last acknowledged state delivery for one (user, surface).
 
-    ``acked_fingerprint`` is the renderer's sha256 of the delivered canonical
-    document (change detection); ``acked_revision`` is that document's
-    revision, kept as the out-of-order backstop only.
+    ``acked_sequence`` is the delivered document's sequence (spec §2:
+    monotonic per surface, bumped only by content-changing renders);
+    ``acked_fingerprint`` is the renderer's sha256 of that document's
+    canonical ``harnesses`` array. A selection reads applied only when the
+    pair equals the surface's CURRENT rendered pair.
     """
 
     id: UUID
     user_id: UUID
     surface: str
-    acked_revision: int
+    acked_sequence: int
     acked_fingerprint: str
     acked_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class AgentAuthRenderSequenceRecord:
+    """The current rendered document sequence for one (user, surface).
+
+    ``sequence`` moves exactly when a render's ``harnesses`` content hash
+    (``fingerprint``) changed — the persisted counter behind the wire
+    document's ``sequence`` field (spec §2 "How delivery is governed").
+    """
+
+    id: UUID
+    user_id: UUID
+    surface: str
+    sequence: int
+    fingerprint: str
+    rendered_at: datetime
     created_at: datetime
     updated_at: datetime
 

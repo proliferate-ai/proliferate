@@ -292,8 +292,8 @@ async def put_auth_selections(
     """Replace a scope's selection sources with the full desired list.
 
     Runs the per-harness legality validator (contract §2), then the store diff
-    (structural coherence + key ownership), bumps the surface revision implicitly
-    via row updated_at, and schedules cloud materialization.
+    (structural coherence + key ownership); the surface sequence bumps at the
+    next render iff the rendered content actually changed (spec §2).
     """
     try:
         validate_auth_selection_set(harness_kind=harness_kind, sources=sources)
@@ -364,9 +364,9 @@ async def get_auth_state(
 
     Same render path as the cloud materializer. A surface with no resolvable
     enabled sources renders as a v2 doc with an empty ``harnesses`` list. The
-    fingerprint (the renderer's sha256 of the canonical document) rides the
-    response so the desktop can echo it back through the delivery ack — the
-    server never has to trust a client-computed hash.
+    fingerprint (the renderer's sha256 of the canonical ``harnesses`` array,
+    spec §2) rides the response so the desktop can echo it back through the
+    delivery ack — the server never has to trust a client-computed hash.
 
     The third element is the surface's full persisted harness-settings map
     (``agent_auth_harness_settings``), keyed by harness_kind. It exists for
@@ -388,31 +388,33 @@ async def ack_auth_state_delivery(
     *,
     user_id: UUID,
     surface: str,
-    revision: int,
+    sequence: int,
     fingerprint: str,
 ) -> agent_gateway_store.AgentAuthDeliveryAckRecord:
     """Record a surface runtime's delivery acknowledgement (desktop ack seam).
 
     The desktop calls this after its local runtime's state PUT/DELETE
-    succeeded, echoing the pushed document's (revision, fingerprint) as served
-    by ``GET /state``. Out-of-order (lower-revision) acks are inert in the
+    succeeded, echoing the pushed document's (sequence, fingerprint) as served
+    by ``GET /state``. Out-of-order (lower-sequence) acks are inert in the
     store — a delayed confirmation of a superseded document never moves the
-    stamp backwards.
+    stamp backwards — and an equal-sequence ack is an idempotent re-ack
+    (equal sequence can no longer carry different content: the sequence bumps
+    exactly when the rendered content changes, spec §2).
 
     Trust boundary: the FINGERPRINT is taken from the authenticated client by
     design — it can only misreport its own delivery state, and it already
     holds the keys the document carries, so a lie gains it nothing beyond a
-    wrong badge on its own settings. The REVISION, however, is server-bounded:
-    an ack claiming a revision higher than the surface's current rendered
-    revision (max ``updated_at`` over the surface's selection rows — the same
-    value ``GET /state`` serves) could never have been served, and accepting
-    it would wedge the store's only-move-forward backstop against every later
+    wrong badge on its own settings. The SEQUENCE, however, is server-bounded:
+    an ack claiming a sequence above the surface's current rendered sequence
+    (the persisted render-sequence row — the same value ``GET /state`` stamps
+    into the document) could never have been served, and accepting it would
+    wedge the store's only-move-forward backstop against every later
     legitimate ack. Such an ack from the future is rejected with 400.
     """
-    if revision < 0:
+    if sequence < 0:
         raise CloudApiError(
             "invalid_agent_auth_delivery_ack",
-            "revision must be a non-negative integer.",
+            "sequence must be a non-negative integer.",
             status_code=400,
         )
     fingerprint = fingerprint.strip()
@@ -422,34 +424,27 @@ async def ack_auth_state_delivery(
             "fingerprint must be a 1-128 character string.",
             status_code=400,
         )
-    current_revision = _selection_scope_revision(
-        await agent_gateway_store.list_auth_selections(db, user_id=user_id, surface=surface)
-    )
-    if revision > current_revision:
+    current = await agent_gateway_store.get_render_sequence(db, user_id=user_id, surface=surface)
+    if sequence > (current.sequence if current is not None else 0):
         raise CloudApiError(
             "invalid_agent_auth_delivery_ack",
-            "ack from the future: revision exceeds the surface's current rendered revision.",
+            "ack from the future: sequence exceeds the surface's current rendered sequence.",
             status_code=400,
         )
     record = await agent_gateway_store.record_delivery_ack(
         db,
         user_id=user_id,
         surface=surface,
-        revision=revision,
+        sequence=sequence,
         fingerprint=fingerprint,
     )
     log_cloud_event(
         "agent_auth_delivery_acked",
         user_id=str(user_id),
         surface=surface,
-        revision=revision,
+        sequence=sequence,
     )
     return record
-
-
-def _selection_scope_revision(records: Sequence[AgentAuthSelectionRecord]) -> int:
-    """The renderer's revision contribution of one harness scope (ms epoch)."""
-    return max((int(record.updated_at.timestamp() * 1000) for record in records), default=0)
 
 
 async def annotate_selection_delivery(
@@ -460,32 +455,27 @@ async def annotate_selection_delivery(
 ) -> dict[UUID, bool]:
     """Per-record applied-vs-pending truth for the selections read.
 
-    Applied means acknowledged (agent-auth.md): a record reads applied only
-    when its surface's runtime has confirmed a delivery that covers it —
-    either the surface's CURRENT rendered fingerprint equals the acked one
-    (nothing outstanding at all), or this harness scope's revision is no newer
-    than the acked revision (the outstanding change belongs to a different
-    harness on the surface). No ack at all means everything with rows is
-    pending — a failed or missing delivery is visible, never silently stale.
+    Applied means acknowledged, at SURFACE level (spec §4 cell 1): a record
+    reads applied only when its surface's ack row exists AND carries the
+    surface's current rendered (sequence, fingerprint), both equal. The
+    current pair comes from a fresh render (``build_agent_auth_state``) — a
+    render that finds changed content legitimately bumps the sequence, which
+    is what flips the surface's selections back to pending until the new
+    document is acked. No ack at all means everything with rows is pending —
+    a failed or missing delivery is visible, never silently stale.
     """
     applied: dict[UUID, bool] = {}
     for surface in {record.surface for record in records}:
-        surface_records = [record for record in records if record.surface == surface]
         ack = await agent_gateway_store.get_delivery_ack(db, user_id=user_id, surface=surface)
-        if ack is None:
-            for record in surface_records:
-                applied[record.id] = False
-            continue
-        _, fingerprint = await build_agent_auth_state(db, user_id, surface=surface)
-        surface_applied = ack.acked_fingerprint == fingerprint
-        by_harness: dict[str, list[AgentAuthSelectionRecord]] = {}
-        for record in surface_records:
-            by_harness.setdefault(record.harness_kind, []).append(record)
-        for harness_records in by_harness.values():
-            scope_revision = _selection_scope_revision(harness_records)
-            harness_applied = surface_applied or scope_revision <= ack.acked_revision
-            for record in harness_records:
-                applied[record.id] = harness_applied
+        surface_applied = False
+        if ack is not None:
+            state, fingerprint = await build_agent_auth_state(db, user_id, surface=surface)
+            surface_applied = (
+                ack.acked_sequence == state["sequence"] and ack.acked_fingerprint == fingerprint
+            )
+        for record in records:
+            if record.surface == surface:
+                applied[record.id] = surface_applied
     return applied
 
 

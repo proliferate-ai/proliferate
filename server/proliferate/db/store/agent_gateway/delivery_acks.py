@@ -1,13 +1,15 @@
 """Agent-auth delivery acknowledgement persistence (per user/surface stamp).
 
-The "Applied means acknowledged" seam (agent-auth.md): one row per
+The "Applied means acknowledged" seam (agent_auth spec §2): one row per
 (user, surface) recording the last rendered ``state.json`` a surface's
 runtime confirmed. Writers are the two delivery pipelines — the cloud
 materializer stamps after its sandbox operation completes, and the desktop
 ack route stamps what the local runtime's state push accepted. Readers derive
-pending-vs-applied by comparing the CURRENT rendered (revision, fingerprint)
-against the stamp; the fingerprint is the change detector, the revision only
-rejects an out-of-order (delayed) ack for an older document.
+pending-vs-applied by comparing the CURRENT rendered ``(sequence,
+fingerprint)`` against the stamp: applied requires BOTH to match. Equal
+sequence carries equal content by construction (the sequence bumps exactly
+when content changes), so a re-ack at the stored sequence is idempotent and
+a lower one is inert.
 """
 
 from __future__ import annotations
@@ -40,22 +42,24 @@ async def record_delivery_ack(
     *,
     user_id: UUID,
     surface: str,
-    revision: int,
+    sequence: int,
     fingerprint: str,
 ) -> AgentAuthDeliveryAckRecord:
     """Stamp an acknowledged delivery; latest wins, out-of-order acks are inert.
 
-    An ack whose ``revision`` is LOWER than the stored one is a delayed
+    An ack whose ``sequence`` is LOWER than the stored one is a delayed
     confirmation of a superseded document (the runtime itself rejects such a
     push as stale) — it must not move the stamp backwards, so the stored row
-    is returned unchanged. An EQUAL revision is content-authoritative (key
-    rotation without a selection edit) and updates the fingerprint.
+    is returned unchanged. An EQUAL sequence is an idempotent re-ack: equal
+    sequence can no longer carry different content (the sequence bumps exactly
+    when the rendered content changes), so re-stamping the same pair is
+    harmless and never an error.
 
     Written as a single ``INSERT ... ON CONFLICT (user_id, surface) DO
     UPDATE`` so two concurrent FIRST acks for the same scope cannot race a
     check-then-insert into a unique-constraint failure: the loser of the
     insert race lands in the conflict arm, where the same only-move-forward
-    revision predicate applies. A predicate-suppressed update (stale ack)
+    sequence predicate applies. A predicate-suppressed update (stale ack)
     returns no row, and the stored stamp is re-read unchanged.
     """
     if surface not in AGENT_AUTH_SURFACES:
@@ -67,7 +71,7 @@ async def record_delivery_ack(
             .values(
                 user_id=user_id,
                 surface=surface,
-                acked_revision=revision,
+                acked_sequence=sequence,
                 acked_fingerprint=fingerprint,
                 acked_at=now,
                 created_at=now,
@@ -76,15 +80,15 @@ async def record_delivery_ack(
             .on_conflict_do_update(
                 constraint="uq_agent_auth_delivery_ack_scope",
                 set_={
-                    "acked_revision": revision,
+                    "acked_sequence": sequence,
                     "acked_fingerprint": fingerprint,
                     "acked_at": now,
                     "updated_at": now,
                 },
-                # Only move forward: strictly newer revisions advance the
-                # stamp; an equal revision refreshes the fingerprint (key
-                # rotation without a selection edit); an older one is inert.
-                where=AgentAuthDeliveryAck.acked_revision <= revision,
+                # Only move forward: strictly newer sequences advance the
+                # stamp; an equal sequence is an idempotent re-ack (same
+                # content by construction); an older one is inert.
+                where=AgentAuthDeliveryAck.acked_sequence <= sequence,
             )
             .returning(AgentAuthDeliveryAck)
         )
