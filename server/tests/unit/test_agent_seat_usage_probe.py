@@ -21,7 +21,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from proliferate.db.store.agent_gateway import SeatUsageSampleRecord
+from proliferate.db.store.agent_gateway.records import SeatUsageSampleRecord
 from proliferate.server.agent_auth.seats import (
     next_seat_usage_probe_at,
     parse_seat_usage_headers,
@@ -255,7 +255,6 @@ SERVER_ROOT = Path(__file__).resolve().parents[2] / "proliferate"
 # shape a launch on a sample.
 ALLOWED_IMPORTERS = {
     "db/models/agent_gateway.py",  # defines the table
-    "db/store/agent_gateway/__init__.py",  # re-exports the record
     "db/store/agent_gateway/mappers.py",
     "db/store/agent_gateway/seat_usage.py",  # the store itself
     "server/agent_auth/seats.py",  # the probe (writer) + the usage read
@@ -312,6 +311,30 @@ class TestAdvisoryOnlyLaw:
             f"modules must not read it: {violations}"
         )
 
+    def test_launch_path_never_mentions_the_sample_surface_at_all(self) -> None:
+        # Stricter than the import scan for the modules that decide launches:
+        # a raw-text sweep catches what import statements cannot — attribute
+        # access through a package alias, getattr strings, raw SQL naming the
+        # table. The launch/render path may not SPELL "seat_usage" (or any
+        # sentinel) in any form.
+        needles = {*SENTINEL_NAMES, "seat_usage"}
+        violations = []
+        for rel in sorted(LAUNCH_PATH_MODULES):
+            text = (SERVER_ROOT / rel).read_text(encoding="utf-8")
+            for needle in needles:
+                if needle in text:
+                    violations.append(f"{rel}: {needle}")
+        assert violations == []
+
+    def test_sample_surface_is_not_reachable_through_the_store_package(self) -> None:
+        # The launch path holds `agent_gateway_store` (the package) as an
+        # alias; the sample surface must stay out of that namespace so the
+        # alias can never reach it without a new import the scans would see.
+        import proliferate.db.store.agent_gateway as store_package
+
+        assert not hasattr(store_package, "SeatUsageSampleRecord")
+        assert "seat_usage" not in getattr(store_package, "__all__", ())
+
     def test_launch_path_is_never_allowlisted(self) -> None:
         # Belt for the allowlist itself: the launch/render path can never be
         # added to ALLOWED_IMPORTERS without tripping this.
@@ -321,6 +344,8 @@ class TestAdvisoryOnlyLaw:
     def test_allowlist_paths_exist(self) -> None:
         # A moved file silently exits the scan; keep the allowlist honest.
         missing = [
-            rel for rel in ALLOWED_IMPORTERS if not (SERVER_ROOT / rel).is_file()
+            rel
+            for rel in ALLOWED_IMPORTERS | LAUNCH_PATH_MODULES
+            if not (SERVER_ROOT / rel).is_file()
         ]
         assert missing == []

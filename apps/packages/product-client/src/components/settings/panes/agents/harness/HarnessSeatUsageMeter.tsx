@@ -17,6 +17,9 @@ function formatResetTime(iso: string | null | undefined, now: Date): string | nu
   if (!iso) return null;
   const reset = new Date(iso);
   if (Number.isNaN(reset.getTime())) return null;
+  // A reset already behind us would read as a future time — say nothing and
+  // let the sample age carry the staleness instead.
+  if (reset.getTime() <= now.getTime()) return null;
   const sameDay =
     reset.getTime() - now.getTime() < 24 * 60 * 60 * 1000 &&
     reset.getDate() === now.getDate();
@@ -52,7 +55,9 @@ function UsageBar({
   now: Date;
 }) {
   const percent = Math.round(Math.min(Math.max(utilization, 0), 1) * 100);
-  const warning = limited || utilization >= WARNING_THRESHOLD;
+  // Judge the ROUNDED percent so the label and its treatment always agree
+  // (0.745 renders "75%" and must warn like 75%).
+  const warning = limited || percent >= WARNING_THRESHOLD * 100;
   const reset = formatResetTime(resetIso, now);
   return (
     <div
@@ -148,6 +153,11 @@ export function SeatUsageMeter({
         limited={limited && sample.bindingWindow !== "five_hour"}
         now={now}
       />
+      {/* Live bars carry their evidence age too — an hours-old "allowed"
+          sample must never read as a fresh bar. */}
+      <span className="text-ui-sm text-muted-foreground" data-seat-usage-age>
+        {HARNESS_PANE_COPY.seatUsageCheckedAgo(formatAge(sample.sampledAt, now))}
+      </span>
     </div>
   );
 }

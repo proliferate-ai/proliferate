@@ -37,8 +37,9 @@ from proliferate.constants.agent_gateway import (
     SEAT_USAGE_STATUS_PROBE_FAILED,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
-from proliferate.db.store.agent_gateway import AgentApiKeyRecord, SeatUsageSampleRecord
+from proliferate.db.store.agent_gateway import AgentApiKeyRecord
 from proliferate.db.store.agent_gateway import seat_usage as seat_usage_store
+from proliferate.db.store.agent_gateway.records import SeatUsageSampleRecord
 from proliferate.integrations.anthropic import (
     AnthropicIntegrationError,
     probe_subscription_usage,
@@ -102,14 +103,14 @@ async def create_seat(
             "The seat token must be a non-empty string.",
             status_code=400,
         )
-    # A control character can never be part of a credential, but it CAN make
-    # the usage probe's HTTP layer reject the Authorization header — and such
-    # rejections quote the header value. Refuse at intake so that path is
-    # unreachable rather than merely caught downstream.
-    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in token):
+    # A setup-token is printable ASCII; anything else can never be a working
+    # credential but CAN make the usage probe's HTTP layer reject (and, for
+    # non-ASCII, quote) the Authorization header value. Refuse at intake so
+    # that path is unreachable rather than merely caught downstream.
+    if any(not 0x20 < ord(char) < 0x7F for char in token):
         raise CloudApiError(
             "invalid_agent_seat_token",
-            "The seat token contains control characters.",
+            "The seat token must be printable ASCII.",
             status_code=400,
         )
     title = title.strip() if title else None
@@ -392,17 +393,29 @@ async def seat_usage_probe(
     The writer prunes samples past the 30-day horizon on every write, so
     retention needs no separate janitor.
     """
-    fetched = await agent_gateway_store.get_agent_seat_decrypted_for_probe(
-        db, api_key_id=api_key_id
-    )
-    if fetched is None:
-        return None
-    _, seat_token = fetched
+    decrypt_failed = False
+    fetched = None
     try:
-        http_status, headers = await probe_subscription_usage(oauth_token=seat_token)
-        parsed = parse_seat_usage_headers(http_status, headers)
-    except AnthropicIntegrationError:
+        fetched = await agent_gateway_store.get_agent_seat_decrypted_for_probe(
+            db, api_key_id=api_key_id
+        )
+    except Exception:
+        # A corrupt ciphertext / rotated encryption key is a probe failure
+        # for THIS seat, never a crash for the whole pass.
+        decrypt_failed = True
+    if fetched is None and not decrypt_failed:
+        return None
+    if fetched is None:
         parsed = _PROBE_FAILED
+    else:
+        _, seat_token = fetched
+        try:
+            http_status, headers = await probe_subscription_usage(
+                oauth_token=seat_token
+            )
+            parsed = parse_seat_usage_headers(http_status, headers)
+        except AnthropicIntegrationError:
+            parsed = _PROBE_FAILED
     record = await seat_usage_store.insert_seat_usage_sample(
         db,
         api_key_id=api_key_id,
@@ -450,7 +463,14 @@ async def run_seat_usage_probe_pass(db: AsyncSession) -> SeatUsageProbePassResul
         if due_at is not None and due_at > now:
             skipped += 1
             continue
-        record = await seat_usage_probe(db, api_key_id=seat.id)
+        try:
+            record = await seat_usage_probe(db, api_key_id=seat.id)
+        except Exception:
+            # The last-resort belt: one seat's surprise (the probe itself
+            # already absorbs decrypt and provider failures) never aborts the
+            # pass for every other user's seats.
+            skipped += 1
+            continue
         if record is None:
             skipped += 1
             continue
@@ -499,5 +519,9 @@ async def force_seat_usage_samples(
         latest = latest_by_seat.get(seat.id)
         if latest is not None and now - latest.sampled_at < _FORCE_MIN_AGE:
             continue
-        await seat_usage_probe(db, api_key_id=seat.id)
+        try:
+            await seat_usage_probe(db, api_key_id=seat.id)
+        except Exception:
+            # One seat's surprise never blanks the whole pane's read.
+            continue
     return await seat_usage_store.latest_seat_usage_samples(db, user_id=user_id)

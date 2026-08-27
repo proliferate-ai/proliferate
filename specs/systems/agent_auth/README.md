@@ -376,7 +376,7 @@ Two signals, one picture.
 **The usage probe — the soft signal, advisory only, never a launch gate** (the header surface is undocumented, so control never depends on it):
 
 - A one-token request per active seat; the response's rate-limit headers carry live 5-hour and 7-day utilization plus resets, account-global → `seat_usage_sample` → the meters.
-- Cadence is config: `agent_seat_usage_probe_active_interval` (default 5 min while a session runs on the seat) · `_idle_interval` (default 30 min) · off for revoked seats · a settings-pane open forces one sample.
+- Cadence is config: `agent_seat_usage_probe_active_interval` (default 5 min while the seat shows RISING utilization between successive samples — the server-observable trace of a running session; the server never knows which seat serves, so detection lags a fresh burst by up to one idle interval) · `_idle_interval` (default 30 min) · off for revoked seats · a settings-pane open forces one sample (`POST /seats/usage/refresh`, floor-limited).
 - The request rides the same pinned-address egress rules as every outbound call; provider errors record a `probe_failed` sample and back off exponentially to a one-hour cap.
 - Samples older than 30 days are pruned by the writer; the meters read only the latest per seat.
 
@@ -460,6 +460,9 @@ typed value shown per route, message is the plain-words copy, extra fields are n
 
 GET  /seats/usage
   → [ { apiKeyId, util5h, util7d, reset5h, reset7d, bindingWindow, status, sampledAt } ]
+POST /seats/usage/refresh
+  → same shape   # flow 5's pane-open poke: force one fresh sample per seat, then read;
+                 # a per-seat freshness floor keeps pane flapping from amplifying probes
 POST /seats/{key_id}/limit-hit    { window, resetAt }
   → 204        # the courier relays the runtime's observed limit hits; feeds meters + the audit event
 
@@ -655,7 +658,7 @@ useSeatUsage()           // the meters; returns the latest sample per seat
 **When the frontend re-reads and re-probes** — the complete boundary set. The frontend never derives and never probes on its own; it re-reads the status document and, at defined boundaries, asks the runtime to re-check via door 3's poke or the manual-refresh route:
 
 - **Subscription is the default.** `useHarnessStatus` subscribes on mount (settings pane, onboarding card, composer badge) and renders every push; there is no client polling loop. Where the stream is unavailable, the hook falls back to re-reading on the invalidation boundaries below.
-- **Opening the agents settings pane** re-reads status and methods, and forces a fresh usage sample for visible seats (the pane-open probe).
+- **Opening the agents settings pane** re-reads status and methods, and forces a fresh usage sample for visible seats (the pane-open probe). While the seat meters stay visible they re-read the usage samples on a modest interval — a server-fed DB read keeping already-taken samples current, not a probe loop and not a status-document poll (the no-polling law governs the runtime status document).
 - **After a login terminal closes**, the runtime has already poked itself (`LoginTerminal`); the frontend just re-reads — it never issues its own poke here.
 - **After a selection or vault mutation acks**, the query set invalidates and re-reads: selection PUT → selections + state + status; key create/revoke → keys + selections + status; seat mint → keys + status + usage.
 - **Manual refresh** is the one user-facing poke: the refresh affordance calls the runtime's refresh route, renders `queued`/`running` inline, and — on failure — shows the backoff line with the next-attempt countdown, never an eternal spinner.

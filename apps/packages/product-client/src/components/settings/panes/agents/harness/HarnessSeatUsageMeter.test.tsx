@@ -39,6 +39,34 @@ describe("SeatUsageMeter", () => {
     expect(screen.getAllByText(/^resets /)).toHaveLength(2);
   });
 
+  it("shows the sample age on live bars too — never a stale bar reading as fresh", () => {
+    const { container } = render(<SeatUsageMeter sample={sampleFor()} now={NOW} />);
+    expect(
+      container.querySelector("[data-seat-usage-age]")?.textContent,
+    ).toBe("checked 5m ago");
+  });
+
+  it("suppresses a reset time already in the past", () => {
+    render(
+      <SeatUsageMeter
+        sample={sampleFor({ reset5h: "2026-08-26T11:00:00Z" })}
+        now={NOW}
+      />,
+    );
+    // Only the (future) 7d reset renders; the passed 5h reset says nothing.
+    expect(screen.getAllByText(/^resets /)).toHaveLength(1);
+  });
+
+  it("keeps the percent label and the warning treatment in agreement at the boundary", () => {
+    const { container } = render(
+      <SeatUsageMeter sample={sampleFor({ util5h: 0.745, util7d: 0.4 })} now={NOW} />,
+    );
+    expect(screen.getByText("75%")).toBeTruthy();
+    const warned = container.querySelectorAll('[data-seat-usage-warning="true"]');
+    expect(warned).toHaveLength(1);
+    expect(warned[0]?.textContent).toContain("5-hour");
+  });
+
   it("emphasizes the binding window and not the other", () => {
     const { container } = render(<SeatUsageMeter sample={sampleFor()} now={NOW} />);
     const binding = container.querySelector('[data-seat-usage-window="binding"]');

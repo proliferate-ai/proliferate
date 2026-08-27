@@ -11,8 +11,9 @@ reader exists, enforced by an import-scan test.
   status CHECK, plus a binding_window CHECK pinning the DDL's commented
   vocabulary (five_hour | seven_day). Beyond the spec DDL, performance only: ON DELETE CASCADE on
   the FK (vault rows cascade with their user, so samples must ride along or
-  user deletion trips the FK) and one (api_key_id, sampled_at) index — the
-  latest-per-seat read and the writer's 30-day prune both walk it.
+  user deletion trips the FK) and one (api_key_id, sampled_at) index for the
+  per-seat reads (latest-per-seat + the cadence engine's recent-samples
+  walk); the 30-day prune is a plain sweep of a small table.
 
 Downgrade drops the table (data preservation is not a constraint; samples
 are 30-day-transient probe observations).

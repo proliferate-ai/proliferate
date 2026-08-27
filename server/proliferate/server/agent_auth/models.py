@@ -25,8 +25,11 @@ from proliferate.db.store.agent_gateway import (
     AgentGatewayEnrollmentRecord,
     DesiredAuthSource,
     OrgMemberRouteSelectionRecord,
-    SeatUsageSampleRecord,
 )
+
+# From the records module directly: the sample surface is advisory-only and
+# deliberately absent from the store package namespace (import-scan enforced).
+from proliferate.db.store.agent_gateway.records import SeatUsageSampleRecord
 
 if TYPE_CHECKING:
     from proliferate.server.agent_auth.service import OrgAgentPolicySnapshot

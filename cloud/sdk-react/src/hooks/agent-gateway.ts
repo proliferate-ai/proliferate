@@ -133,7 +133,11 @@ export function useSeatUsage(enabled = true) {
     queryKey: agentSeatUsageKey(),
     queryFn: () => getSeatUsage(client),
     enabled,
+    // Re-read only while a meter is mounted AND the window is focused; the
+    // probe cadence itself is server-owned — this is a cheap DB read that
+    // keeps visible bars current, not a client-side probe loop.
     refetchInterval: enabled ? 60_000 : false,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -147,7 +151,11 @@ export function useRefreshSeatUsage() {
   const queryClient = useQueryClient();
   return useMutation<SeatUsageSample[], Error, void>({
     mutationFn: () => refreshSeatUsage(client),
-    onSuccess: (samples) => {
+    onSuccess: async (samples) => {
+      // Cancel any in-flight GET first: a read started before the refresh
+      // committed would otherwise land after setQueryData and clobber the
+      // fresh rows with pre-refresh ones until the next interval tick.
+      await queryClient.cancelQueries({ queryKey: agentSeatUsageKey() });
       queryClient.setQueryData(agentSeatUsageKey(), samples);
     },
   });

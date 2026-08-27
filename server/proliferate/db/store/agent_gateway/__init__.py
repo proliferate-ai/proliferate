@@ -77,8 +77,13 @@ from proliferate.db.store.agent_gateway.records import (
     LlmCreditBalanceRecord,
     LlmCreditGrantRecord,
     OrgAgentPolicyRecord,
-    SeatUsageSampleRecord,
 )
+
+# Deliberately NOT re-exported here: the seat_usage store and its record
+# (advisory-only, agent_auth spec flow 5). The launch/render path imports
+# this package as `agent_gateway_store`; keeping the sample surface out of
+# the package namespace means that alias can never reach it. Importers go to
+# `.seat_usage` / `.records` directly and are pinned by the import-scan test.
 from proliferate.db.store.agent_gateway.selections import (
     AgentApiKeyNotUsableError,
     AgentProviderConfigNotSupportedError,
@@ -113,7 +118,6 @@ __all__ = [
     "LlmCreditGrantRecord",
     "OrgAgentPolicyRecord",
     "OrgMemberRouteSelectionRecord",
-    "SeatUsageSampleRecord",
     "advance_usage_import_cursor",
     "build_redacted_hint",
     "clear_auth_selections",

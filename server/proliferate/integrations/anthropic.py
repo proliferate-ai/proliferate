@@ -58,10 +58,11 @@ async def probe_subscription_usage(
                 },
                 json=payload,
             )
-    except httpx.HTTPError:
-        # Deliberately message-free of request detail, and `from None`: an
-        # h11/httpx header-validation error can quote the offending header
-        # value verbatim, so the cause chain is cut rather than carried into
+    except Exception:
+        # `except Exception`, not just httpx.HTTPError: header encoding can
+        # raise UnicodeEncodeError BEFORE any HTTP machinery runs, and such
+        # messages quote the offending value. Deliberately message-free and
+        # `from None`: the cause chain is cut rather than carried into
         # anything a reporter might serialize.
         raise AnthropicIntegrationError(
             status_code=599,
