@@ -14,6 +14,20 @@ breaks the other side until it is updated.
 - Consumer: `anyharness-lib`'s `domains/agents/route_auth/` — `load_state_file`
   → `resolve_profile` → `render_profile`.
 
+## The file set
+
+- `v2.json` — the main fixture (below). claude's `settings` is absent, so the
+  runtime's rotate default (`true`, round-robin) governs its seat pool.
+- `v2-rotate-off.json` — a sibling copy of `v2.json` whose claude entry
+  additionally carries `"settings": { "rotate": false }` (keys after
+  `sources`), pinning the rotate-off launch semantics cross-language: Python
+  asserts the renderer emits that claude entry byte-identically when fed the
+  same seats plus the harness-settings row
+  (`test_agent_auth_state_contract_fixture.py`), and Rust asserts the launch
+  pins the last-served seat under it while `v2.json` round-robins
+  (`contract_fixture_tests.rs`). A Rust test also pins that the two files
+  differ by exactly that one settings object, so the siblings cannot drift.
+
 ## What `v2.json` pins
 
 Four things the two sides could otherwise drift on silently:

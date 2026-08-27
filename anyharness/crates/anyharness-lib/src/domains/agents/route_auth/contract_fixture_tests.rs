@@ -24,6 +24,13 @@ use crate::persistence::Db;
 const FIXTURE: &str =
     include_str!("../../../../../../../fixtures/contracts/agent-auth-state/v2.json");
 
+/// The sibling variant: v2.json with claude additionally carrying
+/// `"settings": {"rotate": false}` — the cross-language pin for the
+/// rotate-off launch semantics (the main fixture stays rotate-default so the
+/// other pins keep their round-robin meaning).
+const ROTATE_OFF_FIXTURE: &str =
+    include_str!("../../../../../../../fixtures/contracts/agent-auth-state/v2-rotate-off.json");
+
 fn fixture_state() -> AgentAuthState {
     serde_json::from_str(FIXTURE).expect("the contract fixture must parse as a v2 document")
 }
@@ -278,4 +285,75 @@ fn the_contract_fixture_drives_a_real_launch_render() {
             "missing removal of {key}"
         );
     }
+}
+
+const SEAT_BB: &str = "30000000-0000-4000-8000-000000000022";
+const SEAT_CC: &str = "30000000-0000-4000-8000-000000000023";
+
+/// The rotate-off variant is v2.json plus EXACTLY claude's
+/// `settings.rotate=false` — nothing else may drift between the siblings, or
+/// the variant stops pinning what it claims to pin.
+#[test]
+fn the_rotate_off_variant_differs_from_v2_only_by_claudes_rotate_setting() {
+    let mut variant: serde_json::Value =
+        serde_json::from_str(ROTATE_OFF_FIXTURE).expect("variant parses");
+    let base: serde_json::Value = serde_json::from_str(FIXTURE).expect("v2 parses");
+
+    let claude = variant["harnesses"]
+        .as_array_mut()
+        .expect("harnesses")
+        .iter_mut()
+        .find(|entry| entry["harness_kind"] == "claude")
+        .expect("claude entry");
+    let settings = claude
+        .as_object_mut()
+        .expect("entry object")
+        .remove("settings")
+        .expect("the variant's claude entry carries settings");
+    assert_eq!(settings, serde_json::json!({ "rotate": false }));
+    assert_eq!(variant, base, "no other byte of the fixture may differ");
+}
+
+/// The cross-language rotate-off pin, launch-side: the variant resolves to
+/// `rotate == false`, and with `last_served = seatBB` the launch serves
+/// seatBB again (the pin), where the rotate-default v2.json round-robins on
+/// to seatCC from the same last-served fact.
+#[test]
+fn the_rotate_off_fixture_pins_the_served_seat_where_v2_round_robins() {
+    let rotate_off: AgentAuthState =
+        serde_json::from_str(ROTATE_OFF_FIXTURE).expect("variant parses as a v2 document");
+    match resolve_profile(Some(&rotate_off), "claude").expect("resolve") {
+        AgentRuntimeAuthProfile::Sources(sources) => {
+            assert!(!sources.rotate, "the variant's claude entry is rotate-off");
+        }
+        other => panic!("claude should be routed, got {other:?}"),
+    }
+
+    let now_epoch_s = chrono::Utc::now().timestamp();
+    let serving_after = |name: &str, fixture: &str| {
+        let home = TempHome::new(name);
+        home.write_state_raw(fixture.as_bytes());
+        let store = SeatCoolingStore::new(Db::open_in_memory().expect("open in-memory db"));
+        store.confirm_served("claude", SEAT_BB, now_epoch_s);
+        resolve_launch_route_auth_rotated_for_server(
+            home.path(),
+            "claude",
+            &HarnessPlanResolver,
+            &store,
+            Some("https://api.proliferate.example"),
+        )
+        .expect("the fixture must render a claude launch")
+        .serving_seat_id
+    };
+
+    assert_eq!(
+        serving_after("contract-fixture-rotate-off", ROTATE_OFF_FIXTURE).as_deref(),
+        Some(SEAT_BB),
+        "rotate-off pins the last-served seat"
+    );
+    assert_eq!(
+        serving_after("contract-fixture-rotate-default", FIXTURE).as_deref(),
+        Some(SEAT_CC),
+        "rotate absent → true: the pool round-robins past the last-served seat"
+    );
 }

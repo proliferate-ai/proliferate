@@ -12,6 +12,7 @@ producer under test is configured exactly as the renderer suite configures it.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import uuid
 
@@ -21,6 +22,8 @@ from tests.unit.test_agent_auth_state_render import (
     _inputs,
     _selection,
 )
+
+ROTATE_OFF_FIXTURE_PATH = FIXTURE_PATH.with_name("v2-rotate-off.json")
 
 
 class TestAgentAuthStateContractFixture:
@@ -209,6 +212,42 @@ class TestAgentAuthStateContractFixture:
             entry for entry in state["harnesses"] if entry["harness_kind"] == "claude"
         )
         assert rendered_claude == fixture_claude
+
+    def test_the_rotate_off_variants_claude_entry_is_what_this_renderer_emits(self) -> None:
+        # The sibling fixture (v2-rotate-off.json) pins the rotate-off launch
+        # semantics cross-language: same seat pool as v2.json, claude's entry
+        # additionally carrying `"settings": {"rotate": false}` (keys after
+        # `sources`). Feed the renderer the same seat inputs plus that
+        # harness-settings row and require a byte-identical claude entry —
+        # Rust's half (`contract_fixture_tests.rs`) proves the launch pins
+        # the applied seat under it.
+        variant = json.loads(ROTATE_OFF_FIXTURE_PATH.read_text(encoding="utf-8"))
+        variant_claude = next(
+            entry for entry in variant["harnesses"] if entry["harness_kind"] == "claude"
+        )
+        assert variant_claude["settings"] == {"rotate": False}
+
+        state, _ = agent_auth.render_agent_auth_state(
+            dataclasses.replace(
+                _inputs(
+                    (_selection(harness="claude", source_kind="seat"),),
+                    seat_values=tuple(
+                        (
+                            uuid.UUID(source["seat_id"]),
+                            source["env"]["CLAUDE_CODE_OAUTH_TOKEN"],
+                        )
+                        for source in variant_claude["sources"]
+                    ),
+                ),
+                harness_settings={"claude": {"rotate": False}},
+            )
+        )
+        rendered_claude = next(
+            entry for entry in state["harnesses"] if entry["harness_kind"] == "claude"
+        )
+        # Byte-identical, key order included: the settings rider rides AFTER
+        # the sources, exactly as the fixture carries it.
+        assert json.dumps(rendered_claude) == json.dumps(variant_claude)
 
     def test_the_fixtures_provider_config_source_is_a_resolved_env_map(self) -> None:
         # §4.3's ruling: opencode's third source demonstrates additive
