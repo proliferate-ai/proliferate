@@ -53,11 +53,14 @@ jobs:
         run: node scripts/ops/grafana-sli-alerts.mjs check
       - name: Check old-workspace overlay (until retirement)
         run: node scripts/ops/grafana-alerting.mjs check
+      - name: Check Honeycomb trigger intent
+        run: node scripts/ops/honeycomb-triggers.mjs check
       - name: Run operator-tool tests
         run: |
           node --test scripts/ops/grafana-alerting.test.mjs \
             scripts/ops/grafana-rebuild-bootstrap.test.mjs \
-            scripts/ops/grafana-sli-alerts.test.mjs
+            scripts/ops/grafana-sli-alerts.test.mjs \
+            scripts/ops/honeycomb-triggers.test.mjs
 
   apply:
     name: Apply intent to the canonical workspace
@@ -137,3 +140,57 @@ jobs:
             echo "::error title=Grafana drift detected::Live workspace has drifted from checked-in intent. Fix by committing the live change back into server/infra/observability/grafana/** (export tooling) or re-running the apply lane to revert it. Never leave the divergence standing."
             exit 1
           fi
+
+  honeycomb-apply:
+    name: Apply Honeycomb trigger intent (dogfood)
+    if: github.event_name == 'push'
+    needs: check
+    runs-on: ubuntu-latest
+    concurrency:
+      group: honeycomb-apply
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Apply + verify
+        env:
+          HONEYCOMB_CONFIG_KEY: ${{ secrets.HONEYCOMB_CONFIG_KEY }}
+        run: |
+          if [ -z "$HONEYCOMB_CONFIG_KEY" ]; then
+            echo "::warning title=Honeycomb apply SKIPPED::HONEYCOMB_CONFIG_KEY secret is not configured. Trigger intent merged but NOT applied — Pablo: gh secret set HONEYCOMB_CONFIG_KEY (the dogfood-scoped config key), then re-run this workflow."
+            echo "## Honeycomb apply: SKIPPED (no key)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          export HONEYCOMB_TRIGGERS_LIVE=1
+          node scripts/ops/honeycomb-triggers.mjs apply --env dogfood
+          {
+            echo "## Honeycomb trigger receipt ($(date -u +%Y-%m-%dT%H:%M:%SZ), commit ${GITHUB_SHA})"
+            echo '```'
+            node scripts/ops/honeycomb-triggers.mjs verify --env dogfood
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  honeycomb-drift:
+    name: Nightly Honeycomb drift check
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Verify live matches intent
+        env:
+          HONEYCOMB_CONFIG_KEY: ${{ secrets.HONEYCOMB_CONFIG_KEY }}
+        run: |
+          if [ -z "$HONEYCOMB_CONFIG_KEY" ]; then
+            echo "::warning title=Honeycomb drift check SKIPPED::HONEYCOMB_CONFIG_KEY secret is not configured."
+            exit 0
+          fi
+          node scripts/ops/honeycomb-triggers.mjs verify --env dogfood

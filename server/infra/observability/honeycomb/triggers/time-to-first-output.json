@@ -1,0 +1,44 @@
+{
+  "alert_type": "on_change",
+  "checksum": "8ff1795d85cbb461188d3dd3d8be530b2caa8d445ba09589176aa0a898da5911",
+  "dataset": "anyharness",
+  "description": "P95 of first_output_ms on anyharness.turn.execute terminals - the product stopped feeling alive. Starting threshold 10s.",
+  "disabled": false,
+  "frequency": 900,
+  "name": "SLI: time to first output p95",
+  "query": {
+    "calculations": [
+      {
+        "column": "proliferate.argument.first_output_ms",
+        "op": "P95"
+      }
+    ],
+    "filter_combination": "AND",
+    "filters": [
+      {
+        "column": "proliferate.name",
+        "op": "=",
+        "value": "anyharness.turn.execute"
+      },
+      {
+        "column": "proliferate.lifecycle.phase",
+        "op": "=",
+        "value": "terminal"
+      },
+      {
+        "column": "proliferate.argument.first_output_ms",
+        "op": "exists"
+      }
+    ],
+    "time_range": 900
+  },
+  "recipient": {
+    "id": null,
+    "type": "slack"
+  },
+  "slug": "time-to-first-output",
+  "threshold": {
+    "op": ">",
+    "value": 10000
+  }
+}

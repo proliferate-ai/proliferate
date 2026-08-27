@@ -1,0 +1,39 @@
+{
+  "alert_type": "on_change",
+  "checksum": "5319659903d8b6bc19f82d96e56bc7e13aa0a22c2ae982fc17792a0fe436f3b9",
+  "dataset": "anyharness",
+  "description": "abandoned outcomes across lifecycle terminals. The collector finalizes a dead producer's open operations itself (finalizer=collector), so every started ends in exactly one terminal and orphans are a plain count - a started nobody resolved is a bug by definition. Absolute count as the starting form: trigger queries cannot divide.",
+  "disabled": false,
+  "frequency": 900,
+  "name": "SLI: orphaned operations (abandoned terminals)",
+  "query": {
+    "calculations": [
+      {
+        "op": "COUNT"
+      }
+    ],
+    "filter_combination": "AND",
+    "filters": [
+      {
+        "column": "proliferate.lifecycle.phase",
+        "op": "=",
+        "value": "terminal"
+      },
+      {
+        "column": "proliferate.lifecycle.outcome",
+        "op": "=",
+        "value": "abandoned"
+      }
+    ],
+    "time_range": 900
+  },
+  "recipient": {
+    "id": null,
+    "type": "slack"
+  },
+  "slug": "orphan-rate",
+  "threshold": {
+    "op": ">",
+    "value": 10
+  }
+}

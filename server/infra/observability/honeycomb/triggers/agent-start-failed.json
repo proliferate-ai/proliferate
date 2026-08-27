@@ -1,0 +1,44 @@
+{
+  "alert_type": "on_change",
+  "checksum": "a8fc7d6f959284b2f87c351e6b0b6c3cc994b2099433aec0e9e38b2d112f3fd4",
+  "dataset": "anyharness",
+  "description": "anyharness.agent.start terminals with outcome=failed - harnesses stopped launching. Starting threshold.",
+  "disabled": false,
+  "frequency": 900,
+  "name": "SLI: agent-start failures",
+  "query": {
+    "calculations": [
+      {
+        "op": "COUNT"
+      }
+    ],
+    "filter_combination": "AND",
+    "filters": [
+      {
+        "column": "proliferate.name",
+        "op": "=",
+        "value": "anyharness.agent.start"
+      },
+      {
+        "column": "proliferate.lifecycle.phase",
+        "op": "=",
+        "value": "terminal"
+      },
+      {
+        "column": "proliferate.lifecycle.outcome",
+        "op": "=",
+        "value": "failed"
+      }
+    ],
+    "time_range": 900
+  },
+  "recipient": {
+    "id": null,
+    "type": "slack"
+  },
+  "slug": "agent-start-failed",
+  "threshold": {
+    "op": ">",
+    "value": 5
+  }
+}

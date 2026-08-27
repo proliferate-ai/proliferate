@@ -1,0 +1,44 @@
+{
+  "alert_type": "on_change",
+  "checksum": "5a1eb87e8e896a2b4e9049b6005441495ad7bcded92c6cedbaf8a26170126023",
+  "dataset": "anyharness",
+  "description": "anyharness.session.create terminals with outcome=failed. rejected is deliberately excluded: it is user-fixable configuration and a product signal, not a page. Starting threshold, re-tuned via the alerting spec.",
+  "disabled": false,
+  "frequency": 900,
+  "name": "SLI: session-create failures",
+  "query": {
+    "calculations": [
+      {
+        "op": "COUNT"
+      }
+    ],
+    "filter_combination": "AND",
+    "filters": [
+      {
+        "column": "proliferate.name",
+        "op": "=",
+        "value": "anyharness.session.create"
+      },
+      {
+        "column": "proliferate.lifecycle.phase",
+        "op": "=",
+        "value": "terminal"
+      },
+      {
+        "column": "proliferate.lifecycle.outcome",
+        "op": "=",
+        "value": "failed"
+      }
+    ],
+    "time_range": 900
+  },
+  "recipient": {
+    "id": null,
+    "type": "slack"
+  },
+  "slug": "session-create-failed",
+  "threshold": {
+    "op": ">",
+    "value": 5
+  }
+}

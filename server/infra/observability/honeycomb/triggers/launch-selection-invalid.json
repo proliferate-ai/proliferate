@@ -1,0 +1,52 @@
+{
+  "alert_type": "on_change",
+  "checksum": "f214c2b97bb92408a966a56a3ecdd968416476670ac1bd3771a7204272414365",
+  "dataset": "anyharness",
+  "description": "session.create + agent.start terminals rejected with a launch-selection classification - configuration stopped rendering launchable. Encoded in classifications; deliberately no new catalog operation.",
+  "disabled": false,
+  "frequency": 900,
+  "name": "SLI: launch-selection rejections",
+  "query": {
+    "calculations": [
+      {
+        "op": "COUNT"
+      }
+    ],
+    "filter_combination": "AND",
+    "filters": [
+      {
+        "column": "proliferate.name",
+        "op": "in",
+        "value": [
+          "anyharness.session.create",
+          "anyharness.agent.start"
+        ]
+      },
+      {
+        "column": "proliferate.lifecycle.phase",
+        "op": "=",
+        "value": "terminal"
+      },
+      {
+        "column": "proliferate.error_classification",
+        "op": "in",
+        "value": [
+          "launch_options_unavailable",
+          "launch_value_unsupported",
+          "agent_env_override_unsupported",
+          "route_auth_refused"
+        ]
+      }
+    ],
+    "time_range": 900
+  },
+  "recipient": {
+    "id": null,
+    "type": "slack"
+  },
+  "slug": "launch-selection-invalid",
+  "threshold": {
+    "op": ">",
+    "value": 5
+  }
+}
