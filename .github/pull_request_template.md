@@ -4,7 +4,7 @@
 
 ## Testing
 
-<!-- State the tier(s) exercised per specs/engineering/testing/README.md, or why none is feasible. -->
+<!-- State the block exercised (merge block: unit/integration/contracts) or world, per specs/engineering/testing/README.md, or why none is feasible. -->
 
 -
 

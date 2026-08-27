@@ -235,8 +235,8 @@ allow-as-data + rustfmt into CI · ruff over `scripts/` · gaps.toml deleted
 > [!decision] PABLO DECIDES: trailer ratchet timing. Rec: ratchet from the
 > first trailered test — from 1, never from 0.
 
-> [!decision] PABLO DECIDES: the self-host battery posture. Parked (tagged
-> out of gating, kept; smoke stays on push:main) vs culled. Rec: parked.
+(The self-host battery posture decision lives with the worlds datasheet:
+[release.md](release.md#decisions).)
 
 ## Known gaps
 

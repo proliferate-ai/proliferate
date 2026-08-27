@@ -96,6 +96,9 @@ trains:
   (`scripts/ci-cd/check-migration-ids-across-branches.sh`).
 - **Only the branch owner pushes.** A merge and a branch delete are two
   commands; delete only after the merge API reports success.
+- **Forks that idle do not resume themselves.** The coordinator subscribes
+  to idle notices and re-nudges with the exact branch and head SHA; a fork
+  left idle mid-task is a stalled PR nobody is watching.
 - **Touching `.github/workflows/**` needs the `workflow` OAuth scope** on
   the pushing token; verify before dispatching a fork that edits lanes.
 - **Review**: at least one completed fresh-context refuter per non-trivial
@@ -117,13 +120,13 @@ standing e2e world · e2e green is prod's door.**
   qualification on the same candidates, never a second build. Requires
   endpoint-agnostic artifacts (config at runtime; today's lanes each build
   their own image — the artifact-handoff slice closes this, Known gaps).
-- **main → staging**: push:main green → staging deploys immediately, no
-  additional tests; staggered latest-wins (concurrency groups; a newer
-  green supersedes a queued deploy, never cancels one mid-flight);
-  migrations run inside the deploy; deploy failure → Slack; rollback =
-  re-promote the previous artifact. ※ In flight — supersedes #2140's
-  "merging to main deploys nothing" doctrine and rewrites its two
-  enforcement tests.
+- **main → staging** — **live (#2269; trigger trust guard #2279)**:
+  push:main green → staging deploys immediately, no additional tests;
+  staggered latest-wins (concurrency groups; a newer green supersedes a
+  queued deploy, never cancels one mid-flight); migrations run inside the
+  deploy; deploy failure → Slack; rollback = re-promote the previous
+  artifact. Superseded #2140's "merging to main deploys nothing" doctrine
+  and rewrote its two enforcement tests.
 - **prod**: manual promote; nothing new runs at prod time. Doors: the
   battery verdict (observe mode during fix week — red informs, Pablo's
   judgment decides) and artifact identity. **WHO**: Pablo, or an agent he
@@ -221,3 +224,6 @@ lands.
       ([lint-wiring](../../../delivery/testing-cicd/delivery-spec-lint-wiring.md)).
 - [ ] Staging has no background plane (worker/beat services unset) and no
       staleness detection; the E2B webhook 401s on staging.
+- [ ] Per-test quarantine rows: the census quarantine schema covers jobs
+      only; first candidate: the anyharness-lib workspace_stop
+      kill-escalation flake (2026-08-27).

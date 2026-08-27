@@ -26,7 +26,7 @@ law, enforced as a lint because a lint sees every route ever written while
 a test sees the ones someone listed.
 
 Corollary: `enforced_by = "review"` is not enforcement — it is declared
-debt. The 8 such records in `server/gaps.toml` were ruled deleted
+debt. The 8 such records in `lints/server/gaps.toml` were ruled deleted
 2026-08-26 (honest beats aspirational; re-author properly if a law earns an
 engine).
 

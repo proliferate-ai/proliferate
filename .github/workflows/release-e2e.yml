@@ -1,7 +1,7 @@
 name: Release E2E (tier 3)
 
-# Tier-3 live end-to-end runner (specs/engineering/testing/README.md "Tier 3 —
-# live end-to-end"). Drives real agents on cheap models through real flows:
+# Worlds-block live end-to-end runner (specs/engineering/testing/release.md —
+# the worlds datasheet). Drives real agents on cheap models through real flows:
 # provision/pause/resume/connect, chat per cataloged agent, config apply,
 # secrets materialization, billing metering, repo settings.
 #

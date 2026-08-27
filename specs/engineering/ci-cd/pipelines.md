@@ -18,8 +18,8 @@ Not here: what's excluded, naming the pipeline that owns it
 
 ## Pipeline — commit
 
-Budget: < 1 s · Trigger: git pre-commit hook · Green means: nothing — it
-cannot fail.
+※ In flight — the make-gate slice builds the hook. Budget: < 1 s ·
+Trigger: git pre-commit hook · Green means: nothing — it cannot fail.
 
 Formatters only, on staged files, **auto-fix + restage, never blocks**:
 `ruff format` · `cargo fmt` · `biome format --write`. No linting, no
@@ -77,7 +77,7 @@ Not here: anything staged or live (nightly/release); change detection
 
 ## Pipeline — main
 
-main → staging ※ (in flight). Budget: ~15 min to live · Trigger: push:main, green · Green means: staging
+main → staging — **live (#2269)**. Budget: ~15 min to live · Trigger: push:main, green · Green means: staging
 IS current main.
 
 **Deploy is not a gate.** Full run + self-host smoke, then staging deploys
@@ -86,8 +86,9 @@ afterward (nightly). Staggered latest-wins via concurrency groups; a newer
 green supersedes a queued deploy, never one mid-flight. Migrations run
 inside the deploy. Deploy failure → Slack. Rollback = re-promote the
 previous artifact.
-Not here: any test gate (PR's); the battery (nightly's). Supersedes
-#2140's inverse doctrine and rewrites its two enforcement tests.
+Not here: any test gate (PR's); the battery (nightly's). Superseded
+#2140's inverse doctrine and rewrote its two enforcement tests (#2269;
+trigger trust guard #2279).
 
 ## Pipeline — nightly
 
@@ -113,7 +114,9 @@ local-real runtime cells · packaged-upgrade N−1→N · self-host per its
 posture ruling) → evidence per cell → candidate promotion
 ([release-delivery.md](release-delivery.md)). **One artifact base**: extra
 qualification on the same candidates staging ran, never a second build.
-Red means red — `continue-on-error` only via quarantine rows.
+Red means red — `continue-on-error` only via quarantine rows (※ the
+quarantine mechanism is unbuilt and seven `continue-on-error` sites are
+live today; the lane-census slice closes this).
 Not here: deployed-surface qualification (nightly-vs-staging owns it).
 
 ## Pipeline — prod
