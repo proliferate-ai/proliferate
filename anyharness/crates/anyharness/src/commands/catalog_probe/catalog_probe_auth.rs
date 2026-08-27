@@ -35,11 +35,7 @@ pub fn auth_env_for_context(
             // Isolate the Claude config dir so machine-local settings
             // (default model, effort preference) can't pollute observed
             // values; mirrors production's gateway CLAUDE_CONFIG_DIR usage.
-            let mut env = isolation_env(
-                auth_context,
-                &[("CLAUDE_CONFIG_DIR", "claude-config")],
-                isolation_dirs,
-            )?;
+            let mut env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")], isolation_dirs)?;
             // Optional config preset: seed the isolated config dir with a
             // settings.json (experiments / future per-context config presets).
             if let Ok(settings_json) = std::env::var("PROBE_CLAUDE_SETTINGS_JSON") {
@@ -49,10 +45,7 @@ pub fn auth_env_for_context(
                     settings_json,
                 )?;
             }
-            env.insert(
-                "ANTHROPIC_API_KEY".to_string(),
-                secrets.require("ANTHROPIC_API_KEY")?,
-            );
+            env.insert("ANTHROPIC_API_KEY".to_string(), secrets.require("ANTHROPIC_API_KEY")?);
             Ok(env)
         }
         // Claude against AWS Bedrock: same binary, server side is Bedrock's
@@ -60,11 +53,7 @@ pub fn auth_env_for_context(
         // and model ids are a distinct surface from anthropic-api. Auth is a
         // Bedrock API key (bearer token) — no SigV4 ceremony.
         (AgentKind::Claude, "bedrock") => {
-            let mut env = isolation_env(
-                auth_context,
-                &[("CLAUDE_CONFIG_DIR", "claude-config")],
-                isolation_dirs,
-            )?;
+            let mut env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")], isolation_dirs)?;
             env.insert(
                 "AWS_BEARER_TOKEN_BEDROCK".to_string(),
                 secrets.require("AWS_BEARER_TOKEN_BEDROCK")?,
@@ -78,11 +67,7 @@ pub fn auth_env_for_context(
         // ~/.claude/.credentials.json). We copy it into an isolated config
         // dir so nothing else from the machine leaks in.
         (AgentKind::Claude, "anthropic-oauth") => {
-            let mut env = isolation_env(
-                auth_context,
-                &[("CLAUDE_CONFIG_DIR", "claude-config")],
-                isolation_dirs,
-            )?;
+            let mut env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")], isolation_dirs)?;
             if let Ok(token) = secrets.require("CLAUDE_CODE_OAUTH_TOKEN") {
                 // Long-lived token from `claude setup-token`.
                 env.insert("CLAUDE_CODE_OAUTH_TOKEN".to_string(), token);
@@ -109,28 +94,19 @@ pub fn auth_env_for_context(
         (AgentKind::OpenCode, "baseline") => opencode_isolation_env(auth_context, isolation_dirs),
         (AgentKind::OpenCode, "anthropic-api") => {
             let mut env = opencode_isolation_env(auth_context, isolation_dirs)?;
-            env.insert(
-                "ANTHROPIC_API_KEY".to_string(),
-                secrets.require("ANTHROPIC_API_KEY")?,
-            );
+            env.insert("ANTHROPIC_API_KEY".to_string(), secrets.require("ANTHROPIC_API_KEY")?);
             Ok(env)
         }
         (AgentKind::OpenCode, "openai-api") => {
             let mut env = opencode_isolation_env(auth_context, isolation_dirs)?;
-            env.insert(
-                "OPENAI_API_KEY".to_string(),
-                secrets.require("OPENAI_API_KEY")?,
-            );
+            env.insert("OPENAI_API_KEY".to_string(), secrets.require("OPENAI_API_KEY")?);
             Ok(env)
         }
         // OpenCode Zen: opencode's own subscription gateway (provider id
         // "opencode"), keyed by OPENCODE_API_KEY.
         (AgentKind::OpenCode, "opencode-zen") => {
             let mut env = opencode_isolation_env(auth_context, isolation_dirs)?;
-            env.insert(
-                "OPENCODE_API_KEY".to_string(),
-                secrets.require("OPENCODE_API_KEY")?,
-            );
+            env.insert("OPENCODE_API_KEY".to_string(), secrets.require("OPENCODE_API_KEY")?);
             Ok(env)
         }
         (AgentKind::OpenCode, "gemini-api") => {
@@ -145,11 +121,7 @@ pub fn auth_env_for_context(
         // isolated CODEX_HOME the same way production launch_env does.
         (AgentKind::Codex, "openai-api") => {
             let key = secrets.require("OPENAI_API_KEY")?;
-            let mut env = isolation_env(
-                auth_context,
-                &[("CODEX_HOME", "codex-home")],
-                isolation_dirs,
-            )?;
+            let mut env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")], isolation_dirs)?;
             let codex_home = env.get("CODEX_HOME").expect("codex isolation dir");
             std::fs::write(
                 std::path::Path::new(codex_home).join("auth.json"),
@@ -170,11 +142,7 @@ pub fn auth_env_for_context(
             if !std::path::Path::new(&source).exists() {
                 bail!("openai-oauth requires a logged-in codex auth.json (run `codex login`); not found at {source}");
             }
-            let env = isolation_env(
-                auth_context,
-                &[("CODEX_HOME", "codex-home")],
-                isolation_dirs,
-            )?;
+            let env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")], isolation_dirs)?;
             let codex_home = env.get("CODEX_HOME").expect("codex isolation dir");
             std::fs::copy(&source, std::path::Path::new(codex_home).join("auth.json"))
                 .with_context(|| format!("failed to copy {source}"))?;
@@ -194,11 +162,7 @@ pub fn auth_env_for_context(
         // not support /v1/responses and are unreachable from codex.
         (AgentKind::Codex, "bedrock") => {
             let token = secrets.require("AWS_BEARER_TOKEN_BEDROCK")?;
-            let mut env = isolation_env(
-                auth_context,
-                &[("CODEX_HOME", "codex-home")],
-                isolation_dirs,
-            )?;
+            let mut env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")], isolation_dirs)?;
             let codex_home = env.get("CODEX_HOME").expect("codex isolation dir");
             let config = format!(
                 r#"model = "openai.gpt-oss-120b"
@@ -429,36 +393,20 @@ mod tests {
             values: BTreeMap::from([("CURSOR_API_KEY".to_string(), "sk-cursor-test".to_string())]),
         };
         let mut isolation_dirs = IsolationDirs::default();
-        let env = auth_env_for_context(
-            &secrets,
-            &AgentKind::Cursor,
-            "cursor-login",
-            &mut isolation_dirs,
-        )
-        .unwrap();
-        assert_eq!(
-            env.get("CURSOR_API_KEY").map(String::as_str),
-            Some("sk-cursor-test")
-        );
+        let env =
+            auth_env_for_context(&secrets, &AgentKind::Cursor, "cursor-login", &mut isolation_dirs)
+                .unwrap();
+        assert_eq!(env.get("CURSOR_API_KEY").map(String::as_str), Some("sk-cursor-test"));
     }
 
     #[test]
     fn cursor_login_arm_falls_through_to_machine_login_without_a_supplied_key() {
-        let secrets = ProbeSecrets {
-            values: BTreeMap::new(),
-        };
+        let secrets = ProbeSecrets { values: BTreeMap::new() };
         let mut isolation_dirs = IsolationDirs::default();
-        let env = auth_env_for_context(
-            &secrets,
-            &AgentKind::Cursor,
-            "cursor-login",
-            &mut isolation_dirs,
-        )
-        .unwrap();
-        assert!(
-            env.is_empty(),
-            "no key supplied: machine login stands, nothing to inject"
-        );
+        let env =
+            auth_env_for_context(&secrets, &AgentKind::Cursor, "cursor-login", &mut isolation_dirs)
+                .unwrap();
+        assert!(env.is_empty(), "no key supplied: machine login stands, nothing to inject");
     }
 
     #[test]

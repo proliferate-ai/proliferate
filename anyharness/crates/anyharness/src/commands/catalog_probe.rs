@@ -54,12 +54,8 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
     }
     let secrets = ProbeSecrets::capture_and_scrub();
     let mut isolation_dirs = IsolationDirs::default();
-    let auth_env = auth_env_for_context(
-        &secrets,
-        &agent_kind,
-        &args.auth_context,
-        &mut isolation_dirs,
-    )?;
+    let auth_env =
+        auth_env_for_context(&secrets, &agent_kind, &args.auth_context, &mut isolation_dirs)?;
 
     let runtime_home = args
         .runtime_home
@@ -100,12 +96,8 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
     // the harness config seeded to select it. Accepted = the harness lists
     // or selects the id; the menu-read in `snapshot` is unaffected.
     for trial_id in &args.trial_models {
-        let trial_env = auth_env_for_context(
-            &secrets,
-            &agent_kind,
-            &args.auth_context,
-            &mut isolation_dirs,
-        )?;
+        let trial_env =
+            auth_env_for_context(&secrets, &agent_kind, &args.auth_context, &mut isolation_dirs)?;
         let config_dir = trial_env
             .get("CLAUDE_CONFIG_DIR")
             .cloned()
@@ -152,14 +144,14 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
                     (false, None, None)
                 }
             };
-        snapshot
-            .trials
-            .push(anyharness_lib::live::sessions::probe::ProbeTrialResult {
+        snapshot.trials.push(
+            anyharness_lib::live::sessions::probe::ProbeTrialResult {
                 model_id: trial_id.clone(),
                 accepted,
                 name,
                 config_options,
-            });
+            },
+        );
     }
 
     let out_dir = PathBuf::from(&args.out);
@@ -196,10 +188,7 @@ fn print_summary(snapshot: &ProbeSnapshot, out_path: &std::path::Path) {
         .iter()
         .filter(|model| model.config_options.is_some())
         .count();
-    println!(
-        "per-model config options observed: {observed}/{}",
-        snapshot.models.len()
-    );
+    println!("per-model config options observed: {observed}/{}", snapshot.models.len());
     for warning in &snapshot.warnings {
         println!("warning: {warning}");
     }
