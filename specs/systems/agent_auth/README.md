@@ -100,7 +100,7 @@ Native harness login is not a method: it is an onboarding detection that offers 
 
 ## 2 · Data
 
-### Server tables ([db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py))
+### Server tables ([db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py) · [db/models/agent_auth_delivery.py](../../../server/proliferate/db/models/agent_auth_delivery.py))
 
 ```sql
 -- The vault: one titled secret per row. kind decides what value_ciphertext decrypts to:
@@ -156,10 +156,26 @@ CREATE TABLE agent_auth_delivery_ack (
     user_id           uuid NOT NULL,
     surface           text NOT NULL,
     acked_sequence    bigint NOT NULL,        -- monotonic per (user, surface)
-    acked_fingerprint text NOT NULL,          -- sha256 of the canonical document
+    acked_fingerprint text NOT NULL,          -- sha256 of the canonical harnesses array
     acked_at          timestamptz NOT NULL,
     created_at        timestamptz NOT NULL,
     updated_at        timestamptz NOT NULL,
+    UNIQUE (user_id, surface)
+);
+
+-- The persisted counter behind the document's `sequence` field: the per-(user, surface)
+-- render counter, bumped only by a render whose harnesses content changed — a no-op
+-- render leaves the row untouched. fingerprint is the last rendered content hash: the
+-- sha256 of the canonical harnesses array, the same value GET /state serves as its rider.
+CREATE TABLE agent_auth_render_sequence (
+    id           uuid PRIMARY KEY,
+    user_id      uuid NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    surface      text NOT NULL CHECK (surface IN ('local','cloud')),
+    sequence     bigint NOT NULL,
+    fingerprint  text NOT NULL,
+    rendered_at  timestamptz NOT NULL,
+    created_at   timestamptz NOT NULL,
+    updated_at   timestamptz NOT NULL,
     UNIQUE (user_id, surface)
 );
 
@@ -411,11 +427,13 @@ Full file tree (final layout — today's locations live in the delta table):
 server/proliferate/
 ├── constants/agent_gateway.py            closed vocabularies, registry mirrors, STATE_VERSION
 ├── db/models/agent_gateway.py            the agent_auth tables (the gateway tables are ai_gateway's)
+├── db/models/agent_auth_delivery.py      the render-sequence table — split out; agent_gateway.py sits at its line-count ratchet
 ├── db/store/agent_gateway/               the agent_auth stores (the gateway stores are ai_gateway's)
 │   ├── records.py · mappers.py           typed records; DesiredAuthSource
 │   ├── api_keys.py                       vault CRUD, encryption at rest, decrypt for render
-│   ├── selections.py                     full-desired-state put, the cross-table write gate, scope revision
+│   ├── selections.py                     full-desired-state put, the cross-table write gate
 │   ├── delivery_acks.py                  only-forward ack stamp
+│   ├── render_sequence.py                the render-sequence bump — advances only on content change
 │   ├── harness_settings.py               settings rows
 │   └── policy.py                         org policy + member route listing
 └── server/agent_auth/

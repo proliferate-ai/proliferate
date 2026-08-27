@@ -95,11 +95,14 @@ export function useLocalAuthStateSync() {
   const state = stateQuery.data;
   const runtimeHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
 
-  // Enrollment-sync poke, client half (Proof C5): C-1's server half bumps the
-  // local-surface sequence when an enrollment reaches `synced`, so the next
-  // pull renders WITH keys — this half makes that pull happen promptly by
-  // invalidating the state query on the observed →synced transition. Polling
-  // exists only to observe that transition and stops once synced.
+  // Enrollment-sync poke, client half (Proof C5): under content-hash
+  // sequencing there is no separate revision-touch to react to — an
+  // enrollment reaching `synced` changes what the renderer emits (the
+  // gateway source goes from dropped to present), so the next render bumps
+  // its own sequence. This half exists to make that next render happen
+  // promptly, by invalidating the state query on the observed →synced
+  // transition instead of waiting for an unrelated mutation. Polling exists
+  // only to observe that transition and stops once synced.
   const [enrollmentPollMs, setEnrollmentPollMs] = useState<number | false>(
     ENROLLMENT_SYNC_POLL_MS,
   );

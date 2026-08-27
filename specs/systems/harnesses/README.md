@@ -19,7 +19,7 @@ Make "is Claude ready on this machine, and with which exact model and controls m
 | `harness_launch_option_states` — target-observed model ids and control values per kind | [launch_options/store.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_options/store.rs) | the launch probe only |
 | Readiness overrides, path resolution, version facts | [readiness/](../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs) | derived, not stored |
 
-Not owned though co-located (see Fences): `auth/`, `auth_state.rs`, `route_auth/` — the runtime half of **agent_auth**.
+Not owned though co-located (see Fences): `auth/`, `route_auth/` — the runtime half of **agent_auth**.
 
 ## 3. Public surface
 
@@ -86,7 +86,7 @@ In-process: `AgentRuntime` ([runtime.rs](../../../anyharness/crates/anyharness-l
 | Not owned | Owner |
 | --- | --- |
 | Live session actors, ACP stdio connections, prompt execution | sessions ([session-engine.md](../sessions/session-engine.md)) |
-| Credential vault, selections, `state.json` delivery, route-auth rendering, gateway plans — `domains/agents/{auth,auth_state.rs,route_auth}` | **agent_auth** (control-plane spec with a runtime section; today [AGENT_AUTH.md](../agent_auth/README.md)) |
+| Credential vault, selections, `state.json` delivery, route-auth rendering, gateway plans — `domains/agents/{auth,route_auth}` | **agent_auth** (control-plane spec with a runtime section; today [AGENT_AUTH.md](../agent_auth/README.md)) |
 | Virtual keys, LiteLLM, model gateway enrollment | model_gateway ([MODELS.md](launch-options.md)) |
 | Catalog *generation* (`scripts/agent-catalog/**`) | release-delivery (engineering system) |
 | Supervisor binary swaps, worker mailbox | managed_runtime ([MANAGED_RUNTIME.md](managed-runtime.md)) |
@@ -105,7 +105,7 @@ Declared edge: `agents → sessions` (baseline; the reverse `sessions → agents
 > credential paths, which only Claude/Codex/OpenCode have.
 
 > [!decision] PABLO DECIDES: the agent_auth runtime half. `route_auth` (5.3K
-> lines), `auth/` (3.5K) and `auth_state.rs` sit in `domains/agents`, but their
+> lines) and `auth/` (3.5K) sit in `domains/agents`, but their
 > laws (headless never holds human credentials; gateway plan per launch) belong
 > to agent_auth. Options: (a) move them to `domains/agent_auth/` in Wave 3 and
 > let the agent_auth spec own a runtime code map; (b) keep them here as an
@@ -128,7 +128,7 @@ anyharness/crates/anyharness-lib/src/domains/agents/    → target: systems/harn
 ├── portability/                            provider auth-file portability (codex)
 ├── live_ports.rs                           trait impls for live-defined ports
 ├── runtime.rs                              AgentRuntime facade
-└── (auth/, auth_state.rs, route_auth/)     → agent_auth runtime section (fenced, see §7)
+└── (auth/, route_auth/)                    → agent_auth runtime section (fenced, see §7)
 anyharness/crates/anyharness-lib/src/integrations/agent_cli/   provider CLI mechanics (consumed)
 anyharness/crates/anyharness-lib/src/integrations/acp/         shared ACP helpers (consumed)
 anyharness/crates/anyharness-lib/src/api/http/{agents,agents_contract,agents_errors,
