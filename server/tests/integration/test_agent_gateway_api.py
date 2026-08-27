@@ -609,12 +609,12 @@ class TestAgentAuthSelections:
     async def test_cursor_accepts_api_key_source(self, client: AsyncClient) -> None:
         # Cursor DOES take an api_key selection end to end (its CURSOR_API_KEY
         # slot) — only the gateway route is closed to it. The store still
-        # injects the disabled gateway revision-marker row for cursor too:
-        # the marker's job is keeping the scope's rendered revision
-        # (max(updated_at) across all rows) monotonic, which is harness-
-        # agnostic — cursor can't select the gateway source, but it still
-        # needs the marker so deleting/replacing its api_key row can't move
-        # the revision backwards.
+        # injects the disabled gateway marker row for cursor too: the
+        # marker's job is keeping a row alive as the scope's visible
+        # pending→applied carrier after a clear-to-native, which is
+        # harness-agnostic — cursor can't select the gateway source, but
+        # clearing its api_key row still needs a surviving row to read
+        # pending until the emptied document is acked.
         _, headers = await _authed_user(client)
         created = await _create_key(client, headers)
         response = await _put_selections(
@@ -1011,7 +1011,7 @@ class TestAgentAuthState:
         assert isinstance(fingerprint, str) and len(fingerprint) == 64
         assert payload == {
             "version": 2,
-            "revision": 0,
+            "sequence": 1,
             "user_id": user_id,
             "harnesses": [],
             "harness_settings": {},
@@ -1087,7 +1087,7 @@ class TestAgentAuthState:
         doc = response.json()
         assert doc["version"] == 2
         assert doc["user_id"] == user_id
-        assert isinstance(doc["revision"], int) and doc["revision"] > 0
+        assert isinstance(doc["sequence"], int) and doc["sequence"] > 0
         assert doc["harnesses"] == [
             {
                 "harness_kind": "claude",

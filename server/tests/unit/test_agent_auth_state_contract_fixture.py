@@ -31,7 +31,7 @@ class TestAgentAuthStateContractFixture:
         fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
         assert fixture["version"] == agent_auth.AGENT_AUTH_STATE_VERSION
-        assert isinstance(fixture["revision"], int)
+        assert isinstance(fixture["sequence"], int)
         # snake_case on the wire, and no UI-only fields leak into it.
         serialized = json.dumps(fixture)
         for forbidden in ("provider_hint", "harnessKind", "envVarName", "model_catalog"):
