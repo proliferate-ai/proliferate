@@ -232,12 +232,12 @@ mod tests {
         let errors = [
             RouteAuthError::SelectionMissing {
                 harness_kind: "claude".into(),
-                revision: 7,
+                sequence: 7,
                 reason: None,
             },
             RouteAuthError::SelectionMissing {
                 harness_kind: "grok".into(),
-                revision: 7,
+                sequence: 7,
                 reason: Some("the credits behind it ran out".into()),
             },
             RouteAuthError::SeatCooling {

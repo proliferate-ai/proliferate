@@ -306,7 +306,7 @@ impl AgentRuntime {
     /// `~/.claude`. claude-only this slice; other harnesses refuse in type.
     ///
     /// The scratch root is a SIBLING of `agent-auth/` (same reasoning as the
-    /// probe scratch): the launch-side revision GC enumerates `agent-auth/`
+    /// probe scratch): the launch-side sequence GC enumerates `agent-auth/`
     /// and must never see mint dirs.
     pub async fn start_mint_seat_terminal(
         &self,

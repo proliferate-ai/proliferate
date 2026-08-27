@@ -284,7 +284,7 @@ mod tests {
         };
         let sources = HarnessSources {
             harness_kind: "claude".into(),
-            revision: 1,
+            sequence: 1,
             sources: vec![seat("a"), seat("a"), seat("b"), seat("a")],
             rotate: true,
         };
