@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,18 +37,43 @@ async def bump_render_sequence_if_changed(
 ) -> int:
     """Advance the scope's sequence iff ``fingerprint`` differs; return it.
 
-    ONE atomic Postgres upsert, so two concurrent renders cannot race a
-    check-then-write into a lost bump or a unique-constraint failure: the
-    first render for a scope inserts the row at sequence 1; a conflicting
-    writer lands in the ON CONFLICT arm, whose predicate suppresses the
-    update when the stored fingerprint already equals the incoming one (the
-    no-op render). A suppressed update returns no row, and the current
-    sequence is re-read unchanged.
+    ONE statement, always, and the returned sequence is ALWAYS the sequence
+    the returned fingerprint was stored with — that pairing is what the
+    runtime's equal-sequence acceptance and the idempotent re-ack read as
+    "equal sequence means identical content".
+
+    The first render for a scope inserts the row at sequence 1; a conflicting
+    writer lands in the ON CONFLICT arm, which has NO ``WHERE`` predicate and
+    therefore always updates and always returns a row. The decision lives in
+    the SET expression instead: ``sequence`` advances only when the stored
+    fingerprint differs from the incoming one, and holds for a no-op render.
+
+    Why the predicate moved out of ``WHERE``: the suppressed arm returned no
+    row, so the sequence had to be re-read by a SECOND statement, and the
+    pairing then rested on a Postgres subtlety — ``ON CONFLICT DO UPDATE``
+    locks the conflicting row BEFORE evaluating its ``WHERE``, so the row could
+    not move under the re-read (verified: a suppressed upsert blocks a
+    concurrent bump until it commits). Correct, but correct for a reason
+    nothing in the code stated and a future reader could not check. With one
+    statement the pairing is structural: the sequence returned is the sequence
+    written next to the fingerprint written, in the same tuple.
+
+    Cost, accepted deliberately: the conflict arm now writes a new row version
+    on every render, including no-op ones, where the old form wrote none. The
+    scope is one narrow row per (user, surface) and no indexed column changes,
+    so the updates are HOT-eligible; the invariant is worth the churn.
+    ``rendered_at`` and ``updated_at`` stay conditional so a no-op render still
+    leaves the row's VALUES identical ("a no-op render changes neither",
+    spec §2) — only the physical tuple is new.
     """
     if surface not in AGENT_AUTH_SURFACES:
         raise ValueError(f"Unknown agent auth surface: {surface}")
     now = utcnow()
-    sequence = (
+    content_changed = AgentAuthRenderSequence.fingerprint.is_distinct_from(fingerprint)
+    # ``scalar_one`` (never ``scalar_one_or_none``): with no ``WHERE`` on the
+    # conflict arm, both arms return a row, so a missing row is a real invariant
+    # break and must raise rather than be papered over.
+    return (
         await db.execute(
             pg_insert(AgentAuthRenderSequence)
             .values(
@@ -63,28 +88,27 @@ async def bump_render_sequence_if_changed(
             .on_conflict_do_update(
                 constraint="uq_agent_auth_render_sequence_scope",
                 set_={
-                    "sequence": AgentAuthRenderSequence.sequence + 1,
+                    "sequence": case(
+                        (content_changed, AgentAuthRenderSequence.sequence + 1),
+                        else_=AgentAuthRenderSequence.sequence,
+                    ),
+                    # Unconditional: on the held arm the stored value already
+                    # equals this one (that is what `content_changed` false
+                    # means), so writing it changes nothing.
                     "fingerprint": fingerprint,
-                    "rendered_at": now,
-                    "updated_at": now,
+                    "rendered_at": case(
+                        (content_changed, now),
+                        else_=AgentAuthRenderSequence.rendered_at,
+                    ),
+                    "updated_at": case(
+                        (content_changed, now),
+                        else_=AgentAuthRenderSequence.updated_at,
+                    ),
                 },
-                where=AgentAuthRenderSequence.fingerprint.is_distinct_from(fingerprint),
             )
             .returning(AgentAuthRenderSequence.sequence)
         )
-    ).scalar_one_or_none()
-    if sequence is not None:
-        return sequence
-    # Unchanged content: the predicate suppressed the update, so the stored
-    # sequence is current — the no-op render's "changes neither" guarantee.
-    current = await get_render_sequence(db, user_id=user_id, surface=surface)
-    if current is None:
-        # Only reachable if the conflicting row vanished between the upsert and
-        # this read (a concurrent user delete cascading the scope away). Raise a
-        # real error rather than assert: under ``python -O`` an assert compiles
-        # away and the next line would dereference None.
-        raise RuntimeError(f"Render sequence row vanished for user {user_id} surface {surface!r}")
-    return current.sequence
+    ).scalar_one()
 
 
 async def get_render_sequence(
