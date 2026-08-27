@@ -50,11 +50,20 @@ test("staging deploys from green main and from an operator", () => {
   assert.doesNotMatch(triggers, /\bpush:/);
   assert.doesNotMatch(triggers, /\bschedule:/);
 
-  // Auto runs deploy only what CI proved: the plan job refuses non-success
-  // conclusions, and the checkout pins the triggering run's exact head SHA.
+  // Auto runs deploy only what CI proved ON THIS REPO'S MAIN: the plan job
+  // refuses non-success conclusions AND anything that is not a push to main
+  // from this repository (the workflow_run branch filter matches a fork PR's
+  // head branch named `main`, which would otherwise auto-deploy fork code with
+  // inherited secrets). The checkout pins the triggering run's exact head SHA.
   assert.match(
     workflow,
-    /github\.event_name != 'workflow_run' \|\| github\.event\.workflow_run\.conclusion == 'success'/,
+    /github\.event_name != 'workflow_run' \|\| \(github\.event\.workflow_run\.conclusion == 'success' && github\.event\.workflow_run\.event == 'push' && github\.event\.workflow_run\.head_branch == 'main' && github\.event\.workflow_run\.head_repository\.full_name == github\.repository\)/,
+  );
+  // Non-deployable events (red CI, non-push triggers) never share the deploy
+  // concurrency group, so they cannot cancel a pending real deploy.
+  assert.match(
+    workflow,
+    /group: deploy-staging-\$\{\{ github\.repository \}\}-\$\{\{ \(github\.event_name == 'workflow_run' && \(github\.event\.workflow_run\.conclusion != 'success' \|\| github\.event\.workflow_run\.event != 'push'\)\) && github\.run_id \|\| 'main' \}\}/,
   );
   assert.match(
     workflow,
