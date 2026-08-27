@@ -87,7 +87,8 @@ def _inputs(
         )
     return agent_auth.AgentAuthStateInputs(
         user_id=USER_ID,
-        sequence=sequence, lineage=LINEAGE,
+        sequence=sequence,
+        lineage=LINEAGE,
         selections=selections,
         api_key_values=api_key_values or {},
         provider_config_values=provider_config_values or {},
@@ -118,7 +119,8 @@ class TestRenderAgentAuthState:
         )
         assert state == {
             "version": 2,
-            "sequence": SEQUENCE, "lineage": LINEAGE,
+            "sequence": SEQUENCE,
+            "lineage": LINEAGE,
             "user_id": str(USER_ID),
             "harnesses": [
                 {
@@ -338,10 +340,7 @@ class TestRenderAgentAuthState:
             ]
             for harness in state["harnesses"]
         }
-        assert rendered == {
-            "claude": ["sk-litellm-claude"],
-            "codex": ["sk-litellm-codex"],
-        }
+        assert rendered == {"claude": ["sk-litellm-claude"], "codex": ["sk-litellm-codex"]}
 
     def test_harness_missing_from_the_key_map_never_borrows_a_sibling_key(self) -> None:
         """Fails closed (``sources: []``, not dropped) and never borrows claude's key."""
