@@ -31,9 +31,24 @@ impl LaunchProbeService {
         let material = match self.material(harness_kind) {
             Ok(material) => material,
             Err(error) => {
+                // ONE timestamp for the durable row, the slot's failure record
+                // and the document, so `probe.at` and the recorded failure time
+                // cannot disagree by a scheduling hiccup.
+                let now = Utc::now();
                 let committed = service
-                    .record_failure(&started, &Utc::now().to_rfc3339(), "materialization_failed")
+                    .record_failure(&started, &now.to_rfc3339(), "materialization_failed")
                     .map_err(|write_error| RefreshError::Persistence(write_error.to_string()))?;
+                // Record the failure on the slot, exactly like the other two
+                // failure arms. Without it this arm defeated BOTH brakes and the
+                // self-recovery: `last_attempt_at` was never stamped, so
+                // `attempt_covers(None, poked_at)` is always false and N
+                // simultaneous pokes each ran a full attempt instead of
+                // coalescing; and `next_attempt_at` was never armed, so no
+                // `BackoffExpired` timer existed and the event set stopped
+                // containing its own recovery. The trigger is ordinary: a
+                // present-but-empty harness entry (exhausted gateway budget,
+                // revoked seat) resolves to `SelectionMissing` and lands here.
+                self.record_failure(harness_kind, slot, now);
                 tracing::info!(
                     harness = harness_kind,
                     harness_basis_revision = %started.basis_revision,
@@ -44,7 +59,7 @@ impl LaunchProbeService {
                     event = "agent.launch_options_probe.completed",
                     "launch-options probe materialization failed"
                 );
-                self.notify_probe_failed(harness_kind, Utc::now());
+                self.notify_probe_failed(harness_kind, now);
                 return Err(error.into());
             }
         };
