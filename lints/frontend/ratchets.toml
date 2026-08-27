@@ -15,7 +15,9 @@ reason = "Support snapshot artifact store's Unix filesystem layer: private-by-co
 
 [[max_lines]]
 path = "apps/desktop/src-tauri/src/diagnostics/support_snapshot/scrub/patterns.rs"
-max_lines = 610
+# 610 -> 613 (2026-08-27 lint wiring): the needless_range_loop rewrite keeps the
+# boundary==end tail-call explicit with a comment — not new debt.
+max_lines = 613
 reason = "Support export scrub pattern table: the labelled, unlabelled-scheme, environment-assignment, provider-prefix, and opaque-catch-all rules form one ordered redaction pipeline whose precedence is load-bearing and pinned by the scrub tests, so a rule family cannot move without moving that order with it. Split into scrub/patterns/{labelled,unlabelled,opaque}.rs when a sixth rule family lands."
 
 [[max_lines]]
