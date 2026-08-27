@@ -1,9 +1,18 @@
+use std::sync::Arc;
+
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 use crate::{
     desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode},
     diagnostics_collector::producer::TauriDiagnosticsProducer,
 };
+
+mod scrub;
+
+use scrub::{scrub_breadcrumb, scrub_event, scrub_log};
+
+/// The single env-like Sentry tag preserved as bounded deployment identity.
+pub(crate) const RUNTIME_ENV_TAG: &str = "runtime_env";
 
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
@@ -88,6 +97,10 @@ pub fn init(native_diagnostics: &TauriDiagnosticsProducer) -> TelemetryGuards {
                     1.0,
                 ),
                 attach_stacktrace: true,
+                send_default_pii: false,
+                before_send: Some(Arc::new(scrub_event)),
+                before_breadcrumb: Some(Arc::new(scrub_breadcrumb)),
+                before_send_log: Some(Arc::new(scrub_log)),
                 ..Default::default()
             },
         ))
@@ -110,7 +123,7 @@ pub fn init(native_diagnostics: &TauriDiagnosticsProducer) -> TelemetryGuards {
     if telemetry.is_some() {
         sentry::configure_scope(|scope| {
             scope.set_tag("surface", "desktop_native");
-            scope.set_tag("runtime_env", "local");
+            scope.set_tag(RUNTIME_ENV_TAG, "local");
             if let Some(mode_tag) = telemetry_mode_tag(telemetry_mode) {
                 scope.set_tag("telemetry_mode", mode_tag);
             }
