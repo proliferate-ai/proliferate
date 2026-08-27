@@ -121,7 +121,7 @@ describe("SeatDetails rotation tags", () => {
 });
 
 describe("SeatDetails cooling line", () => {
-  it("renders the all-cooling line with the formatted earliest reset", () => {
+  it("renders the no-serve cooling line with the formatted next reset", () => {
     const coolingUntil = "2026-01-05T18:00:00Z";
     renderSeatDetails(editorApi({
       seats: [seat("s1", "Max seat · a")],
@@ -130,8 +130,10 @@ describe("SeatDetails cooling line", () => {
 
     const time = formatSeatResetTime(coolingUntil);
     expect(time).not.toBeNull();
+    // Worded to be true in both no-serve cases: all logins cooling, or the
+    // rotate-off pinned login cooling.
     expect(
-      screen.getByText(`All logins are cooling — the earliest resets at ${time}`),
+      screen.getByText(`No login can serve right now — the next reset is at ${time}.`),
     ).toBeTruthy();
   });
 

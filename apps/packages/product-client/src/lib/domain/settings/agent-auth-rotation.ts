@@ -8,11 +8,9 @@ type AgentAuthStateSummary = NonNullable<AgentSummary["authState"]>;
  * the next in line; `coolingUntil` is non-null ONLY when no seat can serve
  * right now — all cooling, or a rotate-off pinned seat cooling).
  *
- * THE ONE LOCAL TYPE EXTENSION for this contract: the runtime lane ships
- * `servingSeatId` / `nextSeatId` / `coolingUntil` on `AgentAuthStateSummary`
- * in the same slice, so the generated anyharness SDK type does not carry them
- * yet. `readAuthRotation` narrows structurally by value; delete this module's
- * rider cast once the SDK regen carries the fields.
+ * The generated SDK type (`AgentAuthStateSummary`) carries all three fields;
+ * this summary merely normalizes their optionality (`?: string | null`) to
+ * plain nulls so consumers branch on one shape.
  */
 export interface AgentAuthRotationSummary {
   /** The seat serving now, or null when the summary carries none. */
@@ -29,14 +27,9 @@ export interface AgentAuthRotationSummary {
 export function readAuthRotation(
   authState: AgentAuthStateSummary | null | undefined,
 ): AgentAuthRotationSummary {
-  const rider = (authState ?? null) as {
-    servingSeatId?: unknown;
-    nextSeatId?: unknown;
-    coolingUntil?: unknown;
-  } | null;
   return {
-    servingSeatId: typeof rider?.servingSeatId === "string" ? rider.servingSeatId : null,
-    nextSeatId: typeof rider?.nextSeatId === "string" ? rider.nextSeatId : null,
-    coolingUntil: typeof rider?.coolingUntil === "string" ? rider.coolingUntil : null,
+    servingSeatId: authState?.servingSeatId ?? null,
+    nextSeatId: authState?.nextSeatId ?? null,
+    coolingUntil: authState?.coolingUntil ?? null,
   };
 }

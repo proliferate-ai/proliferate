@@ -55,21 +55,18 @@ export function presentSessionError(item: ErrorItem): SessionErrorPresentation {
     };
   }
 
-  // Seat plan limit (agent_auth flow 5). The reader feature-detects the
-  // `seat_usage_limit` kind by string value — the Rust variant ships in the
-  // same slice as this arm. Plain words, never the runtime code; the trailing
-  // sentence stays even for a one-seat pool (the pool size is not knowable
-  // here, and under rotation the sentence is true — the next launch lands on
-  // the next non-cooling login, which may be this one after its reset).
+  // Seat plan limit (agent_auth flow 5). Plain words, never the runtime
+  // code. The body promises nothing about the NEXT session: whether it
+  // rotates onto another login is the runtime's decision under the rotate
+  // setting (rotate=false waits for this login's reset), so a sentence about
+  // it would be false half the time. The relaunch recovery is the offer.
   const seatLimit = readSeatUsageLimitDetails(item.details);
   if (seatLimit) {
     const resetTime = formatSeatResetTime(seatLimit.resetAt);
     const resetClause = resetTime === null ? "" : ` It resets at ${resetTime}.`;
     return {
       title: "Claude.ai plan limit reached",
-      description:
-        `This session's Claude.ai login hit its plan limit.${resetClause}`
-        + " The next session starts on your next login automatically.",
+      description: `This session's Claude.ai login hit its plan limit.${resetClause}`,
       technicalDetail: technicalMessage,
       fallbackModelLabel: null,
       recoveryAction: "relaunch_session",

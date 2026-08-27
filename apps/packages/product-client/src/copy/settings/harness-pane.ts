@@ -214,8 +214,11 @@ export const HARNESS_PANE_COPY = {
   // derives nothing); `time` is the localized reset via formatSeatResetTime.
   seatServingNowTag: "Serving now",
   seatNextUpTag: "Next up",
+  // True in BOTH no-serve cases: every login cooling under rotation, or the
+  // rotate-off pinned login cooling (where other logins may be fresh but the
+  // pin means none will serve).
   seatCoolingLine: (time: string) =>
-    `All logins are cooling — the earliest resets at ${time}`,
+    `No login can serve right now — the next reset is at ${time}.`,
   seatRotateLabel: "Rotate between logins",
   seatRotateDescription: "Off pins the serving login. Usage limits still apply.",
   seatRotateUpdateError: "Could not update login rotation.",

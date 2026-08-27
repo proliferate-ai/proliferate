@@ -49,8 +49,7 @@ describe("presentSessionError", () => {
     expect(presentation).toMatchObject({
       title: "Claude.ai plan limit reached",
       description:
-        `This session's Claude.ai login hit its plan limit. It resets at ${time} on ${day}.`
-        + " The next session starts on your next login automatically.",
+        `This session's Claude.ai login hit its plan limit. It resets at ${time} on ${day}.`,
       fallbackModelLabel: null,
       recoveryAction: "relaunch_session",
     });
@@ -70,8 +69,7 @@ describe("presentSessionError", () => {
     }));
 
     expect(presentation.description).toBe(
-      "This session's Claude.ai login hit its plan limit."
-      + " The next session starts on your next login automatically.",
+      "This session's Claude.ai login hit its plan limit.",
     );
     expect(presentation.recoveryAction).toBe("relaunch_session");
   });

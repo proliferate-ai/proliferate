@@ -4,14 +4,12 @@ import type { ErrorEventDetails } from "@anyharness/sdk";
  * The `seat_usage_limit` turn-error details (agent_auth spec flow 5, the hard
  * signal): a session died because its Claude.ai seat hit a plan limit.
  *
- * THE ONE LOCAL TYPE EXTENSION for this contract: the Rust runtime ships this
- * `ErrorEventDetails` variant in the same slice, so the generated SDK union
- * does not carry it yet — the reader below feature-detects by string value,
- * the same defensive move the `network_connection` arm makes in
- * `session-error-presentation.ts`. Field casing mirrors the existing
- * `provider_rate_limit` details convention (camelCase fields, snake_case enum
- * values). Fold into the generated union and delete this once the SDK regen
- * carries the variant.
+ * The generated SDK union (`ErrorEventDetails`) carries this variant; this
+ * shape is its NARROWED reading. The one delta from the wire type: the
+ * generated `window` is a plain `string`, so the reader below parses it into
+ * the contract's bounded window vocabulary (unknown values read as null).
+ * Field casing mirrors the `provider_rate_limit` details convention
+ * (camelCase fields, snake_case enum values).
  */
 export interface SeatUsageLimitErrorDetails {
   kind: "seat_usage_limit";
@@ -29,33 +27,28 @@ export interface SeatUsageLimitErrorDetails {
 }
 
 /**
- * Narrow error-event details to the seat-limit shape, or null. Tolerant on
- * purpose: a malformed variant (missing seat id or reset) reads as "not this
- * kind" and falls through to the generic error presentation rather than
- * rendering a half-filled arm.
+ * Narrow error-event details to the seat-limit shape, or null. The kind
+ * discriminant comes from the generated union; the field reads stay
+ * runtime-tolerant on purpose — a malformed variant from an older runtime
+ * (missing seat id or reset) reads as "not this kind" and falls through to
+ * the generic error presentation rather than rendering a half-filled arm.
  */
 export function readSeatUsageLimitDetails(
   details: ErrorEventDetails | null | undefined,
 ): SeatUsageLimitErrorDetails | null {
-  const record = details as {
-    kind?: unknown;
-    seatId?: unknown;
-    "window"?: unknown;
-    resetAt?: unknown;
-  } | null | undefined;
-  if (!record || record.kind !== "seat_usage_limit") {
+  if (!details || details.kind !== "seat_usage_limit") {
     return null;
   }
-  const seatId = typeof record.seatId === "string" && record.seatId.length > 0
-    ? record.seatId
+  const seatId = typeof details.seatId === "string" && details.seatId.length > 0
+    ? details.seatId
     : null;
-  const resetAt = typeof record.resetAt === "string" && record.resetAt.length > 0
-    ? record.resetAt
+  const resetAt = typeof details.resetAt === "string" && details.resetAt.length > 0
+    ? details.resetAt
     : null;
   if (seatId === null || resetAt === null) {
     return null;
   }
-  const raw = record["window"];
+  const raw = details["window"];
   const bindingWindow = raw === "five_hour" || raw === "seven_day" ? raw : null;
   return { kind: "seat_usage_limit", seatId, "window": bindingWindow, resetAt };
 }
