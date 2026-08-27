@@ -15,7 +15,7 @@ Give every workspace a shell the user and the agent can share, and give the runt
 | `terminal_command_runs` — purpose (`general`/`run`/`setup`), command, status (`queued`…`timed_out`), exit code, bounded stdout/stderr/combined output (64 KiB cap), timing | [store.rs](../../../anyharness/crates/anyharness-lib/src/domains/terminals/store.rs) |
 | Live registry of running PTYs and output hubs (`TerminalRegistry`, `TerminalOutputRegistry`) | [live/terminals/manager.rs](../../../anyharness/crates/anyharness-lib/src/live/terminals/manager.rs) — process-lifetime only |
 | Active setup/archive-script task registry | `TerminalService.active_setup_tasks` |
-| Agent-login terminal records | [live/terminals/agent_login.rs](../../../anyharness/crates/anyharness-lib/src/live/terminals/agent_login.rs) |
+| Agent-login terminal records | [live/terminals/agent_login/](../../../anyharness/crates/anyharness-lib/src/live/terminals/agent_login/mod.rs) |
 | `workspace_setup_state` — the durable "latest setup run" pointer per workspace (`set_latest_setup_run`, read by `latest_setup_run`) | [store.rs](../../../anyharness/crates/anyharness-lib/src/domains/terminals/store.rs); *when* it is set is [workspaces](../workspaces/README.md)' policy |
 
 `TerminalRecord` itself is a live projection (id, workspace, title, purpose, cwd, status, exit code, latest command run) — terminals are not durable across runtime restarts; their command runs are.
@@ -93,7 +93,7 @@ anyharness/crates/anyharness-lib/src/
 │   ├── driver/                      PTY + shell process lifecycle
 │   ├── output_sink/                 ordered output/status hub with replay floor
 │   ├── command_runs/                bounded runs, setup runs, workspace-wide stop
-│   └── agent_login.rs               login terminals hosted for harnesses
+│   └── agent_login/                 login terminals hosted for harnesses (+ the seat-mint half)
 ├── api/http/terminals.rs            transport
 └── (sse/ws transport for the output stream lives in api/)
 anyharness/crates/anyharness-contract/src/v1/terminals.rs

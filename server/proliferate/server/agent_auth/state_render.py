@@ -146,9 +146,8 @@ class AgentAuthStateInputs:
 
     ``seat_values`` is every ACTIVE seat (``anthropic_subscription``) entry's
     ``(id, decrypted token)``, **in vault order** (``created_at``) — the order
-    the renderer expands a pool seat row into wire sources (agent_auth spec
-    §2's "seat selection shape"). A revoked seat is simply absent, so its
-    source vanishes at the next render pass.
+    a pool seat row expands in (spec §2's "seat selection shape"). A revoked
+    seat is simply absent, so its source vanishes at the next render pass.
     """
 
     user_id: UUID
@@ -195,21 +194,17 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
         # (the pool, in vault order); every other kind renders at most one.
         # Every expanded seat source shares one sort key, and Python's sort is
         # stable, so vault order survives the per-harness (kind, env) sort.
-        # The document carries each active seat AT MOST ONCE per harness
-        # (spec §2's "every active seat, in vault order"): the kind-counting
-        # radio lets a pool row and a pin coexist as one selected method, and
-        # without this dedupe the pinned seat's token would render twice —
-        # double-weighting it under slice 2's round-robin.
+        # Each active seat renders AT MOST ONCE per harness (spec §2): the
+        # kind-counting radio lets a pool row and a pin coexist as one method,
+        # and the dedupe keeps the pinned seat's token from rendering twice.
         if selection.source_kind == AGENT_AUTH_SOURCE_SEAT:
             seen = seen_seat_ids.setdefault(selection.harness_kind, set())
             for seat_source in _render_seat_sources(inputs, selection):
-                seat_id = str(seat_source["seat_id"])
-                if seat_id in seen:
-                    continue
-                seen.add(seat_id)
-                by_harness[selection.harness_kind].append(
-                    ((str(seat_source["kind"]), ""), seat_source)
-                )
+                if seat_source["seat_id"] not in seen:
+                    seen.add(seat_source["seat_id"])
+                    by_harness[selection.harness_kind].append(
+                        ((str(seat_source["kind"]), ""), seat_source)
+                    )
             continue
         source = _render_source(inputs, selection)
         if source is None:
@@ -271,14 +266,10 @@ def _render_seat_sources(
     runtime owns which one serves (slice 1: the first; rotation is slice 2).
     A non-null id pins one seat. A revoked/vanished seat is simply absent
     from ``seat_values``, so its source drops and the harness entry fails
-    closed at the next pass — same never-abort contract as every other
-    unsatisfiable source.
-
-    The env map is ALREADY the harness's real env-var name
-    (``CLAUDE_CODE_OAUTH_TOKEN``), mirroring the provider_config wire ruling:
-    the runtime ``.set()``s exact keys, never renames. Seats are claude-only
-    this slice (the validator enforces it at write time); a seat row on any
-    other harness is dropped here too rather than trusted.
+    closed at the next pass — the never-abort contract. The env map carries
+    the harness's REAL env-var name (the runtime ``.set()``s exact keys) per
+    the provider_config wire ruling. Seats are claude-only this slice (the
+    validator enforces it); other harnesses' seat rows drop here too.
     """
     if selection.harness_kind not in AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS:
         logger.warning(
@@ -288,9 +279,7 @@ def _render_seat_sources(
         return []
     seats = inputs.seat_values
     if selection.api_key_id is not None:
-        seats = tuple(
-            (seat_id, token) for seat_id, token in seats if seat_id == selection.api_key_id
-        )
+        seats = tuple(s for s in seats if s[0] == selection.api_key_id)
     return [
         {
             "kind": AGENT_AUTH_SOURCE_SEAT,

@@ -100,6 +100,6 @@ reason = "PRO-111 adds the surface/error field assertions to the OAuthProviderTo
 
 [[max_lines]]
 path = "server/tests/unit/test_agent_auth_state_render.py"
-max_lines = 730
-reason = "C-train composition: C-1/C-2 renderer additions; renderer unit suite (+fail-closed rewrites, +the renderer-merge tripwire; the contract-fixture producer class split out to test_agent_auth_state_contract_fixture.py); D3 python arm adds TestTranslateProviderConfigEnv (6-row table) + TestRenderProviderConfigSource coverage for the new provider_config wire source; review fix cycle 1 adds a userinfo/port hostname-derivation edge case ; +93: seats v1 TestRenderSeatSources (pool expansion in vault order, pinning, revoked-seat fail-closed, seatless-harness defense)"
+max_lines = 749
+reason = "C-train composition: C-1/C-2 renderer additions; renderer unit suite (+fail-closed rewrites, +the renderer-merge tripwire; the contract-fixture producer class split out to test_agent_auth_state_contract_fixture.py); D3 python arm adds TestTranslateProviderConfigEnv (6-row table) + TestRenderProviderConfigSource coverage for the new provider_config wire source; review fix cycle 1 adds a userinfo/port hostname-derivation edge case ; +93: seats v1 TestRenderSeatSources (pool expansion in vault order, pinning, revoked-seat fail-closed, seatless-harness defense) ; +19: review-fix pool+pin seat dedupe case (each active seat renders at most once)"
 

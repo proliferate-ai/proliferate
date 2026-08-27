@@ -47,7 +47,7 @@ In-process: `AgentRuntime` ([runtime.rs](../../../anyharness/crates/anyharness-l
   protocol helpers the adapters share.
 - `anyharness-credential-discovery` crate — provider credential file parsing.
 - `terminals` — login terminals run through
-  [live/terminals/agent_login.rs](../../../anyharness/crates/anyharness-lib/src/live/terminals/agent_login.rs).
+  [live/terminals/agent_login/](../../../anyharness/crates/anyharness-lib/src/live/terminals/agent_login/mod.rs).
 - `catalogs/agents/**` at build time (the registry + catalog data) and the
   desktop seed archive delivered through [desktop_host.md](../desktop-host/README.md).
 - agent_auth — the resolved credential ladder and gateway plan the launch

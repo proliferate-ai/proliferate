@@ -143,6 +143,11 @@ impl AgentRuntime {
         catalog_service: super::catalog::service::AgentCatalogService,
         surface: RuntimeSurface,
     ) -> Self {
+        // Mint scratch dirs are meaningless across a restart (mint state is
+        // memory-only): sweep any previous process's orphans before this
+        // runtime can mint anew — their claude-config/ can hold credential
+        // state. Construction is the runtime's startup boundary.
+        sweep_mint_scratch(&runtime_home);
         Self {
             runtime_home,
             reconcile_service,
