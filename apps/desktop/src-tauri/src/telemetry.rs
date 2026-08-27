@@ -83,7 +83,7 @@ pub fn init(native_diagnostics: &TauriDiagnosticsProducer) -> TelemetryGuards {
             dsn,
             sentry::ClientOptions {
                 environment: Some(
-                    env_or_default("PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT", "trusted-beta").into(),
+                    env_or_default("PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT", "production").into(),
                 ),
                 release: Some(
                     env_or_default(

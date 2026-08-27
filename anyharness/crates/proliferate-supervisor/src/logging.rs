@@ -348,7 +348,7 @@ pub fn init() -> TelemetryGuards {
             dsn,
             sentry::ClientOptions {
                 environment: Some(
-                    env_or_default(TARGET_SENTRY_ENVIRONMENT_ENV, "trusted-beta").into(),
+                    env_or_default(TARGET_SENTRY_ENVIRONMENT_ENV, "production").into(),
                 ),
                 release: Some(
                     env_or_default(SUPERVISOR_SENTRY_RELEASE_ENV, &default_release()).into(),

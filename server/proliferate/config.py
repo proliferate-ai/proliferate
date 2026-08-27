@@ -181,7 +181,7 @@ class Settings(BaseSettings):
 
     # Observability
     sentry_dsn: str = ""
-    sentry_environment: str = "trusted-beta"
+    sentry_environment: str = "local"
     sentry_release: str = ""
     sentry_traces_sample_rate: float = 1.0
 

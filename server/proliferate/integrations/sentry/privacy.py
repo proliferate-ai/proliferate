@@ -38,7 +38,8 @@ from .scalars import (
 MAX_SEQUENCE = 100
 MAX_SPANS = 1000
 
-ENVIRONMENTS = _set("trusted-beta staging production Production")
+# Closed set (ruled 2026-08-26); trusted-beta stays only until in-field 0.4.x builds rotate.
+ENVIRONMENTS = _set("local staging production dogfood trusted-beta")
 EVENT_LEVELS = _set("debug info warning error critical fatal")
 HTTP_METHODS = _set("GET HEAD POST PUT PATCH DELETE OPTIONS TRACE CONNECT")
 MECHANISM_TYPES = _set("generic chained starlette threading excepthook celery")

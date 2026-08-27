@@ -39,7 +39,7 @@ export function getDesktopTelemetryConfig(): DesktopTelemetryConfig {
   return {
     environment:
       import.meta.env.VITE_PROLIFERATE_ENVIRONMENT?.trim()
-      || (import.meta.env.DEV ? "development" : "trusted-beta"),
+      || (import.meta.env.DEV ? "local" : "production"),
     release:
       import.meta.env.VITE_PROLIFERATE_RELEASE?.trim()
       || `proliferate-desktop@${packageJson.version}`,
