@@ -18,13 +18,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import suppress
+from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.db import session_ops as db_session
 from proliferate.integrations.sentry import report_critical
 from proliferate.server.ai_gateway.enrollment import backfill_enrollments
-from proliferate.server.ai_gateway.free_credits import run_zero_grant_check
+from proliferate.server.ai_gateway.free_credits import (
+    ZeroGrantCheckResult,
+    run_zero_grant_check,
+)
 from proliferate.server.ai_gateway.migration import migrate_legacy_enrollments
 from proliferate.server.ai_gateway.topups import (
     LlmTopupRunResult,
@@ -52,25 +57,31 @@ async def run_enrollment_backfill_once(*, limit: int = _BACKFILL_BATCH_LIMIT) ->
         # sees org rows) and pre-D-2 shared-identity org rows re-mint. Both
         # are idempotent and settle into a no-op once the backlog is drained.
         migrated = await migrate_legacy_enrollments(db, limit=limit)
-        processed = migrated + await backfill_enrollments(db, limit=limit)
-        # The zero-grant guard rides the backfill tick (the spec-shaped home,
-        # "a worker-loop check"): aged active org enrollments whose subject
-        # holds zero grant rows get the grant re-attempted, and whatever stays
-        # grantless raises one ops alert inside run_zero_grant_check itself.
-        zero_grant = await run_zero_grant_check(db, limit=limit)
-        if zero_grant.checked:
-            logger.info(
-                "Agent gateway zero-grant check processed enrollments",
-                extra={
-                    "checked": zero_grant.checked,
-                    "healed": zero_grant.healed,
-                    "alerted": zero_grant.alerted,
-                },
-            )
-        return processed
+        return migrated + await backfill_enrollments(db, limit=limit)
+
+
+async def run_zero_grant_check_once(
+    *,
+    limit: int = _BACKFILL_BATCH_LIMIT,
+    already_alerted_org_ids: set[UUID] | None = None,
+) -> ZeroGrantCheckResult:
+    # Deliberately its OWN transaction, never the backfill's: the backfill
+    # tick's enrollment work has already committed by the time this runs, so
+    # a throwing reclaim/heal can never roll it back.
+    async with db_session.open_async_transaction() as db:
+        return await run_zero_grant_check(
+            db,
+            limit=limit,
+            already_alerted_org_ids=already_alerted_org_ids,
+        )
 
 
 async def _backfill_loop() -> None:
+    # Zero-grant guard state, process-local: the cadence stamp and the set of
+    # orgs already paged. A restart re-pages each still-broken org once —
+    # accepted; paging state is not worth persisting.
+    next_zero_grant_check = 0.0
+    alerted_org_ids: set[UUID] = set()
     while True:
         try:
             processed = await run_enrollment_backfill_once()
@@ -79,6 +90,25 @@ async def _backfill_loop() -> None:
                     "Agent gateway enrollment backfill processed subjects",
                     extra={"processed": processed},
                 )
+            if time.monotonic() >= next_zero_grant_check:
+                # The guard rides the backfill loop (the spec-shaped home) but
+                # on its OWN cadence. Stamped BEFORE the run: a crashing check
+                # retries hourly, never on every 300s backfill tick.
+                next_zero_grant_check = (
+                    time.monotonic() + settings.agent_gateway_zero_grant_check_interval_seconds
+                )
+                zero_grant = await run_zero_grant_check_once(
+                    already_alerted_org_ids=alerted_org_ids
+                )
+                if zero_grant.checked:
+                    logger.info(
+                        "Agent gateway zero-grant check processed enrollments",
+                        extra={
+                            "checked": zero_grant.checked,
+                            "healed": zero_grant.healed,
+                            "alerted": zero_grant.alerted,
+                        },
+                    )
         except Exception as exc:
             report_critical(
                 exc,

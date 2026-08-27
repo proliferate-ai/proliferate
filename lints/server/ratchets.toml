@@ -49,6 +49,11 @@ max_lines = 894
 reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D train rewrote the suite org-first (D1 proof, floor mirroring, signup shape); C-1 added the both-surfaces poke coverage; slice 5 adds the founder-org regression (one ensure_org_enrollment call leaves BOTH the enrollment row and the free_signup grant row — the grant is not a separable hook)"
 
 [[max_lines]]
+path = "server/tests/integration/test_agent_gateway_zero_grant_guard.py"
+max_lines = 703
+reason = "slice 5's reclaim + guard proofs, then the safety-panel probes committed as regressions: paid-top-up orphan, second human's allocation on the orphan, destination-already-funded, non-paging classifications (no identity / invitee org), page-once-per-org, and the loop-cadence test; splits with the suite taxonomy pass"
+
+[[max_lines]]
 path = "server/tests/integration/test_agent_gateway_migration.py"
 max_lines = 619
 reason = "NEW in D-3: the legacy-enrollment migration proofs (D6) + the org-only grep-gates (D8)"

@@ -355,6 +355,8 @@ async def list_active_org_enrollments_with_zero_grants(
     enrollment row lands in the same flow as the grant) out of the feed, and
     zero ``llm_credit_grant`` rows of ANY source — free_signup, topup, admin,
     seat_pool — is what distinguishes "never funded" from merely exhausted.
+    Newest first: old rows the guard classifies as unhealable must never
+    starve fresh breakage out of the ``limit`` window.
     """
     has_any_grant = (
         select(LlmCreditGrant.id)
@@ -371,7 +373,7 @@ async def list_active_org_enrollments_with_zero_grants(
                     AgentGatewayEnrollment.created_at < older_than,
                     ~has_any_grant,
                 )
-                .order_by(AgentGatewayEnrollment.created_at)
+                .order_by(AgentGatewayEnrollment.created_at.desc())
                 .limit(limit)
             )
         )

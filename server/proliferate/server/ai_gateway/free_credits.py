@@ -43,6 +43,7 @@ from proliferate.constants.billing import BILLING_SUBJECT_KIND_ORGANIZATION
 from proliferate.db.models.billing import BillingSubject
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import organizations as organization_store
+from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
 from proliferate.db.store.billing_subjects import (
     count_agent_gateway_free_credit_allocations_for_subject,
     ensure_agent_gateway_free_credit_allocation,
@@ -68,7 +69,13 @@ class AgentGatewayZeroGrantEnrollments(Exception):
 
 @dataclass(frozen=True)
 class ZeroGrantCheckResult:
-    """Summary of one zero-grant guard pass, returned for logging/tests."""
+    """Summary of one zero-grant guard pass, returned for logging/tests.
+
+    ``healed`` counts enrollments whose grant landed this pass; ``alerted``
+    counts ORGS newly paged this pass (still-grantless, pageable, and not in
+    the caller's already-alerted set). Classified-unhealable enrollments and
+    repeat orgs appear in neither — they are logged, never paged.
+    """
 
     checked: int
     healed: int
@@ -288,23 +295,54 @@ async def ensure_signup_free_credit_grant(
     return grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP
 
 
+async def _classify_unhealable(
+    db: AsyncSession,
+    enrollment: AgentGatewayEnrollmentRecord,
+) -> str | None:
+    """Why a still-grantless enrollment must NOT page, or ``None`` (pageable).
+
+    Two shapes are legitimately never self-healable and would otherwise page
+    forever: ``no_github_identity`` (the dedupe is GitHub-keyed — a signup
+    without a linked identity has nothing to grant against) and
+    ``non_default_org`` (the grant lands only on the member's DEFAULT org, so
+    an invitee org's subject never receives one by design). Both are logged
+    by the caller and excluded from paging.
+    """
+    if enrollment.user_id is None:
+        return "no_github_identity"
+    if await get_linked_github_provider_user_id(db, enrollment.user_id) is None:
+        return "no_github_identity"
+    default_org = await organization_store.get_default_organization_for_user(
+        db, enrollment.user_id
+    )
+    if default_org is None or default_org.organization.id != enrollment.organization_id:
+        return "non_default_org"
+    return None
+
+
 async def run_zero_grant_check(
     db: AsyncSession,
     *,
     max_age_seconds: int = 3600,
     limit: int = 50,
+    already_alerted_org_ids: set[UUID] | None = None,
 ) -> ZeroGrantCheckResult:
-    """Sweep aged zero-grant org enrollments: self-heal, then alert the rest.
+    """Sweep aged zero-grant org enrollments: self-heal, classify, then page.
 
     The guard the delivery spec mandates behind the signup-grant fix: an
     active org enrollment older than ``max_age_seconds`` whose billing
     subject holds zero ``llm_credit_grant`` rows should not exist — the grant
-    lands in the same flow as the enrollment. Each one gets the (now
-    orphan-aware) ``ensure_signup_free_credit_grant`` re-attempted; whatever
-    is still grantless afterwards raises ONE ``report_critical`` ops alert
-    for the whole tick (count + org ids in the extras) plus a
-    ``logger.error`` listing, so a silent skip is loud within the hour
-    instead of surfacing as a user's 403 on day 8.
+    lands in the same flow as the enrollment. The feed is newest-first so
+    fresh breakage is never starved by old unhealable rows at the ``limit``.
+
+    Each listed enrollment gets the (orphan-aware)
+    ``ensure_signup_free_credit_grant`` re-attempted. What stays grantless is
+    CLASSIFIED before anything pages (see ``_classify_unhealable``); the
+    pageable remainder raises at most ONE aggregated ``report_critical`` per
+    pass, covering only orgs NOT already in ``already_alerted_org_ids`` —
+    the caller-owned set is mutated in place, so a worker passing a
+    process-lifetime set pages each broken org exactly once per process
+    (a restart re-pages once; accepted). Repeat orgs log a warning instead.
     """
     cutoff = utcnow() - timedelta(seconds=max_age_seconds)
     listed = await agent_gateway_store.list_active_org_enrollments_with_zero_grants(
@@ -334,36 +372,62 @@ async def run_zero_grant_check(
         if enrollment.id in listed_ids
     }
     healed = [e for e in listed if e.id not in still_grantless_ids]
-    alerted = [e for e in listed if e.id in still_grantless_ids]
-    alerted_org_ids = tuple(
-        sorted({e.organization_id for e in alerted if e.organization_id is not None}, key=str)
+    pageable: list[AgentGatewayEnrollmentRecord] = []
+    for enrollment in listed:
+        if enrollment.id not in still_grantless_ids:
+            continue
+        reason = await _classify_unhealable(db, enrollment)
+        if reason is not None:
+            logger.warning(
+                "Agent gateway zero-grant enrollment is not self-healable; not paging",
+                extra={
+                    "reason": reason,
+                    "enrollment_id": str(enrollment.id),
+                    "organization_id": str(enrollment.organization_id),
+                    "user_id": str(enrollment.user_id),
+                },
+            )
+            continue
+        pageable.append(enrollment)
+    pageable_org_ids = sorted(
+        {e.organization_id for e in pageable if e.organization_id is not None}, key=str
     )
-    if alerted:
+    known = already_alerted_org_ids if already_alerted_org_ids is not None else set()
+    new_org_ids = tuple(org_id for org_id in pageable_org_ids if org_id not in known)
+    repeat_org_ids = tuple(org_id for org_id in pageable_org_ids if org_id in known)
+    if new_org_ids:
+        known.update(new_org_ids)
         report_critical(
             AgentGatewayZeroGrantEnrollments(
-                f"{len(alerted)} active org enrollment(s) older than "
+                f"{len(new_org_ids)} org(s) with enrollments older than "
                 f"{max_age_seconds}s still hold zero LLM credit grants after "
                 "the self-heal attempt"
             ),
             tags={"domain": "agent_gateway", "action": "zero_grant_check"},
             extras={
-                "zero_grant_count": len(alerted),
-                "zero_grant_organization_ids": [str(org_id) for org_id in alerted_org_ids],
+                # The count is the message's and the log's job — only the org
+                # ids ride the Sentry extras, matching the privacy allowlist.
+                "zero_grant_organization_ids": [str(org_id) for org_id in new_org_ids],
             },
         )
         logger.error(
             "Agent gateway zero-grant enrollments could not be healed",
             extra={
-                "count": len(alerted),
-                "organization_ids": [str(org_id) for org_id in alerted_org_ids],
+                "count": len(new_org_ids),
+                "organization_ids": [str(org_id) for org_id in new_org_ids],
             },
+        )
+    if repeat_org_ids:
+        logger.warning(
+            "Agent gateway zero-grant orgs already paged this process; suppressing repeat",
+            extra={"organization_ids": [str(org_id) for org_id in repeat_org_ids]},
         )
     return ZeroGrantCheckResult(
         checked=len(listed),
         healed=len(healed),
-        alerted=len(alerted),
+        alerted=len(new_org_ids),
         healed_organization_ids=tuple(
             sorted({e.organization_id for e in healed if e.organization_id is not None}, key=str)
         ),
-        alerted_organization_ids=alerted_org_ids,
+        alerted_organization_ids=new_org_ids,
     )

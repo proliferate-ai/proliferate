@@ -14,6 +14,7 @@ in-flight signups alone.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -44,6 +45,7 @@ from proliferate.server.ai_gateway import free_credits
 from proliferate.server.ai_gateway.enrollment import ensure_org_enrollment
 from proliferate.server.ai_gateway.free_credits import (
     AgentGatewayZeroGrantEnrollments,
+    ZeroGrantCheckResult,
     ensure_signup_free_credit_grant,
     run_zero_grant_check,
 )
@@ -489,15 +491,75 @@ async def test_zero_grant_check_heals_stale_grantless_enrollment(
     assert balance.granted_usd == Decimal("5")
 
 
+async def _pageable_grantless_enrollment(
+    db_session: AsyncSession,
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """A still-grantless enrollment the guard MUST page on: identity linked,
+    the org IS the user's default, but the identity's claim is held by a
+    LIVE other org (a second account on a re-linked identity), so the heal
+    attempt can never land a grant. Returns (user_id, org_id)."""
+    first_user = await _create_user(db_session)
+    github_subject = await _link_github_identity(db_session, user_id=first_user)
+    await _place_in_org(db_session, user_id=first_user)
+    assert await ensure_signup_free_credit_grant(db_session, first_user) is True
+
+    second_user = await _create_user(db_session)
+    identity = (
+        await db_session.execute(
+            select(AuthIdentity).where(
+                AuthIdentity.provider == "github",
+                AuthIdentity.provider_subject == github_subject,
+            )
+        )
+    ).scalar_one()
+    identity.user_id = second_user
+    await db_session.flush()
+    second_org = await _place_in_org(db_session, user_id=second_user)
+    enrollment = await ensure_org_enrollment(db_session, second_org, second_user)
+    await _backdate_enrollment(db_session, enrollment.id, hours=2)
+    return second_user, second_org
+
+
 @pytest.mark.asyncio
-async def test_zero_grant_check_alerts_when_grant_cannot_land(
+async def test_zero_grant_check_pages_on_unexplained_grantless_org(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Still grantless after the heal attempt → one ops alert for the tick.
+    """A pageable still-grantless org raises ONE aggregated alert whose
+    extras survive the real Sentry projection (no monkeypatch blind spot)."""
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    calls = _capture_report_critical(monkeypatch)
+    _, org_id = await _pageable_grantless_enrollment(db_session)
 
-    No linked GitHub identity means the grant has nothing to dedupe on and
-    can never land; the guard must say so loudly instead of sweeping forever.
+    result = await run_zero_grant_check(db_session)
+
+    assert result.checked == 1
+    assert result.healed == 0
+    assert result.alerted == 1
+    assert result.alerted_organization_ids == (org_id,)
+    assert len(calls) == 1  # ONE aggregated alert per pass
+    error, kwargs = calls[0]
+    assert isinstance(error, AgentGatewayZeroGrantEnrollments)
+    assert kwargs["tags"] == {"domain": "agent_gateway", "action": "zero_grant_check"}
+    assert kwargs["extras"] == {"zero_grant_organization_ids": [str(org_id)]}
+    # The extras must survive the REAL projection path — a key the allowlist
+    # drops or redacts would silently strip the alert's payload.
+    from proliferate.integrations.sentry.privacy import _project_extras
+
+    assert _project_extras(kwargs["extras"]) == kwargs["extras"]
+
+
+@pytest.mark.asyncio
+async def test_zero_grant_check_classifies_no_identity_as_non_paging(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """No linked GitHub identity → legitimately unhealable, logged, never paged.
+
+    The dedupe is GitHub-keyed: this shape can never receive a grant, and
+    paging it hourly forever would be pure noise.
     """
     monkeypatch.setattr(settings, "agent_gateway_enabled", False)
     monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
@@ -507,18 +569,116 @@ async def test_zero_grant_check_alerts_when_grant_cannot_land(
     enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
     await _backdate_enrollment(db_session, enrollment.id, hours=2)
 
-    result = await run_zero_grant_check(db_session)
+    with caplog.at_level(logging.WARNING, logger="proliferate.server.ai_gateway.free_credits"):
+        result = await run_zero_grant_check(db_session)
 
     assert result.checked == 1
     assert result.healed == 0
-    assert result.alerted == 1
-    assert result.alerted_organization_ids == (org_id,)
-    assert len(calls) == 1  # ONE alert per tick
-    error, kwargs = calls[0]
-    assert isinstance(error, AgentGatewayZeroGrantEnrollments)
-    assert kwargs["tags"] == {"domain": "agent_gateway", "action": "zero_grant_check"}
-    assert kwargs["extras"]["zero_grant_count"] == 1
-    assert kwargs["extras"]["zero_grant_organization_ids"] == [str(org_id)]
+    assert result.alerted == 0
+    assert calls == []
+    assert any(
+        getattr(record, "reason", None) == "no_github_identity" for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_zero_grant_check_classifies_non_default_org_as_non_paging(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An invitee org's grantless subject is by design, not an incident.
+
+    The grant lands only on the member's DEFAULT org; an org the user joined
+    later never receives it, so its zero-grant subject must classify out
+    instead of paging on every sweep.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    calls = _capture_report_critical(monkeypatch)
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id)
+    await _place_in_org(db_session, user_id=user_id)  # the DEFAULT org
+    later_org = await _place_in_org(db_session, user_id=user_id)  # invitee org
+    enrollment = await ensure_org_enrollment(db_session, later_org, user_id)
+    await _backdate_enrollment(db_session, enrollment.id, hours=2)
+
+    with caplog.at_level(logging.WARNING, logger="proliferate.server.ai_gateway.free_credits"):
+        result = await run_zero_grant_check(db_session)
+
+    assert result.checked == 1
+    assert result.healed == 0
+    assert result.alerted == 0
+    assert calls == []
+    assert any(
+        getattr(record, "reason", None) == "non_default_org" for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_zero_grant_check_pages_once_per_org(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A still-broken org pages on its first pass and only warns after.
+
+    The caller-owned already-alerted set is the memory: the worker passes a
+    process-lifetime set, so an unhealable org can never become a paging
+    storm (a process restart re-pages once — accepted).
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    calls = _capture_report_critical(monkeypatch)
+    _, org_id = await _pageable_grantless_enrollment(db_session)
+    alerted: set[uuid.UUID] = set()
+
+    first = await run_zero_grant_check(db_session, already_alerted_org_ids=alerted)
+    second = await run_zero_grant_check(db_session, already_alerted_org_ids=alerted)
+
+    assert first.alerted == 1
+    assert first.alerted_organization_ids == (org_id,)
+    assert second.alerted == 0
+    assert second.alerted_organization_ids == ()
+    assert len(calls) == 1  # the repeat pass warned instead of paging again
+    assert alerted == {org_id}
+
+
+@pytest.mark.asyncio
+async def test_backfill_loop_runs_zero_grant_check_on_its_own_cadence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The guard rides the backfill loop but NOT its 300s tick.
+
+    Three backfill iterations inside one zero-grant interval must invoke the
+    check exactly once — the cadence is what turns 288 potential pages/day
+    into at most the hourly sweep.
+    """
+    from proliferate.server.ai_gateway import worker
+
+    ticks = {"backfill": 0, "zero_grant": 0}
+
+    async def fake_backfill(*, limit: int = 50) -> int:
+        ticks["backfill"] += 1
+        if ticks["backfill"] >= 3:
+            raise asyncio.CancelledError
+        return 0
+
+    async def fake_zero_grant(
+        *, limit: int = 50, already_alerted_org_ids: set[uuid.UUID] | None = None
+    ) -> ZeroGrantCheckResult:
+        ticks["zero_grant"] += 1
+        return ZeroGrantCheckResult(0, 0, 0, (), ())
+
+    monkeypatch.setattr(worker, "run_enrollment_backfill_once", fake_backfill)
+    monkeypatch.setattr(worker, "run_zero_grant_check_once", fake_zero_grant)
+    monkeypatch.setattr(settings, "agent_gateway_backfill_interval_seconds", 0.0)
+    monkeypatch.setattr(settings, "agent_gateway_zero_grant_check_interval_seconds", 3600.0)
+
+    with pytest.raises(asyncio.CancelledError):
+        await worker._backfill_loop()
+
+    assert ticks["backfill"] == 3
+    assert ticks["zero_grant"] == 1
 
 
 @pytest.mark.asyncio
