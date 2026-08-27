@@ -5,15 +5,14 @@ name: Release E2E (tier 3)
 # provision/pause/resume/connect, chat per cataloged agent, config apply,
 # secrets materialization, billing metering, repo settings.
 #
-# Cadence: on demand only (workflow_dispatch), never on `pull_request`. It
-# burns real money/time (E2B sandboxes, gateway LLM calls); the daily cron was
-# removed in the 2026-08 engineering cull — re-establishing a cadence is a
-# step-3 CI/CD-spec decision (delivery/engineering-cull/delivery-spec-ci-diet.md).
-# Tier 3 never gates ordinary merges. The legacy
-# local/staging jobs remain provisional and `continue-on-error`; the manual
-# protected-Qualification jobs are strict, preserve red exits, and upload V4
-# evidence for their selected exact-head scope. Production promotion does not
-# yet consume a complete Tier-3/Tier-4 aggregate.
+# Cadence (delivery/testing-cicd/delivery-spec-e2e-observable.md, ruled
+# 2026-08-26): the STAGING BATTERY runs nightly (cron below, ~01:00 PT) in
+# observe mode — red blocks nothing, one morning digest names every journey's
+# verdict — and on demand via workflow_dispatch. Every other job here is
+# dispatch-only and never runs on the cron. Tier 3 never gates ordinary
+# merges. The manual protected-Qualification jobs are strict, preserve red
+# exits, and upload V4 evidence for their selected exact-head scope.
+# Production promotion does not yet consume a complete Tier-3/Tier-4 aggregate.
 #
 # Honest scoping (the runner self-reports blocked/expected-fail per scenario
 # for anything it lacks credentials for; the gates below just avoid booting a
@@ -26,12 +25,16 @@ name: Release E2E (tier 3)
 #     mapped to RELEASE_E2E_E2B_API_KEY) AND a publicly reachable server URL for
 #     E2B to deliver webhooks to — a locally booted server on 127.0.0.1 needs a
 #     tunnel, so sandbox scenarios self-report blocked without one.
-#   - The staging lane (against the real staging deployment + its gateway) is
-#     the README's documented CI target, but the staging gateway test key is not
-#     provisioned yet (RELEASE_E2E_GATEWAY_TEST_KEY on staging). Its job is left
-#     commented at the bottom until that key exists.
+#   - The staging battery (against the real staging deployment + its gateway)
+#     is the nightly primary: gateway key, durable org, and the rotating
+#     session credential are provisioned; the battery preflight hard-gates only
+#     on API_BASE_URL, and a missing session credential surfaces as blocked
+#     cells in the digest rather than a silent skip.
 
 on:
+  schedule:
+    # The staging battery, nightly (~01:00 PT). Only release-e2e-staging keys on this.
+    - cron: "0 8 * * *"
   workflow_dispatch:
     inputs:
       manual_world:
@@ -44,14 +47,6 @@ on:
         type: choice
         options:
           - all
-          - local
-          - staging
-      lane:
-        description: Runtime target lane the runner points at.
-        default: local
-        required: false
-        type: choice
-        options:
           - local
           - staging
       scenarios:
@@ -110,229 +105,25 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  release-e2e-local:
-    name: tier-3 local lane (provisional)
-    # NOTE: with the daily cron removed (2026-08 cull) this schedule-only job is
-    # currently unreachable. Kept pending the step-3 CI/CD spec's ruling on the
-    # tier-3 cadence; delete or re-trigger it there, not here.
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    concurrency:
-      group: release-e2e-local
-      cancel-in-progress: false
-    # Provisional posture, enforced twice: the job name says so, and the job
-    # never fails the workflow while it is provisional (README CI mapping —
-    # tier 3 is not yet a merge gate).
-    continue-on-error: true
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: proliferate
-          POSTGRES_PASSWORD: localdev
-          POSTGRES_DB: proliferate
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U proliferate -d proliferate"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-    steps:
-      # Preflight gate (billing-suite pattern): a tier-3 local run needs the
-      # gateway test key to drive real agents in CI. Absent -> skip cleanly.
-      - name: Preflight — required credentials
-        id: preflight
-        env:
-          GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
-          DURABLE_USER_EMAIL: ${{ secrets.RELEASE_E2E_DURABLE_USER_EMAIL }}
-          DURABLE_USER_PASSWORD: ${{ secrets.RELEASE_E2E_DURABLE_USER_PASSWORD }}
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-        run: |
-          enabled=true
-          if [ -z "$GATEWAY_TEST_KEY" ]; then
-            echo "::notice title=Tier-3 skipped::RELEASE_E2E_GATEWAY_TEST_KEY is not set. The local lane cannot drive real agents in CI without it (there is no native agent CLI login on the runner). Provision a LiteLLM virtual key for an e2e-tests team (cheap-model allowlist, see T3-CHAT-1) and add it as the RELEASE_E2E_GATEWAY_TEST_KEY secret. Skipping cleanly."
-            enabled=false
-          fi
-          if [ -z "$DURABLE_USER_EMAIL" ] || [ -z "$DURABLE_USER_PASSWORD" ]; then
-            echo "::notice title=Tier-3 durable identity self-seeded::RELEASE_E2E_DURABLE_USER_EMAIL / _PASSWORD not set — the runner seeds a per-run durable user through the real /setup claim (the stack is ephemeral), so local-lane server-mediated scenarios still run. Sandbox-lane scenarios that need the real persistent identity report blocked."
-          fi
-          if [ -z "$E2B_API_KEY" ]; then
-            echo "::notice title=Tier-3 sandbox lane absent::E2B_API_KEY not set — sandbox-lane scenarios will report blocked. (Note: even with the key, the sandbox lane needs a publicly reachable server URL / tunnel for E2B webhooks.)"
-          fi
-          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.preflight.outputs.enabled == 'true'
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: steps.preflight.outputs.enabled == 'true'
-        with:
-          node-version: "22"
-      - uses: pnpm/action-setup@v6
-        if: steps.preflight.outputs.enabled == 'true'
-        with:
-          version: 10
-      - uses: astral-sh/setup-uv@v7
-        if: steps.preflight.outputs.enabled == 'true'
-      - uses: actions/setup-python@v7
-        if: steps.preflight.outputs.enabled == 'true'
-        with:
-          python-version: "3.12"
-      - uses: dtolnay/rust-toolchain@stable
-        if: steps.preflight.outputs.enabled == 'true'
-      - uses: Swatinem/rust-cache@v2
-        if: steps.preflight.outputs.enabled == 'true'
-        with:
-          workspaces: "."
-
-      - name: Install workspace dependencies
-        if: steps.preflight.outputs.enabled == 'true'
-        run: pnpm install --frozen-lockfile
-
-      - name: Install server (venv, matches local layout)
-        if: steps.preflight.outputs.enabled == 'true'
-        run: cd server && uv venv .venv --python 3.12 && uv pip install -e ".[dev]"
-
-      - name: Install system deps (Tauri crates in the workspace build)
-        if: steps.preflight.outputs.enabled == 'true'
-        # `make build-rust` compiles the whole workspace, including the Tauri
-        # desktop crate — same package set ci.yml installs for it.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Build the AnyHarness runtime binary
-        if: steps.preflight.outputs.enabled == 'true'
-        # Builds the workspace once and copies the runtime into
-        # DEV_ANYHARNESS_TARGET_DIR, so downstream tooling and a laptop run
-        # resolve the same binary. Cargo state lives in the workspace target dir,
-        # which is what rust-cache above is pointed at.
-        run: make build-rust
-
-      - name: Boot the server + AnyHarness runtime, then run the tier-3 runner
-        if: steps.preflight.outputs.enabled == 'true'
-        env:
-          # Local stack wiring — the runner points at these (env-manifest.ts).
-          SINGLE_ORG_MODE: "true"
-          # CI-only server secrets (same throwaway values server-ci.yml uses;
-          # settings validation requires them when debug=False).
-          JWT_SECRET: release-e2e-ci-jwt-secret
-          CLOUD_SECRET_KEY: release-e2e-ci-cloud-secret
-          SETUP_TOKEN_FILE: /tmp/proliferate-ci-setup-token
-          DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
-          # Same URL the DB-seam probes (billing_probe.py, integration_audit_probe.py)
-          # read the local profile ledger/audit tables from.
-          RELEASE_E2E_LOCAL_DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
-          REDIS_URL: redis://127.0.0.1:6379/0
-          PROLIFERATE_API_PORT: "8086"
-          # The server's own base URL — worker enrollment mints the integration
-          # gateway URL from it (seam/workers/service.py worker_cloud_base_url);
-          # without it, /worker/enroll 500s cloud_worker_misconfigured (T3-INT-1).
-          API_BASE_URL: http://127.0.0.1:8086
-          ANYHARNESS_PORT: "8542"
-          ANYHARNESS_RUNTIME_HOME: ${{ github.workspace }}/.ci-runtime-home
-          RELEASE_E2E_SERVER_URL: http://127.0.0.1:8086
-          RELEASE_E2E_LOCAL_RUNTIME_URL: http://127.0.0.1:8542
-          # Credentials — mapped from repo secrets to the manifest's env names.
-          # Absent secrets expand to empty; the runner reports those scenarios
-          # blocked rather than failing (env-resolution.ts).
-          RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
-          # Public base URL of the gateway the test key was issued against
-          # (staging's AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL). With both set the
-          # runner pushes gateway agent-auth to the local runtime so harnesses
-          # chat with no native CLI login (env-manifest.ts).
-          RELEASE_E2E_GATEWAY_BASE_URL: ${{ secrets.RELEASE_E2E_GATEWAY_BASE_URL || 'https://staging-gateway.proliferate.com' }}
-          # Durable-user secrets are OPTIONAL for this lane: when absent the
-          # runner self-seeds a per-run durable user through the real /setup
-          # claim (the stack is ephemeral), and sandbox-lane scenarios that
-          # need the real persistent identity report blocked (#1069).
-          RELEASE_E2E_DURABLE_USER_EMAIL: ${{ secrets.RELEASE_E2E_DURABLE_USER_EMAIL }}
-          RELEASE_E2E_DURABLE_USER_PASSWORD: ${{ secrets.RELEASE_E2E_DURABLE_USER_PASSWORD }}
-          RELEASE_E2E_DURABLE_ORG_ID: ${{ secrets.RELEASE_E2E_DURABLE_ORG_ID }}
-          RELEASE_E2E_INTEGRATION_API_KEY: ${{ secrets.RELEASE_E2E_INTEGRATION_API_KEY }}
-          # E2B repo secrets carry the runner's manifest names.
-          RELEASE_E2E_E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          RELEASE_E2E_E2B_TEAM_ID: ${{ secrets.RELEASE_E2E_E2B_TEAM_ID }}
-          # Stripe test mode for the billing scenarios' setup seam.
-          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
-          LANE: ${{ github.event.inputs.lane || 'local' }}
-          SCENARIOS: ${{ github.event.inputs.scenarios || 'all' }}
-          AGENTS: ${{ github.event.inputs.agents || 'all' }}
-        run: |
-          set -euo pipefail
-          # Apply migrations then boot the API server (headless — not `make run`,
-          # which also launches the Tauri desktop app).
-          ( cd server && .venv/bin/alembic upgrade head )
-          ( cd server && .venv/bin/uvicorn proliferate.main:app --host 127.0.0.1 --port 8086 ) &
-          SERVER_PID=$!
-          # Boot the AnyHarness runtime built above. ANTHROPIC_AUTH_TOKEN is
-          # exported to the runtime process because its session-create
-          # readiness gate reads only process env / native login files — it
-          # does not consult the gateway agent-auth state the runner pushes
-          # (PUT /v1/agent-auth/state), so a gateway-only environment would
-          # report claude LoginRequired. At launch the gateway render overrides
-          # ANTHROPIC_AUTH_TOKEN/_BASE_URL with the same key anyway, so this
-          # only satisfies the readiness check, never routes traffic.
-          ANTHROPIC_AUTH_TOKEN="$RELEASE_E2E_GATEWAY_TEST_KEY" \
-            ./target/runtime-local/debug/anyharness serve --host 127.0.0.1 --port 8542 &
-          RUNTIME_PID=$!
-          trap 'kill $SERVER_PID $RUNTIME_PID 2>/dev/null || true' EXIT
-
-          # Wait for both to report healthy.
-          for url in http://127.0.0.1:8086/health http://127.0.0.1:8542/health; do
-            for i in $(seq 1 60); do
-              if curl -fsS "$url" >/dev/null 2>&1; then break; fi
-              if [ "$i" = "60" ]; then echo "timed out waiting for $url"; exit 1; fi
-              sleep 2
-            done
-          done
-
-          make release-e2e LANE="$LANE" DESKTOP=web AGENTS="$AGENTS" SCENARIOS="$SCENARIOS"
-
-      - name: Upload failure reports
-        # always() (not failure()): the runner step is continue-on-error, so a
-        # red runner never flips the job to "failed" and failure() would skip
-        # this. Upload whenever the job ran the runner; the step no-ops when
-        # there are no reports.
-        if: always() && steps.preflight.outputs.enabled == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: release-e2e-reports
-          path: tests/release/.output/
-          retention-days: 7
-          if-no-files-found: ignore
-
   # ---------------------------------------------------------------------------
-  # Staging lane — the README's documented tier-3 CI target (real deployment,
-  # publicly reachable, real gateway with cheap models). Runs against the
-  # `staging` GitHub environment (its vars/secrets: API_BASE_URL,
-  # RELEASE_E2E_GATEWAY_TEST_KEY, RELEASE_E2E_DURABLE_ORG_ID, …). The staging
-  # gateway + durable org id + gateway test key are now provisioned; the one
-  # remaining gate is the browser-free durable-user session:
-  # RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN (a `staging` environment secret).
-  # Refresh tokens rotate on every use, so a durable-in-CI mechanism (a
-  # non-rotating bootstrap, or persisting the rotated state between runs) is
-  # still needed before this authenticates for real — until then the preflight
-  # skips cleanly (::notice::), the same pattern the local lane uses.
-  # The runner constrains this broad selector to Tier-3 sandbox-runtime cells;
-  # it never runs Tier-2, controller-local, self-host, or Tier-4 bodies here.
+  # Staging lane — THE STAGING BATTERY (delivery/testing-cicd/delivery-spec-e2e-observable.md).
+  # Runs against the `staging` GitHub environment (API_BASE_URL, WEB_URL,
+  # RELEASE_E2E_GATEWAY_TEST_KEY, RELEASE_E2E_DURABLE_ORG_ID, …). The durable
+  # user (proliferate-e2e-bot, GitHub-OAuth-only) authenticates through a
+  # rotating session refresh token: bootstrapped once into the
+  # RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN environment secret
+  # (tests/release/scripts/staging-session-remint.sh), then self-rotated by the
+  # runner and PERSISTED BETWEEN RUNS in the Actions cache (the restore/save
+  # steps below) — the write-back the July design never had. The concurrency
+  # group serializes runs so rotation never races.
+  # Observe mode: NO continue-on-error — red is visible and blocks nothing
+  # (this workflow is in no rollup or branch protection). The runner constrains
+  # the broad selector to Tier-3 sandbox-runtime cells (T3-*, incl. T3-BATT-*).
   release-e2e-staging:
-    name: tier-3 staging lane (provisional)
-    # NOTE: the 'schedule' clause below is dead since the 2026-08 cull removed
-    # the cron (this lane stays reachable via dispatch). Kept because the
-    # qualification-runner workflow test asserts this exact expression; clean it
-    # up with the step-3 cadence ruling.
+    name: staging battery (observe mode)
+    # The cron fires this job; a dispatch reaches it via manual_world
+    # (all|staging) unless it is a self-host-only dispatch. The qualification
+    # runner workflow test asserts this exact expression.
     if: >-
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' &&
@@ -340,13 +131,26 @@ jobs:
       (inputs.manual_world == 'all' || inputs.manual_world == 'staging'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
     concurrency:
       group: release-e2e-staging
       cancel-in-progress: false
-    continue-on-error: true
     environment: staging
     steps:
-      - name: Preflight — staging credentials
+      # Checkout + node are unconditional: the digest step below must run even
+      # when the preflight disables the battery (it is plain node, no install).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      # The preflight hard-gates ONLY on the deployment URL. A missing session
+      # credential is NOT a gate: the runner reports those cells blocked and
+      # the digest carries it — a silent green skip is the one thing observe
+      # mode forbids.
+      - name: Preflight — staging deployment
         id: preflight
         env:
           GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
@@ -354,25 +158,20 @@ jobs:
           STAGING_SESSION_REFRESH_TOKEN: ${{ secrets.RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN }}
         run: |
           enabled=true
+          reason=""
           if [ -z "$STAGING_SERVER_URL" ]; then
-            echo "::notice title=Staging tier-3 skipped::staging API_BASE_URL variable is not set."
+            reason="staging API_BASE_URL variable is not set — the battery cannot target a deployment"
+            echo "::notice title=Staging battery skipped::$reason"
             enabled=false
           fi
           if [ -z "$STAGING_SESSION_REFRESH_TOKEN" ]; then
-            echo "::notice title=Staging tier-3 skipped::RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN (staging env secret) is not set — the durable staging user (proliferate-e2e-bot, GitHub-OAuth-only, no password) authenticates via a rotating session refresh token. Bootstrap one per tests/release/src/fixtures/staging-session.ts and add it (plus a rotation-durable mechanism) before this lane runs. Skipping cleanly."
-            enabled=false
+            echo "::notice title=Staging session bootstrap absent::RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN (staging env secret) is unset — the runner falls back to the cached rotating state; with neither, journeys report blocked in the digest. Recover with tests/release/scripts/staging-session-remint.sh."
           fi
           if [ -z "$GATEWAY_TEST_KEY" ]; then
-            echo "::notice title=Staging gateway key absent::RELEASE_E2E_GATEWAY_TEST_KEY not set — gateway-dependent scenarios report blocked. Billing-surface scenarios (T3-BILL-4) still run."
+            echo "::notice title=Staging gateway key absent::RELEASE_E2E_GATEWAY_TEST_KEY not set — gateway-dependent scenarios report blocked."
           fi
           echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.preflight.outputs.enabled == 'true'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: steps.preflight.outputs.enabled == 'true'
-        with:
-          node-version: "22"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@v6
         if: steps.preflight.outputs.enabled == 'true'
         with:
@@ -387,16 +186,40 @@ jobs:
         if: steps.preflight.outputs.enabled == 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Run tier-3 against staging
+      # Rotation write-back, half 1: restore the last run's rotated session
+      # state. Rolling key (one entry per run) + prefix restore = latest wins.
+      - name: Restore the rotating staging session state
+        if: steps.preflight.outputs.enabled == 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ github.workspace }}/.release-e2e/staging-session.json
+          key: staging-session-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            staging-session-state-
+
+      - name: Run the staging battery
         if: steps.preflight.outputs.enabled == 'true'
         env:
           # API_BASE_URL already includes the deployment's /api prefix, which is
           # exactly what RELEASE_E2E_SERVER_URL wants (env-manifest.ts).
           RELEASE_E2E_SERVER_URL: ${{ vars.API_BASE_URL }}
+          RELEASE_E2E_WEB_URL: ${{ vars.WEB_URL }}
           RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
           RELEASE_E2E_GATEWAY_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL || 'https://staging-gateway.proliferate.com' }}
+          # Bootstrap only: the runner prefers the restored state file above and
+          # falls back to this secret when no rotated state exists.
           RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN: ${{ secrets.RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN }}
+          RELEASE_E2E_STAGING_SESSION_STATE: ${{ github.workspace }}/.release-e2e/staging-session.json
           RELEASE_E2E_DURABLE_ORG_ID: ${{ vars.RELEASE_E2E_DURABLE_ORG_ID }}
+          # The durable staging user is proliferate-e2e-bot / support@proliferate.com
+          # (what the seed script and fixtures implement). The environment's
+          # RELEASE_E2E_DURABLE_USER_EMAIL names a different, non-existent
+          # identity and is deliberately NOT mapped here.
+          RELEASE_E2E_GITHUB_TEST_REPO: ${{ vars.RELEASE_E2E_GITHUB_TEST_REPO }}
+          RELEASE_E2E_GITHUB_TEST_TOKEN: ${{ secrets.RELEASE_E2E_GITHUB_TEST_TOKEN }}
+          RELEASE_E2E_INTEGRATION_API_KEY: ${{ secrets.RELEASE_E2E_INTEGRATION_API_KEY }}
+          AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
+          AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
           RELEASE_E2E_E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
           RELEASE_E2E_E2B_TEAM_ID: ${{ vars.E2B_TEAM_ID }}
           LANE: staging
@@ -412,6 +235,50 @@ jobs:
           path: tests/release/.output/
           retention-days: 7
           if-no-files-found: ignore
+
+      # Rotation write-back, half 2: persist the rotated state for the next run
+      # (always — a red battery still rotated the token). Guarded on the file
+      # actually existing: a run where no staging login happened (blocked
+      # cells, non-battery selector) must not fail on an empty cache save.
+      # Scope note: the Actions cache is branch-scoped — a branch dispatch
+      # seeds its own scope, and the nightly on main seeds main's on its first
+      # run from the bootstrap secret. That is safe because refresh does NOT
+      # revoke prior tokens (sessions.py mints stateless JWTs; the bootstrap
+      # stays valid for its 30-day lifetime) — the cache is an optimization,
+      # the secret is the floor, and staging-session-remint.sh is the recovery.
+      - name: Check for rotated session state
+        id: session-state
+        if: always() && steps.preflight.outputs.enabled == 'true'
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/.release-e2e/staging-session.json" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save the rotating staging session state
+        if: always() && steps.session-state.outputs.present == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ github.workspace }}/.release-e2e/staging-session.json
+          key: staging-session-state-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # The morning digest: one message naming every journey's verdict — even
+      # when the preflight skipped the battery (NO RESULTS + the reason IS the
+      # signal; the acceptance-gate falsifier is "no digest arrives"). Never
+      # fails the job. Delivery chain: the battery webhook (spec name), else
+      # the engineering-alerts webhook, else the pinned digest issue.
+      - name: Morning digest
+        if: always()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_BATTERY_WEBHOOK_URL || secrets.SLACK_ENGINEERING_ALERTS_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DIGEST_NOTE: ${{ steps.preflight.outputs.reason }}
+        run: >-
+          node scripts/ci-cd/battery-digest.mjs
+          --reports tests/release/.output
+          --lane staging
+          --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
   # ---------------------------------------------------------------------------
   # Local functional — "Complete Local Workspace Qualification (Functional)"

@@ -42,6 +42,15 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     secret: false,
   },
   {
+    name: "RELEASE_E2E_WEB_URL",
+    description:
+      "Origin of the deployed web app for the target lane (no path), read by the staging battery's thin " +
+      "web smoke (T3-BATT-WEB-1) to assert the shell and login route serve. Staging: the `staging` " +
+      "environment's WEB_URL variable.",
+    whereItLives: "Staging: https://staging.proliferate.com (GitHub `staging` environment variable WEB_URL).",
+    secret: false,
+  },
+  {
     name: "RELEASE_E2E_GATEWAY_TEST_KEY",
     description:
       "Dedicated LiteLLM gateway virtual key, allowlisted to the cheap test-model set " +
