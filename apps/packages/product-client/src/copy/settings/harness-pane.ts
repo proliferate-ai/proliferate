@@ -205,6 +205,8 @@ export const HARNESS_PANE_COPY = {
   seatMintFailed:
     "The sign-in did not produce a seat. Close the terminal and try again.",
   seatUploadFailed: "Could not save the seat — re-run the sign-in.",
+  seatUploadGithubLinkRequired:
+    "Your Proliferate account isn't linked to GitHub yet. Connect GitHub in Settings → Account, then add the login again.",
   seatEmptyList: "No Claude.ai logins yet.",
   seatRemove: "Remove",
   seatRemoveError: "Could not remove the seat.",
