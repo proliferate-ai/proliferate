@@ -63,15 +63,15 @@ pub(super) fn validate_endpoint(
         }
         (
             EndpointCaptureState::LimitUncertain,
-            Some(EndpointFailureReason::SessionWindowLimitUncertain),
+            Some(EndpointFailureReason::WindowLimitUncertain),
             WindowCompletenessV1::LimitUncertain,
         ) => Ok(SupportEndpointStateV1::LimitUncertain),
         (
             EndpointCaptureState::Omitted,
             Some(
-                EndpointFailureReason::SessionUnavailable
-                | EndpointFailureReason::SessionTimeout
-                | EndpointFailureReason::SessionInvalid,
+                EndpointFailureReason::Unavailable
+                | EndpointFailureReason::Timeout
+                | EndpointFailureReason::Invalid,
             ),
             _,
         ) if included_bytes == 0

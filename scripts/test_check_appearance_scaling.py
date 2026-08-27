@@ -1,6 +1,6 @@
-from pathlib import Path
 import re
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from scripts import check_appearance_scaling as check_module
@@ -15,8 +15,6 @@ from scripts.check_appearance_scaling import (
     apply_staged_baseline,
     census_slack,
     check_census_additions,
-    sealed_directory_violations,
-    sealed_prefixes,
     check_design_css_source,
     check_source,
     collect_raw_violations,
@@ -24,9 +22,12 @@ from scripts.check_appearance_scaling import (
     load_baselines,
     raw_hex_scope_excluded,
     relative_path,
+    sealed_directory_violations,
+    sealed_prefixes,
     staged_census,
     unsanctioned_growth,
 )
+
 
 class RecordCoverageTest(unittest.TestCase):
     """Every rule this checker claims must have a record, and vice versa.
@@ -45,8 +46,7 @@ class RecordCoverageTest(unittest.TestCase):
         constants = {
             name: value
             for name, value in vars(check_module).items()
-            if name.endswith("_RULE")
-            or name in {"CENSUS_SLACK_RULE_ID", "SEALED_RULE_ID"}
+            if name.endswith("_RULE") or name in {"CENSUS_SLACK_RULE_ID", "SEALED_RULE_ID"}
         }
         self.assertEqual(len(constants), 36, "one constant per record")
         self.assertEqual(set(constants.values()), self.RULE_IDS)
@@ -74,7 +74,7 @@ class RecordCoverageTest(unittest.TestCase):
 
 class AppearanceScalingGuardTest(unittest.TestCase):
     def test_rejects_fixed_text_and_imported_icon_sizes(self) -> None:
-        source = '''
+        source = """
 import { Check as Done, X } from "lucide-react";
 export function Example() {
   return <div style={{ fontSize: 12 }} className="text-[13px] text-3xl">
@@ -82,7 +82,7 @@ export function Example() {
     <X size={16} />
   </div>;
 }
-'''
+"""
         violations = check_source(Path("Example.tsx"), source)
         self.assertEqual(
             {violation.rule_id for violation in violations},
@@ -90,24 +90,24 @@ export function Example() {
         )
 
     def test_accepts_semantic_text_and_glyph_tiers(self) -> None:
-        source = '''
+        source = """
 import { Check } from "lucide-react";
 export function Example() {
   return <span className="text-ui"><Check className="icon-paired" /></span>;
 }
-'''
+"""
         self.assertEqual(check_source(Path("Example.tsx"), source), [])
 
     def test_ignores_examples_in_comments(self) -> None:
-        source = '''
+        source = """
 // Never add text-3xl or <Check size={16}> here.
 /* text-[13px] is forbidden at production call sites. */
 export function Example() { return <span className="text-title" />; }
-'''
+"""
         self.assertEqual(check_source(Path("Example.tsx"), source), [])
 
     def test_rejects_fixed_status_dot_but_not_structural_avatar(self) -> None:
-        source = '''
+        source = """
 export function Example() {
   return <>
     <span className="size-1.5 rounded-full bg-info" />
@@ -115,54 +115,57 @@ export function Example() {
     <span className="size-2.5 rounded-full bg-background transition-transform" />
   </>;
 }
-'''
+"""
         violations = check_source(Path("Example.tsx"), source)
         self.assertEqual([violation.rule_id for violation in violations], ["PROD-SCALE-12"])
 
     def test_rejects_fixed_inline_svg_geometry_but_not_wrapper_geometry(self) -> None:
-        source = '''
+        source = """
 export function Example() {
   return <button className="size-8"><svg width="16" height={16} /></button>;
 }
-'''
+"""
         violations = check_source(Path("Example.tsx"), source)
-        self.assertEqual([violation.rule_id for violation in violations], [
-            "PROD-SCALE-5",
-            "PROD-SCALE-5",
-        ])
+        self.assertEqual(
+            [violation.rule_id for violation in violations],
+            [
+                "PROD-SCALE-5",
+                "PROD-SCALE-5",
+            ],
+        )
 
     def test_discovers_only_supported_icon_import_sources(self) -> None:
-        source = '''
+        source = """
 import { Check, X as Close } from "lucide-react";
 import { Minus } from "#product/primitives/icons/core";
 import { Button } from "#product/primitives/Button";
-'''
+"""
         self.assertEqual(imported_icon_names(source), {"Check", "Close", "Minus"})
 
     def test_rejects_fixed_shared_icon_utility(self) -> None:
-        source = '''
+        source = """
 import { Minus } from "#product/primitives/icons/core";
 export function Control() { return <Minus className="size-3.5" />; }
-'''
+"""
         violations = check_source(Path("Control.tsx"), source)
         self.assertEqual([violation.rule_id for violation in violations], ["PROD-SCALE-7"])
 
     def test_rejects_fixed_icon_nested_inside_component_prop(self) -> None:
-        source = '''
+        source = """
 import { Plus } from "#product/primitives/icons/core";
 export function Control() {
   return <Popover trigger={<Button><Plus className="size-3" /></Button>} />;
 }
-'''
+"""
         violations = check_source(Path("Control.tsx"), source)
         self.assertEqual([violation.rule_id for violation in violations], ["PROD-SCALE-7"])
 
     def test_rejects_fixed_svg_descendant_utility(self) -> None:
-        source = '''
+        source = """
 export function Control({ icon }) {
   return <span className="size-7 [&_svg]:size-3.5">{icon}</span>;
 }
-'''
+"""
         violations = check_source(Path("Control.tsx"), source)
         self.assertEqual(
             [violation.rule_id for violation in violations],
@@ -170,12 +173,12 @@ export function Control({ icon }) {
         )
 
     def test_rejects_fixed_glyph_class_indirections(self) -> None:
-        source = '''
+        source = """
 const MENU_ICON_CLASS = "size-3.5";
 export function TargetIcon({ size = "size-3.5" }) {
   return <MenuItem iconClassName="size-4 text-current" />;
 }
-'''
+"""
         violations = check_source(Path("Control.tsx"), source)
         self.assertEqual(
             {violation.rule_id for violation in violations},
@@ -187,13 +190,13 @@ export function TargetIcon({ size = "size-3.5" }) {
         )
 
     def test_rejects_fixed_global_icon_aliases(self) -> None:
-        source = '''
+        source = """
 :root {
   --workspace-icon-size: 14px;
   --workspace-action-size: 28px;
   --other-icon-size: var(--icon-paired);
 }
-'''
+"""
         violations = check_design_css_source(Path("product.css"), source)
         self.assertEqual(
             [violation.rule_id for violation in violations],
@@ -201,7 +204,7 @@ export function TargetIcon({ size = "size-3.5" }) {
         )
 
     def test_rejects_closed_foundation_literal_vocabularies(self) -> None:
-        source = '''
+        source = """
 export function Example() {
   return <div className="
     text-sm text-[color:var(--color-foreground)] rounded-t-[13px] z-[70]
@@ -210,7 +213,7 @@ export function Example() {
     duration-150
   " />;
 }
-'''
+"""
         violations = check_source(Path("Example.tsx"), source)
         self.assertEqual(
             {violation.rule_id for violation in violations},
@@ -229,11 +232,11 @@ export function Example() {
         )
 
     def test_rejects_removed_keystone_shadow_and_static_foreground_alpha(self) -> None:
-        source = '''
+        source = """
 export function Example() {
   return <div className="shadow-keystone bg-foreground/[0.04]" />;
 }
-'''
+"""
         self.assertEqual(
             {violation.rule_id for violation in check_source(Path("Example.tsx"), source)},
             {"PROD-SCALE-18", "PROD-SCALE-20"},
@@ -300,16 +303,14 @@ export function Example() {
             "hover:bg-foreground/80",
         ):
             with self.subTest(utility=utility):
-                self.assertEqual(
-                    check_source(Path("E.tsx"), f'const cls = "{utility}";\n'), []
-                )
+                self.assertEqual(check_source(Path("E.tsx"), f'const cls = "{utility}";\n'), [])
 
     def test_accepts_negative_assertions_for_foreground_alpha(self) -> None:
         source = 'expect(cls).not.toContain("bg-foreground/5");\n'
         self.assertEqual(check_source(Path("E.test.tsx"), source), [])
 
     def test_accepts_closed_semantic_foundation_vocabulary(self) -> None:
-        source = '''
+        source = """
 export function Example() {
   return <div className="
     text-ui rounded-xl z-tooltip gap-1.5 size-5 shadow-popover
@@ -317,23 +318,23 @@ export function Example() {
     hover:bg-foreground/90 duration-hover ease-out-quint
   " />;
 }
-'''
+"""
         self.assertEqual(check_source(Path("Example.tsx"), source), [])
 
     def test_accepts_negative_assertions_for_retired_state_names(self) -> None:
-        source = '''
+        source = """
 expect(html).not.toContain("hover:bg-sidebar-accent");
 expect(html).not.toContain("data-[state=open]:bg-accent");
 expect(html).not.toContain("text-xs");
-'''
+"""
         self.assertEqual(check_source(Path("Example.test.tsx"), source), [])
 
     def test_rejects_inline_motion_but_allows_non_motion_clocks(self) -> None:
-        source = '''
+        source = """
 const NETWORK_TIMEOUT_MS = 30_000;
 const CARD_EXIT_DURATION_MS = 120;
 const style = { transition: "opacity 150ms cubic-bezier(0.4, 0, 0.2, 1)" };
-'''
+"""
         rule_ids = {violation.rule_id for violation in check_source(Path("motion.ts"), source)}
         self.assertEqual(
             rule_ids,
@@ -341,13 +342,13 @@ const style = { transition: "opacity 150ms cubic-bezier(0.4, 0, 0.2, 1)" };
         )
 
     def test_allows_one_marked_activity_declaration(self) -> None:
-        source = '''
+        source = """
 /* activity-motion */
 const ORBIT_DELAYS = [
   "[animation-delay:0s]",
   "[animation-delay:0.2s]",
 ] as const;
-'''
+"""
         self.assertEqual(check_source(Path("activity.tsx"), source), [])
 
     def test_raw_hex_scope_and_exact_exceptions(self) -> None:
@@ -359,7 +360,9 @@ const ORBIT_DELAYS = [
         rejected = check_source(Path("components/Demo.test.tsx"), 'const color = "#abcdef";')
         self.assertEqual([violation.rule_id for violation in rejected], ["PROD-SCALE-29"])
         self.assertEqual(
-            check_source(Path("components/Demo.test.tsx"), 'expect(css).not.toContain("#232323");'),
+            check_source(
+                Path("components/Demo.test.tsx"), 'expect(css).not.toContain("#232323");'
+            ),
             [],
         )
         self.assertEqual(
@@ -372,16 +375,19 @@ const ORBIT_DELAYS = [
         )
 
     def test_design_css_rejects_global_tokens_and_finite_motion(self) -> None:
-        source = '''
+        source = """
 @theme { --color-test: red; }
 :root { --color-test: red; }
 .card {
   transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(8px);
 }
-'''
+"""
         self.assertEqual(
-            {violation.rule_id for violation in check_design_css_source(Path("product.css"), source)},
+            {
+                violation.rule_id
+                for violation in check_design_css_source(Path("product.css"), source)
+            },
             {
                 "PROD-SCALE-30",
                 "PROD-SCALE-31",
@@ -391,7 +397,7 @@ const ORBIT_DELAYS = [
         )
 
     def test_design_css_allows_marked_infinite_activity_and_composer_backdrop(self) -> None:
-        source = '''
+        source = """
 /* activity-motion */
 .spinner {
   animation: spin 1.5s linear infinite;
@@ -400,7 +406,7 @@ const ORBIT_DELAYS = [
   -webkit-backdrop-filter: var(--composer-backdrop-filter);
   backdrop-filter: var(--composer-backdrop-filter);
 }
-'''
+"""
         self.assertEqual(check_design_css_source(Path("product.css"), source), [])
 
     def test_backdrop_filter_ownership_covers_the_vendor_prefixed_spelling(self) -> None:
@@ -409,7 +415,7 @@ const ORBIT_DELAYS = [
         and must not be the one spelling the ownership gate cannot see."""
         for declaration in ("backdrop-filter", "-webkit-backdrop-filter"):
             with self.subTest(declaration=declaration):
-                source = ".some-panel {\n  %s: blur(24px);\n}\n" % declaration
+                source = f".some-panel {{\n  {declaration}: blur(24px);\n}}\n"
                 self.assertEqual(
                     [
                         violation.rule_id
@@ -421,12 +427,9 @@ const ORBIT_DELAYS = [
     def test_authored_backdrop_filter_in_product_source_covers_both_spellings(self) -> None:
         for declaration in ("backdrop-filter", "-webkit-backdrop-filter"):
             with self.subTest(declaration=declaration):
-                source = 'const style = { cssText: "%s: blur(8px)" };\n' % declaration
+                source = f'const style = {{ cssText: "{declaration}: blur(8px)" }};\n'
                 self.assertEqual(
-                    [
-                        violation.rule_id
-                        for violation in check_source(Path("Panel.tsx"), source)
-                    ],
+                    [violation.rule_id for violation in check_source(Path("Panel.tsx"), source)],
                     ["PROD-SCALE-27"],
                 )
 
@@ -443,16 +446,19 @@ const ORBIT_DELAYS = [
 
     def test_design_css_allows_component_scoped_mode_variables(self) -> None:
         """Only genuinely global roots are generated; scoped blocks stay authored."""
-        source = '''
+        source = """
 :root[data-mode="light"] .right-panel-tab-system {
   --right-panel-tab-surface: var(--color-surface);
 }
 :root[data-mode="light"] {
   --color-test: red;
 }
-'''
+"""
         self.assertEqual(
-            [violation.rule_id for violation in check_design_css_source(Path("product.css"), source)],
+            [
+                violation.rule_id
+                for violation in check_design_css_source(Path("product.css"), source)
+            ],
             ["PROD-SCALE-31"],
         )
 
@@ -474,8 +480,12 @@ const ORBIT_DELAYS = [
         )
 
         baseline = {
-            "standardNumericZ": {"apps/packages/product-client/src/primitives/NewList.tsx|z-10": 1},
-            "unvirtualizedLongLists": {"apps/packages/product-client/src/primitives/NewList.tsx|rows": 1},
+            "standardNumericZ": {
+                "apps/packages/product-client/src/primitives/NewList.tsx|z-10": 1
+            },
+            "unvirtualizedLongLists": {
+                "apps/packages/product-client/src/primitives/NewList.tsx|rows": 1
+            },
         }
         self.assertEqual(check_census_additions(sources, baseline, Path("/repo")), [])
 
@@ -487,7 +497,9 @@ const ORBIT_DELAYS = [
             Violation("PROD-SCALE-1", path, 9, "m"),
         ]
         census = staged_census(legacy, Path("/repo"))
-        self.assertEqual(census, {"apps/packages/product-client/src/primitives/Legacy.tsx|PROD-SCALE-1": 2})
+        self.assertEqual(
+            census, {"apps/packages/product-client/src/primitives/Legacy.tsx|PROD-SCALE-1": 2}
+        )
         self.assertEqual(apply_staged_baseline(legacy, census, Path("/repo")), [])
 
         regressed = [*legacy, Violation("PROD-SCALE-1", path, 14, "m")]
@@ -538,12 +550,17 @@ const ORBIT_DELAYS = [
         path = Path("/repo/apps/packages/product-client/src/primitives/Legacy.tsx")
         remaining = [Violation("PROD-SCALE-1", path, 4, "m")]
         ratcheted = staged_census(remaining, Path("/repo"))
-        self.assertEqual(ratcheted, {"apps/packages/product-client/src/primitives/Legacy.tsx|PROD-SCALE-1": 1})
+        self.assertEqual(
+            ratcheted, {"apps/packages/product-client/src/primitives/Legacy.tsx|PROD-SCALE-1": 1}
+        )
         self.assertEqual(census_slack(remaining, ratcheted, Path("/repo")), [])
 
         regressed = [*remaining, Violation("PROD-SCALE-1", path, 40, "new")]
         self.assertEqual(
-            [violation.lineno for violation in apply_staged_baseline(regressed, ratcheted, Path("/repo"))],
+            [
+                violation.lineno
+                for violation in apply_staged_baseline(regressed, ratcheted, Path("/repo"))
+            ],
             [40],
         )
         self.assertEqual(census_slack(regressed, ratcheted, Path("/repo")), [])
@@ -634,7 +651,10 @@ const ORBIT_DELAYS = [
         path = Path("/repo/apps/packages/product-client/src/primitives/Clean.tsx")
         violation = Violation("PROD-SCALE-18", path, 3, "m")
         self.assertEqual(
-            [reported.lineno for reported in apply_staged_baseline([violation], {}, Path("/repo"))],
+            [
+                reported.lineno
+                for reported in apply_staged_baseline([violation], {}, Path("/repo"))
+            ],
             [3],
         )
 
@@ -694,10 +714,14 @@ const ORBIT_DELAYS = [
         self.assertEqual(
             unsanctioned_growth(
                 previous,
-                {"apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.tsx|PROD-SCALE-18": 1},
+                {
+                    "apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.tsx|PROD-SCALE-18": 1
+                },
                 sanctions,
             ),
-            ["apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.tsx|PROD-SCALE-18: 0 -> 1"],
+            [
+                "apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.tsx|PROD-SCALE-18: 0 -> 1"
+            ],
         )
 
     def test_census_growth_is_refused_for_an_unsanctioned_family(self) -> None:
@@ -822,9 +846,7 @@ class SealedDirectoryTest(unittest.TestCase):
     """A directory a slice finished is pinned at zero, not re-baselined."""
 
     BASELINE = {
-        "sealedDirectories": [
-            {"path": "apps/x/clean", "justification": "cleaned by the x slice"}
-        ]
+        "sealedDirectories": [{"path": "apps/x/clean", "justification": "cleaned by the x slice"}]
     }
 
     def test_a_staged_hit_inside_a_sealed_directory_is_reported(self) -> None:

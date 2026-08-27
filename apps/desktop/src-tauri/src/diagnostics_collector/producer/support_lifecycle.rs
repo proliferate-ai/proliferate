@@ -28,9 +28,9 @@ const SUPPORT_CLASSIFICATIONS: [&str; 15] = [
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SupportLifecycleAdmissionError {
-    InvalidClientJobId,
-    InvalidPreparationOperationId,
-    InvalidAttempt,
+    ClientJobId,
+    PreparationOperationId,
+    Attempt,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -191,7 +191,7 @@ impl TauriDiagnosticsProducer {
         client_job_id: &str,
     ) -> Result<SupportPreparationOperation, SupportLifecycleAdmissionError> {
         require_canonical_uuid(client_job_id)
-            .map_err(|_| SupportLifecycleAdmissionError::InvalidClientJobId)?;
+            .map_err(|_| SupportLifecycleAdmissionError::ClientJobId)?;
         let correlation = LifecycleCorrelation {
             item_id: Some(client_job_id.to_owned()),
             ..LifecycleCorrelation::default()
@@ -211,11 +211,11 @@ impl TauriDiagnosticsProducer {
         attempt: u64,
     ) -> Result<SupportSubmissionOperation, SupportLifecycleAdmissionError> {
         require_canonical_uuid(client_job_id)
-            .map_err(|_| SupportLifecycleAdmissionError::InvalidClientJobId)?;
+            .map_err(|_| SupportLifecycleAdmissionError::ClientJobId)?;
         require_canonical_uuid(preparation_operation_id)
-            .map_err(|_| SupportLifecycleAdmissionError::InvalidPreparationOperationId)?;
+            .map_err(|_| SupportLifecycleAdmissionError::PreparationOperationId)?;
         if !(1..=MAX_SAFE_INTEGER).contains(&attempt) {
-            return Err(SupportLifecycleAdmissionError::InvalidAttempt);
+            return Err(SupportLifecycleAdmissionError::Attempt);
         }
         let correlation = LifecycleCorrelation {
             parent_operation_id: Some(preparation_operation_id.to_owned()),

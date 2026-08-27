@@ -60,9 +60,7 @@ STORE_REF_RE = re.compile(
 USE_HEAD_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\b")
 CRATE_GROUP_DOMAIN_RE = re.compile(r"\bdomains\s*::\s*([a-z_][a-z0-9_]*)")
 CRATE_GROUP_STORE_RE = re.compile(r"\bdomains\s*::\s*([a-z_][a-z0-9_]*)\s*::\s*store\b")
-DOMAIN_GROUP_STORE_RE = re.compile(
-    r"crate::domains::([a-z_][a-z0-9_]*)\s*::\s*\{[^;]*\bstore\b"
-)
+DOMAIN_GROUP_STORE_RE = re.compile(r"crate::domains::([a-z_][a-z0-9_]*)\s*::\s*\{[^;]*\bstore\b")
 MAX_STATEMENT_LINES = 100
 
 # A violation's fingerprint is `<enclosing symbol>::<content anchor>` — never a
@@ -169,7 +167,17 @@ def collect_violations(
             lines = path.read_text(encoding="utf-8").splitlines()
             stripped = [strip_line_comment(raw) for raw in lines]
 
-            def edge_ref(target: str, lineno: int, detail: str) -> None:
+            # The two helpers below are called only within this iteration; the
+            # loop variables are bound as defaults so the closure cannot drift.
+            def edge_ref(
+                target: str,
+                lineno: int,
+                detail: str,
+                *,
+                domain: str = domain,
+                relative: str = relative,
+                lines: list[str] = lines,
+            ) -> None:
                 if target == domain or target not in domains:
                     return
                 edges_seen.add((domain, target))
@@ -184,7 +192,16 @@ def collect_violations(
                         )
                     )
 
-            def store_ref(target: str, lineno: int, anchor: str, detail: str) -> None:
+            def store_ref(
+                target: str,
+                lineno: int,
+                anchor: str,
+                detail: str,
+                *,
+                domain: str = domain,
+                relative: str = relative,
+                lines: list[str] = lines,
+            ) -> None:
                 if target == domain or target not in domains:
                     return
                 violations.append(

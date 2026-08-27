@@ -1,6 +1,5 @@
 //! Phase A writes nothing, and phase B uses what phase A captured.
 
-use super::super::*;
 use super::*;
 
 /// **The assertion the two-phase split exists for.** Reading the material for

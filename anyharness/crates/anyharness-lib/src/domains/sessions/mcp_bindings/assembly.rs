@@ -267,8 +267,7 @@ mod tests {
     use crate::domains::sessions::mcp_bindings::product_launch::ProductMcpLaunchRegistration;
     use crate::domains::sessions::model::SessionMcpBindingPolicy;
     use crate::domains::workspaces::model::{
-        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
-        WorkspaceSurface,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
     };
     use crate::origin::OriginContext;
 

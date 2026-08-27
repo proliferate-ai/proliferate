@@ -51,8 +51,8 @@ pub fn parse_porcelain_v2(raw: &str) -> ParsedStatus {
             if let Some(file) = parse_unmerged(entry) {
                 result.files.push(file);
             }
-        } else if entry.starts_with("? ") {
-            let path = entry[2..].to_string();
+        } else if let Some(untracked) = entry.strip_prefix("? ") {
+            let path = untracked.to_string();
             result.files.push(GitChangedFile {
                 path,
                 old_path: None,

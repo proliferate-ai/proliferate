@@ -108,4 +108,3 @@ pub struct WorktreeInventoryResponse {
 pub struct PruneOrphanWorktreeRequest {
     pub path: String,
 }
-

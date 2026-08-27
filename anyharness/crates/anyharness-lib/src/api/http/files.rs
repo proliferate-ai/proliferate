@@ -572,10 +572,7 @@ mod tests {
     #[test]
     fn unexpected_io_problem_is_generic_and_path_free() {
         let service_error = FileServiceError::from_io(
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "seeded OS error for /private/customer/repository.txt",
-            ),
+            std::io::Error::other("seeded OS error for /private/customer/repository.txt"),
             "private/customer/repository.txt",
         );
         let error = map_service_error(service_error);

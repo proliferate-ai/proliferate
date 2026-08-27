@@ -91,9 +91,7 @@ def main() -> int:
         match = BLOCKED_ROOT_MOD_RE.search(line)
         if match:
             violations.append(
-                diagnostic(
-                    "AH-WORKER-4", f"{main_relative}:{lineno}", match.group(0).strip()
-                )
+                diagnostic("AH-WORKER-4", f"{main_relative}:{lineno}", match.group(0).strip())
             )
 
     if not violations:

@@ -82,9 +82,7 @@ class WrappedCallsAreNotAnEscapeHatch(unittest.TestCase):
         self.assertIn(
             "PROD-COPY-2",
             findings_for(
-                "showToast(\n"
-                "  `Couldn't save the workspace: ${errorMessage(error)}`,\n"
-                ");",
+                "showToast(\n  `Couldn't save the workspace: ${errorMessage(error)}`,\n);",
             ),
         )
 
@@ -92,11 +90,7 @@ class WrappedCallsAreNotAnEscapeHatch(unittest.TestCase):
         self.assertIn(
             "PROD-COPY-1",
             findings_for(
-                "toastError({\n"
-                "  headline:\n"
-                '    "Couldn\'t save "\n'
-                "    + target,\n"
-                "});",
+                'toastError({\n  headline:\n    "Couldn\'t save "\n    + target,\n});',
             ),
         )
 

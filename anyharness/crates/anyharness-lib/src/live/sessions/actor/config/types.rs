@@ -43,6 +43,8 @@ pub(in crate::live::sessions) enum ConfigPurpose {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::live::sessions::actor) enum ConfigApplyOutcome {
     NoChange,
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     AppliedRequested,
     AppliedAuthoritative,
     NotApplied,

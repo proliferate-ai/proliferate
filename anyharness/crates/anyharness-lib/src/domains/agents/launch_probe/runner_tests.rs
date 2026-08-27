@@ -81,14 +81,12 @@ done
 }
 
 fn request(home: &TempRuntimeHome, timeout: Duration) -> ProbeRequest {
-    let material =
-        probe_auth_material_for_server(home.path(), "opencode", None).expect("material");
+    let material = probe_auth_material_for_server(home.path(), "opencode", None).expect("material");
     ProbeRequest {
         harness_kind: "opencode".to_string(),
         material,
         plan: GatewayModelPlan {
             models: vec!["m-1".to_string()],
-            ..Default::default()
         },
         runtime_home: home.path().to_path_buf(),
         per_probe_timeout: timeout,
@@ -157,7 +155,10 @@ async fn cancelling_a_probe_kills_the_child_then_removes_the_scratch() {
         "the fake agent must actually start"
     );
     let pid = read_pid(&pid_file).expect("child pid");
-    assert!(pid_is_alive(pid), "the child is running before cancellation");
+    assert!(
+        pid_is_alive(pid),
+        "the child is running before cancellation"
+    );
     assert!(
         !scratch_roots(&home).is_empty(),
         "the probe materialized a scratch root"

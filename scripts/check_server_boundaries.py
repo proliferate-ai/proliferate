@@ -242,9 +242,7 @@ NAMED_STORE_BOUNDARIES: dict[str, NamedStoreBoundary] = {
     # module as well as under each submodule.
     "proliferate.db.store.agent_gateway": NamedStoreBoundary(
         store_module="proliferate.db.store.agent_gateway",
-        protected_symbols=frozenset(
-            _AGENT_AUTH_VAULT_SYMBOLS | _AGENT_AUTH_SELECTION_SYMBOLS
-        ),
+        protected_symbols=frozenset(_AGENT_AUTH_VAULT_SYMBOLS | _AGENT_AUTH_SELECTION_SYMBOLS),
         owner_label="Agent auth",
         product_owner_prefixes=_AGENT_AUTH_OWNER_PREFIXES,
         persistence_owner_paths=_AGENT_AUTH_PERSISTENCE_OWNER_PATHS,
@@ -898,10 +896,7 @@ class NamedCrossDomainWriteChecker(ast.NodeVisitor):
             relative = self.path.relative_to(self.repo_root)
         except ValueError:
             return False
-        if any(
-            _starts_with(relative.parts, prefix)
-            for prefix in boundary.product_owner_prefixes
-        ):
+        if any(_starts_with(relative.parts, prefix) for prefix in boundary.product_owner_prefixes):
             return True
         return relative.as_posix() in boundary.persistence_owner_paths
 
@@ -1067,9 +1062,7 @@ def check_structure(repo_root: Path = REPO_ROOT) -> list[Violation]:
     return violations
 
 
-def disambiguate(
-    violations: list[Violation], repo_root: Path = REPO_ROOT
-) -> list[Violation]:
+def disambiguate(violations: list[Violation], repo_root: Path = REPO_ROOT) -> list[Violation]:
     """Give repeated fingerprints an occurrence ordinal, in file order.
 
     Two hits of the same rule can share a fingerprint — the same matched token
@@ -1086,9 +1079,7 @@ def disambiguate(
         if len(group) == 1:
             out.extend(group)
             continue
-        for ordinal, violation in enumerate(
-            sorted(group, key=lambda item: item.lineno), start=1
-        ):
+        for ordinal, violation in enumerate(sorted(group, key=lambda item: item.lineno), start=1):
             out.append(
                 violation
                 if ordinal == 1

@@ -129,16 +129,16 @@ fn lifecycle_admission_rejects_noncanonical_ids_and_unsafe_attempts() {
     let parent = uuid::Uuid::new_v4().to_string();
     assert!(matches!(
         producer.begin_support_snapshot_preparation("AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"),
-        Err(SupportLifecycleAdmissionError::InvalidClientJobId)
+        Err(SupportLifecycleAdmissionError::ClientJobId)
     ));
     assert!(matches!(
         producer.begin_support_snapshot_submission(&job_id, "not-a-uuid", 1),
-        Err(SupportLifecycleAdmissionError::InvalidPreparationOperationId)
+        Err(SupportLifecycleAdmissionError::PreparationOperationId)
     ));
     for attempt in [0, MAX_SAFE_INTEGER + 1] {
         assert!(matches!(
             producer.begin_support_snapshot_submission(&job_id, &parent, attempt),
-            Err(SupportLifecycleAdmissionError::InvalidAttempt)
+            Err(SupportLifecycleAdmissionError::Attempt)
         ));
     }
     assert_eq!(producer.queue_snapshot().0, 0);

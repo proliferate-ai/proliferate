@@ -264,7 +264,10 @@ impl fmt::Debug for CreateSessionRequest {
             .field("agent_kind", &self.agent_kind)
             .field("model_id", &self.model_id)
             .field("mode_id", &self.mode_id)
-            .field("control_keys", &self.control_values.keys().collect::<Vec<_>>())
+            .field(
+                "control_keys",
+                &self.control_values.keys().collect::<Vec<_>>(),
+            )
             .field(
                 "system_prompt_append_count",
                 &self

@@ -30,3 +30,6 @@ proliferate-diagnostics-protocol.workspace = true
 
 [dev-dependencies]
 sentry = { workspace = true, features = ["test"] }
+
+[lints]
+workspace = true

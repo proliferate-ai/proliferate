@@ -7,10 +7,9 @@ use anyharness_contract::v1::{
     AgentAuthLoginHandoff, AgentAuthNextAction, AgentAuthProbeLifecycle, AgentAuthProbePhase,
     AgentAuthSelectionFact, AgentAuthStateSummary, AgentCliAuthState, AgentCredentialState,
     AgentInstallProgress, AgentInstallProgressComponent, AgentInstallProgressPhase,
-    AgentInstallState,
-    AgentLoginTerminalRecord, AgentLoginTerminalStatus, AgentReadinessState, AgentReconcileSummary,
-    AgentSummary, ArtifactStatus, InstallAgentRequest,
-    ReconcileAgentResult, ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
+    AgentInstallState, AgentLoginTerminalRecord, AgentLoginTerminalStatus, AgentReadinessState,
+    AgentReconcileSummary, AgentSummary, ArtifactStatus, InstallAgentRequest, ReconcileAgentResult,
+    ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
 };
 
 use crate::domains::agents::auth_state::{

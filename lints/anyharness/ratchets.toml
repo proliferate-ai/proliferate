@@ -15,7 +15,7 @@ reason = "existing AnyHarness oversized file (+hosting schema registration, +age
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/router_tests.rs"
-max_lines = 1892
+max_lines = 1904
 reason = "existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version tests, +managed default-placement route test, +model-snapshot status route shape/auth tests, +agent-auth/install poke contract tests, +agent-auth/install poke-suppression proofs against the automatic_poke_engine seam (F-036 cycle-2 review item 1); the catalog-push handler tests are gone with the heartbeat transport)"
 
 [[max_lines]]
@@ -30,22 +30,22 @@ reason = "classifier tests incl. gateway route activation + bedrock flag-only de
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/launch_facts.rs"
-max_lines = 636
+max_lines = 625
 reason = "Track D provider_config credential facts: a source's already-resolved env map classifies per-key against the registry's declared flag vocabulary (registry_flag_vars), producing EnvFlag for mode-switch flags (e.g. CLAUDE_CODE_USE_BEDROCK) and presence-only Env for everything else, same secrets rule as api_key; the vocabulary unions auth.slots[] with providerConfig[] (D3-rust)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs"
-max_lines = 680
+max_lines = 679
 reason = "Track D provider_config render arm (claude/opencode generic env-set, codex aws_bedrock via built-in amazon-bedrock provider, codex azure_openai UNVERIFIED config.toml injection kept behind the registry's pending flag, cursor/grok/unknown-kind UnsupportedRoute) landed alongside the existing native/gateway recipe table, +sanitize_claude_ambient fix so a provider_config route's own rerouting flag (e.g. CLAUDE_CODE_USE_BEDROCK) survives sanitization instead of being unconditionally stripped, scoped in review cycle 1 to the keys the provider_config arm itself recorded so an api_key row named like a rerouting flag is still stripped (D3-rust)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs"
-max_lines = 1890
+max_lines = 1889
 reason = "existing AnyHarness oversized file (catalog-owned unattended default replaces local fallback helper)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/goals/service_tests.rs"
-max_lines = 682
+max_lines = 676
 reason = "goal service regression tests for pending_op idempotency"
 
 [[max_lines]]
@@ -55,7 +55,7 @@ reason = "loops runtime — native write path + emulated Codex scheduler (+2b de
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/plans/service.rs"
-max_lines = 607
+max_lines = 604
 reason = "existing AnyHarness oversized file; shrank from 628 after folding plans/plan_interaction_links reads into PlanStore (grid plan PR 5b)"
 
 [[max_lines]]
@@ -65,7 +65,7 @@ reason = "existing AnyHarness oversized test file"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs"
-max_lines = 1155
+max_lines = 1158
 reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block); the same-payload resume lives in checkpoint_linkage_tests.rs with the Lane H NULL-linkage pins, and the rung-3 provider-anchor gates plus shared fixtures live in fork_anchor_gate_tests.rs"
 
 [[max_lines]]
@@ -80,7 +80,7 @@ reason = "catalog probe with per-harness model-source fallbacks (+the three runt
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/terminals/manager_tests.rs"
-max_lines = 730
+max_lines = 728
 reason = "R3 workspace-stop terminal suite: +615 lines of stop_all_for_workspace coverage (kill census, setup-process reaping, wedged-terminal escalation) sharing one real-PTY manager harness per case"
 
 [[max_lines]]
@@ -125,12 +125,12 @@ reason = "existing SDK oversized file; legacy Subagents MCP reducer branch remov
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/workflows/store.rs"
-max_lines = 1377
+max_lines = 1379
 reason = "workflows gen-2 durable store: run/node/doc writes, apply_transition and projections share one SQLite seam; split into store/ on next growth per guides/domains.md ; +62: PR3 adds the docs-registry register/read seam and rendered-envelope persistence ; +32: PR4 adds the Ruling L DisposeThenStart side effect, the node model column, and queue-aware hold event emission ; +115: PR5a adds the courier PUT upsert (Ruling B one-live-run refusal, key-sorted definition JSON note) and the node_membership 404 discriminator read ; +11: pr11 adds the failure_code classification to the named transition event ; +20: pr11b splits the queued-interjection Hold out of the stale-notification target ; +25: fix/wf2-run-cancel adds the run-cancel command ; +25: fix round 1 widens Cancel's disposal to every running row (chain + adhoc), NULLs the disposed node's session_id, and clears interruption_code on cancel"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/workflows/store_tests.rs"
-max_lines = 1677
+max_lines = 1683
 reason = "workflows gen-2 store suite over real migrations (idempotent create, transition application, projections, boot fence, docs registry) ; +139: PR3 adds docs-registry and rendered-envelope round-trip proofs ; +31: PR5a adds one-live-run refusal and membership-discriminator proofs ; +79: pr11 adds the subscriber-capture proof for the named transition event ; +89: pr11b adds the shared capture harness plus interjection-held and node_launched join-key proofs ; +117: fix/wf2-run-cancel adds the cancel command store suite ; +98: fix round 1 adds the running-adhoc double-disposal proof and the interruption_code-cleared-on-cancel proof"
 
 [[max_lines]]
@@ -140,10 +140,42 @@ reason = "workflows gen-2 pure transition table: the ADR's ruling rows and their
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/workflows/transition_tests.rs"
-max_lines = 1190
+max_lines = 1193
 reason = "workflows gen-2 transition suite: one test per ADR table row plus staleness and illegal-command proofs ; +76: PR4 adds ForcedUnload-parking and Ruling L redo-from-running proofs ; +55: fix/wf2-run-cancel adds the cancel transition suite ; +32: fix round 1 adds the running-adhoc disposal proof and parameterizes the terminal-command wall over Completed/Failed/Cancelled"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/workflows/lifecycle_tests.rs"
-max_lines = 1066
+max_lines = 1069
 reason = "workflows gen-2 engine lifecycle suite: scripted-ACP agents drive real runs through the manager/actor (happy path, gate approve, flip, redo, undo, boot fence) with zero mocks of our machinery"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/adapters/git/operations/worktrees.rs"
+max_lines = 602
+reason = "rustfmt normalization 2026-08-27 (lint wiring): multi-line rewraps under the pinned 1.98.0 toolchain pushed the file over the cap — mechanical whitespace, not new debt; shrink with the next real split"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/agents/catalog/artifact.rs"
+max_lines = 645
+reason = "rustfmt normalization 2026-08-27 (lint wiring): multi-line rewraps under the pinned 1.98.0 toolchain pushed the file over the cap — mechanical whitespace, not new debt; shrink with the next real split"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/loops/service_tests.rs"
+max_lines = 607
+reason = "rustfmt normalization 2026-08-27 (lint wiring): multi-line rewraps under the pinned 1.98.0 toolchain pushed the file over the cap — mechanical whitespace, not new debt; shrink with the next real split"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt_message_actor_tests.rs"
+max_lines = 603
+reason = "rustfmt normalization 2026-08-27 (lint wiring): multi-line rewraps under the pinned 1.98.0 toolchain pushed the file over the cap — mechanical whitespace, not new debt; shrink with the next real split"
+
+[[max_lines]]
+path = "apps/desktop/src-tauri/src/diagnostics/support_snapshot/coordinator/timestamp_tests.rs"
+max_lines = 628
+reason = "rustfmt normalization 2026-08-27 (lint wiring): multi-line rewraps under the pinned 1.98.0 toolchain pushed the file over the cap — mechanical whitespace, not new debt; shrink with the next real split"
+
+[[max_lines]]
+path = "apps/desktop/src-tauri/src/updater_owned.rs"
+# 616 -> 624 (2026-08-27 lint wiring): the enum de-prefixing pins its shipped
+# wire strings with per-variant serde renames — not new debt.
+max_lines = 624
+reason = "rustfmt normalization 2026-08-27 (lint wiring): multi-line rewraps under the pinned 1.98.0 toolchain pushed the file over the cap — mechanical whitespace, not new debt; shrink with the next real split"

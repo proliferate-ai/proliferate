@@ -34,10 +34,7 @@ pub async fn feed_ws(
     // A feed is scoped to its owning session; authorize against that.
     assert_session_auth_scope(&state, &auth, &binding.session_id)?;
 
-    let stream = state
-        .feed_service
-        .open(&binding)
-        .map_err(map_feed_error)?;
+    let stream = state.feed_service.open(&binding).map_err(map_feed_error)?;
 
     Ok(ws.on_upgrade(move |socket| handle_feed_ws(socket, feed_id, stream)))
 }
@@ -48,7 +45,9 @@ async fn handle_feed_ws(socket: WebSocket, feed_id: String, stream: FeedStream) 
 
     for frame in replay {
         if ws_sink
-            .send(Message::Text(frame_to_json(&feed_id, frame).to_string().into()))
+            .send(Message::Text(
+                frame_to_json(&feed_id, frame).to_string().into(),
+            ))
             .await
             .is_err()
         {

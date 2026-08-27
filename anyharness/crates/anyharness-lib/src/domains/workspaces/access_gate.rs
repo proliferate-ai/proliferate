@@ -234,8 +234,7 @@ mod tests {
     use crate::domains::terminals::store::TerminalStore;
     use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
     use crate::domains::workspaces::model::{
-        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
-        WorkspaceSurface,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
     };
     use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
     use crate::live::terminals::TerminalService;

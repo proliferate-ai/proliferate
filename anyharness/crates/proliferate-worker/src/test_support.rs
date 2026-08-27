@@ -22,7 +22,6 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::config::WorkerConfig;
 use tracing::field::{Field, Visit};
 use tracing::Level;
 use tracing_subscriber::layer::{Context, Layer};
@@ -60,10 +59,6 @@ pub(crate) struct CapturedEvent {
     pub(crate) level: Level,
     pub(crate) target: String,
     pub(crate) fields: Vec<(String, FieldValue)>,
-    /// What the installed latch probe read at the instant this event was
-    /// captured, when a probe was installed. This is how "the state was already
-    /// set BEFORE the log line" becomes behavioural rather than source-inspected.
-    pub(crate) latch_at_capture: Option<bool>,
 }
 
 impl CapturedEvent {
@@ -78,23 +73,6 @@ impl CapturedEvent {
             .iter()
             .find(|(key, _)| key == name)
             .map(|(_, value)| value)
-    }
-
-    pub(crate) fn has_field(&self, name: &str) -> bool {
-        self.field(name).is_some()
-    }
-
-    /// Every byte this event could put in front of an operator: target, level,
-    /// field names, and rendered field values. The privacy proof scans this.
-    pub(crate) fn rendered(&self) -> String {
-        let mut rendered = format!("{} {:?}", self.target, self.level);
-        for (key, value) in &self.fields {
-            rendered.push(' ');
-            rendered.push_str(key);
-            rendered.push('=');
-            rendered.push_str(&value.text());
-        }
-        rendered
     }
 }
 
@@ -112,9 +90,6 @@ pub(crate) enum Step {
 }
 
 pub(crate) type Timeline = Arc<Mutex<Vec<Step>>>;
-
-/// Read some piece of process state at the moment an event is captured.
-pub(crate) type LatchProbe = Arc<dyn Fn() -> bool + Send + Sync>;
 
 pub(crate) fn timeline() -> Timeline {
     Arc::new(Mutex::new(Vec::new()))
@@ -135,8 +110,8 @@ pub(crate) fn events(timeline: &Timeline) -> Vec<CapturedEvent> {
 }
 
 /// The index in the shared timeline of the first step matching a predicate.
-pub(crate) fn position(timeline: &Timeline, mut matches: impl FnMut(&Step) -> bool) -> Option<usize> {
-    steps(timeline).iter().position(|step| matches(step))
+pub(crate) fn position(timeline: &Timeline, matches: impl FnMut(&Step) -> bool) -> Option<usize> {
+    steps(timeline).iter().position(matches)
 }
 
 pub(crate) fn is_request_containing(needle: &str) -> impl Fn(&Step) -> bool + '_ {
@@ -172,7 +147,6 @@ impl Visit for FieldCollector {
 
 struct CollectingLayer {
     timeline: Timeline,
-    probe: Option<LatchProbe>,
 }
 
 impl<S: tracing::Subscriber> Layer<S> for CollectingLayer {
@@ -180,9 +154,6 @@ impl<S: tracing::Subscriber> Layer<S> for CollectingLayer {
         let mut collector = FieldCollector(Vec::new());
         event.record(&mut collector);
         let metadata = event.metadata();
-        // Read the probed state HERE, inside the emit path, so ordering between
-        // the state change and the log line is observed rather than assumed.
-        let latch_at_capture = self.probe.as_ref().map(|probe| probe());
         self.timeline
             .lock()
             .unwrap()
@@ -190,7 +161,6 @@ impl<S: tracing::Subscriber> Layer<S> for CollectingLayer {
                 level: *metadata.level(),
                 target: metadata.target().to_string(),
                 fields: collector.0,
-                latch_at_capture,
             }));
     }
 }
@@ -199,22 +169,8 @@ impl<S: tracing::Subscriber> Layer<S> for CollectingLayer {
 /// current-thread runtime, so every future polled inside the guard's lifetime
 /// emits into this timeline and no other test's.
 pub(crate) fn capture(timeline: &Timeline) -> tracing::subscriber::DefaultGuard {
-    install(timeline, None)
-}
-
-/// Like [`capture`], but each captured event also records what `probe` read at
-/// the instant of capture.
-pub(crate) fn capture_with_latch_probe(
-    timeline: &Timeline,
-    probe: LatchProbe,
-) -> tracing::subscriber::DefaultGuard {
-    install(timeline, Some(probe))
-}
-
-fn install(timeline: &Timeline, probe: Option<LatchProbe>) -> tracing::subscriber::DefaultGuard {
     tracing::subscriber::set_default(tracing_subscriber::registry().with(CollectingLayer {
         timeline: timeline.clone(),
-        probe,
     }))
 }
 
@@ -283,10 +239,10 @@ impl InstrumentedServer {
                 let (method, path) = request_line(&raw);
                 let line = format!("{method} {path}");
                 thread_hits.lock().unwrap().push(line.clone());
-                timeline
-                    .lock()
-                    .unwrap()
-                    .push(Step::Request { server: label, line });
+                timeline.lock().unwrap().push(Step::Request {
+                    server: label,
+                    line,
+                });
                 let (status, body) = routes
                     .iter()
                     .find(|(route_method, route_path, _, _)| {
@@ -346,57 +302,4 @@ pub(crate) fn request_line(raw: &str) -> (String, String) {
         parts.next().unwrap_or_default().to_string(),
         parts.next().unwrap_or_default().to_string(),
     )
-}
-
-// ── Shared JSON fixtures ───────────────────────────────────────────────────
-
-pub(crate) fn agents_list(kinds: &[&str]) -> String {
-    serde_json::Value::Array(
-        kinds
-            .iter()
-            .map(|kind| serde_json::json!({ "kind": kind }))
-            .collect(),
-    )
-    .to_string()
-}
-
-pub(crate) fn status_json_for(agent: &str, probed_at: &str) -> String {
-    serde_json::json!({
-        "agent": agent,
-        "schemaVersion": 2,
-        "probedAt": probed_at,
-        "stateRevision": 7,
-        "models": [{"id": "m1"}],
-        "modes": [{"id": "default"}],
-        "warnings": [],
-        "lastAttempt": {"at": probed_at, "outcome": "ok"}
-    })
-    .to_string()
-}
-
-// ── Shared Worker config fixtures ──────────────────────────────────────────
-
-/// A Worker config with no mailbox dir: heartbeat + sync only, no convergence.
-pub(crate) fn minimal_config() -> WorkerConfig {
-    WorkerConfig {
-        cloud_base_url: "https://cloud.test".to_string(),
-        enrollment_token: None,
-        worker_db_path: "/tmp/worker.sqlite3".into(),
-        integration_gateway_home: None,
-        heartbeat_interval_seconds: 30,
-        runtime_base_url: "http://127.0.0.1:8457".to_string(),
-        runtime_bearer_token: None,
-        supervisor_update_request_dir: None,
-        config_path: None,
-    }
-}
-
-pub(crate) fn cloud_config_for(
-    runtime_addr: std::net::SocketAddr,
-    cloud_addr: std::net::SocketAddr,
-) -> WorkerConfig {
-    let mut config = minimal_config();
-    config.cloud_base_url = format!("http://{cloud_addr}");
-    config.runtime_base_url = format!("http://{runtime_addr}");
-    config
 }

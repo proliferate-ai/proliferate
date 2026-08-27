@@ -30,6 +30,8 @@ enum ForkInboundState {
         startup_fault: bool,
     },
     ReadyChild {
+        #[allow(dead_code)]
+        // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
         parent_native_session_id: String,
         child_native_session_id: String,
     },

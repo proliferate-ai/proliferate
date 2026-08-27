@@ -57,7 +57,7 @@ fn serialized_contents(gateway: &IntegrationGatewayConfig) -> Result<Vec<u8>, Wo
 
 fn write_contents(config: &WorkerConfig, contents: &[u8]) -> Result<(), WorkerError> {
     let path = dotfile_path(config);
-    crate::config::write_private_file(&path, &contents, DOTFILE_NAME, |path, source| {
+    crate::config::write_private_file(&path, contents, DOTFILE_NAME, |path, source| {
         WorkerError::WriteIntegrationGateway { path, source }
     })
 }

@@ -34,7 +34,7 @@ async fn idle_live_parent_delivers_completion_once() {
     assert_final_delivery(&state, &script, &delivery);
     assert_eq!(
         prompt_texts(&script.request_log),
-        [delivery.notification_text.clone()]
+        std::slice::from_ref(&delivery.notification_text)
     );
 
     stop_target_actor(&state).await;

@@ -346,7 +346,7 @@ pub fn prepare_prompt(
                 plan_reference_count = checked_plan_reference_count(plan_reference_count + 1)?;
                 total_plan_reference_bytes = checked_plan_reference_total(
                     total_plan_reference_bytes,
-                    plan.body_markdown.as_bytes().len(),
+                    plan.body_markdown.len(),
                 )?;
                 stored_blocks.push(StoredPromptBlock::PlanReference {
                     plan_id: plan.id,

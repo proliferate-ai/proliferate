@@ -66,8 +66,7 @@ TEST_FILE_RE = re.compile(r"(^|_)tests\.rs$")
 def _iter_rs_files():
     if not CRATES_ROOT.is_dir():
         return
-    for path in sorted(CRATES_ROOT.rglob("*.rs")):
-        yield path
+    yield from sorted(CRATES_ROOT.rglob("*.rs"))
 
 
 def _relative(path: Path) -> str:
@@ -209,7 +208,10 @@ def check_launcher_writes() -> tuple[list[str], list[str]]:
                 lint_records.render_diagnostic(
                     rule,
                     location,
-                    detail="generate_launcher_script(..) with no activate_launcher promotion in the enclosing function",
+                    detail=(
+                        "generate_launcher_script(..) with no activate_launcher promotion "
+                        "in the enclosing function"
+                    ),
                 )
             )
     stale = [
@@ -244,7 +246,12 @@ def check_catalog_construction() -> list[str]:
             location = f"{rel}:{lineno}"
             failures.append(
                 lint_records.render_diagnostic(
-                    rule, location, detail=f"CatalogSyncService::{match.group(1)}(..) outside the allowed construction sites"
+                    rule,
+                    location,
+                    detail=(
+                        f"CatalogSyncService::{match.group(1)}(..) outside the allowed "
+                        "construction sites"
+                    ),
                 )
             )
     return failures

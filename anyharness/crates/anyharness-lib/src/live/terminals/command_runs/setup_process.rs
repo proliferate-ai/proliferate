@@ -160,7 +160,7 @@ pub(in crate::live::terminals) async fn run_setup_process(
     let mut stdout_capture = String::new();
     let mut stderr_capture = String::new();
     let mut output_truncated = false;
-    let mut status: Option<std::process::ExitStatus> = None;
+    let status: Option<std::process::ExitStatus>;
     let mut timed_out = false;
 
     loop {

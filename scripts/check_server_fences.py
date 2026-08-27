@@ -83,8 +83,7 @@ def load_fence_config(root: Path) -> tuple[tuple[str, ...], set[tuple[str, str]]
     systems = tuple(data.get("fence", {}).get("systems", []))
     if not systems:
         raise SystemExit(
-            f"{CHECKER}: {path}: [fence] must name at least one fenced system "
-            f"(systems = [...])"
+            f"{CHECKER}: {path}: [fence] must name at least one fenced system (systems = [...])"
         )
     edges: set[tuple[str, str]] = set()
     for entry in data.get("edge", []):

@@ -25,6 +25,7 @@ pub(crate) struct ProbeOptions {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(crate) struct ProbeAttestation {
     pub name: String,
     pub version: String,
@@ -32,12 +33,14 @@ pub(crate) struct ProbeAttestation {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(crate) struct ProbeNativeCli {
     pub path: String,
     pub version: Option<String>,
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(crate) struct ProbeTrialResult {
     pub model_id: String,
     pub accepted: bool,
@@ -46,6 +49,7 @@ pub(crate) struct ProbeTrialResult {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(crate) struct ProbePromptResult {
     pub ok: bool,
     pub detail: String,
@@ -60,6 +64,7 @@ pub(crate) struct ProbeModelEntry {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(crate) struct ProbeSnapshot {
     pub probed_at: String,
     pub agent_kind: String,

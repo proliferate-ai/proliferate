@@ -43,15 +43,14 @@ a migration must delete the entry in the commit that fixes the site.
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import posixpath
 import re
 import sys
-from typing import Iterable
-
+from collections import Counter, defaultdict
+from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
@@ -131,6 +130,21 @@ REGISTRY_ROW_RE = re.compile(
 )
 INCUBATING_RE = re.compile(r"\bincubating:", re.IGNORECASE)
 
+# Each mechanical check is a `[[rule]]` record in lints/product/component-library.toml
+# (PROD-COMPLIB-*); the slug stays the checker's internal key and the allowlist's,
+# the record id is what a diagnostic cites.
+RECORD_IDS = {
+    "hand-rolled-overlay-role": "PROD-COMPLIB-1",
+    "dead-library-component": "PROD-COMPLIB-2",
+    "missing-library-jsdoc": "PROD-COMPLIB-3",
+    "registry-row-without-file": "PROD-COMPLIB-4",
+    "expired-incubating-note": "PROD-COMPLIB-5",
+    "tier-file-without-registry-row": "PROD-COMPLIB-6",
+    "kit-imports-feature-code": "PROD-COMPLIB-7",
+    "kit-directory-without-registry-rows": "PROD-COMPLIB-8",
+}
+RECORD_PATH = "lints/product/component-library.toml"
+
 ALLOWLIST_RULES = {
     "hand-rolled-overlay-role": "handRolledOverlayRoles",
     "dead-library-component": "deadLibraryComponents",
@@ -146,7 +160,11 @@ class Violation:
     message: str
 
     def format(self) -> str:
-        return f"{self.relative_path}:{self.lineno}: [{self.rule_id}] {self.message}"
+        record = RECORD_IDS.get(self.rule_id, "PROD-COMPLIB-?")
+        return (
+            f"{self.relative_path}:{self.lineno}: [{record} {self.rule_id}] {self.message} "
+            f"({RECORD_PATH})"
+        )
 
 
 @dataclass(frozen=True)
@@ -187,9 +205,7 @@ def iter_source_files(roots: Iterable[Path] = SCANNED_ROOTS) -> list[Path]:
         files.extend(
             path
             for path in sorted(root.rglob("*"))
-            if path.is_file()
-            and path.suffix in EXTENSIONS
-            and not path.name.endswith(".d.ts")
+            if path.is_file() and path.suffix in EXTENSIONS and not path.name.endswith(".d.ts")
         )
     return files
 
@@ -422,9 +438,7 @@ def registry_violations(
         consumers = {
             consumer
             for consumer in importers.get(target, set())
-            if consumer != target
-            and not is_test_path(consumer)
-            and not is_playground(consumer)
+            if consumer != target and not is_test_path(consumer) and not is_playground(consumer)
         }
         if not consumers:
             violations.append(
@@ -500,9 +514,7 @@ def tier_file_violations(
             if relative_path in NON_COMPONENT_TIER_FILES:
                 continue
             within = path.relative_to(root).as_posix()
-            if any(
-                within.startswith(directory) for directory in NON_COMPONENT_TIER_DIRECTORIES
-            ):
+            if any(within.startswith(directory) for directory in NON_COMPONENT_TIER_DIRECTORIES):
                 continue
             if path.resolve() in indexed:
                 continue
@@ -512,9 +524,7 @@ def tier_file_violations(
                     for consumer in importers.get(path.resolve(), set())
                     if consumer != path.resolve() and not is_test_path(consumer)
                 }
-                if consumers and all(
-                    consumer.parent == path.parent for consumer in consumers
-                ):
+                if consumers and all(consumer.parent == path.parent for consumer in consumers):
                     continue
             violations.append(
                 Violation(
@@ -535,9 +545,7 @@ def tier_file_violations(
 # --------------------------------------------------------------------------
 
 
-def kit_violations(
-    rows: list[RegistryRow], sources: dict[Path, str]
-) -> list[Violation]:
+def kit_violations(rows: list[RegistryRow], sources: dict[Path, str]) -> list[Violation]:
     violations: list[Violation] = []
     kit_dirs = sorted(
         path for path in PATTERNS_DIR.iterdir() if path.is_dir() and path.name != "__tests__"
@@ -546,7 +554,8 @@ def kit_violations(
     registered_kit_segments = {
         row.link.split("primitives/patterns/", 1)[1].split("/", 1)[0]
         for row in rows
-        if "primitives/patterns/" in row.link and "/" in row.link.split("primitives/patterns/", 1)[1]
+        if "primitives/patterns/" in row.link
+        and "/" in row.link.split("primitives/patterns/", 1)[1]
     }
     for kit_dir in kit_dirs:
         if kit_dir.name not in registered_kit_segments:
@@ -665,7 +674,8 @@ def main(argv: list[str] | None = None) -> int:
         seen = observed.get((rule_id, relative_path), 0)
         if seen < entry.count:
             stale.append(
-                f"{relative_path}:1: [{rule_id}] stale allowance (observed {seen}, "
+                f"{relative_path}:1: [{RECORD_IDS.get(rule_id, 'PROD-COMPLIB-?')} {rule_id}] "
+                f"stale allowance (observed {seen}, "
                 f"allowed {entry.count}); the allowlist only shrinks — delete the entry "
                 f"in the commit that fixed the site"
             )

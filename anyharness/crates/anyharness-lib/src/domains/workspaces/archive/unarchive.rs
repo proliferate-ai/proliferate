@@ -152,8 +152,8 @@ pub(super) async fn unarchive(
         &mut notices,
     )
     .await
-    .map_err(|error| {
-        if let UnarchiveError::Failed(detail) = &error {
+    .inspect_err(|error| {
+        if let UnarchiveError::Failed(detail) = error {
             tracing::error!(
                 workspace_id = %workspace_id,
                 sentry_code = "UNARCHIVE_RESTORE_FAILED",
@@ -161,7 +161,6 @@ pub(super) async fn unarchive(
                 "the restore failed; the retry converges"
             );
         }
-        error
     })?;
 
     if restored.history_incomplete_relevant

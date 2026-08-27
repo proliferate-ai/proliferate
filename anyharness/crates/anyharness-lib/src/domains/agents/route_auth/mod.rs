@@ -90,7 +90,10 @@ pub enum RouteAuthError {
     #[error("{harness_kind} isn't set up — pick a method in Settings → Agents")]
     NoConfiguredSource { harness_kind: String },
     #[error("agent-auth source for '{harness_kind}' is incomplete: {detail}")]
-    SelectionIncomplete { harness_kind: String, detail: String },
+    SelectionIncomplete {
+        harness_kind: String,
+        detail: String,
+    },
     #[error("agent-auth route for '{harness_kind}' is unsupported: {detail}")]
     UnsupportedRoute {
         harness_kind: String,
@@ -369,8 +372,5 @@ fn launch_route_selection_failure_for_server(
     let state = load_effective_state(runtime_home, current_server_origin).ok()?;
     // Same bridged resolution as the launch itself: create-time must not
     // refuse a harness the launcher would run (the bridge's grant included).
-    match resolve_profile_for_launch(runtime_home, state.as_ref(), harness_kind) {
-        Ok(_) => None,
-        Err(error) => Some(error),
-    }
+    resolve_profile_for_launch(runtime_home, state.as_ref(), harness_kind).err()
 }

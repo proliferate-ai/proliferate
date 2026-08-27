@@ -9,7 +9,7 @@ use super::finish::{FinishError, FinishResult};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub(super) enum PreparationInterruption {
+pub(crate) enum PreparationInterruption {
     Running = 0,
     Cancelled = 1,
     Deadline = 2,
@@ -19,7 +19,7 @@ pub(super) enum PreparationInterruption {
 /// One admitted preparation has one interruption decision and one idle fence.
 /// The first cancellation/deadline request wins; all async and blocking work
 /// observes that same decision.
-pub(super) struct PreparationControl {
+pub(crate) struct PreparationControl {
     interruption: AtomicU8,
     cancelled: Arc<AtomicBool>,
     deadline_expired: Arc<AtomicBool>,
@@ -205,20 +205,11 @@ impl FinishCompletion {
     }
 }
 
+#[derive(Default)]
 struct FinishCompletionState {
     result: Option<Result<FinishResult, FinishError>>,
     authorized: bool,
     cleanup_claimed: bool,
-}
-
-impl Default for FinishCompletionState {
-    fn default() -> Self {
-        Self {
-            result: None,
-            authorized: false,
-            cleanup_claimed: false,
-        }
-    }
 }
 
 impl FinishCompletionState {

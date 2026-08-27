@@ -24,7 +24,7 @@ pub(super) fn owner_file_metadata_is_safe(
 ) -> bool {
     regular_file
         && peer_uid_is_owner(uid)
-        && exact_mode.map_or(true, |expected| mode == expected)
+        && exact_mode.is_none_or(|expected| mode == expected)
         && (exact_mode.is_some() || mode & 0o022 == 0)
 }
 

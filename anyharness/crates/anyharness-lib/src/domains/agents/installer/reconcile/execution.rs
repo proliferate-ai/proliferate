@@ -7,15 +7,15 @@ use uuid::Uuid;
 
 use super::{reconcile_agent_with_progress, AgentReconcileOutcome, AgentReconcileResult};
 use crate::domains::agents::catalog::service::{ActiveCatalog, AgentCatalogService};
-use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
-use crate::domains::agents::installer::progress::{
-    InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
-};
 use crate::domains::agents::installer::auto_install::{
     auto_install_decision_with_escape_hatch, AgentInstallFacts,
 };
+use crate::domains::agents::installer::progress::{
+    InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
+};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
+use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::agents::model::{AgentDescriptor, AgentKind, ArtifactRole, ResolvedArtifact};
 use crate::domains::agents::readiness::service::resolve_agent_unrouted;
 use crate::domains::agents::runtime::RuntimeSurface;
@@ -106,6 +106,12 @@ impl AgentReconcileJob {
 pub struct AgentReconcileService {
     job: Arc<Mutex<Option<AgentReconcileJob>>>,
     execution_lock: Arc<Mutex<()>>,
+}
+
+impl Default for AgentReconcileService {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AgentReconcileService {
@@ -522,6 +528,7 @@ fn probe_after_install(phase: InstallProgressPhase) -> bool {
 /// The predicate above, for the poke-wiring suite. Exposed rather than duplicated so
 /// the assertion cannot drift from the branch the job actually takes.
 #[cfg(test)]
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(crate) fn probe_after_install_for_test(phase: InstallProgressPhase) -> bool {
     probe_after_install(phase)
 }

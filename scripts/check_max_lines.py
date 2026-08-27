@@ -12,7 +12,6 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -117,7 +116,7 @@ def count_lines(path: Path) -> int:
     return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
 
 
-def server_max_lines_for(relative_path: str) -> Optional[int]:
+def server_max_lines_for(relative_path: str) -> int | None:
     path = Path(relative_path)
     parts = path.parts
     name = path.name
@@ -146,10 +145,7 @@ def max_lines_for(relative_path: str) -> int:
     server_max_lines = server_max_lines_for(relative_path)
     if server_max_lines is not None:
         return server_max_lines
-    if (
-        relative_path.startswith("apps/desktop/src/components/")
-        and relative_path.endswith(".tsx")
-    ):
+    if relative_path.startswith("apps/desktop/src/components/") and relative_path.endswith(".tsx"):
         return COMPONENT_MAX_LINES
     return MAX_LINES
 

@@ -45,7 +45,6 @@ impl SessionStore {
                 map_fork_operation,
             )
             .optional()
-            .map_err(Into::into)
         })
     }
 
@@ -62,7 +61,6 @@ impl SessionStore {
                 map_fork_operation,
             )
             .optional()
-            .map_err(Into::into)
         })
     }
 

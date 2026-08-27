@@ -3,7 +3,9 @@ use tracing::info;
 use crate::cloud_client::HeartbeatResponse;
 
 /// The tracing target the heartbeat acknowledgement is emitted under. Tests
-/// locate the acknowledgement by target and field rather than by message text.
+/// locate the acknowledgement by target and field rather than by message text,
+/// so the only readers live behind `cfg(test)`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub const HEARTBEAT_ACK_TARGET: &str = module_path!();
 
 /// The one per-heartbeat acknowledgement. REL-10 adds the server's snapshot-upload

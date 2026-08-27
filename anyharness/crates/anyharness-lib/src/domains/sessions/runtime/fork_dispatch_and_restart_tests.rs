@@ -26,7 +26,6 @@ use crate::app::test_support;
 use crate::domains::sessions::model::parse_action_capabilities;
 use crate::domains::sessions::runtime::{EnsureLiveSessionError, ForkSessionError};
 use crate::domains::workspaces::checkpoints::{CheckpointOrigin, CheckpointRecord};
-use crate::live::sessions::SessionStartupStrategy;
 use crate::persistence::Db;
 
 // --- (a) Two-boundary dispatch proof ---------------------------------------

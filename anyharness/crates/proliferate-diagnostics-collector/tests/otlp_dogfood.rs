@@ -312,7 +312,10 @@ async fn accepted_records_reach_the_destination_as_conformant_otlp_with_its_head
         assert_eq!(value, TEAM_CREDENTIAL);
     }
     assert_eq!(
-        state.header_values(DATASET_HEADER).first().map(String::as_str),
+        state
+            .header_values(DATASET_HEADER)
+            .first()
+            .map(String::as_str),
         Some("proliferate")
     );
 
@@ -361,9 +364,16 @@ async fn a_failing_destination_degrades_only_the_exporter_and_never_local_eviden
     );
     assert!(receipt.rejections.is_empty());
 
-    let degraded =
-        until_exporter(&collector, Duration::from_secs(30), ExporterStateV1::Degraded).await;
-    assert!(degraded, "a failing destination must show in exporter health");
+    let degraded = until_exporter(
+        &collector,
+        Duration::from_secs(30),
+        ExporterStateV1::Degraded,
+    )
+    .await;
+    assert!(
+        degraded,
+        "a failing destination must show in exporter health"
+    );
 
     let health = health(&collector).await;
     assert_eq!(health.exporter.state, ExporterStateV1::Degraded);

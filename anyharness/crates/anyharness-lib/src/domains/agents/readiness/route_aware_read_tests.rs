@@ -152,8 +152,7 @@ fn route_upgraded_readiness_is_distinguishable_from_native_readiness() {
     // Launch resolution agrees (same upgrade path), and the unrouted projection
     // never claims a route.
     assert!(
-        resolve_launch_agent(&grok, &world.runtime_home, &BTreeMap::new())
-            .credentials_from_route
+        resolve_launch_agent(&grok, &world.runtime_home, &BTreeMap::new()).credentials_from_route
     );
     assert!(!resolve_agent_unrouted(&grok, &world.runtime_home).credentials_from_route);
 }

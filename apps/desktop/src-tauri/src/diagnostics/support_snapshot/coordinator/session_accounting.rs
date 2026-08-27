@@ -28,12 +28,10 @@ pub(super) fn note_endpoint_reason(
     accounting: &mut SupportScrubAccounting,
 ) {
     let reason = match reason {
-        Some(EndpointFailureReason::SessionUnavailable) => {
-            SupportOmissionReasonV1::SessionUnavailable
-        }
-        Some(EndpointFailureReason::SessionTimeout) => SupportOmissionReasonV1::SessionTimeout,
-        Some(EndpointFailureReason::SessionInvalid) => SupportOmissionReasonV1::SessionInvalid,
-        Some(EndpointFailureReason::SessionWindowLimitUncertain) => {
+        Some(EndpointFailureReason::Unavailable) => SupportOmissionReasonV1::SessionUnavailable,
+        Some(EndpointFailureReason::Timeout) => SupportOmissionReasonV1::SessionTimeout,
+        Some(EndpointFailureReason::Invalid) => SupportOmissionReasonV1::SessionInvalid,
+        Some(EndpointFailureReason::WindowLimitUncertain) => {
             SupportOmissionReasonV1::SessionWindowLimitUncertain
         }
         None => return,

@@ -17,8 +17,10 @@ struct TempHome {
 
 impl TempHome {
     fn new(prefix: &str) -> Self {
-        let path = std::env::temp_dir()
-            .join(format!("anyharness-gateway-plan-{prefix}-{}", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!(
+            "anyharness-gateway-plan-{prefix}-{}",
+            uuid::Uuid::new_v4()
+        ));
         std::fs::create_dir_all(&path).expect("create temp home");
         Self { path }
     }
@@ -273,7 +275,11 @@ fn the_launch_path_reads_the_memo_and_never_fetches() {
     assert_eq!(fetcher.calls(), 1);
     let warm = planner.resolve_gateway_models("opencode", 3);
     assert_eq!(warm.models, vec!["live-1", "live-2"]);
-    assert_eq!(fetcher.calls(), 1, "the launch read the memo, it did not refresh it");
+    assert_eq!(
+        fetcher.calls(),
+        1,
+        "the launch read the memo, it did not refresh it"
+    );
 }
 
 /// An expired memo remains exact target evidence on the launch path.
@@ -302,7 +308,11 @@ fn an_expired_memo_remains_available_to_a_nonblocking_launch() {
 fn a_claude_plan_preserves_the_live_list_without_static_roles() {
     let home = TempHome::new("claude-roles");
     home.write_gateway_state("claude", "https://gw.example", "sk-virtual");
-    let fetcher = Arc::new(CountingFetch::new(&["claude-sonnet-4-5", "gpt-5.2", "grok-4"]));
+    let fetcher = Arc::new(CountingFetch::new(&[
+        "claude-sonnet-4-5",
+        "gpt-5.2",
+        "grok-4",
+    ]));
     let planner = build_planner(&home, fetcher, DEFAULT_PLAN_FETCH_TTL);
 
     let plan = planner.resolve_gateway_models_blocking("claude", 3);

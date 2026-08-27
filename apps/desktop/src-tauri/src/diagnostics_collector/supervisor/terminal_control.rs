@@ -274,7 +274,7 @@ impl TerminalControlState {
 
     async fn dispatch_with_timeout<'a, W, F>(
         &'a self,
-        mut reservation: TerminalReservation<'a>,
+        reservation: TerminalReservation<'a>,
         command: Vec<u8>,
         timeout: Duration,
         write: W,

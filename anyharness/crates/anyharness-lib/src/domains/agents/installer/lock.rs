@@ -26,6 +26,9 @@ impl AgentInstallLock {
     fn acquire(path: PathBuf) -> std::io::Result<Self> {
         let file = OpenOptions::new()
             .create(true)
+            // Lock files are contended by design; never truncate — another
+            // holder may have the file open, and the byte content is unused.
+            .truncate(false)
             .read(true)
             .write(true)
             .open(&path)?;

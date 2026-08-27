@@ -35,8 +35,7 @@ fn falls_back_to_model_id_when_name_absent() {
 
 #[test]
 fn skips_entries_without_a_model_id() {
-    let state =
-        json!({ "availableModels": [{ "name": "no id" }, { "modelId": "grok-4.3" }] });
+    let state = json!({ "availableModels": [{ "name": "no id" }, { "modelId": "grok-4.3" }] });
     assert_eq!(
         model_entries_from_model_state(&state).expect("entries"),
         vec![("grok-4.3".to_string(), "grok-4.3".to_string(), None)]
@@ -62,5 +61,8 @@ fn init_meta_model_setter_requires_exact_effective_readback() {
         confirmed_model_from_ext_response(&confirmed).as_deref(),
         Some("grok-4.6")
     );
-    assert_eq!(confirmed_model_from_ext_response(&acknowledgement_only), None);
+    assert_eq!(
+        confirmed_model_from_ext_response(&acknowledgement_only),
+        None
+    );
 }

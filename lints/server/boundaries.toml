@@ -279,7 +279,9 @@ diagnostic's owner-service hint."""
 why = """Unrestricted foreign writes make responsibility and schema-change
 blast radius unknowable. Only the owner's service writes, so invariant
 enforcement has one write boundary. The named table is a bounded migration;
-the repository-wide owner table is still debt — see SRV-STORE-6."""
+the repository-wide owner table is still debt (#1714 — its gap record was
+deleted 2026-08-27 with the other do-nothing records; it returns with an
+engine)."""
 
 [rule.example]
 bad = "organization_store.bind_team_checkout_session(...)  # from a billing service"

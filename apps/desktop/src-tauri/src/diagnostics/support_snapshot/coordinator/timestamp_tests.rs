@@ -13,14 +13,12 @@ use proliferate_diagnostics_protocol::v1::types::{
 };
 use tokio::time::Duration;
 
-use crate::diagnostics_collector::support_export::{
-    probe, SupportExportIssuanceError as Issuance,
-};
+use crate::diagnostics_collector::support_export::{probe, SupportExportIssuanceError as Issuance};
 
 use super::super::artifact_store::{SupportArtifactReference, SupportArtifactStore};
 use super::super::schema::enums::SupportSessionOmissionReasonV1;
-use super::super::schema::model::manifest::SupportSessionCollectionManifestV1;
 use super::super::schema::model::health::SupportChildProducerStatusV1;
+use super::super::schema::model::manifest::SupportSessionCollectionManifestV1;
 use super::super::schema::model::snapshot::SupportSnapshotV3;
 use super::super::schema::validate::validate_timestamp;
 use super::capture::CaptureError;
@@ -172,7 +170,11 @@ async fn exercise_clock_case(case: &ClockCase) {
         "{}",
         case.name
     );
-    assert_eq!(output.window.source_time_to, case.captured_at, "{}", case.name);
+    assert_eq!(
+        output.window.source_time_to, case.captured_at,
+        "{}",
+        case.name
+    );
     // 2. Byte identity and an exact 900-second parsed interval.
     assert_eq!(
         output.captured_at, output.window.source_time_to,
@@ -181,7 +183,10 @@ async fn exercise_clock_case(case: &ClockCase) {
     );
     assert_fixed_milliseconds(&output.captured_at, case.name);
     assert_fixed_milliseconds(&output.window.source_time_from, case.name);
-    assert_exact_window(&output.window.source_time_from, &output.window.source_time_to);
+    assert_exact_window(
+        &output.window.source_time_from,
+        &output.window.source_time_to,
+    );
     // No `AutoSi` spelling of the raw instant can reach the response. For a
     // raw clock already at whole-millisecond precision both spellings agree,
     // so the assertion applies only where `AutoSi` would differ.
@@ -199,11 +204,30 @@ async fn exercise_clock_case(case: &ClockCase) {
     // 3. The real permit accepted and consumed exactly those request bytes
     // before any downstream collector response was observed.
     let observed = probe::observed();
-    assert_eq!(observed.len(), 2, "{}: one issuance and one consumption", case.name);
-    assert_eq!(observed[0].stage, probe::IssuanceStage::Issued, "{}", case.name);
-    assert_eq!(observed[1].stage, probe::IssuanceStage::Consumed, "{}", case.name);
+    assert_eq!(
+        observed.len(),
+        2,
+        "{}: one issuance and one consumption",
+        case.name
+    );
+    assert_eq!(
+        observed[0].stage,
+        probe::IssuanceStage::Issued,
+        "{}",
+        case.name
+    );
+    assert_eq!(
+        observed[1].stage,
+        probe::IssuanceStage::Consumed,
+        "{}",
+        case.name
+    );
     for entry in &observed {
-        assert_eq!(entry.source_time_from, case.source_time_from, "{}", case.name);
+        assert_eq!(
+            entry.source_time_from, case.source_time_from,
+            "{}",
+            case.name
+        );
         assert_eq!(entry.source_time_to, case.captured_at, "{}", case.name);
     }
 
@@ -226,19 +250,29 @@ async fn exercise_clock_case(case: &ClockCase) {
     let bytes = store
         .read_verified(&reference)
         .unwrap_or_else(|_| panic!("{}: verified staged read", case.name));
-    let snapshot: SupportSnapshotV3 =
-        serde_json::from_slice(&bytes).unwrap_or_else(|error| {
-            panic!("{}: staged artifact is not a SupportSnapshotV3: {error}", case.name)
-        });
+    let snapshot: SupportSnapshotV3 = serde_json::from_slice(&bytes).unwrap_or_else(|error| {
+        panic!(
+            "{}: staged artifact is not a SupportSnapshotV3: {error}",
+            case.name
+        )
+    });
     assert_eq!(snapshot.schema_version, 3, "{}", case.name);
     assert_eq!(snapshot.generated_at, case.captured_at, "{}", case.name);
-    assert_eq!(snapshot.selection.source_time_to, case.captured_at, "{}", case.name);
+    assert_eq!(
+        snapshot.selection.source_time_to, case.captured_at,
+        "{}",
+        case.name
+    );
     assert_eq!(
         snapshot.selection.source_time_from, case.source_time_from,
         "{}",
         case.name
     );
-    assert_eq!(snapshot.collector.captured_at, case.captured_at, "{}", case.name);
+    assert_eq!(
+        snapshot.collector.captured_at, case.captured_at,
+        "{}",
+        case.name
+    );
     assert_eq!(
         snapshot.generated_at, snapshot.selection.source_time_to,
         "{}: generatedAt is the selection end byte-for-byte",
@@ -354,7 +388,11 @@ async fn noncanonical_window_terminal_carries_only_the_two_bounded_arguments() {
     // No timestamp, identifier, path, or raw input rides the record.
     let encoded = serde_json::to_string(&terminal.arguments).expect("arguments JSON");
     for forbidden in [
-        "2026-", "Z\"", "/", "support_snapshot_preparation_rejected", "NoncanonicalWindow",
+        "2026-",
+        "Z\"",
+        "/",
+        "support_snapshot_preparation_rejected",
+        "NoncanonicalWindow",
     ] {
         assert!(
             !encoded.contains(forbidden),
@@ -374,9 +412,18 @@ async fn noncanonical_window_terminal_carries_only_the_two_bounded_arguments() {
 #[tokio::test]
 async fn every_other_failure_cause_carries_neither_argument() {
     let causes = [
-        ("invalid preparation id", CaptureError::Issuance(Issuance::InvalidPreparationId)),
-        ("expired deadline", CaptureError::Issuance(Issuance::ExpiredDeadline)),
-        ("request invariant", CaptureError::Issuance(Issuance::RequestInvariant)),
+        (
+            "invalid preparation id",
+            CaptureError::Issuance(Issuance::InvalidPreparationId),
+        ),
+        (
+            "expired deadline",
+            CaptureError::Issuance(Issuance::ExpiredDeadline),
+        ),
+        (
+            "request invariant",
+            CaptureError::Issuance(Issuance::RequestInvariant),
+        ),
         ("generic invalid capture", CaptureError::Invalid),
     ];
     for (name, cause) in causes {
@@ -497,7 +544,11 @@ fn truncation_never_rounds_a_raw_clock_read() {
             "{}",
             case.name
         );
-        assert!(truncated <= parse(case.raw), "{}: never rounds up", case.name);
+        assert!(
+            truncated <= parse(case.raw),
+            "{}: never rounds up",
+            case.name
+        );
     }
 }
 

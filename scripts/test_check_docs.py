@@ -79,9 +79,7 @@ class DocumentationIntegrityTest(unittest.TestCase):
         self.assertNotIn(legacy_testing_root, check_docs.REQUIRED_READMES)
 
     def test_specs_roots_are_closed(self) -> None:
-        self.assertEqual(
-            check_docs.SPECS_ROOTS, {"areas", "systems", "engineering"}
-        )
+        self.assertEqual(check_docs.SPECS_ROOTS, {"areas", "systems", "engineering"})
         self.assertEqual(
             check_docs.SPECS_ROOT_FILES,
             {
@@ -137,8 +135,9 @@ class DocumentationIntegrityTest(unittest.TestCase):
                 path.write_text(content, encoding="utf-8")
                 paths.append(path)
 
-            with patch.object(check_docs, "ROOT", root), patch.object(
-                check_docs, "tracked_files", return_value=paths
+            with (
+                patch.object(check_docs, "ROOT", root),
+                patch.object(check_docs, "tracked_files", return_value=paths),
             ):
                 return check_docs.check_markdown()
 
@@ -217,14 +216,10 @@ Setext Heading
                 "nested/guide.md": "# Present\n",
             }
         )
-        self.assertEqual(
-            {error.rule_id for error in errors}, {"PROD-DOCS-6", "PROD-DOCS-4"}
-        )
+        self.assertEqual({error.rule_id for error in errors}, {"PROD-DOCS-6", "PROD-DOCS-4"})
         diagnostics = rendered(errors)
         self.assertTrue(any("missing heading anchor" in error for error in diagnostics))
-        self.assertTrue(
-            any("leaves the repository" in error for error in diagnostics)
-        )
+        self.assertTrue(any("leaves the repository" in error for error in diagnostics))
 
     def test_structured_data(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -243,8 +238,9 @@ Setext Heading
                     return [valid_yaml]
                 return []
 
-            with patch.object(check_docs, "ROOT", root), patch.object(
-                check_docs, "tracked_files", side_effect=files
+            with (
+                patch.object(check_docs, "ROOT", root),
+                patch.object(check_docs, "tracked_files", side_effect=files),
             ):
                 errors = check_docs.check_structured_data()
 
@@ -319,8 +315,9 @@ Setext Heading
                     return [invalid_yaml]
                 return []
 
-            with patch.object(check_docs, "ROOT", root), patch.object(
-                check_docs, "tracked_files", side_effect=files
+            with (
+                patch.object(check_docs, "ROOT", root),
+                patch.object(check_docs, "tracked_files", side_effect=files),
             ):
                 errors = check_docs.check_structured_data()
 
@@ -344,8 +341,9 @@ Setext Heading
                     return [catalog]
                 return []
 
-            with patch.object(check_docs, "ROOT", root), patch.object(
-                check_docs, "tracked_files", side_effect=files
+            with (
+                patch.object(check_docs, "ROOT", root),
+                patch.object(check_docs, "tracked_files", side_effect=files),
             ):
                 errors = check_docs.check_structured_data()
 

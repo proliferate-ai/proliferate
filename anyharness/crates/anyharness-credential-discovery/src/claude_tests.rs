@@ -118,8 +118,7 @@ fn normalizes_legacy_oauth_file_to_canonical_path() {
 #[test]
 fn exports_api_key_config_as_minimal_portable_file() {
     let home = make_temp_home();
-    let contents =
-        r#"{"primaryApiKey":"sk-ant-123","oauthAccount":{"accountUuid":"acct-123"}}"#;
+    let contents = r#"{"primaryApiKey":"sk-ant-123","oauthAccount":{"accountUuid":"acct-123"}}"#;
     fs::write(home.join(CLAUDE_CONFIG_PATH), contents).expect("write claude config");
 
     let export = export_portable_auth(&home)
