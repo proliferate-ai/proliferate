@@ -208,6 +208,8 @@ fn log_path_for_command(command: &Commands) -> Option<PathBuf> {
         }
         Commands::PrintOpenapi => None,
         Commands::CatalogProbe(_) => None,
+        // The reader of the logs must never write to them.
+        Commands::Logs(_) => None,
     }
 }
 

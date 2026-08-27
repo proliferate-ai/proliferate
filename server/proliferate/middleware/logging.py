@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from logging.handlers import RotatingFileHandler
 from datetime import UTC, datetime
 
 from proliferate.config import settings
@@ -85,7 +86,45 @@ def configure_server_logging() -> None:
         app_logger.addHandler(fallback_handler)
         app_logger.propagate = False
 
+    _attach_local_file_sink(app_logger)
+
     app_logger._proliferate_configured = True  # type: ignore[attr-defined]
+
+
+def _local_server_log_path() -> str | None:
+    """`<logs home>/server/logs/server.log`, local dev only.
+
+    The local tail (`proliferate logs`) interleaves every process's file
+    sink; in local dev the server's lines otherwise exist only in the
+    uvicorn terminal. Production and cloud mode keep stdout -> CloudWatch
+    untouched (no file). `PROLIFERATE_LOGS_HOME` overrides the root for
+    tests and non-standard homes.
+    """
+    if not settings.debug:
+        return None
+    root = os.getenv("PROLIFERATE_LOGS_HOME")
+    if not root:
+        home = os.path.expanduser("~")
+        if home == "~":
+            return None
+        root = os.path.join(home, ".proliferate")
+    return os.path.join(root, "server", "logs", "server.log")
+
+
+def _attach_local_file_sink(app_logger: logging.Logger) -> None:
+    path = _local_server_log_path()
+    if path is None:
+        return
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        handler = RotatingFileHandler(path, maxBytes=5 * 1024 * 1024, backupCount=2)
+    except OSError:
+        return  # a sink is never worth failing startup for
+    # Always the JSON record, whatever the console shows: the file's only
+    # reader is the tail, and a machine reads JSON (observability README §2).
+    handler.addFilter(CorrelationLogFilter())
+    handler.setFormatter(JsonLogFormatter())
+    app_logger.addHandler(handler)
 
 
 def _configure_handler(handler: logging.Handler) -> None:

@@ -69,6 +69,8 @@ impl DiagnosticsCollectorSupervisor {
 
     pub(crate) async fn stop_collector(&self) -> Result<(), SupervisorUnavailable> {
         let _decision = self.decisions.lock().await;
+        // The tail's discovery point dies with the generation it described.
+        super::super::descriptor_file::remove();
         let mut stop_operation = self.producer.begin_lifecycle("desktop.collector.stop");
         let _ = self.producer.drain(PRODUCER_DRAIN_TIMEOUT).await;
         let (mut process, retained_launch) = {
@@ -380,6 +382,14 @@ impl DiagnosticsCollectorSupervisor {
     }
 
     pub(super) fn accept_ready(&self, process: OwnedCollectorProcess) {
+        // The local tail's discovery point follows every ready generation.
+        {
+            let (endpoint, capability) = process.tail_descriptor();
+            super::super::descriptor_file::write(
+                endpoint,
+                capability.expose_for_descriptor_file(),
+            );
+        }
         let client = process.client();
         let collector_boot_id = process.descriptor().collector_boot_id.clone();
         let schema_major = process.descriptor().schema_major;

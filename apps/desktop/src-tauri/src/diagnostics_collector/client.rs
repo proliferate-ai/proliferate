@@ -28,6 +28,13 @@ const MAX_STREAM_FRAME_BYTES: usize = 1_048_576;
 pub(crate) struct SecretCapability(Zeroizing<String>);
 
 impl SecretCapability {
+    /// The raw capability, exposed for exactly one consumer: the 0600
+    /// connection-descriptor file the local tail reads
+    /// (`descriptor_file.rs`, which documents the custody decision).
+    pub(crate) fn expose_for_descriptor_file(&self) -> &str {
+        self.0.as_str()
+    }
+
     pub(crate) fn new(value: String) -> Result<Self, CollectorClientError> {
         if value.is_empty()
             || value.len() > 256
