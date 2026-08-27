@@ -771,7 +771,7 @@ const ORBIT_DELAYS = [
         hooks_dir = check_module.REPO_ROOT / "scripts" / "git-hooks"
         gate = (check_module.REPO_ROOT / "scripts" / "gate").read_text()
         self.assertIn(
-            '"python3 scripts/check_appearance_scaling.py"',
+            '("appearance scaling", "python3 scripts/check_appearance_scaling.py"),',
             gate,
             "the gate's always-set no longer runs the appearance-scaling checker",
         )

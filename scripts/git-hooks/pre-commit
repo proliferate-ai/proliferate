@@ -32,19 +32,42 @@ warn() {
   echo "pre-commit: $*" >&2
 }
 
+# restage_changed <pre-format "hash path" lines>: re-add only files whose
+# content the formatter actually changed — an untouched, partially staged file
+# must never have its unstaged hunks swept into the commit.
+restage_changed() {
+  printf '%s\n' "$1" | while IFS=' ' read -r before f; do
+    [ -n "$f" ] && [ -f "$f" ] || continue
+    after=$(git hash-object "$f" 2>/dev/null) || continue
+    if [ "$after" != "$before" ]; then
+      git add "$f" 2>/dev/null || warn "could not restage $f"
+    fi
+  done
+}
+
+hashes_for() {
+  for f in $1; do
+    [ -f "$f" ] && printf '%s %s\n' "$(git hash-object "$f")" "$f"
+  done
+}
+
 # --- Python: ruff format over staged files in the server's ruff scope -------
 py_files=$(printf '%s\n' "$staged" | grep -E '^server/(proliferate|tests)/.*\.py$' || true)
 if [ -n "$py_files" ]; then
   if command -v uv >/dev/null 2>&1; then
+    py_existing=""
     rel=""
     for f in $py_files; do
-      [ -f "$f" ] && rel="$rel ${f#server/}"
+      if [ -f "$f" ]; then
+        py_existing="$py_existing $f"
+        rel="$rel ${f#server/}"
+      fi
     done
-    if [ -n "$rel" ]; then
+    if [ -n "$py_existing" ]; then
+      py_hashes=$(hashes_for "$py_existing")
       # shellcheck disable=SC2086
       if (cd server && uv run --python 3.12 --frozen --extra dev ruff format $rel >/dev/null 2>&1); then
-        # shellcheck disable=SC2086
-        git add $py_files 2>/dev/null || warn "could not restage formatted python files"
+        restage_changed "$py_hashes"
       else
         warn "ruff format failed; commit proceeds unformatted (the gate will tell you)."
       fi
@@ -55,22 +78,27 @@ if [ -n "$py_files" ]; then
 fi
 
 # --- Rust: rustfmt over the staged .rs files only ----------------------------
+# rustfmt directly, NOT `cargo fmt -- <files>`: cargo-fmt appends file args to
+# the full workspace target list, so it would reformat everything. The edition
+# mirrors [workspace.package] in the root Cargo.toml.
 rs_files=$(printf '%s\n' "$staged" | grep -E '\.rs$' || true)
 if [ -n "$rs_files" ]; then
-  if command -v cargo >/dev/null 2>&1; then
+  if command -v rustfmt >/dev/null 2>&1; then
     rs_existing=""
     for f in $rs_files; do
       [ -f "$f" ] && rs_existing="$rs_existing $f"
     done
-    # shellcheck disable=SC2086
-    if [ -n "$rs_existing" ] && cargo fmt -- $rs_existing >/dev/null 2>&1; then
+    if [ -n "$rs_existing" ]; then
+      rs_hashes=$(hashes_for "$rs_existing")
       # shellcheck disable=SC2086
-      git add $rs_existing 2>/dev/null || warn "could not restage formatted rust files"
-    else
-      warn "cargo fmt failed; commit proceeds unformatted (the gate will tell you)."
+      if rustfmt --edition 2021 $rs_existing >/dev/null 2>&1; then
+        restage_changed "$rs_hashes"
+      else
+        warn "rustfmt failed; commit proceeds unformatted (the gate will tell you)."
+      fi
     fi
   else
-    warn "cargo not found; skipping cargo fmt."
+    warn "rustfmt not found; skipping rust formatting."
   fi
 fi
 

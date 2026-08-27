@@ -141,7 +141,7 @@ endif
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
         server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
-        check check-max-lines check-server-boundaries test test-server fmt clippy \
+        gate check check-max-lines check-server-boundaries test test-server fmt clippy \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build dev-build rebuild \
         desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \

@@ -102,6 +102,24 @@ class ClassifyTests(unittest.TestCase):
     def test_md_anywhere_is_docs(self):
         self.assertTrue(gate.classify(["anyharness/README.md"]).docs)
 
+    def test_cicd_mjs_and_root_manifests_have_planes(self):
+        scope = gate.classify(
+            ["scripts/ci-cd/pr-metadata.mjs", "package.json", "pnpm-lock.yaml"]
+        )
+        self.assertTrue(scope.cicd)
+        self.assertTrue(scope.shared_frontend)
+        self.assertEqual(scope.unmapped, [])
+
+    def test_changed_server_tests_are_collected(self):
+        scope = gate.classify(["server/tests/unit/test_billing_domain.py"])
+        self.assertEqual(scope.server_changed_tests, ["tests/unit/test_billing_domain.py"])
+
+    def test_unknown_paths_are_reported_unmapped(self):
+        scope = gate.classify(["random/thing.xyz", "scripts/git-hooks/pre-push"])
+        self.assertEqual(
+            scope.unmapped, ["random/thing.xyz", "scripts/git-hooks/pre-push"]
+        )
+
 
 class CrateTests(unittest.TestCase):
     def test_crate_name_parses_package_section_only(self):
@@ -212,6 +230,36 @@ class BuildChecksTests(unittest.TestCase):
         self.assertIn("--workspace", clippy.cmd)
         self.assertNotIn("-D warnings", clippy.cmd)  # info mode until lint-wiring lands
 
+    def test_rust_fmt_is_advisory_until_its_ci_job_exists(self):
+        scope = gate.classify(["anyharness/crates/anyharness-lib/src/lib.rs"])
+        checks = gate.build_checks(scope, **self._base_kwargs())
+        fmt = next(c for c in checks if c.name.startswith("rust: fmt"))
+        self.assertTrue(fmt.advisory)
+
+    def test_empty_domain_server_diff_is_a_loud_no_test_note(self):
+        scope = gate.classify(["server/proliferate/lib/email.py"])
+        checks = gate.build_checks(scope, **self._base_kwargs())
+        note = next(c for c in checks if c.name == "server: tests")
+        self.assertIsNone(note.cmd)
+        self.assertTrue(note.loud)
+        self.assertIn("CI runs the full suite", note.skip_reason)
+
+    def test_changed_test_files_run_even_without_a_domain(self):
+        scope = gate.classify(["server/tests/unit/test_billing_domain.py"])
+        checks = gate.build_checks(scope, **self._base_kwargs())
+        pytest_check = next(c for c in checks if c.cmd and " pytest " in f" {c.cmd} ")
+        self.assertIn("tests/unit/test_billing_domain.py", pytest_check.cmd)
+
+    def test_no_engine_python_turns_engine_checks_into_loud_skips(self):
+        scope = gate.classify(["specs/x.md"])
+        checks = gate.build_checks(scope, **self._base_kwargs())
+        adjusted = gate.apply_engine_availability(checks, None)
+        engine_checks = [c for c in adjusted if c.name in {n for n, _ in gate.ALWAYS_ENGINES}]
+        self.assertTrue(engine_checks)
+        self.assertTrue(all(c.cmd is None and c.loud for c in engine_checks))
+        untouched = gate.apply_engine_availability(checks, "/opt/py312")
+        self.assertIs(untouched, checks)
+
     def test_missing_nextest_is_a_loud_skip_not_a_fail(self):
         scope = gate.classify(["anyharness/crates/anyharness-lib/src/lib.rs"])
         checks = gate.build_checks(scope, **self._base_kwargs(have_nextest=False))
@@ -267,15 +315,45 @@ class MirrorRuleTests(unittest.TestCase):
             (REPO / ".github" / "workflows" / "server-ci.yml").read_text()
         )
 
-    def test_always_engines_mirror_repo_shape_steps(self):
-        for name, cmd in gate.ALWAYS_ENGINES:
-            with self.subTest(check=name):
-                self.assertIn(_normalized(cmd), self.ci)
+    @classmethod
+    def _repo_shape_python3_lines(cls) -> set[str]:
+        """Every python3 command line in ci.yml's Repo shape checks job."""
+        raw = (REPO / ".github" / "workflows" / "ci.yml").read_text()
+        start = raw.index("name: Repo shape checks")
+        end = raw.index("\n  terraform-validate:", start)
+        lines = set()
+        for line in raw[start:end].splitlines():
+            stripped = line.strip()
+            if stripped.startswith("run: "):
+                stripped = stripped[len("run: "):]
+            if stripped.startswith("python3 "):
+                lines.add(stripped)
+        return lines
 
-    def test_scripts_proofs_mirror_repo_shape_steps(self):
-        for name, cmd in gate.SCRIPTS_PROOFS:
-            if name == "checker tests: gate":
-                continue  # added by this slice; asserted below
+    def test_python3_census_is_two_directional(self):
+        """The gate runs exactly the repo-shape job's python3 commands.
+
+        Both directions: a gate command CI doesn't run is a mirror violation;
+        a repo-shape step the gate doesn't know is silent local under-coverage
+        (a new checker must be added to ALWAYS_ENGINES/SCRIPTS_PROOFS in the
+        same PR that adds its CI step — this test is what forces that).
+        """
+        ci_lines = self._repo_shape_python3_lines()
+        gate_lines = {
+            cmd
+            for _, cmd in (*gate.ALWAYS_ENGINES, *gate.SCRIPTS_PROOFS)
+            if cmd.startswith("python3 ")
+        }
+        self.assertEqual(gate_lines - ci_lines, set(), "gate runs commands CI does not")
+        self.assertEqual(ci_lines - gate_lines, set(), "CI runs commands the gate does not")
+
+    def test_uv_proof_mirrors_repo_shape(self):
+        uv_cmds = [cmd for _, cmd in gate.SCRIPTS_PROOFS if cmd.startswith("uv ")]
+        self.assertEqual(len(uv_cmds), 1)
+        self.assertIn(_normalized(uv_cmds[0]), self.ci)
+
+    def test_cicd_config_tests_mirror_ci(self):
+        for name, cmd in gate.CICD_CONFIG_TESTS:
             with self.subTest(check=name):
                 self.assertIn(_normalized(cmd), self.ci)
 
