@@ -75,7 +75,7 @@ pub(super) struct ReadVerificationProof {
     pub expires_at: Instant,
 }
 
-pub(super) struct CoordinatorState {
+pub(crate) struct CoordinatorState {
     pub shutdown_armed: bool,
     pub readiness: ReadinessState,
     pub preparation: Option<OpenPreparation>,

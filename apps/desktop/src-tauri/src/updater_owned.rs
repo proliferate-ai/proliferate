@@ -4,7 +4,7 @@
 //! abort/resume, persists nothing, and its `Update::install(bytes)` seam does NO
 //! signature verification. So we own the transfer: stream to a staged file with
 //! resume, enforce a single live download via an abort token, and verify sha256
-//! + minisign against the baked pubkey before install. See Update Flow ADR
+//! and minisign against the baked pubkey before install. See Update Flow ADR
 //! (FR-2) and `specs/systems/desktop-host/desktop-native.md`.
 
 use std::path::{Path, PathBuf};
@@ -39,12 +39,20 @@ pub struct OwnedUpdaterError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum OwnedUpdaterErrorCode {
-    UpdaterCheckFailed,
-    UpdaterDownloadStalled,
-    UpdaterDownloadAborted,
-    UpdaterArtifactHashMismatch,
-    UpdaterInstallFailed,
-    UpdaterDiskFull,
+    // Explicit renames pin the shipped wire strings across the 2026-08-27
+    // variant de-prefixing (enum_variant_names).
+    #[serde(rename = "UPDATER_CHECK_FAILED")]
+    CheckFailed,
+    #[serde(rename = "UPDATER_DOWNLOAD_STALLED")]
+    DownloadStalled,
+    #[serde(rename = "UPDATER_DOWNLOAD_ABORTED")]
+    DownloadAborted,
+    #[serde(rename = "UPDATER_ARTIFACT_HASH_MISMATCH")]
+    ArtifactHashMismatch,
+    #[serde(rename = "UPDATER_INSTALL_FAILED")]
+    InstallFailed,
+    #[serde(rename = "UPDATER_DISK_FULL")]
+    DiskFull,
 }
 
 impl OwnedUpdaterError {
@@ -56,21 +64,21 @@ impl OwnedUpdaterError {
     }
 
     fn check(message: impl Into<String>) -> Self {
-        Self::new(OwnedUpdaterErrorCode::UpdaterCheckFailed, message)
+        Self::new(OwnedUpdaterErrorCode::CheckFailed, message)
     }
 
     fn install(message: impl Into<String>) -> Self {
-        Self::new(OwnedUpdaterErrorCode::UpdaterInstallFailed, message)
+        Self::new(OwnedUpdaterErrorCode::InstallFailed, message)
     }
 
     fn mismatch(message: impl Into<String>) -> Self {
-        Self::new(OwnedUpdaterErrorCode::UpdaterArtifactHashMismatch, message)
+        Self::new(OwnedUpdaterErrorCode::ArtifactHashMismatch, message)
     }
 
     /// Classify a std::io error: a full disk (ENOSPC) is user-actionable.
     fn from_io(err: &std::io::Error) -> Self {
         if err.raw_os_error() == Some(28) {
-            Self::new(OwnedUpdaterErrorCode::UpdaterDiskFull, err.to_string())
+            Self::new(OwnedUpdaterErrorCode::DiskFull, err.to_string())
         } else {
             Self::install(err.to_string())
         }
@@ -383,7 +391,7 @@ pub async fn updater_owned_check<R: Runtime>(
 
     let Some(update) = update else {
         return Err(OwnedUpdaterError::new(
-            OwnedUpdaterErrorCode::UpdaterCheckFailed,
+            OwnedUpdaterErrorCode::CheckFailed,
             "no update available",
         ));
     };
@@ -494,7 +502,7 @@ async fn download_to_staged(
             biased;
             _ = token.cancelled() => {
                 return Err(OwnedUpdaterError::new(
-                    OwnedUpdaterErrorCode::UpdaterDownloadAborted,
+                    OwnedUpdaterErrorCode::DownloadAborted,
                     "download aborted",
                 ));
             }
@@ -505,7 +513,7 @@ async fn download_to_staged(
                 Err(_) => {
                     tracing::warn!(version, counter = "updater.download.stall", "owned download stalled");
                     return Err(OwnedUpdaterError::new(
-                        OwnedUpdaterErrorCode::UpdaterDownloadStalled,
+                        OwnedUpdaterErrorCode::DownloadStalled,
                         "download stalled: no bytes received",
                     ));
                 }

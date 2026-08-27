@@ -83,6 +83,7 @@ pub struct SupportOptionalScrubbed<T> {
 }
 
 /// Stateless scrubber apart from an optional, caller-provided home prefix.
+#[derive(Default)]
 pub struct SupportExportScrubber {
     home_directory: Option<String>,
 }
@@ -125,14 +126,6 @@ impl SupportExportScrubber {
         source: SupportEvidenceSourceV1,
     ) -> Result<SupportOptionalScrubbed<SupportJsonValueV1>, SupportScrubError> {
         value::scrub_optional(self, value, source)
-    }
-}
-
-impl Default for SupportExportScrubber {
-    fn default() -> Self {
-        Self {
-            home_directory: None,
-        }
     }
 }
 

@@ -91,7 +91,7 @@ fn placeholder_is_binary_invalid_on_a_supported_target() {
 fn control_channel_accepts_only_the_closed_typed_shutdown_command() {
     let command = typed_shutdown_command().expect("typed command");
     assert_eq!(command, br#"{"command":"shutdown"}"#);
-    assert!(command.len() + 1 <= MAX_CONTROL_COMMAND_BYTES);
+    assert!(command.len() < MAX_CONTROL_COMMAND_BYTES);
 }
 
 #[tokio::test]

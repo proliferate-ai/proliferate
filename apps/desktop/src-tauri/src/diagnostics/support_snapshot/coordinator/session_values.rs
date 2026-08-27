@@ -207,9 +207,7 @@ pub(super) fn summary_binding_time(
     source_time_from: Option<&str>,
     source_time_to: &str,
 ) -> Option<DateTime<Utc>> {
-    let Some(object) = value.as_object() else {
-        return None;
-    };
+    let object = value.as_object()?;
     if object.contains_key("liveConfig") {
         return None;
     }
@@ -223,9 +221,9 @@ pub(super) fn summary_binding_time(
     {
         return None;
     }
-    let Some(updated_at) = object.get("updatedAt").and_then(serde_json::Value::as_str) else {
-        return None;
-    };
+    let updated_at = object
+        .get("updatedAt")
+        .and_then(serde_json::Value::as_str)?;
     validate_timestamp(updated_at).ok()?;
     let updated = parse_time(updated_at).ok()?;
     let cutoff = parse_time(source_time_to).ok()?;

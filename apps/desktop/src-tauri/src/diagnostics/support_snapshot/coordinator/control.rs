@@ -205,20 +205,11 @@ impl FinishCompletion {
     }
 }
 
+#[derive(Default)]
 struct FinishCompletionState {
     result: Option<Result<FinishResult, FinishError>>,
     authorized: bool,
     cleanup_claimed: bool,
-}
-
-impl Default for FinishCompletionState {
-    fn default() -> Self {
-        Self {
-            result: None,
-            authorized: false,
-            cleanup_claimed: false,
-        }
-    }
 }
 
 impl FinishCompletionState {

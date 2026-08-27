@@ -175,5 +175,7 @@ reason = "rustfmt normalization 2026-08-27 (lint wiring): multi-line rewraps und
 
 [[max_lines]]
 path = "apps/desktop/src-tauri/src/updater_owned.rs"
-max_lines = 616
+# 616 -> 624 (2026-08-27 lint wiring): the enum de-prefixing pins its shipped
+# wire strings with per-variant serde renames — not new debt.
+max_lines = 624
 reason = "rustfmt normalization 2026-08-27 (lint wiring): multi-line rewraps under the pinned 1.98.0 toolchain pushed the file over the cap — mechanical whitespace, not new debt; shrink with the next real split"

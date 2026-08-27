@@ -59,7 +59,7 @@ fn entry_for_path(path: String) -> Option<DroppedPathEntry> {
         .into_owned();
     let is_directory = metadata.is_dir();
     Some(DroppedPathEntry {
-        size: (!is_directory).then(|| metadata.len()),
+        size: (!is_directory).then_some(metadata.len()),
         path,
         name,
         is_directory,

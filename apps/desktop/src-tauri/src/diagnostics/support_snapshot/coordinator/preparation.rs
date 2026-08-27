@@ -584,7 +584,7 @@ fn validate_begin_times(
     let granted = DateTime::parse_from_rfc3339(&input.consent.granted_at)
         .map_err(|_| "support_snapshot_invalid_input".to_string())?
         .with_timezone(&Utc);
-    if report > granted || granted > now.clone() {
+    if report > granted || granted > *now {
         return Err("support_snapshot_invalid_input".to_string());
     }
     Ok(())
