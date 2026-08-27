@@ -104,7 +104,7 @@ Each checked-in workflow appears exactly once below. Trigger posture describes h
 
 | Workflow | Trigger and posture | Role |
 | --- | --- | --- |
-| `agent-runtime-compat.yml` | Manual | Exercise live local AnyHarness compatibility with configured agent credentials. |
+| `anyharness-attached.yml` | Manual (credential-dark) | Exercise live local AnyHarness compatibility with configured agent credentials — dark until the agent secrets are provisioned or the lane is ruled out (census row carries the sunset). |
 | `catalog-probe.yml` | Scheduled daily or manual | Probe agent/catalog pins through the protected `Catalog Probe` environment, pass sanitized outputs to a separate write-capable PR job, and create or update an owned GitHub issue on scheduled failure. |
 | `ci-heavy-lanes.yml` | Manual | Run the four lanes demoted off the per-PR path in the 2026-08 engineering cull (candidate-build-handoff, login-budget, scroll-physics, workflow-definition-lifecycle), verbatim moves out of `ci.yml`. Re-gating is a step-3 CI/CD-spec decision. |
 | `ci.yml` | Push to `main`, pull request, or manual | Run repository shape, configuration, Rust, SDK, client, and workflow checks. Required-check policy is external to this file. |
