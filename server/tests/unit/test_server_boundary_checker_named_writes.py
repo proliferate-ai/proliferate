@@ -65,16 +65,10 @@ STORE_RULE_IDS = {
 
 STORE_OWNER_HINTS = {
     "proliferate.db.store.organizations": "proliferate.server.organizations.service",
-    "proliferate.db.store.organization_invitations": (
-        "proliferate.server.organizations.service"
-    ),
+    "proliferate.db.store.organization_invitations": ("proliferate.server.organizations.service"),
     "proliferate.db.store.agent_gateway": "proliferate.server.agent_auth.service",
-    "proliferate.db.store.agent_gateway.api_keys": (
-        "proliferate.server.agent_auth.service"
-    ),
-    "proliferate.db.store.agent_gateway.selections": (
-        "proliferate.server.agent_auth.service"
-    ),
+    "proliferate.db.store.agent_gateway.api_keys": ("proliferate.server.agent_auth.service"),
+    "proliferate.db.store.agent_gateway.selections": ("proliferate.server.agent_auth.service"),
 }
 
 

@@ -50,8 +50,16 @@ target-version = "py312"
 line-length = 99
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "ANN"]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "TID"]
 ignore = ["B008"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+# Parent-relative imports (`from .. import x`) resolve by position, so a module
+# moved across a domain boundary keeps importing its OLD neighborhood without
+# any import line naming the fenced package — invisible to the server fence
+# checker (SRV-FENCE-001), which resolves absolute module paths. Absolute
+# imports only across parents; same-package `.x` stays legal.
+ban-relative-imports = "parents"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN", "I001"]

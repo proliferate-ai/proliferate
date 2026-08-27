@@ -610,9 +610,7 @@ async def test_zero_grant_check_classifies_non_default_org_as_non_paging(
     assert result.healed == 0
     assert result.alerted == 0
     assert calls == []
-    assert any(
-        getattr(record, "reason", None) == "non_default_org" for record in caplog.records
-    )
+    assert any(getattr(record, "reason", None) == "non_default_org" for record in caplog.records)
 
 
 @pytest.mark.asyncio

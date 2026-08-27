@@ -360,7 +360,8 @@ async def test_enrollment_and_free_signup_grant_land_in_the_same_flow(
     )
     assert len(grants) == 1
     assert grants[0].amount_usd == Decimal("5")
-    assert grants[0].source_ref == f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{enrollment.billing_subject_id}"
+    expected_ref = f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{enrollment.billing_subject_id}"
+    assert grants[0].source_ref == expected_ref
 
 
 @pytest.mark.asyncio

@@ -184,9 +184,7 @@ async def _reclaim_orphaned_allocation(
         refusal_reason = "orphan_holds_foreign_allocations"
     elif any(
         grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP
-        for grant in await agent_gateway_store.list_llm_credit_grants(
-            db, default_org_subject.id
-        )
+        for grant in await agent_gateway_store.list_llm_credit_grants(db, default_org_subject.id)
     ):
         refusal_reason = "destination_already_has_free_signup"
     if refusal_reason is not None:

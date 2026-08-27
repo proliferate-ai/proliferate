@@ -247,9 +247,7 @@ async def test_reported_error_redacts_the_virtual_key_everywhere(
     # the real emit path (the one carrying the exc_info traceback) actually runs.
     critical_logger.disabled = False
     try:
-        with caplog.at_level(
-            logging.WARNING, logger="proliferate.server.ai_gateway.verification"
-        ):
+        with caplog.at_level(logging.WARNING, logger="proliferate.server.ai_gateway.verification"):
             await verification.run_verification(db_session)
     finally:
         critical_logger.removeHandler(handler)

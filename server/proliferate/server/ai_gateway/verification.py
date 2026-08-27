@@ -266,9 +266,7 @@ async def record_verification_verdicts(
             if sample_error is None:
                 sample_error = observation.error
             continue
-        status, delta = _diff_verdict(
-            observation.harness_kind, observation.observed, expected_map
-        )
+        status, delta = _diff_verdict(observation.harness_kind, observation.observed, expected_map)
         await record_enrollment_key_verification(
             db,
             enrollment_key_id=observation.enrollment_key_id,
@@ -290,8 +288,7 @@ async def record_verification_verdicts(
     if errored >= max(_ERROR_ALERT_FLOOR, math.ceil(checked / 2)):
         report_critical(
             AgentGatewayVerificationErrors(
-                f"verification errored on {errored} of {checked} keys; "
-                f"sample: {sample_error}"
+                f"verification errored on {errored} of {checked} keys; sample: {sample_error}"
             ),
             tags={"domain": "agent_gateway", "action": "verification"},
         )

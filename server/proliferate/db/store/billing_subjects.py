@@ -319,9 +319,7 @@ async def move_agent_gateway_free_credit_allocation(
         FreeCloudAllocation.billing_subject_id == from_billing_subject_id,
     )
     if github_provider_user_id is not None:
-        query = query.where(
-            FreeCloudAllocation.github_provider_user_id == github_provider_user_id
-        )
+        query = query.where(FreeCloudAllocation.github_provider_user_id == github_provider_user_id)
     result = await db.execute(
         query.values(billing_subject_id=to_billing_subject_id, updated_at=utcnow())
     )
@@ -386,9 +384,7 @@ async def count_agent_gateway_free_credit_allocations_for_subject(
         FreeCloudAllocation.billing_subject_id == billing_subject_id,
     )
     if github_provider_user_id is not None:
-        query = query.where(
-            FreeCloudAllocation.github_provider_user_id == github_provider_user_id
-        )
+        query = query.where(FreeCloudAllocation.github_provider_user_id == github_provider_user_id)
     return int(await db.scalar(query) or 0)
 
 
