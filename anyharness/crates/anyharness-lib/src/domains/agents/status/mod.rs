@@ -20,6 +20,19 @@
 //! 5. the settings rider `rotate` (parsed by `resolve_profile`);
 //! 6. the probe evidence held beside the row (the serve-stale observation).
 //!
+//! Items 1–5 are the COMPOSED half ([`compose`]); item 6 is the probe block
+//! ([`probe_block`]). They are decided in different places on purpose:
+//!
+//! - a composition refresh (`AuthApplied`, `LoginTerminal`, `SeatCooling`,
+//!   `InstallCompleted`, `Startup`) re-derives items 1–5 and carries the probe
+//!   block over verbatim;
+//! - a probe event moves the probe block and NOTHING else. It does not
+//!   recompose, so a probe completing can never publish an auth world that no
+//!   composition refresh chose — which is what happened while probe writers
+//!   composed: a verdict write carrying a state-file read from milliseconds
+//!   earlier reverted the served `methods`/`applied` to the pre-apply world and
+//!   silently lost an auth change.
+//!
 //! Refreshing a harness whose recomposed document is byte-identical to the
 //! persisted one neither publishes nor rewrites — changing one harness's auth
 //! leaves every other harness's document byte-stable.
@@ -27,103 +40,37 @@
 //! Never logs or persists token material: documents carry seat ids and
 //! verdicts only.
 
+mod compose;
+#[cfg(test)]
+mod concurrency_tests;
+mod doc;
+mod probe_block;
 mod store;
 #[cfg(test)]
 mod tests;
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use chrono::{DateTime, Utc};
 use tokio::sync::broadcast;
 
+use doc::{parse_doc, ComposedBody};
+pub use doc::{
+    AppliedMethod, MethodRow, ProbeStatus, ProbeVerdict, StatusDoc, METHOD_KIND_API_KEY,
+    METHOD_KIND_GATEWAY, METHOD_KIND_NATIVE, METHOD_KIND_SEAT, OFFER_MINT_SEAT,
+};
+pub use probe_block::ProbeStaleGuard;
+use probe_block::{probe_block, HarnessMark, ProbeIntent};
 pub use store::AgentStatusStore;
-use store::ObservationWrite;
+use store::{Decided, DocumentWrite};
 
-use crate::domains::agents::auth::credentials::detect_cli_auth_state;
 use crate::domains::agents::launch_probe::targets::ProbeTargets;
 use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
-use crate::domains::agents::model::{AgentKind, CliAuthState};
 use crate::domains::agents::registry;
-use crate::domains::agents::route_auth::profile::{
-    resolve_profile, AgentRuntimeAuthProfile, HarnessSources, ResolvedSource,
-};
-use crate::domains::agents::route_auth::rotation::seat_rotation_readout;
-use crate::domains::agents::route_auth::{current_server_origin, load_effective_state};
 use crate::domains::agents::seat_cooling::SeatCoolingStore;
 use crate::persistence::Db;
-
-/// The domain's status document (the wire twin is
-/// `anyharness_contract::v1::StatusDoc`, mapped at the API boundary
-/// per AH-CONTRACT-1). Serde derives live here because the document is
-/// PERSISTED in this exact shape — `doc_json` is the served truth, and the
-/// spec's printed snake_case shape is the contract for both the row and the
-/// wire.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct StatusDoc {
-    pub harness_kind: String,
-    pub methods: Vec<MethodRow>,
-    /// The applied method, from the applied document — never detection. The
-    /// SERVING seat rides `applied.seat_id`. `None`/`null` when the document
-    /// gives this harness no satisfiable sources.
-    pub applied: Option<AppliedMethod>,
-    pub next_seat_id: Option<String>,
-    pub rotate: bool,
-    pub probe: ProbeStatus,
-    pub cooling_until: Option<String>,
-}
-
-/// One method row: launch methods carry `available`; the `native` row carries
-/// `detected` (+ `offer`) and never `available`.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct MethodRow {
-    pub kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub available: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub seat_id: Option<String>,
-    pub applied: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub detected: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub offer: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct AppliedMethod {
-    pub kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub seat_id: Option<String>,
-}
-
-/// The closed probe-verdict set.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProbeVerdict {
-    Verified,
-    Failed,
-    Unverified,
-}
-
-/// The serve-stale probe block: `stale` dims, the observation stays visible.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct ProbeStatus {
-    pub verdict: ProbeVerdict,
-    pub at: Option<String>,
-    pub stale: bool,
-}
-
-/// Method vocabulary on the document (the spec's three methods + the native
-/// detection row).
-pub const METHOD_KIND_SEAT: &str = "seat";
-pub const METHOD_KIND_GATEWAY: &str = "gateway";
-pub const METHOD_KIND_API_KEY: &str = "api_key";
-pub const METHOD_KIND_NATIVE: &str = "native";
-/// The native row's offer for seat-capable harnesses.
-pub const OFFER_MINT_SEAT: &str = "mint_seat";
-
-const OBSERVED_VERIFIED: &str = "verified";
-const OBSERVED_FAILED: &str = "failed";
 
 /// Why a refresh fired — trace vocabulary only; every cause runs the same
 /// recomposition.
@@ -137,6 +84,11 @@ pub enum RefreshCause {
     LoginTerminal,
     /// A live session observed a seat limit hit and marked the seat cooling.
     SeatCooling,
+    /// An install finished. A harness installed after boot has no row yet, and
+    /// nothing else composes one: the install poke is refused outright for a
+    /// manual-refresh-only harness, and even for an auto-probeable one it is
+    /// fire-and-forget, so the install response would serve `authStatus: null`.
+    InstallCompleted,
 }
 
 impl RefreshCause {
@@ -146,6 +98,7 @@ impl RefreshCause {
             Self::AuthApplied => "auth_applied",
             Self::LoginTerminal => "login_terminal",
             Self::SeatCooling => "seat_cooling",
+            Self::InstallCompleted => "install_completed",
         }
     }
 }
@@ -163,7 +116,12 @@ pub struct AgentStatusService {
     universe: Vec<String>,
     /// The home dir native detection reads (the user's `$HOME` in production;
     /// a temp dir in tests so a developer's real logins cannot leak in).
-    detection_home: PathBuf,
+    /// `None` when the home dir cannot be resolved at all — that means NO
+    /// native detection, never a scan of the filesystem root.
+    detection_home: Option<PathBuf>,
+    /// Per-harness write cells: the stale-mark bookkeeping AND the lock every
+    /// status write for that harness is taken under. See [`HarnessMark`].
+    marks: Mutex<HashMap<String, Arc<Mutex<HarnessMark>>>>,
     publisher: broadcast::Sender<StatusDoc>,
 }
 
@@ -173,8 +131,7 @@ impl AgentStatusService {
             .iter()
             .map(|descriptor| descriptor.kind.as_str().to_string())
             .collect();
-        let detection_home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-        Self::with_parts(db, runtime_home, targets, universe, detection_home)
+        Self::with_detection_home(db, runtime_home, targets, universe, dirs::home_dir())
     }
 
     pub(crate) fn with_parts(
@@ -184,6 +141,16 @@ impl AgentStatusService {
         universe: Vec<String>,
         detection_home: PathBuf,
     ) -> Self {
+        Self::with_detection_home(db, runtime_home, targets, universe, Some(detection_home))
+    }
+
+    fn with_detection_home(
+        db: Db,
+        runtime_home: PathBuf,
+        targets: Arc<dyn ProbeTargets>,
+        universe: Vec<String>,
+        detection_home: Option<PathBuf>,
+    ) -> Self {
         let (publisher, _) = broadcast::channel(64);
         Self {
             runtime_home,
@@ -192,6 +159,7 @@ impl AgentStatusService {
             targets,
             universe,
             detection_home,
+            marks: Mutex::new(HashMap::new()),
             publisher,
         }
     }
@@ -229,9 +197,20 @@ impl AgentStatusService {
     /// probe block over unchanged (probe evidence moves only through the
     /// probe writers below).
     pub fn refresh(&self, harness_kind: &str, cause: RefreshCause) {
-        let probe = self.stored_probe_block(harness_kind);
-        let doc = self.compose(harness_kind, probe);
-        self.persist(doc, ObservationWrite::Keep, cause.as_str());
+        let cell = self.mark_cell(harness_kind);
+        let mut mark = lock_mark(&cell);
+        // Composition runs under the harness's own write cell, so two refreshes
+        // for one harness — the startup pass racing an apply, which happens on
+        // EVERY boot — cannot interleave their reads and writes and persist a
+        // document built from the older read.
+        let body = self.compose_body(harness_kind);
+        self.write_locked(
+            harness_kind,
+            Some(body),
+            ProbeIntent::Carry,
+            cause.as_str(),
+            &mut mark,
+        );
     }
 
     pub fn refresh_harnesses(&self, harness_kinds: &[String], cause: RefreshCause) {
@@ -248,32 +227,62 @@ impl AgentStatusService {
         }
     }
 
+    /// Admit a probe attempt against the document, RAII-style: the document
+    /// goes stale now — queued counts — and the mark comes back off when the
+    /// LAST admitted attempt lets go without a completion of its own. See
+    /// [`ProbeStaleGuard`], which is why this returns a value that must be held.
+    #[must_use = "the stale mark is released when the guard drops"]
+    pub fn admit_probe(self: &Arc<Self>, harness_kind: &str) -> ProbeStaleGuard {
+        let cell = self.mark_cell(harness_kind);
+        {
+            let mut mark = lock_mark(&cell);
+            if mark.admitted == 0 {
+                // Nothing is in flight, so what the document shows right now is
+                // what a release must put back.
+                mark.restore = self
+                    .store
+                    .read(harness_kind)
+                    .and_then(|row| parse_doc(harness_kind, &row.doc_json))
+                    .is_some_and(|doc| doc.probe.stale);
+            }
+            mark.admitted = mark.admitted.saturating_add(1);
+            self.probe_write(
+                harness_kind,
+                ProbeIntent::MarkStale,
+                "probe_admitted",
+                &mut mark,
+            );
+        }
+        ProbeStaleGuard::new(self.clone(), harness_kind.to_string())
+    }
+
     /// A probe attempt was admitted (queued or running): the document goes
     /// stale, verdict and evidence unchanged — the last observation stays
     /// visible while the re-probe runs.
+    ///
+    /// The bare mark, with no release. Production admits through
+    /// [`Self::admit_probe`]; this is the primitive it writes with, kept public
+    /// so tests can drive the serve-stale ladder one step at a time.
     pub fn probe_admitted(&self, harness_kind: &str) {
-        let mut probe = self.stored_probe_block(harness_kind);
-        probe.stale = true;
-        let doc = self.compose(harness_kind, probe);
-        self.persist(doc, ObservationWrite::Keep, "probe_admitted");
+        let cell = self.mark_cell(harness_kind);
+        let mut mark = lock_mark(&cell);
+        self.probe_write(
+            harness_kind,
+            ProbeIntent::MarkStale,
+            "probe_admitted",
+            &mut mark,
+        );
     }
 
     /// A probe succeeded: fresh evidence, and the observation store moves.
     pub fn probe_verified(&self, harness_kind: &str, at: DateTime<Utc>) {
-        let at = at.to_rfc3339();
-        let probe = ProbeStatus {
-            verdict: ProbeVerdict::Verified,
-            at: Some(at.clone()),
-            stale: false,
-        };
-        let doc = self.compose(harness_kind, probe);
-        self.persist(
-            doc,
-            ObservationWrite::Set {
-                verdict: OBSERVED_VERIFIED,
-                at: &at,
-            },
+        let cell = self.mark_cell(harness_kind);
+        let mut mark = lock_mark(&cell);
+        self.probe_write(
+            harness_kind,
+            ProbeIntent::Verified { at },
             "probe_verified",
+            &mut mark,
         );
     }
 
@@ -283,39 +292,34 @@ impl AgentStatusService {
     /// an honest `failed` verdict at the attempt time — failed, not dark, not
     /// fabricated.
     pub fn probe_failed(&self, harness_kind: &str, at: DateTime<Utc>) {
-        let prior_verified_at = self.store.read(harness_kind).and_then(|row| {
-            (row.probe_verdict.as_deref() == Some(OBSERVED_VERIFIED))
-                .then_some(row.probe_at)
-                .flatten()
-        });
-        match prior_verified_at {
-            Some(prior_at) => {
-                let probe = ProbeStatus {
-                    verdict: ProbeVerdict::Verified,
-                    at: Some(prior_at),
-                    stale: true,
-                };
-                let doc = self.compose(harness_kind, probe);
-                self.persist(doc, ObservationWrite::Keep, "probe_failed");
-            }
-            None => {
-                let at = at.to_rfc3339();
-                let probe = ProbeStatus {
-                    verdict: ProbeVerdict::Failed,
-                    at: Some(at.clone()),
-                    stale: false,
-                };
-                let doc = self.compose(harness_kind, probe);
-                self.persist(
-                    doc,
-                    ObservationWrite::Set {
-                        verdict: OBSERVED_FAILED,
-                        at: &at,
-                    },
-                    "probe_failed",
-                );
-            }
+        let cell = self.mark_cell(harness_kind);
+        let mut mark = lock_mark(&cell);
+        self.probe_write(
+            harness_kind,
+            ProbeIntent::Failed { at },
+            "probe_failed",
+            &mut mark,
+        );
+    }
+
+    /// One admitted attempt let go. The mark comes off only when the last one
+    /// does, and it goes back to what the chain's own last completion chose —
+    /// so a coalesce loser dropping cannot clear a mark the running winner
+    /// needs, and a dimming failure stays dimmed.
+    pub(super) fn release_probe(&self, harness_kind: &str) {
+        let cell = self.mark_cell(harness_kind);
+        let mut mark = lock_mark(&cell);
+        mark.admitted = mark.admitted.saturating_sub(1);
+        if mark.admitted > 0 {
+            return;
         }
+        let restore = mark.restore;
+        self.probe_write(
+            harness_kind,
+            ProbeIntent::ReleaseStale { restore },
+            "probe_released",
+            &mut mark,
+        );
     }
 
     /// The startup pass: every persisted row is re-served STALE until the
@@ -331,10 +335,16 @@ impl AgentStatusService {
             .map(|(harness_kind, _)| harness_kind)
             .collect();
         for harness_kind in &persisted {
-            let mut probe = self.stored_probe_block(harness_kind);
-            probe.stale = true;
-            let doc = self.compose(harness_kind, probe);
-            self.persist(doc, ObservationWrite::Keep, "startup");
+            let cell = self.mark_cell(harness_kind);
+            let mut mark = lock_mark(&cell);
+            let body = self.compose_body(harness_kind);
+            self.probe_write_with_body(
+                harness_kind,
+                Some(body),
+                ProbeIntent::MarkStale,
+                "startup",
+                &mut mark,
+            );
         }
         let installed: Vec<String> = self
             .universe
@@ -356,46 +366,113 @@ impl AgentStatusService {
         }
     }
 
-    /// The stored document's probe block, or the unverified default for a
-    /// harness with no row yet.
-    fn stored_probe_block(&self, harness_kind: &str) -> ProbeStatus {
-        self.store
-            .read(harness_kind)
-            .and_then(|row| parse_doc(harness_kind, &row.doc_json))
-            .map(|doc| doc.probe)
-            .unwrap_or(ProbeStatus {
-                verdict: ProbeVerdict::Unverified,
-                at: None,
-                stale: false,
-            })
+    /// One harness's write cell, created on first use and never removed (the
+    /// universe is bounded by the registry).
+    fn mark_cell(&self, harness_kind: &str) -> Arc<Mutex<HarnessMark>> {
+        self.marks
+            .lock()
+            .expect("agent-auth status marks poisoned")
+            .entry(harness_kind.to_string())
+            .or_default()
+            .clone()
     }
 
-    /// Persist + publish, byte-stability gated: a recomposed document that is
-    /// byte-identical to the persisted one (with no new observation to
-    /// record) neither rewrites the row nor publishes an event.
-    fn persist(&self, doc: StatusDoc, observation: ObservationWrite<'_>, why: &str) {
-        let serialized = match serde_json::to_string(&doc) {
-            Ok(serialized) => serialized,
-            Err(error) => {
-                tracing::warn!(harness_kind = %doc.harness_kind, %error, "failed to serialize agent-auth status document");
-                return;
-            }
+    /// A probe-block-only write. Probe evidence never recomposes — EXCEPT for a
+    /// harness with no row at all, where there is no body to patch and an
+    /// honest composition is the only way to hold the evidence.
+    fn probe_write(
+        &self,
+        harness_kind: &str,
+        intent: ProbeIntent,
+        why: &str,
+        mark: &mut HarnessMark,
+    ) {
+        let body = self
+            .store
+            .read(harness_kind)
+            .is_none()
+            .then(|| self.compose_body(harness_kind));
+        self.probe_write_with_body(harness_kind, body, intent, why, mark);
+    }
+
+    fn probe_write_with_body(
+        &self,
+        harness_kind: &str,
+        body: Option<ComposedBody>,
+        intent: ProbeIntent,
+        why: &str,
+        mark: &mut HarnessMark,
+    ) {
+        self.write_locked(harness_kind, body, intent, why, mark);
+    }
+
+    /// Persist + publish, byte-stability gated. Must be called with the
+    /// harness's write cell held.
+    ///
+    /// The atomicity argument, in one place: `body` was composed OUTSIDE the
+    /// transaction (file reads, detection, the rotation readout) and is pure
+    /// data by the time it gets here; the probe block is resolved INSIDE the
+    /// transaction against the very row the write replaces, and the byte-
+    /// stability comparison happens against that same read. So the document and
+    /// the observation columns are always written from one read of one row, and
+    /// no interleaving writer can leave them disagreeing.
+    fn write_locked(
+        &self,
+        harness_kind: &str,
+        body: Option<ComposedBody>,
+        intent: ProbeIntent,
+        why: &str,
+        mark: &mut HarnessMark,
+    ) {
+        let decided = self
+            .store
+            .write_document(harness_kind, Utc::now().timestamp(), |row| {
+                let (probe, observation) = probe_block(intent, harness_kind, row);
+                let doc = match body.as_ref() {
+                    Some(body) => body.into_doc(harness_kind, probe),
+                    // A probe write patches the persisted document's own body.
+                    // No row means nothing to patch and nothing to say.
+                    None => {
+                        let mut doc = parse_doc(harness_kind, &row?.doc_json)?;
+                        doc.probe = probe;
+                        doc
+                    }
+                };
+                let doc_json = match serde_json::to_string(&doc) {
+                    Ok(doc_json) => doc_json,
+                    Err(error) => {
+                        tracing::warn!(harness_kind, %error, "failed to serialize agent-auth status document");
+                        return None;
+                    }
+                };
+                // Byte-stable AND carrying no new observation: neither rewrite
+                // the row nor publish.
+                if observation.is_none() && row.is_some_and(|row| row.doc_json == doc_json) {
+                    return Some(Decided {
+                        payload: doc,
+                        write: None,
+                    });
+                }
+                Some(Decided {
+                    payload: doc,
+                    write: Some(DocumentWrite {
+                        doc_json,
+                        observation,
+                    }),
+                })
+            });
+        let Some((doc, wrote)) = decided else {
+            return;
         };
-        if matches!(observation, ObservationWrite::Keep) {
-            let unchanged = self
-                .store
-                .read(&doc.harness_kind)
-                .is_some_and(|row| row.doc_json == serialized);
-            if unchanged {
-                return;
-            }
+        if intent.is_completion() {
+            // Whatever staleness this completion chose is what an eventual
+            // release restores: a failure over a prior verified observation
+            // leaves the badge dimmed, and a release must not un-dim it.
+            mark.restore = doc.probe.stale;
         }
-        self.store.upsert(
-            &doc.harness_kind,
-            &serialized,
-            observation,
-            Utc::now().timestamp(),
-        );
+        if !wrote {
+            return;
+        }
         tracing::debug!(
             harness_kind = %doc.harness_kind,
             cause = why,
@@ -403,191 +480,10 @@ impl AgentStatusService {
         );
         let _ = self.publisher.send(doc);
     }
-
-    /// Compose the document from the live inputs (module docs, items 1–5)
-    /// plus the given probe block (item 6).
-    fn compose(&self, harness_kind: &str, probe: ProbeStatus) -> StatusDoc {
-        let state = load_effective_state(&self.runtime_home, current_server_origin().as_deref())
-            .ok()
-            .flatten();
-        // Native / absent / unsatisfiable all compose the same "no available
-        // methods" document: availability means material a launch could use.
-        let sources = match resolve_profile(state.as_ref(), harness_kind) {
-            Ok(AgentRuntimeAuthProfile::Sources(sources)) => Some(sources),
-            _ => None,
-        };
-        let rotate = sources
-            .as_ref()
-            .map(|sources| sources.rotate)
-            .unwrap_or(true);
-        let descriptor = registry::descriptor(harness_kind);
-        let readout = seat_rotation_readout(
-            &self.runtime_home,
-            harness_kind,
-            &self.seat_cooling,
-            Utc::now().timestamp(),
-        );
-
-        let seat_pool = seat_pool(sources.as_ref());
-        let serving_seat = if seat_pool.is_empty() {
-            None
-        } else {
-            readout
-                .serving_seat_id
-                .clone()
-                .or_else(|| seat_pool.first().cloned())
-        };
-        let applied = applied_method(sources.as_ref(), &seat_pool, serving_seat.as_deref());
-
-        let mut methods = Vec::new();
-        let declared_seat = descriptor
-            .as_ref()
-            .is_some_and(|descriptor| descriptor.kind == AgentKind::Claude);
-        if declared_seat {
-            for seat_id in &seat_pool {
-                methods.push(MethodRow {
-                    kind: METHOD_KIND_SEAT.to_string(),
-                    available: Some(true),
-                    seat_id: Some(seat_id.clone()),
-                    applied: serving_seat.as_deref() == Some(seat_id.as_str()),
-                    detected: None,
-                    offer: None,
-                });
-            }
-        }
-        let declared_gateway = descriptor.as_ref().is_some_and(|descriptor| {
-            descriptor.auth.slots.iter().any(|slot| {
-                slot.id == METHOD_KIND_GATEWAY || slot.materialization.gateway_env.is_some()
-            })
-        });
-        if declared_gateway
-            && has_source(sources.as_ref(), |source| {
-                matches!(source, ResolvedSource::Gateway(_))
-            })
-        {
-            methods.push(MethodRow {
-                kind: METHOD_KIND_GATEWAY.to_string(),
-                available: Some(true),
-                seat_id: None,
-                applied: applied_kind_is(applied.as_ref(), METHOD_KIND_GATEWAY),
-                detected: None,
-                offer: None,
-            });
-        }
-        let declared_api_key = descriptor.as_ref().is_some_and(|descriptor| {
-            descriptor
-                .auth
-                .slots
-                .iter()
-                .any(|slot| !slot.env_vars.is_empty())
-        });
-        if declared_api_key
-            && has_source(sources.as_ref(), |source| {
-                matches!(
-                    source,
-                    ResolvedSource::ApiKey(_) | ResolvedSource::ProviderConfig(_)
-                )
-            })
-        {
-            methods.push(MethodRow {
-                kind: METHOD_KIND_API_KEY.to_string(),
-                available: Some(true),
-                seat_id: None,
-                applied: applied_kind_is(applied.as_ref(), METHOD_KIND_API_KEY),
-                detected: None,
-                offer: None,
-            });
-        }
-        if let Some(descriptor) = descriptor.as_ref() {
-            if detect_cli_auth_state(&descriptor.auth, &self.detection_home)
-                == Some(CliAuthState::Authenticated)
-            {
-                methods.push(MethodRow {
-                    kind: METHOD_KIND_NATIVE.to_string(),
-                    available: None,
-                    seat_id: None,
-                    applied: false,
-                    detected: Some(true),
-                    offer: declared_seat.then(|| OFFER_MINT_SEAT.to_string()),
-                });
-            }
-        }
-
-        StatusDoc {
-            harness_kind: harness_kind.to_string(),
-            methods,
-            applied,
-            next_seat_id: readout.next_seat_id,
-            rotate,
-            probe,
-            cooling_until: readout.cooling_until,
-        }
-    }
 }
 
-fn seat_pool(sources: Option<&HarnessSources>) -> Vec<String> {
-    sources
-        .map(|sources| {
-            sources
-                .sources
-                .iter()
-                .filter_map(|source| match source {
-                    ResolvedSource::Seat(seat) => Some(seat.seat_id.clone()),
-                    _ => None,
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn has_source(
-    sources: Option<&HarnessSources>,
-    predicate: impl Fn(&ResolvedSource) -> bool,
-) -> bool {
-    sources.is_some_and(|sources| sources.sources.iter().any(predicate))
-}
-
-/// The document's applied tag, from the applied document only: seats win (the
-/// serving seat rides `seat_id`), else the first non-seat source's method
-/// family in document order (`provider_config` is the api_key family's typed
-/// variant, so it tags as `api_key`). `None` when the document gives the
-/// harness no satisfiable sources.
-fn applied_method(
-    sources: Option<&HarnessSources>,
-    seat_pool: &[String],
-    serving_seat: Option<&str>,
-) -> Option<AppliedMethod> {
-    let sources = sources?;
-    if !seat_pool.is_empty() {
-        return Some(AppliedMethod {
-            kind: METHOD_KIND_SEAT.to_string(),
-            seat_id: serving_seat.map(str::to_string),
-        });
-    }
-    sources.sources.first().map(|source| AppliedMethod {
-        kind: match source {
-            ResolvedSource::Gateway(_) => METHOD_KIND_GATEWAY.to_string(),
-            ResolvedSource::ApiKey(_) | ResolvedSource::ProviderConfig(_) => {
-                METHOD_KIND_API_KEY.to_string()
-            }
-            ResolvedSource::Seat(_) => METHOD_KIND_SEAT.to_string(),
-        },
-        seat_id: None,
-    })
-}
-
-fn applied_kind_is(applied: Option<&AppliedMethod>, kind: &str) -> bool {
-    applied.is_some_and(|applied| applied.kind == kind)
-}
-
-fn parse_doc(harness_kind: &str, doc_json: &str) -> Option<StatusDoc> {
-    match serde_json::from_str(doc_json) {
-        Ok(doc) => Some(doc),
-        Err(error) => {
-            tracing::warn!(harness_kind, %error, "persisted agent-auth status document is malformed; skipping");
-            None
-        }
-    }
+fn lock_mark(cell: &Arc<Mutex<HarnessMark>>) -> MutexGuard<'_, HarnessMark> {
+    cell.lock().expect("agent-auth status mark poisoned")
 }
 
 /// The absolute path arm of the doc — kept for parity with the other stores'

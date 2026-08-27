@@ -42,6 +42,8 @@ pub mod probe;
 pub mod targets;
 
 #[cfg(test)]
+mod concurrency_tests;
+#[cfg(test)]
 mod contradiction_tests;
 #[cfg(test)]
 mod recovery_tests;
@@ -198,10 +200,20 @@ impl LaunchProbeService {
     /// Probe evidence intake (spec §3 flow 4, the serve-stale semantics): the
     /// document goes stale the moment an attempt is admitted — queued counts —
     /// and the last observation stays visible while the re-probe runs.
-    fn notify_probe_admitted(&self, harness_kind: &str) {
-        if let Some(agent_status) = self.agent_status.as_ref() {
-            agent_status.probe_admitted(harness_kind);
-        }
+    ///
+    /// Returns the RAII guard that takes the mark back off, so the caller must
+    /// hold it for the lifetime of the attempt: the document-side twin of
+    /// `LiveStateGuard`, covering the coalesce return, the backoff-refused
+    /// return, an early `run_attempt` error that never reaches a verdict, and
+    /// the whole future being dropped mid-refresh.
+    #[must_use = "dropping the guard is what releases the document's stale mark"]
+    fn notify_probe_admitted(
+        &self,
+        harness_kind: &str,
+    ) -> Option<crate::domains::agents::status::ProbeStaleGuard> {
+        self.agent_status
+            .as_ref()
+            .map(|agent_status| agent_status.admit_probe(harness_kind))
     }
 
     pub(super) fn notify_probe_verified(&self, harness_kind: &str, at: DateTime<Utc>) {
@@ -444,7 +456,10 @@ impl LaunchProbeService {
         // good. Every exit below drops the guard, including a coalesce return and
         // this future being abandoned mid-wait.
         let live_state = self.admit_attempt(slot.clone());
-        self.notify_probe_admitted(harness_kind);
+        // Held to the end of this function, exactly like `live_state`: the
+        // coalesce return below, the backoff refusal below it, and this future
+        // being abandoned mid-wait all release the document's stale mark.
+        let _status_stale = self.notify_probe_admitted(harness_kind);
         let _attempt_gate = slot.attempt_gate.lock().await;
         // The coalesce: the previous holder usually probed for this poke already.
         // Failed attempts count too — N pokes racing a failing probe coalesce
@@ -495,7 +510,10 @@ impl LaunchProbeService {
 
         let slot = self.slot(harness_kind);
         let live_state = self.admit_attempt(slot.clone());
-        self.notify_probe_admitted(harness_kind);
+        // This whole function is awaited directly in an axum handler, so a
+        // client disconnecting mid-refresh drops the future here. The guard is
+        // what stops that from wedging the document stale-marked forever.
+        let _status_stale = self.notify_probe_admitted(harness_kind);
         let _attempt_gate = slot.attempt_gate.lock().await;
 
         self.run_attempt(harness_kind, &slot, PokeReason::Manual, live_state)

@@ -32,6 +32,8 @@ pub mod rotation;
 pub mod state;
 
 #[cfg(test)]
+mod changed_set_concurrency_tests;
+#[cfg(test)]
 mod gateway_plan_tests;
 #[cfg(test)]
 mod origin_guard_tests;

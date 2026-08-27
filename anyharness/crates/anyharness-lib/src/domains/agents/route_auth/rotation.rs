@@ -11,6 +11,7 @@ use std::path::Path;
 use crate::domains::agents::seat_cooling::SeatCoolingStore;
 
 use super::profile::{resolve_profile, AgentRuntimeAuthProfile, HarnessSources, ResolvedSource};
+use super::state::AgentAuthState;
 use super::{current_server_origin, load_effective_state};
 
 /// The pane-facing seat rotation readout (agent_auth spec §4 cell 2's
@@ -153,9 +154,22 @@ pub fn seat_rotation_readout(
         Ok(state) => state,
         Err(_) => return SeatRotationReadout::default(),
     };
-    let Ok(AgentRuntimeAuthProfile::Sources(sources)) =
-        resolve_profile(state.as_ref(), harness_kind)
-    else {
+    seat_rotation_readout_for_state(state.as_ref(), harness_kind, store, now_epoch_s)
+}
+
+/// [`seat_rotation_readout`] over a state document the caller ALREADY loaded.
+///
+/// The status document's composition needs this arm: it derives the profile and
+/// the readout from the same applied document, and loading the file twice mixed
+/// two auth worlds into one document — `applied.seat_id` could name a seat with
+/// no method row at all, because a push landed between the two reads.
+pub fn seat_rotation_readout_for_state(
+    state: Option<&AgentAuthState>,
+    harness_kind: &str,
+    store: &SeatCoolingStore,
+    now_epoch_s: i64,
+) -> SeatRotationReadout {
+    let Ok(AgentRuntimeAuthProfile::Sources(sources)) = resolve_profile(state, harness_kind) else {
         return SeatRotationReadout::default();
     };
     let pool = seat_pool(&sources);
