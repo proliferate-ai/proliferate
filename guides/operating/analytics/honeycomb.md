@@ -36,9 +36,13 @@ required).
 
 ## The three product SLIs (D3)
 
-Full source-record citations and the checked-in draft Honeycomb query
-specification live in
-[`server/infra/observability/honeycomb/product-sli-queries.json`](../../../server/infra/observability/honeycomb/product-sli-queries.json).
+The draft query file this section described
+(`product-sli-queries.json`) was superseded on 2026-08-27 by executable
+trigger intent:
+[`server/infra/observability/honeycomb/triggers/`](../../../server/infra/observability/honeycomb/triggers/)
+applied and verified by
+[`scripts/ops/honeycomb-triggers.mjs`](../../../scripts/ops/honeycomb-triggers.mjs)
+(five SLIs, thresholds of record in the alerting spec).
 **Update 2026-08-21 ~08:2xZ:** Lane B posted the Stage-1 dogfood proof to the
 Accounts and Wiring doc ("Lane B2, Stage-1 dogfood proof") -- the `anyharness`
 dataset genuinely holds real Stage-0 records now (6 emitted, zero drops, 12
