@@ -45,7 +45,9 @@ async def probe_subscription_usage(
         "messages": [{"role": "user", "content": "."}],
     }
     try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+        # trust_env=False: the URL is hard-coded, so no HTTPS_PROXY or
+        # NO_PROXY from the environment may interpose on the token's path.
+        async with httpx.AsyncClient(timeout=timeout_seconds, trust_env=False) as client:
             response = await client.post(
                 _MESSAGES_URL,
                 headers={
@@ -56,14 +58,15 @@ async def probe_subscription_usage(
                 },
                 json=payload,
             )
-    except httpx.HTTPError as exc:
-        # Deliberately message-free of request detail: an httpx transport
-        # error's text names the URL at most, never headers, and this wrapper
-        # adds nothing that could carry the token.
+    except httpx.HTTPError:
+        # Deliberately message-free of request detail, and `from None`: an
+        # h11/httpx header-validation error can quote the offending header
+        # value verbatim, so the cause chain is cut rather than carried into
+        # anything a reporter might serialize.
         raise AnthropicIntegrationError(
             status_code=599,
             message="Anthropic usage probe failed before a response arrived.",
-        ) from exc
+        ) from None
     return response.status_code, {
         key.lower(): value for key, value in response.headers.items()
     }

@@ -292,6 +292,12 @@ class SeatUsageSample(Base):
             "status IN ('allowed', 'limited', 'probe_failed')",
             name="ck_seat_usage_sample_status",
         ),
+        # The spec DDL leaves binding_window as a commented vocabulary; pinning
+        # it as a CHECK keeps a header-derived value from ever storing junk.
+        CheckConstraint(
+            "binding_window IS NULL OR binding_window IN ('five_hour', 'seven_day')",
+            name="ck_seat_usage_sample_binding_window",
+        ),
         # Beyond the spec DDL (performance only): the latest-per-seat read and
         # the writer's 30-day prune both walk (api_key_id, sampled_at).
         Index("ix_seat_usage_sample_key_sampled", "api_key_id", "sampled_at"),

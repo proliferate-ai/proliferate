@@ -8,7 +8,8 @@ reader exists, enforced by an import-scan test.
 - New table ``seat_usage_sample`` per spec §2's DDL: bigserial PK,
   ``api_key_id → agent_api_key``, nullable observation columns (a
   ``probe_failed`` row records that no trustworthy observation exists), the
-  status CHECK. Beyond the spec DDL, performance only: ON DELETE CASCADE on
+  status CHECK, plus a binding_window CHECK pinning the DDL's commented
+  vocabulary (five_hour | seven_day). Beyond the spec DDL, performance only: ON DELETE CASCADE on
   the FK (vault rows cascade with their user, so samples must ride along or
   user deletion trips the FK) and one (api_key_id, sampled_at) index — the
   latest-per-seat read and the writer's 30-day prune both walk it.
@@ -52,6 +53,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "status IN ('allowed', 'limited', 'probe_failed')",
             name="ck_seat_usage_sample_status",
+        ),
+        sa.CheckConstraint(
+            "binding_window IS NULL OR binding_window IN ('five_hour', 'seven_day')",
+            name="ck_seat_usage_sample_binding_window",
         ),
         sa.ForeignKeyConstraint(
             ["api_key_id"],

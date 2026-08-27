@@ -102,6 +102,16 @@ async def create_seat(
             "The seat token must be a non-empty string.",
             status_code=400,
         )
+    # A control character can never be part of a credential, but it CAN make
+    # the usage probe's HTTP layer reject the Authorization header — and such
+    # rejections quote the header value. Refuse at intake so that path is
+    # unreachable rather than merely caught downstream.
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in token):
+        raise CloudApiError(
+            "invalid_agent_seat_token",
+            "The seat token contains control characters.",
+            status_code=400,
+        )
     title = title.strip() if title else None
     if title and len(title) > _MAX_TITLE_LENGTH:
         raise CloudApiError(
@@ -387,9 +397,9 @@ async def seat_usage_probe(
     )
     if fetched is None:
         return None
-    _, token = fetched
+    _, seat_token = fetched
     try:
-        http_status, headers = await probe_subscription_usage(oauth_token=token)
+        http_status, headers = await probe_subscription_usage(oauth_token=seat_token)
         parsed = parse_seat_usage_headers(http_status, headers)
     except AnthropicIntegrationError:
         parsed = _PROBE_FAILED

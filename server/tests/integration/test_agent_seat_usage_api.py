@@ -270,6 +270,22 @@ class TestSeatUsageApi:
         assert len(samples) == 1  # the fresh one; the 31-day row is pruned
         assert samples[0].util_5h == pytest.approx(0.63)
 
+    async def test_mint_intake_refuses_control_characters(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        # A control character in the token would make the probe's HTTP layer
+        # reject (and quote) the Authorization header; intake refuses first.
+        _, headers = await _authed_user(client)
+        response = await client.post(
+            "/v1/cloud/agent-auth/keys",
+            headers=headers,
+            json={"value": SEAT_TOKEN + "\x01", "kind": "anthropic_subscription"},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_agent_seat_token"
+        assert SEAT_TOKEN not in response.text
+
     async def test_seat_token_never_reaches_samples_logs_or_responses(
         self,
         client: AsyncClient,
