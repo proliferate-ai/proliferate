@@ -182,8 +182,32 @@ export const HARNESS_PANE_COPY = {
   methodGatewayDescription: "Use managed model access.",
   methodApiKey: "API key",
   methodApiKeyDescription: "Use a saved provider key.",
+  methodSeat: "Claude.ai login",
+  methodSeatDescription: "Run on a Claude subscription.",
   methodCli: "CLI login",
   methodCliDescription: "Use the harness's own session.",
+  // Seats v1 (the Claude.ai logins section, single-seat subset).
+  seatAddLogin: "Add a Claude.ai login",
+  seatAddLoginStarting: "Opening…",
+  seatSheetTitle: "Add a Claude.ai login",
+  seatSheetDescription:
+    "Sign in with your Claude.ai account in the browser. The seat is captured automatically — no token to paste.",
+  seatEmailLabel: "Account email",
+  seatEmailPlaceholder: "you@example.com",
+  seatPlanLabel: "Plan (optional)",
+  seatPlanPlaceholder: "e.g. Max 20x",
+  seatSheetStart: "Start sign-in",
+  seatSheetCancel: "Cancel",
+  seatWaitingForSignIn: "Waiting for sign-in…",
+  seatCapturing: "Capturing the seat…",
+  seatUploading: "Saving the seat…",
+  seatAddedToast: (title: string) => `Added ${title}.`,
+  seatMintFailed:
+    "The sign-in did not produce a seat. Close the terminal and try again.",
+  seatUploadFailed: "Could not save the seat — re-run the sign-in.",
+  seatEmptyList: "No Claude.ai logins yet.",
+  seatRemove: "Remove",
+  seatRemoveError: "Could not remove the seat.",
   // §1 — the exit to the vendor tool's own documentation.
   docsLink: "Docs",
   // Gateway enrollment in flight (header badge, warning tone).

@@ -116,7 +116,7 @@ export function HarnessProvidersSection({
     }
     setProviderError(null);
     createKey.mutate(
-      { title: `${provider.displayName} API key`, value },
+      { title: `${provider.displayName} API key`, value, kind: "api_key" },
       {
         onSuccess: (created) => {
           editor.addBoundApiKey(envVarName, provider.id, created.id, {

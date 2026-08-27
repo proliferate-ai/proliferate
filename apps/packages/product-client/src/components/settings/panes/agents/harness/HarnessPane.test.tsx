@@ -79,6 +79,7 @@ const state = vi.hoisted(() => ({
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
+const mintSeatMutate = vi.hoisted(() => vi.fn());
 const revokeKeyMutate = vi.hoisted(() => vi.fn());
 const overrideMutate = vi.hoisted(() => vi.fn());
 const refreshModelSnapshotMutate = vi.hoisted(() => vi.fn());
@@ -120,6 +121,7 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useOrgAgentPolicy: () => ({ data: undefined, isLoading: false }),
   usePutAuthSelections: () => ({ mutate: putMutate, isPending: false }),
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
+  useMintAgentSeat: () => ({ mutateAsync: mintSeatMutate, isPending: false }),
   useRevokeAgentApiKey: () => ({ mutate: revokeKeyMutate, isPending: false }),
   useUpsertAgentModelOverride: () => ({ mutate: overrideMutate, isPending: false }),
 }));
@@ -129,6 +131,16 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 // SDK hooks standing in for that runtime call.
 vi.mock("@anyharness/sdk-react", () => ({
   useAnyHarnessRuntimeContext: () => ({ runtimeUrl: "http://127.0.0.1:8457" }),
+  // The seat-mint workflow's direct client edge; the seat pane tests only
+  // reach the start affordance, so inert stubs suffice.
+  getAnyHarnessClient: () => ({
+    agents: {
+      startLoginTerminal: vi.fn(),
+      getLoginTerminal: vi.fn(),
+      closeLoginTerminal: vi.fn(),
+      claimMintToken: vi.fn(),
+    },
+  }),
   useAgentLaunchOptionsQuery: ({ harnessKind }: { harnessKind: string }) => {
     const sourceModels = state.modelSnapshotStatus.data?.models ?? null;
     return {
@@ -454,7 +466,7 @@ describe("HarnessPane authentication", () => {
 
     // The vault key is created with the derived provider title.
     expect(createKeyMutate).toHaveBeenCalledWith(
-      { title: "Anthropic API key", value: "sk-test-value" },
+      { title: "Anthropic API key", value: "sk-test-value", kind: "api_key" },
       expect.anything(),
     );
   });
@@ -694,7 +706,7 @@ describe("HarnessPane authentication", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(createKeyMutate).toHaveBeenCalledWith(
-      { title: "Cursor API key", value: "sk-cursor" },
+      { title: "Cursor API key", value: "sk-cursor", kind: "api_key" },
       expect.anything(),
     );
   });
@@ -818,7 +830,7 @@ describe("HarnessPane authentication", () => {
 
     // Write 1: the vault api_key entry, from the inline paste field.
     expect(createKeyMutate).toHaveBeenCalledWith(
-      { title: "OpenRouter API key", value: "sk-openrouter" },
+      { title: "OpenRouter API key", value: "sk-openrouter", kind: "api_key" },
       expect.anything(),
     );
 
@@ -1161,5 +1173,98 @@ describe("HarnessPane all models (local composed observation)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
 
     expect(refreshModelSnapshotMutate).toHaveBeenCalledWith("claude", expect.anything());
+  });
+});
+
+describe("HarnessPane seat method (seats v1)", () => {
+  it("shows the Claude.ai login card for claude and not for codex", () => {
+    renderPane("claude");
+    expect(screen.getByRole("button", { name: "Claude.ai login" })).toBeTruthy();
+    cleanup();
+    renderPane("codex");
+    expect(screen.queryByRole("button", { name: "Claude.ai login" })).toBeNull();
+  });
+
+  it("selecting the seat card with no vault seats goes pending without a PUT", () => {
+    // An enabled pool row with zero seats would render present-but-empty and
+    // refuse every launch — so the click may only mark the method pending.
+    renderPane("claude");
+    fireEvent.click(screen.getByRole("button", { name: "Claude.ai login" }));
+
+    expect(putMutate).not.toHaveBeenCalled();
+    const card = screen.getByRole("button", { name: "Claude.ai login" });
+    expect(card.getAttribute("aria-pressed")).toBe("true");
+    // The single-seat detail area: empty list + the add affordance.
+    expect(screen.getByText("No Claude.ai logins yet.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add a Claude.ai login" })).toBeTruthy();
+  });
+
+  it("selecting the seat card with a vault seat commits the pool selection", () => {
+    state.apiKeys.data = [{
+      id: "seat-1",
+      title: "Max seat · ops@acme.com",
+      kind: "anthropic_subscription",
+      redactedHint: "sk-...atAA",
+      status: "active",
+      createdAt: "2026-08-26T00:00:00Z",
+    }];
+    renderPane("claude");
+    fireEvent.click(screen.getByRole("button", { name: "Claude.ai login" }));
+
+    expect(putMutate).toHaveBeenCalledWith(
+      {
+        harnessKind: "claude",
+        surface: "local",
+        body: {
+          sources: [
+            { sourceKind: "gateway", enabled: false },
+            { sourceKind: "seat", enabled: true },
+          ],
+        },
+      },
+      expect.anything(),
+    );
+  });
+
+  it("an enabled seat selection renders the seat method with its labeled row", () => {
+    state.apiKeys.data = [{
+      id: "seat-1",
+      title: "Max seat · ops@acme.com",
+      kind: "anthropic_subscription",
+      redactedHint: "sk-...atAA",
+      status: "active",
+      createdAt: "2026-08-26T00:00:00Z",
+    }];
+    state.selections.data = [{
+      id: "sel-seat",
+      harnessKind: "claude",
+      surface: "local",
+      sourceKind: "seat",
+      apiKeyId: null,
+      keyTitle: null,
+      envVarName: null,
+      providerHint: null,
+      enabled: true,
+      createdAt: "2026-08-26T00:00:00Z",
+      updatedAt: "2026-08-26T00:00:00Z",
+    }];
+    renderPane("claude");
+
+    const card = screen.getByRole("button", { name: "Claude.ai login" });
+    expect(card.getAttribute("aria-pressed")).toBe("true");
+    // The seat row carries the user-entered label, verbatim.
+    expect(screen.getByText("Max seat · ops@acme.com")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove" })).toBeTruthy();
+  });
+
+  it("the mint sheet asks for email and optional plan tier", () => {
+    renderPane("claude");
+    fireEvent.click(screen.getByRole("button", { name: "Claude.ai login" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add a Claude.ai login" }));
+
+    expect(screen.getByText(/Sign in with your Claude.ai account/)).toBeTruthy();
+    expect(screen.getByLabelText("Account email")).toBeTruthy();
+    expect(screen.getByLabelText("Plan (optional)")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start sign-in" })).toBeTruthy();
   });
 });

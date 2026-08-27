@@ -111,31 +111,32 @@ describe("deriveEditorState", () => {
 describe("buildDesiredSources", () => {
   it("emits an enabled gateway source when the toggle is on", () => {
     expect(
-      buildDesiredSources("claude", { gatewayEnabled: true, rows: [] }),
+      buildDesiredSources("claude", { gatewayEnabled: true, seatEnabled: false, rows: [] }),
     ).toEqual([{ sourceKind: "gateway", enabled: true }]);
   });
 
   it("retains a disabled gateway revision marker when the toggle is off", () => {
     expect(
-      buildDesiredSources("claude", { gatewayEnabled: false, rows: [] }),
+      buildDesiredSources("claude", { gatewayEnabled: false, seatEnabled: false, rows: [] }),
     ).toEqual([{ sourceKind: "gateway", enabled: false }]);
   });
 
   it("never emits a gateway source for cursor (no gateway recipe)", () => {
     expect(isGatewayCapableHarness("cursor")).toBe(false);
     expect(
-      buildDesiredSources("cursor", { gatewayEnabled: false, rows: [] }),
+      buildDesiredSources("cursor", { gatewayEnabled: false, seatEnabled: false, rows: [] }),
     ).toEqual([]);
     // Even a true gatewayEnabled toggle never surfaces a gateway source for
     // cursor — there is no capability state that would ever legalize it.
     expect(
-      buildDesiredSources("cursor", { gatewayEnabled: true, rows: [] }),
+      buildDesiredSources("cursor", { gatewayEnabled: true, seatEnabled: false, rows: [] }),
     ).toEqual([]);
   });
 
   it("wires a cursor api_key row (its only legal source)", () => {
     const sources = buildDesiredSources("cursor", {
       gatewayEnabled: false,
+      seatEnabled: false,
       rows: [row({ envVarName: "CURSOR_API_KEY", providerHint: "cursor" })],
     });
     expect(sources).toEqual([
@@ -152,6 +153,7 @@ describe("buildDesiredSources", () => {
   it("wires only complete rows and carries enabled/providerHint through", () => {
     const sources = buildDesiredSources("claude", {
       gatewayEnabled: false,
+      seatEnabled: false,
       rows: [
         row({ uid: "a", enabled: true }),
         row({ uid: "b", apiKeyId: null }), // incomplete → skipped
@@ -184,16 +186,73 @@ describe("buildDesiredSources", () => {
 
 describe("isNativeState", () => {
   it("is native when nothing is enabled", () => {
-    expect(isNativeState({ gatewayEnabled: false, rows: [] })).toBe(true);
+    expect(isNativeState({ gatewayEnabled: false, seatEnabled: false, rows: [] })).toBe(true);
     expect(
-      isNativeState({ gatewayEnabled: false, rows: [row({ enabled: false })] }),
+      isNativeState({ gatewayEnabled: false, seatEnabled: false, rows: [row({ enabled: false })] }),
     ).toBe(true);
   });
 
   it("is not native when the gateway or any row is enabled", () => {
-    expect(isNativeState({ gatewayEnabled: true, rows: [] })).toBe(false);
+    expect(isNativeState({ gatewayEnabled: true, seatEnabled: false, rows: [] })).toBe(false);
     expect(
-      isNativeState({ gatewayEnabled: false, rows: [row({ enabled: true })] }),
+      isNativeState({ gatewayEnabled: false, seatEnabled: false, rows: [row({ enabled: true })] }),
+    ).toBe(false);
+  });
+});
+
+describe("seat sources (seats v1)", () => {
+  it("derives seatEnabled from an enabled seat selection row", () => {
+    const state = deriveEditorState(
+      [
+        selection({
+          id: "s",
+          sourceKind: "seat",
+          apiKeyId: null,
+          envVarName: null,
+          keyTitle: null,
+          providerHint: null,
+        }),
+      ],
+      "claude",
+      "local",
+    );
+    expect(state.seatEnabled).toBe(true);
+    expect(state.rows).toEqual([]);
+  });
+
+  it("emits the pool seat row only when ON, and only for claude", () => {
+    expect(
+      buildDesiredSources("claude", {
+        gatewayEnabled: false,
+        seatEnabled: true,
+        rows: [],
+      }),
+    ).toEqual([
+      { sourceKind: "gateway", enabled: false },
+      { sourceKind: "seat", enabled: true },
+    ]);
+    // OFF: no seat row at all — non-seat scopes stay byte-identical to the
+    // pre-seat wire shape.
+    expect(
+      buildDesiredSources("claude", {
+        gatewayEnabled: false,
+        seatEnabled: false,
+        rows: [],
+      }),
+    ).toEqual([{ sourceKind: "gateway", enabled: false }]);
+    // Seatless harness: the toggle can never surface a seat row.
+    expect(
+      buildDesiredSources("codex", {
+        gatewayEnabled: false,
+        seatEnabled: true,
+        rows: [],
+      }),
+    ).toEqual([{ sourceKind: "gateway", enabled: false }]);
+  });
+
+  it("an enabled seat is not the native state", () => {
+    expect(
+      isNativeState({ gatewayEnabled: false, seatEnabled: true, rows: [] }),
     ).toBe(false);
   });
 });

@@ -336,7 +336,7 @@ describe("ApiKeysPane", () => {
     fireEvent.click(screen.getByRole("button", { name: "creator-submit" }));
 
     expect(createMutate).toHaveBeenCalledWith(
-      { title: "Personal key", value: "sk-ant-123" },
+      { title: "Personal key", value: "sk-ant-123", kind: "api_key" },
       expect.anything(),
     );
   });

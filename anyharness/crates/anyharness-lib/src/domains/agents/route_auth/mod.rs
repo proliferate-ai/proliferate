@@ -66,13 +66,24 @@ pub enum RouteAuthError {
     /// [`resolve_profile`] and refused at both create and launch, per
     /// agent-auth.md's "present-but-empty fails closed".
     ///
+    /// The Display copy speaks plain words (agent_auth spec: "Refusals speak
+    /// plain words") naming the likely causes and the action. The document
+    /// cannot yet carry WHICH cause emptied the sources (`revision` is still
+    /// the wire's only rider this slice; the typed reasons ride the status
+    /// module in a later slice), so the copy names the family — a revoked
+    /// seat or key, or exhausted credits — rather than fabricating certainty.
+    ///
     /// `SelectionConflict` used to sit beside this, for "N entries where one is
     /// allowed". It is deleted rather than wired: source cardinality is a
     /// per-harness SERVER rule (`selection_rules.py`) enforced before a document
     /// is ever written, and the document's shape — one entry per harness with a
     /// flat source list — cannot represent the conflict it described. There was
     /// no input a correct runtime could construct it from.
-    #[error("no agent-auth route selection for harness '{harness_kind}' at revision {revision}")]
+    #[error(
+        "the auth method selected for '{harness_kind}' can't be used right now — \
+         its seat or key may have been revoked, or the credits behind it ran out. \
+         Pick or fix a method in Settings → Agents. (state revision {revision})"
+    )]
     SelectionMissing { harness_kind: String, revision: i64 },
     #[error("agent-auth source for '{harness_kind}' is incomplete: {detail}")]
     SelectionIncomplete { harness_kind: String, detail: String },
