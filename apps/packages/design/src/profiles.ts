@@ -100,11 +100,15 @@ export const themeProfiles: Readonly<Record<string, ThemeProfile>> = {
      * (#171717), composer at #303030. Steps stay gentle; nothing pops hard.
      */
     darkTokens: {
-      "--color-surface-under": "#141414",
+      // The glass header/dock composite over surface-under, and the shell
+      // wrapper paints sidebar-background behind the chat — both must sit
+      // on the content plane or they render as darker bands at the top and
+      // bottom of the chat column. Only the sidebar column itself recedes.
+      "--color-surface-under": "#212121",
       "--color-background": "#212121",
       "--color-surface": "#212121",
       "--color-sidebar": "#171717",
-      "--color-sidebar-background": "#171717",
+      "--color-sidebar-background": "#212121",
       "--color-surface-elevated": "#2a2a2a",
       "--color-card": "#2a2a2a",
       "--color-popover": "#353535",
