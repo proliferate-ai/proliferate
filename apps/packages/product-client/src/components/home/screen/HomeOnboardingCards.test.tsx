@@ -52,6 +52,7 @@ function badge(
     terminal: true,
     launchable: true,
     rechecking: false,
+    detail: null,
     actionLabel: null,
     ...overrides,
   };
@@ -185,6 +186,8 @@ describe("HomeOnboardingCards state-bound setup card", () => {
           terminal: true,
           launchable: false,
           rechecking: true,
+          // The DOCUMENT's own marker, not a card-local placeholder.
+          detail: "re-checking",
         }),
       ]),
     });
@@ -196,7 +199,7 @@ describe("HomeOnboardingCards state-bound setup card", () => {
     expect(line).toBeTruthy();
     // Not sr-only: the dimming is visible text, not a hidden hint.
     expect(line?.className).not.toContain("sr-only");
-    expect(line?.textContent).toBe(HOME_SCREEN_LABELS.authSetupRechecking);
+    expect(line?.textContent).toBe("re-checking");
     // A stale row is terminal and shows no spinner. Selected on the Spinner's
     // own `data-loading-spinner` hook (D-R13): the old `.animate-spin` selector
     // named a Tailwind class this app's Spinner never emits — it renders
@@ -210,14 +213,40 @@ describe("HomeOnboardingCards state-bound setup card", () => {
   it("keeps a green row green while it re-checks (the light dims, it never goes out)", () => {
     const { container } = renderCards({
       authSetupEvidence: evidence([
-        badge({ harnessKind: "claude", label: "Authenticated", rechecking: true }),
+        badge({
+          harnessKind: "claude",
+          label: "Authenticated",
+          rechecking: true,
+          // Green carries its evidence age; the re-check rides beside it, never
+          // instead of it.
+          detail: "verified 2m ago · re-checking",
+        }),
       ]),
     });
 
     expect(screen.getByText("Authenticated")).toBeTruthy();
+    expect(screen.getByText("verified 2m ago · re-checking")).toBeTruthy();
     expect(container.querySelector("[data-agent-onboarding-rechecking]")).toBeTruthy();
     // Launchable: nothing to action, so no affordance is offered.
     expect(screen.queryByText(HOME_SCREEN_LABELS.authSetupOpenAgents)).toBeNull();
+  });
+
+  it("prints NO diagnostic line when the document supports none", () => {
+    // The line the deleted derived summary filled is a sanctioned loss: better an
+    // absent line than a constant standing in for a reason we do not hold.
+    const { container } = renderCards({
+      authSetupEvidence: evidence([
+        badge({
+          phase: "actionable",
+          label: "Not authenticated",
+          tone: "destructive",
+          launchable: false,
+          detail: null,
+        }),
+      ]),
+    });
+
+    expect(container.querySelector("[data-agent-onboarding-detail]")).toBeNull();
   });
 
   it("renders nothing when the evidence card has no badges", () => {

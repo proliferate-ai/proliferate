@@ -11,11 +11,12 @@ import type {
 } from "#product/lib/domain/agents/auth-setup-badges";
 
 /**
- * One agent's onboarding row (agent_auth §4 cell 4). The badge label and tone
- * are the runtime's status document, verbatim. Every NON-launchable terminal
- * state carries an affordance routing to the agent pane, so no state the card
- * shows is a dead end; a stale document shows its LAST OBSERVATION with a
- * re-checking line rather than an eternal spinner.
+ * One agent's onboarding row (agent_auth §4 cell 4). The badge label, tone, and
+ * diagnostic line are the runtime's status document, verbatim. Every
+ * NON-launchable state carries an affordance — the most specific next action the
+ * document can name, else the generic route to the agent pane — so no state the
+ * card shows is a dead end; a stale document shows its LAST OBSERVATION with a
+ * re-checking marker rather than an eternal spinner.
  */
 function AuthSetupEvidenceRow({
   badge,
@@ -61,14 +62,17 @@ function AuthSetupEvidenceRow({
           ) : null}
         </span>
       </div>
-      {badge.rechecking ? (
-        // Stale renders as stale, never as loading: the badge above is the last
-        // observation, and this line says the runtime is re-probing.
+      {badge.detail ? (
+        // The document's own diagnostic: the evidence age that makes green mean
+        // something, and/or the re-checking marker (stale renders as stale, never
+        // as loading — the badge above is the last observation). Nothing is
+        // printed here that the document does not state.
         <span
           className="line-clamp-1 pl-7 text-ui-sm text-muted-foreground"
-          data-agent-onboarding-rechecking
+          data-agent-onboarding-detail
+          data-agent-onboarding-rechecking={badge.rechecking ? "true" : undefined}
         >
-          {HOME_SCREEN_LABELS.authSetupRechecking}
+          {badge.detail}
         </span>
       ) : null}
     </div>

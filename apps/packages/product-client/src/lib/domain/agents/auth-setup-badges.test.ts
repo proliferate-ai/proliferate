@@ -153,26 +153,85 @@ describe("deriveOnboardingAgentBadge — the status document, verbatim", () => {
     expect(badge.pending).toBe(false);
   });
 
-  it("treats stale with NOTHING observed as the first probe still running", () => {
+  it("makes stale with NOTHING observed actionable, not an eternal pending", () => {
+    // There is no last observation to show, and no clock here to give up on the
+    // re-probe, so the row states the document's words and offers the way
+    // forward. The card must never wait on a probe it cannot see finish.
     const badge = deriveOnboardingAgentBadge(
       agentFor({ authStatus: statusFor({ at: null, stale: true }) }),
     );
 
-    expect(badge.phase).toBe("waiting");
-    expect(badge.pending).toBe(true);
-    expect(badge.terminal).toBe(false);
+    expect(badge.phase).toBe("actionable");
+    expect(badge.pending).toBe(false);
+    expect(badge.terminal).toBe(true);
+    // A re-probe IS running: the marker says so, and it is not a spinner.
     expect(badge.rechecking).toBe(true);
+    expect(badge.detail).toBe(HARNESS_PANE_COPY.authBadgeRechecking);
   });
 
-  it("waits, bound to the state, while an applied method is unobserved", () => {
+  it("makes an applied-but-unobserved harness actionable, never pending forever", () => {
+    // The runtime owes this harness an observation and is not even re-probing
+    // (the document is not stale). Nothing will move this row on its own.
     const badge = deriveOnboardingAgentBadge(
       agentFor({ authStatus: statusFor({ verdict: "unverified" }) }),
     );
 
-    expect(badge.phase).toBe("waiting");
+    expect(badge.phase).toBe("actionable");
     expect(badge.label).toBe(HARNESS_PANE_COPY.authBadgeNotVerified);
-    expect(badge.pending).toBe(true);
-    expect(badge.terminal).toBe(false);
+    expect(badge.pending).toBe(false);
+    expect(badge.terminal).toBe(true);
+  });
+
+  it("names the action the document supports: nothing applied ⇒ choose a source", () => {
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({
+        authStatus: statusFor({ verdict: "unverified" }, { applied: null }),
+      }),
+    );
+
+    expect(badge.actionLabel).toBe(HOME_SCREEN_LABELS.authSetupChooseSourceAction);
+  });
+
+  it("offers the DETECTED native login as a seat when the runtime offers it", () => {
+    // The `native` row's own statement (detected + offer: "mint_seat"): the login
+    // already on this machine can be captured as a portable seat.
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({
+        authStatus: statusFor(
+          { verdict: "unverified" },
+          {
+            applied: null,
+            methods: [
+              { kind: "native", applied: false, detected: true, offer: "mint_seat" },
+            ],
+          },
+        ),
+      }),
+    );
+
+    expect(badge.actionLabel).toBe(HOME_SCREEN_LABELS.authSetupUseLoginAction);
+  });
+
+  it("keeps the GENERIC action for a cause the document cannot attribute", () => {
+    // A failed probe on an applied method: the reason (an exhausted allocation, a
+    // dead key) is not a document field, and the typed per-cause reasons are
+    // unbuilt. Guessing a specific action here would be a derivation.
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({ authStatus: statusFor({ verdict: "failed", at: OBSERVED_AT }) }),
+    );
+
+    expect(badge.actionLabel).toBeNull();
+  });
+
+  it("carries the evidence age on green, so the card's green means something", () => {
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({
+        authStatus: statusFor({ verdict: "verified", at: OBSERVED_AT }),
+      }),
+    );
+
+    expect(badge.detail).not.toBeNull();
+    expect(badge.detail).toContain("verified");
   });
 
   it("is an actionable terminal with nothing applied", () => {
@@ -219,14 +278,41 @@ describe("resolveAuthSetupEvidence", () => {
     return new Map(agents.map((agent) => [agent.kind, agent]));
   }
 
-  it("is not done while any adopted agent is non-terminal", () => {
+  it("is not done while an install is still running", () => {
+    // The ONE document-independent wait: a live install, whose end the runtime
+    // reports as installed / install_required / failed.
     const evidence = resolveAuthSetupEvidence(
       ["claude"],
-      agentsByKind(agentFor({ authStatus: statusFor() })),
+      agentsByKind(agentFor({ installState: "installing" })),
+      true,
     );
 
     expect(evidence.badges).toHaveLength(1);
     expect(evidence.done).toBe(false);
+  });
+
+  it("CANNOT stay pending when the runtime reports no progress at all", () => {
+    // The hang this replaces: first-run adoption wrote selections and the probe
+    // never advanced one harness past unverified, so Home showed "Setting up your
+    // agents…" for the rest of the session and permanently consumed one of three
+    // onboarding slots. Every arm of the document is terminal now, so the card
+    // completes with its rows actionable instead.
+    for (const probe of [
+      { verdict: "unverified", at: null, stale: false },
+      { verdict: "unverified", at: null, stale: true },
+      { verdict: "failed", at: null, stale: false },
+      { verdict: "verified", at: null, stale: false },
+    ] as const) {
+      const evidence = resolveAuthSetupEvidence(
+        ["claude"],
+        agentsByKind(agentFor({ authStatus: statusFor(probe) })),
+        true,
+      );
+
+      expect(evidence.done).toBe(true);
+      expect(evidence.badges.some((badge) => badge.pending)).toBe(false);
+      expect(evidence.badges.every((badge) => badge.terminal)).toBe(true);
+    }
   });
 
   it("is done once every adopted agent is terminal", () => {
@@ -245,6 +331,7 @@ describe("resolveAuthSetupEvidence", () => {
           ),
         }),
       ),
+      true,
     );
 
     expect(evidence.done).toBe(true);
@@ -254,8 +341,8 @@ describe("resolveAuthSetupEvidence", () => {
     ]);
   });
 
-  it("emits a visible pending row for an adopted kind the projection lacks", () => {
-    const evidence = resolveAuthSetupEvidence(["grok"], agentsByKind());
+  it("waits on an adopted kind while the projection has not ANSWERED", () => {
+    const evidence = resolveAuthSetupEvidence(["grok"], agentsByKind(), false);
 
     expect(evidence.done).toBe(false);
     expect(evidence.badges).toHaveLength(1);
@@ -265,7 +352,19 @@ describe("resolveAuthSetupEvidence", () => {
     expect(evidence.badges[0]?.pending).toBe(true);
   });
 
+  it("stops waiting once the projection has answered and still lacks the kind", () => {
+    // No further state is coming for this kind, so waiting on it is waiting
+    // forever. The row stays VISIBLE and terminal, with the pane affordance.
+    const evidence = resolveAuthSetupEvidence(["grok"], agentsByKind(), true);
+
+    expect(evidence.done).toBe(true);
+    expect(evidence.badges).toHaveLength(1);
+    expect(evidence.badges[0]?.pending).toBe(false);
+    expect(evidence.badges[0]?.phase).toBe("actionable");
+    expect(evidence.badges[0]?.displayName).not.toBe("grok");
+  });
+
   it("is never done with no adopted kinds at all", () => {
-    expect(resolveAuthSetupEvidence([], agentsByKind()).done).toBe(false);
+    expect(resolveAuthSetupEvidence([], agentsByKind(), true).done).toBe(false);
   });
 });

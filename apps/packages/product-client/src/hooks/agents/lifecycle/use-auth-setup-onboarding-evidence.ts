@@ -16,13 +16,20 @@ import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-o
  * shared store, but the resolution is a pure fold of each adopted agent's
  * `installState` and its status document — no grace window, no clock. The card
  * completes (and latches, so a later pending edit never resurrects it) once
- * every adopted agent reaches a terminal state.
+ * every adopted agent reaches a terminal state, where terminal means "the card
+ * is no longer the thing waiting", not "finished": a stale or unobserved
+ * document is a state with an affordance, not a spinner.
  *
  * Returns null while there is no card to show (adoption undecided or empty, or
  * already settled); otherwise the badges and the completion flag.
  */
 export function useAuthSetupOnboardingEvidence(): AuthSetupEvidence | null {
-  const { agentsByKind } = useAgentCatalog();
+  const catalog = useAgentCatalog();
+  const { agentsByKind } = catalog;
+  // Has the projection ANSWERED? A disabled query is `isPending` forever in
+  // react-query v5, so an idle fetch status counts as answered — otherwise a host
+  // with no runtime would keep the card pending for the rest of the session.
+  const projectionAnswered = !catalog.isPending || catalog.fetchStatus === "idle";
   const adoptedHarnessKinds = useAuthSetupOnboardingStore(
     (store) => store.adoptedHarnessKinds,
   );
@@ -30,25 +37,27 @@ export function useAuthSetupOnboardingEvidence(): AuthSetupEvidence | null {
   const markSettled = useAuthSetupOnboardingStore((store) => store.markSettled);
 
   const watching =
-    settled === null
-    && adoptedHarnessKinds !== null
-    && adoptedHarnessKinds.length > 0;
+    !settled && adoptedHarnessKinds !== null && adoptedHarnessKinds.length > 0;
 
   const evidence = useMemo(() => {
     if (!watching || adoptedHarnessKinds === null) {
       return null;
     }
-    return resolveAuthSetupEvidence(adoptedHarnessKinds, agentsByKind);
-  }, [watching, adoptedHarnessKinds, agentsByKind]);
+    return resolveAuthSetupEvidence(
+      adoptedHarnessKinds,
+      agentsByKind,
+      projectionAnswered,
+    );
+  }, [watching, adoptedHarnessKinds, agentsByKind, projectionAnswered]);
 
   useEffect(() => {
-    if (settled !== null || evidence === null) {
+    if (settled || evidence === null) {
       return;
     }
     if (evidence.done) {
-      // Completion is state-bound, never timer-bound. Latch "applied" so the
-      // card stays gone once every adopted agent is terminal.
-      markSettled("applied");
+      // Completion is state-bound, never timer-bound. Latch so the card stays
+      // gone once every adopted agent is terminal.
+      markSettled();
     }
   }, [markSettled, settled, evidence]);
 
