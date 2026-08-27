@@ -16,7 +16,6 @@ use super::output_sink::TerminalOutputHub;
 
 mod mint;
 
-pub use mint::MINT_POST_EXIT_CLAIM_WINDOW;
 use mint::{feed_mint_capture, MintRegistry, MintState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

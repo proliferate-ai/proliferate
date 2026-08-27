@@ -41,10 +41,7 @@ fn sequence_server(statuses: Vec<(u16, &'static str)>) -> (String, Arc<Mutex<Vec
             let mut request = Vec::new();
             let mut buffer = [0u8; 4096];
             // Read until the header terminator plus the declared body length.
-            loop {
-                let Ok(read) = stream.read(&mut buffer) else {
-                    break;
-                };
+            while let Ok(read) = stream.read(&mut buffer) {
                 if read == 0 {
                     break;
                 }
