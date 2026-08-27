@@ -142,7 +142,7 @@ fn the_fixtures_empty_entry_fails_closed_while_an_absent_one_is_native() {
     ));
     assert_eq!(
         error.to_string(),
-        "the auth method selected for 'grok' can't be used right now — \
+        "The auth method selected for grok can't be used right now — \
          managed model access isn't ready on this account yet. \
          Pick or fix a method in Settings → Agents."
     );

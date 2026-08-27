@@ -384,7 +384,7 @@ fn refusal_copy_is_pinned_exactly() {
             harness: "claude".into()
         }
         .copy(),
-        "Claude isn't set up — pick a method in Settings."
+        "Claude Code isn't set up — pick a method in Settings"
     );
     // An unknown kind falls back to the kind string.
     assert_eq!(
@@ -392,7 +392,7 @@ fn refusal_copy_is_pinned_exactly() {
             harness: "mystery".into()
         }
         .copy(),
-        "mystery isn't set up — pick a method in Settings."
+        "mystery isn't set up — pick a method in Settings"
     );
     assert_eq!(
         LaunchRefusal::SourceUnsatisfied {

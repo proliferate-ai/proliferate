@@ -3,6 +3,14 @@
 //! human sees. "Refusals speak plain words" — a bare error code never reaches
 //! a person, so the copy lives here, beside the type, pinned by test.
 //!
+//! This module is the ONE producer of every refusal sentence. The
+//! `RouteAuthError` refusal-family variants (`SelectionMissing`,
+//! `SeatCooling`, `AllSeatsCooling`) delegate their `Display` to the
+//! `*_copy` producers below, and the HTTP mappers render the launch surface
+//! through [`LaunchRefusal::from_route_auth_error`] → [`LaunchRefusal::copy`]
+//! / [`LaunchRefusal::code`] — so the words a human sees and the words an
+//! error prints cannot drift (pinned by `refusal_round_trips_every_route_auth_refusal`).
+//!
 //! `NoConfiguredSource` has no live producer this slice — zero rows in the
 //! document still mean native (the zero-rows cutover is a later slice) — but
 //! the vocabulary, copy, and rendering ship now so the cutover is a producer
@@ -17,6 +25,19 @@ use super::RouteAuthError;
 /// about WHICH cause emptied the sources would be a lie.
 pub const UNSATISFIED_FAMILY_REASON: &str =
     "its seat or key may have been revoked, or the credits behind it ran out";
+
+/// The product name a refusal calls a harness by. The spec's frozen
+/// `NoConfiguredSource` sentence names the CLI a person installs and signs
+/// into — "Claude Code" — while the catalog's `display_name` for that kind
+/// is the shorter "Claude" the pane headers use; every other kind reads the
+/// catalog name, and an unparseable kind falls back to the raw string.
+fn harness_product_name(harness: &str) -> &str {
+    match AgentKind::parse(harness) {
+        Some(AgentKind::Claude) => "Claude Code",
+        Some(kind) => kind.display_name(),
+        None => harness,
+    }
+}
 
 /// A typed auth launch refusal. Data only — `copy()` is the one place the
 /// human sentence is produced.
@@ -44,16 +65,10 @@ impl LaunchRefusal {
     /// new refusal variant must fail to compile here until it has copy.
     pub fn copy(&self) -> String {
         match self {
-            Self::NoConfiguredSource { harness } => {
-                let display = AgentKind::parse(harness)
-                    .map(|kind| kind.display_name())
-                    .unwrap_or(harness.as_str());
-                format!("{display} isn't set up — pick a method in Settings.")
+            Self::NoConfiguredSource { harness } => no_configured_source_copy(harness),
+            Self::SourceUnsatisfied { harness, reason } => {
+                source_unsatisfied_copy(harness, Some(reason))
             }
-            Self::SourceUnsatisfied { harness, reason } => format!(
-                "The auth method selected for {harness} can't be used right now — {reason}. \
-                 Pick or fix a method in Settings → Agents."
-            ),
             Self::SeatCooling {
                 seat: _,
                 reset_at_epoch_s,
@@ -113,6 +128,28 @@ impl LaunchRefusal {
             | RouteAuthError::Materialize { .. } => None,
         }
     }
+}
+
+/// The `NoConfiguredSource` sentence (spec §4's frozen copy: "Claude Code
+/// isn't set up — pick a method in Settings").
+fn no_configured_source_copy(harness: &str) -> String {
+    format!(
+        "{} isn't set up — pick a method in Settings",
+        harness_product_name(harness)
+    )
+}
+
+/// The `SourceUnsatisfied` sentence — one producer, shared by
+/// [`LaunchRefusal::copy`] and `RouteAuthError::SelectionMissing`'s Display so
+/// the words cannot drift. `reason` is the document's typed
+/// `unsatisfied_reason`; absent, the cause family
+/// ([`UNSATISFIED_FAMILY_REASON`]) stands in.
+pub(crate) fn source_unsatisfied_copy(harness_kind: &str, reason: Option<&str>) -> String {
+    format!(
+        "The auth method selected for {harness_kind} can't be used right now — {}. \
+         Pick or fix a method in Settings → Agents.",
+        reason.unwrap_or(UNSATISFIED_FAMILY_REASON)
+    )
 }
 
 /// The `SeatCooling` sentence — one producer, shared by [`LaunchRefusal::copy`]
@@ -180,6 +217,75 @@ fn format_reset_time_in<Tz: chrono::TimeZone>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The launch surface renders `LaunchRefusal`; the error prints `Display`.
+    /// Both must be the same words: every refusal-family `RouteAuthError`
+    /// variant round-trips through `from_route_auth_error` to identical copy
+    /// AND code, with and without a carried reason.
+    #[test]
+    fn refusal_round_trips_every_route_auth_refusal() {
+        let reset = chrono::Utc::now().timestamp() + 3_600;
+        let errors = [
+            RouteAuthError::SelectionMissing {
+                harness_kind: "claude".into(),
+                revision: 7,
+                reason: None,
+            },
+            RouteAuthError::SelectionMissing {
+                harness_kind: "grok".into(),
+                revision: 7,
+                reason: Some("the credits behind it ran out".into()),
+            },
+            RouteAuthError::SeatCooling {
+                harness_kind: "claude".into(),
+                seat_id: "seat-a".into(),
+                reset_at_epoch_s: reset,
+            },
+            RouteAuthError::AllSeatsCooling {
+                harness_kind: "claude".into(),
+                earliest_reset_epoch_s: reset,
+            },
+        ];
+        for error in &errors {
+            let refusal =
+                LaunchRefusal::from_route_auth_error(error).expect("a refusal-family variant");
+            assert_eq!(refusal.copy(), error.to_string(), "{error:?}");
+            assert_eq!(refusal.code(), error.code(), "{error:?}");
+        }
+        // The family reason stands in exactly when the document carried none.
+        assert_eq!(
+            errors[0].to_string(),
+            "The auth method selected for claude can't be used right now — \
+             its seat or key may have been revoked, or the credits behind it ran out. \
+             Pick or fix a method in Settings → Agents."
+        );
+        // Shape/IO problems are not refusals.
+        assert!(LaunchRefusal::from_route_auth_error(&RouteAuthError::Materialize {
+            detail: "disk full".into()
+        })
+        .is_none());
+    }
+
+    /// The frozen `NoConfiguredSource` sentence names the product a person
+    /// signs into — "Claude Code", not the catalog's short "Claude" — with no
+    /// trailing period (spec §4).
+    #[test]
+    fn no_configured_source_names_the_product_a_person_signs_into() {
+        assert_eq!(
+            LaunchRefusal::NoConfiguredSource {
+                harness: "claude".into()
+            }
+            .copy(),
+            "Claude Code isn't set up — pick a method in Settings"
+        );
+        assert_eq!(
+            LaunchRefusal::NoConfiguredSource {
+                harness: "codex".into()
+            }
+            .copy(),
+            "Codex isn't set up — pick a method in Settings"
+        );
+    }
 
     #[test]
     fn same_day_formats_clock_only_and_other_day_names_the_date() {

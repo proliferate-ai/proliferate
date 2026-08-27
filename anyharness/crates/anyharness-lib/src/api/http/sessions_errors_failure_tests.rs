@@ -188,3 +188,64 @@ fn resume_startup_stderr_detail_reaches_caller_through_safe_typed_error() {
     );
     assert_eq!(mapped.code(), Some("AGENT_STARTUP_FAILED"));
 }
+
+/// An unsatisfiable agent-auth selection must reach the client as a typed
+/// **409 naming the auth failure**, not the generic 400 "session create
+/// failed" the readiness gate would produce. The distinction is the whole
+/// point: 400 SESSION_CREATE_FAILED reads as "fix your request", while this
+/// says "the route you selected is dead" — and only that lets the UI send the
+/// user to the auth pane instead of to an install button.
+#[test]
+fn an_unsatisfiable_selection_maps_to_a_typed_conflict() {
+    use crate::domains::agents::route_auth::RouteAuthError;
+
+    let mapped = map_create_session_error(CreateAndStartSessionError::RouteAuth(
+        RouteAuthError::SelectionMissing {
+            harness_kind: "claude".to_string(),
+            revision: 42,
+            reason: None,
+        },
+    ));
+
+    assert_eq!(mapped.status(), StatusCode::CONFLICT);
+    assert_eq!(mapped.code(), Some("AGENT_ROUTE_SELECTION_MISSING"));
+    assert_eq!(mapped.into_response().status(), StatusCode::CONFLICT);
+}
+
+/// The refusal family reaches the wire as the `LaunchRefusal` vocabulary:
+/// the ProblemDetails detail IS `copy()` and the code IS `code()` — the
+/// words a human sees are produced once, never re-derived per mapper.
+#[test]
+fn refusal_family_renders_the_launch_refusal_vocabulary() {
+    use crate::domains::agents::route_auth::{LaunchRefusal, RouteAuthError};
+
+    let reset = chrono::Utc::now().timestamp() + 3_600;
+    let errors = [
+        RouteAuthError::SelectionMissing {
+            harness_kind: "claude".to_string(),
+            revision: 42,
+            reason: Some("the credits behind it ran out".to_string()),
+        },
+        RouteAuthError::SeatCooling {
+            harness_kind: "claude".to_string(),
+            seat_id: "seat-a".to_string(),
+            reset_at_epoch_s: reset,
+        },
+        RouteAuthError::AllSeatsCooling {
+            harness_kind: "claude".to_string(),
+            earliest_reset_epoch_s: reset,
+        },
+    ];
+    for error in &errors {
+        let refusal = LaunchRefusal::from_route_auth_error(error).expect("refusal family");
+        let mapped = super::map_route_auth_error(error);
+        assert_eq!(mapped.status(), StatusCode::CONFLICT, "{error:?}");
+        assert_eq!(mapped.detail(), Some(refusal.copy().as_str()), "{error:?}");
+        assert_eq!(mapped.code(), Some(refusal.code()), "{error:?}");
+    }
+    // No bare variant name or code leaks into the human sentence.
+    let mapped = super::map_route_auth_error(&errors[0]);
+    let detail = mapped.detail().expect("detail");
+    assert!(!detail.contains("AGENT_ROUTE"), "{detail}");
+    assert!(!detail.contains("SelectionMissing"), "{detail}");
+}

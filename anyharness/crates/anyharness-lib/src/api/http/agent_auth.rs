@@ -105,26 +105,14 @@ fn applied_harness_kinds(document: &AgentAuthState) -> Vec<String> {
         .collect()
 }
 
-/// State-route mapping, EXHAUSTIVE (no catch-all): adding a refusal variant
-/// must break compile here. Only `StaleStateRevision` can actually arise from
-/// `apply_state_file`/`clear_state_file`, but the 409/500 split mirrors
-/// `sessions_errors::map_route_auth_error` for every variant so the two
-/// mappers can never disagree on a code's status.
+/// State-route mapping: ONE mapper with the sessions API
+/// (`sessions_errors::map_route_auth_error`, exhaustive, refusal family
+/// rendered through the `LaunchRefusal` vocabulary). Only
+/// `StaleStateRevision` can actually arise from
+/// `apply_state_file`/`clear_state_file`; delegating rather than mirroring
+/// is what makes "the two mappers can never disagree" structural.
 fn map_route_auth_error(error: RouteAuthError) -> ApiError {
-    match error {
-        RouteAuthError::StaleStateRevision { .. }
-        | RouteAuthError::SelectionMissing { .. }
-        | RouteAuthError::SeatCooling { .. }
-        | RouteAuthError::AllSeatsCooling { .. }
-        | RouteAuthError::SelectionIncomplete { .. }
-        | RouteAuthError::UnsupportedRoute { .. }
-        | RouteAuthError::UnknownHarness { .. } => {
-            ApiError::conflict(error.to_string(), error.code())
-        }
-        RouteAuthError::MalformedStateFile { .. } | RouteAuthError::Materialize { .. } => {
-            ApiError::internal(error.to_string())
-        }
-    }
+    super::sessions_errors::map_route_auth_error(&error)
 }
 
 #[cfg(test)]

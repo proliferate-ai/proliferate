@@ -146,7 +146,7 @@ fn unsatisfied_reason_reaches_the_refusal_and_its_display() {
     ));
     assert_eq!(
         error.to_string(),
-        "the auth method selected for 'claude' can't be used right now — \
+        "The auth method selected for claude can't be used right now — \
          the credits behind it ran out. Pick or fix a method in Settings → Agents."
     );
 
@@ -156,7 +156,7 @@ fn unsatisfied_reason_reaches_the_refusal_and_its_display() {
         .expect_err("must fail closed");
     assert_eq!(
         bare.to_string(),
-        "the auth method selected for 'claude' can't be used right now — \
+        "The auth method selected for claude can't be used right now — \
          its seat or key may have been revoked, or the credits behind it ran out. \
          Pick or fix a method in Settings → Agents."
     );

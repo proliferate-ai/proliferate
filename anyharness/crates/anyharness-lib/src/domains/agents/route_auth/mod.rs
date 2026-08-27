@@ -77,11 +77,12 @@ pub enum RouteAuthError {
     /// agent-auth.md's "present-but-empty fails closed".
     ///
     /// The Display copy speaks plain words (agent_auth spec: "Refusals speak
-    /// plain words") naming the likely causes and the action. The document
-    /// cannot yet carry WHICH cause emptied the sources (`revision` is still
-    /// the wire's only rider this slice; the typed reasons ride the status
-    /// module in a later slice), so the copy names the family — a revoked
-    /// seat or key, or exhausted credits — rather than fabricating certainty.
+    /// plain words") naming the likely causes and the action; it is produced
+    /// by [`refusal::source_unsatisfied_copy`], the SAME producer behind
+    /// [`refusal::LaunchRefusal::SourceUnsatisfied`], so the launch surface
+    /// and the error can never say different things. Absent a typed reason
+    /// the copy names the family — a revoked seat or key, or exhausted
+    /// credits — rather than fabricating certainty.
     ///
     /// `SelectionConflict` used to sit beside this, for "N entries where one is
     /// allowed". It is deleted rather than wired: source cardinality is a
@@ -95,7 +96,7 @@ pub enum RouteAuthError {
     /// short, word-shaped text (an over-long or token-shaped value is dropped
     /// to the family sentence, since this Display reaches shipped logs).
     /// `revision` stays for logs/tracing but no longer rides the Display copy.
-    #[error("{}", selection_missing_display(harness_kind, reason.as_deref()))]
+    #[error("{}", refusal::source_unsatisfied_copy(harness_kind, reason.as_deref()))]
     SelectionMissing {
         harness_kind: String,
         revision: i64,
@@ -147,17 +148,6 @@ impl RouteAuthError {
             Self::Materialize { .. } => "AGENT_ROUTE_MATERIALIZE_FAILED",
         }
     }
-}
-
-/// `SelectionMissing`'s plain-words Display: the server's typed reason when
-/// the document carried one, else the cause family. Words shared with
-/// [`refusal::LaunchRefusal::SourceUnsatisfied`]'s copy.
-fn selection_missing_display(harness_kind: &str, reason: Option<&str>) -> String {
-    format!(
-        "the auth method selected for '{harness_kind}' can't be used right now — {}. \
-         Pick or fix a method in Settings → Agents.",
-        reason.unwrap_or(refusal::UNSATISFIED_FAMILY_REASON)
-    )
 }
 
 /// The env var the desktop Tauri launcher sets (from the app's own
