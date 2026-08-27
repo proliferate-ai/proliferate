@@ -380,6 +380,7 @@ body {
    `shadow-user-message` utility resolve identically — this is co-location, not
    a workaround. */
 .chat-user-message-bubble {
+  background: var(--color-user-message-surface);
   border-color: var(--color-user-message-border);
   box-shadow: var(--shadow-user-message);
 }

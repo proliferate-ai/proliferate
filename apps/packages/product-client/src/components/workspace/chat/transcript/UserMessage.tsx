@@ -88,7 +88,7 @@ export function UserMessage({
              * build time, which would bake in dark's `none` and leave light with
              * no lift. The design CSS emits the var and lets the cascade pick.
              */
-            className="chat-user-message-bubble max-w-[77%] break-words rounded-2xl border bg-card px-3 py-2 text-foreground"
+            className="chat-user-message-bubble max-w-[77%] break-words rounded-2xl border px-3 py-2 text-foreground"
             data-telemetry-mask
           >
             <div

@@ -854,6 +854,17 @@ export const themeTokens = {
     light: "var(--color-border)",
     provenance: "[RETUNE:light/independent-scale]", layer: "component",
   },
+  /**
+   * The bubble's fill, as its own anatomy value rather than an alias of the
+   * shared card plane, so a light retune can give the bubble a filled,
+   * borderless treatment without repainting every card. Defaults to the card
+   * plane in both modes — a pure re-plumb with zero visual delta.
+   */
+  "--color-user-message-surface": {
+    dark: "var(--color-card)",
+    light: "var(--color-card)",
+    provenance: "[RETUNE:light/independent-scale]", layer: "component",
+  },
   "--color-warning": {
     dark: "rgba(255, 180, 50, 0.15)",
     light: palette.amber.tint,

@@ -74,12 +74,14 @@ export const themeProfiles: Readonly<Record<string, ThemeProfile>> = {
       "--color-hover": codex(0.05),
       "--color-selected": codex(0.065),
       "--color-active": codex(0.08),
-      "--color-user-message-border": codex(0.08),
+      // The reference user bubble: filled #f4f4f4 pill, no border, no lift.
+      "--color-user-message-surface": "#f4f4f4",
+      "--color-user-message-border": "transparent",
+      "--elevation-user-message": "none",
       "--elevation-subtle": `0 1px 2px ${codex(0.04)}`,
       "--elevation-popover": `0 0 0 0.5px ${codex(0.05)}, 0 4px 16px ${codex(0.08)}`,
       "--elevation-modal": `0 24px 48px ${codex(0.16)}`,
       "--elevation-composer": `0 0 0 1px ${codex(0.1)}, 0 2px 12px ${codex(0.06)}`,
-      "--elevation-user-message": `0 1px 2px ${codex(0.03)}`,
     },
   },
 
