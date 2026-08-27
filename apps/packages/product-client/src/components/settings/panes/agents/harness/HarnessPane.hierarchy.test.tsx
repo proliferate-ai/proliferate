@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { makeTestProductHost } from "#product/test/product-host-test-utils";
@@ -9,10 +10,18 @@ import { HarnessPane } from "#product/components/settings/panes/agents/harness/H
 const hierarchyTestHost = makeTestProductHost();
 
 function renderHarnessPane(harnessKind = "claude") {
+  // A per-render QueryClient: the native-bridge prompt reads the local
+  // runtime through a react-query query (disabled here — no healthy runtime
+  // connection in this suite — but the provider must exist to render).
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <ProductHostProvider host={hierarchyTestHost}>
-      <HarnessPane harnessKind={harnessKind} />
-    </ProductHostProvider>,
+    <QueryClientProvider client={queryClient}>
+      <ProductHostProvider host={hierarchyTestHost}>
+        <HarnessPane harnessKind={harnessKind} />
+      </ProductHostProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -53,6 +62,8 @@ const installState = vi.hoisted(() => ({
 
 vi.mock("@anyharness/sdk-react", () => ({
   useAnyHarnessRuntimeContext: () => ({ runtimeUrl: "http://127.0.0.1:8457" }),
+  // Consumed by the native-bridge prompt's query key (use-native-bridge.ts).
+  useAnyHarnessCacheScopeKey: () => "test-scope",
 }));
 
 vi.mock("#product/stores/ui/agent-surface-store", () => ({
