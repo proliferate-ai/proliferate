@@ -200,9 +200,7 @@ class ParserTests(unittest.TestCase):
         self.assertIn("job depth", str(ctx.exception))
 
     def test_sequence_form_on_fails_loud(self) -> None:
-        self.fx.write_workflow(
-            "seq.yml", "name: x\non:\n  - push\njobs:\n  a:\n    steps: []\n"
-        )
+        self.fx.write_workflow("seq.yml", "name: x\non:\n  - push\njobs:\n  a:\n    steps: []\n")
         with self.assertRaises(ValueError) as ctx:
             check_lanes.parse_workflow(self.fx.workflows / "seq.yml")
         self.assertIn("sequence-form", str(ctx.exception))
@@ -258,7 +256,9 @@ class CensusTests(unittest.TestCase):
     def test_pipeline_must_match_a_real_trigger(self) -> None:
         # ci.yml has no schedule trigger, so "nightly" is a lie
         self.fx.write_census(
-            self.green.replace(lane("ci.yml", "repo-shape", "pr"), lane("ci.yml", "repo-shape", "nightly"))
+            self.green.replace(
+                lane("ci.yml", "repo-shape", "pr"), lane("ci.yml", "repo-shape", "nightly")
+            )
         )
         self.assertEqual(self.rule_ids(), [check_lanes.CADENCE_RULE_ID])
 
@@ -324,12 +324,16 @@ class CensusTests(unittest.TestCase):
 
     def test_reusable_requires_workflow_call(self) -> None:
         self.fx.write_census(
-            self.green.replace(lane("ci.yml", "analyze", "pr"), lane("ci.yml", "analyze", "reusable"))
+            self.green.replace(
+                lane("ci.yml", "analyze", "pr"), lane("ci.yml", "analyze", "reusable")
+            )
         )
         self.assertEqual(self.rule_ids(), [check_lanes.CADENCE_RULE_ID])
 
     def test_continue_on_error_needs_quarantine(self) -> None:
-        self.fx.write_census(self.green.replace(quarantine("parked.yml", "smoke", "2026-09-30"), ""))
+        self.fx.write_census(
+            self.green.replace(quarantine("parked.yml", "smoke", "2026-09-30"), "")
+        )
         violations = self.fx.violations()
         # one diagnostic per occurrence line: smoke carries two
         self.assertEqual(
@@ -389,10 +393,7 @@ class LiveRepositoryTests(unittest.TestCase):
         census = check_lanes.load_census()
         self.assertGreater(len(facts), 0)
         missing = [
-            (f.name, job)
-            for f in facts
-            for job in f.jobs
-            if (f.name, job) not in census.lanes
+            (f.name, job) for f in facts for job in f.jobs if (f.name, job) not in census.lanes
         ]
         self.assertEqual(missing, [])
         for f in facts:

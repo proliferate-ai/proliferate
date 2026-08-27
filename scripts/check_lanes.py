@@ -149,8 +149,7 @@ def parse_workflow(path: Path) -> WorkflowFacts:
                 # silent empty trigger tuple; nested sequence items (cron
                 # entries under schedule:) are fine and skipped.
                 raise ValueError(
-                    f"{path.name}:{index}: sequence-form `on:` is unparseable — "
-                    "use the block form"
+                    f"{path.name}:{index}: sequence-form `on:` is unparseable — use the block form"
                 )
             trigger = _TRIGGER_RE.match(line)
             if trigger:
@@ -172,9 +171,7 @@ def parse_workflow(path: Path) -> WorkflowFacts:
                 )
             elif stripped.startswith(("continue-on-error:", "- continue-on-error:")):
                 if not current_job:
-                    raise ValueError(
-                        f"{path.name}:{index}: continue-on-error before any job id"
-                    )
+                    raise ValueError(f"{path.name}:{index}: continue-on-error before any job id")
                 continue_on_error.append((current_job, index))
 
     if not saw_on or not saw_jobs:
@@ -308,7 +305,7 @@ def collect_violations(
                         (
                             CADENCE_RULE_ID,
                             f"{workflow}:{job}",
-                            "dispatch-with-sunset requires sunset = \"YYYY-MM-DD\"",
+                            'dispatch-with-sunset requires sunset = "YYYY-MM-DD"',
                         )
                     )
                 elif sunset < today:
@@ -331,7 +328,7 @@ def collect_violations(
                 )
 
     # Direction 2: no row outlives reality.
-    for (workflow_name, job), row in sorted(census.lanes.items()):
+    for (workflow_name, job), _row in sorted(census.lanes.items()):
         f = facts_by_name.get(workflow_name)
         if f is None or job not in f.jobs:
             violations.append(
@@ -364,7 +361,7 @@ def collect_violations(
                     (
                         QUARANTINE_RULE_ID,
                         f"{workflow}:{job} (line {line})",
-                        "quarantine row needs expires = \"YYYY-MM-DD\"",
+                        'quarantine row needs expires = "YYYY-MM-DD"',
                     )
                 )
             elif expires < today:
@@ -376,7 +373,7 @@ def collect_violations(
                         "fix the flake or re-rule the row",
                     )
                 )
-    for (workflow_name, job), row in sorted(census.quarantine.items()):
+    for (workflow_name, job), _row in sorted(census.quarantine.items()):
         f = facts_by_name.get(workflow_name)
         alive = f is not None and any(j == job for j, _ in f.continue_on_error)
         if not alive:
@@ -398,7 +395,10 @@ def print_missing(facts: list[WorkflowFacts], census: Census) -> None:
                 print("[[lane]]")
                 print(f'workflow = "{f.name}"')
                 print(f'job = "{job}"')
-                print(f'pipeline = ""  # one of: {", ".join(PIPELINES)}; triggers: {", ".join(f.triggers)}')
+                print(
+                    f'pipeline = ""  # one of: {", ".join(PIPELINES)}; '
+                    f"triggers: {', '.join(f.triggers)}"
+                )
                 print('cadence = ""')
                 print("gate_mirrored = false")
                 print()
