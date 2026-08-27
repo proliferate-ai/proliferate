@@ -198,9 +198,9 @@ change detection deferred (a cost optimization, not a fix; it adds a
 > `specs/lints/` with the engines, `fixtures/` → `tests/contracts/`,
 > `delivery/` → `specs/delivery/`) — tonight vs behind the spec pass.
 
-## Known gaps — the build list, in blocking order
+## Known gaps
 
-Each gap is frozen as a delivery spec under
+The build list, in blocking order. Each gap is frozen as a delivery spec under
 [delivery/testing-cicd/](../../../delivery/testing-cicd/) before its code
 lands.
 

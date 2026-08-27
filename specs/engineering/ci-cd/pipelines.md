@@ -28,9 +28,9 @@ Escape: `PROLIFERATE_SKIP_HOOKS=1`. Installed by `make setup` (worktrees
 share `.git/hooks` — one install covers every agent worktree).
 Not here: anything that can say no (push's).
 
-## Pipeline — push (`make gate`) ※
+## Pipeline — push
 
-Budget: ≤ 2 min warm · Trigger: pre-push hook, or `make gate` by hand ·
+`make gate` ※ (in flight). Budget: ≤ 2 min warm · Trigger: pre-push hook, or `make gate` by hand ·
 Green means: the merge gate will not embarrass you — same commands, same
 verdicts.
 
@@ -75,9 +75,9 @@ never skip-comments.
 Not here: anything staged or live (nightly/release); change detection
 (deferred on record).
 
-## Pipeline — main → staging ※
+## Pipeline — main
 
-Budget: ~15 min to live · Trigger: push:main, green · Green means: staging
+main → staging ※ (in flight). Budget: ~15 min to live · Trigger: push:main, green · Green means: staging
 IS current main.
 
 **Deploy is not a gate.** Full run + self-host smoke, then staging deploys
@@ -89,9 +89,9 @@ previous artifact.
 Not here: any test gate (PR's); the battery (nightly's). Supersedes
 #2140's inverse doctrine and rewrites its two enforcement tests.
 
-## Pipeline — nightly ※
+## Pipeline — nightly
 
-Budget: overnight · Trigger: cron ~02:00 PT · Green means: this morning's
+※ In flight. Budget: overnight · Trigger: cron ~02:00 PT · Green means: this morning's
 promotable-or-not verdict is fresh.
 
 Composes: **the e2e battery against staging**
@@ -102,9 +102,9 @@ suites · `anyharness/tests` · the release-harness self-check). Reporting:
 one Slack digest; red only, never green noise.
 Not here: anything that gates a merge.
 
-## Pipeline — release (shipped artifacts)
+## Pipeline — release
 
-Budget: shippable any day · Trigger: per release (an honest event cadence,
+Shipped artifacts. Budget: shippable any day · Trigger: per release (an honest event cadence,
 unlike dispatch-with-no-sunset) · Green means: the candidate set is
 qualified.
 

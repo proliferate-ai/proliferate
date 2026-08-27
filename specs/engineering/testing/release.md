@@ -24,7 +24,9 @@ observables · verdict; schema lives with the runner in `tests/release/`),
 consumed by the release train ([ci-cd](../ci-cd/release-delivery.md)) and,
 target, by runs-triage.
 
-## 2 · What an e2e scenario is (ruled 2026-08-26)
+## 2 · What an e2e scenario is
+
+Ruled 2026-08-26.
 
 - **One user journey through the product's real surfaces, asserting
   outcomes, never transcripts** (testing law 7).
