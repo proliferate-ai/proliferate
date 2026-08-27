@@ -36,27 +36,21 @@ use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 )]
 pub async fn list_agents(State(state): State<AppState>) -> Json<Vec<AgentSummary>> {
     let snapshot = state.agent_runtime.list_agents().await;
-    // The status documents are the persisted machine truth (agent_auth spec
-    // §2) — read here, never recomputed: the projection carries EXACTLY what
+    // The whole projection is one blocking hop: to_summary probes PATH per
+    // agent (userPathCopyDetected) and the status reads hit sqlite behind the
+    // shared connection mutex — synchronous IO that must not run on the axum
+    // task. The status documents are the persisted machine truth (agent_auth
+    // spec §2) — read, never recomputed: the projection carries EXACTLY what
     // GET /v1/agent-auth/status serves, so the two surfaces cannot disagree.
-    let auth_statuses: Vec<Option<anyharness_contract::v1::AgentAuthStatusDoc>> = snapshot
-        .agents
-        .iter()
-        .map(|agent| {
-            state
-                .agent_status_service
-                .read(agent.descriptor.kind.as_str())
-                .map(super::agent_auth_contract::status_doc_to_contract)
-        })
-        .collect();
-    // to_summary probes PATH per agent (userPathCopyDetected); keep that
-    // synchronous IO off the async executor.
+    let status_service = state.agent_status_service.clone();
     let summaries = tokio::task::spawn_blocking(move || {
         snapshot
             .agents
             .iter()
-            .zip(auth_statuses)
-            .map(|(agent, auth_status)| {
+            .map(|agent| {
+                let auth_status = status_service
+                    .read(agent.descriptor.kind.as_str())
+                    .map(super::agent_auth_contract::status_doc_to_contract);
                 to_summary(agent, Some(&snapshot.reconcile_snapshot), auth_status)
             })
             .collect::<Vec<AgentSummary>>()
@@ -81,11 +75,13 @@ pub async fn get_agent(
     Path(kind): Path<String>,
 ) -> Result<Json<AgentSummary>, ApiError> {
     let snapshot = state.agent_runtime.get_agent(&kind).await?;
-    let auth_status = state
-        .agent_status_service
-        .read(&kind)
-        .map(super::agent_auth_contract::status_doc_to_contract);
+    // Same blocking hop as list_agents: the status read is sqlite behind the
+    // shared connection mutex, so it rides with the PATH-probing projection.
+    let status_service = state.agent_status_service.clone();
     let summary = tokio::task::spawn_blocking(move || {
+        let auth_status = status_service
+            .read(&kind)
+            .map(super::agent_auth_contract::status_doc_to_contract);
         to_summary(
             &snapshot.agent,
             Some(&snapshot.reconcile_snapshot),
