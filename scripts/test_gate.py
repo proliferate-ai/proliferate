@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import sys
+from importlib.machinery import SourceFileLoader
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,9 +21,12 @@ REPO = Path(__file__).resolve().parent.parent
 
 
 def _load_gate():
-    spec = importlib.util.spec_from_file_location("gate", REPO / "scripts" / "gate")
+    # `scripts/gate` has no .py suffix, so name the loader explicitly.
+    loader = SourceFileLoader("gate", str(REPO / "scripts" / "gate"))
+    spec = importlib.util.spec_from_loader("gate", loader)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.modules["gate"] = module  # dataclasses resolve annotations via sys.modules
+    loader.exec_module(module)
     return module
 
 
@@ -194,7 +199,7 @@ class BuildChecksTests(unittest.TestCase):
     def test_missing_uv_is_one_loud_skip(self):
         scope = gate.classify(["server/proliferate/server/billing/service.py"])
         checks = gate.build_checks(scope, **self._base_kwargs(have_uv=False))
-        server_checks = [c for c in checks if c.name.startswith("server")]
+        server_checks = [c for c in checks if c.name.startswith("server:")]
         self.assertEqual(len(server_checks), 1)
         self.assertIsNone(server_checks[0].cmd)
         self.assertTrue(server_checks[0].loud)

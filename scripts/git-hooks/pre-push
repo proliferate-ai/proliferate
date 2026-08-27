@@ -1,0 +1,35 @@
+#!/bin/sh
+# Gate-on-push hook — the pre-push tier of the ruled pipeline
+# (delivery/testing-cicd/delivery-spec-make-gate.md; target spec
+# specs/engineering/ci-cd/pipelines.md § "Pipeline — pre-push").
+#
+# Runs `make gate`: the change-scoped local mirror of the merge gate. Same
+# commands CI runs, ≤2 min warm, so a push that passes here will not come back
+# red six minutes later. Missing tools and services skip LOUDLY inside the gate
+# rather than blocking; CI remains authoritative.
+#
+# Escape: PROLIFERATE_SKIP_HOOKS=1. Never habitually --no-verify: the gate is
+# what saves you the CI round-trip.
+# POSIX sh only.
+
+if [ "${PROLIFERATE_SKIP_HOOKS:-}" = "1" ]; then
+  exit 0
+fi
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$repo_root" || exit 0
+
+if ! command -v make >/dev/null 2>&1; then
+  echo "pre-push: make not found; run 'python3 scripts/gate' by hand. Push proceeds." >&2
+  exit 0
+fi
+
+if make --no-print-directory gate; then
+  exit 0
+fi
+
+echo "" >&2
+echo "pre-push: the gate is red. Fix it (each failure printed its re-run command)," >&2
+echo "          or push anyway and verify in CI — but never with --no-verify as habit:" >&2
+echo "          the gate is the fast loop; CI is the slow, authoritative one." >&2
+exit 1

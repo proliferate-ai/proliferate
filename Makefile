@@ -1419,9 +1419,16 @@ install: git-hooks
 
 # Point git at the checked-in hooks. Idempotent, safe to re-run, and local to
 # this clone/worktree (never committed state). See guides/local/README.md.
+# The pre-push gate: change-scoped local mirror of the merge gate
+# (delivery/testing-cicd/delivery-spec-make-gate.md). `make gate` by hand or
+# via the pre-push hook; `python3 scripts/gate --list` shows what a diff selects.
+gate:
+	@python3 scripts/gate
+
 git-hooks:
 	@git config core.hooksPath scripts/git-hooks
-	@echo "git hooks enabled (core.hooksPath=scripts/git-hooks); bypass a single commit with --no-verify."
+	@echo "git hooks enabled (core.hooksPath=scripts/git-hooks): pre-commit formats staged files, pre-push runs 'make gate'."
+	@echo "escape hatch: PROLIFERATE_SKIP_HOOKS=1"
 
 # --- Sidecar staging ---
 

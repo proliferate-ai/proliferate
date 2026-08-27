@@ -230,7 +230,7 @@ def server_test_files(domains: set[str], repo: Path) -> list[str]:
             stem = f.stem
             if any(domain in stem for domain in domains):
                 hits.append(str(f.relative_to(repo / "server")))
-    return hits
+    return sorted(hits)
 
 
 def pc_relative(srcs: list[str]) -> list[str]:

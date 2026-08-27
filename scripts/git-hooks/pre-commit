@@ -1,89 +1,75 @@
 #!/bin/sh
-# Foundation vocabulary pre-commit guard (R-V2-2).
+# Format-on-commit hook — the commit tier of the ruled pipeline
+# (delivery/testing-cicd/delivery-spec-make-gate.md; target spec
+# specs/engineering/ci-cd/pipelines.md § "Pipeline — commit").
 #
-# Fast, local, and advisory-by-escape-hatch: it checks only the frontend files
-# in THIS commit, so it stays well under a couple of seconds even on a large
-# staged change. CI remains the backstop and runs the same script over the whole
-# repository, so bypassing this hook can never land a violation silently.
+# Runs the BOUGHT FORMATTERS ONLY on staged files, auto-fixes, and restages.
+# It never lints and it NEVER FAILS: a formatter error prints a warning and the
+# commit proceeds (a blocking hook makes an agent loop; an auto-fixing one costs
+# nothing). Checks live in the pre-push gate (`make gate`); CI is the backstop.
 #
-# Bypass:  git commit --no-verify
-# POSIX sh only; no dependency beyond python3 (already required to work here).
-
-set -eu
-
-repo_root=$(git rev-parse --show-toplevel)
-cd "$repo_root"
+# The two checks this hook used to carry moved to the gate: appearance-scaling
+# runs in the gate's always-set, theme equality in its design-package rule.
+#
+# Partial-staging caveat: formatting rewrites the working copy and `git add`
+# restages the whole file, so a partially staged file has its unstaged hunks
+# staged too. Stage whole files, or commit hunks with PROLIFERATE_SKIP_HOOKS=1.
+#
+# Escape: PROLIFERATE_SKIP_HOOKS=1 (or --no-verify for one commit).
+# POSIX sh only.
 
 if [ "${PROLIFERATE_SKIP_HOOKS:-}" = "1" ]; then
   exit 0
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "pre-commit: python3 not found; skipping appearance-scaling check." >&2
-  exit 0
-fi
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$repo_root" || exit 0
 
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -n "$staged" ] || exit 0
 
-# Only the roots the guard owns, and only files that still exist in the worktree.
-frontend_files=$(printf '%s\n' "$staged" | grep -E \
-  '^(apps/packages/product-client/src/.*\.(ts|tsx)|apps/desktop/src/.*\.(ts|tsx)|apps/packages/design/src/css/(dom|product)\.css|apps/packages/design/src/tokens\.ts)$' \
-  || true)
+warn() {
+  echo "pre-commit: $*" >&2
+}
 
-status=0
-
-if [ -n "$frontend_files" ]; then
-  existing=""
-  for file in $frontend_files; do
-    if [ -f "$file" ]; then
-      existing="$existing $file"
+# --- Python: ruff format over staged files in the server's ruff scope -------
+py_files=$(printf '%s\n' "$staged" | grep -E '^server/(proliferate|tests)/.*\.py$' || true)
+if [ -n "$py_files" ]; then
+  if command -v uv >/dev/null 2>&1; then
+    rel=""
+    for f in $py_files; do
+      [ -f "$f" ] && rel="$rel ${f#server/}"
+    done
+    if [ -n "$rel" ]; then
+      # shellcheck disable=SC2086
+      if (cd server && uv run --python 3.12 --frozen --extra dev ruff format $rel >/dev/null 2>&1); then
+        # shellcheck disable=SC2086
+        git add $py_files 2>/dev/null || warn "could not restage formatted python files"
+      else
+        warn "ruff format failed; commit proceeds unformatted (the gate will tell you)."
+      fi
     fi
-  done
-  if [ -n "$existing" ]; then
-    # shellcheck disable=SC2086
-    if ! python3 scripts/check_appearance_scaling.py $existing; then
-      status=1
-    fi
-  fi
-fi
-
-# The theme is generated from tokens.ts; whenever the design package changes,
-# re-project it and prove byte equality before the commit is recorded.
-#
-# The tsc step is LOAD-BEARING, not an optimization: generate-theme.mjs imports
-# the COMPILED dist/tokens.js, so without recompiling first the generator
-# re-projects whatever was compiled last time. An edit to src/tokens.ts would
-# then produce a byte-identical theme and the hook would pass while the tree
-# drifted — exactly the one failure this check exists to catch. Build order is
-# the same law the package `build` script follows: tsc, generate, check.
-if printf '%s\n' "$staged" | grep -q '^apps/packages/design/'; then
-  design_tsc=apps/packages/design/node_modules/.bin/tsc
-  if [ ! -x "$design_tsc" ]; then
-    design_tsc=node_modules/.bin/tsc
-  fi
-  if [ ! -x "$design_tsc" ]; then
-    echo "pre-commit: typescript is not installed; skipping theme equality." >&2
-    echo "            run: pnpm install && pnpm --filter @proliferate/design build" >&2
   else
-    design_tsc=$(cd "$(dirname "$design_tsc")" && pwd)/$(basename "$design_tsc")
-    if ! (
-      cd apps/packages/design &&
-        "$design_tsc" -p tsconfig.json &&
-        node scripts/generate-theme.mjs >/dev/null &&
-        node scripts/check-theme.mjs >/dev/null
-    ); then
-      echo "pre-commit: generated theme does not match tokens.ts." >&2
-      echo "            run: pnpm --filter @proliferate/design build" >&2
-      status=1
-    fi
+    warn "uv not found; skipping ruff format."
   fi
 fi
 
-if [ "$status" -ne 0 ]; then
-  echo "" >&2
-  echo "pre-commit: foundation checks failed. Fix the call sites, or commit with" >&2
-  echo "            --no-verify if you are deliberately deferring (CI still runs them)." >&2
+# --- Rust: cargo fmt over the workspace when any .rs is staged --------------
+rs_files=$(printf '%s\n' "$staged" | grep -E '\.rs$' || true)
+if [ -n "$rs_files" ]; then
+  if command -v cargo >/dev/null 2>&1; then
+    if cargo fmt --all >/dev/null 2>&1; then
+      # shellcheck disable=SC2086
+      git add $rs_files 2>/dev/null || warn "could not restage formatted rust files"
+    else
+      warn "cargo fmt failed; commit proceeds unformatted (the gate will tell you)."
+    fi
+  else
+    warn "cargo not found; skipping cargo fmt."
+  fi
 fi
 
-exit "$status"
+# --- TypeScript / CSS / JSON --------------------------------------------------
+# biome: enabled by the format slice (Biome adopted 2026-08-26, not yet in-repo).
+
+exit 0
