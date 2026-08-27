@@ -3,7 +3,7 @@
 // environment/HTTP/DB plumbing in billing-env.ts; both are re-exported so
 // specs keep using a single `import * as b from "../../stack/billing.ts"`.
 //
-// The tier-2 rules (specs/engineering/testing/standard.md) hold here with one
+// The tier-2 rules (specs/engineering/testing/README.md) hold here with one
 // billing-specific reading:
 //   - Stripe is REAL (test keys + test clocks). We never mock the Stripe API.
 //     Subscriptions/invoices/customers are real test-mode objects created via

@@ -4,13 +4,13 @@ Status: target contract for automated Tier 2, Tier 3, and Tier 4 product qualifi
 
 This document is the complete target manifest for deciding whether a Proliferate release works as intended. It owns the required guarantees and the meaning of a passing release. The surrounding testing documents have narrower roles:
 
-- [`../TESTING.md`](standard.md) owns tier mechanics, placement, and test-writing
+- [`../TESTING.md`](../../../specs/engineering/testing/README.md) owns tier mechanics, placement, and test-writing
   rules.
-- [`flows.md`](flows.md) is the current legacy flow view. Its future pointer,
+- [`flows.md`](../../../tests/release/core-release-scenario-manifest.json) is the current legacy flow view. Its future pointer,
   collection, lane, and run-status columns are generated from the target
   manifest, executable registries, and run evidence; they are not separately
   hand-owned truth.
-- [`scenarios.md`](scenarios.md) is the current migration/finding ledger. Stable
+- [`scenarios.md`](../../../tests/release/core-release-scenario-manifest.json) is the current migration/finding ledger. Stable
   journey semantics move to the tier contracts below; implementation history
   belongs in issues and generated evidence rather than registry prose.
 - [`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md) owns
@@ -24,7 +24,7 @@ This document is the complete target manifest for deciding whether a Proliferate
   current mechanism notes, and lower-tier implementation hand-off. The Tier 3
   contract owns `SH-*` qualification actions and assertions; this contract and
   the target manifest own stable guarantee identity and qualification state.
-- [`core-release-scenario-manifest.json`](core-release-scenario-manifest.json)
+- [`core-release-scenario-manifest.json`](../../../tests/release/core-release-scenario-manifest.json)
   is the one machine-owned target inventory. It contains stable guarantee IDs
   and composed journey children. Presence is not coverage: `planned` means
   unqualified until a real collector, collected test id, required cells, gate,
@@ -34,7 +34,7 @@ This document is the complete target manifest for deciding whether a Proliferate
   worktree because that file referenced collectors absent from current main.
 - Every run emits immutable evidence separately from both manifests. Static
   implementation state never substitutes for an observed result.
-- [`manual-release-qa.md`](manual-release-qa.md) owns manual verification that cannot be
+- [`manual-release-qa.md`](../../../guides/deploying/manual-release-qa.md) owns manual verification that cannot be
   automated.
 
 When another testing document describes a smaller or provisional matrix, this contract wins. Product behavior remains owned by the relevant feature and primitive specs under `specs/**`.
@@ -568,8 +568,8 @@ The remaining enforcement exceptions are:
 - hosted Web is not booted by the existing Tier 2 world;
 - the Tier 4 Desktop and cloud update journeys cannot qualify in CI today;
 - the agent-auth and model-gateway platform contracts are now written
-  ([agent-auth.md](../../systems/agent_auth/README.md),
-  [MODELS.md](../../systems/harnesses/launch-options.md),
+  ([agent-auth.md](../../../specs/systems/agent_auth/README.md),
+  [MODELS.md](../../../specs/systems/harnesses/launch-options.md),
   both Status: target with pinned gaps); collectors for these areas audit
   against those documents' bodies, treating their Current-gaps items as
   known deltas rather than failures; and

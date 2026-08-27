@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Scroll-physics tier (specs/engineering/testing/standard.md). The real transcript renderer, driven
+// Scroll-physics tier (specs/engineering/testing/README.md). The real transcript renderer, driven
 // by the REAL @anyharness/sdk reducer through `window.__scrollPhysics`, is
 // measured in real Chromium and WebKit. Everything external is absent. Each
 // spec asserts an observable physics invariant from DOM probes and a per-frame

@@ -35,7 +35,7 @@ server/proliferate/server/cloud/runtime/bootstrap.py
 
 Each emitter uses its own component release. Production delivery stamps the component version and 12-character source SHA; local or unstamped fallbacks do not claim production artifact identity. The server also validates an override before accepting it as a `proliferate-server` release. Worker and Supervisor have separate emergency release overrides because one target-wide release cannot identify both binaries.
 
-Release construction and immutable artifact identity belong to [Delivery](../shipping/release-delivery.md). Sentry project names only route provider events; they are not release component names.
+Release construction and immutable artifact identity belong to [Delivery](../ci-cd/release-delivery.md). Sentry project names only route provider events; they are not release component names.
 
 Environment comes from the component's configured Sentry environment. It is separate from the release and from provider project routing. Operators must filter by all three when validating a deployment.
 

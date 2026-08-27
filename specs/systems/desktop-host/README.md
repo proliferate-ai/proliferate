@@ -75,7 +75,7 @@ Make Desktop a thin native shell: the same product code runs on Web with `deskto
 | Worker enrollment protocol, heartbeat, identity store, gateway credential file | seam (worker crate; today [worker.md](../../areas/anyharness.md)) |
 | Supervisor, mailbox, binary swaps, cloud convergence | managed_runtime ([MANAGED_RUNTIME.md](../harnesses/managed-runtime.md)) |
 | Diagnostics collector, child bridge, support snapshot, scrubbing (`src-tauri/src/diagnostics*`) | diagnostics plane-infra (frozen, ADR-owned; [OBSERVABILITY.md](../../engineering/observability/standard.md)) |
-| Owned updater, runtime-version assert, release staging | release-delivery (engineering system; [desktop-updates.md](../../engineering/shipping/desktop-updates.md)) |
+| Owned updater, runtime-version assert, release staging | release-delivery (engineering system; [desktop-updates.md](../../engineering/ci-cd/desktop-updates.md)) |
 | Google Workspace MCP auth/credentials (`commands/google_workspace_mcp*`) | integration_gateway — a desktop-local integration lane hosted by the shell |
 | Anonymous telemetry bootstrap | observability infra (product telemetry section) |
 | Agent seed archives (contents, pins) | [harnesses.md](../harnesses/README.md); the shell only passes the env |
@@ -125,7 +125,7 @@ Target: `specs/systems/desktop-host/deep-dive.md` graduates into this file (its 
   (identity-key transitions, retry, silent-when-unsupported).
 - Config and identity: [app_config_home_env_tests.rs](../../../apps/desktop/src-tauri/src/app_config_home_env_tests.rs),
   [updater_owned_tests.rs](../../../apps/desktop/src-tauri/src/updater_owned_tests.rs) (release-delivery's, listed for completeness).
-- Cross-plane: the desktop lanes in [tests/release](../../../tests/release) per [TESTING.md](../../engineering/testing/standard.md).
+- Cross-plane: the desktop lanes in [tests/release](../../../tests/release) per [the testing spec](../../engineering/testing/README.md).
 
 ## Known gaps / follow-ups
 

@@ -23,7 +23,7 @@ import type { QualificationWorld } from "../config/types.js";
 
 /**
  * Testable command orchestration
- * (specs/engineering/testing/core-release-validation.md; historical section
+ * (delivery/testing-cicd/archive/core-release-validation.md; historical section
  * name: "Runner integration").
  * The required ordering is encoded here: parse → identity → selection →
  * candidate-build-map validation → only then local-user/gateway setup →

@@ -159,7 +159,7 @@ Client-plane presentation: [components/agents](../../../apps/packages/product-cl
   [contradiction_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_probe/contradiction_tests.rs),
   [api/http/agent_launch_options_tests.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agent_launch_options_tests.rs).
 - Release lanes: the managed-agent install/spawn scenarios under
-  [tests/release](../../../tests/release) (see [TESTING.md](../../engineering/testing/standard.md)).
+  [tests/release](../../../tests/release) (see [the testing spec](../../engineering/testing/README.md)).
 
 ## Known gaps / follow-ups
 

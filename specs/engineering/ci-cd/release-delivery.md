@@ -142,7 +142,7 @@ Server CI's shrink-only mypy census compares a pull request with its base SHA an
   preparation and readiness policy.
 - [Environment Sources](../../../guides/local/dev-profiles.md#environment-sources)
   and its variable catalog own configuration locations and precedence.
-- [Testing](../testing/standard.md) owns release qualification,
+- [Testing](../testing/README.md) owns release qualification,
   test tiers, scenarios, and evidence requirements.
 - [Desktop Updates](desktop-updates.md) owns installed-product updater and
   release-notice behavior.

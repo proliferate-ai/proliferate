@@ -37,9 +37,9 @@ throughput safe — process weight where the blast radius is, generated
 artifacts regenerated rather than hand-merged, and lanes that cannot
 silently lie.
 
-## 2 · The lane census ※
+## 2 · The lane census
 
-The law it mechanizes: **a check lives in exactly one pipeline, and every
+※ Target — the checker is in flight. The law it mechanizes: **a check lives in exactly one pipeline, and every
 pipeline has an honest trigger — a dispatch-only lane is a lane that
 doesn't exist.**
 
@@ -104,9 +104,9 @@ trains:
   check seconds after opening is usually a label race — re-check after
   labels settle.
 
-## 5 · The CD line (ruled 2026-08-26)
+## 5 · The CD line
 
-**Merge is the only test gate · deploy is not a gate · staging is the
+Ruled 2026-08-26. **Merge is the only test gate · deploy is not a gate · staging is the
 standing e2e world · e2e green is prod's door.**
 
 - **One artifact base**: build once per green main — one candidate set
@@ -147,7 +147,7 @@ artifacts · deploy events · the merged commit on `main`.
 
 - **[Testing](../testing/README.md)** owns every norm; this spec never
   decides what a lane must prove.
-- **[Infra](../infra/README.md)** owns Terraform and topology — the deploy
+- **[Infra](../../areas/infra.md)** owns Terraform and topology — the deploy
   *targets*; this spec owns what deploys *when*.
 - **[Observability](../observability/README.md)** owns what the lanes
   report to, event names, and alert policy.

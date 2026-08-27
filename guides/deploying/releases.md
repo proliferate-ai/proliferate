@@ -3,7 +3,7 @@
 This procedure covers release coordinators and artifact publication. Hosted
 staging and manual production promotion are covered by
 [Hosted Deployments](hosted.md). Release qualification belongs to
-[Testing](../../specs/engineering/testing/standard.md).
+[Testing](../../specs/engineering/testing/README.md).
 
 ## Before Running A Release
 
@@ -78,7 +78,7 @@ Publishing the GitHub Release alone does not make the updater live. The updater
 job publishes signed versioned artifacts plus immutable and rolling
 `latest.json` and public `installers.json` manifests. Verify both the GitHub
 Release and the live manifests. Product-side update behavior remains owned by
-[Desktop Updates](../../specs/engineering/shipping/desktop-updates.md).
+[Desktop Updates](../../specs/engineering/ci-cd/desktop-updates.md).
 
 For each macOS target, the Desktop release lane builds the diagnostics
 collector package first and stages that exact executable into the app. Verify

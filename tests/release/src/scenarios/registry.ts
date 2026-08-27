@@ -34,8 +34,8 @@ import { selfhostQual1 } from "./selfhost-qual-1.js";
 import { selfhostCfn1 } from "./selfhost-cfn-1.js";
 
 /**
- * The tier-3 first wave (specs/engineering/testing/scenarios.md#tier-3--first-wave),
- * the self-hosting battery under `selfhost/` (specs/engineering/testing/self-hosting.md),
+ * The tier-3 first wave (tests/release/core-release-scenario-manifest.json#tier-3--first-wave),
+ * the self-hosting battery under `selfhost/` (delivery/testing-cicd/archive/self-hosting.md),
  * the tier-4 upgrade-path scenarios under `upgrade/`, the provisional
  * LOCAL-WORLD-SMOKE-1 local-world infrastructure proof (see
  * `local-world-smoke-1.ts` — not the canonical LOCAL-2 guarantee), and

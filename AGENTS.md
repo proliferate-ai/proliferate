@@ -68,12 +68,12 @@ system spec (next section) owns the behavior.
 | `cloud/sdk/**`, `cloud/sdk-react/**`, `anyharness/sdk/**`, `anyharness/sdk-react/**` | [`specs/areas/frontend.md`](specs/areas/frontend.md) (SDK section) |
 | UI: components, styling, tokens, theme | [`specs/DESIGN_SYSTEM.md`](specs/DESIGN_SYSTEM.md) |
 | User-facing copy, naming, product feel | [`specs/product-sense.md`](specs/product-sense.md) |
-| `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**`, `scripts/agent-gateway-smoke/**` | [`specs/engineering/testing/standard.md`](specs/engineering/testing/standard.md) |
+| `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**`, `scripts/agent-gateway-smoke/**` | [`specs/engineering/testing/README.md`](specs/engineering/testing/README.md) |
 | Telemetry and scrubber sources in any area (`**/telemetry/**`, `**/telemetry.rs`, `server/proliferate/integrations/sentry/**`, `server/proliferate/middleware/logging.py`), `server/infra/observability/**` | [`specs/engineering/observability/standard.md`](specs/engineering/observability/standard.md) |
 | `scripts/check_*`, `lints/**`, `MANIFEST.toml` files, checker allowlists and ratchets | Constitution — see [Repository-wide rules](#repository-wide-rules) |
 | `adrs/**` — writing or reviewing a decision record | [`guides/process/adrs.md`](guides/process/adrs.md) |
 | `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` | [`guides/process/README.md`](guides/process/README.md) |
-| `.github/workflows/**`, `scripts/ci-cd/**`, `apps/desktop/infra/**`, `apps/desktop/scripts/**`, `server/infra/**`, `server/deploy/**` | [`guides/deploying/README.md`](guides/deploying/README.md) and [`specs/engineering/shipping/release-delivery.md`](specs/engineering/shipping/release-delivery.md) |
+| `.github/workflows/**`, `scripts/ci-cd/**`, `apps/desktop/infra/**`, `apps/desktop/scripts/**`, `server/infra/**`, `server/deploy/**` | [`guides/deploying/README.md`](guides/deploying/README.md) and [`specs/engineering/ci-cd/release-delivery.md`](specs/engineering/ci-cd/release-delivery.md) |
 | `.auth-env/**`, local profiles, local app identity | [`guides/local/README.md`](guides/local/README.md) |
 | `delivery/**` | Frozen delivery specs; never edited after freeze except for a founder re-ruling — [`specs/README.md`](specs/README.md#authority) |
 | `specs/areas/anyharness-db-schema.sql` and other generated references | Never hand-edit; the owning area doc names the regenerate command — [`specs/areas/anyharness.md`](specs/areas/anyharness.md) |
@@ -107,14 +107,14 @@ Engineering systems (testing, observability, alerting, the building loop, the
 customer loop) are cross-cutting: they own no product state and consume every
 product spec's `Emits` and `Proof` sections. Their specs live under
 `specs/engineering/<name>/README.md`; the per-PR standards are
-[`specs/engineering/testing/standard.md`](specs/engineering/testing/standard.md) and
+[`specs/engineering/testing/README.md`](specs/engineering/testing/README.md) and
 [`specs/engineering/observability/standard.md`](specs/engineering/observability/standard.md).
 
 ## Repository-wide rules
 
 - If it's not current, it's not in this repo: future work lives in PRs, issues,
   and `adrs/`; update docs in the same PR that changes behavior.
-- Consider [`specs/engineering/testing/standard.md`](specs/engineering/testing/standard.md) and
+- Consider [`specs/engineering/testing/README.md`](specs/engineering/testing/README.md) and
   [`specs/engineering/observability/standard.md`](specs/engineering/observability/standard.md) in every PR; the PR
   template asks for both sections.
 - Constitution: never weaken a lint, add a net-new exception, delete a pinning

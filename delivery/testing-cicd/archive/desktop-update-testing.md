@@ -2,7 +2,7 @@
 
 How the current local prototype builds an N−1-shaped Desktop app, points it at a local update feed, stages an N artifact, and exercises the real Tauri updater engine. This is useful mechanism signal, but it is not the complete `T4-DESKTOP-1` qualification journey. Read the target artifact, relaunch, state-continuity, AnyHarness, native CLI, ACP agent-process, and post-update-turn contract in [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md).
 
-Read the product and UI acceptance contract in [`desktop-updates.md`](../shipping/desktop-updates.md) alongside this mechanism. The current collector proves manifest fetch, semver selection, signature verification, and a bundle swap headlessly. It does not launch the installed N application, run real bundled sidecars, preserve a real runtime home/session, or reconcile installed agents, so it cannot claim `T4-DESKTOP-1` qualification by itself.
+Read the product and UI acceptance contract in [`desktop-updates.md`](../../../specs/engineering/ci-cd/desktop-updates.md) alongside this mechanism. The current collector proves manifest fetch, semver selection, signature verification, and a bundle swap headlessly. It does not launch the installed N application, run real bundled sidecars, preserve a real runtime home/session, or reconcile installed agents, so it cannot claim `T4-DESKTOP-1` qualification by itself.
 
 The shipped app is not touched. `apps/desktop/src-tauri/tauri.conf.json` keeps its production endpoint (`https://downloads.proliferate.com/desktop/stable/latest.json`) and production pubkey. A test build overrides only those two values (plus a test-only insecure-transport flag) through a **build-time config overlay**, so a build with no overlay is byte-for-byte today's config.
 

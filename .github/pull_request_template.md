@@ -4,7 +4,7 @@
 
 ## Testing
 
-<!-- State the tier(s) exercised per specs/engineering/testing/standard.md, or why none is feasible. -->
+<!-- State the tier(s) exercised per specs/engineering/testing/README.md, or why none is feasible. -->
 
 -
 

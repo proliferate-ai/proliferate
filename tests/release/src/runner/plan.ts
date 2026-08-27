@@ -4,7 +4,7 @@ import type { PlannedCellV1 } from "./result.js";
 
 /**
  * Exact-cell expansion and validation
- * (specs/engineering/testing/core-release-validation.md; historical section
+ * (delivery/testing-cicd/archive/core-release-validation.md; historical section
  * name: "Cell identity"). The
  * selected-cell array produced here is the complete test plan for one
  * invocation: leaf scenarios keep their unchanged `<scenario>/<lane>` cell,
