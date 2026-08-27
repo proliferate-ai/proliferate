@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { makeTestProductHost, type TestProductHostOptions } from "#product/test/product-host-test-utils";
-import { harnessStatusFixture, verifiedHarnessStatus } from "#product/test/agent-auth-status-fixtures";
+import { harnessStatusFixture, verifiedHarnessStatus } from "#product/hooks/access/anyharness/agent-auth/use-harness-status.fixtures";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
 
 // Anonymous host keeps the organizations query disabled, as before. Its

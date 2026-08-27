@@ -1,4 +1,4 @@
-import type { HarnessStatus } from "#product/hooks/access/anyharness/agent-auth/use-harness-status";
+import type { HarnessStatus } from "./use-harness-status";
 
 /**
  * Status-document fixtures for the pane suites (agent_auth spec §2).

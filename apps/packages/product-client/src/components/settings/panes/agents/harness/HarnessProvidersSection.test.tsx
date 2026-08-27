@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
-import { harnessStatusFixture } from "#product/test/agent-auth-status-fixtures";
+import { harnessStatusFixture } from "#product/hooks/access/anyharness/agent-auth/use-harness-status.fixtures";
 import { HarnessProvidersSection } from "./HarnessProvidersSection";
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
