@@ -78,7 +78,12 @@ async def bump_render_sequence_if_changed(
     # Unchanged content: the predicate suppressed the update, so the stored
     # sequence is current — the no-op render's "changes neither" guarantee.
     current = await get_render_sequence(db, user_id=user_id, surface=surface)
-    assert current is not None
+    if current is None:
+        # Only reachable if the conflicting row vanished between the upsert and
+        # this read (a concurrent user delete cascading the scope away). Raise a
+        # real error rather than assert: under ``python -O`` an assert compiles
+        # away and the next line would dereference None.
+        raise RuntimeError(f"Render sequence row vanished for user {user_id} surface {surface!r}")
     return current.sequence
 
 

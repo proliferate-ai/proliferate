@@ -2,11 +2,13 @@
 
 The "Applied means acknowledged" seam (agent_auth spec §2): one row per
 (user, surface) recording the last rendered ``state.json`` a surface's
-runtime confirmed. Writers are the two delivery pipelines — the cloud
-materializer stamps after its sandbox operation completes, and the desktop
-ack route stamps what the local runtime's state push accepted. Readers derive
-pending-vs-applied by comparing the CURRENT rendered ``(sequence,
-fingerprint)`` against the stamp: applied requires BOTH to match. Equal
+runtime confirmed. There is exactly ONE writer: the delivery-ack route, which
+stamps what the local runtime's state push accepted, relayed by the desktop
+courier. ``surface='cloud'`` is retained dormant (spec §2) — the cloud
+materializer that once stamped it was deleted in the cull, and the surface
+waits for the environments rebuild rather than migrating out and back.
+Readers derive pending-vs-applied by comparing the CURRENT rendered
+``(sequence, fingerprint)`` against the stamp: applied requires BOTH. Equal
 sequence carries equal content by construction (the sequence bumps exactly
 when content changes), so a re-ack at the stored sequence is idempotent and
 a lower one is inert.
@@ -97,7 +99,12 @@ async def record_delivery_ack(
         # The conflict predicate suppressed the update — a delayed ack for a
         # superseded document. The scope row necessarily exists.
         row = await _load_row(db, user_id=user_id, surface=surface)
-        assert row is not None
+        if row is None:
+            # Only reachable if the conflicting row vanished between the upsert
+            # and this read (a concurrent user delete cascading the scope away).
+            # Raise a real error rather than assert: under ``python -O`` an
+            # assert compiles away and the next line would dereference None.
+            raise RuntimeError(f"Delivery ack row vanished for user {user_id} surface {surface!r}")
         # The suppressed UPDATE never reached the ORM, so the identity-mapped
         # instance (if any) is already current; no refresh needed.
         return delivery_ack_record(row)
