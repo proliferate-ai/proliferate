@@ -29,7 +29,7 @@ max_lines = 665
 reason = "W-F2 period-boundary gate adds one guard clause (a billing_reason check plus its drop report and the hold-clear that must still run) to _handle_invoice_paid; the reporter and its context assembly live in webhook_drops.py. W-F5 drop visibility: the intake path was already 595/600 before this change, so threading the Stripe event id through the five handlers and adding one report call per silent early return cannot fit under the cap. The drop vocabulary, levels, paid-detection, and all per-reason context assembly were split out to webhook_drops.py to keep the growth to call sites only; splitting the handlers themselves is deferred to the billing service taxonomy pass rather than done inside an observability-only fix. Adversarial-review fix pass (MAJOR 1) adds a two-line reporter call at the dispatch fall-through's 13th silent drop (unhandled_event_type); billing error normalization changes only the direct error import"
 
 [[max_lines]]
-path = "server/proliferate/server/agent_auth/enrollment.py"
+path = "server/proliferate/server/ai_gateway/enrollment.py"
 max_lines = 630
 reason = "C-train composition re-attaches C-1 both-surface sync-completion pokes; D train: org-only ensure_signup_enrollment + per-(org,member) LiteLLM identity + fingerprint-driven per-key re-mint; shrank again when ensure_user_enrollment died (D-3), split pending"
 

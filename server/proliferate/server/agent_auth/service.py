@@ -40,8 +40,8 @@ from proliferate.db.store.billing import list_entitlements
 from proliferate.db.store.billing_subscriptions import list_subscriptions
 from proliferate.db.store.organizations import list_organizations_for_user
 from proliferate.lib.infra.time.wall_clock import utcnow
-from proliferate.server.agent_auth import budget
-from proliferate.server.agent_auth.budget import get_gateway_enrollment_for_user
+from proliferate.server.ai_gateway import budget
+from proliferate.server.ai_gateway.budget import get_gateway_enrollment_for_user
 from proliferate.server.agent_auth.selection_rules import (
     SelectionRuleError,
     validate_auth_selection_set,

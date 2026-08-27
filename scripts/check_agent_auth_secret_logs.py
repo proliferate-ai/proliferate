@@ -4,7 +4,8 @@
 
 The agent-auth surfaces move real provider secrets and minted gateway keys
 through their hot paths: the cloud enrollment/migration/topup flows in
-``server/proliferate/server/agent_auth`` and the AnyHarness render and
+``server/proliferate/server/agent_auth`` and
+``server/proliferate/server/ai_gateway`` and the AnyHarness render and
 model-snapshot planes under ``route_auth`` / ``model_snapshot``. A single
 ``logger.info("minted %s", virtual_key)`` or ``tracing::warn!(%value_ciphertext,
 ...)`` writes a live credential into logs that ship to a collector — an
@@ -76,6 +77,7 @@ OWNED_RULE_IDS = frozenset(
 # the decrypt paths actually live), and the Rust render + snapshot planes.
 SCANNED_ROOTS: list[tuple[str, frozenset[str]]] = [
     ("server/proliferate/server/agent_auth", frozenset({".py"})),
+    ("server/proliferate/server/ai_gateway", frozenset({".py"})),
     ("server/proliferate/db/store/agent_gateway", frozenset({".py"})),
     ("server/proliferate/db/models/agent_gateway.py", frozenset({".py"})),
     ("server/proliferate/db/models/cloud", frozenset({".py"})),

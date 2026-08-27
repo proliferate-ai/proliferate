@@ -23,18 +23,18 @@ from contextlib import suppress
 from proliferate.config import settings
 from proliferate.db import session_ops as db_session
 from proliferate.integrations.sentry import report_critical
-from proliferate.server.agent_auth.enrollment import backfill_enrollments
-from proliferate.server.agent_auth.migration import migrate_legacy_enrollments
-from proliferate.server.agent_auth.topups import (
+from proliferate.server.ai_gateway.enrollment import backfill_enrollments
+from proliferate.server.ai_gateway.migration import migrate_legacy_enrollments
+from proliferate.server.ai_gateway.topups import (
     LlmTopupRunResult,
     run_llm_topups,
     topups_enabled,
 )
-from proliferate.server.agent_auth.usage_import import (
+from proliferate.server.ai_gateway.usage_import import (
     UsageImportResult,
     run_usage_import,
 )
-from proliferate.server.agent_auth.verification import (
+from proliferate.server.ai_gateway.verification import (
     VerificationResult,
     run_verification,
 )

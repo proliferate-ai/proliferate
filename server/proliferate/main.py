@@ -45,7 +45,7 @@ from proliferate.server.accounts.identity.api import router as identity_auth_rou
 from proliferate.server.agent_auth.api import gateway_account_router as agent_gateway_router
 from proliferate.server.agent_auth.api import organization_router as agent_auth_organization_router
 from proliferate.server.agent_auth.api import router as agent_auth_router
-from proliferate.server.agent_auth.worker import (
+from proliferate.server.ai_gateway.worker import (
     start_agent_gateway_enrollment_backfill,
     start_agent_gateway_llm_topups,
     start_agent_gateway_usage_import,

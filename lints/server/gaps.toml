@@ -226,7 +226,7 @@ why = """Domain-owned loops each bring their own restart, observability, and
 failure model, so work is neither uniformly restartable nor uniformly
 observable. Periodic process loops remain in billing/reconciler.py,
 anonymous_telemetry/worker.py, and three Agent Gateway loops in
-agent_auth/worker.py, and background/enqueue_health.py is a direct
+ai_gateway/worker.py, and background/enqueue_health.py is a direct
 background-store client. Closing this needs a deployed, behaviour-equivalent
 background plane before any checker can be turned on."""
 

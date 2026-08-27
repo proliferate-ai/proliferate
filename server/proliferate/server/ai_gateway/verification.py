@@ -50,7 +50,7 @@ from proliferate.lib.infra.time.wall_clock import utcnow
 logger = logging.getLogger(__name__)
 
 # ``server/litellm/config.yaml`` relative to this file
-# (proliferate/server/agent_auth/verification.py -> server/).
+# (proliferate/server/ai_gateway/verification.py -> server/).
 _CONFIG_PATH = Path(__file__).resolve().parents[4] / "litellm" / "config.yaml"
 
 
