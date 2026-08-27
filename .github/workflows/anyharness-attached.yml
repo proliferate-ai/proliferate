@@ -1,4 +1,18 @@
-name: Agent Runtime Compatibility
+name: AnyHarness Attached Compatibility
+
+# CREDENTIAL-DARK LANE (honest, dated). The real-agent runtime compatibility
+# suite — the runtime standalone tests attached to real agents. Relocated
+# verbatim from agent-runtime-compat.yml (deleted 2026-08-27); planned as a
+# nightly-checks job, but the secrets its validation step requires
+# (ANTHROPIC_API_KEY / ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON,
+# OPENAI_API_KEY / CODEX_API_KEY / ANYHARNESS_TEST_CODEX_AUTH_JSON) are not
+# provisioned in this repository's Actions secrets, and the lane's only
+# historical run (2026-05-20) failed on exactly that validation.
+#
+# PABLO: provision the agent secrets (then move this job into
+# nightly-checks.yml and flip its census row to nightly), or rule the lane
+# out — the census row in lints/product/lanes.toml carries the
+# dispatch-with-sunset date for this decision.
 
 on:
   workflow_dispatch:
@@ -9,12 +23,13 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   CARGO_TERM_COLOR: always
-  NODE_OPTIONS: --max-old-space-size=8192
 
 jobs:
-  agent-runtime-local:
+  # Real AnyHarness local runtime compatibility: the runtime standalone suite
+  # attached to real agents with the configured credentials. Verbatim move
+  # from agent-runtime-compat.yml (deleted with this lane's arrival).
+  anyharness-attached:
     name: Real AnyHarness local runtime compatibility
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -27,6 +42,7 @@ jobs:
       GH_TOKEN: ${{ secrets.ANYHARNESS_TEST_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
       ANYHARNESS_TEST_FIXTURE_REPO_URL: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_URL }}
       ANYHARNESS_TEST_FIXTURE_REPO_REF: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_REF }}
+      NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -125,3 +141,4 @@ jobs:
           set -euo pipefail
           node scripts/setup-agent-runtime-suite.mjs cleanup \
             --state-file "${{ steps.prepare-runtime.outputs.state_file }}"
+

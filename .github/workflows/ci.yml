@@ -127,6 +127,11 @@ jobs:
           python3 -m unittest scripts/test_check_manifests.py
           python3 scripts/check_manifests.py
 
+      - name: Check lane census
+        run: |
+          python3 -m unittest scripts/test_check_lanes.py
+          python3 scripts/check_lanes.py
+
       - name: Check session mutation admission
         run: python3 scripts/check_session_mutation_admission.py
 

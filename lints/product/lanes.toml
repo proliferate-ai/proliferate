@@ -1,0 +1,691 @@
+# The lane census — the ruled law (2026-08-26): every check belongs to exactly
+# one pipeline, and every pipeline has an honest trigger — a dispatch-only lane
+# doesn't exist. One [[lane]] row per workflow job; [[quarantine]] rows are the
+# only sanction for continue-on-error, and they expire. Enforced both
+# directions by scripts/check_lanes.py; delivery spec:
+# delivery/testing-cicd/delivery-spec-lane-census.md.
+#
+# Pipelines: pr · main · nightly · release · prod · dispatch-with-sunset ·
+# reusable ("reusable" = workflow_call-only files; their jobs run in their
+# callers' pipelines). A matrix job is one row: the census records job
+# definitions, not expansions. gate_mirrored marks jobs whose commands the
+# pre-push gate mirrors byte-for-byte (recorded here; enforced by the gate
+# slice, not this checker).
+
+[[rule]]
+id = "PROD-LANE-001"
+title = "Every CI job carries a lane-census row, and no row outlives its job"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_lanes.py"
+mode = "lint"
+scope = ".github/workflows/*.yml"
+
+rule = """Every job in every workflow has exactly one [[lane]] row in lints/product/lanes.toml, and every row names a job that still exists."""
+alternative = """Add the row in the same PR that adds or renames the job (run `python3 scripts/check_lanes.py --print-missing` for a stub); delete the row in the same PR that deletes the job."""
+why = """The census is how "what runs where" stays legible: the 2026-08 cull left lanes that existed on paper and never ran, and nobody could say which. Ruled 2026-08-26."""
+
+[rule.example]
+bad = "a new deploy job merged with no census row"
+good = "the same PR adds [[lane]] workflow/job/pipeline/cadence"
+
+[[rule]]
+id = "PROD-LANE-002"
+title = "A lane's declared pipeline matches a real trigger; dispatch-only lanes carry a sunset"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_lanes.py"
+mode = "lint"
+scope = ".github/workflows/*.yml"
+
+rule = """A row's pipeline must match the workflow's actual triggers (pr needs a pull_request trigger, main needs push/workflow_run, nightly needs schedule, release needs push/workflow_call, prod needs schedule/push, reusable needs workflow_call — workflow_dispatch is always an allowed extra, never the qualifying trigger), and a dispatch-only workflow must be pipeline dispatch-with-sunset with an unexpired sunset date."""
+alternative = """Give the lane its honest trigger (a cron, a push, a workflow_run), or declare dispatch-with-sunset with a real decide-by date — and when the date arrives, promote the cadence or delete the lane."""
+why = """A dispatch-only lane is a lane that doesn't exist: intent, heavy lanes, and the anyharness suite all "existed" for weeks while never running. Ruled 2026-08-26."""
+
+[rule.example]
+bad = "on: workflow_dispatch only, censused as pipeline = \"nightly\""
+good = "a schedule: cron plus pipeline = \"nightly\", or dispatch-with-sunset + sunset = \"2026-09-30\""
+
+[[rule]]
+id = "PROD-LANE-003"
+title = "continue-on-error exists only under an unexpired quarantine row"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_lanes.py"
+mode = "lint"
+scope = ".github/workflows/*.yml"
+
+rule = """Every continue-on-error in a workflow job is covered by a [[quarantine]] row naming an owner and an unexpired expires date; a quarantine row with no surviving continue-on-error is stale and fails."""
+alternative = """Fix the flake and delete both the flag and the row; or, while it is genuinely quarantined, keep the dated row current — expiry means fix it or re-rule it, never silence."""
+why = """continue-on-error masked a fully red staging e2e lane as green for weeks (0 green / 4 failed / 9 blocked reported "success", observed 2026-08-25). Red must mean red. Ruled 2026-08-26."""
+
+[rule.example]
+bad = "continue-on-error: true with no quarantine row"
+good = "[[quarantine]] workflow/job/owner/reason/expires beside the flag"
+
+# ── The census ──────────────────────────────────────────────────────────────
+
+# ci.yml — the PR merge gate (push:main + pull_request + dispatch)
+[[lane]]
+workflow = "ci.yml"
+job = "repo-shape"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+
+[[lane]]
+workflow = "ci.yml"
+job = "terraform-validate"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = false
+
+[[lane]]
+workflow = "ci.yml"
+job = "ci-cd-config"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = false
+
+[[lane]]
+workflow = "ci.yml"
+job = "cargo-check"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+
+[[lane]]
+workflow = "ci.yml"
+job = "rust-lint"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+note = "fmt --check byte-identical; the gate scopes clippy to touched crates (lint-wiring slice, #2293)"
+
+[[lane]]
+workflow = "ci.yml"
+job = "sdk-build"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+
+[[lane]]
+workflow = "ci.yml"
+job = "desktop-frontend"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+
+[[lane]]
+workflow = "ci.yml"
+job = "mobile-typecheck"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+
+[[lane]]
+workflow = "ci.yml"
+job = "web-frontend"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+
+[[lane]]
+workflow = "ci.yml"
+job = "shared-frontend-checks"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+
+[[lane]]
+workflow = "ci.yml"
+job = "shared-frontend-packages"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+
+[[lane]]
+workflow = "ci.yml"
+job = "ci-ok"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = false
+note = "rollup; drift-guarded required check"
+
+# server-ci.yml — the server half of the merge gate
+[[lane]]
+workflow = "server-ci.yml"
+job = "changes"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = false
+
+[[lane]]
+workflow = "server-ci.yml"
+job = "build-artifact-runtime"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = false
+
+[[lane]]
+workflow = "server-ci.yml"
+job = "lint"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+
+[[lane]]
+workflow = "server-ci.yml"
+job = "test-unit"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = false
+note = "the gate runs touched-domain tests at -n 2, not this exact invocation"
+
+[[lane]]
+workflow = "server-ci.yml"
+job = "test-integration"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = false
+note = "3 deterministic shards; gate scopes instead"
+
+[[lane]]
+workflow = "server-ci.yml"
+job = "server-ci-ok"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = false
+note = "rollup; drift-guarded required check"
+
+# codeql.yml
+[[lane]]
+workflow = "codeql.yml"
+job = "analyze"
+pipeline = "pr"
+cadence = "every PR + push:main + weekly cron (Mon 03:27 UTC)"
+gate_mirrored = false
+note = "matrix ×3 languages = one job definition; three required contexts"
+
+# pr-metadata.yml
+[[lane]]
+workflow = "pr-metadata.yml"
+job = "validate-pr-metadata"
+pipeline = "pr"
+cadence = "pull_request_target label/readiness events"
+gate_mirrored = false
+
+# deploy-staging.yml — green main → staging, automatically (the staging-pipeline
+# slice, delivery-spec-staging-pipeline.md, merged 2026-08-27 as #2269)
+[[lane]]
+workflow = "deploy-staging.yml"
+job = "plan"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "deploy-staging.yml"
+job = "deploy-server"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "deploy-staging.yml"
+job = "deploy-litellm"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "deploy-staging.yml"
+job = "deploy-web"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "deploy-staging.yml"
+job = "deploy-desktop"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
+gate_mirrored = false
+note = "desktop stays dry_run on staging"
+
+[[lane]]
+workflow = "deploy-staging.yml"
+job = "summary"
+pipeline = "main"
+cadence = "green main (workflow_run on CI success) + dispatch"
+gate_mirrored = false
+
+# release.yml — prod (the transitional daily cron, ruled 2026-08-26; it dies
+# in the PR that makes promote deliberate once the battery stands)
+[[lane]]
+workflow = "release.yml"
+job = "prepare"
+pipeline = "prod"
+cadence = "daily 09:00 UTC cron (transitional) + manual promote dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release.yml"
+job = "release-runtime"
+pipeline = "prod"
+cadence = "daily 09:00 UTC cron (transitional) + manual promote dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release.yml"
+job = "release-server"
+pipeline = "prod"
+cadence = "daily 09:00 UTC cron (transitional) + manual promote dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release.yml"
+job = "release-desktop"
+pipeline = "prod"
+cadence = "daily 09:00 UTC cron (transitional) + manual promote dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release.yml"
+job = "deploy-server-prod"
+pipeline = "prod"
+cadence = "daily 09:00 UTC cron (transitional) + manual promote dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release.yml"
+job = "deploy-litellm-prod"
+pipeline = "prod"
+cadence = "daily 09:00 UTC cron (transitional) + manual promote dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release.yml"
+job = "deploy-web-prod"
+pipeline = "prod"
+cadence = "daily 09:00 UTC cron (transitional) + manual promote dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release.yml"
+job = "publish-product-release"
+pipeline = "prod"
+cadence = "daily 09:00 UTC cron (transitional) + manual promote dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release.yml"
+job = "summary"
+pipeline = "prod"
+cadence = "daily 09:00 UTC cron (transitional) + manual promote dispatch"
+gate_mirrored = false
+
+# Reusable lanes — workflow_call only; run in their callers' pipelines
+[[lane]]
+workflow = "_build-server.yml"
+job = "docker"
+pipeline = "reusable"
+cadence = "via caller"
+gate_mirrored = false
+
+[[lane]]
+workflow = "_build-server.yml"
+job = "self-hosted-release-assets"
+pipeline = "reusable"
+cadence = "via caller"
+gate_mirrored = false
+
+[[lane]]
+workflow = "_deploy-server.yml"
+job = "deploy"
+pipeline = "reusable"
+cadence = "via caller"
+gate_mirrored = false
+
+[[lane]]
+workflow = "_deploy-litellm.yml"
+job = "deploy"
+pipeline = "reusable"
+cadence = "via caller"
+gate_mirrored = false
+
+[[lane]]
+workflow = "_deploy-web.yml"
+job = "deploy"
+pipeline = "reusable"
+cadence = "via caller"
+gate_mirrored = false
+
+[[lane]]
+workflow = "_deploy-desktop.yml"
+job = "plan"
+pipeline = "reusable"
+cadence = "via caller"
+gate_mirrored = false
+
+[[lane]]
+workflow = "_deploy-desktop.yml"
+job = "release"
+pipeline = "reusable"
+cadence = "via caller"
+gate_mirrored = false
+
+# Release-train lanes (event cadence "per release" is honest)
+[[lane]]
+workflow = "release-desktop.yml"
+job = "build-desktop"
+pipeline = "release"
+cadence = "per release (called by release.yml; tag push + dispatch)"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release-desktop.yml"
+job = "create-release"
+pipeline = "release"
+cadence = "per release (called by release.yml; tag push + dispatch)"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release-desktop.yml"
+job = "publish-updater"
+pipeline = "release"
+cadence = "per release (called by release.yml; tag push + dispatch)"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release-runtime.yml"
+job = "build-binaries"
+pipeline = "release"
+cadence = "per release (called by release.yml; tag push + dispatch)"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release-runtime.yml"
+job = "publish-sdk"
+pipeline = "release"
+cadence = "per release (called by release.yml; tag push + dispatch)"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release-runtime.yml"
+job = "create-release"
+pipeline = "release"
+cadence = "per release (called by release.yml; tag push + dispatch)"
+gate_mirrored = false
+
+[[lane]]
+workflow = "release-runtime.yml"
+job = "publish-cdn"
+pipeline = "release"
+cadence = "per release (called by release.yml; tag push + dispatch)"
+gate_mirrored = false
+
+# release-e2e.yml — the staging battery runs nightly (the e2e-observable
+# slice, #2287): the 08:00 UTC cron keys ONLY release-e2e-staging (job-level
+# if); the other worlds run per-release by dispatch. release-e2e-local was
+# deleted by that slice; observe mode = NO continue-on-error anywhere here.
+[[lane]]
+workflow = "release-e2e.yml"
+job = "release-e2e-staging"
+pipeline = "nightly"
+cadence = "nightly 08:00 UTC cron + dispatch + pre-promote on demand"
+gate_mirrored = false
+note = "observe mode: red blocks nothing, feeds the morning digest"
+
+[[lane]]
+workflow = "release-e2e.yml"
+job = "release-e2e-local-functional"
+pipeline = "dispatch-with-sunset"
+cadence = "per-release qualification, by dispatch"
+gate_mirrored = false
+sunset = "2026-09-30"
+note = "release-train lane in a schedule-carrying workflow; the vocabulary lacks an event-lane shape for this — revisit with the per-test quarantine schema"
+
+[[lane]]
+workflow = "release-e2e.yml"
+job = "release-e2e-selfhost-install"
+pipeline = "dispatch-with-sunset"
+cadence = "per-release qualification, by dispatch"
+gate_mirrored = false
+sunset = "2026-09-30"
+note = "release-train lane in a schedule-carrying workflow; same vocabulary gap as above"
+
+# release-e2e-selfhost.yml — parked posture (PABLO DECIDES: self-host battery)
+[[lane]]
+workflow = "release-e2e-selfhost.yml"
+job = "artifact-chain"
+pipeline = "dispatch-with-sunset"
+cadence = "manual dispatch"
+gate_mirrored = false
+sunset = "2026-09-30"
+note = "self-host battery parked pending the posture ruling"
+
+[[lane]]
+workflow = "release-e2e-selfhost.yml"
+job = "provisioning"
+pipeline = "dispatch-with-sunset"
+cadence = "manual dispatch"
+gate_mirrored = false
+sunset = "2026-09-30"
+note = "self-host battery parked pending the posture ruling"
+
+# Cloud-template lanes — held dark pending the environments/cloud ruling
+[[lane]]
+workflow = "release-cloud-template.yml"
+job = "build-and-publish"
+pipeline = "dispatch-with-sunset"
+cadence = "manual dispatch"
+gate_mirrored = false
+sunset = "2026-09-30"
+note = "held dark pending the environments/cloud rebuild ruling"
+
+[[lane]]
+workflow = "promote-cloud-template.yml"
+job = "promote"
+pipeline = "dispatch-with-sunset"
+cadence = "manual dispatch"
+gate_mirrored = false
+sunset = "2026-09-30"
+note = "held dark pending the environments/cloud rebuild ruling"
+
+# main-pipeline lanes
+[[lane]]
+workflow = "self-host-smoke.yml"
+job = "changes"
+pipeline = "main"
+cadence = "push:main (smoke-relevant paths) + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "self-host-smoke.yml"
+job = "smoke"
+pipeline = "main"
+cadence = "push:main (smoke-relevant paths) + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "publish-agent-catalog.yml"
+job = "publish"
+pipeline = "main"
+cadence = "push:main (catalog paths) + dispatch"
+gate_mirrored = false
+
+# grafana-monitors.yml — the observability monitor lane (#2281):
+# check on PR, apply on merge, nightly drift
+[[lane]]
+workflow = "grafana-monitors.yml"
+job = "check"
+pipeline = "pr"
+cadence = "every PR (monitor paths)"
+gate_mirrored = false
+
+[[lane]]
+workflow = "grafana-monitors.yml"
+job = "apply"
+pipeline = "main"
+cadence = "push:main (monitor paths)"
+gate_mirrored = false
+
+[[lane]]
+workflow = "grafana-monitors.yml"
+job = "drift"
+pipeline = "nightly"
+cadence = "nightly cron"
+gate_mirrored = false
+
+# Nightly canaries
+[[lane]]
+workflow = "catalog-probe.yml"
+job = "probe"
+pipeline = "nightly"
+cadence = "daily 09:00 UTC cron + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "catalog-probe.yml"
+job = "publish"
+pipeline = "nightly"
+cadence = "daily 09:00 UTC cron + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "catalog-probe.yml"
+job = "alert"
+pipeline = "nightly"
+cadence = "daily 09:00 UTC cron + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "windows-compile-check.yml"
+job = "runtime"
+pipeline = "nightly"
+cadence = "daily 09:23 UTC cron + dispatch"
+gate_mirrored = false
+note = "windows canary; C5 ruling open (keep-as-canary rec 2026-08-26)"
+
+[[lane]]
+workflow = "windows-compile-check.yml"
+job = "desktop"
+pipeline = "nightly"
+cadence = "daily 09:23 UTC cron + dispatch"
+gate_mirrored = false
+note = "windows canary; C5 ruling open (keep-as-canary rec 2026-08-26)"
+
+[[lane]]
+workflow = "windows-process-kill-tests.yml"
+job = "process-kill"
+pipeline = "nightly"
+cadence = "daily 09:29 UTC cron + dispatch"
+gate_mirrored = false
+note = "windows canary; C5 ruling open"
+
+[[lane]]
+workflow = "windows-sdk-generate-check.yml"
+job = "windows"
+pipeline = "nightly"
+cadence = "daily 09:35 UTC cron + dispatch"
+gate_mirrored = false
+note = "windows canary; C5 ruling open"
+
+[[lane]]
+workflow = "windows-sdk-generate-check.yml"
+job = "linux"
+pipeline = "nightly"
+cadence = "daily 09:35 UTC cron + dispatch"
+gate_mirrored = false
+note = "windows canary; C5 ruling open"
+
+# nightly-checks.yml — the slow-but-real set (this slice)
+[[lane]]
+workflow = "nightly-checks.yml"
+job = "scroll-physics"
+pipeline = "nightly"
+cadence = "daily 09:00 UTC cron + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "nightly-checks.yml"
+job = "workflow-canvas"
+pipeline = "nightly"
+cadence = "daily 09:00 UTC cron + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "nightly-checks.yml"
+job = "release-harness-selfcheck"
+pipeline = "nightly"
+cadence = "daily 09:00 UTC cron + dispatch"
+gate_mirrored = false
+
+[[lane]]
+workflow = "nightly-checks.yml"
+job = "report-red"
+pipeline = "nightly"
+cadence = "daily 09:00 UTC cron + dispatch"
+gate_mirrored = false
+note = "red-only Slack digest via SLACK_ENGINEERING_ALERTS_WEBHOOK_URL"
+
+# anyharness-attached.yml — CREDENTIAL-DARK (relocated verbatim from
+# agent-runtime-compat.yml, deleted 2026-08-27): the agent secrets its
+# validation step requires are not provisioned, and its only historical run
+# (2026-05-20) failed on exactly that. PABLO: provision the secrets (then the
+# job moves into nightly-checks and this row flips to nightly) or rule the
+# lane out by the sunset.
+[[lane]]
+workflow = "anyharness-attached.yml"
+job = "anyharness-attached"
+pipeline = "dispatch-with-sunset"
+cadence = "manual dispatch (credential-dark)"
+gate_mirrored = false
+sunset = "2026-09-30"
+note = "PABLO: provision agent secrets → nightly, or rule the lane out"
+
+# ── Quarantine (continue-on-error sanctions; they expire) ──────────────────
+#
+# KNOWN GAP: quarantine rows model workflow JOBS (continue-on-error) only —
+# per-TEST quarantine (a flaky test pinned by name, owner + expiry, instead of
+# a skip-comment) has no schema yet. Two candidates, both observed 2026-08-27
+# on non-Rust diffs, both intermittent session-actor concurrency in
+# anyharness-lib:
+#   1. live::sessions::actor::tests::workspace_stop::
+#        stop_and_await_kill_escalation_can_leave_the_agents_own_output_torn_mid_record
+#      (PR #2279; timing-sensitive kill-escalation assertion)
+#   2. domains::sessions::runtime::fork_dispatch_and_restart_tests::
+#        concurrent_double_fork_on_the_same_key_never_duplicates_the_child
+#      (PR #2286, docs-only diff, 3268 passed / 1 failed)
+# Both may be smoke from the await_holding_lock debt (123 allowed sites; the
+# careful lock-scope pass is queued — see lints/anyharness). Owned by the
+# ci-cd spec's Known gaps; do not grow this file's schema ad hoc.
+
+[[quarantine]]
+workflow = "release-e2e-selfhost.yml"
+job = "provisioning"
+owner = "testing/release"
+reason = "provisional self-host provisioning lanes pending the posture ruling"
+expires = "2026-09-30"
+
+[[quarantine]]
+workflow = "release-desktop.yml"
+job = "build-desktop"
+owner = "desktop-host"
+reason = "windows desktop build soft-allowed while windows is canary-grade (conditional on matrix.runner_os)"
+expires = "2026-09-30"
+
+[[quarantine]]
+workflow = "windows-compile-check.yml"
+job = "runtime"
+owner = "desktop-host"
+reason = "windows canary lanes report without blocking; C5 ruling open"
+expires = "2026-09-30"
+
+[[quarantine]]
+workflow = "windows-compile-check.yml"
+job = "desktop"
+owner = "desktop-host"
+reason = "windows canary lanes report without blocking; C5 ruling open"
+expires = "2026-09-30"

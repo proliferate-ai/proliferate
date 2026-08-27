@@ -17,6 +17,8 @@ This spec reads as ground truth for the final system. Every difference from what
 | client | the courier files (`use-local-auth-state-sync.ts`, `local-auth-state.ts`, the sidecar origin line) · the settings auth panes and onboarding auth surfaces (consumers) |
 | data | `fixtures/contracts/agent-auth-state/` (the wire pin) · the generated SDK clients |
 
+`domains/agents/seat_cooling/` — the per-seat cooling state store (`0077_seat_cooling.sql`) — is agent_auth-owned but not yet colocated with the rest of the runtime cell; it folds into `domains/agent_auth/` at convergence.
+
 **Responsibilities:**
 
 - Know which auth methods exist for each harness, and hold each person's choice per (harness, surface).
@@ -97,6 +99,8 @@ Two rules of the road are held by review, not machinery: *couriers carry, never 
         - The local HTTP API serves it to the frontend; the courier reports the ack from it; readiness consumes it through one seam (`apply_launch_route_upgrade`).
     - `start_login(harness, variant)` — the login terminal, including the `mint_seat` variant.
         - The settings pane's "Authenticate" and the seat-minting affordance are its only callers.
+    - `current_server_origin()` / `load_effective_state(runtime_home, origin)` / `state_file_path(runtime_home)` — the effective-state read surface: which server issued the applied document, and where its file lives on disk.
+        - **One consumer: `launch_options` (`basis.rs`, `tests.rs`).** The launch-options basis reads the same effective-state seam a launch uses, so its persisted revision never drifts from what a real launch would apply; `tests.rs` also reaches `launch_probe::test_support::snapshot` (test-only).
 - **Consumes:** the applied document (from the courier) · the catalog surface (which harnesses exist, which auth contexts each declares) · the terminal machinery for login flows.
 
 ### the courier — desktop TS
