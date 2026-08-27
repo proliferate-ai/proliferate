@@ -5,11 +5,13 @@
 // Reads every qualification-evidence.json the runner wrote, groups the cells
 // by verdict, and delivers ONE message: "staging battery N/M green · red: … ·
 // expected-fail: … · blocked: …". Observe mode: this script never fails the
-// job (exit 0 always) and never per-failure alerts — one digest, once.
+// job (exit 0 always) and never per-failure alerts — one digest, once. A run
+// that produced no evidence (preflight skipped, runner crashed) still digests:
+// NO RESULTS + the preflight note is itself the signal.
 //
-// Delivery: SLACK_WEBHOOK_URL when set (Block Kit-free plain text so every
-// workspace renders it), else the pinned digest issue (created once, its body
-// replaced nightly) via the GitHub REST API with GH_TOKEN + GITHUB_REPOSITORY.
+// Delivery chain (each failure falls through to the next): SLACK_WEBHOOK_URL →
+// the pinned digest issue (GH_TOKEN + GITHUB_REPOSITORY; found via the search
+// API so it never falls off a page and duplicates) → stdout.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -45,6 +47,24 @@ export function findReports(root) {
   return found;
 }
 
+/**
+ * Parses report files, tolerating corrupt/partial ones (a cancelled job's
+ * tree is not guaranteed): unreadable files become a note in the digest, not
+ * a silent absence of the whole digest.
+ */
+export function readReports(files, readFile = (file) => readFileSync(file, "utf8")) {
+  const reports = [];
+  const unreadable = [];
+  for (const file of files) {
+    try {
+      reports.push(JSON.parse(readFile(file)));
+    } catch (error) {
+      unreadable.push(`${path.basename(path.dirname(file))}/${path.basename(file)}: ${error instanceof Error ? error.message.slice(0, 80) : error}`);
+    }
+  }
+  return { reports, unreadable };
+}
+
 /** One digest row per result cell across all reports, keyed by cell id (last report wins). */
 export function summarizeReports(reports) {
   const cells = new Map();
@@ -71,14 +91,20 @@ function oneLine(text, max = 160) {
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
-/** The digest text. `lane` and `runUrl` are context; everything else is the summary. */
-export function formatDigest(summary, { lane = "staging", runUrl = null, when = new Date() } = {}) {
+/** The digest text. `note` carries e.g. the preflight-skip reason; `unreadable` lists corrupt reports. */
+export function formatDigest(summary, { lane = "staging", runUrl = null, when = new Date(), note = "", unreadable = [] } = {}) {
   const day = when.toISOString().slice(0, 10);
   const header =
     summary.total === 0
       ? `${lane} battery ${day}: NO RESULTS — the runner produced no evidence (check the run).`
       : `${lane} battery ${day}: ${summary.green}/${summary.total} green`;
   const lines = [header];
+  if (note && note.trim().length > 0) {
+    lines.push(`note: ${oneLine(note)}`);
+  }
+  for (const entry of unreadable) {
+    lines.push(`note: unreadable report — ${oneLine(entry)}`);
+  }
   const label = { failed: "RED", expected_fail: "expected-fail", blocked: "blocked", green: "green" };
   for (const status of STATUS_ORDER) {
     const rows = summary.byStatus[status] ?? [];
@@ -100,15 +126,17 @@ export function formatDigest(summary, { lane = "staging", runUrl = null, when = 
   return lines.join("\n");
 }
 
-/** Which channel the digest goes to, from the environment. Pure, for tests. */
-export function chooseDelivery(env) {
+/** The ordered delivery chain the environment allows. Pure, for tests. */
+export function deliveryChain(env) {
+  const chain = [];
   if (env.SLACK_WEBHOOK_URL?.trim()) {
-    return { kind: "slack" };
+    chain.push("slack");
   }
   if (env.GH_TOKEN?.trim() && env.GITHUB_REPOSITORY?.trim()) {
-    return { kind: "issue", repository: env.GITHUB_REPOSITORY.trim() };
+    chain.push("issue");
   }
-  return { kind: "stdout" };
+  chain.push("stdout");
+  return chain;
 }
 
 async function deliverSlack(text, env, fetchImpl) {
@@ -122,10 +150,42 @@ async function deliverSlack(text, env, fetchImpl) {
   }
 }
 
+/**
+ * Finds the pinned digest issue via the search API (title-scoped — never
+ * falls off a page-1 listing and starts duplicating), falling back to a
+ * paginated list scan when search is unavailable.
+ */
+async function findDigestIssue(api, title, headers, fetchImpl) {
+  const query = encodeURIComponent(`repo:${api.repo} is:issue is:open in:title "${title}"`);
+  const search = await fetchImpl(`https://api.github.com/search/issues?q=${query}&per_page=20`, { headers });
+  if (search.ok) {
+    const found = (await search.json()).items?.find((issue) => issue.title === title && !issue.pull_request);
+    if (found) {
+      return found;
+    }
+    return null;
+  }
+  for (let page = 1; page <= 5; page += 1) {
+    const list = await fetchImpl(`${api.base}/issues?state=open&per_page=100&page=${page}`, { headers });
+    if (!list.ok) {
+      throw new Error(`issue list responded ${list.status}`);
+    }
+    const issues = await list.json();
+    const found = issues.find((issue) => issue.title === title && !issue.pull_request);
+    if (found) {
+      return found;
+    }
+    if (issues.length < 100) {
+      return null;
+    }
+  }
+  return null;
+}
+
 async function deliverIssue(text, env, fetchImpl) {
   const repo = env.GITHUB_REPOSITORY.trim();
   const title = env.DIGEST_ISSUE_TITLE?.trim() || "Staging battery — morning digest";
-  const api = `https://api.github.com/repos/${repo}`;
+  const api = { repo, base: `https://api.github.com/repos/${repo}` };
   const headers = {
     authorization: `Bearer ${env.GH_TOKEN}`,
     accept: "application/vnd.github+json",
@@ -133,54 +193,67 @@ async function deliverIssue(text, env, fetchImpl) {
     "user-agent": "proliferate-battery-digest",
   };
   const body = `\`\`\`\n${text}\n\`\`\`\n\n_Replaced nightly by \`scripts/ci-cd/battery-digest.mjs\`. Observe mode: red blocks nothing; this is the triage queue._`;
-  const search = await fetchImpl(`${api}/issues?state=open&per_page=100&labels=`, { headers });
-  if (!search.ok) {
-    throw new Error(`issue list responded ${search.status}`);
-  }
-  const existing = (await search.json()).find((issue) => issue.title === title && !issue.pull_request);
+  const existing = await findDigestIssue(api, title, headers, fetchImpl);
   const response = existing
-    ? await fetchImpl(`${api}/issues/${existing.number}`, { method: "PATCH", headers, body: JSON.stringify({ body }) })
-    : await fetchImpl(`${api}/issues`, { method: "POST", headers, body: JSON.stringify({ title, body }) });
+    ? await fetchImpl(`${api.base}/issues/${existing.number}`, { method: "PATCH", headers, body: JSON.stringify({ body }) })
+    : await fetchImpl(`${api.base}/issues`, { method: "POST", headers, body: JSON.stringify({ title, body }) });
   if (!response.ok) {
     throw new Error(`issue ${existing ? "update" : "create"} responded ${response.status}`);
   }
 }
 
-/** Never throws: delivery problems are printed, and the digest is always echoed to stdout. */
+/**
+ * Never throws: walks the delivery chain until one channel succeeds; the
+ * digest is always echoed to stdout regardless.
+ */
 export async function deliver(text, env = process.env, fetchImpl = fetch) {
   console.log(text);
-  const target = chooseDelivery(env);
-  try {
-    if (target.kind === "slack") {
-      await deliverSlack(text, env, fetchImpl);
-    } else if (target.kind === "issue") {
-      await deliverIssue(text, env, fetchImpl);
-    } else {
-      console.log("[battery-digest] no SLACK_WEBHOOK_URL and no GH_TOKEN/GITHUB_REPOSITORY — digest printed only.");
+  const errors = [];
+  for (const channel of deliveryChain(env)) {
+    try {
+      if (channel === "slack") {
+        await deliverSlack(text, env, fetchImpl);
+      } else if (channel === "issue") {
+        await deliverIssue(text, env, fetchImpl);
+      } else {
+        if (errors.length > 0) {
+          console.log(`[battery-digest] all channels failed (${errors.join("; ")}) — digest printed only.`);
+        } else if (deliveryChain(env).length === 1) {
+          console.log("[battery-digest] no SLACK_WEBHOOK_URL and no GH_TOKEN/GITHUB_REPOSITORY — digest printed only.");
+        }
+      }
+      return { delivered: channel, errors };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${channel}: ${message}`);
+      console.log(`[battery-digest] delivery via ${channel} failed (${message}) — trying the next channel.`);
     }
-    return { delivered: target.kind, error: null };
-  } catch (error) {
-    console.log(`[battery-digest] delivery via ${target.kind} failed: ${error instanceof Error ? error.message : error}`);
-    return { delivered: target.kind, error: String(error) };
   }
+  return { delivered: "stdout", errors };
 }
 
 function parseArgs(argv) {
-  const args = { reports: "tests/release/.output", lane: "staging", runUrl: null };
+  const args = { reports: "tests/release/.output", lane: "staging", runUrl: null, note: "" };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--reports") args.reports = argv[++i];
     else if (arg === "--lane") args.lane = argv[++i];
     else if (arg === "--run-url") args.runUrl = argv[++i];
+    else if (arg === "--note") args.note = argv[++i];
   }
   return args;
 }
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const args = parseArgs(argv);
-  const reports = findReports(args.reports).map((file) => JSON.parse(readFileSync(file, "utf8")));
+  const { reports, unreadable } = readReports(findReports(args.reports));
   const summary = summarizeReports(reports);
-  const text = formatDigest(summary, { lane: args.lane, runUrl: args.runUrl });
+  const text = formatDigest(summary, {
+    lane: args.lane,
+    runUrl: args.runUrl,
+    note: args.note || env.DIGEST_NOTE || "",
+    unreadable,
+  });
   await deliver(text, env);
   return 0;
 }

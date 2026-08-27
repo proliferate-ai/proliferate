@@ -25,10 +25,11 @@ name: Release E2E (tier 3)
 #     mapped to RELEASE_E2E_E2B_API_KEY) AND a publicly reachable server URL for
 #     E2B to deliver webhooks to — a locally booted server on 127.0.0.1 needs a
 #     tunnel, so sandbox scenarios self-report blocked without one.
-#   - The staging lane (against the real staging deployment + its gateway) is
-#     the README's documented CI target, but the staging gateway test key is not
-#     provisioned yet (RELEASE_E2E_GATEWAY_TEST_KEY on staging). Its job is left
-#     commented at the bottom until that key exists.
+#   - The staging battery (against the real staging deployment + its gateway)
+#     is the nightly primary: gateway key, durable org, and the rotating
+#     session credential are provisioned; the battery preflight hard-gates only
+#     on API_BASE_URL, and a missing session credential surfaces as blocked
+#     cells in the digest rather than a silent skip.
 
 on:
   schedule:
@@ -46,14 +47,6 @@ on:
         type: choice
         options:
           - all
-          - local
-          - staging
-      lane:
-        description: Runtime target lane the runner points at.
-        default: local
-        required: false
-        type: choice
-        options:
           - local
           - staging
       scenarios:
@@ -146,7 +139,18 @@ jobs:
       cancel-in-progress: false
     environment: staging
     steps:
-      - name: Preflight — staging credentials
+      # Checkout + node are unconditional: the digest step below must run even
+      # when the preflight disables the battery (it is plain node, no install).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      # The preflight hard-gates ONLY on the deployment URL. A missing session
+      # credential is NOT a gate: the runner reports those cells blocked and
+      # the digest carries it — a silent green skip is the one thing observe
+      # mode forbids.
+      - name: Preflight — staging deployment
         id: preflight
         env:
           GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
@@ -154,25 +158,20 @@ jobs:
           STAGING_SESSION_REFRESH_TOKEN: ${{ secrets.RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN }}
         run: |
           enabled=true
+          reason=""
           if [ -z "$STAGING_SERVER_URL" ]; then
-            echo "::notice title=Staging tier-3 skipped::staging API_BASE_URL variable is not set."
+            reason="staging API_BASE_URL variable is not set — the battery cannot target a deployment"
+            echo "::notice title=Staging battery skipped::$reason"
             enabled=false
           fi
           if [ -z "$STAGING_SESSION_REFRESH_TOKEN" ]; then
-            echo "::notice title=Staging tier-3 skipped::RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN (staging env secret) is not set — the durable staging user (proliferate-e2e-bot, GitHub-OAuth-only, no password) authenticates via a rotating session refresh token. Bootstrap one per tests/release/src/fixtures/staging-session.ts and add it (plus a rotation-durable mechanism) before this lane runs. Skipping cleanly."
-            enabled=false
+            echo "::notice title=Staging session bootstrap absent::RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN (staging env secret) is unset — the runner falls back to the cached rotating state; with neither, journeys report blocked in the digest. Recover with tests/release/scripts/staging-session-remint.sh."
           fi
           if [ -z "$GATEWAY_TEST_KEY" ]; then
-            echo "::notice title=Staging gateway key absent::RELEASE_E2E_GATEWAY_TEST_KEY not set — gateway-dependent scenarios report blocked. Billing-surface scenarios (T3-BILL-4) still run."
+            echo "::notice title=Staging gateway key absent::RELEASE_E2E_GATEWAY_TEST_KEY not set — gateway-dependent scenarios report blocked."
           fi
           echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.preflight.outputs.enabled == 'true'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: steps.preflight.outputs.enabled == 'true'
-        with:
-          node-version: "22"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@v6
         if: steps.preflight.outputs.enabled == 'true'
         with:
@@ -238,23 +237,43 @@ jobs:
           if-no-files-found: ignore
 
       # Rotation write-back, half 2: persist the rotated state for the next run
-      # (always — a red battery still rotated the token).
-      - name: Save the rotating staging session state
+      # (always — a red battery still rotated the token). Guarded on the file
+      # actually existing: a run where no staging login happened (blocked
+      # cells, non-battery selector) must not fail on an empty cache save.
+      # Scope note: the Actions cache is branch-scoped — a branch dispatch
+      # seeds its own scope, and the nightly on main seeds main's on its first
+      # run from the bootstrap secret. That is safe because refresh does NOT
+      # revoke prior tokens (sessions.py mints stateless JWTs; the bootstrap
+      # stays valid for its 30-day lifetime) — the cache is an optimization,
+      # the secret is the floor, and staging-session-remint.sh is the recovery.
+      - name: Check for rotated session state
+        id: session-state
         if: always() && steps.preflight.outputs.enabled == 'true'
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/.release-e2e/staging-session.json" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save the rotating staging session state
+        if: always() && steps.session-state.outputs.present == 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ github.workspace }}/.release-e2e/staging-session.json
           key: staging-session-state-${{ github.run_id }}-${{ github.run_attempt }}
 
-      # The morning digest: one message naming every journey's verdict. Never
-      # fails the job. Slack when the engineering-alerts webhook is provisioned,
-      # else the pinned "Staging battery — morning digest" issue.
+      # The morning digest: one message naming every journey's verdict — even
+      # when the preflight skipped the battery (NO RESULTS + the reason IS the
+      # signal; the acceptance-gate falsifier is "no digest arrives"). Never
+      # fails the job. Delivery chain: the battery webhook (spec name), else
+      # the engineering-alerts webhook, else the pinned digest issue.
       - name: Morning digest
-        if: always() && steps.preflight.outputs.enabled == 'true'
+        if: always()
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_ENGINEERING_ALERTS_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_BATTERY_WEBHOOK_URL || secrets.SLACK_ENGINEERING_ALERTS_WEBHOOK_URL }}
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          DIGEST_NOTE: ${{ steps.preflight.outputs.reason }}
         run: >-
           node scripts/ci-cd/battery-digest.mjs
           --reports tests/release/.output

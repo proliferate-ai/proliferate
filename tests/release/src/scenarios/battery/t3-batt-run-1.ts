@@ -9,13 +9,15 @@ import {
   warmPersonalCloudSandbox,
 } from "../../fixtures/cloud-sandbox.js";
 import { findTurnEndedEvent, type SessionEventEnvelope } from "../../fixtures/local-runtime.js";
+import { ApiRequestError } from "../../fixtures/http.js";
 import {
   BATTERY_FLOW_REF,
   assertStagingLane,
   authenticateBattery,
   cheapestModel,
   describeFailure,
-  isSurfaceUnavailable,
+  errorCode,
+  isSurfaceAbsent,
 } from "./common.js";
 
 /** The server's real proxy into the sandbox's own AnyHarness runtime (cloud-sandbox.ts). */
@@ -43,10 +45,13 @@ interface SessionSummary {
  * (`turn_ended`), never from what the agent said.
  *
  * EXPECTED-FAIL today (ruled 2026-08-26): the cloud session path is being
- * rebuilt (environments/seam). Declared ONLY on the surface-unavailable
- * signature from the proxy/sandbox path; a credits-exhausted 402 on the
- * durable org is a known ops gate and reports `blocked`; anything else is a
- * real red.
+ * rebuilt (environments/seam), and the gap includes WORKSPACE PROVISIONING —
+ * a fresh sandbox has no git checkout, and provisioning one through the
+ * product is the not-yet-built half (t3-wt-1's sandbox lane documents the
+ * same gap). Declared signatures: a strictly absent surface (404/405/501) on
+ * the proxy path · WORKSPACE_CREATE_FAILED from the runtime · the sandbox
+ * never reaching ready. A credits-exhausted 402 reports `blocked` (ops gate);
+ * anything else is a real red.
  */
 export const t3BattRun1: ScenarioDefinition = {
   id: "T3-BATT-RUN-1",
@@ -119,10 +124,16 @@ export const t3BattRun1: ScenarioDefinition = {
             "provisioning gate on staging, not a product verdict. Grant the e2e subject cloud credit to unblock.",
         );
       }
-      if (isSurfaceUnavailable(error) || /did not reach status=ready/.test(describeFailure(error))) {
+      const isProvisioningGap =
+        isSurfaceAbsent(error) ||
+        errorCode(error) === "WORKSPACE_CREATE_FAILED" ||
+        (error instanceof ApiRequestError && error.status === 400 && /workspace/i.test(describeFailure(error))) ||
+        /did not reach status=ready/.test(describeFailure(error));
+      if (isProvisioningGap) {
         throw new ScenarioExpectedFailError(
-          "T3-BATT-RUN-1: the cloud session path (sandbox materialization → gateway proxy → runtime session) is " +
-            `not serving on staging — the environments/seam rebuild owns the fix (observed: ${describeFailure(error)})`,
+          "T3-BATT-RUN-1: the cloud session path (sandbox materialization → gateway proxy → workspace provisioning " +
+            `→ runtime session) is not serving on staging — the environments/seam rebuild owns the fix ` +
+            `(observed: ${describeFailure(error)})`,
         );
       }
       throw error;
@@ -130,11 +141,18 @@ export const t3BattRun1: ScenarioDefinition = {
   },
 };
 
-/** Reuses an existing sandbox workspace, else creates one in the sandbox home. */
+/**
+ * Reuses the sandbox's existing workspace (deterministically: lowest id) —
+ * the product's own state in a warm sandbox — else attempts creation, whose
+ * 400 WORKSPACE_CREATE_FAILED is part of the declared provisioning gap (the
+ * runtime requires an existing git checkout, and provisioning one through
+ * the product is the unbuilt half).
+ */
 async function ensureWorkspace(client: ApiClient): Promise<string> {
   const listed = await client.get<{ workspaces?: Array<{ id: string }> } | Array<{ id: string }>>(`${PROXY}/v1/workspaces`);
-  const workspaces = Array.isArray(listed) ? listed : (listed.workspaces ?? []);
+  const workspaces = (Array.isArray(listed) ? listed : (listed.workspaces ?? [])).slice();
   if (workspaces.length > 0) {
+    workspaces.sort((a, b) => a.id.localeCompare(b.id));
     return workspaces[0].id;
   }
   const created = await client.post<{ workspace?: { id: string }; id?: string }>(`${PROXY}/v1/workspaces`, {

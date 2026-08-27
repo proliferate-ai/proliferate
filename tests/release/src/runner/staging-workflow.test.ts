@@ -37,9 +37,18 @@ test("the staging battery runs in observe mode: visible verdicts, nightly cron, 
   assert.match(job, /actions\/cache\/restore@[0-9a-f]{40}/);
   assert.match(job, /actions\/cache\/save@[0-9a-f]{40}/);
   assert.match(job, /RELEASE_E2E_STAGING_SESSION_STATE: \$\{\{ github\.workspace \}\}\/\.release-e2e\/staging-session\.json/);
-  // The digest always runs and never gates.
-  assert.match(job, /name: Morning digest\n\s+if: always\(\)/);
+  // The digest always runs and never gates — including on preflight-skipped
+  // runs ("no digest arrives" is the acceptance-gate falsifier), so its `if:`
+  // must be exactly always(), with no preflight condition attached.
+  assert.match(job, /name: Morning digest\n\s+if: always\(\)\n/);
   assert.match(job, /battery-digest\.mjs/);
+  // The digest's Slack chain honors the frozen spec's channel name first.
+  assert.match(job, /SLACK_WEBHOOK_URL: \$\{\{ secrets\.SLACK_BATTERY_WEBHOOK_URL \|\| secrets\.SLACK_ENGINEERING_ALERTS_WEBHOOK_URL \}\}/);
+  // The preflight hard-gates ONLY on the deployment URL — a missing session
+  // credential must surface as blocked cells in the digest, never a skip.
+  assert.equal((job.match(/enabled=false/g) ?? []).length, 1);
+  // The cache save is guarded on the state file existing (no false-red saves).
+  assert.match(job, /if: always\(\) && steps\.session-state\.outputs\.present == 'true'/);
   // The provisioned-but-previously-unmapped vars now reach the runner.
   for (const name of ["RELEASE_E2E_WEB_URL", "RELEASE_E2E_GITHUB_TEST_REPO", "RELEASE_E2E_INTEGRATION_API_KEY"]) {
     assert.match(job, new RegExp(`${name}: \\$\\{\\{ (?:vars|secrets)\\.`));

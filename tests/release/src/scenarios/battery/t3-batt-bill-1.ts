@@ -56,13 +56,18 @@ export const t3BattBill1: ScenarioDefinition = {
       assert.ok(overview.billingMode, `T3-BATT-BILL-1 (${label}): overview must name a billing mode`);
 
       const usage = await billing.usageSummary(owner);
+      // Contract note: several usage fields are `float | None` server-side
+      // (unlimited entitlements) — null is contract-legal, negative is not.
       for (const [key, value] of Object.entries({
         computeUsedSecondsMtd: usage.computeUsedSecondsMtd,
         computeRemainingSeconds: usage.computeRemainingSeconds,
         llmUsedUsdMtd: usage.llmUsedUsdMtd,
         llmRemainingUsd: usage.llmRemainingUsd,
       })) {
-        assert.equal(typeof value, "number", `T3-BATT-BILL-1 (${label}): usage.${key} must be numeric`);
+        if (value === null || value === undefined) {
+          continue;
+        }
+        assert.equal(typeof value, "number", `T3-BATT-BILL-1 (${label}): usage.${key} must be numeric or null`);
         assert.ok(Number.isFinite(value) && value >= 0, `T3-BATT-BILL-1 (${label}): usage.${key} must be a non-negative number`);
       }
 

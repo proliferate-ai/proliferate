@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 
 import type { ScenarioDefinition } from "../types.js";
 import { BillingHttpClient } from "../../fixtures/billing-http.js";
-import { BATTERY_FLOW_REF, assertStagingLane, authenticateBattery, durableOrgId } from "./common.js";
+import {
+  BATTERY_FLOW_REF,
+  DURABLE_USER_EMAIL_DEFAULT,
+  assertStagingLane,
+  authenticateBattery,
+  durableOrgId,
+} from "./common.js";
 
 /**
  * T3-BATT-AUTH-1 — identity + org membership, live on staging.
@@ -37,7 +43,15 @@ export const t3BattAuth1: ScenarioDefinition = {
     assert.ok(session.accessToken.length > 0, "T3-BATT-AUTH-1: session must carry an access token");
     assert.equal(session.tokenType, "bearer", "T3-BATT-AUTH-1: session token type must be bearer");
     assert.ok(session.user?.id, "T3-BATT-AUTH-1: session must identify a user");
-    assert.ok(session.user.email.includes("@"), "T3-BATT-AUTH-1: session user must carry an email");
+    // The session must belong to THE durable identity — a session for any other
+    // user must red this journey (refuter finding 10). The env override exists
+    // for future worlds; on staging the seeded identity is the default.
+    const expectedEmail = process.env.RELEASE_E2E_DURABLE_USER_EMAIL?.trim() || DURABLE_USER_EMAIL_DEFAULT;
+    assert.equal(
+      session.user.email,
+      expectedEmail,
+      `T3-BATT-AUTH-1: the session must identify the durable user ${expectedEmail} (got ${session.user.email})`,
+    );
 
     const billing = new BillingHttpClient(serverUrl, session.accessToken);
     const orgs = await billing.organizations();

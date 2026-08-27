@@ -8,7 +8,8 @@ import {
   authenticateBattery,
   battRunId,
   durableOrgId,
-  isSurfaceUnavailable,
+  hasErrorCode,
+  isSurfaceAbsent,
   rethrowAsExpectedFail,
 } from "./common.js";
 
@@ -33,10 +34,10 @@ interface WorkerEnrollResponse {
  * revoked afterwards so the durable fixture is left as found.
  *
  * EXPECTED-FAIL today (ruled 2026-08-26): staging runs no worker/background
- * plane (`WORKERS_DEPLOY_ENABLED=false`, no `ECS_WORKER_SERVICE`), so the
- * seam's server side may not serve. The expected-fail is declared ONLY when
- * the failure is the "surface unavailable" class (404/405/5xx); an
- * authentication or validation failure is a real red.
+ * plane (`WORKERS_DEPLOY_ENABLED=false`, no `ECS_WORKER_SERVICE`). The gap's
+ * EXACT signatures: the product's own `cloud_worker_misconfigured` code
+ * (seam/workers/service.py), or a strictly absent surface (404/405/501).
+ * A generic 500/502/503 or an auth/validation failure is a REAL red.
  */
 export const t3BattWorker1: ScenarioDefinition = {
   id: "T3-BATT-WORKER-1",
@@ -88,8 +89,8 @@ export const t3BattWorker1: ScenarioDefinition = {
       rethrowAsExpectedFail(
         "T3-BATT-WORKER-1",
         error,
-        isSurfaceUnavailable,
-        "worker enrollment surface not served on staging — no worker/background plane is deployed there " +
+        (observed) => hasErrorCode(observed, "cloud_worker_misconfigured") || isSurfaceAbsent(observed),
+        "worker enrollment not served on staging — no worker/background plane is deployed there " +
           "(WORKERS_DEPLOY_ENABLED=false); the environments/seam work owns the fix",
       );
     } finally {
