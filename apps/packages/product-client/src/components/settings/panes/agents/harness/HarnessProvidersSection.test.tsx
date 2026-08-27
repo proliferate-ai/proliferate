@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
+import { harnessStatusFixture } from "#product/test/agent-auth-status-fixtures";
 import { HarnessProvidersSection } from "./HarnessProvidersSection";
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
@@ -12,6 +13,12 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 
 vi.mock("#product/config/provider-logos.generated", () => ({
   PROVIDER_LOGO_URLS: {},
+}));
+
+// OpenCode's badge is the runtime's status document now, not the old
+// unconditional green: `deriveProvidersStatus` is deleted.
+vi.mock("#product/hooks/access/anyharness/agent-auth/use-harness-status", () => ({
+  useHarnessStatus: () => harnessStatusFixture(),
 }));
 
 // The provider-picker chunk carries a 170+-mark asset map: stub a deliberate

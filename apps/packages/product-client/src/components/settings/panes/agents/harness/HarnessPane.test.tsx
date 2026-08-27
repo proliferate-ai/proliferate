@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { makeTestProductHost, type TestProductHostOptions } from "#product/test/product-host-test-utils";
+import { harnessStatusFixture, verifiedHarnessStatus } from "#product/test/agent-auth-status-fixtures";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
 
 // Anonymous host keeps the organizations query disabled, as before. Its
@@ -71,6 +72,7 @@ const state = vi.hoisted(() => ({
     data: undefined as Record<string, unknown> | undefined,
     isLoading: false,
   },
+  harnessStatus: null as unknown, // the status document; the badge is it, verbatim
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
@@ -184,6 +186,9 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
 }));
 
+vi.mock("#product/hooks/access/anyharness/agent-auth/use-harness-status", () => ({
+  useHarnessStatus: () => state.harnessStatus ?? harnessStatusFixture(),
+}));
 vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (s: { show: typeof showToast }) => unknown) =>
     selector({ show: showToast }),
@@ -408,6 +413,7 @@ afterEach(() => {
   state.loginSessions = {};
   state.modelSnapshotStatus.data = undefined;
   state.modelSnapshotStatus.isLoading = false;
+  state.harnessStatus = null;
 });
 
 describe("HarnessPane authentication", () => {
@@ -673,13 +679,9 @@ describe("HarnessPane authentication", () => {
 
   it("shows the minimal native status row when nothing is enabled", () => {
     const { container } = renderPane("claude");
-    // Minimal status ruling (2026-07-27): one row, badge + refresh, no
-    // savedState/description noise.
+    // Minimal status ruling (2026-07-27): one row, badge + refresh, no noise.
     expect(container.querySelector('[data-harness-status="native"]')).not.toBeNull();
-    expect(
-      screen.queryByText(/No auth configured — the CLI's own login is used/),
-    ).toBeNull();
-    expect(screen.getByText("Not authenticated")).toBeTruthy();
+    expect(screen.getByText("Not configured")).toBeTruthy(); // the document, verbatim
     expect(screen.getByRole("button", { name: "Refresh status" })).toBeTruthy();
   });
 
@@ -972,11 +974,9 @@ describe("HarnessPane authentication", () => {
     expect(putMutate).not.toHaveBeenCalled();
   });
 
-  // P1-b regression: while the capabilities query is still in flight (first
-  // load, no data yet), the gateway status row must show a neutral/loading
-  // tone instead of falsely reporting "Not ready" before the observation
-  // exists.
-  it("shows a loading status, not a false Not ready warning, while gateway capabilities are pending", () => {
+  // P1-b, restated against the document: an in-flight capabilities read must not
+  // move the badge — the derivation folding enrollment into a word is gone.
+  it("never derives the auth badge from a pending gateway capabilities read", () => {
     state.capabilities.data = undefined;
     state.capabilities.isPending = true;
     state.capabilities.isFetching = true;
@@ -996,7 +996,7 @@ describe("HarnessPane authentication", () => {
     renderPane("claude");
 
     expect(screen.queryByText("Not ready")).toBeNull();
-    expect(screen.getAllByText("Checking").length).toBeGreaterThan(0);
+    expect(screen.getByText("Not configured")).toBeTruthy(); // the document said so
   });
 
   it("disables the gateway toggle while enrollment is unsynced", () => {
@@ -1056,6 +1056,7 @@ describe("HarnessPane authentication", () => {
   // itself says login can't run right now (canRunLogin false, e.g. already
   // authenticated). The fix requires BOTH supportsLogin and canRunLogin.
   it("does not offer Authenticate for a healthy authenticated agent even when supportsLogin is true", () => {
+    state.harnessStatus = verifiedHarnessStatus();
     state.agentsByKind = new Map([[
       "claude",
       {
@@ -1067,9 +1068,8 @@ describe("HarnessPane authentication", () => {
     ]]);
     renderPane("claude");
 
-    // Select the CLI card (the default fallback already selects it, but be
-    // explicit) — its detail area renders nothing but the badge when
-    // authenticated (design-handoff v2: "the state must be said exactly once").
+    // Select the CLI card (the fallback already does, but be explicit) — the
+    // badge is the runtime's DATED observation, never a readiness-derived green.
     fireEvent.click(screen.getByRole("button", { name: "CLI login" }));
 
     expect(screen.getByText("Authenticated")).toBeTruthy();

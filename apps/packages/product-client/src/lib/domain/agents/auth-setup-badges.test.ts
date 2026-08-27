@@ -1,41 +1,27 @@
 import { describe, expect, it } from "vitest";
-import type { AgentSummary } from "@anyharness/sdk";
-import type { AgentAuthState } from "#product/lib/domain/settings/agent-auth-evidence";
+import type { AgentAuthStatusDoc, AgentSummary } from "@anyharness/sdk";
 import {
   deriveOnboardingAgentBadge,
   resolveAuthSetupEvidence,
 } from "#product/lib/domain/agents/auth-setup-badges";
+import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 
-type Display = AgentAuthState["display"];
+const OBSERVED_AT = "2026-08-27T00:00:00Z";
 
-const ALL_DISPLAYS: Display[] = [
-  "not_installed",
-  "unsupported",
-  "misconfigured",
-  "expired",
-  "unavailable",
-  "probing",
-  "usable",
-  "authenticated",
-  "selected",
-  "installed",
-];
-
-function authStateFor(
-  display: Display,
-  extra: Partial<AgentAuthState> = {},
-): AgentAuthState {
+function statusFor(
+  probe: Partial<AgentAuthStatusDoc["probe"]> = {},
+  overrides: Partial<AgentAuthStatusDoc> = {},
+): AgentAuthStatusDoc {
   return {
-    display,
-    nextAction: "none",
-    facts: {
-      installed: true,
-      expired: false,
-      misconfigured: false,
-      unsupportedRoute: false,
-      probe: { phase: "idle", observationNonempty: false },
-    },
-    ...extra,
+    harness_kind: "claude",
+    methods: [],
+    applied: { kind: "seat", seat_id: "seat-1" },
+    next_seat_id: null,
+    rotate: true,
+    probe: { verdict: "unverified", at: null, stale: false, ...probe },
+    cooling_until: null,
+    ...overrides,
   };
 }
 
@@ -58,228 +44,228 @@ describe("deriveOnboardingAgentBadge — install state binding", () => {
     const badge = deriveOnboardingAgentBadge(
       agentFor({ installState: "installing" }),
     );
+
     expect(badge.phase).toBe("installing");
+    expect(badge.label).toBe(HOME_SCREEN_LABELS.authSetupInstalling);
     expect(badge.pending).toBe(true);
     expect(badge.terminal).toBe(false);
     expect(badge.launchable).toBe(false);
+    expect(badge.actionLabel).toBeNull();
   });
 
-  it("binds install_required (no derivation yet) to an actionable install", () => {
+  it("wins over an absent document: installing reads installing", () => {
     const badge = deriveOnboardingAgentBadge(
-      agentFor({ installState: "install_required", authState: undefined }),
+      agentFor({ installState: "installing", authStatus: statusFor() }),
     );
+
+    expect(badge.phase).toBe("installing");
+  });
+
+  it.each(["install_required", "failed"] as const)(
+    "makes a %s install an actionable terminal with its Install affordance",
+    (installState) => {
+      const badge = deriveOnboardingAgentBadge(agentFor({ installState }));
+
+      expect(badge.phase).toBe("actionable");
+      expect(badge.label).toBe(HOME_SCREEN_LABELS.authSetupNeedsInstall);
+      expect(badge.terminal).toBe(true);
+      expect(badge.pending).toBe(false);
+      expect(badge.launchable).toBe(false);
+      expect(badge.actionLabel).toBe(HOME_SCREEN_LABELS.authSetupInstallAction);
+    },
+  );
+});
+
+describe("deriveOnboardingAgentBadge — no status document", () => {
+  it("is an actionable terminal, so the card can never spin forever", () => {
+    const badge = deriveOnboardingAgentBadge(agentFor({ authStatus: null }));
+
     expect(badge.phase).toBe("actionable");
+    expect(badge.label).toBe(HOME_SCREEN_LABELS.authSetupWaitingStatus);
+    expect(badge.tone).toBe("neutral");
     expect(badge.terminal).toBe(true);
-    expect(badge.actionLabel).toBe("Install");
-  });
-
-  it("binds an installed-but-underived agent to an actionable terminal (never an eternal spinner)", () => {
-    const badge = deriveOnboardingAgentBadge(
-      agentFor({ installState: "installed", authState: undefined }),
-    );
-    // A runtime that never folds a derivation must not spin forever: the card
-    // completes via actionable-terminal semantics, with the pane fallback.
-    expect(badge.phase).toBe("actionable");
     expect(badge.pending).toBe(false);
-    expect(badge.terminal).toBe(true);
     expect(badge.launchable).toBe(false);
-    expect(badge.label).toBe("Waiting for status");
+    expect(badge.rechecking).toBe(false);
   });
 });
 
-describe("deriveOnboardingAgentBadge — ack + derived display binding", () => {
-  it("renders usable/authenticated as launchable terminals with no action", () => {
-    for (const display of ["usable", "authenticated"] as const) {
-      const badge = deriveOnboardingAgentBadge(
-        agentFor({ authState: authStateFor(display, { nextAction: "none" }) }),
-      );
-      expect(badge.phase).toBe("ready");
-      expect(badge.launchable).toBe(true);
-      expect(badge.terminal).toBe(true);
-      expect(badge.tone).toBe("success");
-      expect(badge.actionLabel).toBeNull();
-    }
+describe("deriveOnboardingAgentBadge — the status document, verbatim", () => {
+  it("is ready and launchable ONLY on a dated observation", () => {
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({
+        authStatus: statusFor({ verdict: "verified", at: OBSERVED_AT }),
+      }),
+    );
+
+    expect(badge.phase).toBe("ready");
+    expect(badge.label).toBe(HARNESS_PANE_COPY.authBadgeAuthenticated);
+    expect(badge.tone).toBe("success");
+    expect(badge.launchable).toBe(true);
+    expect(badge.terminal).toBe(true);
   });
 
-  it("renders selected (acknowledged, awaiting probe) as a bound pending state", () => {
+  it("refuses green for a verified verdict with no evidence age", () => {
     const badge = deriveOnboardingAgentBadge(
-      agentFor({ authState: authStateFor("selected", { nextAction: "wait" }) }),
+      agentFor({ authStatus: statusFor({ verdict: "verified", at: null }) }),
     );
+
+    expect(badge.phase).not.toBe("ready");
+    expect(badge.launchable).toBe(false);
+    expect(badge.tone).not.toBe("success");
+  });
+
+  it("renders a STALE document as stale-with-last-observation, never loading", () => {
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({
+        authStatus: statusFor({
+          verdict: "verified",
+          at: OBSERVED_AT,
+          stale: true,
+        }),
+      }),
+    );
+
+    // The light dims, it never goes out: green with its age survives the
+    // pending re-probe, and the re-checking marker is what says so.
+    expect(badge.launchable).toBe(true);
+    expect(badge.tone).toBe("success");
+    expect(badge.rechecking).toBe(true);
+    expect(badge.pending).toBe(false);
+  });
+
+  it("makes a stale FAILED observation terminal with its last words on screen", () => {
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({
+        authStatus: statusFor({
+          verdict: "failed",
+          at: OBSERVED_AT,
+          stale: true,
+        }),
+      }),
+    );
+
+    expect(badge.phase).toBe("rechecking");
+    expect(badge.label).toBe(HARNESS_PANE_COPY.authBadgeNotAuthenticated);
+    expect(badge.rechecking).toBe(true);
+    // Terminal, so the card completes rather than waiting on a probe forever.
+    expect(badge.terminal).toBe(true);
+    expect(badge.pending).toBe(false);
+  });
+
+  it("treats stale with NOTHING observed as the first probe still running", () => {
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({ authStatus: statusFor({ at: null, stale: true }) }),
+    );
+
     expect(badge.phase).toBe("waiting");
     expect(badge.pending).toBe(true);
     expect(badge.terminal).toBe(false);
+    expect(badge.rechecking).toBe(true);
   });
 
-  it("renders a running/queued probe as pending, not terminal", () => {
-    for (const phase of ["running", "queued"] as const) {
-      const badge = deriveOnboardingAgentBadge(
-        agentFor({
-          authState: authStateFor("probing", {
-            nextAction: "wait_for_probe",
-            facts: {
-              installed: true,
-              expired: false,
-              misconfigured: false,
-              unsupportedRoute: false,
-              probe: { phase, observationNonempty: false },
-            },
-          }),
-        }),
-      );
-      expect(badge.phase).toBe("probing");
-      expect(badge.pending).toBe(true);
-      expect(badge.terminal).toBe(false);
-    }
+  it("waits, bound to the state, while an applied method is unobserved", () => {
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({ authStatus: statusFor({ verdict: "unverified" }) }),
+    );
+
+    expect(badge.phase).toBe("waiting");
+    expect(badge.label).toBe(HARNESS_PANE_COPY.authBadgeNotVerified);
+    expect(badge.pending).toBe(true);
+    expect(badge.terminal).toBe(false);
   });
 
-  it("renders a stuck probe (backoff) as a terminal badge carrying its next attempt, never an eternal spinner", () => {
+  it("is an actionable terminal with nothing applied", () => {
     const badge = deriveOnboardingAgentBadge(
       agentFor({
-        authState: authStateFor("unavailable", {
-          nextAction: "top_up_or_retry",
-          facts: {
-            installed: true,
-            expired: false,
-            misconfigured: false,
-            unsupportedRoute: false,
-            probe: {
-              phase: "backoff",
-              observationNonempty: false,
-              nextAttemptAt: "2026-01-01T00:00:30Z",
-              lastFailureDetail: "429 rate limited",
-            },
-          },
+        authStatus: statusFor({ verdict: "unverified" }, { applied: null }),
+      }),
+    );
+
+    expect(badge.phase).toBe("actionable");
+    expect(badge.label).toBe(HARNESS_PANE_COPY.authBadgeNotConfigured);
+    expect(badge.tone).toBe("neutral");
+    expect(badge.terminal).toBe(true);
+  });
+
+  it("is an actionable terminal on a failed observation", () => {
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({ authStatus: statusFor({ verdict: "failed", at: OBSERVED_AT }) }),
+    );
+
+    expect(badge.phase).toBe("actionable");
+    expect(badge.tone).toBe("destructive");
+    expect(badge.terminal).toBe(true);
+    expect(badge.launchable).toBe(false);
+  });
+
+  it("never greens an unknown verdict from a newer runtime (forward-compat)", () => {
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({
+        authStatus: statusFor({
+          verdict: "quantum_verified" as AgentAuthStatusDoc["probe"]["verdict"],
+          at: OBSERVED_AT,
         }),
       }),
     );
-    expect(badge.phase).toBe("backoff");
-    expect(badge.pending).toBe(false);
-    expect(badge.terminal).toBe(true);
-    expect(badge.nextAttemptAt).toBe("2026-01-01T00:00:30Z");
-    expect(badge.lastFailureDetail).toBe("429 rate limited");
-  });
 
-  it("renders every non-launchable terminal display with an actionable next step (no dead ends)", () => {
-    const terminalActionByDisplay: Partial<Record<Display, string>> = {
-      installed: "log_in_or_paste_key",
-      not_installed: "install",
-      expired: "log_in_or_paste_key",
-      misconfigured: "fix_config",
-    };
-    for (const [display, nextAction] of Object.entries(
-      terminalActionByDisplay,
-    )) {
-      const badge = deriveOnboardingAgentBadge(
-        agentFor({
-          kind: display,
-          authState: authStateFor(display as Display, {
-            nextAction: nextAction as AgentAuthState["nextAction"],
-          }),
-        }),
-      );
-      expect(badge.terminal).toBe(true);
-      expect(badge.launchable).toBe(false);
-      // A next-action label is present, so the row is never a dead end.
-      expect(badge.actionLabel).not.toBeNull();
-    }
-  });
-});
-
-describe("no-dead-end invariant across every display", () => {
-  // Mirror of the card's affordance rule (HomeOnboardingCards): a launchable
-  // badge needs no action; every other badge routes to the pane via its
-  // next-action label, or the "open agents" fallback when the action is null.
-  const OPEN_AGENTS_FALLBACK = "Open agent settings";
-  function cardAffordance(
-    launchable: boolean,
-    actionLabel: string | null,
-  ): string | null {
-    return launchable ? null : actionLabel ?? OPEN_AGENTS_FALLBACK;
-  }
-
-  it("resolves every display to either a launchable terminal or a non-null affordance", () => {
-    for (const display of ALL_DISPLAYS) {
-      const badge = deriveOnboardingAgentBadge(
-        agentFor({ authState: authStateFor(display) }),
-      );
-      if (badge.launchable) {
-        expect(cardAffordance(badge.launchable, badge.actionLabel)).toBeNull();
-      } else {
-        // Never a dead end: a non-launchable badge always has an affordance.
-        expect(cardAffordance(badge.launchable, badge.actionLabel)).not.toBeNull();
-      }
-      // Green tone is reachable ONLY on the two launchable terminals.
-      if (badge.tone === "success") {
-        expect(badge.launchable).toBe(true);
-      }
-    }
-  });
-
-  it("keeps unsupported (next action 'none') from being a dead end via the fallback", () => {
-    const badge = deriveOnboardingAgentBadge(
-      agentFor({ authState: authStateFor("unsupported", { nextAction: "none" }) }),
-    );
     expect(badge.launchable).toBe(false);
-    expect(badge.actionLabel).toBeNull();
-    expect(cardAffordance(badge.launchable, badge.actionLabel)).toBe(
-      OPEN_AGENTS_FALLBACK,
-    );
+    expect(badge.tone).toBe("neutral");
   });
 });
 
-describe("resolveAuthSetupEvidence — card completion is state-bound", () => {
-  function byKind(agents: AgentSummary[]): Map<string, AgentSummary> {
+describe("resolveAuthSetupEvidence", () => {
+  function agentsByKind(...agents: AgentSummary[]) {
     return new Map(agents.map((agent) => [agent.kind, agent]));
   }
 
-  it("is not done while any adopted agent is still pending (no timer completes it)", () => {
-    const agents = byKind([
-      agentFor({ kind: "claude", authState: authStateFor("usable") }),
-      agentFor({ kind: "codex", installState: "installing" }),
+  it("is not done while any adopted agent is non-terminal", () => {
+    const evidence = resolveAuthSetupEvidence(
+      ["claude"],
+      agentsByKind(agentFor({ authStatus: statusFor() })),
+    );
+
+    expect(evidence.badges).toHaveLength(1);
+    expect(evidence.done).toBe(false);
+  });
+
+  it("is done once every adopted agent is terminal", () => {
+    const evidence = resolveAuthSetupEvidence(
+      ["claude", "codex"],
+      agentsByKind(
+        agentFor({
+          authStatus: statusFor({ verdict: "verified", at: OBSERVED_AT }),
+        }),
+        agentFor({
+          kind: "codex",
+          displayName: "Codex",
+          authStatus: statusFor(
+            { verdict: "failed", at: OBSERVED_AT },
+            { harness_kind: "codex" },
+          ),
+        }),
+      ),
+    );
+
+    expect(evidence.done).toBe(true);
+    expect(evidence.badges.map((badge) => badge.phase)).toEqual([
+      "ready",
+      "actionable",
     ]);
-    const { badges, done } = resolveAuthSetupEvidence(["claude", "codex"], agents);
-    expect(badges).toHaveLength(2);
-    expect(done).toBe(false);
   });
 
-  it("emits a visible named badge for an adopted kind missing from the projection", () => {
-    const agents = byKind([
-      agentFor({ kind: "claude", authState: authStateFor("usable") }),
-    ]);
-    const { badges, done } = resolveAuthSetupEvidence(["claude", "codex"], agents);
-    expect(done).toBe(false);
-    // The stuck agent is still accounted for by a row, named from the
-    // registry rather than by its bare wire kind (D-R19).
-    const missing = badges.find((badge) => badge.harnessKind === "codex");
-    expect(missing).toBeDefined();
-    expect(missing?.displayName).toBe("Codex");
-    expect(missing?.pending).toBe(true);
-    expect(missing?.terminal).toBe(false);
+  it("emits a visible pending row for an adopted kind the projection lacks", () => {
+    const evidence = resolveAuthSetupEvidence(["grok"], agentsByKind());
+
+    expect(evidence.done).toBe(false);
+    expect(evidence.badges).toHaveLength(1);
+    expect(evidence.badges[0]?.harnessKind).toBe("grok");
+    // Named through the registry, never the bare wire kind (D-R19).
+    expect(evidence.badges[0]?.displayName).not.toBe("grok");
+    expect(evidence.badges[0]?.pending).toBe(true);
   });
 
-  it("completes only when every adopted agent reaches a terminal state (launchable or actionable)", () => {
-    const agents = byKind([
-      agentFor({ kind: "claude", authState: authStateFor("usable") }),
-      agentFor({
-        kind: "codex",
-        authState: authStateFor("installed", { nextAction: "log_in_or_paste_key" }),
-      }),
-    ]);
-    const { done } = resolveAuthSetupEvidence(["claude", "codex"], agents);
-    expect(done).toBe(true);
-  });
-
-  it("is not done for an empty adopted set", () => {
-    const { done } = resolveAuthSetupEvidence([], new Map());
-    expect(done).toBe(false);
-  });
-});
-
-// D-R19: this badge exists exactly when the agents projection cannot supply a
-// displayName, so a bare wire kind here reaches a Home card as lowercase text.
-describe("missing-agent badge naming", () => {
-  it("names an adopted-but-absent harness from the registry, not its wire kind", () => {
-    const { badges } = resolveAuthSetupEvidence(["grok"], new Map());
-    expect(badges.map((badge) => badge.displayName)).toEqual(["Grok"]);
+  it("is never done with no adopted kinds at all", () => {
+    expect(resolveAuthSetupEvidence([], agentsByKind()).done).toBe(false);
   });
 });

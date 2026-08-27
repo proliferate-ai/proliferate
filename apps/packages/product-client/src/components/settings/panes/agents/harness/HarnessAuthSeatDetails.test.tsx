@@ -11,6 +11,10 @@ const testState = vi.hoisted(() => ({
   harnessSettings: {
     data: undefined as Record<string, Record<string, unknown>> | undefined,
   },
+  // The status document the seam serves. The tags, the next-up marker, and the
+  // cooling line all read it verbatim — there is nothing left to duck-type off
+  // the agent summary.
+  status: {} as Record<string, unknown>,
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
@@ -31,6 +35,21 @@ vi.mock("#product/components/agents/AgentLoginTerminalPanel", () => ({
   AgentLoginTerminalPanel: () => <div data-testid="login-terminal" />,
 }));
 
+vi.mock("#product/hooks/access/anyharness/agent-auth/use-harness-status", () => ({
+  useHarnessStatus: () => ({
+    methods: [],
+    applied: null,
+    nextSeatId: null,
+    rotate: true,
+    probe: null,
+    coolingUntil: null,
+    unknown: true,
+    loading: false,
+    refresh: vi.fn(),
+    ...testState.status,
+  }),
+}));
+
 function seat(id: string, title: string) {
   return {
     id,
@@ -44,7 +63,6 @@ function seat(id: string, title: string) {
 
 function editorApi(overrides: {
   seats?: ReturnType<typeof seat>[];
-  authState?: Record<string, unknown> | null;
   seatEnabled?: boolean;
 } = {}): HarnessAuthEditorApi {
   return {
@@ -59,9 +77,7 @@ function editorApi(overrides: {
       rows: [],
     },
     handleSeatToggle: vi.fn(),
-    localAgent: overrides.authState === undefined
-      ? undefined
-      : { kind: "claude", authState: overrides.authState },
+    localAgent: { kind: "claude" },
     loginWorkflow: {
       runtimeConnection: {
         baseUrl: "http://127.0.0.1:8457",
@@ -80,13 +96,19 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   testState.harnessSettings.data = undefined;
+  testState.status = {};
 });
 
 describe("SeatDetails rotation tags", () => {
   it("tags the serving and next-up seats on the right rows only", () => {
+    // `applied.seat_id` IS the serving seat; `next_seat_id` is the next in line.
+    testState.status = {
+      applied: { kind: "seat", seat_id: "s1" },
+      nextSeatId: "s2",
+      unknown: false,
+    };
     const { container } = renderSeatDetails(editorApi({
       seats: [seat("s1", "Max seat · a"), seat("s2", "Max seat · b"), seat("s3", "Max seat · c")],
-      authState: { display: "usable", servingSeatId: "s1", nextSeatId: "s2" },
     }));
 
     const row = (id: string) =>
@@ -100,33 +122,43 @@ describe("SeatDetails rotation tags", () => {
   });
 
   it("shows only the serving tag when the next launch would pick the same seat", () => {
-    renderSeatDetails(editorApi({
-      seats: [seat("s1", "Max seat · a")],
-      authState: { display: "usable", servingSeatId: "s1", nextSeatId: "s1" },
-    }));
+    testState.status = {
+      applied: { kind: "seat", seat_id: "s1" },
+      nextSeatId: "s1",
+      unknown: false,
+    };
+    renderSeatDetails(editorApi({ seats: [seat("s1", "Max seat · a")] }));
 
     expect(screen.getByText("Serving now")).toBeTruthy();
     expect(screen.queryByText("Next up")).toBeNull();
   });
 
-  it("renders no tags when the summary carries no rotation fields", () => {
-    renderSeatDetails(editorApi({
-      seats: [seat("s1", "Max seat · a")],
-      authState: { display: "usable" },
-    }));
+  it("renders no tags when the document holds no rotation state", () => {
+    testState.status = { unknown: false };
+    renderSeatDetails(editorApi({ seats: [seat("s1", "Max seat · a")] }));
 
     expect(screen.queryByText("Serving now")).toBeNull();
     expect(screen.queryByText("Next up")).toBeNull();
+  });
+
+  it("shows no serving tag when the applied method is not a seat", () => {
+    // A gateway-applied harness has no serving seat, whatever the pool holds.
+    testState.status = {
+      applied: { kind: "gateway" },
+      nextSeatId: null,
+      unknown: false,
+    };
+    renderSeatDetails(editorApi({ seats: [seat("s1", "Max seat · a")] }));
+
+    expect(screen.queryByText("Serving now")).toBeNull();
   });
 });
 
 describe("SeatDetails cooling line", () => {
   it("renders the no-serve cooling line with the formatted next reset", () => {
     const coolingUntil = "2026-01-05T18:00:00Z";
-    renderSeatDetails(editorApi({
-      seats: [seat("s1", "Max seat · a")],
-      authState: { display: "usable", coolingUntil },
-    }));
+    testState.status = { coolingUntil, unknown: false };
+    renderSeatDetails(editorApi({ seats: [seat("s1", "Max seat · a")] }));
 
     const time = formatSeatResetTime(coolingUntil);
     expect(time).not.toBeNull();
@@ -138,9 +170,13 @@ describe("SeatDetails cooling line", () => {
   });
 
   it("renders no cooling line while a seat can serve", () => {
+    testState.status = {
+      applied: { kind: "seat", seat_id: "s1" },
+      coolingUntil: null,
+      unknown: false,
+    };
     const { container } = renderSeatDetails(editorApi({
       seats: [seat("s1", "Max seat · a")],
-      authState: { display: "usable", servingSeatId: "s1", coolingUntil: null },
     }));
 
     expect(container.querySelector("[data-seat-cooling-line]")).toBeNull();

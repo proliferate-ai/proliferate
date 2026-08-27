@@ -51,9 +51,8 @@ function badge(
     pending: false,
     terminal: true,
     launchable: true,
+    rechecking: false,
     actionLabel: null,
-    nextAttemptAt: null,
-    lastFailureDetail: null,
     ...overrides,
   };
 }
@@ -77,33 +76,18 @@ function readinessCard(
   };
 }
 
-describe("HomeOnboardingCards auth-setup step", () => {
-  it("renders the setting-up card while the step is pending", () => {
-    renderCards({ authSetup: "settingUp" });
-
-    expect(screen.getAllByText(HOME_SCREEN_LABELS.authSetupTitle).length).toBeGreaterThan(0);
-    expect(
-      screen.getByText(HOME_SCREEN_LABELS.authSetupDescription),
-    ).toBeTruthy();
-  });
-
-  it("renders no spinner on the setting-up card (frame + ThinkingText title survive, the spinner does not)", () => {
-    const { container } = renderCards({ authSetup: "settingUp" });
-
-    expect(container.querySelector("[data-loading-spinner]")).toBeNull();
-  });
-
-  it.each(["hidden", "applied", "advanced"] as const)(
-    "renders nothing for the %s step state",
-    (state) => {
-      const { container } = renderCards({ authSetup: state });
-      expect(container.innerHTML).toBe("");
-    },
-  );
-
-  it("renders nothing when the step is absent (mocked facades)", () => {
+describe("HomeOnboardingCards auth-setup card", () => {
+  it("renders nothing when there is no setup card at all", () => {
     const { container } = renderCards();
     expect(container.innerHTML).toBe("");
+  });
+
+  it("renders no spinner on the setup card", () => {
+    const { container } = renderCards({
+      authSetupEvidence: evidence([badge({ harnessKind: "claude" })]),
+    });
+
+    expect(container.querySelector("[data-loading-spinner]")).toBeNull();
   });
 
   it("keeps the 3-card cap with the evidence card leading", () => {
@@ -120,24 +104,9 @@ describe("HomeOnboardingCards auth-setup step", () => {
     expect(screen.queryByText("title-repository-settings")).toBeNull();
   });
 
-  it("keeps the 3-card cap with the setting-up card leading", () => {
-    renderCards({
-      authSetup: "settingUp",
-      cards: [
-        card("add-repository"),
-        card("agent-defaults"),
-        card("repository-settings"),
-      ],
-    });
-
-    expect(screen.getAllByText(HOME_SCREEN_LABELS.authSetupTitle).length).toBeGreaterThan(0);
-    expect(screen.getByText("title-add-repository")).toBeTruthy();
-    expect(screen.getByText("title-agent-defaults")).toBeTruthy();
-    expect(screen.queryByText("title-repository-settings")).toBeNull();
-  });
 });
 
-describe("HomeOnboardingCards evidence-bound card (rung 7)", () => {
+describe("HomeOnboardingCards state-bound setup card", () => {
   it("renders the evidence card with a badge per adopted agent", () => {
     renderCards({
       authSetupEvidence: evidence([
@@ -202,43 +171,53 @@ describe("HomeOnboardingCards evidence-bound card (rung 7)", () => {
     expect(screen.getByText(HOME_SCREEN_LABELS.authSetupOpenAgents)).toBeTruthy();
   });
 
-  it("shows a backoff row's next attempt and failure detail VISIBLY instead of an eternal spinner", () => {
-    const future = new Date(Date.now() + 30_000).toISOString();
+  it("shows a stale row's LAST OBSERVATION with a re-checking line, never a spinner", () => {
     const { container } = renderCards({
       authSetupEvidence: evidence([
         badge({
           harnessKind: "grok",
           displayName: "Grok",
-          phase: "backoff",
-          label: "Unavailable",
-          tone: "warning",
+          phase: "rechecking",
+          // The last observation's own words stay on screen.
+          label: "Not authenticated",
+          tone: "destructive",
           pending: false,
           terminal: true,
           launchable: false,
-          actionLabel: "Top up or retry",
-          nextAttemptAt: future,
-          lastFailureDetail: "429 rate limited",
+          rechecking: true,
         }),
       ]),
     });
+
+    expect(screen.getByText("Not authenticated")).toBeTruthy();
     const line = container.querySelector<HTMLElement>(
-      "[data-agent-onboarding-next-attempt]",
+      "[data-agent-onboarding-rechecking]",
     );
     expect(line).toBeTruthy();
-    // Not sr-only: the line is visible text carrying both the countdown and
-    // the failure detail.
+    // Not sr-only: the dimming is visible text, not a hidden hint.
     expect(line?.className).not.toContain("sr-only");
-    expect(line?.textContent).toContain("Next attempt in");
-    expect(line?.textContent).toContain("429 rate limited");
-    // A terminal backoff row shows no spinner. Selected on the Spinner's own
-    // `data-loading-spinner` hook (D-R13): the old `.animate-spin` selector
+    expect(line?.textContent).toBe(HOME_SCREEN_LABELS.authSetupRechecking);
+    // A stale row is terminal and shows no spinner. Selected on the Spinner's
+    // own `data-loading-spinner` hook (D-R13): the old `.animate-spin` selector
     // named a Tailwind class this app's Spinner never emits — it renders
     // `proliferate-spinner` and rotates from a CSS rule — so the assertion
-    // matched nothing whether or not a spinner was there, and passed even
-    // with a real Spinner rendered in this subtree.
+    // matched nothing whether or not a spinner was there.
     expect(
-      container.querySelector('[data-agent-onboarding-phase="backoff"] [data-loading-spinner]'),
+      container.querySelector('[data-agent-onboarding-phase="rechecking"] [data-loading-spinner]'),
     ).toBeNull();
+  });
+
+  it("keeps a green row green while it re-checks (the light dims, it never goes out)", () => {
+    const { container } = renderCards({
+      authSetupEvidence: evidence([
+        badge({ harnessKind: "claude", label: "Authenticated", rechecking: true }),
+      ]),
+    });
+
+    expect(screen.getByText("Authenticated")).toBeTruthy();
+    expect(container.querySelector("[data-agent-onboarding-rechecking]")).toBeTruthy();
+    // Launchable: nothing to action, so no affordance is offered.
+    expect(screen.queryByText(HOME_SCREEN_LABELS.authSetupOpenAgents)).toBeNull();
   });
 
   it("renders nothing when the evidence card has no badges", () => {
@@ -293,9 +272,9 @@ describe("HomeOnboardingCards readiness card (replaces the deleted model-probe c
     expect(container.innerHTML).toBe("");
   });
 
-  it("takes the last of the 3 card slots, after setup cards", () => {
+  it("takes the last of the 3 card slots, after the setup card", () => {
     renderCards({
-      authSetup: "settingUp",
+      authSetupEvidence: evidence([badge({ harnessKind: "claude" })]),
       cards: [card("add-repository"), card("agent-defaults")],
       readinessCard: readinessCard(),
     });
