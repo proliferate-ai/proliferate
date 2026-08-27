@@ -253,6 +253,27 @@ def _tenant_id(value: Any) -> str | None:
     return _prefixed_uuid(value, _set("user org"), 41)
 
 
+_ROUTE_SEGMENT = re.compile(r"\A(?:[a-z0-9][a-z0-9._-]{0,30}|\{[a-z_][a-z0-9_]{0,30}\})\Z")
+
+
+def http_route_template(value: Any) -> str | None:
+    """Admit a bounded route template (``/orgs/{org_id}``), never a raw-id path.
+
+    Literal segments are short lowercase tokens, parameters keep their
+    ``{name}`` placeholder form; a canonical UUID (36 bytes) or any other
+    id-shaped segment exceeds the per-segment bound and drops the tag.
+    """
+    cleaned = _clean_str(value, 200)
+    if cleaned is None or not cleaned.startswith("/"):
+        return None
+    segments = [segment for segment in cleaned.split("/") if segment]
+    if len(segments) > 16:
+        return None
+    if any(not _ROUTE_SEGMENT.match(segment) for segment in segments):
+        return None
+    return cleaned
+
+
 def _label(value: Any) -> str | None:
     return _prefixed_uuid(value, _LABEL_PREFIXES, 65)
 
@@ -268,6 +289,7 @@ TAG_VALIDATORS: dict[str, Any] = {
     "telemetry_mode": _catalog("hosted_product", 14),
     "request_id": uuid4_value,
     "http_method": _catalog_of(HTTP_METHODS, 7),
+    "http_route": http_route_template,
     "support_report_id": uuid4_hex,
     "tenant_id": _tenant_id,
     "critical_failure": _catalog("true", 4),

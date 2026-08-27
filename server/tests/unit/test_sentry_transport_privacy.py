@@ -190,7 +190,10 @@ VALID_UUID_HEX = "0f3c2a9d6b8e4f1aa7c25d3e9b64108f"
         ("telemetry_mode", "hosted_product", True), ("telemetry_mode", "self_managed", False),
         ("request_id", VALID_UUID, True), ("request_id", SENTINELS[12], False),
         ("http_method", "POST", True), ("http_method", "post", False),
-        ("http_route", "/orgs/{org_id}", False), ("http_route", "/orgs/" + VALID_UUID, False),
+        ("http_route", "/orgs/{org_id}", True), ("http_route", "/orgs/" + VALID_UUID, False),
+        ("http_route", "/v1/support/reports/{report_id}/upload-targets", True),
+        ("http_route", "orgs/{org_id}", False), ("http_route", "/" + "a/" * 17, False),
+        ("http_route", "/Orgs/{org_id}", False), ("http_route", "/orgs/" + VALID_UUID_HEX, False),
         ("user_id", VALID_UUID, True), ("organization_id", VALID_UUID, True),
         ("cloud_workspace_id", VALID_UUID, True), ("cloud_target_id", VALID_UUID, True),
         ("sandbox_profile_id", VALID_UUID, True), ("cloud_sandbox_id", VALID_UUID, True),
@@ -466,7 +469,7 @@ def test_transaction_projection_keeps_only_the_proven_surface() -> None:
          "op": "queue.publish", "status": "ok", "start_timestamp": 1755600000.1,
          "timestamp": 1755600000.9}
     ]
-    assert projected["tags"] == {"http_method": "POST"}
+    assert projected["tags"] == {"http_route": "/orgs/{org_id}", "http_method": "POST"}
     assert projected["request"] == {"method": "POST"}
     assert "fingerprint" not in projected
 
