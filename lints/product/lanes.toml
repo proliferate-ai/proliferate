@@ -96,6 +96,14 @@ gate_mirrored = true
 
 [[lane]]
 workflow = "ci.yml"
+job = "rust-lint"
+pipeline = "pr"
+cadence = "every PR + push:main"
+gate_mirrored = true
+note = "fmt --check byte-identical; the gate scopes clippy to touched crates (lint-wiring slice, #2293)"
+
+[[lane]]
+workflow = "ci.yml"
 job = "sdk-build"
 pipeline = "pr"
 cadence = "every PR + push:main"
@@ -417,44 +425,35 @@ pipeline = "release"
 cadence = "per release (called by release.yml; tag push + dispatch)"
 gate_mirrored = false
 
-# release-e2e.yml — dispatch-only TODAY; the e2e-observable slice
-# (delivery-spec-e2e-observable.md) restores the nightly battery cron
-# tonight; these rows flip to pipeline = "nightly" at that merge.
-[[lane]]
-workflow = "release-e2e.yml"
-job = "release-e2e-local"
-pipeline = "dispatch-with-sunset"
-cadence = "manual dispatch (transitional)"
-gate_mirrored = false
-sunset = "2026-09-05"
-note = "flips to nightly when the e2e-observable slice lands"
-
+# release-e2e.yml — the staging battery runs nightly (the e2e-observable
+# slice, #2287): the 08:00 UTC cron keys ONLY release-e2e-staging (job-level
+# if); the other worlds run per-release by dispatch. release-e2e-local was
+# deleted by that slice; observe mode = NO continue-on-error anywhere here.
 [[lane]]
 workflow = "release-e2e.yml"
 job = "release-e2e-staging"
-pipeline = "dispatch-with-sunset"
-cadence = "manual dispatch (transitional)"
+pipeline = "nightly"
+cadence = "nightly 08:00 UTC cron + dispatch + pre-promote on demand"
 gate_mirrored = false
-sunset = "2026-09-05"
-note = "flips to nightly when the e2e-observable slice lands"
+note = "observe mode: red blocks nothing, feeds the morning digest"
 
 [[lane]]
 workflow = "release-e2e.yml"
 job = "release-e2e-local-functional"
 pipeline = "dispatch-with-sunset"
-cadence = "manual dispatch (transitional)"
+cadence = "per-release qualification, by dispatch"
 gate_mirrored = false
-sunset = "2026-09-05"
-note = "flips to nightly when the e2e-observable slice lands"
+sunset = "2026-09-30"
+note = "release-train lane in a schedule-carrying workflow; the vocabulary lacks an event-lane shape for this — revisit with the per-test quarantine schema"
 
 [[lane]]
 workflow = "release-e2e.yml"
 job = "release-e2e-selfhost-install"
 pipeline = "dispatch-with-sunset"
-cadence = "manual dispatch (transitional)"
+cadence = "per-release qualification, by dispatch"
 gate_mirrored = false
-sunset = "2026-09-05"
-note = "flips to nightly when the e2e-observable slice lands"
+sunset = "2026-09-30"
+note = "release-train lane in a schedule-carrying workflow; same vocabulary gap as above"
 
 # release-e2e-selfhost.yml — parked posture (PABLO DECIDES: self-host battery)
 [[lane]]
@@ -514,6 +513,29 @@ workflow = "publish-agent-catalog.yml"
 job = "publish"
 pipeline = "main"
 cadence = "push:main (catalog paths) + dispatch"
+gate_mirrored = false
+
+# grafana-monitors.yml — the observability monitor lane (#2281):
+# check on PR, apply on merge, nightly drift
+[[lane]]
+workflow = "grafana-monitors.yml"
+job = "check"
+pipeline = "pr"
+cadence = "every PR (monitor paths)"
+gate_mirrored = false
+
+[[lane]]
+workflow = "grafana-monitors.yml"
+job = "apply"
+pipeline = "main"
+cadence = "push:main (monitor paths)"
+gate_mirrored = false
+
+[[lane]]
+workflow = "grafana-monitors.yml"
+job = "drift"
+pipeline = "nightly"
+cadence = "nightly cron"
 gate_mirrored = false
 
 # Nightly canaries
@@ -639,20 +661,6 @@ note = "PABLO: provision agent secrets → nightly, or rule the lane out"
 # Both may be smoke from the await_holding_lock debt (123 allowed sites; the
 # careful lock-scope pass is queued — see lints/anyharness). Owned by the
 # ci-cd spec's Known gaps; do not grow this file's schema ad hoc.
-
-[[quarantine]]
-workflow = "release-e2e.yml"
-job = "release-e2e-local"
-owner = "testing/release"
-reason = "tier-3 local lane provisional during the qualification rebuild"
-expires = "2026-09-30"
-
-[[quarantine]]
-workflow = "release-e2e.yml"
-job = "release-e2e-staging"
-owner = "e2e-observable slice"
-reason = "masked-green staging lane; the e2e-observable slice strips this flag tonight — row dies at its merge"
-expires = "2026-09-05"
 
 [[quarantine]]
 workflow = "release-e2e-selfhost.yml"
