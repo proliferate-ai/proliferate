@@ -3,6 +3,10 @@ mod app_config;
 mod commands;
 mod desktop_telemetry_mode;
 pub mod diagnostics;
+// The macOS-native collector seam: on other targets its cfg'd paths compile
+// out and their imports/helpers go unused — module-level allow, not 12
+// per-import cfgs that break on the next refactor. Linux CI is the authority.
+#[cfg_attr(not(target_os = "macos"), allow(unused_imports, dead_code))]
 pub mod diagnostics_collector;
 mod editors;
 mod quit_flow;
