@@ -152,7 +152,7 @@ OpenCode is intentionally treated as provider-managed for readiness. AnyHarness 
 
 Code path:
 
-- `anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs`
+- `anyharness/crates/anyharness-lib/src/domains/agent_auth/auth/credentials.rs`
 - Claude/Codex local file parsing and portable export normalization are shared
   with desktop cloud sync via `anyharness/crates/anyharness-credential-discovery/`
 

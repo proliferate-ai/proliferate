@@ -1,7 +1,7 @@
 /**
  * Pushes a gateway-keyed agent-auth state document to the LOCAL AnyHarness
  * runtime (`PUT /v1/agent-auth/state`, the state.json v2 contract in
- * anyharness/crates/anyharness-lib/src/domains/agents/route_auth/state.rs) so
+ * anyharness/crates/anyharness-lib/src/domains/agent_auth/route_auth/state.rs) so
  * harnesses can drive real chat through the LiteLLM gateway in an environment
  * with no native agent CLI login (the CI runner). This is the same document
  * the desktop dispatch worker pushes after fetching

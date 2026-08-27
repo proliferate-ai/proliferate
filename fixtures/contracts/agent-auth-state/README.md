@@ -11,7 +11,7 @@ breaks the other side until it is updated.
 - Producer: `server/proliferate/server/agent_auth/state_render.py`
   (`render_agent_auth_state`), for both the cloud-materialized and the
   desktop-served surface.
-- Consumer: `anyharness-lib`'s `domains/agents/route_auth/` — `load_state_file`
+- Consumer: `anyharness-lib`'s `domains/agent_auth/route_auth/` — `load_state_file`
   → `resolve_profile` → `render_profile`.
 
 ## The file set

@@ -59,6 +59,19 @@ good = """`use crate::domains::sessions::service::SessionService;` and a facade 
 from = "activity"
 to = "sessions"
 
+# The agent_auth node (Wave-3 consolidation, agent_auth system spec S0):
+# measured at the move, like every other row. Doors in machine form --
+# sessions' launch path, the agents readiness/runtime seam, and the
+# agent_operations error-shape test consume agent_auth; agent_auth
+# consumes agents' catalog/registry/model/runtime surfaces.
+[[edge]]
+from = "agent_auth"
+to = "agents"
+
+[[edge]]
+from = "agent_operations"
+to = "agent_auth"
+
 [[edge]]
 from = "agent_operations"
 to = "agents"
@@ -70,6 +83,10 @@ to = "sessions"
 [[edge]]
 from = "agent_operations"
 to = "workspaces"
+
+[[edge]]
+from = "agents"
+to = "agent_auth"
 
 [[edge]]
 from = "agents"
@@ -174,6 +191,10 @@ to = "sessions"
 [[edge]]
 from = "reviews"
 to = "workspaces"
+
+[[edge]]
+from = "sessions"
+to = "agent_auth"
 
 [[edge]]
 from = "sessions"

@@ -25,7 +25,7 @@ Boundaries — the auth split is declare vs apply:
   (native / gateway / API key), `state.json` materialization, and the
   harness-specific application glue (env injection at spawn, harness
   config rewriting, per-harness quirks in
-  `anyharness-lib/src/domains/agents/route_auth/`).
+  `anyharness-lib/src/domains/agent_auth/route_auth/`).
 - **A new harness touches both**: its auth vocabulary is a `registry.json`
   edit here; how those slots get filled and switched is agent-auth's
   contract.

@@ -14,7 +14,7 @@ Use this doc first to understand AnyHarness ownership. Then read the focused gui
 
 ## Launch-option and live-session authority
 
-`domains/agents/launch_options/` owns target-observed pre-launch state and exact validation. `domains/agents/launch_probe/` owns override-free detection. `domains/sessions/launch_intent.rs` and the session store own the atomic resolved intent. The live actor applies and confirms that intent before ready; `domains/sessions/live_config/` owns the latest full per-session snapshot and validated mutation. Catalog modules are distribution, presentation, and compatibility support only and cannot authorize executable values.
+`domains/agents/launch_options/` owns target-observed pre-launch state and exact validation. `domains/agent_auth/launch_probe/` owns override-free detection. `domains/sessions/launch_intent.rs` and the session store own the atomic resolved intent. The live actor applies and confirms that intent before ready; `domains/sessions/live_config/` owns the latest full per-session snapshot and validated mutation. Catalog modules are distribution, presentation, and compatibility support only and cannot authorize executable values.
 
 ## Overarching Architecture
 
@@ -1572,7 +1572,7 @@ Do not import contract request/response types into domains. Use internal domain 
 
 Exception: session event payloads may use contract event types when those types are the durable event-log payload. The exception is for event payloads only — contract types as a domain's working model or as persisted rows are violations.
 
-Migration exceptions (the rule is the law; this is the debt): `domains/agents/auth` uses contract auth structs end-to-end. Target: domain twins minted at the API seam. (The sessions runtime's former fetching response mapper is resolved: `runtime/view.rs` composes `SessionView` and the API maps it dep-lessly.)
+Migration exceptions (the rule is the law; this is the debt): `domains/agent_auth/auth` uses contract auth structs end-to-end. Target: domain twins minted at the API seam. (The sessions runtime's former fetching response mapper is resolved: `runtime/view.rs` composes `SessionView` and the API maps it dep-lessly.)
 
 ## Errors
 

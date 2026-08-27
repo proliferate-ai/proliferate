@@ -685,25 +685,25 @@ reason = "strict-mirror loop runtime uses SetSessionLoopRequest to drive the sid
 
 [[exception]]
 rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs"
+path = "anyharness/crates/anyharness-lib/src/domains/agent_auth/auth/login_terminal.rs"
 site = "crate::live::terminals::AgentLoginTerminalRecord"
 reason = "agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
 
 [[exception]]
 rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs"
+path = "anyharness/crates/anyharness-lib/src/domains/agent_auth/auth/login_terminal.rs"
 site = "crate::live::terminals::AgentLoginTerminalService"
 reason = "agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
 
 [[exception]]
 rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs"
+path = "anyharness/crates/anyharness-lib/src/domains/agent_auth/auth/login_terminal.rs"
 site = "crate::live::terminals::AgentLoginTerminalStatus"
 reason = "agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
 
 [[exception]]
 rule = "AH-LIVE-5"
-path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs"
+path = "anyharness/crates/anyharness-lib/src/domains/agent_auth/auth/login_terminal.rs"
 site = "crate::live::terminals::StartAgentLoginTerminalOptions"
 reason = "agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
 
