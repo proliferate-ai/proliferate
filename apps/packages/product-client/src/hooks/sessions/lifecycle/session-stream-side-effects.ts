@@ -32,6 +32,7 @@ import type { SessionStreamCache } from "#product/hooks/sessions/cache/use-sessi
 import {
   createLatestTimestampThrottle,
 } from "#product/lib/domain/sessions/stream/latest-timestamp-throttle";
+import { relaySeatLimitHit } from "#product/lib/access/cloud/seat-limit-report";
 
 const STREAM_WORKSPACE_ACTIVITY_WRITE_INTERVAL_MS = 1_000;
 
@@ -142,6 +143,17 @@ export function applyBatchedStreamSideEffects(input: {
         );
         break;
       }
+      case "report_seat_limit_hit":
+        // Fire-and-forget courier relay (agent_auth §4 cell 3): dedupe and
+        // failure-swallowing live in the relay; nothing here awaits it.
+        relaySeatLimitHit({
+          sessionId: effect.sessionId,
+          seq: effect.seq,
+          seatId: effect.seatId,
+          window: effect.window,
+          resetAt: effect.resetAt,
+        });
+        break;
     }
   }
 

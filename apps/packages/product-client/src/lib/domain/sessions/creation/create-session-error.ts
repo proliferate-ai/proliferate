@@ -12,6 +12,70 @@ const UNSUPPORTED_SESSION_MODE_CODE = "SESSION_MODE_UNSUPPORTED";
 // helpers below only identify it for suppression.
 const WORKSPACE_DIRECTORY_MISSING_CODE = "WORKSPACE_DIRECTORY_MISSING";
 
+// The runtime's launch refusals (agent_auth flow 3): the 409 carries
+// plain-words `detail` since slice 1, and those server-sent words are always
+// preferred. This map is the belt behind that suspender — the words shown
+// when a refusal arrives with no usable detail — so a bare AGENT_ROUTE_* code
+// never reaches a human. Keyed union, no default arm: an unknown code falls
+// to the generic plain-words fallback below, never to the code itself.
+type LaunchRefusalCode =
+  | "AGENT_ROUTE_SEAT_COOLING"
+  | "AGENT_ROUTE_ALL_SEATS_COOLING"
+  | "AGENT_ROUTE_SELECTION_MISSING";
+
+const LAUNCH_REFUSAL_FALLBACK_COPY: Record<LaunchRefusalCode, string> = {
+  AGENT_ROUTE_SEAT_COOLING:
+    "The selected Claude.ai login hit its plan limit and is cooling down. "
+    + "Try again after it resets, or turn rotation on in Settings.",
+  AGENT_ROUTE_ALL_SEATS_COOLING:
+    "All Claude.ai logins hit their plan limits and are cooling down. "
+    + "Try again after the earliest reset.",
+  AGENT_ROUTE_SELECTION_MISSING:
+    "This agent isn't set up to authenticate yet. Pick a method in Settings.",
+};
+
+// Never show a human a codey string: an all-caps underscore token (a machine
+// code standing alone, e.g. "AGENT_ROUTE_SEAT_COOLING" or "SEAT_COOLING") is
+// not a sentence. Real refusal copy always carries lowercase words.
+const BARE_CODE_RE = /^[A-Z][A-Z0-9_]*$/;
+
+const GENERIC_CREATE_FAILURE_MESSAGE =
+  "The session could not start. Try again.";
+
+function isBareCodeString(value: string): boolean {
+  return BARE_CODE_RE.test(value.trim());
+}
+
+function plainWordsOrNull(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  if (!normalized || isBareCodeString(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+/**
+ * The launch refusal in plain words: the server-sent `detail` wins whenever
+ * it reads as words; a refusal that arrived without usable detail gets the
+ * code-keyed fallback copy (which names the cause — better than the envelope
+ * title's generic boilerplate). Null for errors that are not launch refusals.
+ */
+function launchRefusalMessage(error: unknown): string | null {
+  if (!(error instanceof AnyHarnessError)) {
+    return null;
+  }
+  const code = error.problem.code;
+  if (
+    code !== "AGENT_ROUTE_SEAT_COOLING"
+    && code !== "AGENT_ROUTE_ALL_SEATS_COOLING"
+    && code !== "AGENT_ROUTE_SELECTION_MISSING"
+  ) {
+    return null;
+  }
+  return plainWordsOrNull(error.problem.detail)
+    ?? LAUNCH_REFUSAL_FALLBACK_COPY[code];
+}
+
 /**
  * Client-side pre-flight refusal, mirroring the runtime's 409. Carries the
  * stable machine code on the error object so detection is structural — the
@@ -51,7 +115,18 @@ export function formatSessionCreateFailureMessage(error: unknown): string {
   if (unsupportedMessage) {
     return unsupportedMessage;
   }
-  return error instanceof Error ? error.message : String(error);
+  const refusalMessage = launchRefusalMessage(error);
+  if (refusalMessage) {
+    return refusalMessage;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  // The bare-code audit (agent_auth "Refusals speak plain words"): whatever
+  // path produced this error, a naked machine code never reaches a human —
+  // an unknown coded failure degrades to generic plain words instead.
+  if (isBareCodeString(message) || message.trim().length === 0) {
+    return GENERIC_CREATE_FAILURE_MESSAGE;
+  }
+  return message;
 }
 
 /**
@@ -65,6 +140,8 @@ export function formatSessionCreateFailureMessage(error: unknown): string {
 export function formatSessionCreateCause(error: unknown): string {
   return unsupportedSessionSelectionMessage(error)
     ?? unsupportedSessionSelectionMessage(errorCause(error))
+    ?? launchRefusalMessage(error)
+    ?? launchRefusalMessage(errorCause(error))
     ?? formatSessionCreateFailureMessage(error);
 }
 

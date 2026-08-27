@@ -208,6 +208,17 @@ export const HARNESS_PANE_COPY = {
   seatEmptyList: "No Claude.ai logins yet.",
   seatRemove: "Remove",
   seatRemoveError: "Could not remove the seat.",
+  // Seats rotation (slice 2 — rotation & refusals): the serving-now/next-up
+  // tags, the all-cooling line, and the rotate switch. The tags render the
+  // runtime's status verbatim (servingSeatId/nextSeatId — the frontend
+  // derives nothing); `time` is the localized reset via formatSeatResetTime.
+  seatServingNowTag: "Serving now",
+  seatNextUpTag: "Next up",
+  seatCoolingLine: (time: string) =>
+    `All logins are cooling — the earliest resets at ${time}`,
+  seatRotateLabel: "Rotate between logins",
+  seatRotateDescription: "Off pins the serving login. Usage limits still apply.",
+  seatRotateUpdateError: "Could not update login rotation.",
   // §1 — the exit to the vendor tool's own documentation.
   docsLink: "Docs",
   // Gateway enrollment in flight (header badge, warning tone).

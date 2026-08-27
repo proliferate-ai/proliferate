@@ -20,6 +20,14 @@ export type AgentAuthStateSource = Schema<"AgentAuthStateSource">;
 export type AckAgentAuthStateRequest = Schema<"AgentAuthStateAckRequest">;
 export type AgentAuthDeliveryAck = Schema<"AgentAuthDeliveryAckResponse">;
 
+// The courier's limit-hit relay body (agent_auth spec §4, POST
+// /seats/{key_id}/limit-hit). Declared directly until the server-side OpenAPI
+// regen carries the request schema — swap to `Schema<...>` at that point.
+export interface ReportSeatLimitHitRequest {
+  window?: "five_hour" | "seven_day" | null;
+  resetAt: string;
+}
+
 export type AgentGatewayCapabilities = Schema<"AgentGatewayCapabilitiesResponse">;
 export type AgentGatewayEnrollment = Schema<"AgentGatewayEnrollmentResponse">;
 

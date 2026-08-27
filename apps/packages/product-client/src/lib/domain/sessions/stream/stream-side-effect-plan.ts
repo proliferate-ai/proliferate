@@ -14,6 +14,9 @@ import {
 import {
   deriveAuthoritativeAgentOperation,
 } from "#product/lib/domain/sessions/agent-operations-authority";
+import {
+  readSeatUsageLimitDetails,
+} from "#product/domain/chats/transcript/seat-usage-limit";
 
 export interface ReconciledStreamConfigIntent {
   liveConfig: SessionLiveConfigSnapshot;
@@ -66,6 +69,19 @@ export type PlannedStreamEventEffect =
     kind: "mark_session_promoted";
     durableSessionId: string;
     workspaceId: string | null;
+  }
+  | {
+    /**
+     * A `seat_usage_limit` turn error arrived: relay the observed hit to the
+     * cloud (agent_auth §4 cell 3, `reportSeatLimitHit`). Identity is the
+     * envelope's (runtime session id, seq) — the relay dedupes on it.
+     */
+    kind: "report_seat_limit_hit";
+    sessionId: string;
+    seq: number;
+    seatId: string;
+    window: "five_hour" | "seven_day" | null;
+    resetAt: string;
   };
 
 export type OrderedStreamSideEffect =
@@ -158,6 +174,19 @@ export function planBatchedStreamSideEffects(input: {
         kind: "notify_turn_end",
         eventType: event.type,
       });
+    }
+    if (event.type === "error") {
+      const seatLimit = readSeatUsageLimitDetails(event.details);
+      if (seatLimit) {
+        eventEffects.push({
+          kind: "report_seat_limit_hit",
+          sessionId: envelope.sessionId,
+          seq: envelope.seq,
+          seatId: seatLimit.seatId,
+          window: seatLimit.window,
+          resetAt: seatLimit.resetAt,
+        });
+      }
     }
     if (event.type === "subagent_turn_completed") {
       eventEffects.push({

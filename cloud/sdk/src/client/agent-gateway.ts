@@ -14,6 +14,7 @@ import type {
   OrgAgentPolicy,
   OrgAgentPolicyViolationListResponse,
   PutAuthSelectionsRequest,
+  ReportSeatLimitHitRequest,
   UpdateOrgAgentPolicyRequest,
   UpsertAgentModelOverrideRequest,
 } from "../types/index.js";
@@ -138,7 +139,7 @@ export async function ackAgentAuthState(
  */
 export async function reportSeatLimitHit(
   keyId: string,
-  body: { window?: "five_hour" | "seven_day" | null; resetAt: string },
+  body: ReportSeatLimitHitRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<void> {
   await client.requestJson<void>({

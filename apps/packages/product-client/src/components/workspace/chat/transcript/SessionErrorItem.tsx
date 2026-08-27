@@ -5,6 +5,7 @@ import { CircleAlert } from "#product/primitives/icons/status";
 import { CircleQuestion } from "#product/primitives/icons/core";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { useSessionModelFallbackAction } from "#product/hooks/sessions/workflows/use-session-model-fallback-action";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
 import { presentSessionError } from "#product/domain/chats/transcript/session-error-presentation";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
@@ -22,10 +23,12 @@ export function SessionErrorItem({
   const fallback = providerRateLimitFallback(item);
   const presentation = presentSessionError(item);
   const setFallbackModel = useSessionModelFallbackAction();
+  const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
   const showToast = useToastStore((state) => state.show);
   const showErrorToast = useToastStore((state) => state.showError);
   const requestModelPicker = useModelSupportStore((state) => state.requestPicker);
   const [isApplyingFallback, setIsApplyingFallback] = useState(false);
+  const [isRelaunching, setIsRelaunching] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
 
   const isOnline = useConnectivityStore((state) => state.isOnline);
@@ -71,6 +74,37 @@ export function SessionErrorItem({
     // Pre-fill the composer and focus it so the user can re-send with one click.
     useChatInputStore.getState().setDraftText(workspaceId, lastUserText);
     useChatInputStore.getState().requestFocus();
+  };
+
+  // One-click relaunch after a seat plan-limit death (agent_auth flow 5): a
+  // NEW session on the same workspace/harness/model through the ordinary
+  // create path. The client only relaunches — the launch lands on the next
+  // non-cooling login via the runtime's ordinary seat ladder.
+  const handleRelaunch = () => {
+    if (!sessionId || isRelaunching) {
+      return;
+    }
+    const record = getSessionRecord(sessionId);
+    if (!record) {
+      return;
+    }
+    setIsRelaunching(true);
+    void createEmptySessionWithResolvedConfig({
+      agentKind: record.agentKind,
+      modelId: record.modelId ?? record.requestedModelId ?? record.agentKind,
+      ...(record.workspaceId ? { workspaceId: record.workspaceId } : {}),
+    })
+      .catch((error: unknown) => {
+        showErrorToast({
+          headline: "Session not relaunched",
+          consequence: "No new session was started.",
+          cause: errorMessage(error),
+          retry: handleRelaunch,
+        });
+      })
+      .finally(() => {
+        setIsRelaunching(false);
+      });
   };
 
   const handleFallback = () => {
@@ -152,6 +186,19 @@ export function SessionErrorItem({
               className="px-2.5 text-chat"
             >
               Choose model
+            </Button>
+          )}
+          {presentation.recoveryAction === "relaunch_session" && sessionId && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              loading={isRelaunching}
+              onClick={handleRelaunch}
+              className="px-2.5 text-chat"
+            >
+              <RefreshCw className="icon-paired" />
+              Relaunch session
             </Button>
           )}
           {presentation.technicalDetail && (
