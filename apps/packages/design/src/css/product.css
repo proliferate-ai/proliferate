@@ -5,6 +5,9 @@
    above the @source list. This file declares rules only; global token VALUES
    are never hand-authored here. */
 @import "../theme.css";
+/* DEV-ONLY light-mode profile candidates (scripts/generate-profiles.mjs);
+   inert unless data-theme-profile is set. Removed with the theming ruling. */
+@import "../theme-profiles.css";
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/manrope";
 

@@ -36,7 +36,7 @@
     "./desktop.css": "./dist/css/desktop.css"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/generate-theme.mjs && node scripts/copy-css.mjs && node scripts/check-theme.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/generate-theme.mjs && node scripts/generate-profiles.mjs && node scripts/copy-css.mjs && node scripts/check-theme.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
