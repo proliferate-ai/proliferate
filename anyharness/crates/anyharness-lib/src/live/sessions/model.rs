@@ -380,6 +380,11 @@ pub struct ActorCapabilities {
     /// wiring; `None` in suites that exercise no seat behavior. Every store
     /// operation degrades on failure, so this handle can never brick a launch.
     pub seat_cooling: Option<Arc<crate::domains::agents::seat_cooling::SeatCoolingStore>>,
+    /// The agent-auth status documents, refreshed after a live limit hit
+    /// marks a seat cooling (the cooling banner must move the moment the
+    /// machine knows). `Some` in the real app wiring; `None` in suites that
+    /// exercise no seat behavior. Refreshes degrade-with-warn, never gate.
+    pub agent_status: Option<Arc<crate::domains::agents::status::AgentStatusService>>,
 }
 
 /// Per-call powers: hooks and context that vary per session start.

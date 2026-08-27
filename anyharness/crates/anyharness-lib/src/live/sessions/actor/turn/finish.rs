@@ -290,13 +290,10 @@ impl SessionActor {
                 // session actually running on a recorded serving seat — a
                 // limit error on a non-seat route must never produce seat
                 // events or cooling.
-                let seat_usage_limit = self
-                    .serving_seat_id
-                    .as_ref()
-                    .and_then(|seat_id| {
-                        classify_seat_usage_limit_error(&error_message)
-                            .map(|observation| (seat_id.clone(), observation))
-                    });
+                let seat_usage_limit = self.serving_seat_id.as_ref().and_then(|seat_id| {
+                    classify_seat_usage_limit_error(&error_message)
+                        .map(|observation| (seat_id.clone(), observation))
+                });
                 let (error_details, error_code) = if let Some((seat_id, observation)) =
                     seat_usage_limit
                 {
@@ -409,6 +406,15 @@ impl SessionActor {
                 Some(observation.window),
                 now_epoch_s,
             );
+            // The status document's cooling banner must move the moment the
+            // machine knows (agent_auth spec §2: event-refreshed, never
+            // computed on read). Degrade-with-warn inside; never gates.
+            if let Some(agent_status) = self.caps.agent_status.as_ref() {
+                agent_status.refresh(
+                    &self.agent_kind,
+                    crate::domains::agents::status::RefreshCause::SeatCooling,
+                );
+            }
         } else {
             tracing::warn!(
                 session_id = %self.session_id,

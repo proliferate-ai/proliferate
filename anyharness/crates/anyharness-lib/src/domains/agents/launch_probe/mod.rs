@@ -105,6 +105,11 @@ pub struct LaunchProbeService {
     /// `bind_self` — means no timer is armed and a lapsed backoff waits for the
     /// next external poke, the pre-recovery behavior.
     self_handle: std::sync::OnceLock<std::sync::Weak<LaunchProbeService>>,
+    /// The status-document service's probe-evidence intake: attempt admission
+    /// marks the harness's document stale, completion writes the verdict.
+    /// Event-pushed from here rather than polled from there, so the document
+    /// can never claim a probe state the engine doesn't hold.
+    agent_status: Option<Arc<crate::domains::agents::status::AgentStatusService>>,
 }
 
 impl LaunchProbeService {
@@ -147,6 +152,7 @@ impl LaunchProbeService {
             started_at: Utc::now(),
             launch_options: None,
             self_handle: std::sync::OnceLock::new(),
+            agent_status: None,
         };
         // The orphan sweep, live from the moment ownership is decided.
         //
@@ -175,11 +181,40 @@ impl LaunchProbeService {
         self
     }
 
+    pub fn with_agent_status(
+        mut self,
+        agent_status: Arc<crate::domains::agents::status::AgentStatusService>,
+    ) -> Self {
+        self.agent_status = Some(agent_status);
+        self
+    }
+
     /// Bind the engine's own `Arc` so failure-armed backoff-expiry timers can
     /// poke back into it. Called once at wiring (and by tests that exercise
     /// the self-recovery); a second call is a no-op.
     pub fn bind_self(self: &Arc<Self>) {
         let _ = self.self_handle.set(Arc::downgrade(self));
+    }
+
+    /// Probe evidence intake (spec §3 flow 4, the serve-stale semantics): the
+    /// document goes stale the moment an attempt is admitted — queued counts —
+    /// and the last observation stays visible while the re-probe runs.
+    fn notify_probe_admitted(&self, harness_kind: &str) {
+        if let Some(agent_status) = self.agent_status.as_ref() {
+            agent_status.probe_admitted(harness_kind);
+        }
+    }
+
+    pub(super) fn notify_probe_verified(&self, harness_kind: &str, at: DateTime<Utc>) {
+        if let Some(agent_status) = self.agent_status.as_ref() {
+            agent_status.probe_verified(harness_kind, at);
+        }
+    }
+
+    pub(super) fn notify_probe_failed(&self, harness_kind: &str, at: DateTime<Utc>) {
+        if let Some(agent_status) = self.agent_status.as_ref() {
+            agent_status.probe_failed(harness_kind, at);
+        }
     }
 
     /// Arm the self-recovery for a failed attempt (spec §3 flow 4: the event
@@ -461,6 +496,7 @@ impl LaunchProbeService {
         // good. Every exit below drops the guard, including a coalesce return and
         // this future being abandoned mid-wait.
         let live_state = self.admit_attempt(slot.clone());
+        self.notify_probe_admitted(harness_kind);
         let _attempt_gate = slot.attempt_gate.lock().await;
         // The coalesce: the previous holder usually probed for this poke already.
         // Failed attempts count too — N pokes racing a failing probe coalesce
@@ -511,6 +547,7 @@ impl LaunchProbeService {
 
         let slot = self.slot(harness_kind);
         let live_state = self.admit_attempt(slot.clone());
+        self.notify_probe_admitted(harness_kind);
         let _attempt_gate = slot.attempt_gate.lock().await;
 
         self.run_attempt(harness_kind, &slot, PokeReason::Manual, live_state)

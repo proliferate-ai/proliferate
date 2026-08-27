@@ -1,5 +1,6 @@
 pub mod access;
 pub mod agent_auth;
+pub(crate) mod agent_auth_contract;
 pub mod agent_launch_options;
 #[cfg(test)]
 mod agent_launch_options_grace_tests;

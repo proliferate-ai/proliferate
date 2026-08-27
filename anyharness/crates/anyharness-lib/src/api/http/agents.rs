@@ -14,8 +14,8 @@ use axum::{
 };
 
 use super::agents_contract::{
-    agent_login_terminal_to_contract, install_request,
-    reconcile_snapshot_to_contract, to_installed_artifact_status, to_summary,
+    agent_login_terminal_to_contract, install_request, reconcile_snapshot_to_contract,
+    to_installed_artifact_status, to_summary,
 };
 use super::error::ApiError;
 use crate::app::AppState;
@@ -319,6 +319,12 @@ pub async fn close_agent_login_terminal(
         &state.automatic_poke_engine,
         &terminal.kind,
         PokeReason::LoginTerminal,
+    );
+    // A closed login terminal may have changed the harness's native world —
+    // the status document's detection row re-reads it now.
+    state.agent_status_service.refresh(
+        &terminal.kind,
+        crate::domains::agents::status::RefreshCause::LoginTerminal,
     );
     Ok(StatusCode::NO_CONTENT)
 }

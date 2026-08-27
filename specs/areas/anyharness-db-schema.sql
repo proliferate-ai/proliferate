@@ -40,6 +40,15 @@ CREATE TABLE activity_subagents (
     PRIMARY KEY (session_id, subagent_id)
 );
 
+-- table: agent_auth_status
+CREATE TABLE agent_auth_status (
+    harness_kind TEXT PRIMARY KEY,
+    doc_json TEXT NOT NULL,
+    probe_verdict TEXT,
+    probe_at TEXT,
+    updated_at_epoch_s INTEGER NOT NULL
+);
+
 -- table: agent_model_registry_snapshots
 CREATE TABLE agent_model_registry_snapshots (
     id TEXT PRIMARY KEY,

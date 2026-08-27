@@ -28,6 +28,7 @@ use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
 use crate::domains::agents::launch_probe::LaunchProbeService;
 use crate::domains::agents::runtime::AgentRuntime;
+use crate::domains::agents::status::AgentStatusService;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
@@ -75,8 +76,8 @@ use crate::domains::workflows::session_extension::WorkflowSessionExtension;
 use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::archive::WorkspaceArchiveService;
-use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::deletion::purge::WorkspacePurgeService;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::domains::workspaces::files_runtime::{
@@ -137,6 +138,9 @@ pub struct AppState {
     /// Reads and the manual refresh keep the real engine above, because nothing there
     /// fires on its own.
     pub automatic_poke_engine: Option<Arc<LaunchProbeService>>,
+    /// The per-harness status documents (agent_auth spec §2): read, stream,
+    /// and event-refresh — the machine's single source of auth truth.
+    pub agent_status_service: Arc<AgentStatusService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
@@ -233,8 +237,12 @@ impl AppState {
             // would put a process-global read inside the reconcile loop.
             crate::domains::agents::runtime::RuntimeSurface::from_env(),
         );
-        let (launch_options_service, launch_probe_service, gateway_model_planner) =
-            agent_launch::build_services(&db, &runtime_home);
+        let (
+            launch_options_service,
+            launch_probe_service,
+            gateway_model_planner,
+            agent_status_service,
+        ) = agent_launch::build_services(&db, &runtime_home);
         // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
         // why it is separate; the suppression is a property of the wiring rather
         // than of which event sites happened to be threaded.
@@ -338,6 +346,7 @@ impl AppState {
             activity_service: activity_service.clone(),
             product_context: agent_product_context,
             automatic_poke_engine: automatic_poke_engine.clone(),
+            agent_status_service: agent_status_service.clone(),
         });
         let cowork_delegation_service = CoworkDelegationService::new(
             (*cowork_service).clone(),
@@ -575,6 +584,18 @@ impl AppState {
         // non-blocking + best-effort. See AgentRuntime::spawn_startup_pass.
         #[cfg(not(test))]
         agent_runtime.clone().spawn_startup_pass();
+        // The status module's startup pass (agent_auth spec §2): every
+        // persisted document is re-served STALE until the startup probes
+        // re-verify it, every installed harness gets a row, and a harness
+        // that appeared with no install event raises FirstDetected.
+        // Blocking-pool work (sqlite + fs); suppressed under cfg(test) with
+        // the other startup side effects.
+        #[cfg(not(test))]
+        {
+            let status = agent_status_service.clone();
+            let poke_engine = automatic_poke_engine.clone();
+            tokio::task::spawn_blocking(move || status.startup_pass(&poke_engine));
+        }
         Ok(Self {
             runtime_home,
             runtime_base_url,
@@ -587,6 +608,7 @@ impl AppState {
             launch_options_service,
             launch_probe_service,
             automatic_poke_engine,
+            agent_status_service,
             agent_reconcile_service,
             repo_root_service,
             workspace_runtime,

@@ -11,14 +11,18 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agent_auth::{delete_agent_auth_state, put_agent_auth_state},
-    agent_launch_options, agents, auth as http_auth, catalogs, cowork,
-    files, git, goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay,
-    repo_roots, reviews, sessions, sessions_config, sessions_events, sessions_fork,
-    sessions_interactions, sessions_lifecycle, sessions_prompt, sessions_resume, subagents,
-    terminals, workflow_runs, workspaces, workspaces_lifecycle, workspaces_purge,
-    workspaces_restore, workspaces_setup, workspaces_worktrees, worktrees,
+    agent_auth::{
+        delete_agent_auth_state, get_agent_auth_methods, get_agent_auth_status,
+        put_agent_auth_state,
+    },
+    agent_launch_options, agents, auth as http_auth, catalogs, cowork, files, git, goals, health,
+    hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
+    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
+    sessions_prompt, sessions_resume, subagents, terminals, workflow_runs, workspaces,
+    workspaces_lifecycle, workspaces_purge, workspaces_restore, workspaces_setup,
+    workspaces_worktrees, worktrees,
 };
+use super::sse::agent_auth as sse_agent_auth;
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
 use super::ws::agent_login_terminals as ws_agent_login_terminals;
@@ -70,6 +74,12 @@ pub fn build_router(state: AppState) -> Router {
         .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
         .route("/agent-auth/state", put(put_agent_auth_state))
         .route("/agent-auth/state", delete(delete_agent_auth_state))
+        .route("/agent-auth/status", get(get_agent_auth_status))
+        .route(
+            "/agent-auth/status/stream",
+            get(sse_agent_auth::stream_agent_auth_status),
+        )
+        .route("/agent-auth/methods", get(get_agent_auth_methods))
         // Catalogs (read-only: the runtime binary is the only transport)
         .route(
             "/catalogs/agents/version",

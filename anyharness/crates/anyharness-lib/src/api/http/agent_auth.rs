@@ -5,15 +5,24 @@
 //! persists it atomically (0600) at `<runtime_home>/agent-auth/state.json`,
 //! where every session launch reads it fresh.
 
-use anyharness_contract::v1::ApplyAgentAuthStateResponse;
-use axum::{body::Bytes, extract::State, http::StatusCode, Json};
+use anyharness_contract::v1::{
+    AgentAuthMethodRow, AgentAuthStatusDoc, ApplyAgentAuthStateResponse,
+};
+use axum::{
+    body::Bytes,
+    extract::{Query, State},
+    http::StatusCode,
+    Json,
+};
 
+use super::agent_auth_contract::{method_row_to_contract, status_doc_to_contract};
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::agents::route_auth::{
     apply_state_file, clear_state_file, AgentAuthState, RouteAuthError,
 };
+use crate::domains::agents::status::RefreshCause;
 
 #[utoipa::path(
     put,
@@ -60,6 +69,11 @@ pub async fn put_agent_auth_state(
         &outcome.changed_harnesses,
         PokeReason::AuthApplied,
     );
+    // The same changed set refreshes the status documents — and ONLY those:
+    // an untouched harness's document stays byte-stable across the apply.
+    state
+        .agent_status_service
+        .refresh_harnesses(&outcome.changed_harnesses, RefreshCause::AuthApplied);
     Ok(Json(ApplyAgentAuthStateResponse {
         applied: true,
         sequence: document.sequence,
@@ -85,17 +99,117 @@ pub async fn delete_agent_auth_state(
     // readable names; the widest targeting (every eligible harness) is the
     // honest fallback there. An absent file cleared nothing and pokes nothing.
     match cleared.previous_harnesses {
-        Some(previous) => LaunchProbeService::poke_harnesses_optional(
-            &state.automatic_poke_engine,
-            &previous,
-            PokeReason::AuthApplied,
-        ),
-        None => LaunchProbeService::poke_all_optional(
-            &state.automatic_poke_engine,
-            PokeReason::AuthApplied,
-        ),
+        Some(previous) => {
+            LaunchProbeService::poke_harnesses_optional(
+                &state.automatic_poke_engine,
+                &previous,
+                PokeReason::AuthApplied,
+            );
+            state
+                .agent_status_service
+                .refresh_harnesses(&previous, RefreshCause::AuthApplied);
+        }
+        None => {
+            LaunchProbeService::poke_all_optional(
+                &state.automatic_poke_engine,
+                PokeReason::AuthApplied,
+            );
+            state
+                .agent_status_service
+                .refresh_all(RefreshCause::AuthApplied);
+        }
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct AgentAuthStatusQuery {
+    /// Filter to one harness (404 for a harness the runtime doesn't know).
+    pub harness: Option<String>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/agent-auth/status",
+    params(("harness" = Option<String>, Query, description = "Filter to one harness kind")),
+    responses(
+        (status = 200, description = "The persisted per-harness status documents", body = Vec<AgentAuthStatusDoc>),
+        (status = 404, description = "Unknown harness", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "agent-auth"
+)]
+pub async fn get_agent_auth_status(
+    State(state): State<AppState>,
+    Query(query): Query<AgentAuthStatusQuery>,
+) -> Result<Json<Vec<AgentAuthStatusDoc>>, ApiError> {
+    match query.harness {
+        Some(harness) => {
+            require_known_harness(&state, &harness)?;
+            Ok(Json(
+                state
+                    .agent_status_service
+                    .read(&harness)
+                    .into_iter()
+                    .map(status_doc_to_contract)
+                    .collect(),
+            ))
+        }
+        None => Ok(Json(
+            state
+                .agent_status_service
+                .read_all()
+                .into_iter()
+                .map(status_doc_to_contract)
+                .collect(),
+        )),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct AgentAuthMethodsQuery {
+    pub harness: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/agent-auth/methods",
+    params(("harness" = String, Query, description = "Harness kind (required)")),
+    responses(
+        (status = 200, description = "The harness's method rows, straight from its status document", body = Vec<AgentAuthMethodRow>),
+        (status = 404, description = "Unknown harness", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "agent-auth"
+)]
+pub async fn get_agent_auth_methods(
+    State(state): State<AppState>,
+    Query(query): Query<AgentAuthMethodsQuery>,
+) -> Result<Json<Vec<AgentAuthMethodRow>>, ApiError> {
+    require_known_harness(&state, &query.harness)?;
+    // Served FROM the status document (never recomposed on read): the method
+    // picker needs no document parsing, and cannot disagree with the pane.
+    Ok(Json(
+        state
+            .agent_status_service
+            .read(&query.harness)
+            .map(|doc| {
+                doc.methods
+                    .into_iter()
+                    .map(method_row_to_contract)
+                    .collect()
+            })
+            .unwrap_or_default(),
+    ))
+}
+
+fn require_known_harness(state: &AppState, harness: &str) -> Result<(), ApiError> {
+    if state.agent_status_service.is_known_harness(harness) {
+        Ok(())
+    } else {
+        Err(ApiError::not_found(
+            format!("Unknown harness kind: {harness}"),
+            "AGENT_AUTH_UNKNOWN_HARNESS",
+        ))
+    }
 }
 
 /// State-route mapping: ONE mapper with the sessions API

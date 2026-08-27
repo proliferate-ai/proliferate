@@ -42,6 +42,7 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
         seat_cooling: Some(Arc::new(
             crate::domains::agents::seat_cooling::SeatCoolingStore::new(store.db()),
         )),
+        agent_status: None,
     }
 }
 

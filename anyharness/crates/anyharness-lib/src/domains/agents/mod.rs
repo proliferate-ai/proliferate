@@ -13,3 +13,4 @@ pub mod registry;
 pub mod route_auth;
 pub mod runtime;
 pub mod seat_cooling;
+pub mod status;

@@ -44,6 +44,7 @@ impl LaunchProbeService {
                     event = "agent.launch_options_probe.completed",
                     "launch-options probe materialization failed"
                 );
+                self.notify_probe_failed(harness_kind, Utc::now());
                 return Err(error.into());
             }
         };
@@ -89,6 +90,7 @@ impl LaunchProbeService {
                                 RefreshError::Persistence(write_error.to_string())
                             })?;
                         self.record_failure(harness_kind, slot, now);
+                        self.notify_probe_failed(harness_kind, now);
                         tracing::info!(
                             harness = harness_kind,
                             harness_basis_revision = %started.basis_revision,
@@ -105,6 +107,7 @@ impl LaunchProbeService {
                     .record_success(&started, &options, &now.to_rfc3339())
                     .map_err(|error| RefreshError::Persistence(error.to_string()))?;
                 self.record_success(slot, now);
+                self.notify_probe_verified(harness_kind, now);
                 tracing::info!(
                     harness = harness_kind,
                     harness_basis_revision = %started.basis_revision,
@@ -126,6 +129,7 @@ impl LaunchProbeService {
                     .record_failure(&started, &now.to_rfc3339(), failure_code)
                     .map_err(|write_error| RefreshError::Persistence(write_error.to_string()))?;
                 self.record_failure(harness_kind, slot, now);
+                self.notify_probe_failed(harness_kind, now);
                 tracing::info!(
                     harness = harness_kind,
                     harness_basis_revision = %started.basis_revision,
