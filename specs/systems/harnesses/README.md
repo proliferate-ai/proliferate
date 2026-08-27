@@ -2,7 +2,7 @@
 
 Status: current (grade B). System spec in the Organization Standard anatomy. The runtime system that owns *which coding agents exist and whether they can launch*: the supported-kind registry, the distribution catalog compiled into the binary, install/seed/reconcile of agent artifacts, credential detection and readiness, target-observed launch options and the probe that observes them, and the per-provider adapters (ACP extensions, live controls, transcript quirks). It hands the session engine a **resolved launch surface**; it never runs a session.
 
-Today the code lives in `domains/agents/` and the docs call it "agents". The Organization Standard names the system **harnesses** (a harness is the thing you run; an agent is the thing a user talks to), and the target tree renames the folder. Depth references: [agents.md](agents-domain.md), [agent-distribution.md](distribution.md), [harnesses.md](harness-integrations.md) and the per-provider docs under [harnesses/](claude.md), [acp.md](../../areas/anyharness.md), [agent-mode-matrix.md](agent-mode-matrix.md), [MODELS.md](../agent_auth/models.md).
+Today the code lives in `domains/agents/` and the docs call it "agents". The Organization Standard names the system **harnesses** (a harness is the thing you run; an agent is the thing a user talks to), and the target tree renames the folder. Depth references: [agents.md](agents-domain.md), [agent-distribution.md](distribution.md), [harnesses.md](harness-integrations.md) and the per-provider docs under [harnesses/](claude.md), [acp.md](../../areas/anyharness.md), [agent-mode-matrix.md](agent-mode-matrix.md), [MODELS.md](launch-options.md).
 
 ## 1. Purpose
 
@@ -86,8 +86,8 @@ In-process: `AgentRuntime` ([runtime.rs](../../../anyharness/crates/anyharness-l
 | Not owned | Owner |
 | --- | --- |
 | Live session actors, ACP stdio connections, prompt execution | sessions ([session-engine.md](../sessions/session-engine.md)) |
-| Credential vault, selections, `state.json` delivery, route-auth rendering, gateway plans — `domains/agents/{auth,auth_state.rs,route_auth}` | **agent_auth** (control-plane spec with a runtime section; today [AGENT_AUTH.md](../agent_auth/deep-dive.md)) |
-| Virtual keys, LiteLLM, model gateway enrollment | model_gateway ([MODELS.md](../agent_auth/models.md)) |
+| Credential vault, selections, `state.json` delivery, route-auth rendering, gateway plans — `domains/agents/{auth,auth_state.rs,route_auth}` | **agent_auth** (control-plane spec with a runtime section; today [AGENT_AUTH.md](../agent_auth/README.md)) |
+| Virtual keys, LiteLLM, model gateway enrollment | model_gateway ([MODELS.md](launch-options.md)) |
 | Catalog *generation* (`scripts/agent-catalog/**`) | release-delivery (engineering system) |
 | Supervisor binary swaps, worker mailbox | managed_runtime ([MANAGED_RUNTIME.md](managed-runtime.md)) |
 | Cowork/review/workflow session policy | their owning domains |

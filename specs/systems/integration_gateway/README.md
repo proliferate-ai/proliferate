@@ -131,7 +131,7 @@ SDK: [integrations.ts](../../../cloud/sdk/src/client/integrations.ts), `integrat
   [integrations.md § Runtime Worker Identity](deep-dive.md)).
 - Mounting the gateway as an MCP server inside a session:
   [mcp-runtime.md](../subagents/mcp-runtime.md).
-- Model credentials and LLM traffic: [model_gateway.md](../agent_auth/model-gateway.md).
+- Model credentials and LLM traffic: [model_gateway.md](../ai_gateway/README.md).
 - GitHub App installations and repository authority: [github.md](../github/README.md).
   GitHub is not an integration definition; its App is the identity of work.
 - Product-identity OAuth (who this Proliferate user is): accounts.

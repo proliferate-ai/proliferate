@@ -95,7 +95,7 @@ Composer focus follows the app lifecycle. The workspace composer takes focus aft
 
 ## 1.1 Model Selector Semantics
 
-Before launch, the composer model selector presents the selected target's exact `HarnessLaunchOptions` contract from `specs/systems/agent_auth/models.md`. After launch, it presents the active session's `SessionLiveConfigSnapshot`. Identity is the raw observed ID, never a display label or inferred provider shape.
+Before launch, the composer model selector presents the selected target's exact `HarnessLaunchOptions` contract from `specs/systems/harnesses/launch-options.md`. After launch, it presents the active session's `SessionLiveConfigSnapshot`. Identity is the raw observed ID, never a display label or inferred provider shape.
 
 Rules:
 
@@ -132,7 +132,7 @@ Rules:
   is shown for repair and is never aliased or replaced. With no saved intent,
   only defaults reported by `HarnessLaunchOptions` apply. Cowork working-mode
   and tuning changes do not update standard-workspace saved intent.
-- [Models and harness launch options](../agent_auth/models.md) owns whether a
+- [Models and harness launch options](../harnesses/launch-options.md) owns whether a
   selection is current, `update_current_chat`, or `open_new_chat`; Composer
   presents that action and does not derive it from live setter availability.
 - [Chat Lifecycle](lifecycle.md) owns the visible create, preserve, and replace

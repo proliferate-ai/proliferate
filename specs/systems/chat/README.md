@@ -133,7 +133,7 @@ Presence and multiplayer today are **claiming only**: team-kind chats (`slack`, 
   ([../agents/README.md](../../README.md)).
 - **Agent auth / models** owns identity and availability of models and
   controls; chat only renders launch options and the live snapshot
-  ([MODELS.md](../agent_auth/models.md), [AGENT_AUTH.md](../agent_auth/deep-dive.md)).
+  ([MODELS.md](../harnesses/launch-options.md), [AGENT_AUTH.md](../agent_auth/README.md)).
 - **Runs triage** (target) owns goals, loops, and background-work rows; today
   those render inside the chat column from the activity domain and are
   recorded there as a migration source

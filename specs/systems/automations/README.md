@@ -158,7 +158,7 @@ The control plane emits no named events for definitions or invocations today. Th
 | --- | --- | --- |
 | Session lifecycle, event log, pending-prompt queue | runtime `sessions` ([sessions.md](../sessions/anyharness-sessions.md)) | a node *is* a session; this system observes turn ends through `SessionExtension` and never writes session rows |
 | Worktree creation, repo-root registry, destruction | runtime `workspaces` ([workspaces.md](../workspaces/anyharness-workspaces.md)) | `workflow_placement.rs` lives in workspaces; this system supplies the run id and mode |
-| Harness selection, credentials, launch options | harnesses / [agent_auth](../agent_auth/README.md) / [MODELS.md](../agent_auth/models.md) | a node's `model` is a pass-through config; resolution is the launcher's |
+| Harness selection, credentials, launch options | harnesses / [agent_auth](../agent_auth/README.md) / [MODELS.md](../harnesses/launch-options.md) | a node's `model` is a pass-through config; resolution is the launcher's |
 | In-environment fan-out (subagents, product MCP) | runtime `subagents` | orchestration inside one environment is not an automation; an automation node may *use* subagents like any session |
 | Cross-environment spawn, run results, budget envelopes | [runs.md](runs.md) (target) | the CP run record; today the runtime run is the only run object |
 | Trigger intake from Slack, webhooks, schedules, API | [api.md](../api/README.md) / product Slack (target) | every source normalizes into one frozen invocation *here*; the intake surfaces are theirs |
