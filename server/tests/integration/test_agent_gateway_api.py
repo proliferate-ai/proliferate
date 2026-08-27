@@ -403,12 +403,17 @@ class TestAgentApiKeys:
     async def test_create_validation_error_never_echoes_value(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
 
+        # `title` went schema-optional with seats v1 (the seat kind composes
+        # its own), so a bare-key create without one is now the TYPED 400
+        # rather than a Pydantic 422 — and its body still never echoes the
+        # secret, which is what this test actually guards.
         missing_field = await client.post(
             "/v1/cloud/agent-auth/keys",
             headers=headers,
             json={"value": SECRET},
         )
-        assert missing_field.status_code == 422, missing_field.text
+        assert missing_field.status_code == 400, missing_field.text
+        assert missing_field.json()["detail"]["code"] == "invalid_agent_api_key_title"
         assert SECRET not in missing_field.text
 
         wrong_type = await client.post(
