@@ -1,7 +1,6 @@
-//! ADVERSARIAL REVIEW TESTS (review-a worktree only — never for the branch).
-//!
-//! Target: the status store's lock/transaction discipline under concurrent
-//! pokes, per the correctness-and-concurrency review lens.
+//! Concurrency pins for the status store's lock/transaction discipline under
+//! concurrent pokes. Born in an adversarial review; kept on the branch because
+//! the races they pin are permanent invariants, not review scaffolding.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};

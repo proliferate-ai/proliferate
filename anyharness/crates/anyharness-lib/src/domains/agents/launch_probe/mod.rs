@@ -456,15 +456,19 @@ impl LaunchProbeService {
         // good. Every exit below drops the guard, including a coalesce return and
         // this future being abandoned mid-wait.
         let live_state = self.admit_attempt(slot.clone());
-        // Held to the end of this function, exactly like `live_state`: the
-        // coalesce return below, the backoff refusal below it, and this future
-        // being abandoned mid-wait all release the document's stale mark.
+        // Held to the end of this function: the coalesce return below, the
+        // backoff refusal below it, and this future being abandoned mid-wait
+        // all release the document's stale mark.
         //
-        // Declared AFTER `live_state` on purpose. Locals drop in reverse, so on
-        // every early exit the document's mark is released before the slot
-        // reports `idle` — which is what lets an observer treat an idle slot as
-        // "and the document is not mid-mark either". Reordering these two lines
-        // silently inverts that.
+        // Declared AFTER `live_state`, and the reverse-drop ordering ("mark
+        // released before the slot reports idle") holds only for THIS
+        // function's own exits — `live_state` is moved INTO `run_attempt`, so
+        // on its early-error returns the guard drops there first and the slot
+        // can read idle a beat before this mark releases. That inversion is
+        // benign: no await separates `run_attempt` returning from this
+        // function's exit, and the release restores exactly what the last
+        // completion chose (or the pre-admission staleness when none wrote),
+        // so the transient window never leaves a mark with nothing behind it.
         let _status_stale = self.notify_probe_admitted(harness_kind);
         let _attempt_gate = slot.attempt_gate.lock().await;
         // The coalesce: the previous holder usually probed for this poke already.

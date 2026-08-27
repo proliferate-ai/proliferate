@@ -1,8 +1,8 @@
-//! ADVERSARIAL REVIEW TESTS (review-a worktree only — never for the branch).
-//!
 //! Engine-level reachability proof for the status-store read-modify-write race:
 //! nothing here touches the store directly. Only real pokes against a real
 //! (fake-runner) engine, then a settled-state assertion on the served document.
+//! Born in an adversarial review; kept on the branch because the races they pin
+//! are permanent invariants, not review scaffolding.
 
 use std::sync::Arc;
 use std::time::Duration;
