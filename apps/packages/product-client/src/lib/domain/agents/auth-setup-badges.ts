@@ -64,7 +64,11 @@ export interface OnboardingAgentBadge {
   /** Badge text — the document's own words, or a pre-document phase. */
   label: string;
   tone: AuthStatusTone;
-  /** True while the state is still progressing (spinner, no affordance yet). */
+  /**
+   * True while the state is still progressing. Rendered as a spinner; the row
+   * still carries the generic pane affordance (a pending row is never a dead
+   * end), just no state-specific `actionLabel` yet.
+   */
   pending: boolean;
   /** True once the card no longer waits on this agent. */
   terminal: boolean;
@@ -259,7 +263,7 @@ export function deriveOnboardingAgentBadge(
 
 /**
  * The badge for an adopted kind the agents projection has not answered for yet.
- * A bound pending row (spinner, no affordance) named by its kind, keeping the
+ * A bound pending row (spinner, generic pane affordance) named by its kind, keeping the
  * card honest about a harness it is still waiting on. Bounded by the read
  * itself: once the projection answers, the kind either has an agent or gets the
  * terminal row below.

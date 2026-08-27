@@ -65,6 +65,11 @@ impl AgentStatusService {
         let applied = applied_method(sources.as_ref(), &seat_pool, serving_seat.as_deref());
 
         let mut methods = Vec::new();
+        // Deliberate mirror, not an oversight: this kind test mirrors the
+        // server's `AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS = ("claude",)`
+        // because the registry declares no seat vocabulary yet. Codex seats
+        // (phase 2) must extend BOTH sites; the registry is the intended
+        // owner of seat capability once it grows the vocabulary.
         let declared_seat = descriptor
             .as_ref()
             .is_some_and(|descriptor| descriptor.kind == AgentKind::Claude);
@@ -180,6 +185,11 @@ fn has_source(
 /// family in document order (`provider_config` is the api_key family's typed
 /// variant, so it tags as `api_key`). `None` when the document gives the
 /// harness no satisfiable sources.
+///
+/// Known limitation (deferred with the typed-per-cause-reasons work): for an
+/// additive harness (opencode: gateway + N keys) SEVERAL sources are live at
+/// once, but the document reports the first source's family as its ONE
+/// applied method — §2's single `applied` object cannot express two.
 fn applied_method(
     sources: Option<&HarnessSources>,
     seat_pool: &[String],

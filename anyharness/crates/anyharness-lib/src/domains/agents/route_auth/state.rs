@@ -257,6 +257,14 @@ pub fn apply_state_file(
         Err(RouteAuthError::MalformedStateFile { .. }) => None,
         Err(error) => return Err(error),
     };
+    // Known open wedge (delivery slice-3 review, open question): this guard
+    // compares sequences that may come from DIFFERENT counter lineages. A
+    // server switch pushes a document from another origin's counter; a
+    // same-origin DB rebuild restarts the counter lower. Either can wedge the
+    // runtime behind a stale-but-higher persisted sequence until manual state
+    // clear. A sound fix needs an ordering authority over lineages on the
+    // wire (not a heuristic here) and is founder-gated — do not "fix" this
+    // guard locally.
     if let Some(current) = previous.as_ref().map(|existing| existing.sequence) {
         if state.sequence < current {
             return Err(RouteAuthError::StaleStateSequence {
