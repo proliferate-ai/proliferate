@@ -8,7 +8,7 @@ language asserts it produces this, each consuming language asserts it parses
 this, and a shape change is made by changing the fixture — which mechanically
 breaks the other side until it is updated.
 
-- Producer: `server/proliferate/server/cloud/materialization/materialize/agent_auth.py`
+- Producer: `server/proliferate/server/agent_auth/state_render.py`
   (`render_agent_auth_state`), for both the cloud-materialized and the
   desktop-served surface.
 - Consumer: `anyharness-lib`'s `domains/agents/route_auth/` — `load_state_file`
@@ -87,6 +87,17 @@ run (a plain env-set loop for claude/opencode, codex's config.toml injection
 for `aws_bedrock`/`azure_openai`) — never to rename a field. This is the
 byte-identical third source D3's python and Rust arms coordinate on; see
 "Reconciliation status" below.
+
+**5. Delivery is governed by `sequence`, identified by `fingerprint` (agent_auth
+spec §2, "How delivery is governed").** The document carries `sequence` — a
+per-(user, surface) counter the producer bumps ONLY on a render whose
+`harnesses` content changed (a revoke, a rotation, a selection edit — any
+content change; a no-op render leaves it alone). The consumer rejects a push
+whose `sequence` is below the one it persisted and treats an equal `sequence` as
+the same content re-pushed. `fingerprint` — sha256 of the canonical `harnesses`
+array — is a `GET /state` rider only and never appears in this document; the
+courier strips it before the push and echoes it in the ack. `revision` is gone
+from the wire: a reader that still looks for it is reading a pre-slice-3 shape.
 
 Also pinned incidentally, because they are easy to get wrong: the document is
 **snake_case** on the wire (`harness_kind`, `env_var_name`, `base_url`,
