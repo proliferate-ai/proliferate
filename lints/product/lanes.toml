@@ -617,6 +617,15 @@ gate_mirrored = false
 note = "red-only Slack digest via SLACK_ENGINEERING_ALERTS_WEBHOOK_URL"
 
 # ── Quarantine (continue-on-error sanctions; they expire) ──────────────────
+#
+# KNOWN GAP: quarantine rows model workflow JOBS (continue-on-error) only —
+# per-TEST quarantine (a flaky test pinned by name, owner + expiry, instead of
+# a skip-comment) has no schema yet. First candidate, observed 2026-08-27 on a
+# zero-Rust diff (PR #2279): anyharness-lib
+# live::sessions::actor::tests::workspace_stop::
+#   stop_and_await_kill_escalation_can_leave_the_agents_own_output_torn_mid_record
+# (timing-sensitive kill-escalation assertion). Owned by the ci-cd spec's
+# Known gaps; do not grow this file's schema ad hoc.
 
 [[quarantine]]
 workflow = "release-e2e.yml"
