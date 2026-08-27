@@ -68,9 +68,7 @@ async def probe_subscription_usage(
             status_code=599,
             message="Anthropic usage probe failed before a response arrived.",
         ) from None
-    return response.status_code, {
-        key.lower(): value for key, value in response.headers.items()
-    }
+    return response.status_code, {key.lower(): value for key, value in response.headers.items()}
 
 
 async def generate_message_text(

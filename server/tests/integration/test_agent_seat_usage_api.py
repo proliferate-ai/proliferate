@@ -123,9 +123,7 @@ class TestSeatUsageApi:
     ) -> None:
         _, headers = await _authed_user(client)
         seat_a = await _mint_seat(client, headers, email="a@example.com")
-        seat_b = await _mint_seat(
-            client, headers, email="b@example.com", token=SEAT_TOKEN + "B"
-        )
+        seat_b = await _mint_seat(client, headers, email="b@example.com", token=SEAT_TOKEN + "B")
         now = datetime.now(tz=UTC)
         for seat_id, older, newer in (
             (seat_a, 0.30, 0.63),
@@ -173,9 +171,7 @@ class TestSeatUsageApi:
         fake = _FakeProbe()
         monkeypatch.setattr(seats_module, "probe_subscription_usage", fake)
 
-        first = await client.post(
-            "/v1/cloud/agent-auth/seats/usage/refresh", headers=headers
-        )
+        first = await client.post("/v1/cloud/agent-auth/seats/usage/refresh", headers=headers)
         assert first.status_code == 200, first.text
         rows = first.json()
         assert len(rows) == 2
@@ -184,9 +180,7 @@ class TestSeatUsageApi:
         assert all(row["util5h"] == pytest.approx(0.63) for row in rows)
 
         # The freshness floor: an immediate re-open probes nothing new.
-        second = await client.post(
-            "/v1/cloud/agent-auth/seats/usage/refresh", headers=headers
-        )
+        second = await client.post("/v1/cloud/agent-auth/seats/usage/refresh", headers=headers)
         assert second.status_code == 200
         assert len(second.json()) == 2
         assert fake.calls == 2
@@ -240,9 +234,7 @@ class TestSeatUsageApi:
                 raise ValueError("simulated ciphertext corruption")
             return await real_decrypt(db, api_key_id=api_key_id)
 
-        monkeypatch.setattr(
-            store_pkg, "get_agent_seat_decrypted_for_probe", decrypt_or_explode
-        )
+        monkeypatch.setattr(store_pkg, "get_agent_seat_decrypted_for_probe", decrypt_or_explode)
         fake = _FakeProbe()
         monkeypatch.setattr(seats_module, "probe_subscription_usage", fake)
 
@@ -306,9 +298,7 @@ class TestSeatUsageApi:
     ) -> None:
         _, headers = await _authed_user(client)
         seat_id = await _mint_seat(client, headers, email="a@example.com")
-        revoked = await client.delete(
-            f"/v1/cloud/agent-auth/keys/{seat_id}", headers=headers
-        )
+        revoked = await client.delete(f"/v1/cloud/agent-auth/keys/{seat_id}", headers=headers)
         assert revoked.status_code == 200, revoked.text
         fake = _FakeProbe()
         monkeypatch.setattr(seats_module, "probe_subscription_usage", fake)
@@ -340,9 +330,7 @@ class TestSeatUsageApi:
         fake = _FakeProbe()
         monkeypatch.setattr(seats_module, "probe_subscription_usage", fake)
 
-        response = await client.post(
-            "/v1/cloud/agent-auth/seats/usage/refresh", headers=headers
-        )
+        response = await client.post("/v1/cloud/agent-auth/seats/usage/refresh", headers=headers)
         assert response.status_code == 200
         samples = await seat_usage_store.recent_seat_usage_samples(
             db_session, api_key_id=uuid.UUID(seat_id)
@@ -385,9 +373,7 @@ class TestSeatUsageApi:
             refresh = await client.post(
                 "/v1/cloud/agent-auth/seats/usage/refresh", headers=headers
             )
-            listed = await client.get(
-                "/v1/cloud/agent-auth/seats/usage", headers=headers
-            )
+            listed = await client.get("/v1/cloud/agent-auth/seats/usage", headers=headers)
         # The probe DID receive the decrypted token (that is its job)…
         assert fake.tokens_seen == [SEAT_TOKEN]
         # …but the token appears in no response, no log line, and no sample.

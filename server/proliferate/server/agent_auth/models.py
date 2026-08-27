@@ -329,9 +329,7 @@ class SeatUsageSampleResponse(AgentGatewayBaseModel):
     util_7d: float | None = Field(default=None, alias="util7d")
     reset_5h: str | None = Field(default=None, alias="reset5h")
     reset_7d: str | None = Field(default=None, alias="reset7d")
-    binding_window: SeatUsageBindingWindow | None = Field(
-        default=None, alias="bindingWindow"
-    )
+    binding_window: SeatUsageBindingWindow | None = Field(default=None, alias="bindingWindow")
     status: SeatUsageStatus
 
 

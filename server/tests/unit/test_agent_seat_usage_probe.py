@@ -168,10 +168,7 @@ def _sample(
 
 class TestSeatUsageCadence:
     def test_no_samples_is_due_now(self) -> None:
-        assert (
-            next_seat_usage_probe_at([], active_interval=ACTIVE, idle_interval=IDLE)
-            is None
-        )
+        assert next_seat_usage_probe_at([], active_interval=ACTIVE, idle_interval=IDLE) is None
 
     def test_rising_utilization_is_active(self) -> None:
         newest = _sample(minutes_ago=0, util_5h=0.55)
@@ -215,9 +212,7 @@ class TestSeatUsageCadence:
         expected = [600.0, 1200.0, 2400.0, 3600.0, 3600.0]
         for failures, want in enumerate(expected, start=1):
             samples = [replace(failed, id=i) for i in range(failures)] + history
-            got = seat_usage_probe_interval(
-                samples, active_interval=ACTIVE, idle_interval=IDLE
-            )
+            got = seat_usage_probe_interval(samples, active_interval=ACTIVE, idle_interval=IDLE)
             assert got == want, f"{failures} failures"
 
     def test_success_after_failures_clears_backoff(self) -> None:
@@ -226,9 +221,7 @@ class TestSeatUsageCadence:
             _sample(minutes_ago=10, status="probe_failed", util_5h=None, util_7d=None),
             _sample(minutes_ago=20, util_5h=0.5),
         ]
-        interval = seat_usage_probe_interval(
-            samples, active_interval=ACTIVE, idle_interval=IDLE
-        )
+        interval = seat_usage_probe_interval(samples, active_interval=ACTIVE, idle_interval=IDLE)
         # Newest is a success; the stale failure no longer governs. Movement
         # (0.5 → 0.6) makes it active.
         assert interval == ACTIVE
@@ -303,8 +296,7 @@ def _imports_seat_usage(path: Path) -> bool:
             if "seat_usage" in module:
                 return True
             if any(
-                alias.name in SENTINEL_NAMES or "seat_usage" in alias.name
-                for alias in node.names
+                alias.name in SENTINEL_NAMES or "seat_usage" in alias.name for alias in node.names
             ):
                 return True
     return False

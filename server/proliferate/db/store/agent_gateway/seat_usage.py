@@ -95,16 +95,10 @@ async def latest_seat_usage_samples(
         .subquery()
     )
     sample = aliased(SeatUsageSample, ranked)
-    rows = (
-        (await db.execute(select(sample).where(ranked.c.recency_rank == 1)))
-        .scalars()
-        .all()
-    )
+    rows = (await db.execute(select(sample).where(ranked.c.recency_rank == 1))).scalars().all()
     by_seat = {row.api_key_id: row for row in rows}
     return [
-        seat_usage_sample_record(by_seat[seat_id])
-        for seat_id in seat_ids
-        if seat_id in by_seat
+        seat_usage_sample_record(by_seat[seat_id]) for seat_id in seat_ids if seat_id in by_seat
     ]
 
 

@@ -293,9 +293,7 @@ def parse_seat_usage_headers(
     else:
         binding_window = None
 
-    status = (
-        SEAT_USAGE_STATUS_LIMITED if http_status == 429 else SEAT_USAGE_STATUS_ALLOWED
-    )
+    status = SEAT_USAGE_STATUS_LIMITED if http_status == 429 else SEAT_USAGE_STATUS_ALLOWED
     unified = lowered.get(_HEADER_UNIFIED_STATUS, "").strip().lower()
     if unified in _UNIFIED_STATUS_ALLOWED:
         status = SEAT_USAGE_STATUS_ALLOWED
@@ -339,11 +337,9 @@ def seat_usage_probe_interval(
             break
     if failures:
         return float(min(active_interval * (2.0**failures), _PROBE_BACKOFF_CAP_SECONDS))
-    successes = [
-        sample
-        for sample in samples
-        if sample.status != SEAT_USAGE_STATUS_PROBE_FAILED
-    ][:2]
+    successes = [sample for sample in samples if sample.status != SEAT_USAGE_STATUS_PROBE_FAILED][
+        :2
+    ]
     if len(successes) < 2:
         return active_interval
     newest, previous = successes
@@ -410,9 +406,7 @@ async def seat_usage_probe(
     else:
         _, seat_token = fetched
         try:
-            http_status, headers = await probe_subscription_usage(
-                oauth_token=seat_token
-            )
+            http_status, headers = await probe_subscription_usage(oauth_token=seat_token)
             parsed = parse_seat_usage_headers(http_status, headers)
         except AnthropicIntegrationError:
             parsed = _PROBE_FAILED
@@ -509,15 +503,11 @@ async def force_seat_usage_samples(
     now = utcnow()
     latest_by_seat = {
         record.api_key_id: record
-        for record in await seat_usage_store.latest_seat_usage_samples(
-            db, user_id=user_id
-        )
+        for record in await seat_usage_store.latest_seat_usage_samples(db, user_id=user_id)
     }
     seats = [
         record
-        for record in await agent_gateway_store.list_agent_api_keys(
-            db, user_id=user_id
-        )
+        for record in await agent_gateway_store.list_agent_api_keys(db, user_id=user_id)
         if record.kind == AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION
     ]
     for seat in seats:
