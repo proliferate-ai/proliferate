@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentAuthStatusDoc } from "@anyharness/sdk";
 import {
@@ -67,6 +67,7 @@ function documentFor(overrides: Partial<AgentAuthStatusDoc> = {}): AgentAuthStat
 type StreamHandlers = Parameters<typeof mocks.openHarnessAuthStatusStream>[1] & {
   onEvent: (document: AgentAuthStatusDoc) => void;
   onError?: (error: Error) => void;
+  onOpen?: () => void;
   onClose?: () => void;
 };
 let handlers: StreamHandlers;
@@ -91,7 +92,10 @@ beforeEach(() => {
   );
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("useHarnessStatus", () => {
   it("subscribes on mount and renders a pushed document", async () => {
@@ -160,25 +164,143 @@ describe("useHarnessStatus", () => {
     mocks.getHarnessAuthStatus.mockResolvedValue(documentFor());
     handlers.onError?.(new Error("stream refused"));
 
-    // Exactly one re-read: the fallback is a read, not a retry loop.
+    // ONE re-read per end: the read covers the gap; recovering the pushes is
+    // the scheduled re-subscribe's job (pinned below), never a read loop.
     await waitFor(() => {
       expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(2);
     });
     await waitFor(() => expect(result.current.probe?.verdict).toBe("verified"));
   });
 
-  it("re-reads once when the stream ends", async () => {
+  it("re-reads once per stream end, and re-subscribes after the backoff", async () => {
+    vi.useFakeTimers();
     renderHook(() => useHarnessStatus("claude"), { wrapper });
 
-    await waitFor(() => {
-      expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(1);
-    });
+    await act(async () => {});
+    expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(1);
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(1);
 
-    handlers.onClose?.();
-
-    await waitFor(() => {
-      expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(2);
+    // The runtime ends a lagged subscriber's stream ON PURPOSE. The end costs
+    // one re-read (gap coverage)...
+    await act(async () => {
+      handlers.onClose?.();
     });
+    expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(2);
+
+    // ...and one scheduled re-open. Nothing before the first delay elapses —
+    // and the re-open is a SUBSCRIPTION, not another read.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(2);
+    expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("backs off exponentially to a 30s cap — a dead runtime is never hammered", async () => {
+    vi.useFakeTimers();
+    renderHook(() => useHarnessStatus("claude"), { wrapper });
+
+    await act(async () => {});
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(1);
+
+    // No attempt ever fires onOpen, so every end is consecutive: the delay
+    // doubles from 1s and pins at the 30s cap. Each cycle costs exactly one
+    // open and one gap re-read — a runtime that stays down costs one request
+    // per 30s, not a busy-loop.
+    const schedule = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000];
+    for (const [index, delayMs] of schedule.entries()) {
+      const opensBefore = index + 1;
+      await act(async () => {
+        handlers.onClose?.();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(delayMs - 1);
+      });
+      expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(opensBefore);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(opensBefore + 1);
+    }
+
+    // One read on mount, then exactly one re-read per end: the re-reads track
+    // the ends, never a timer.
+    expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(1 + schedule.length);
+  });
+
+  it("a successful re-open resets the backoff and resumes rendering pushes", async () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useHarnessStatus("claude"), { wrapper });
+
+    await act(async () => {});
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(1);
+
+    // Two failed cycles walk the delay up: 1s, then 2s.
+    await act(async () => {
+      handlers.onClose?.();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      handlers.onClose?.();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(3);
+
+    // The third attempt OPENS: the pane is subscribed again, and a pushed
+    // frame lands in the cache and renders — the pane is not a snapshot.
+    // (react-query notifies observers on a setTimeout(0), hence the advance.)
+    await act(async () => {
+      handlers.onOpen?.();
+      handlers.onEvent(documentFor());
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.probe?.verdict).toBe("verified");
+
+    // And the open RESET the schedule: the next end waits 1s, not 4s.
+    await act(async () => {
+      handlers.onClose?.();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(4);
+  });
+
+  it("unmount during the backoff window cancels the pending re-open", async () => {
+    vi.useFakeTimers();
+    const { unmount } = renderHook(() => useHarnessStatus("claude"), { wrapper });
+
+    await act(async () => {});
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      handlers.onClose?.();
+    });
+    expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(2);
+
+    unmount();
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+
+    // The pending re-open died with the pane: no timer leaks past cleanup, so
+    // nothing re-subscribes and nothing re-reads, ever again.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(1);
+    expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(2);
   });
 
   it("re-reads on refresh — the frontend re-reads, it never probes", async () => {

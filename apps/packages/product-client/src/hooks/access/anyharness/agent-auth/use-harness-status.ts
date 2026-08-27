@@ -13,7 +13,18 @@ import {
   getHarnessAuthMethods,
   getHarnessAuthStatus,
   openHarnessAuthStatusStream,
+  type HarnessAuthStatusStreamHandle,
 } from "#product/lib/access/anyharness/agent-auth";
+
+/**
+ * The re-subscribe schedule after a stream end: 1s, doubling per consecutive
+ * end, capped at 30s. The cap is what makes a genuinely-down runtime cheap —
+ * at worst one failed open per 30s per pane, never a hammer loop — while a
+ * stream that actually OPENS resets the schedule so a one-off lag-end costs a
+ * single second of pushlessness.
+ */
+const STREAM_REOPEN_BASE_DELAY_MS = 1_000;
+const STREAM_REOPEN_MAX_DELAY_MS = 30_000;
 
 /** The applied-method tag on a status document. */
 export type HarnessAppliedMethod = NonNullable<AgentAuthStatusDoc["applied"]>;
@@ -60,10 +71,14 @@ export interface HarnessStatus {
  *
  * Subscription is the default (spec §4 cell 4, "When the frontend re-reads and
  * re-probes"): the stream is opened on mount and each frame is written straight
- * into the cache, so there is no client polling loop. The `GET /status` read is
- * the fallback where the stream is unavailable — it seeds the first render and
- * is re-issued once if the stream errors or ends, so a machine with no working
- * stream still shows the runtime's truth instead of an empty pane.
+ * into the cache, so there is no client polling loop. The `GET /status` read
+ * seeds the first render, and when the stream errors or ends it is re-issued
+ * ONCE to cover the gap — the runtime deliberately ends a subscriber that lags
+ * its broadcast (no seq/replay, so staying subscribed would silently lose
+ * events), so an end is expected in a throttled window's life. Recovery of the
+ * pushes themselves is the re-subscribe below, on a capped backoff: without it
+ * a pane that lagged once would degrade to a static snapshot for the rest of
+ * its mount.
  */
 export function useHarnessStatus(
   harnessKind: string | null | undefined,
@@ -112,21 +127,70 @@ export function useHarnessStatus(
       );
     };
     // A stream that never opened, or one that ended, leaves this pane holding
-    // whatever it last read. Re-read ONCE (no retry loop, no polling): the
-    // document is the runtime's, and re-reading is the documented fallback.
+    // whatever it last read. Re-read ONCE per end (no read loop, no polling
+    // interval): the read covers whatever pushed while unsubscribed, and the
+    // scheduled re-open below is what restores the pushes themselves.
     const reread = () => {
       void queryClient.invalidateQueries({
         queryKey: anyHarnessAgentAuthStatusKey(runtimeUrl, kind, cacheScopeKey),
         exact: true,
       });
     };
-    const handle = openHarnessAuthStatusStream(connection, {
-      onEvent: writeDocument,
-      onError: reread,
-      onClose: reread,
-    });
+
+    let disposed = false;
+    let reopenTimer: ReturnType<typeof setTimeout> | null = null;
+    let consecutiveEnds = 0;
+    let handle: HarnessAuthStatusStreamHandle | null = null;
+
+    const open = () => {
+      if (disposed) {
+        return;
+      }
+      // ONE recovery per subscription, even if a reader ever surfaced both an
+      // error and a close for the same stream: two would double the re-read
+      // and stack two re-open timers.
+      let recovered = false;
+      const recover = () => {
+        if (disposed || recovered) {
+          return;
+        }
+        recovered = true;
+        reread();
+        // `2 ** ends` runs away unbounded, so cap FIRST: past ~2^53 the
+        // doubling is Infinity, and `Math.min` still answers the cap.
+        const delay = Math.min(
+          STREAM_REOPEN_BASE_DELAY_MS * 2 ** consecutiveEnds,
+          STREAM_REOPEN_MAX_DELAY_MS,
+        );
+        consecutiveEnds += 1;
+        reopenTimer = setTimeout(() => {
+          reopenTimer = null;
+          open();
+        }, delay);
+      };
+      handle = openHarnessAuthStatusStream(connection, {
+        // An OPENED stream (a 200, frames flowing) resets the schedule: the
+        // next lag-end waits 1s again instead of inheriting a 30s delay.
+        onOpen: () => {
+          consecutiveEnds = 0;
+        },
+        onEvent: writeDocument,
+        onError: recover,
+        onClose: recover,
+      });
+    };
+
+    open();
+
     return () => {
-      handle.close();
+      // Unmount (or a deps change) must cancel a pending re-open: a timer that
+      // survives this cleanup would resubscribe a pane that no longer exists.
+      disposed = true;
+      if (reopenTimer !== null) {
+        clearTimeout(reopenTimer);
+        reopenTimer = null;
+      }
+      handle?.close();
     };
   }, [cacheScopeKey, connection, enabled, kind, queryClient, runtimeUrl]);
 

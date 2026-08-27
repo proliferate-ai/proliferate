@@ -71,8 +71,9 @@ export function getHarnessAuthMethods(
  * The WHOLE connection is threaded, `fetch` included: on the cloud surface the
  * context's transport override is the only thing that attaches the sandbox
  * gateway's `authorization` header (there is no `authToken` there), so a stream
- * opened on the module-global `fetch` 401s and the pane's badge freezes at the
- * first read — the hook behind this has no polling fallback by design.
+ * opened on the module-global `fetch` 401s every attempt and the pane degrades
+ * to the hook's backoff-capped re-reads — pushes gone, ~30s of staleness per
+ * frame — with no error a user would ever see.
  * `AgentAuthStatusStreamOptions.fetch` is a REQUIRED key for exactly that
  * reason: dropping it again is a type error, not a silent excess property.
  */
