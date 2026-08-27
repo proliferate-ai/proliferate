@@ -20,6 +20,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent-auth/native-bridge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_native_bridge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-auth/native-bridge/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * The dismiss-to-configure act of the one-time prompt: drop one harness's
+         *     legacy flag so its next launch follows the real convention. Idempotent —
+         *     a harness without a flag answers 204 too.
+         */
+        delete: operations["dismiss_native_bridge"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agent-auth/state": {
         parameters: {
             query?: never;
@@ -3726,6 +3763,22 @@ export interface components {
             title?: string | null;
             updatedAt: string;
         };
+        /**
+         * @description The native-migration bridge (agent_auth spec, delta row "Zero rows =
+         *     unconfigured, with a migration for today's native users"): which harnesses
+         *     on this machine still carry the legacy flag that keeps their launches on
+         *     the harness's own login until the one-time prompt is acted on.
+         */
+        NativeBridgeResponse: {
+            /** @description Harness kinds whose legacy flag is still pending, sorted. */
+            harnesses: string[];
+            /**
+             * @description True once the one-time seed pass (the runtime-side migration) has run
+             *     on this runtime home. False on a runtime that has not started with
+             *     bridge-aware code yet.
+             */
+            seeded: boolean;
+        };
         NodeModel: {
             agentKind: string;
             controlValues?: {
@@ -5624,6 +5677,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    get_native_bridge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Harnesses still carrying the native-migration legacy flag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeBridgeResponse"];
+                };
+            };
+            /** @description Bridge file unreadable */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    dismiss_native_bridge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harness kind */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Legacy flag cleared (or was not held) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown harness kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Bridge file could not be written */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

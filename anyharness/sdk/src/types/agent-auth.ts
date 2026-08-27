@@ -4,6 +4,13 @@ export type ApplyAgentAuthStateResponse =
   components["schemas"]["ApplyAgentAuthStateResponse"];
 
 /**
+ * The native-migration bridge (`GET /v1/agent-auth/native-bridge`): which
+ * harnesses on this machine still carry the legacy flag that keeps their
+ * launches on the harness's own login until the one-time prompt is acted on.
+ */
+export type NativeBridgeResponse = components["schemas"]["NativeBridgeResponse"];
+
+/**
  * One credential source in the agent-auth state.json v2 contract
  * (`route_auth/state.rs`, snake_case on the wire). The runtime accepts the
  * document verbatim as the PUT /v1/agent-auth/state body, so it is typed here

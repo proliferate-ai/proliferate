@@ -115,6 +115,40 @@ class TestAuthSelectionRules:
             sources=[_api_key(env_var_name="A" + "B" * 127)],
         )
 
+    def test_env_passthrough_form_is_rejected_in_plain_words(self) -> None:
+        # The retired env-passthrough form (agent_auth spec ruling): an
+        # api_key source naming an env var WITHOUT a vault reference — "use
+        # the machine's own value of that variable". THE validator refuses it
+        # by name, in plain words, before the store's generic shape error;
+        # disabled rows are just as illegal (the shape is unstorable, not
+        # merely unlaunchable).
+        for enabled in (True, False):
+            with pytest.raises(SelectionRuleError, match="isn't supported anymore"):
+                validate_auth_selection_set(
+                    harness_kind="claude",
+                    sources=[
+                        DesiredAuthSource(
+                            source_kind="api_key",
+                            api_key_id=None,
+                            env_var_name="ANTHROPIC_API_KEY",
+                            enabled=enabled,
+                        )
+                    ],
+                )
+        # Nameless vault-less api_key sources are the same retired shape.
+        with pytest.raises(SelectionRuleError, match="isn't supported anymore"):
+            validate_auth_selection_set(
+                harness_kind="claude",
+                sources=[
+                    DesiredAuthSource(
+                        source_kind="api_key",
+                        api_key_id=None,
+                        env_var_name=None,
+                        enabled=True,
+                    )
+                ],
+            )
+
 
 class TestRedactedHint:
     def test_prefixed_key_keeps_prefix_and_tail(self) -> None:
