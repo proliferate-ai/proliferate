@@ -38,7 +38,7 @@ enforced_by = "scripts/check_lanes.py"
 mode = "lint"
 scope = ".github/workflows/*.yml"
 
-rule = """A row's pipeline must match the workflow's actual triggers (pr needs a pull_request trigger, main needs push/workflow_run, nightly needs schedule, reusable needs workflow_call), and a dispatch-only workflow outside release/prod must be pipeline dispatch-with-sunset with an unexpired sunset date."""
+rule = """A row's pipeline must match the workflow's actual triggers (pr needs a pull_request trigger, main needs push/workflow_run, nightly needs schedule, release needs push/workflow_call, prod needs schedule/push, reusable needs workflow_call — workflow_dispatch is always an allowed extra, never the qualifying trigger), and a dispatch-only workflow must be pipeline dispatch-with-sunset with an unexpired sunset date."""
 alternative = """Give the lane its honest trigger (a cron, a push, a workflow_run), or declare dispatch-with-sunset with a real decide-by date — and when the date arrives, promote the cadence or delete the lane."""
 why = """A dispatch-only lane is a lane that doesn't exist: intent, heavy lanes, and the anyharness suite all "existed" for weeks while never running. Ruled 2026-08-26."""
 
@@ -595,14 +595,6 @@ gate_mirrored = false
 
 [[lane]]
 workflow = "nightly-checks.yml"
-job = "anyharness-attached"
-pipeline = "nightly"
-cadence = "daily 09:00 UTC cron + dispatch"
-gate_mirrored = false
-note = "absorbed from agent-runtime-compat.yml (deleted in the same PR)"
-
-[[lane]]
-workflow = "nightly-checks.yml"
 job = "release-harness-selfcheck"
 pipeline = "nightly"
 cadence = "daily 09:00 UTC cron + dispatch"
@@ -615,6 +607,21 @@ pipeline = "nightly"
 cadence = "daily 09:00 UTC cron + dispatch"
 gate_mirrored = false
 note = "red-only Slack digest via SLACK_ENGINEERING_ALERTS_WEBHOOK_URL"
+
+# anyharness-attached.yml — CREDENTIAL-DARK (relocated verbatim from
+# agent-runtime-compat.yml, deleted 2026-08-27): the agent secrets its
+# validation step requires are not provisioned, and its only historical run
+# (2026-05-20) failed on exactly that. PABLO: provision the secrets (then the
+# job moves into nightly-checks and this row flips to nightly) or rule the
+# lane out by the sunset.
+[[lane]]
+workflow = "anyharness-attached.yml"
+job = "anyharness-attached"
+pipeline = "dispatch-with-sunset"
+cadence = "manual dispatch (credential-dark)"
+gate_mirrored = false
+sunset = "2026-09-30"
+note = "PABLO: provision agent secrets → nightly, or rule the lane out"
 
 # ── Quarantine (continue-on-error sanctions; they expire) ──────────────────
 #

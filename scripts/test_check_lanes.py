@@ -82,6 +82,8 @@ DISPATCH_WORKFLOW = textwrap.dedent(
           - name: soft step
             continue-on-error: ${{ matrix.os == 'windows' }}
             run: echo soft
+          - continue-on-error: true
+            run: echo dash-first-key form
     """
 ).lstrip()
 
@@ -159,8 +161,12 @@ class ParserTests(unittest.TestCase):
         parked = facts["parked.yml"]
         self.assertEqual(parked.triggers, ("workflow_dispatch",))
         self.assertEqual(parked.jobs, ("provisioning", "smoke"))
-        # job-level and step-level occurrences both attribute to their job
-        self.assertEqual([job for job, _ in parked.continue_on_error], ["provisioning", "smoke"])
+        # job-level, step-level, and dash-first-key occurrences all attribute
+        # to their job (the dash form was the refuter's constructed falsifier)
+        self.assertEqual(
+            [job for job, _ in parked.continue_on_error],
+            ["provisioning", "smoke", "smoke"],
+        )
 
     def test_rejects_inline_on_and_tabs(self) -> None:
         self.fx.write_workflow("inline.yml", "name: x\non: [push]\njobs:\n  a:\n    steps: []\n")
@@ -174,6 +180,32 @@ class ParserTests(unittest.TestCase):
         self.fx.write_workflow("nojobs.yml", "name: x\non:\n  push:\n")
         with self.assertRaises(ValueError):
             check_lanes.parse_workflow(self.fx.workflows / "nojobs.yml")
+
+    def test_flow_form_and_quoted_job_ids_fail_loud(self) -> None:
+        # both shapes would be silently dropped (and a quoted job's
+        # continue-on-error would attribute to the PRECEDING job)
+        self.fx.write_workflow(
+            "flow.yml",
+            "name: x\non:\n  push:\njobs:\n  sneaky: { runs-on: ubuntu-latest }\n",
+        )
+        with self.assertRaises(ValueError) as ctx:
+            check_lanes.parse_workflow(self.fx.workflows / "flow.yml")
+        self.assertIn("job depth", str(ctx.exception))
+        self.fx.write_workflow(
+            "quoted.yml",
+            'name: x\non:\n  push:\njobs:\n  "quoted":\n    steps: []\n',
+        )
+        with self.assertRaises(ValueError) as ctx:
+            check_lanes.parse_workflow(self.fx.workflows / "quoted.yml")
+        self.assertIn("job depth", str(ctx.exception))
+
+    def test_sequence_form_on_fails_loud(self) -> None:
+        self.fx.write_workflow(
+            "seq.yml", "name: x\non:\n  - push\njobs:\n  a:\n    steps: []\n"
+        )
+        with self.assertRaises(ValueError) as ctx:
+            check_lanes.parse_workflow(self.fx.workflows / "seq.yml")
+        self.assertIn("sequence-form", str(ctx.exception))
 
     def test_top_level_key_after_jobs_fails_loud(self) -> None:
         # a trailing top-level block would silently end job parsing and
@@ -254,13 +286,29 @@ class CensusTests(unittest.TestCase):
         # both the trigger contract and the dispatch-only rule fire
         self.assertEqual(ids, [check_lanes.CADENCE_RULE_ID, check_lanes.CADENCE_RULE_ID])
 
-    def test_release_and_prod_may_be_dispatch_only(self) -> None:
-        self.fx.write_census(
-            self.green.replace(
-                lane("parked.yml", "smoke", "dispatch-with-sunset", sunset="2026-09-30"),
-                lane("parked.yml", "smoke", "release"),
+    def test_dispatch_only_cannot_launder_as_release_or_prod(self) -> None:
+        # relabeling a dispatch-only lane release/prod with the sunset deleted
+        # must fail: workflow_dispatch is never the qualifying trigger
+        for pipeline in ("release", "prod"):
+            self.fx.write_census(
+                self.green.replace(
+                    lane("parked.yml", "smoke", "dispatch-with-sunset", sunset="2026-09-30"),
+                    lane("parked.yml", "smoke", pipeline),
+                )
             )
+            ids = self.rule_ids()
+            self.assertEqual(
+                ids,
+                [check_lanes.CADENCE_RULE_ID, check_lanes.CADENCE_RULE_ID],
+                f"laundering as {pipeline} must fire both cadence checks",
+            )
+
+    def test_prod_with_a_schedule_is_honest(self) -> None:
+        self.fx.write_workflow(
+            "cron-prod.yml",
+            "name: x\non:\n  schedule:\n    - cron: '0 9 * * *'\n  workflow_dispatch:\njobs:\n  ship:\n    steps: []\n",
         )
+        self.fx.write_census(self.green + lane("cron-prod.yml", "ship", "prod"))
         self.assertEqual(self.fx.violations(), [])
 
     def test_expired_sunset_fails(self) -> None:
@@ -283,8 +331,13 @@ class CensusTests(unittest.TestCase):
     def test_continue_on_error_needs_quarantine(self) -> None:
         self.fx.write_census(self.green.replace(quarantine("parked.yml", "smoke", "2026-09-30"), ""))
         violations = self.fx.violations()
-        self.assertEqual([v[0] for v in violations], [check_lanes.QUARANTINE_RULE_ID])
-        self.assertIn("parked.yml:smoke", violations[0][1])
+        # one diagnostic per occurrence line: smoke carries two
+        self.assertEqual(
+            [v[0] for v in violations],
+            [check_lanes.QUARANTINE_RULE_ID, check_lanes.QUARANTINE_RULE_ID],
+        )
+        for violation in violations:
+            self.assertIn("parked.yml:smoke", violation[1])
 
     def test_expired_quarantine_fails(self) -> None:
         self.fx.write_census(
@@ -294,8 +347,13 @@ class CensusTests(unittest.TestCase):
             )
         )
         violations = self.fx.violations()
-        self.assertEqual([v[0] for v in violations], [check_lanes.QUARANTINE_RULE_ID])
-        self.assertIn("expired", violations[0][2])
+        # the expired row is reported at each surviving occurrence line
+        self.assertEqual(
+            [v[0] for v in violations],
+            [check_lanes.QUARANTINE_RULE_ID, check_lanes.QUARANTINE_RULE_ID],
+        )
+        for violation in violations:
+            self.assertIn("expired", violation[2])
 
     def test_stale_quarantine_fails(self) -> None:
         self.fx.write_census(self.green + quarantine("ci.yml", "repo-shape", "2026-09-30"))

@@ -51,13 +51,15 @@ PIPELINES = (
 
 # The honest-trigger contract per pipeline: the workflow's top-level triggers
 # must intersect the named set (empty tuple = no trigger requirement beyond
-# the sunset-date rule below).
+# the sunset-date rule below). workflow_dispatch is always an allowed EXTRA,
+# never the qualifying trigger — otherwise a dispatch-only lane could launder
+# itself by relabeling as release/prod with the sunset deleted.
 REQUIRED_TRIGGERS = {
     "pr": ("pull_request", "pull_request_target"),
     "main": ("push", "workflow_run"),
     "nightly": ("schedule",),
-    "release": ("push", "workflow_dispatch", "workflow_call"),
-    "prod": ("schedule", "workflow_dispatch"),
+    "release": ("push", "workflow_call"),
+    "prod": ("schedule", "push"),
     "dispatch-with-sunset": (),
     "reusable": ("workflow_call",),
 }
@@ -141,15 +143,34 @@ def parse_workflow(path: Path) -> WorkflowFacts:
         if not stripped or stripped.startswith("#"):
             continue
         if section == "on":
+            indent = len(line) - len(line.lstrip())
+            if indent == 2 and stripped.startswith("- "):
+                # `- push` directly under on: (sequence form) would yield a
+                # silent empty trigger tuple; nested sequence items (cron
+                # entries under schedule:) are fine and skipped.
+                raise ValueError(
+                    f"{path.name}:{index}: sequence-form `on:` is unparseable — "
+                    "use the block form"
+                )
             trigger = _TRIGGER_RE.match(line)
             if trigger:
                 triggers.append(trigger.group(1))
         elif section == "jobs":
+            indent = len(line) - len(line.lstrip())
             job = _JOB_RE.match(line)
             if job:
                 current_job = job.group(1)
                 jobs.append(current_job)
-            elif stripped.startswith("continue-on-error:"):
+            elif indent == 2:
+                # A job-depth line that isn't a plain job id (flow-form
+                # `sneaky: { … }`, quoted `"quoted":`) would be silently
+                # dropped — and its continue-on-error would attribute to the
+                # PRECEDING job. Refuse rather than under-count.
+                raise ValueError(
+                    f"{path.name}:{index}: unparseable line at job depth "
+                    f"({stripped!r}) — job ids must be plain `job-id:` keys"
+                )
+            elif stripped.startswith(("continue-on-error:", "- continue-on-error:")):
                 if not current_job:
                     raise ValueError(
                         f"{path.name}:{index}: continue-on-error before any job id"
@@ -299,17 +320,13 @@ def collect_violations(
                             "(promote its cadence or delete it)",
                         )
                     )
-            elif (
-                set(f.triggers) == {"workflow_dispatch"}
-                and row.pipeline not in ("release", "prod")
-            ):
+            elif set(f.triggers) == {"workflow_dispatch"}:
                 violations.append(
                     (
                         CADENCE_RULE_ID,
                         f"{workflow}:{job}",
                         f"workflow is dispatch-only but pipeline is {row.pipeline!r} — "
-                        "a dispatch-only lane needs dispatch-with-sunset (or an event "
-                        "cadence: release/prod)",
+                        "a dispatch-only lane must be dispatch-with-sunset",
                     )
                 )
 
