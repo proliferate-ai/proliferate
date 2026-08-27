@@ -230,8 +230,9 @@ jobs:
       - name: Smoke deploy surface detector
         run: node scripts/ci-cd/detect-deploy-surfaces.mjs --base HEAD --head HEAD
 
-  # candidate-build-handoff moved to ci-heavy-lanes.yml (dispatch-only) in the
-  # 2026-08 engineering cull — it protects the parked qualification corridor.
+  # candidate-build-handoff was demoted off the per-PR path in the 2026-08
+  # engineering cull and deleted with the dispatch-only heavy-lanes workflow
+  # (it protected the parked qualification corridor).
 
   cargo-check:
     name: Cargo check & test
@@ -412,9 +413,9 @@ jobs:
       - name: Build web
         run: pnpm web:build
 
-  # login-budget moved to ci-heavy-lanes.yml (dispatch-only) in the 2026-08
-  # engineering cull — the lane, its script, and the dependabot posthog pin are
-  # slated to die together in the product cull (Cull Plan PR-5).
+  # login-budget was demoted off the per-PR path in the 2026-08 engineering
+  # cull and deleted with the dispatch-only heavy-lanes workflow — its script
+  # and the dependabot posthog pin die in the product cull (Cull Plan PR-5).
 
   # Housekeeping that "Test product client"
   # does not need (typecheck, the python-only checks, and the two other
@@ -510,12 +511,11 @@ jobs:
       - name: Test product client
         run: pnpm --filter @proliferate/product-client exec vitest run --shard=${{ matrix.shard }}/4
 
-  # scroll-physics and workflow-definition-lifecycle moved to
-  # ci-heavy-lanes.yml (dispatch-only) in the 2026-08 engineering cull.
-  # Scroll-physics' structural half stays enforced per-PR by repo-shape's
-  # check_transcript_scroll_writer.py; workflow-definition-lifecycle tested a
-  # surface mid gen-2 rebuild (its per-PR fail-closed gate is accepted-lost
-  # while demoted). Re-gating either is the step-3 CI/CD spec's decision.
+  # scroll-physics and workflow-definition-lifecycle were demoted off the
+  # per-PR path in the 2026-08 engineering cull; their dispatch-only
+  # heavy-lanes workflow was deleted and both suites re-home in the upcoming
+  # nightly slice. Scroll-physics' structural half stays enforced per-PR by
+  # repo-shape's check_transcript_scroll_writer.py.
 
   # ---------------------------------------------------------------------------
   # THE REQUIRED STATUS CHECKS FOR `main`.
@@ -555,12 +555,6 @@ jobs:
   #     list. Adding one back is not extra safety, it is a name that can rot.
   #
   # Deliberately NOT required, with reasons:
-  #   intent-tests (provisional) / intent-billing (provisional)
-  #       continue-on-error by design; dispatch-only since the 2026-08 cull
-  #       (they no longer run on PRs at all).
-  #   CI Heavy Lanes (ci-heavy-lanes.yml)
-  #       dispatch-only demotions from this file (2026-08 cull); re-gating is a
-  #       step-3 CI/CD-spec decision.
   #   docker / self-hosted-release-assets (Build Server Artifacts)
   #       release-only, and no longer in Server CI at all: they moved to
   #       _build-server.yml, which release.yml calls directly so a release does

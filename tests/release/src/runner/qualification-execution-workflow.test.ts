@@ -10,10 +10,6 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const release = readFileSync(path.join(REPO_ROOT, ".github/workflows/release-e2e.yml"), "utf8");
 const makefile = readFileSync(path.join(REPO_ROOT, "Makefile"), "utf8");
 const selfhost = readFileSync(path.join(REPO_ROOT, ".github/workflows/release-e2e-selfhost.yml"), "utf8");
-const hardCancel = readFileSync(
-  path.join(REPO_ROOT, ".github/workflows/release-e2e-hard-cancel-cleanup.yml"),
-  "utf8",
-);
 
 function job(source: string, id: string): string {
   const start = source.indexOf(`  ${id}:`);
@@ -44,9 +40,7 @@ test("release qualification has stable independent concurrency groups by world",
 
   assert.match(job(release, "release-e2e-local"), /group: release-e2e-local/);
   assert.match(job(release, "release-e2e-local-functional"), /group: release-e2e-local/);
-  assert.match(job(release, "release-e2e-managed-cloud"), /group: release-e2e-managed-cloud/);
   assert.match(job(release, "release-e2e-selfhost-install"), /group: release-e2e-self-host/);
-  assert.match(job(release, "qualification-tier2"), /group: release-e2e-tier2/);
   assert.match(job(selfhost, "artifact-chain"), /group: release-e2e-tier4/);
   assert.match(job(selfhost, "provisioning"), /group: release-e2e-self-host/);
   assert.match(job(release, "release-e2e-local"), /if: github\.event_name == 'schedule'/);
@@ -62,7 +56,7 @@ test("a self-host dispatch cannot launch unrelated release worlds", () => {
     job(release, "release-e2e-selfhost-install"),
     /if: github\.event_name == 'workflow_dispatch' && inputs\.selfhost/,
   );
-  for (const id of ["qualification-tier2", "release-e2e-local-functional", "release-e2e-managed-cloud"]) {
+  for (const id of ["release-e2e-local-functional"]) {
     assert.match(
       job(release, id),
       /github\.event_name == 'workflow_dispatch' &&\s+!inputs\.selfhost &&/,
@@ -79,13 +73,11 @@ test("a self-host dispatch cannot launch unrelated release worlds", () => {
 test("manual dispatch can isolate one qualification world", () => {
   const workflowHeader = release.slice(0, release.indexOf("\njobs:"));
   assert.match(workflowHeader, /manual_world:/);
-  for (const world of ["all", "local", "managed-cloud", "tier2", "staging"]) {
+  for (const world of ["all", "local", "staging"]) {
     assert.match(workflowHeader, new RegExp(`- ${world}`));
   }
 
   assert.match(job(release, "release-e2e-local-functional"), /inputs\.manual_world == 'local'/);
-  assert.match(job(release, "release-e2e-managed-cloud"), /inputs\.manual_world == 'managed-cloud'/);
-  assert.match(job(release, "qualification-tier2"), /inputs\.manual_world == 'tier2'/);
   assert.match(job(release, "release-e2e-staging"), /inputs\.manual_world == 'staging'/);
 });
 
@@ -221,22 +213,6 @@ test("the manual local world reuses candidates only after a clean smoke exit", (
   assert.ok(candidateMapUpload > alwaysUpload);
 });
 
-test("the managed-cloud derivative world refreshes trusted cleanup authority after CP1", () => {
-  const managed = job(release, "release-e2e-managed-cloud");
-  const cp1 = managed.indexOf("Build candidates and run CLOUD-PROVISION-1 (strict)");
-  const refresh = managed.indexOf("Refresh trusted default-branch cleanup authorization before fixture smoke");
-  const fixtureSmoke = managed.indexOf("Reuse candidates and run MANAGED-CLOUD-FIXTURE-SMOKE-1 (strict)");
-  const handoff = managed.slice(managed.indexOf("Verify exact CP1 → fixture-smoke handoff"));
-
-  assert.ok(cp1 >= 0);
-  assert.ok(refresh > cp1);
-  assert.ok(fixtureSmoke > refresh);
-  assert.equal((managed.match(/path: \.qualification-trusted-default/g) ?? []).length, 2);
-  assert.match(handoff, /attempt_dir="attempt-\$\{GITHUB_RUN_ATTEMPT\}"/);
-  assert.equal((handoff.match(/\$\{attempt_dir\}\/qualification-evidence\.json/g) ?? []).length, 2);
-  assert.doesNotMatch(handoff, /attempt-1\/qualification-evidence\.json/);
-});
-
 test("the Tier 4 artifact-chain preflight describes read-only published artifacts", () => {
   const artifactChain = job(selfhost, "artifact-chain");
   const preflight = artifactChain.indexOf("qualification-preflight.mjs");
@@ -254,22 +230,15 @@ test("the Tier 4 artifact-chain preflight describes read-only published artifact
 test("provider-backed jobs run shared preflight before build/provider setup", () => {
   const local = job(release, "release-e2e-local-functional");
   const selfHost = job(release, "release-e2e-selfhost-install");
-  const managed = job(release, "release-e2e-managed-cloud");
   for (const [body, marker] of [
     [local, "--world local"],
     [selfHost, "--world self-host"],
-    [managed, "--world managed-cloud"],
   ] as const) {
     assert.ok(body.indexOf(marker) >= 0);
     assert.ok(body.indexOf(marker) < body.indexOf("pnpm/action-setup"));
     assert.match(body, /qualification-preflight\.json/);
   }
-  assert.ok(managed.indexOf("--world managed-cloud") < managed.indexOf("Install MUSL target"));
   assert.ok(selfHost.indexOf("--world self-host") < selfHost.indexOf("Configure AWS credentials"));
-  assert.ok(managed.indexOf("Fetch the trusted default-branch cleanup authorization") < managed.indexOf("--world managed-cloud"));
-  assert.match(managed, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
-  assert.match(managed, /--cleanup-attestation-default-branch/);
-  assert.match(managed, /--cleanup-attestation-repository/);
   for (const name of [
     "RELEASE_E2E_SELFHOST_REGION",
     "RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID",
@@ -280,24 +249,6 @@ test("provider-backed jobs run shared preflight before build/provider setup", ()
     "SELFHOST_CELLS_INPUT",
   ]) {
     assert.match(selfHost, new RegExp(`${name}:`), `self-host preflight must receive ${name}`);
-  }
-  for (const name of [
-    "AGENT_GATEWAY_LITELLM_BASE_URL",
-    "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL",
-    "AGENT_GATEWAY_LITELLM_MASTER_KEY",
-    "RELEASE_E2E_E2B_API_KEY",
-    "RELEASE_E2E_E2B_TEAM_ID",
-    "RELEASE_E2E_CLOUD_AWS_REGION",
-    "RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID",
-    "RELEASE_E2E_CLOUD_GITHUB_APP_ID",
-    "RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID",
-    "RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID",
-    "RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY",
-    "RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET",
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-  ]) {
-    assert.match(managed, new RegExp(`${name}:`), `managed preflight must receive ${name}`);
   }
 });
 
@@ -352,7 +303,7 @@ test("the self-host job finishes long local builds before AWS and bounds provide
 
 test("the self-host Make split revalidates the exact candidate map before the provider phase", () => {
   const start = makefile.indexOf("qualification-selfhost:");
-  const end = makefile.indexOf("\n# \"Prove One Real Managed-Cloud Workspace\"", start);
+  const end = makefile.indexOf("\nstripe-setup-test:", start);
   assert.ok(start >= 0 && end > start);
   const target = makefile.slice(start, end);
   assert.match(makefile, /QUALIFICATION_SELFHOST_PHASE \?= all/);
@@ -363,16 +314,12 @@ test("the self-host Make split revalidates the exact candidate map before the pr
   assert.match(target, /if \[ "\$\$phase" = "build" \]; then exit 0; fi/);
 });
 
-test("supported cancellation keeps local receipts and hard cancellation keeps the trusted managed reaper", () => {
-  for (const id of ["release-e2e-local-functional", "release-e2e-selfhost-install", "release-e2e-managed-cloud"]) {
+test("supported cancellation keeps local receipts durable", () => {
+  for (const id of ["release-e2e-local-functional", "release-e2e-selfhost-install"]) {
     const body = job(release, id);
     assert.match(body, /if: always\(\)/);
     assert.match(body, /cancellation-finalization\.json/);
   }
-  assert.match(hardCancel, /workflow_run:\s*\n\s*workflows: \["Release E2E \(tier 3\)"\]/);
-  assert.match(hardCancel, /Reconcile exact run-owned managed-cloud AWS resources/);
-  assert.match(hardCancel, /Reconcile exact run-owned E2B, Stripe, and LiteLLM resources/);
-  assert.doesNotMatch(hardCancel, /workflow_dispatch/);
 });
 
 // The self-host cell selector's literal "all" must mean "no cell filter" — the

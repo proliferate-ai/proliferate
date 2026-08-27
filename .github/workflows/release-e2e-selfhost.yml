@@ -12,7 +12,7 @@ name: Release E2E — Self-hosting (T3-SH / T4-SH)
 #     gate should live — release pipeline, nightly, or both — is a step-3 CI/CD
 #     spec decision (delivery/engineering-cull/delivery-spec-ci-diet.md).
 #
-#   provisioning (T3-SH-1 cold boot, T4-SH-1 update motion): stand up a throwaway
+#   provisioning (T4-SH-1 update motion): stand up a throwaway
 #     EC2 self-hosted control plane (production compose bundle, sslip.io + real
 #     TLS) and tear it down. Costs real infra, so it is gated behind the
 #     RELEASE_E2E_SELFHOST_PROVISION opt-in and AWS credentials; without either
@@ -26,7 +26,7 @@ on:
   workflow_dispatch:
     inputs:
       provision:
-        description: Provision throwaway EC2 boxes for T3-SH-1 / T4-SH-1 (costs a few cents).
+        description: Provision throwaway EC2 boxes for T4-SH-1 (costs a few cents).
         default: "false"
         required: false
         type: choice
@@ -81,7 +81,7 @@ jobs:
           if-no-files-found: error
 
   provisioning:
-    name: T3-SH-1 / T4-SH-1 / T3-SH-2 / T3-SH-3 (provisional)
+    name: T4-SH-1 / T3-SH-2 / T3-SH-3 (provisional)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
@@ -101,9 +101,9 @@ jobs:
           if [ "$PROVISION_INPUT" = "true" ] && [ -n "$AWS_ACCESS_KEY_ID" ]; then
             provision=1
           elif [ "$PROVISION_INPUT" = "true" ] && [ -z "$AWS_ACCESS_KEY_ID" ]; then
-            echo "::notice title=Self-host provisioning skipped::provision=true but no AWS credentials are configured. T3-SH-1 / T4-SH-1 will report blocked (never red)."
+            echo "::notice title=Self-host provisioning skipped::provision=true but no AWS credentials are configured. T4-SH-1 will report blocked (never red)."
           else
-            echo "::notice title=Self-host provisioning off::Set the provision input to true (with AWS creds) to run T3-SH-1 / T4-SH-1 for real. Reporting blocked for this run."
+            echo "::notice title=Self-host provisioning off::Set the provision input to true (with AWS creds) to run T4-SH-1 for real. Reporting blocked for this run."
           fi
           echo "provision=$provision" >> "$GITHUB_OUTPUT"
 
@@ -132,7 +132,7 @@ jobs:
           RELEASE_E2E_SELFHOST_URL: ${{ secrets.RELEASE_E2E_SELFHOST_URL }}
           RELEASE_E2E_SELFHOST_SSH: ${{ secrets.RELEASE_E2E_SELFHOST_SSH }}
           RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
-        run: make release-e2e LANE=local DESKTOP=web AGENTS=all SCENARIOS=T3-SH-1,T3-SH-2,T3-SH-3,T4-SH-1
+        run: make release-e2e LANE=local DESKTOP=web AGENTS=all SCENARIOS=T3-SH-2,T3-SH-3,T4-SH-1
 
       - name: Upload failure reports
         if: always()
