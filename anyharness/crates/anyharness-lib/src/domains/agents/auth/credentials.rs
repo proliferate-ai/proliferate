@@ -208,7 +208,7 @@ fn aggregate_credential_state(auth: &AuthSpec, slots: &[ResolvedAuthSlot]) -> Cr
         }
         AuthReadinessPolicy::AllRequiredSlots => {
             let required = required_slots(slots);
-            if required.is_empty() || required.iter().all(|slot| slot_is_ready(slot)) {
+            if required.is_empty() || required.iter().all(slot_is_ready) {
                 return CredentialState::Ready;
             }
             preferred_missing_state(required)

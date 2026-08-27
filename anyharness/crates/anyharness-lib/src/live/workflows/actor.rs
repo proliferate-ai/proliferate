@@ -26,7 +26,7 @@ use crate::domains::workflows::render::{
 };
 use crate::domains::workflows::store::{emit_decision_events, ResolvedSideEffect, WorkflowStore};
 use crate::domains::workflows::transition::{
-    next, Decision, IllegalTransition, RunState, TurnFinished, WorkflowCommand, WorkflowEvent,
+    next, Decision, IllegalTransition, RunState, TurnFinished, WorkflowEvent,
 };
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::observability::WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET;

@@ -5,7 +5,7 @@
 //! integration-gateway MCP endpoint. At session launch AnyHarness reads that
 //! dotfile and injects an HTTP MCP server named `proliferate_integrations`.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Deserialize;
 

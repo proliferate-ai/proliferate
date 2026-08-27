@@ -157,6 +157,7 @@ pub enum LoginHandoff {
 
 /// The full orthogonal fact struct for one harness in one scope.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub struct AgentAuthFacts {
     /// The harness's artifacts resolved as installed.
     pub installed: bool,
@@ -175,21 +176,6 @@ pub struct AgentAuthFacts {
     pub handoff: Option<LoginHandoff>,
 }
 
-impl Default for AgentAuthFacts {
-    fn default() -> Self {
-        Self {
-            installed: false,
-            unsupported_route: false,
-            misconfigured: false,
-            expired: false,
-            credential: None,
-            selection: None,
-            probe: ProbeLifecycle::default(),
-            gateway: None,
-            handoff: None,
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Derived state

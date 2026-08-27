@@ -44,9 +44,7 @@ impl SessionStore {
                 params![idempotency_key],
                 map_fork_operation,
             )
-            .optional()
-            .map_err(Into::into)
-        })
+            .optional()})
     }
 
     pub fn find_fork_operation_by_child(
@@ -61,9 +59,7 @@ impl SessionStore {
                 params![child_session_id],
                 map_fork_operation,
             )
-            .optional()
-            .map_err(Into::into)
-        })
+            .optional()})
     }
 
     /// Advance a fork operation's phase (forward-only in practice; the store

@@ -224,9 +224,7 @@ impl ActivityStore {
                 params![feed_id],
                 map_feed_binding,
             )
-            .optional()
-            .map_err(Into::into)
-        })
+            .optional()})
     }
 
     pub fn upsert_feed_binding(tx: &Connection, record: &FeedBindingRecord) -> rusqlite::Result<()> {

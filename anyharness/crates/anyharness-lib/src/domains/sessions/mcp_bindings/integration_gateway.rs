@@ -15,7 +15,7 @@ use crate::domains::sessions::mcp_bindings::model::{
 };
 use crate::domains::sessions::model::SessionMcpBindingPolicy;
 use crate::integrations::integration_gateway::{
-    IntegrationGatewayConfig, INTEGRATION_GATEWAY_DOTFILE, INTEGRATION_GATEWAY_ID,
+    IntegrationGatewayConfig, INTEGRATION_GATEWAY_ID,
 };
 
 /// Session extension that injects the integration-gateway MCP server when the

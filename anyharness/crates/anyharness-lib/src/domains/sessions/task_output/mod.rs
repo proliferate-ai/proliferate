@@ -311,7 +311,7 @@ fn truncate_message_to_page_budget(
     let mut low = 0usize;
     let mut high = original.len();
     while low < high {
-        let midpoint = (low + high + 1) / 2;
+        let midpoint = (low + high).div_ceil(2);
         let boundary = floor_char_boundary(&original, midpoint);
         message.text = format!("{}{}", &original[..boundary], TRUNCATION_MARKER);
         message.truncated = true;

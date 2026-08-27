@@ -42,8 +42,8 @@ impl CollectorCore {
         for stored in &inner.records {
             let accepted = stored.decode().map_err(|_| RejectionReason::Core)?;
             *versions.entry(stored.version).or_default() += 1;
-            if record_matches(&accepted, &query.filters) {
-                if stored.cursor > after
+            if record_matches(&accepted, &query.filters)
+                && stored.cursor > after
                     && page_records.len() < usize::from(query.limit)
                     && !page_full
                 {
@@ -57,7 +57,6 @@ impl CollectorCore {
                         page_full = true;
                     }
                 }
-            }
         }
         let mut gaps = Vec::new();
         if let Some(gap) = eviction_gap(

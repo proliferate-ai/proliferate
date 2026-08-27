@@ -1,7 +1,7 @@
 use rusqlite::{params, OptionalExtension};
 
 use super::model::{
-    SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation, SubagentLinkCloseOutcome,
+    SessionLinkRecord, SessionLinkRelation, SubagentLinkCloseOutcome,
     SubagentLinkCloseResult, SubagentLinkOpenOutcome, SubagentLinkOpenResult,
 };
 use super::row::map_session_link;

@@ -552,7 +552,7 @@ fn native_cli_path(
     claude_executable: Option<&str>,
 ) -> Option<PathBuf> {
     let claude_override = (kind == &AgentKind::Claude)
-        .then(|| claude_executable)
+        .then_some(claude_executable)
         .flatten()
         .filter(|value| !value.trim().is_empty())
         .map(PathBuf::from);

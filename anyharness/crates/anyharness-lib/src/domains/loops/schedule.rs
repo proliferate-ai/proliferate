@@ -177,7 +177,7 @@ impl CronExpr {
             return false;
         }
         // chrono weekday: Mon=0..Sun=6; cron: Sun=0..Sat=6.
-        let cron_dow = (dt.weekday().num_days_from_sunday()) as u32;
+        let cron_dow = (dt.weekday().num_days_from_sunday());
         let dom_match = self.day_of_month.contains(&dt.day());
         let dow_match = self.day_of_week.contains(&cron_dow);
         match (self.dom_restricted, self.dow_restricted) {

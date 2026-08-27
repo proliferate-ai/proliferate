@@ -21,7 +21,7 @@ use tokio::time::{Instant, MissedTickBehavior};
 
 use super::LiveSessionManager;
 use crate::live::sessions::actor::command::{
-    ConditionalUnloadOutcome, SessionCommand, UnloadRetainedReason,
+    ConditionalUnloadOutcome, UnloadRetainedReason,
 };
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
 

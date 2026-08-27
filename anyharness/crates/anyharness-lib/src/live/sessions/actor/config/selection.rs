@@ -137,10 +137,10 @@ pub(in crate::live::sessions::actor) fn option_matches_purpose(
     }
 }
 
-pub(in crate::live::sessions) fn find_select_option_by_purpose<'a>(
-    config_options: &'a [acp::schema::SessionConfigOption],
+pub(in crate::live::sessions) fn find_select_option_by_purpose(
+    config_options: &[acp::schema::SessionConfigOption],
     purpose: ConfigPurpose,
-) -> Option<&'a acp::schema::SessionConfigOption> {
+) -> Option<&acp::schema::SessionConfigOption> {
     config_options.iter().find(|option| {
         matches!(&option.kind, acp::schema::SessionConfigKind::Select(_))
             && option_matches_purpose(option, purpose)
@@ -269,7 +269,7 @@ fn has_explicit_variant_params(value: &str) -> bool {
 
     suffix
         .strip_suffix(']')
-        .map_or(true, |params| !params.is_empty())
+        .is_none_or(|params| !params.is_empty())
 }
 
 /// Resolve a model request to the exact composed or provider-qualified value

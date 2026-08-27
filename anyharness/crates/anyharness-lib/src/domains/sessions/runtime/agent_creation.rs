@@ -318,9 +318,7 @@ impl SessionRuntime {
         }
         self.acp_manager.remove_session(session_id).await;
         self.session_service
-            .delete_session(session_id)
-            .map_err(Into::into)
-    }
+            .delete_session(session_id)}
 }
 
 fn map_ordinary_start_error(error: StartNewAgentSessionError) -> CreateOrdinaryAgentSessionError {

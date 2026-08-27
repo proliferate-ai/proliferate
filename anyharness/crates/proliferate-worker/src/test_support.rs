@@ -136,7 +136,7 @@ pub(crate) fn events(timeline: &Timeline) -> Vec<CapturedEvent> {
 
 /// The index in the shared timeline of the first step matching a predicate.
 pub(crate) fn position(timeline: &Timeline, mut matches: impl FnMut(&Step) -> bool) -> Option<usize> {
-    steps(timeline).iter().position(|step| matches(step))
+    steps(timeline).iter().position(matches)
 }
 
 pub(crate) fn is_request_containing(needle: &str) -> impl Fn(&Step) -> bool + '_ {

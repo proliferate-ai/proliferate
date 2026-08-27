@@ -585,7 +585,7 @@ pub fn write_high_water_mark(runtime_home: &Path, generated_at: chrono::DateTime
             std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_string(&mark)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(|e| std::io::Error::other(e))?;
         std::fs::write(path, json)
     })();
     if let Err(e) = result {

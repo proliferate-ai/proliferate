@@ -27,7 +27,7 @@ impl WorkspaceStore {
             let mut stmt = conn.prepare(&format!(
                 "SELECT {WORKSPACE_COLUMNS} FROM workspaces ORDER BY updated_at DESC"
             ))?;
-            let rows = stmt.query_map([], |row| map_row(row))?;
+            let rows = stmt.query_map([], map_row)?;
             rows.collect()
         })
     }

@@ -55,6 +55,12 @@ pub struct AgentLoginTerminalService {
     output_hubs: AgentLoginOutputRegistry,
 }
 
+impl Default for AgentLoginTerminalService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentLoginTerminalService {
     pub fn new() -> Self {
         Self {

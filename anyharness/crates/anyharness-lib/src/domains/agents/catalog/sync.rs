@@ -202,7 +202,7 @@ impl CatalogSyncService {
         let client = super::artifact::BoundedHttpFetchClient::new();
         Self::from_staged_or_bundled(
             runtime_home,
-            should_fetch.then(|| base_url.as_deref()).flatten(),
+            should_fetch.then_some(base_url.as_deref()).flatten(),
             &channel,
             &client,
             &pubkeys,

@@ -1317,7 +1317,7 @@ fn map_node(row: &Row<'_>) -> rusqlite::Result<WorkflowRunNodeRecord> {
         node_type: parse_text(
             row.get::<_, String>("node_type")?.as_str(),
             "node type",
-            |s| WorkflowNodeType::parse(s),
+            WorkflowNodeType::parse,
         )?,
         replaces_node_row_id: row.get("replaces_node_row_id")?,
         anchor_node_row_id: row.get("anchor_node_row_id")?,
@@ -1327,7 +1327,7 @@ fn map_node(row: &Row<'_>) -> rusqlite::Result<WorkflowRunNodeRecord> {
         status: parse_text(
             row.get::<_, String>("status")?.as_str(),
             "node status",
-            |s| WorkflowNodeStatus::parse(s),
+            WorkflowNodeStatus::parse,
         )?,
         session_id: row.get("session_id")?,
         prompt_id: row.get("prompt_id")?,

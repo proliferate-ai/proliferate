@@ -108,6 +108,12 @@ pub struct AgentReconcileService {
     execution_lock: Arc<Mutex<()>>,
 }
 
+impl Default for AgentReconcileService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentReconcileService {
     pub fn new() -> Self {
         Self {

@@ -1084,7 +1084,7 @@ impl CoworkRuntime {
             .await;
         let wake_scheduled = self
             .delegation_service
-            .list_wake_schedules(&[link.id.clone()])?
+            .list_wake_schedules(std::slice::from_ref(&link.id))?
             .into_iter()
             .next()
             .is_some();
@@ -1753,9 +1753,7 @@ fn coding_workspace_slug(value: &str) -> Option<String> {
 
 fn coding_workspace_name_from_branch(branch_name: &str) -> Option<String> {
     branch_name
-        .split('/')
-        .filter(|segment| !segment.trim().is_empty())
-        .next_back()
+        .split('/').rfind(|segment| !segment.trim().is_empty())
         .and_then(coding_workspace_slug)
 }
 
