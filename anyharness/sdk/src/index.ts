@@ -51,6 +51,7 @@ export type {
   AgentAuthStateHarness,
   AgentAuthStateDocument,
   ApplyAgentAuthStateResponse,
+  NativeBridgeResponse,
 } from "./types/agent-auth.js";
 
 export type {

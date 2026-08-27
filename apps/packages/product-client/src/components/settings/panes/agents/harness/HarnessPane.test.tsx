@@ -129,6 +129,8 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 // SDK hooks standing in for that runtime call.
 vi.mock("@anyharness/sdk-react", () => ({
   useAnyHarnessRuntimeContext: () => ({ runtimeUrl: "http://127.0.0.1:8457" }),
+  // Consumed by the native-bridge prompt's query key (use-native-bridge.ts).
+  useAnyHarnessCacheScopeKey: () => "test-scope",
   useAgentLaunchOptionsQuery: ({ harnessKind }: { harnessKind: string }) => {
     const sourceModels = state.modelSnapshotStatus.data?.models ?? null;
     return {
