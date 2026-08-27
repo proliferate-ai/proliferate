@@ -230,7 +230,8 @@ sequenceDiagram
 
 - On its interval, diff each key's **observed** model list against its declared access group.
 - Mismatch → `verification_status=misconfigured` with the delta stored on the key row.
-- **The fix is config.yaml + redeploy** — never a client-side patch. (This loop is the drift detector that would have caught the stale Claude-5 list before a user did.) The expected set is parsed from the reviewed config.yaml itself, which therefore rides the server image as well as the LiteLLM image (`/app/litellm/config.yaml`); absent, the loop degrades to presence-only checks.
+- **The fix is config.yaml + redeploy** — never a client-side patch. (This loop is the drift detector that would have caught the stale Claude-5 list before a user did.) The expected set is parsed from the reviewed config.yaml itself, which therefore rides the server image as well as the LiteLLM image (`/app/litellm/config.yaml`); absent, the loop degrades: a non-empty observed list reads `ok` with a `config_unavailable` delta marker, an empty list still reads `misconfigured`.
+- The tick runs in three phases — a short transaction listing keys, the LiteLLM probes with NO transaction open, a short transaction writing verdicts — and errors aggregate: one warning with counts, one `report_critical` only for an outage-shaped tick (never per key).
 
 ## 4 · Structure
 
@@ -269,7 +270,10 @@ The HTTP surface, with bodies (`/v1/cloud/agent-gateway/…`, product-user beare
 GET /capabilities
   → { gatewayEnabled, publicBaseUrl, enrollmentStatus,
       creditsExhausted,          # true exactly when the renderer is withholding keys — the AA-3 plain-words surface
-      verifications: [ { harnessKind, status, delta?: { reason, models }, verifiedAt? } ] }   # delta only when misconfigured
+      verifications: [ { harnessKind, status, delta?, verifiedAt? } ] }
+      # delta only when the loop stored one, passed through verbatim:
+      #   diff shape     { missing: [...], extra: [...], observed_count, expected_count }
+      #   degraded shape { degraded: "config_unavailable", reason? }
 GET /enrollment
   → { id, subjectKind, litellmTeamId, syncStatus, lastErrorCode, createdAt, updatedAt }
 ```
@@ -288,7 +292,7 @@ The four background loops (`worker.py`, started from `main.py` lifespan; each in
 
 | Loop | Does | Interval setting |
 | --- | --- | --- |
-| backfill | retries `failed` enrollments; runs `migration.py` residue convergence first; zero-grant guard after (`free_credits.run_zero_grant_check`: aged active org enrollments whose subject holds zero grant rows get the grant re-attempted, the rest raise one ops alert per tick) | `agent_gateway_backfill_interval_seconds` |
+| backfill | retries `failed` enrollments; runs `migration.py` residue convergence first; zero-grant guard after (`free_credits.run_zero_grant_check`, own transaction, at most once per `agent_gateway_zero_grant_check_interval_seconds`: aged active org enrollments whose subject holds zero grant rows get the grant re-attempted; the legitimately unhealable — no GitHub identity, invitee orgs — classify out with a warning; the rest page once per org per process) | `agent_gateway_backfill_interval_seconds` (+ `agent_gateway_zero_grant_check_interval_seconds`) |
 | usage import | flow 4 | `agent_gateway_usage_import_interval_seconds` (+ `_overlap_seconds`) |
 | verification | flow 5 | `agent_gateway_verification_interval_seconds` (gated by `agent_gateway_verification_enabled`, default true) |
 | top-ups | auto top-up when the threshold crosses and a price id is configured | `agent_gateway_topup_*` (interval, threshold, price id, amount) |
@@ -315,6 +319,6 @@ Failure modes: LiteLLM unreachable at enrollment → `sync_status=failed`, backf
 - [x] Claude 5 family added to the direct-Anthropic model list — PR #2249 (the first funded launch 403'd on `claude-sonnet-5`; lands on the next release run)
 - [x] Refresh the codex model list the same way (slice 5): the GPT-5.6 family + gpt-5.5 join the codex group — gpt-5.6-sol is codex's current default, and the access-group pin now fails on either harness's CLI default going missing
 - [x] Code split into `server/ai_gateway/` + manifest + recompose (slice 5) — `lints/server/fences.toml` landed with it, pinning who may import this folder and `server/agent_auth/` (enforcement table in [agent_auth §0](../agent_auth/README.md))
-- [x] Find the signup-hook miss that let an org reach day 8 with zero grants; alert on zero-grant orgs (slice 5). Cause found: the founder deleted his first account, and the one-per-GitHub-identity `free_cloud_allocation` survived on the deleted account's orphaned org subject (org row alive, zero memberships) — the re-signup's reserve hit "claimed elsewhere", the grant silently skipped, and a synced enrollment is never revisited. Fixed: an allocation owned by an org-kind subject with zero active memberships is reclaimed (ledger + claim converge onto the new default org via the D-3 primitives; a live second account still gets nothing). Guarded: the backfill tick's zero-grant check self-heals aged grantless enrollments and raises one ops alert per tick for the rest
+- [x] Find the signup-hook miss that let an org reach day 8 with zero grants; alert on zero-grant orgs (slice 5). Cause found: the founder deleted his first account, and the one-per-GitHub-identity `free_cloud_allocation` survived on the deleted account's orphaned org subject (org row alive, zero memberships) — the re-signup's reserve hit "claimed elsewhere", the grant silently skipped, and a synced enrollment is never revisited. Fixed: an allocation stranded on an orphaned org-kind subject is reclaimed ONLY when the move is provably identity-pure — zero active memberships, a ledger holding nothing but the identity's own signup grant, exactly one allocation (this identity's), and a destination without a free_signup row; an impure orphan refuses with a non-paging manual-resolution error, and a live second account still gets nothing. Guarded: the zero-grant check (hourly cadence via the backfill loop, own transaction) self-heals aged grantless enrollments, classifies the legitimately unhealable as non-paging, and pages each newly-broken org once per process
 - [x] Enable verification (slice 5): default true now that config.yaml is settled; the expected-set path is pinned against file moves and the reviewed config rides the server image
 - [ ] Per-run keys + envelopes (pending the ruling) · then ai_magic through the gateway

@@ -102,7 +102,13 @@ class TestLitellmConfigAccessGroups:
             for entry in _load_model_list()
             if "codex" in entry["model_info"]["access_groups"]
         }
-        for model_name in ("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"):
+        for model_name in (
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-5.5",
+            "gpt-5.5-2026-04-23",  # the dated alias resolves to the same upstream
+        ):
             assert model_name in granted_to_codex, (
                 f"{model_name} (codex's current default model family) must be "
                 "granted to the codex access group, or every codex gateway "
