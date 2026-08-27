@@ -227,37 +227,22 @@ impl AppState {
         let catalog_sync_service = Arc::new(CatalogSyncService::from_bundled_and_staged_via_env(
             &runtime_home,
         ));
-        let agent_runtime_without_probes = AgentRuntime::new(
-            runtime_home.clone(),
-            agent_reconcile_service.clone(),
-            agent_seed_store.clone(),
-            AgentCatalogService::new(catalog_sync_service.clone()),
-            // Read once, here: the auto-install pass needs the surface for the
-            // cursor-in-cloud carve-out, and reading it at the decision point
-            // would put a process-global read inside the reconcile loop.
-            crate::domains::agents::runtime::RuntimeSurface::from_env(),
-        );
-        let (
+        // Agents wiring (services, poke suppression, runtime attachment) lives
+        // in agent_launch.rs — its own seam.
+        let agent_launch::AgentStack {
             launch_options_service,
             launch_probe_service,
             gateway_model_planner,
             agent_status_service,
-        ) = agent_launch::build_services(&db, &runtime_home);
-        // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
-        // why it is separate; the suppression is a property of the wiring rather
-        // than of which event sites happened to be threaded.
-        #[cfg(not(test))]
-        let automatic_poke_engine = Some(launch_probe_service.clone());
-        #[cfg(test)]
-        let automatic_poke_engine: Option<Arc<LaunchProbeService>> = None;
-        // The agent runtime carries the engine for its startup and install-completed
-        // pokes. Attached rather than constructor-injected because the engine needs the
-        // catalog service the runtime also takes; building the runtime first and
-        // attaching second keeps both constructors acyclic.
-        let agent_runtime = Arc::new(match automatic_poke_engine.clone() {
-            Some(engine) => agent_runtime_without_probes.with_launch_probe(engine),
-            None => agent_runtime_without_probes,
-        });
+            automatic_poke_engine,
+            agent_runtime,
+        } = agent_launch::build_agent_stack(
+            &db,
+            &runtime_home,
+            &agent_reconcile_service,
+            &agent_seed_store,
+            &catalog_sync_service,
+        );
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
@@ -584,18 +569,9 @@ impl AppState {
         // non-blocking + best-effort. See AgentRuntime::spawn_startup_pass.
         #[cfg(not(test))]
         agent_runtime.clone().spawn_startup_pass();
-        // The status module's startup pass (agent_auth spec §2): every
-        // persisted document is re-served STALE until the startup probes
-        // re-verify it, every installed harness gets a row, and a harness
-        // that appeared with no install event raises FirstDetected.
-        // Blocking-pool work (sqlite + fs); suppressed under cfg(test) with
-        // the other startup side effects.
+        // The status module's startup pass (stale-mark, refresh, FirstDetected).
         #[cfg(not(test))]
-        {
-            let status = agent_status_service.clone();
-            let poke_engine = automatic_poke_engine.clone();
-            tokio::task::spawn_blocking(move || status.startup_pass(&poke_engine));
-        }
+        agent_launch::spawn_status_startup_pass(&agent_status_service, &automatic_poke_engine);
         Ok(Self {
             runtime_home,
             runtime_base_url,

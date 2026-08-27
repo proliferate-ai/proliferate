@@ -11,7 +11,18 @@ use chrono::{DateTime, Utc};
 
 use super::config::ProbeEngineConfig;
 use super::LaunchProbeService;
-use crate::domains::agents::auth_state::ProbePhase;
+
+/// The probe engine's live phase for one harness — the slot vocabulary the
+/// launch-options read surface refines against the durable row. (Lived in the
+/// deleted `auth_state.rs` while the evidence model consumed it; the engine
+/// is its only producer, so it lives here now.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProbePhase {
+    Idle,
+    Queued,
+    Running,
+    Backoff,
+}
 
 /// A reading of the scheduler's slot, stamped with WHEN it was taken so the
 /// slot-before-row ordering can be checked rather than merely documented, and

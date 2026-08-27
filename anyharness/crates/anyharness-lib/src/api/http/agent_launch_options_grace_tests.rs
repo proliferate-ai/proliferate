@@ -10,7 +10,7 @@
 use serde_json::Value;
 
 use super::agent_launch_options_test_fixtures::*;
-use crate::domains::agents::auth_state::ProbePhase;
+use crate::domains::agents::launch_probe::ProbePhase;
 use crate::domains::agents::launch_probe::ProbeEngineMode;
 
 /// The orphan that matters most, on the harness no unattended poke may refresh: a

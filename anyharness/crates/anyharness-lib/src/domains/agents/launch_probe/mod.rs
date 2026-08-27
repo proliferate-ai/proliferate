@@ -36,7 +36,7 @@ pub mod config;
 mod live_state;
 mod phase;
 use phase::abandoned_attempt_after;
-pub use phase::LivePhaseReading;
+pub use phase::{LivePhaseReading, ProbePhase};
 pub mod lock;
 pub mod probe;
 pub mod targets;
@@ -57,7 +57,6 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
 
-use crate::domains::agents::auth_state::{AuthRuntimeInputs, ProbeLifecycle, ProbePhase};
 use crate::domains::agents::route_auth::{self, GatewayModelResolve, RouteAuthError};
 
 pub use config::{PokeReason, ProbeEngineConfig, ProbeEngineMode, RefreshError};
@@ -224,7 +223,7 @@ impl LaunchProbeService {
     /// later timer (which took its own copy), and a success cleared the window
     /// entirely; in both cases this timer is stale and dies silently. The
     /// ordinary coalescing and backoff admission downstream do the rest.
-    pub(super) fn arm_backoff_expiry(
+    fn arm_backoff_expiry(
         &self,
         harness_kind: &str,
         slot: Arc<HarnessSlot>,
@@ -268,14 +267,6 @@ impl LaunchProbeService {
         &self.runtime_home
     }
 
-    /// Runtime evidence used by the canonical agent-readiness projection.
-    /// Launch-option observation replaces the deleted model-snapshot/trial
-    /// authority; no catalog or trial verdict is folded here.
-    pub fn auth_runtime_inputs(&self, harness_kind: &str, now: DateTime<Utc>) -> AuthRuntimeInputs {
-        let (phase, next_attempt_at) = self.live_phase(harness_kind, now);
-        self.auth_runtime_inputs_from_options(harness_kind, now, phase, next_attempt_at)
-    }
-
     /// The slot read both phase surfaces share. An unknown harness has no slot
     /// and therefore no attempt: `Idle`.
     fn live_phase(&self, harness_kind: &str, now: DateTime<Utc>) -> (ProbePhase, Option<String>) {
@@ -291,49 +282,6 @@ impl LaunchProbeService {
                 Some(next) if next > now => (ProbePhase::Backoff, Some(next.to_rfc3339())),
                 _ => (ProbePhase::Idle, None),
             },
-        }
-    }
-
-    fn auth_runtime_inputs_from_options(
-        &self,
-        harness_kind: &str,
-        now: DateTime<Utc>,
-        phase: ProbePhase,
-        next_attempt_at: Option<String>,
-    ) -> AuthRuntimeInputs {
-        let response = self
-            .launch_options
-            .as_ref()
-            .and_then(|service| service.read(harness_kind).ok().flatten());
-        let last_success_age_seconds = response
-            .as_ref()
-            .and_then(|value| value.observed_at.as_deref())
-            .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
-            .map(|value| {
-                now.signed_duration_since(value.with_timezone(&Utc))
-                    .num_seconds()
-                    .max(0)
-            });
-        let last_failure_detail = response
-            .as_ref()
-            .and_then(|value| value.probe_failure_code.clone());
-        let observation_nonempty = response
-            .as_ref()
-            .and_then(|value| value.options.as_ref())
-            .is_some_and(|options| !options.models.is_empty());
-        AuthRuntimeInputs {
-            probe: ProbeLifecycle {
-                phase,
-                last_success_age_seconds,
-                last_failure_detail,
-                next_attempt_at,
-                observation_nonempty,
-            },
-            trial: None,
-            gateway: None,
-            // Seat rotation facts are the HTTP read path's to fold in
-            // (api/http/agents.rs) — this service holds no Db/state handle.
-            seat_rotation: Default::default(),
         }
     }
 

@@ -24,9 +24,7 @@ use crate::domains::agents::auth::login_terminal::{
     get_agent_login_terminal as get_agent_login_terminal_session,
     start_agent_login_terminal_session, AgentLoginVariant as DomainLoginVariant, MintClaimError,
 };
-use crate::domains::agents::auth_state::AuthRuntimeInputs;
 use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
-use crate::domains::agents::route_auth::seat_rotation_readout_via_db;
 
 #[utoipa::path(
     get,
@@ -38,24 +36,17 @@ use crate::domains::agents::route_auth::seat_rotation_readout_via_db;
 )]
 pub async fn list_agents(State(state): State<AppState>) -> Json<Vec<AgentSummary>> {
     let snapshot = state.agent_runtime.list_agents().await;
-    let now = chrono::Utc::now();
-    // The auth runtime inputs are read from the in-memory launch-probe service
-    // before the blocking hop, so the closure below owns everything it needs.
-    // The seat-rotation readout folds in here too: applied document + the
-    // seat-cooling store (via the domain facade) → serving/next/cooling.
-    let auth_runtimes: Vec<AuthRuntimeInputs> = snapshot
+    // The status documents are the persisted machine truth (agent_auth spec
+    // §2) — read here, never recomputed: the projection carries EXACTLY what
+    // GET /v1/agent-auth/status serves, so the two surfaces cannot disagree.
+    let auth_statuses: Vec<Option<anyharness_contract::v1::AgentAuthStatusDoc>> = snapshot
         .agents
         .iter()
         .map(|agent| {
-            let kind = agent.descriptor.kind.as_str();
-            let mut inputs = state.launch_probe_service.auth_runtime_inputs(kind, now);
-            inputs.seat_rotation = seat_rotation_readout_via_db(
-                &state.runtime_home,
-                state.db.clone(),
-                kind,
-                now.timestamp(),
-            );
-            inputs
+            state
+                .agent_status_service
+                .read(agent.descriptor.kind.as_str())
+                .map(super::agent_auth_contract::status_doc_to_contract)
         })
         .collect();
     // to_summary probes PATH per agent (userPathCopyDetected); keep that
@@ -64,9 +55,9 @@ pub async fn list_agents(State(state): State<AppState>) -> Json<Vec<AgentSummary
         snapshot
             .agents
             .iter()
-            .zip(auth_runtimes.iter())
-            .map(|(agent, auth_runtime)| {
-                to_summary(agent, Some(&snapshot.reconcile_snapshot), auth_runtime)
+            .zip(auth_statuses)
+            .map(|(agent, auth_status)| {
+                to_summary(agent, Some(&snapshot.reconcile_snapshot), auth_status)
             })
             .collect::<Vec<AgentSummary>>()
     })
@@ -90,19 +81,15 @@ pub async fn get_agent(
     Path(kind): Path<String>,
 ) -> Result<Json<AgentSummary>, ApiError> {
     let snapshot = state.agent_runtime.get_agent(&kind).await?;
-    let now = chrono::Utc::now();
-    let mut auth_runtime = state.launch_probe_service.auth_runtime_inputs(&kind, now);
-    auth_runtime.seat_rotation = seat_rotation_readout_via_db(
-        &state.runtime_home,
-        state.db.clone(),
-        &kind,
-        now.timestamp(),
-    );
+    let auth_status = state
+        .agent_status_service
+        .read(&kind)
+        .map(super::agent_auth_contract::status_doc_to_contract);
     let summary = tokio::task::spawn_blocking(move || {
         to_summary(
             &snapshot.agent,
             Some(&snapshot.reconcile_snapshot),
-            &auth_runtime,
+            auth_status,
         )
     })
     .await
@@ -142,16 +129,12 @@ pub async fn install_agent(
         &kind,
         PokeReason::InstallCompleted,
     );
-    let now = chrono::Utc::now();
-    let mut auth_runtime = state.launch_probe_service.auth_runtime_inputs(&kind, now);
-    auth_runtime.seat_rotation = seat_rotation_readout_via_db(
-        &state.runtime_home,
-        state.db.clone(),
-        &kind,
-        now.timestamp(),
-    );
+    let auth_status = state
+        .agent_status_service
+        .read(&kind)
+        .map(super::agent_auth_contract::status_doc_to_contract);
     Ok(Json(InstallAgentResponse {
-        agent: to_summary(&outcome.agent, None, &auth_runtime),
+        agent: to_summary(&outcome.agent, None, auth_status),
         already_installed: outcome.already_installed,
         installed_artifacts: outcome
             .installed_artifacts

@@ -54,9 +54,7 @@ pub use probe_materialization::{
 pub use profile::{resolve_profile, AgentRuntimeAuthProfile};
 pub use refusal::LaunchRefusal;
 pub use render::{render_profile, RenderedRouteAuth};
-pub use rotation::{
-    decide_rotation, seat_rotation_readout, seat_rotation_readout_via_db, RotationDecision,
-};
+pub use rotation::{decide_rotation, seat_rotation_readout, RotationDecision, SeatRotationReadout};
 pub use state::{
     apply_state_file, clear_state_file, load_state_file, state_file_path, AgentAuthState,
     AppliedStateOutcome, ClearedStateOutcome,

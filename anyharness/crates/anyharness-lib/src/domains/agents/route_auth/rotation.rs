@@ -8,11 +8,28 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::domains::agents::auth_state::SeatRotationReadout;
 use crate::domains::agents::seat_cooling::SeatCoolingStore;
 
 use super::profile::{resolve_profile, AgentRuntimeAuthProfile, HarnessSources, ResolvedSource};
 use super::{current_server_origin, load_effective_state};
+
+/// The pane-facing seat rotation readout (agent_auth spec §4 cell 2's
+/// serving-now / next-up tags + the cooling banner). Plain data; the frozen
+/// semantics live on [`seat_rotation_readout`], its one producer. (Lived in
+/// the deleted `auth_state.rs` while the evidence model carried it; the
+/// status document is its only consumer now, so it lives with rotation, its
+/// producer.)
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SeatRotationReadout {
+    /// The seat currently considered serving (last served if still in the
+    /// applied pool, else the pool's first). `None` when the doc has no seats.
+    pub serving_seat_id: Option<String>,
+    /// The seat rotation would pick for the NEXT launch. `None` when the pool
+    /// has fewer than two seats, or when no seat could serve.
+    pub next_seat_id: Option<String>,
+    /// RFC3339 UTC deadline, non-`None` ONLY when no seat can serve right now.
+    pub cooling_until: Option<String>,
+}
 
 /// What the next launch should do about seats.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -169,23 +186,6 @@ pub fn seat_rotation_readout(
         cooling_until: cooling_until
             .and_then(|epoch| chrono::DateTime::from_timestamp(epoch, 0).map(|at| at.to_rfc3339())),
     }
-}
-
-/// Facade for the HTTP read path (AH-API-2: handlers call domain facades,
-/// never stores): same derivation as [`seat_rotation_readout`], constructing
-/// the seat-cooling store on the app's shared `Db` handle internally.
-pub fn seat_rotation_readout_via_db(
-    runtime_home: &Path,
-    db: crate::persistence::Db,
-    harness_kind: &str,
-    now_epoch_s: i64,
-) -> SeatRotationReadout {
-    seat_rotation_readout(
-        runtime_home,
-        harness_kind,
-        &SeatCoolingStore::new(db),
-        now_epoch_s,
-    )
 }
 
 #[cfg(test)]
