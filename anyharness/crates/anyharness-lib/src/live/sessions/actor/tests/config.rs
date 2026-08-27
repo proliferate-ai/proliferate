@@ -59,7 +59,7 @@ fn pending_config_rank_treats_synthetic_acp_model_control_as_model() {
 }
 
 #[test]
-fn direct_model_setter_engages_only_without_live_model_control() {
+fn direct_model_setter_engages_only_without_model_config_option() {
     // Harnesses that report no live model control (neither a model config
     // option nor available_models) route a switch through the legacy
     // `session/set_model` ext call; its response must still carry an exact
@@ -77,16 +77,51 @@ fn direct_model_setter_engages_only_without_live_model_control() {
         "grok-4.3"
     ));
 
-    // When a live model list IS present, membership is enforced upstream — the
-    // direct setter must not override it.
-    let with_model_control = SessionStartupState {
+    // Grok enumerates models only on `initialize._meta.modelState` and offers
+    // no `model` config option: the direct setter is the only setter, and the
+    // enumeration still gates membership.
+    let init_meta_enumeration = SessionStartupState {
         current_mode_id: None,
         legacy_mode_state: None,
         config_options: Vec::new(),
+        current_model_id: Some("grok-4.6".to_string()),
+        available_models: session_model_options(&["grok-4.6", "grok-4.5"]),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+    assert!(should_apply_model_via_direct_setter(
+        &init_meta_enumeration,
+        "grok-4.5"
+    ));
+    assert!(!should_apply_model_via_direct_setter(
+        &init_meta_enumeration,
+        "grok-4.3"
+    ));
+
+    // When the session response carries a `model` config option, the select
+    // path owns the switch — the direct setter must not override it, even for
+    // a listed value.
+    let mut model_option = acp::schema::SessionConfigOption::select(
+        "model",
+        "Model",
+        "sonnet",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+            acp::schema::SessionConfigSelectOption::new("haiku", "Haiku"),
+        ],
+    );
+    model_option.category = Some(acp::schema::SessionConfigOptionCategory::Model);
+    let with_model_control = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: vec![model_option],
         current_model_id: Some("sonnet".to_string()),
         available_models: session_model_options(&["sonnet", "haiku"]),
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
+    assert!(!should_apply_model_via_direct_setter(
+        &with_model_control,
+        "haiku"
+    ));
     assert!(!should_apply_model_via_direct_setter(
         &with_model_control,
         "opus"

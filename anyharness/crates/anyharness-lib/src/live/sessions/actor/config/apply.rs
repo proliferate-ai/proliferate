@@ -509,15 +509,25 @@ pub(in crate::live::sessions::actor) fn confirmed_model_id_from_ext_response(
 
 pub(in crate::live::sessions::actor) fn should_apply_model_via_direct_setter(
     startup_state: &SessionStartupState,
-    _desired_model_id: &str,
+    desired_model_id: &str,
 ) -> bool {
-    // Attempt the legacy `session/set_model` only when the harness reports no live
-    // model control at all. ACP 0.14 drops the legacy models block, so such
-    // harnesses surface neither a `model` config option nor `available_models` — the
-    // write cannot be gated locally, and the agent is the sole authority on validity.
-    // When a live model list IS present, membership is enforced upstream; don't
-    // override that.
-    !startup_state.has_direct_model_control()
+    // The legacy `session/set_model` is the only setter for a harness whose
+    // session response carries no `model` config option: the typed
+    // `set_session_config_option` has no target there. When the harness DID
+    // surface a model config option, the select path owns the switch and this
+    // setter must not override it. A model enumeration without a config
+    // option (Grok's `initialize._meta.modelState`) still gates membership:
+    // an id the live menu does not list is refused before anything is sent,
+    // and the agent's exact readback stays the authority on what applied.
+    if find_select_option_by_purpose(&startup_state.config_options, ConfigPurpose::Model).is_some()
+    {
+        return false;
+    }
+    startup_state.available_models.is_empty()
+        || startup_state
+            .available_models
+            .iter()
+            .any(|model| model.id == desired_model_id)
 }
 
 pub(in crate::live::sessions::actor) async fn apply_mode_via_direct_setter_legacy(

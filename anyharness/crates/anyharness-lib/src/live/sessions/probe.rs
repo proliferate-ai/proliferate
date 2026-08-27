@@ -27,7 +27,9 @@ use config_options::{
     switch_model_and_capture_options,
 };
 mod model_setter;
-use model_setter::{model_entries_from_model_state, set_init_meta_model_and_confirm};
+use model_setter::set_init_meta_model_and_confirm;
+
+use crate::live::sessions::driver::types::model_state_from_init_meta;
 
 const PROBE_SESSION_ID: &str = "catalog-probe";
 const PROBE_WORKSPACE_ID: &str = "catalog-probe";
@@ -380,13 +382,14 @@ async fn run_enumeration(
         // initialize response's vendor `_meta.modelState`, not the ACP models
         // block or a `model` config option.
         if let Some(model_state) = init.meta.as_ref().and_then(|meta| meta.get("modelState")) {
-            if let Some(entries) = model_entries_from_model_state(model_state) {
+            let (init_meta_current, init_meta_models) = model_state_from_init_meta(model_state);
+            if !init_meta_models.is_empty() {
                 model_source = "initMetaModelState";
-                current_model_id = model_state
-                    .get("currentModelId")
-                    .and_then(|value| value.as_str())
-                    .map(str::to_string);
-                available = entries;
+                current_model_id = init_meta_current;
+                available = init_meta_models
+                    .into_iter()
+                    .map(|model| (model.id, model.name, model.description))
+                    .collect();
             }
         }
     }

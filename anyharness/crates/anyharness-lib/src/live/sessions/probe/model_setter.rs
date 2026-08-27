@@ -2,32 +2,10 @@ use agent_client_protocol as acp;
 
 const ACP_SET_SESSION_MODEL_METHOD: &str = "session/set_model";
 
-/// Some harnesses advertise models only through the initialize response's
-/// vendor `_meta.modelState`. Keep parsing and setter confirmation together:
-/// enumeration is not executable authority until the setter reads a value back.
-pub(super) fn model_entries_from_model_state(
-    model_state: &serde_json::Value,
-) -> Option<Vec<(String, String, Option<String>)>> {
-    let models = model_state.get("availableModels")?.as_array()?;
-    let entries: Vec<(String, String, Option<String>)> = models
-        .iter()
-        .filter_map(|model| {
-            let id = model.get("modelId").and_then(|value| value.as_str())?;
-            let name = model
-                .get("name")
-                .and_then(|value| value.as_str())
-                .unwrap_or(id)
-                .to_string();
-            let description = model
-                .get("description")
-                .and_then(|value| value.as_str())
-                .map(str::to_string);
-            Some((id.to_string(), name, description))
-        })
-        .collect();
-    (!entries.is_empty()).then_some(entries)
-}
-
+/// Setter confirmation for harnesses that enumerate models only through the
+/// initialize response's vendor `_meta.modelState` (parsed by
+/// `driver::types::model_state_from_init_meta`). Enumeration is not
+/// executable authority until the setter reads a value back.
 pub(super) async fn set_init_meta_model_and_confirm(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
