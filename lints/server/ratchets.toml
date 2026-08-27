@@ -15,7 +15,7 @@ reason = "C-train composition: C-2 agent_auth_delivery_ack model joins the B/D c
 
 [[max_lines]]
 path = "server/proliferate/db/store/billing_subjects.py"
-max_lines = 765
+max_lines = 761
 reason = "slice 5 signup-grant fix adds get_agent_gateway_free_credit_allocation_owner — the orphan-reclaim read resolving which subject holds a GitHub identity's free-credit claim today — beside the allocation helpers it reads; the safety-panel fix adds the identity-purity reads (public identity getter, per-subject allocation count with identity filter) and the identity-filtered allocation move; a billing-subject store split waits for the billing store taxonomy pass"
 
 [[max_lines]]
@@ -45,12 +45,12 @@ reason = "C-train composition; P1 auth rebuild rewrote keys/selections/state cov
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_enrollment.py"
-max_lines = 894
+max_lines = 895
 reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D train rewrote the suite org-first (D1 proof, floor mirroring, signup shape); C-1 added the both-surfaces poke coverage; slice 5 adds the founder-org regression (one ensure_org_enrollment call leaves BOTH the enrollment row and the free_signup grant row — the grant is not a separable hook)"
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_zero_grant_guard.py"
-max_lines = 703
+max_lines = 701
 reason = "slice 5's reclaim + guard proofs, then the safety-panel probes committed as regressions: paid-top-up orphan, second human's allocation on the orphan, destination-already-funded, non-paging classifications (no identity / invitee org), page-once-per-org, and the loop-cadence test; splits with the suite taxonomy pass"
 
 [[max_lines]]
