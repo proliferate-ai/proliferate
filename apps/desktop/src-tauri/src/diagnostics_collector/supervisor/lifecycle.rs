@@ -383,13 +383,8 @@ impl DiagnosticsCollectorSupervisor {
 
     pub(super) fn accept_ready(&self, process: OwnedCollectorProcess) {
         // The local tail's discovery point follows every ready generation.
-        {
-            let (endpoint, capability) = process.tail_descriptor();
-            super::super::descriptor_file::write(
-                endpoint,
-                capability.expose_for_descriptor_file(),
-            );
-        }
+        let (endpoint, capability) = process.tail_descriptor();
+        super::super::descriptor_file::write(endpoint, capability.expose_for_descriptor_file());
         let client = process.client();
         let collector_boot_id = process.descriptor().collector_boot_id.clone();
         let schema_major = process.descriptor().schema_major;
@@ -453,8 +448,7 @@ impl DiagnosticsCollectorSupervisor {
     }
 
     pub(super) fn publish_degraded(&self, classification: &'static str, retry_exhausted: bool) {
-        // No ready generation exists any more; the tail's discovery point
-        // must not outlive what it describes.
+        // The tail's discovery point must not outlive a ready generation.
         super::super::descriptor_file::remove();
         self.fallback.set_active(true);
         let (generation, state) = self

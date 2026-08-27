@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from logging.handlers import RotatingFileHandler
 from datetime import UTC, datetime
+from logging.handlers import RotatingFileHandler
 
 from proliferate.config import settings
 from proliferate.middleware.request_context import get_correlation_context

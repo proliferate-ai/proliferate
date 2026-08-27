@@ -66,13 +66,10 @@ def session_links(session_id: str, *, environment: str = "production") -> Sessio
     )
     return SessionLinks(
         replay=f"{app_base}/sessions/{canonical}",
-        sentry=(
-            f"https://{_SENTRY_ORG}.sentry.io/issues/?query=" + _url_quote(sentry_query)
-        ),
+        sentry=(f"https://{_SENTRY_ORG}.sentry.io/issues/?query=" + _url_quote(sentry_query)),
         honeycomb=(
             f"https://ui.honeycomb.io/{_HONEYCOMB_TEAM}/environments/{honeycomb_env}"
-            f"/datasets/{_HONEYCOMB_DATASET}?query="
-            + _honeycomb_query_param(canonical)
+            f"/datasets/{_HONEYCOMB_DATASET}?query=" + _honeycomb_query_param(canonical)
         ),
         logs=_logs_insights_url(logs_query, log_group),
         support_reports=_logs_insights_url(support_query, log_group),
@@ -95,9 +92,7 @@ def _honeycomb_query_param(session_id: str) -> str:
 
 def _star_encode(value: str) -> str:
     """The console's inner string encoding: non-alphanumerics as *XX hex."""
-    return "".join(
-        char if char.isalnum() else "*" + format(ord(char), "02x") for char in value
-    )
+    return "".join(char if char.isalnum() else "*" + format(ord(char), "02x") for char in value)
 
 
 def _logs_insights_url(query: str, log_group: str) -> str:

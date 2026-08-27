@@ -58,7 +58,4 @@ def test_local_server_log_sink_is_debug_only_and_overridable(monkeypatch) -> Non
 
     monkeypatch.setattr(server_logging.settings, "debug", True)
     monkeypatch.setenv("PROLIFERATE_LOGS_HOME", "/tmp/logs-home")
-    assert (
-        server_logging._local_server_log_path()
-        == "/tmp/logs-home/server/logs/server.log"
-    )
+    assert server_logging._local_server_log_path() == "/tmp/logs-home/server/logs/server.log"
