@@ -11,7 +11,9 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agent_auth::{delete_agent_auth_state, put_agent_auth_state},
+    agent_auth::{
+        delete_agent_auth_state, dismiss_native_bridge, get_native_bridge, put_agent_auth_state,
+    },
     agent_launch_options, agents, auth as http_auth, catalogs, cowork,
     files, git, goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay,
     repo_roots, reviews, sessions, sessions_config, sessions_events, sessions_fork,
@@ -66,6 +68,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
         .route("/agent-auth/state", put(put_agent_auth_state))
         .route("/agent-auth/state", delete(delete_agent_auth_state))
+        .route("/agent-auth/native-bridge", get(get_native_bridge))
+        .route(
+            "/agent-auth/native-bridge/{kind}",
+            delete(dismiss_native_bridge),
+        )
         // Catalogs (read-only: the runtime binary is the only transport)
         .route(
             "/catalogs/agents/version",

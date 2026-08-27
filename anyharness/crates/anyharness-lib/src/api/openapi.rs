@@ -142,6 +142,8 @@ mod support_windows;
         super::http::auth::push_revoked_jtis,
         super::http::agent_auth::put_agent_auth_state,
         super::http::agent_auth::delete_agent_auth_state,
+        super::http::agent_auth::get_native_bridge,
+        super::http::agent_auth::dismiss_native_bridge,
         super::http::catalogs::get_agent_catalog_version,
         super::http::git::get_git_status,
         super::http::git::get_git_diff,

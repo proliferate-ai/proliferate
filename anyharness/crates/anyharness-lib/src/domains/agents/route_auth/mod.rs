@@ -23,6 +23,7 @@
 pub(crate) mod gateway_plan;
 mod gateway_probe;
 mod materialize;
+pub mod native_bridge;
 pub mod plan;
 pub mod probe_materialization;
 pub mod profile;
@@ -40,6 +41,11 @@ pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 
+pub use native_bridge::{
+    clear_native_bridge_flag, clear_native_bridge_flags_for_document, legacy_native_granted,
+    pending_native_bridge_harnesses, seed_native_bridge_at_startup, seed_native_bridge_once,
+    NativeBridgeSeedOutcome,
+};
 pub use plan::{GatewayModelPlan, GatewayModelResolve};
 pub use probe_materialization::{
     materialize_for_probe, probe_auth_material, sweep_probe_scratch, ProbeAuthMaterial,
@@ -74,6 +80,15 @@ pub enum RouteAuthError {
     /// no input a correct runtime could construct it from.
     #[error("no agent-auth route selection for harness '{harness_kind}' at revision {revision}")]
     SelectionMissing { harness_kind: String, revision: i64 },
+    /// The harness has NO entry in the document and the absent-harness policy
+    /// is [`AbsentHarnessPolicy::Refuse`] (the final convention: zero enabled
+    /// selections means unconfigured). Raised only by
+    /// [`resolve_profile_bridged`], and only for a harness the native-migration
+    /// bridge does not hold a legacy flag for. Speaks plain words; shares the
+    /// selection-missing wire code (the spec's refusal variants all render
+    /// under it).
+    #[error("{harness_kind} isn't set up — pick a method in Settings → Agents")]
+    NoConfiguredSource { harness_kind: String },
     #[error("agent-auth source for '{harness_kind}' is incomplete: {detail}")]
     SelectionIncomplete { harness_kind: String, detail: String },
     #[error("agent-auth route for '{harness_kind}' is unsupported: {detail}")]
@@ -94,7 +109,9 @@ impl RouteAuthError {
         match self {
             Self::MalformedStateFile { .. } => "AGENT_ROUTE_STATE_MALFORMED",
             Self::StaleStateRevision { .. } => "AGENT_ROUTE_STATE_STALE",
-            Self::SelectionMissing { .. } => "AGENT_ROUTE_SELECTION_MISSING",
+            Self::SelectionMissing { .. } | Self::NoConfiguredSource { .. } => {
+                "AGENT_ROUTE_SELECTION_MISSING"
+            }
             Self::SelectionIncomplete { .. } => "AGENT_ROUTE_SELECTION_INCOMPLETE",
             Self::UnsupportedRoute { .. } => "AGENT_ROUTE_UNSUPPORTED",
             Self::UnknownHarness { .. } => "AGENT_ROUTE_UNKNOWN_HARNESS",
@@ -116,6 +133,77 @@ pub(crate) fn current_server_origin() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// What a launch does for a harness that has NO entry in the applied document.
+///
+/// This is the zero-rows convention, as one value. Today's convention is
+/// [`Self::Native`] ("absent means native": the harness launches on its own
+/// login). The final convention (agent_auth spec, flow 3) is [`Self::Refuse`]
+/// ("zero enabled rows means unconfigured": a plain-words refusal). The
+/// native-migration bridge ([`native_bridge`]) sits in front of either: a
+/// harness holding a legacy flag launches native under both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AbsentHarnessPolicy {
+    Native,
+    Refuse,
+}
+
+/// The convention THIS build applies — the one place the cutover flips.
+///
+/// The refusal cutover (the typed refusal set, slice 2 of the auth rebuild)
+/// changes this constant to [`AbsentHarnessPolicy::Refuse`] and nothing else:
+/// every launch-path caller already resolves through
+/// [`resolve_profile_bridged`], so the bridge's grant is honored the moment
+/// the flip lands. Pre-cutover native users never see the refusal.
+pub const ABSENT_HARNESS_POLICY: AbsentHarnessPolicy = AbsentHarnessPolicy::Native;
+
+/// [`resolve_profile`] with the native-migration bridge in front of the
+/// absent-harness convention. The ONE seam the cutover consults:
+///
+/// - harness present in the document → [`resolve_profile`] decides (a
+///   present-but-empty entry still fails closed; the bridge never overrides an
+///   explicit selection);
+/// - harness absent + `legacy_native_granted` → [`AgentRuntimeAuthProfile::Native`];
+/// - harness absent + no grant → `policy` decides.
+pub fn resolve_profile_bridged(
+    state: Option<&AgentAuthState>,
+    harness_kind: &str,
+    policy: AbsentHarnessPolicy,
+    legacy_native_granted: bool,
+) -> Result<AgentRuntimeAuthProfile, RouteAuthError> {
+    let absent = state.is_none_or(|state| state.sources_for(harness_kind).is_none());
+    if !absent {
+        return resolve_profile(state, harness_kind);
+    }
+    if legacy_native_granted {
+        tracing::debug!(
+            harness_kind,
+            "harness absent from agent-auth state; legacy native bridge keeps native behavior"
+        );
+        return Ok(AgentRuntimeAuthProfile::Native);
+    }
+    match policy {
+        AbsentHarnessPolicy::Native => Ok(AgentRuntimeAuthProfile::Native),
+        AbsentHarnessPolicy::Refuse => Err(RouteAuthError::NoConfiguredSource {
+            harness_kind: harness_kind.to_string(),
+        }),
+    }
+}
+
+/// The launch-path resolution: [`resolve_profile_bridged`] under this build's
+/// [`ABSENT_HARNESS_POLICY`] with the bridge's grant read from the runtime home.
+fn resolve_profile_for_launch(
+    runtime_home: &Path,
+    state: Option<&AgentAuthState>,
+    harness_kind: &str,
+) -> Result<AgentRuntimeAuthProfile, RouteAuthError> {
+    resolve_profile_bridged(
+        state,
+        harness_kind,
+        ABSENT_HARNESS_POLICY,
+        native_bridge::legacy_native_granted(runtime_home, harness_kind),
+    )
+}
+
 /// Resolve the auth profile that a launch will actually use, including the
 /// desktop server-origin guard. Auth/readiness and the launch-options probe call
 /// this same seam so neither can reason about a route the launcher will ignore.
@@ -124,7 +212,7 @@ pub(crate) fn resolve_launch_auth_profile(
     harness_kind: &str,
 ) -> Result<AgentRuntimeAuthProfile, RouteAuthError> {
     let state = load_effective_state(runtime_home, current_server_origin().as_deref())?;
-    resolve_profile(state.as_ref(), harness_kind)
+    resolve_profile_for_launch(runtime_home, state.as_ref(), harness_kind)
 }
 
 pub(crate) fn load_effective_state(
@@ -177,7 +265,7 @@ fn resolve_launch_route_auth_for_server(
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     let state = load_effective_state(runtime_home, current_server_origin)?;
     let revision = state.as_ref().map(|state| state.revision).unwrap_or(0);
-    let profile = resolve_profile(state.as_ref(), harness_kind)?;
+    let profile = resolve_profile_for_launch(runtime_home, state.as_ref(), harness_kind)?;
     let plan = resolver.resolve_gateway_models(harness_kind, revision);
     let rendered = render_profile(&profile, harness_kind, &plan, runtime_home)?;
     for spec in &rendered.files {
@@ -270,7 +358,9 @@ fn launch_route_selection_failure_for_server(
     // and native readiness governs (identical policy to
     // `launch_route_provides_credentials_for_server`).
     let state = load_effective_state(runtime_home, current_server_origin).ok()?;
-    match resolve_profile(state.as_ref(), harness_kind) {
+    // Same bridged resolution as the launch itself: create-time must not
+    // refuse a harness the launcher would run (the bridge's grant included).
+    match resolve_profile_for_launch(runtime_home, state.as_ref(), harness_kind) {
         Ok(_) => None,
         Err(error) => Some(error),
     }
