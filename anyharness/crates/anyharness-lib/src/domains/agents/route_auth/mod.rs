@@ -23,6 +23,7 @@
 pub(crate) mod gateway_plan;
 mod gateway_probe;
 mod materialize;
+mod seat_trial;
 pub mod plan;
 pub mod probe_materialization;
 pub mod profile;
@@ -36,6 +37,8 @@ mod origin_guard_tests;
 #[cfg(test)]
 mod render_tests;
 #[cfg(test)]
+mod seat_trial_tests;
+#[cfg(test)]
 pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
@@ -47,6 +50,7 @@ pub use probe_materialization::{
 };
 pub use profile::{resolve_profile, AgentRuntimeAuthProfile};
 pub use render::{render_profile, RenderedRouteAuth};
+pub use seat_trial::{SeatTrialLedger, SeatTrialVerdict};
 pub use state::{
     apply_state_file, clear_state_file, load_state_file, state_file_path, AgentAuthState,
 };

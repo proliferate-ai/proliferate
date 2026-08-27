@@ -225,6 +225,8 @@ export const HARNESS_PANE_COPY = {
   // The merged header status badge (design-handoff v2): the state is said
   // exactly once, in the Authentication/Providers section header.
   authBadgeAuthenticated: "Authenticated",
+  authBadgeUnverified: "Unverified",
+  authBadgeExpired: "Expired",
   authBadgeNotConfigured: "Not configured",
   authBadgeNotAuthenticated: "Not authenticated",
   authBadgeEnrollmentFailed: "Enrollment failed",
