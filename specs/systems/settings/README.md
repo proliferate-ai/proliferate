@@ -71,9 +71,10 @@ The `environments` / `repo-environment` sections edit cloud environment records 
   (`CloudSignInRequiredPane`, `CloudUnavailablePane`, `AdminOnlyPlaceholder`,
   `UpgradeGateDialog`) instead of hiding the section.
 - **Agent auth edits are ack-gated.** A harness auth or selection edit shows
-  pending until the gateway acks it; evidence badges reflect delivery state,
-  never local optimism
-  ([agent-auth-evidence.ts](../../../apps/packages/product-client/src/lib/domain/settings/agent-auth-evidence.ts)).
+  pending until the gateway acks it; the auth badges render the runtime's
+  status document verbatim — words, tone, and an evidence age, with no
+  client-side derivation and never local optimism
+  ([agent-auth-status-presentation.ts](../../../apps/packages/product-client/src/lib/domain/settings/agent-auth-status-presentation.ts)).
 - **Preferences round-trip through the host.** Appearance, zoom, and repo
   preferences persist via lifecycle hooks and `ProductHost.storage`; no pane
   writes localStorage directly
