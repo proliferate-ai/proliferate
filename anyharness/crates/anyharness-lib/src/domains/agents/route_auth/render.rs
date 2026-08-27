@@ -29,8 +29,8 @@ use super::profile::{
 use super::sanitize::sanitize_claude_if_routed;
 use super::RouteAuthError;
 
-/// The rendered launch delta for a route-auth profile (two-phase, contract §4).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// The rendered launch delta for a route-auth profile (two-phase, contract §4). `Debug` is hand-written in `redact.rs`: `set`'s values are credentials.
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct RenderedRouteAuth {
     /// Env vars to inject into the session launch layer.
     pub set: BTreeMap<String, String>,

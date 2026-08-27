@@ -27,6 +27,7 @@ pub mod native_bridge;
 pub mod plan;
 pub mod probe_materialization;
 pub mod profile;
+mod redact;
 pub mod render;
 mod sanitize;
 mod seat_trial;
