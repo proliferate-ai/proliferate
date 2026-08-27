@@ -24,6 +24,7 @@ use super::materialize::{self, FileSpec, PathFamily};
 use super::plan::GatewayModelPlan;
 use super::profile::{
     AgentRuntimeAuthProfile, GatewayProfile, HarnessSources, ProviderConfigProfile, ResolvedSource,
+    SeatProfile,
 };
 use super::RouteAuthError;
 
@@ -132,6 +133,11 @@ fn render_sources(
     // `rendered.set` because only THIS arm's names may exempt a claude rerouting
     // flag from sanitization — see `sanitize_claude_ambient`.
     let mut provider_config_keys: BTreeSet<String> = BTreeSet::new();
+    // Seats v1, no rotation: the document carries the seat pool in vault
+    // order, and the FIRST seat serves. Later seat sources are next-in-line
+    // for the rotation slice; composing more than one would let a later
+    // seat's token overwrite the serving one's, so they are skipped here.
+    let mut seat_applied = false;
     for source in &sources.sources {
         match source {
             ResolvedSource::ApiKey(profile) => {
@@ -157,6 +163,13 @@ fn render_sources(
                 &mut rendered,
                 &mut provider_config_keys,
             )?,
+            ResolvedSource::Seat(profile) => {
+                if seat_applied {
+                    continue;
+                }
+                render_seat(&sources.harness_kind, profile, runtime_home, &mut rendered)?;
+                seat_applied = true;
+            }
         }
     }
     // Every non-native route, not just the gateway one. See the fn's doc for the
@@ -517,6 +530,55 @@ fn render_grok_gateway(
         contents: None,
     });
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// seat route (seats v1): "run on this Max subscription". claude only this
+// slice — codex's seat route is the phase-2 refreshing-file shape.
+// ---------------------------------------------------------------------------
+
+/// The claude seat recipe (agent_auth spec §4 cell 2, "claude · seat"): env
+/// only — set the already-resolved seat env (`CLAUDE_CODE_OAUTH_TOKEN`) plus
+/// `CLAUDE_CONFIG_DIR` → that seat's own dir (`claude-config-<seat>/`), which
+/// neutralizes `apiKeyHelper` and ambient settings and keeps the CLI's
+/// keychain state per-seat (config-dir-hashed service names — the live-proven
+/// per-seat coexistence of 2026-08-26).
+///
+/// The strip list — `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_API_KEY`/
+/// `ANTHROPIC_BASE_URL` plus the rerouting flags — is applied by
+/// [`sanitize_claude_ambient`] over the composed delta, exactly as for every
+/// other non-native claude route: the seat env keys are deliberately NOT
+/// recorded as provider-config keys, so no rerouting flag survives, and none
+/// of the three Anthropic selectors is set by this recipe, so all three are
+/// removed. `CLAUDE_CODE_OAUTH_TOKEN` is not on the strip list — it IS the
+/// route.
+fn render_seat(
+    harness_kind: &str,
+    profile: &SeatProfile,
+    runtime_home: &Path,
+    rendered: &mut RenderedRouteAuth,
+) -> Result<(), RouteAuthError> {
+    match parse_harness(harness_kind)? {
+        AgentKind::Claude => {
+            for (key, value) in &profile.env {
+                rendered.set(key, value);
+            }
+            let seat_dir = materialize::claude_seat_config_dir_path(runtime_home, &profile.seat_id);
+            rendered.set("CLAUDE_CONFIG_DIR", path_string(&seat_dir));
+            rendered.files.push(FileSpec {
+                path_family: PathFamily::ClaudeSeatConfig {
+                    seat_id: profile.seat_id.clone(),
+                },
+                revision: 0,
+                contents: None,
+            });
+            Ok(())
+        }
+        _ => Err(RouteAuthError::UnsupportedRoute {
+            harness_kind: harness_kind.to_string(),
+            detail: format!("{harness_kind} has no seat recipe"),
+        }),
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,8 @@ import type {
   ReconcileAgentsRequest,
   ReconcileAgentsResponse,
   AgentLoginTerminalRecord,
+  AgentLoginVariant,
+  ClaimAgentMintTokenResponse,
   StartAgentLoginResponse,
   StartAgentLoginTerminalResponse,
 } from "../types/agents.js";
@@ -59,9 +61,24 @@ export class AgentsClient {
     );
   }
 
-  async startLoginTerminal(kind: string): Promise<StartAgentLoginTerminalResponse> {
+  async startLoginTerminal(
+    kind: string,
+    variant?: AgentLoginVariant,
+  ): Promise<StartAgentLoginTerminalResponse> {
     return this.transport.post<StartAgentLoginTerminalResponse>(
       `/v1/agents/${encodeURIComponent(kind)}/login/terminal`,
+      variant ? { variant } : {},
+    );
+  }
+
+  /**
+   * The one-time seat-token handoff (seats v1): returns the captured mint
+   * token exactly once — the runtime wipes its buffer as it serves this.
+   * Callers hold the token in memory only and POST it straight to the vault.
+   */
+  async claimMintToken(terminalId: string): Promise<ClaimAgentMintTokenResponse> {
+    return this.transport.post<ClaimAgentMintTokenResponse>(
+      `/v1/agents/login-terminals/${encodeURIComponent(terminalId)}/mint-token`,
       {},
     );
   }

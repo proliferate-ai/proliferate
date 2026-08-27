@@ -39,6 +39,15 @@ pub(super) const OPENCODE_CONFIG_PREFIX: &str = "opencode-config";
 /// revision-specific content; the launch env vars are authoritative each launch.
 const CLAUDE_CONFIG_DIR_NAME: &str = "claude-config";
 
+/// Per-seat CLAUDE_CONFIG_DIR family (`claude-config-<seat>/`, seats v1).
+/// Keyed by the seat's vault entry id, NOT by revision: the dir's identity is
+/// the seat, so keychain entries the CLI writes there (config-dir-hashed
+/// service names) stay stable across document revisions, and two seats never
+/// share credential state. Never GC'd by the revision sweep (its suffix is a
+/// UUID, not a revision); a revoked seat's dir is inert — the launch env is
+/// authoritative and simply stops pointing at it.
+const CLAUDE_SEAT_CONFIG_DIR_PREFIX: &str = "claude-config-";
+
 /// Config file names written inside the isolated home dirs.
 const CODEX_CONFIG_FILE_NAME: &str = "config.toml";
 pub(super) const OPENCODE_CONFIG_FILE_NAME: &str = "opencode.json";
@@ -52,10 +61,14 @@ pub(super) const OPENCODE_XDG_DATA_SUBDIR: &str = "xdg-data";
 
 /// Which isolated-state family a [`FileSpec`] materializes. The render layer
 /// tags the spec; apply runs the matching recipe.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathFamily {
     /// Stable (not revision-keyed) CLAUDE_CONFIG_DIR; no content file.
     ClaudeConfig,
+    /// Seat-keyed CLAUDE_CONFIG_DIR (`claude-config-<seat>/`, seats v1); no
+    /// content file. Keyed by the seat's vault entry id so keychain state the
+    /// CLI writes there stays per-seat and revision-stable.
+    ClaudeSeatConfig { seat_id: String },
     /// Revision-keyed CODEX_HOME with a `config.toml` (a ROUTED codex launch).
     CodexHome,
     /// Revision-keyed OpenCode dir with `opencode.json` + XDG subdirs.
@@ -90,6 +103,31 @@ pub(super) fn claude_config_dir_path(runtime_home: &Path) -> PathBuf {
     route_auth_root(runtime_home).join(CLAUDE_CONFIG_DIR_NAME)
 }
 
+/// Pure: the per-seat CLAUDE_CONFIG_DIR path (no I/O). The seat id is
+/// filesystem-sanitized defensively — the server issues UUIDs, but a path
+/// component must never be built from an unvetted wire string.
+pub(super) fn claude_seat_config_dir_path(runtime_home: &Path, seat_id: &str) -> PathBuf {
+    route_auth_root(runtime_home).join(format!(
+        "{CLAUDE_SEAT_CONFIG_DIR_PREFIX}{}",
+        sanitize_path_component(seat_id)
+    ))
+}
+
+/// Keep `[A-Za-z0-9_-]`; everything else becomes `_`. Purely defensive: the
+/// producer's seat ids are UUIDs, which pass through unchanged.
+fn sanitize_path_component(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
 /// Apply one [`FileSpec`]: create the isolated dir (revision-keyed families GC
 /// stale siblings first) and write its config file 0600 where the family has
 /// one. Idempotent per revision.
@@ -97,9 +135,16 @@ pub(super) fn apply_file_spec(
     runtime_home: &Path,
     spec: &FileSpec,
 ) -> Result<(), RouteAuthError> {
-    match spec.path_family {
+    match &spec.path_family {
         PathFamily::ClaudeConfig => {
             let dir = claude_config_dir_path(runtime_home);
+            create_dir(&dir)?;
+        }
+        PathFamily::ClaudeSeatConfig { seat_id } => {
+            // Seat-keyed, never revision-swept: the dir carries per-seat CLI
+            // state (keychain service hashing keys off the config-dir path),
+            // so it must survive document revisions unchanged.
+            let dir = claude_seat_config_dir_path(runtime_home, seat_id);
             create_dir(&dir)?;
         }
         PathFamily::CodexHome => {

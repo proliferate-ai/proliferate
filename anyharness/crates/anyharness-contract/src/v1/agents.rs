@@ -280,9 +280,25 @@ pub struct InstallAgentResponse {
 
 // --- Login ---
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+/// Which login flow a terminal runs. `Native` (the default when absent) is the
+/// harness's own interactive login; `MintSeat` runs the seat-minting flow
+/// (seats v1: `claude setup-token` in an isolated dir, token captured in
+/// memory by the runtime — never disk, never logs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentLoginVariant {
+    #[default]
+    Native,
+    MintSeat,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct StartAgentLoginRequest {}
+pub struct StartAgentLoginRequest {
+    /// Login-terminal variant; absent means the native login flow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant: Option<AgentLoginVariant>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -311,6 +327,24 @@ pub enum AgentLoginTerminalStatus {
     Failed,
 }
 
+/// The seat-mint capture's lifecycle on a `mint_seat` login terminal. Absent
+/// on a native login terminal. The token itself never appears here — it is
+/// claimable exactly once through the mint-token route while `Ready`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentMintCaptureStatus {
+    /// No token line observed yet (the user is still signing in).
+    Waiting,
+    /// A token line matched; the completion grace window is running.
+    Captured,
+    /// Capture complete (terminal exit, or the grace elapsed) — claimable.
+    Ready,
+    /// The token was claimed and the buffer wiped.
+    Consumed,
+    /// The terminal finished with no captured token; nothing was persisted.
+    Failed,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentLoginTerminalRecord {
@@ -324,6 +358,18 @@ pub struct AgentLoginTerminalRecord {
     pub exit_code: Option<i32>,
     pub created_at: String,
     pub updated_at: String,
+    /// Present only on a `mint_seat` terminal: the capture's lifecycle.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mint_status: Option<AgentMintCaptureStatus>,
+}
+
+/// The one-time handoff of a captured seat token to the courier (seats v1).
+/// Serving this response wipes the runtime's capture buffer; a second claim
+/// finds nothing.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaimAgentMintTokenResponse {
+    pub token: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

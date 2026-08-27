@@ -9,3 +9,5 @@ pub mod login_terminal;
 
 #[cfg(test)]
 mod context_tests;
+#[cfg(test)]
+mod seat_mint_tests;

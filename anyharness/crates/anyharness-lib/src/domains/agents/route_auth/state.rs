@@ -43,6 +43,14 @@ pub const SOURCE_KIND_API_KEY: &str = "api_key";
 /// names before the source ever reached Rust -- see agent-auth.md's wire
 /// contract). Rust never renames a field here, only picks a render arm.
 pub const SOURCE_KIND_PROVIDER_CONFIG: &str = "provider_config";
+/// A seat (seats v1): a Max-subscription credential from the vault. Same
+/// already-resolved `env` ruling as `provider_config` (for claude exactly
+/// `{CLAUDE_CODE_OAUTH_TOKEN: <token>}`), plus `seat_id` — the vault entry id,
+/// carried so the runtime can name the serving seat without echoing the token.
+/// The producer expands a pool seat selection into one such source per active
+/// seat, in vault order; the render plane serves the first (rotation is a
+/// later slice).
+pub const SOURCE_KIND_SEAT: &str = "seat";
 
 /// Resolve the absolute path of the agent-auth state file for a given
 /// AnyHarness runtime home. Single source of truth for the layout so delivery
@@ -83,11 +91,15 @@ pub struct AuthSource {
     /// `"aws_bedrock"`, `"azure_openai"`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config_kind: Option<String>,
-    /// `provider_config` only: the ALREADY-resolved, harness-real env-var map
-    /// (Python's job, not Rust's — see `SOURCE_KIND_PROVIDER_CONFIG`'s doc).
-    /// `BTreeMap` for deterministic serialization.
+    /// `provider_config` and `seat`: the ALREADY-resolved, harness-real
+    /// env-var map (Python's job, not Rust's — see
+    /// `SOURCE_KIND_PROVIDER_CONFIG`'s doc). `BTreeMap` for deterministic
+    /// serialization.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub env: Option<BTreeMap<String, String>>,
+    /// `seat` only: the vault entry id of this seat (never key material).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seat_id: Option<String>,
 }
 
 /// One harness's enabled sources (contract §3). Composition is just "a list of
@@ -288,6 +300,7 @@ mod tests {
             value: None,
             config_kind: None,
             env: None,
+            seat_id: None,
         }
     }
 
@@ -300,6 +313,7 @@ mod tests {
             value: Some(value.into()),
             config_kind: None,
             env: None,
+            seat_id: None,
         }
     }
 

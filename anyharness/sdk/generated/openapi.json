@@ -198,6 +198,57 @@
         }
       }
     },
+    "/v1/agents/login-terminals/{terminal_id}/mint-token": {
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "claim_agent_login_terminal_mint_token",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Agent login terminal ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The captured seat token, exactly once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimAgentMintTokenResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not a mint terminal, or not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Capture not complete (or already consumed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents/reconcile": {
       "get": {
         "tags": [
@@ -8222,6 +8273,17 @@
           "kind": {
             "type": "string"
           },
+          "mintStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentMintCaptureStatus",
+                "description": "Present only on a `mint_seat` terminal: the capture's lifecycle."
+              }
+            ]
+          },
           "status": {
             "$ref": "#/components/schemas/AgentLoginTerminalStatus"
           },
@@ -8239,6 +8301,25 @@
           "starting",
           "running",
           "exited",
+          "failed"
+        ]
+      },
+      "AgentLoginVariant": {
+        "type": "string",
+        "description": "Which login flow a terminal runs. `Native` (the default when absent) is the\nharness's own interactive login; `MintSeat` runs the seat-minting flow\n(seats v1: `claude setup-token` in an isolated dir, token captured in\nmemory by the runtime — never disk, never logs).",
+        "enum": [
+          "native",
+          "mint_seat"
+        ]
+      },
+      "AgentMintCaptureStatus": {
+        "type": "string",
+        "description": "The seat-mint capture's lifecycle on a `mint_seat` login terminal. Absent\non a native login terminal. The token itself never appears here — it is\nclaimable exactly once through the mint-token route while `Ready`.",
+        "enum": [
+          "waiting",
+          "captured",
+          "ready",
+          "consumed",
           "failed"
         ]
       },
@@ -8996,6 +9077,18 @@
             "type": "string"
           },
           "url": {
+            "type": "string"
+          }
+        }
+      },
+      "ClaimAgentMintTokenResponse": {
+        "type": "object",
+        "description": "The one-time handoff of a captured seat token to the courier (seats v1).\nServing this response wipes the runtime's capture buffer; a second claim\nfinds nothing.",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
             "type": "string"
           }
         }
@@ -19059,7 +19152,20 @@
         }
       },
       "StartAgentLoginRequest": {
-        "type": "object"
+        "type": "object",
+        "properties": {
+          "variant": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentLoginVariant",
+                "description": "Login-terminal variant; absent means the native login flow."
+              }
+            ]
+          }
+        }
       },
       "StartAgentLoginResponse": {
         "type": "object",

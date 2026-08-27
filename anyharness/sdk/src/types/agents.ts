@@ -86,6 +86,10 @@ export type AgentLoginTerminalStatus = components["schemas"]["AgentLoginTerminal
 export type AgentLoginTerminalRecord = components["schemas"]["AgentLoginTerminalRecord"];
 export type StartAgentLoginTerminalResponse =
   components["schemas"]["StartAgentLoginTerminalResponse"];
+export type AgentLoginVariant = components["schemas"]["AgentLoginVariant"];
+export type AgentMintCaptureStatus = components["schemas"]["AgentMintCaptureStatus"];
+export type ClaimAgentMintTokenResponse =
+  components["schemas"]["ClaimAgentMintTokenResponse"];
 export type ReconcileOutcome = components["schemas"]["ReconcileOutcome"];
 export type ReconcileJobStatus = components["schemas"]["ReconcileJobStatus"];
 export type AgentInstallProgressPhase =

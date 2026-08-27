@@ -8,7 +8,7 @@ mod output_sink;
 pub use crate::domains::terminals::model::TerminalOutputEvent;
 pub use agent_login::{
     AgentLoginTerminalHandle, AgentLoginTerminalRecord, AgentLoginTerminalService,
-    AgentLoginTerminalStatus, StartAgentLoginTerminalOptions,
+    AgentLoginTerminalStatus, MintClaimError, MintTerminalOptions, StartAgentLoginTerminalOptions,
 };
 pub use handle::TerminalHandle;
 pub use manager::TerminalService;

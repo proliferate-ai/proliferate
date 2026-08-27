@@ -39,6 +39,12 @@ impl From<AgentRuntimeError> for ApiError {
                 Some(format!("Agent {kind} does not support native login")),
                 Some("LOGIN_NOT_SUPPORTED"),
             ),
+            AgentRuntimeError::Login(AgentLoginError::SeatMintNotSupported(kind)) => ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "Seat minting not supported",
+                Some(format!("Agent {kind} does not support seat minting")),
+                Some("SEAT_MINT_NOT_SUPPORTED"),
+            ),
             AgentRuntimeError::Login(AgentLoginError::CommandNotFound(kind)) => ApiError::new(
                 StatusCode::CONFLICT,
                 "Login command not found",

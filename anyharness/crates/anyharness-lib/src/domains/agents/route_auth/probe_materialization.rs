@@ -103,6 +103,11 @@ pub(crate) fn probe_auth_material_for_server(
                         env_value_digests.push(credential_value_digest(value));
                     }
                 }
+                ResolvedSource::Seat(profile) => {
+                    for value in profile.env.values() {
+                        env_value_digests.push(credential_value_digest(value));
+                    }
+                }
             }
         }
     }

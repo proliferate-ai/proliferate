@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 
 use super::state::{
     AgentAuthState, AuthSource, SOURCE_KIND_API_KEY, SOURCE_KIND_GATEWAY,
-    SOURCE_KIND_PROVIDER_CONFIG,
+    SOURCE_KIND_PROVIDER_CONFIG, SOURCE_KIND_SEAT,
 };
 use super::RouteAuthError;
 
@@ -49,6 +49,7 @@ pub enum ResolvedSource {
     Gateway(GatewayProfile),
     ApiKey(ApiKeyProfile),
     ProviderConfig(ProviderConfigProfile),
+    Seat(SeatProfile),
 }
 
 /// A raw provider key destined for a free-form env var (contract §4: `api_key`
@@ -78,6 +79,19 @@ pub struct GatewayProfile {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderConfigProfile {
     pub config_kind: String,
+    pub env: BTreeMap<String, String>,
+}
+
+/// A seat (seats v1): "run on this Max subscription". `env` is ALREADY the
+/// harness's real env-var map (for claude exactly
+/// `{CLAUDE_CODE_OAUTH_TOKEN: <token>}`) — same wire ruling as
+/// `provider_config`: the recipe `.set()`s exact keys, never renames.
+/// `seat_id` names the vault entry so status/refusals can identify the seat
+/// without ever echoing the token. The document carries the pool in vault
+/// order; the render plane serves the first (rotation is a later slice).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeatProfile {
+    pub seat_id: String,
     pub env: BTreeMap<String, String>,
 }
 
@@ -163,6 +177,18 @@ fn resolve_source(
                 env,
             }))
         }
+        SOURCE_KIND_SEAT => {
+            let seat_id = require_field(harness_kind, source.seat_id.as_deref(), "seat_id")?;
+            let env = source
+                .env
+                .clone()
+                .filter(|env| !env.is_empty())
+                .ok_or_else(|| RouteAuthError::SelectionIncomplete {
+                    harness_kind: harness_kind.to_string(),
+                    detail: "source is missing required non-empty field 'env'".to_string(),
+                })?;
+            Ok(ResolvedSource::Seat(SeatProfile { seat_id, env }))
+        }
         unknown => Err(RouteAuthError::UnsupportedRoute {
             harness_kind: harness_kind.to_string(),
             detail: format!("unknown agent-auth source kind '{unknown}'"),
@@ -209,6 +235,7 @@ mod tests {
             value: None,
             config_kind: None,
             env: None,
+            seat_id: None,
         }
     }
 
@@ -221,6 +248,7 @@ mod tests {
             value: Some(value.into()),
             config_kind: None,
             env: None,
+            seat_id: None,
         }
     }
 
@@ -237,6 +265,24 @@ mod tests {
                     .map(|(k, v)| (k.to_string(), v.to_string()))
                     .collect(),
             ),
+            seat_id: None,
+        }
+    }
+
+    fn seat_source(seat_id: &str, token: &str) -> AuthSource {
+        AuthSource {
+            kind: SOURCE_KIND_SEAT.into(),
+            base_url: None,
+            key: None,
+            env_var_name: None,
+            value: None,
+            config_kind: None,
+            env: Some(
+                [("CLAUDE_CODE_OAUTH_TOKEN".to_string(), token.to_string())]
+                    .into_iter()
+                    .collect(),
+            ),
+            seat_id: Some(seat_id.into()),
         }
     }
 
@@ -442,6 +488,7 @@ mod tests {
                     value: None,
                     config_kind: None,
                     env: None,
+                    seat_id: None,
                 }],
             )],
         );
@@ -464,6 +511,7 @@ mod tests {
                     value: None,
                     config_kind: None,
                     env: None,
+                    seat_id: None,
                 }],
             )],
         );
@@ -485,6 +533,7 @@ mod tests {
                     value: None,
                     config_kind: None,
                     env: None,
+                    seat_id: None,
                 }],
             )],
         );
@@ -570,10 +619,87 @@ mod tests {
                             .into_iter()
                             .collect(),
                     ),
+                    seat_id: None,
                 }],
             )],
         );
         let error = resolve_profile(Some(&state), "opencode").expect_err("missing config_kind");
+        assert!(matches!(error, RouteAuthError::SelectionIncomplete { .. }));
+    }
+
+    // --- seat (seats v1) --------------------------------------------------
+
+    #[test]
+    fn seat_source_resolves_with_its_env_map_and_seat_id() {
+        let state = state(
+            3,
+            vec![harness(
+                "claude",
+                vec![seat_source("seat-uuid-1", "sk-ant-oat01-token")],
+            )],
+        );
+        let profile = resolve_profile(Some(&state), "claude").expect("resolve");
+        match profile {
+            AgentRuntimeAuthProfile::Sources(sources) => match &sources.sources[..] {
+                [ResolvedSource::Seat(seat)] => {
+                    assert_eq!(seat.seat_id, "seat-uuid-1");
+                    assert_eq!(
+                        seat.env.get("CLAUDE_CODE_OAUTH_TOKEN").map(String::as_str),
+                        Some("sk-ant-oat01-token")
+                    );
+                }
+                other => panic!("expected one Seat source, got {other:?}"),
+            },
+            other => panic!("expected sources, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn seat_pool_resolves_every_seat_in_document_order() {
+        // The producer expands the pool in vault order; resolution preserves it
+        // (which seat SERVES is render's call — first, until rotation lands).
+        let state = state(
+            4,
+            vec![harness(
+                "claude",
+                vec![
+                    seat_source("seat-a", "sk-tok-a"),
+                    seat_source("seat-b", "sk-tok-b"),
+                ],
+            )],
+        );
+        let profile = resolve_profile(Some(&state), "claude").expect("resolve");
+        match profile {
+            AgentRuntimeAuthProfile::Sources(sources) => {
+                let ids: Vec<&str> = sources
+                    .sources
+                    .iter()
+                    .map(|source| match source {
+                        ResolvedSource::Seat(seat) => seat.seat_id.as_str(),
+                        other => panic!("expected Seat, got {other:?}"),
+                    })
+                    .collect();
+                assert_eq!(ids, ["seat-a", "seat-b"]);
+            }
+            other => panic!("expected sources, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn seat_missing_seat_id_is_selection_incomplete() {
+        let mut source = seat_source("seat-a", "sk-tok");
+        source.seat_id = None;
+        let state = state(1, vec![harness("claude", vec![source])]);
+        let error = resolve_profile(Some(&state), "claude").expect_err("missing seat_id");
+        assert!(matches!(error, RouteAuthError::SelectionIncomplete { .. }));
+    }
+
+    #[test]
+    fn seat_with_empty_env_is_selection_incomplete() {
+        let mut source = seat_source("seat-a", "sk-tok");
+        source.env = Some(BTreeMap::new());
+        let state = state(1, vec![harness("claude", vec![source])]);
+        let error = resolve_profile(Some(&state), "claude").expect_err("empty env");
         assert!(matches!(error, RouteAuthError::SelectionIncomplete { .. }));
     }
 }

@@ -2,10 +2,12 @@ use std::collections::HashMap;
 use std::io::{Read as IoRead, Write as IoWrite};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use tokio::sync::{broadcast, Mutex, RwLock};
 
+use crate::domains::agents::auth::login_terminal::{MintCapture, MintCaptureStatus};
 use crate::domains::terminals::model::{ResizeTerminalOptions, TerminalOutputEvent};
 use crate::process_env::remove_runtime_private_pty_env;
 
@@ -30,6 +32,18 @@ pub struct AgentLoginTerminalRecord {
     pub exit_code: Option<i32>,
     pub created_at: String,
     pub updated_at: String,
+    /// Present only on a mint (seat-capture) terminal; computed at read time
+    /// from the in-memory capture — never persisted anywhere.
+    pub mint_status: Option<MintCaptureStatus>,
+}
+
+/// Marks a login terminal as a seat-mint terminal (seats v1): the service
+/// attaches a [`MintCapture`] to its output, enforces single-flight per
+/// harness kind, and removes `scratch_dir` (the isolated mint dir) on every
+/// terminal teardown path.
+#[derive(Debug, Clone)]
+pub struct MintTerminalOptions {
+    pub scratch_dir: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -43,16 +57,58 @@ pub struct StartAgentLoginTerminalOptions {
     pub command_display: String,
     pub cols: u16,
     pub rows: u16,
+    /// `Some` makes this a seat-mint terminal.
+    pub mint: Option<MintTerminalOptions>,
+}
+
+/// One mint terminal's in-memory state. The capture holds the only copy of a
+/// captured token; the scratch dir is the isolated directory the mint command
+/// ran in, removed on every teardown path.
+struct MintState {
+    capture: MintCapture,
+    kind: String,
+    scratch_dir: Option<PathBuf>,
+}
+
+impl MintState {
+    /// Wipe the capture and remove the scratch dir (best-effort, idempotent).
+    fn teardown(&mut self) {
+        self.capture.fail();
+        self.remove_scratch();
+    }
+
+    fn remove_scratch(&mut self) {
+        if let Some(dir) = self.scratch_dir.take() {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+}
+
+/// Why a mint-token claim returned nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MintClaimError {
+    /// Unknown terminal, or a terminal that is not a mint terminal.
+    NotFound,
+    /// The capture is not (or no longer) claimable; carries its state so the
+    /// route can say which.
+    NotReady(MintCaptureStatus),
 }
 
 type AgentLoginPtyRef = Arc<Mutex<AgentLoginPty>>;
 type AgentLoginRegistry = Arc<RwLock<HashMap<String, AgentLoginPtyRef>>>;
 type AgentLoginOutputRegistry = Arc<RwLock<HashMap<String, TerminalOutputHub>>>;
+type MintRegistry = Arc<RwLock<HashMap<String, Arc<Mutex<MintState>>>>>;
 
 #[derive(Clone)]
 pub struct AgentLoginTerminalService {
     terminals: AgentLoginRegistry,
     output_hubs: AgentLoginOutputRegistry,
+    /// Mint capture per terminal id (mint terminals only).
+    mints: MintRegistry,
+    /// The single-flight guard: at most one LIVE mint terminal per harness
+    /// kind — a second mint start returns the open terminal instead of
+    /// spawning (the UI focuses it).
+    mint_by_kind: Arc<RwLock<HashMap<String, String>>>,
 }
 
 impl AgentLoginTerminalService {
@@ -60,6 +116,8 @@ impl AgentLoginTerminalService {
         Self {
             terminals: Arc::new(RwLock::new(HashMap::new())),
             output_hubs: Arc::new(RwLock::new(HashMap::new())),
+            mints: Arc::new(RwLock::new(HashMap::new())),
+            mint_by_kind: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -67,6 +125,17 @@ impl AgentLoginTerminalService {
         &self,
         options: StartAgentLoginTerminalOptions,
     ) -> anyhow::Result<AgentLoginTerminalRecord> {
+        // Single-flight per harness (mint terminals only, agent_auth spec §3
+        // flow 2): a second mint while one is open FOCUSES the open terminal —
+        // returning its record is that focus, since the UI keys panels by id.
+        // The second start's never-used scratch dir is removed on the spot.
+        if let Some(mint) = options.mint.as_ref() {
+            if let Some(existing) = self.live_mint_terminal_for_kind(&options.kind).await {
+                let _ = std::fs::remove_dir_all(&mint.scratch_dir);
+                return Ok(existing);
+            }
+        }
+
         let pty_system = native_pty_system();
         let size = PtySize {
             rows: options.rows,
@@ -105,9 +174,10 @@ impl AgentLoginTerminalService {
 
         let terminal_id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
-        let record = AgentLoginTerminalRecord {
+        let is_mint = options.mint.is_some();
+        let mut record = AgentLoginTerminalRecord {
             id: terminal_id.clone(),
-            kind: options.kind,
+            kind: options.kind.clone(),
             title: options.title,
             status: AgentLoginTerminalStatus::Running,
             cwd,
@@ -115,6 +185,7 @@ impl AgentLoginTerminalService {
             exit_code: None,
             created_at: now.clone(),
             updated_at: now,
+            mint_status: None,
         };
         let hub = TerminalOutputHub::new();
         let pty = AgentLoginPty {
@@ -132,8 +203,25 @@ impl AgentLoginTerminalService {
             let mut hubs = self.output_hubs.write().await;
             hubs.insert(terminal_id.clone(), hub.clone());
         }
+        if let Some(mint) = options.mint {
+            let state = MintState {
+                capture: MintCapture::new(),
+                kind: options.kind.clone(),
+                scratch_dir: Some(mint.scratch_dir),
+            };
+            record.mint_status = Some(state.capture.status(Instant::now()));
+            {
+                let mut mints = self.mints.write().await;
+                mints.insert(terminal_id.clone(), Arc::new(Mutex::new(state)));
+            }
+            {
+                let mut by_kind = self.mint_by_kind.write().await;
+                by_kind.insert(options.kind.clone(), terminal_id.clone());
+            }
+        }
 
         let terminals_ref = self.terminals.clone();
+        let mints_ref = self.mints.clone();
         let tid = terminal_id.clone();
         tokio::task::spawn_blocking(move || {
             let mut buf = [0u8; 4096];
@@ -142,6 +230,9 @@ impl AgentLoginTerminalService {
                     Ok(0) => {
                         let rt = tokio::runtime::Handle::current();
                         rt.block_on(async {
+                            if is_mint {
+                                complete_mint_capture(&mints_ref, &tid).await;
+                            }
                             let code = mark_terminal_exited(&terminals_ref, &tid).await;
                             let _ = hub.emit_exit(code).await;
                         });
@@ -150,11 +241,19 @@ impl AgentLoginTerminalService {
                     Ok(n) => {
                         let data = buf[..n].to_vec();
                         let rt = tokio::runtime::Handle::current();
-                        let _ = rt.block_on(hub.emit_data(data, None, None));
+                        rt.block_on(async {
+                            if is_mint {
+                                feed_mint_capture(&mints_ref, &tid, &data).await;
+                            }
+                            let _ = hub.emit_data(data, None, None).await;
+                        });
                     }
                     Err(_) => {
                         let rt = tokio::runtime::Handle::current();
                         rt.block_on(async {
+                            if is_mint {
+                                complete_mint_capture(&mints_ref, &tid).await;
+                            }
                             let code = mark_terminal_exited(&terminals_ref, &tid).await;
                             let _ = hub.emit_exit(code).await;
                         });
@@ -177,15 +276,20 @@ impl AgentLoginTerminalService {
             pty,
             registry: self.terminals.clone(),
             output_hubs: self.output_hubs.clone(),
+            mints: self.mints.clone(),
+            mint_by_kind: self.mint_by_kind.clone(),
         })
     }
 
     pub async fn get_terminal(&self, terminal_id: &str) -> Option<AgentLoginTerminalRecord> {
-        self.lookup_terminal(terminal_id)
+        let mut record = self
+            .lookup_terminal(terminal_id)
             .await?
             .snapshot()
             .await
-            .ok()
+            .ok()?;
+        record.mint_status = self.mint_status(terminal_id).await;
+        Some(record)
     }
 
     pub async fn close_terminal(&self, terminal_id: &str) -> anyhow::Result<()> {
@@ -195,6 +299,67 @@ impl AgentLoginTerminalService {
             .ok_or_else(|| anyhow::anyhow!("agent login terminal not found"))?;
         handle.close().await
     }
+
+    /// The one-time mint-token handoff (seats v1): returns the captured token
+    /// exactly when the capture is complete, wiping the runtime's buffer in
+    /// the same breath — the courier holds the only remaining copy. The
+    /// scratch dir goes with it.
+    pub async fn claim_mint_token(&self, terminal_id: &str) -> Result<String, MintClaimError> {
+        let state = {
+            let mints = self.mints.read().await;
+            mints.get(terminal_id).cloned()
+        }
+        .ok_or(MintClaimError::NotFound)?;
+        let mut state = state.lock().await;
+        let now = Instant::now();
+        match state.capture.claim(now) {
+            Some(token) => {
+                state.remove_scratch();
+                Ok(token)
+            }
+            None => Err(MintClaimError::NotReady(state.capture.status(now))),
+        }
+    }
+
+    /// The capture's lifecycle for a mint terminal (`None` for native ones).
+    pub async fn mint_status(&self, terminal_id: &str) -> Option<MintCaptureStatus> {
+        let state = {
+            let mints = self.mints.read().await;
+            mints.get(terminal_id).cloned()
+        }?;
+        let state = state.lock().await;
+        Some(state.capture.status(Instant::now()))
+    }
+
+    /// The open (still Starting/Running) mint terminal for a harness kind, if
+    /// any — the single-flight guard's read side. A finished terminal releases
+    /// the slot.
+    async fn live_mint_terminal_for_kind(&self, kind: &str) -> Option<AgentLoginTerminalRecord> {
+        let terminal_id = {
+            let by_kind = self.mint_by_kind.read().await;
+            by_kind.get(kind).cloned()
+        }?;
+        let record = self.get_terminal(&terminal_id).await;
+        match record {
+            Some(record)
+                if matches!(
+                    record.status,
+                    AgentLoginTerminalStatus::Starting | AgentLoginTerminalStatus::Running
+                ) =>
+            {
+                Some(record)
+            }
+            _ => {
+                // Stale slot (terminal finished or vanished): release it so
+                // the next mint can start.
+                let mut by_kind = self.mint_by_kind.write().await;
+                if by_kind.get(kind).map(String::as_str) == Some(terminal_id.as_str()) {
+                    by_kind.remove(kind);
+                }
+                None
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -203,6 +368,8 @@ pub struct AgentLoginTerminalHandle {
     pty: AgentLoginPtyRef,
     registry: AgentLoginRegistry,
     output_hubs: AgentLoginOutputRegistry,
+    mints: MintRegistry,
+    mint_by_kind: Arc<RwLock<HashMap<String, String>>>,
 }
 
 impl AgentLoginTerminalHandle {
@@ -251,6 +418,23 @@ impl AgentLoginTerminalHandle {
         {
             let mut hubs = self.output_hubs.write().await;
             hubs.remove(&self.terminal_id);
+        }
+        // Mint teardown: an unclaimed capture is an abort — wipe the buffer
+        // and remove the scratch dir (a claimed one is already wiped; this is
+        // idempotent). The single-flight slot is released either way.
+        let mint = {
+            let mut mints = self.mints.write().await;
+            mints.remove(&self.terminal_id)
+        };
+        if let Some(mint) = mint {
+            let mut state = mint.lock().await;
+            state.teardown();
+            let kind = state.kind.clone();
+            drop(state);
+            let mut by_kind = self.mint_by_kind.write().await;
+            if by_kind.get(&kind).map(String::as_str) == Some(self.terminal_id.as_str()) {
+                by_kind.remove(&kind);
+            }
         }
         Ok(())
     }
@@ -337,4 +521,33 @@ async fn mark_terminal_exited(terminals: &AgentLoginRegistry, terminal_id: &str)
     }?;
     let mut h = handle.lock().await;
     Some(h.mark_exited()).flatten()
+}
+
+async fn feed_mint_capture(mints: &MintRegistry, terminal_id: &str, data: &[u8]) {
+    let state = {
+        let map = mints.read().await;
+        map.get(terminal_id).cloned()
+    };
+    if let Some(state) = state {
+        let mut state = state.lock().await;
+        state.capture.feed(data, Instant::now());
+    }
+}
+
+/// Terminal exit is one of the two completion signals (the other is the grace
+/// window, evaluated lazily at read/claim time). A failed capture (no match)
+/// wipes itself; its scratch dir goes with it.
+async fn complete_mint_capture(mints: &MintRegistry, terminal_id: &str) {
+    let state = {
+        let map = mints.read().await;
+        map.get(terminal_id).cloned()
+    };
+    if let Some(state) = state {
+        let mut state = state.lock().await;
+        let now = Instant::now();
+        state.capture.on_exit(now);
+        if state.capture.status(now) == MintCaptureStatus::Failed {
+            state.remove_scratch();
+        }
+    }
 }

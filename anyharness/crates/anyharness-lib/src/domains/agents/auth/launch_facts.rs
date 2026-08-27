@@ -121,6 +121,14 @@ fn collect_enrolled_source_facts(
                             }
                         }
                     }
+                    ResolvedSource::Seat(seat) => {
+                        // Seats v1: presence-only facts, same secrets rule as
+                        // `api_key` — the token value never leaves the render
+                        // path (for claude this is CLAUDE_CODE_OAUTH_TOKEN).
+                        for var in seat.env.keys() {
+                            facts.push(CredentialFact::Env { var: var.clone() });
+                        }
+                    }
                 }
             }
             // At most one gateway Route fact regardless of gateway source count;

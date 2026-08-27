@@ -8,7 +8,8 @@ use anyharness_contract::v1::{
     AgentAuthSelectionFact, AgentAuthStateSummary, AgentCliAuthState, AgentCredentialState,
     AgentInstallProgress, AgentInstallProgressComponent, AgentInstallProgressPhase,
     AgentInstallState,
-    AgentLoginTerminalRecord, AgentLoginTerminalStatus, AgentReadinessState, AgentReconcileSummary,
+    AgentLoginTerminalRecord, AgentLoginTerminalStatus, AgentMintCaptureStatus,
+    AgentReadinessState, AgentReconcileSummary,
     AgentSummary, ArtifactStatus, InstallAgentRequest,
     ReconcileAgentResult, ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
 };
@@ -22,6 +23,7 @@ use crate::domains::agents::auth_state::{
 use crate::domains::agents::auth::login_terminal::{
     AgentLoginTerminalRecord as InternalAgentLoginTerminalRecord,
     AgentLoginTerminalStatus as InternalAgentLoginTerminalStatus,
+    MintCaptureStatus as InternalMintCaptureStatus,
 };
 use crate::domains::agents::installer::progress::InstallProgressPhase;
 use crate::domains::agents::installer::reconcile::execution::{
@@ -437,6 +439,13 @@ pub(super) fn agent_login_terminal_to_contract(
         exit_code: record.exit_code,
         created_at: record.created_at,
         updated_at: record.updated_at,
+        mint_status: record.mint_status.map(|status| match status {
+            InternalMintCaptureStatus::Waiting => AgentMintCaptureStatus::Waiting,
+            InternalMintCaptureStatus::Captured => AgentMintCaptureStatus::Captured,
+            InternalMintCaptureStatus::Ready => AgentMintCaptureStatus::Ready,
+            InternalMintCaptureStatus::Consumed => AgentMintCaptureStatus::Consumed,
+            InternalMintCaptureStatus::Failed => AgentMintCaptureStatus::Failed,
+        }),
     }
 }
 

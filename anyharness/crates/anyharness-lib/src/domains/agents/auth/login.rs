@@ -18,6 +18,8 @@ use crate::integrations::agent_cli::executable::{find_in_path, is_valid_executab
 pub enum AgentLoginError {
     #[error("Agent {0} does not support native login")]
     NotSupported(String),
+    #[error("Agent {0} does not support seat minting")]
+    SeatMintNotSupported(String),
     #[error("Login command for agent {0} was not found")]
     CommandNotFound(String),
 }

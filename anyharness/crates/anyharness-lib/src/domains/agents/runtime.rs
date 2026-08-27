@@ -105,6 +105,16 @@ pub struct AgentLoginStart {
     pub message: Option<String>,
 }
 
+/// A seat-mint terminal launch (seats v1): the ordinary login-terminal start
+/// plus the isolated scratch dir the mint command runs in. The login-terminal
+/// service owns the scratch's teardown (removed on claim, close, and every
+/// failure path — an aborted mint leaves nothing on disk).
+#[derive(Debug, Clone)]
+pub struct AgentMintSeatStart {
+    pub start: AgentLoginStart,
+    pub scratch_dir: PathBuf,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum AgentRuntimeError {
     #[error("No built-in agent with kind: {0}")]
@@ -282,6 +292,66 @@ impl AgentRuntime {
             command_display: resolved.command_display,
             reuses_user_state: login_spec.reuses_user_state,
             message: login_spec.message.clone(),
+        })
+    }
+
+    /// Start the seat-mint flow (seats v1, agent_auth spec §3 flow 2): run
+    /// `claude setup-token` in an isolated scratch dir with an isolated
+    /// `CLAUDE_CONFIG_DIR`, so the mint never reads or writes the user's own
+    /// `~/.claude`. claude-only this slice; other harnesses refuse in type.
+    ///
+    /// The scratch root is a SIBLING of `agent-auth/` (same reasoning as the
+    /// probe scratch): the launch-side revision GC enumerates `agent-auth/`
+    /// and must never see mint dirs.
+    pub async fn start_mint_seat_terminal(
+        &self,
+        kind: &str,
+    ) -> Result<AgentMintSeatStart, AgentRuntimeError> {
+        let descriptor = descriptor_for_kind(kind)?;
+        if descriptor.kind != AgentKind::Claude {
+            return Err(AgentRuntimeError::Login(
+                AgentLoginError::SeatMintNotSupported(kind.to_string()),
+            ));
+        }
+        let scratch_dir = self
+            .runtime_home
+            .join("agent-auth-mint")
+            .join(format!("mint-{}", uuid::Uuid::new_v4()));
+        let config_dir = scratch_dir.join("claude-config");
+        std::fs::create_dir_all(&config_dir).map_err(|error| {
+            AgentRuntimeError::LoginTerminalFailed(format!(
+                "failed to create mint scratch dir: {error}"
+            ))
+        })?;
+
+        // Reuse the login-command resolution (managed artifact → registry
+        // binary → PATH) — the mint runs the SAME claude binary, just with
+        // `setup-token` instead of the interactive login args.
+        let mut resolved = login::resolve_login_command(&descriptor, &self.runtime_home)?;
+        resolved.command.args = vec!["setup-token".to_string()];
+        let command_display = login::display_command(&resolved.command);
+        let mut env = resolved.env;
+        env.push((
+            "CLAUDE_CONFIG_DIR".to_string(),
+            config_dir.display().to_string(),
+        ));
+
+        Ok(AgentMintSeatStart {
+            start: AgentLoginStart {
+                kind: descriptor.kind.as_str().to_string(),
+                label: "Add a Claude.ai login".to_string(),
+                command: resolved.command,
+                cwd: scratch_dir.clone(),
+                env,
+                command_display,
+                reuses_user_state: false,
+                message: Some(
+                    "Sign in with your Claude.ai account in the browser; the seat is \
+                     captured automatically."
+                        .to_string(),
+                ),
+            },
+            scratch_dir,
         })
     }
 
