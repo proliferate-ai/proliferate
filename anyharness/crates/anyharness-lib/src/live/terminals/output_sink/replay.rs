@@ -22,6 +22,21 @@ impl ReplayBuffer {
         }
     }
 
+    /// Zero the data payloads, drop every frame, and floor the sequence at
+    /// `next_seq` so a reconnect observes a gap instead of the purged bytes.
+    pub(super) fn purge(&mut self) {
+        for frame in self.frames.iter_mut() {
+            if let TerminalOutputEvent::Data { data, .. } = frame {
+                for byte in data.iter_mut() {
+                    *byte = 0;
+                }
+            }
+        }
+        self.frames.clear();
+        self.byte_len = 0;
+        self.floor_seq = self.next_seq;
+    }
+
     pub(super) fn push(&mut self, event: TerminalOutputEvent) {
         self.byte_len += event.approx_bytes();
         self.frames.push_back(event);

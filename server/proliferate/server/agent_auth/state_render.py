@@ -189,13 +189,24 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
     by_harness: dict[str, list[tuple[tuple[str, str], dict[str, object]]]] = {
         selection.harness_kind: [] for selection in inputs.selections
     }
+    seen_seat_ids: dict[str, set[str]] = {}
     for selection in inputs.selections:
         # A seat selection is the one row that expands to MANY wire sources
         # (the pool, in vault order); every other kind renders at most one.
         # Every expanded seat source shares one sort key, and Python's sort is
         # stable, so vault order survives the per-harness (kind, env) sort.
+        # The document carries each active seat AT MOST ONCE per harness
+        # (spec §2's "every active seat, in vault order"): the kind-counting
+        # radio lets a pool row and a pin coexist as one selected method, and
+        # without this dedupe the pinned seat's token would render twice —
+        # double-weighting it under slice 2's round-robin.
         if selection.source_kind == AGENT_AUTH_SOURCE_SEAT:
+            seen = seen_seat_ids.setdefault(selection.harness_kind, set())
             for seat_source in _render_seat_sources(inputs, selection):
+                seat_id = str(seat_source["seat_id"])
+                if seat_id in seen:
+                    continue
+                seen.add(seat_id)
                 by_harness[selection.harness_kind].append(
                     ((str(seat_source["kind"]), ""), seat_source)
                 )

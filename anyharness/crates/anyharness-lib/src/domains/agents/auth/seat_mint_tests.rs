@@ -295,6 +295,165 @@ async fn mint_capture_never_touches_disk() {
     }
 }
 
+/// The single-flight guard under CONCURRENT starts (a double-click firing two
+/// POSTs): the guard's write lock is held across check + spawn + reserve, so
+/// every racer lands on ONE terminal — a check-then-act guard let both pass
+/// the check before either reserved, spawning two live mint PTYs.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn mint_single_flight_survives_concurrent_starts() {
+    let home = temp_home("seat-concurrent");
+    let service = AgentLoginTerminalService::new();
+
+    let mut tasks = Vec::new();
+    for _ in 0..8 {
+        let service = service.clone();
+        let home = home.clone();
+        tasks.push(tokio::spawn(async move {
+            let scratch = mint_scratch(&home);
+            service
+                .start_terminal(start_options(&home, &scratch, "sleep 30"))
+                .await
+                .expect("concurrent start")
+        }));
+    }
+    let mut ids = Vec::new();
+    for task in tasks {
+        ids.push(task.await.expect("join").id);
+    }
+    let first = ids[0].clone();
+    assert!(
+        ids.iter().all(|id| *id == first),
+        "all concurrent starts must land on one terminal, got {ids:?}"
+    );
+    // Exactly one scratch dir survives — the winner's; every loser's was
+    // removed on the spot.
+    let survivors = std::fs::read_dir(home.join("agent-auth-mint"))
+        .map(|entries| entries.count())
+        .unwrap_or(0);
+    assert_eq!(survivors, 1, "only the winning mint's scratch dir remains");
+
+    service.close_terminal(&first).await.expect("close");
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// An exited-but-unclaimed mint is torn down, not stranded: the scratch dir
+/// goes at exit (the CLI cannot need its config dir any more), and starting
+/// the NEXT mint wipes the old Ready capture as its slot is released.
+#[tokio::test]
+async fn a_replaced_exited_mint_is_torn_down_not_stranded() {
+    let home = temp_home("seat-stale-replace");
+    let scratch = mint_scratch(&home);
+    let token = seat_token();
+    let service = AgentLoginTerminalService::new();
+    let script = format!("echo '{token}'");
+    let first = service
+        .start_terminal(start_options(&home, &scratch, &script))
+        .await
+        .expect("start first");
+    wait_for_mint_status(&service, &first.id, MintCaptureStatus::Ready).await;
+    assert!(
+        !scratch.exists(),
+        "a Ready exit removes the scratch dir without waiting for the claim"
+    );
+
+    let second_scratch = mint_scratch(&home);
+    let second = service
+        .start_terminal(start_options(&home, &second_scratch, "sleep 30"))
+        .await
+        .expect("start second");
+    assert_ne!(second.id, first.id, "a finished mint releases the slot");
+    assert_eq!(
+        service.claim_mint_token(&first.id).await,
+        Err(MintClaimError::NotFound),
+        "the replaced mint's capture is wiped, never left claimable"
+    );
+    assert_no_secret_under(&home, &token);
+
+    service.close_terminal(&second.id).await.expect("close");
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// The one-time handoff wipes EVERY runtime copy: after the claim, a ws
+/// (re)connect's replay must not be able to serve the token line again.
+#[tokio::test]
+async fn claim_purges_the_replay_buffer() {
+    let home = temp_home("seat-replay-purge");
+    let scratch = mint_scratch(&home);
+    let token = seat_token();
+    let service = AgentLoginTerminalService::new();
+    let script = format!("echo '{token}'; sleep 30");
+    let record = service
+        .start_terminal(start_options(&home, &scratch, &script))
+        .await
+        .expect("start");
+    wait_for_mint_status(&service, &record.id, MintCaptureStatus::Captured).await;
+    let handle = service
+        .lookup_terminal(&record.id)
+        .await
+        .expect("terminal handle");
+    let (frames, _rx) = handle.subscribe_output(None).await.expect("subscribe");
+    assert!(
+        frames_contain(&frames, &token),
+        "sanity: the printed token flowed into the replay buffer"
+    );
+
+    service.close_terminal(&record.id).await.expect("close");
+    // Closing wiped capture AND replay; a fresh Ready mint proves the claim
+    // path purges too.
+    let scratch = mint_scratch(&home);
+    let script = format!("echo '{token}'");
+    let record = service
+        .start_terminal(start_options(&home, &scratch, &script))
+        .await
+        .expect("start second");
+    wait_for_mint_status(&service, &record.id, MintCaptureStatus::Ready).await;
+    let claimed = service.claim_mint_token(&record.id).await.expect("claim");
+    assert_eq!(claimed, token);
+    let handle = service
+        .lookup_terminal(&record.id)
+        .await
+        .expect("terminal handle");
+    let (frames, _rx) = handle.subscribe_output(None).await.expect("subscribe after claim");
+    assert!(
+        !frames_contain(&frames, &token),
+        "the one-time handoff must purge the replay copy of the token"
+    );
+    service.close_terminal(&record.id).await.expect("close second");
+    let _ = std::fs::remove_dir_all(home);
+}
+
+fn frames_contain(frames: &[crate::live::terminals::TerminalOutputEvent], needle: &str) -> bool {
+    frames.iter().any(|frame| match frame {
+        crate::live::terminals::TerminalOutputEvent::Data { data, .. } => {
+            String::from_utf8_lossy(data).contains(needle)
+        }
+        _ => false,
+    })
+}
+
+/// Crash recovery: mint state is memory-only, so every scratch dir on disk at
+/// process start is a previous process's orphan — the startup sweep removes
+/// them all (their claude-config/ can hold CLI-written credential state).
+#[test]
+fn startup_sweep_removes_orphaned_mint_scratch() {
+    let home = temp_home("seat-sweep");
+    let orphan = mint_scratch(&home);
+    std::fs::write(
+        orphan.join("claude-config").join(".credentials.json"),
+        "{\"credential\": \"left by a crashed process\"}",
+    )
+    .expect("write orphan credential");
+
+    crate::domains::agents::runtime::sweep_mint_scratch(&home);
+
+    assert!(!orphan.exists(), "the orphaned mint scratch must be swept");
+    let survivors = std::fs::read_dir(home.join("agent-auth-mint"))
+        .map(|entries| entries.count())
+        .unwrap_or(0);
+    assert_eq!(survivors, 0, "the sweep leaves the mint root empty");
+    let _ = std::fs::remove_dir_all(home);
+}
+
 /// The single-flight guard: while a mint terminal is open for a harness, a
 /// second mint start returns THAT terminal (the UI focuses it) instead of
 /// spawning a sibling; once it finishes, the slot is free again.

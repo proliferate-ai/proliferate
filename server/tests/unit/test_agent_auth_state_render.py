@@ -431,6 +431,25 @@ class TestRenderSeatSources:
         sources = state["harnesses"][0]["sources"]
         assert [source["seat_id"] for source in sources] == [str(seat_b)]
 
+    def test_pool_row_plus_pin_never_renders_the_same_seat_twice(self) -> None:
+        # The kind-counting radio accepts a pool row and a pin together as one
+        # selected method; the DOCUMENT must still carry each active seat at
+        # most once (spec §2: "every active seat, in vault order") — a
+        # duplicated seat would double-weight it under slice 2's round-robin.
+        seat_a = uuid.uuid4()
+        seat_b = uuid.uuid4()
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(harness="claude", source_kind="seat"),
+                    _selection(harness="claude", source_kind="seat", api_key_id=seat_b),
+                ),
+                seat_values=((seat_a, "sk-tok-a"), (seat_b, "sk-tok-b")),
+            )
+        )
+        sources = state["harnesses"][0]["sources"]
+        assert [source["seat_id"] for source in sources] == [str(seat_a), str(seat_b)]
+
     def test_revoked_seats_leave_the_entry_present_but_empty(self) -> None:
         # The acceptance gate's secondary check: revoking the seat removes it
         # from the next render, and the harness fails closed at launch —

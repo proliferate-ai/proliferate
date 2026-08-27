@@ -292,6 +292,10 @@ impl AppState {
             TerminalStore::new(db.clone()),
             runtime_home.clone(),
         ));
+        // Mint scratch dirs are meaningless across a restart (mint state is
+        // memory-only): sweep the orphans of any previous process before this
+        // one can mint anew — their claude-config/ can hold credential state.
+        crate::domains::agents::runtime::sweep_mint_scratch(&runtime_home);
         let agent_login_terminal_service = Arc::new(AgentLoginTerminalService::new());
         let worktree_inventory_service = Arc::new(WorktreeInventoryService::new(
             WorkspaceStore::new(db.clone()),

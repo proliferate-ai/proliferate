@@ -234,15 +234,21 @@ impl MintCapture {
         Self::default()
     }
 
-    /// Feed raw terminal output. Complete lines (split on `\n`) are sanitized
-    /// (ANSI escapes and control bytes stripped, whitespace trimmed) and
-    /// matched against the token rule; the LAST matching line wins.
+    /// Feed raw terminal output. Complete lines (split on `\n` AND on `\r`)
+    /// are sanitized (ANSI escapes and control bytes stripped, whitespace
+    /// trimmed) and matched against the token rule; the LAST matching line
+    /// wins. A bare `\r` is a line boundary rather than a stripped byte
+    /// because it resets the cursor to column 0: what follows OVERWRITES the
+    /// visible line, and the capture rule speaks about the visible line — a
+    /// `\r`-overwrite spinner must not merge into the token
+    /// (`"Waiting\rsk-ant-…"` is the token line, visibly). Splitting on both
+    /// keeps `\r\n` pairs harmless: the `\n` then flushes an empty segment.
     pub fn feed(&mut self, bytes: &[u8], now: Instant) {
         if self.consumed || self.failed {
             return;
         }
         for byte in bytes {
-            if *byte == b'\n' {
+            if *byte == b'\n' || *byte == b'\r' {
                 let line = std::mem::take(&mut self.pending);
                 self.take_line(&line, now);
                 wipe_bytes(line);
@@ -346,10 +352,25 @@ impl Drop for MintCapture {
 
 /// Best-effort in-memory scrub: overwrite before release so a dropped buffer
 /// does not keep the token readable in freed memory longer than necessary.
+///
+/// The zeroing is done with volatile writes plus a compiler fence — a plain
+/// `*byte = 0` loop immediately before a drop is a dead store the optimizer
+/// is entitled to elide, which would silently defeat the scrub. The FULL
+/// capacity is zeroed, not just `len`: in-place edits (`String::drain`,
+/// `truncate`) leave stale token bytes between `len` and `capacity`.
 fn wipe_bytes(mut bytes: Vec<u8>) {
-    for byte in bytes.iter_mut() {
-        *byte = 0;
+    let capacity = bytes.capacity();
+    let ptr = bytes.as_mut_ptr();
+    // SAFETY: `ptr..ptr+capacity` is this Vec's own live allocation, `u8` has
+    // no validity invariants, and the length is set to 0 first so no safe
+    // reader can observe the overwritten region as initialized contents.
+    unsafe {
+        bytes.set_len(0);
+        for offset in 0..capacity {
+            std::ptr::write_volatile(ptr.add(offset), 0);
+        }
     }
+    std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
     drop(bytes);
 }
 
@@ -414,7 +435,19 @@ fn sanitize_terminal_line(raw: &[u8]) -> String {
         out.push(byte as char);
         i += 1;
     }
-    out.trim().to_string()
+    // Trim IN PLACE and return `out` itself: `out.trim().to_string()` would
+    // copy a matched token into a fresh allocation and drop `out` un-zeroed,
+    // defeating the wipe invariant on the exact bytes it exists to scrub
+    // (every buffer this function returns is later fed to `wipe_bytes`, which
+    // zeroes the full capacity — covering the bytes `drain` shifts past the
+    // end too).
+    let end = out.trim_end().len();
+    out.truncate(end);
+    let leading = out.len() - out.trim_start().len();
+    if leading > 0 {
+        out.drain(..leading);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -452,6 +485,18 @@ mod tests {
         capture.on_exit(now());
         let token = capture.claim(now()).expect("claimable after exit");
         assert_eq!(token, TOKEN);
+    }
+
+    #[test]
+    fn a_bare_carriage_return_resets_the_visible_line() {
+        // A \r-overwrite spinner: the CLI prints "Waiting…", returns the
+        // cursor to column 0 with a bare \r (no \n), and prints the token
+        // over it. The token IS the visible line and must capture — merging
+        // the segments ("Waitingsk-ant-…") would miss it.
+        let mut capture = MintCapture::new();
+        capture.feed(format!("Waiting\r{TOKEN}\r\n").as_bytes(), now());
+        capture.on_exit(now());
+        assert_eq!(capture.claim(now()).as_deref(), Some(TOKEN));
     }
 
     #[test]

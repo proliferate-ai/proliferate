@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::{Read as IoRead, Write as IoWrite};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use tokio::sync::{broadcast, Mutex, RwLock};
@@ -13,6 +13,14 @@ use crate::domains::terminals::model::{ResizeTerminalOptions, TerminalOutputEven
 use crate::process_env::remove_runtime_private_pty_env;
 
 use super::output_sink::TerminalOutputHub;
+
+/// How long a capture that completed Ready (terminal exited with a captured
+/// token) stays claimable before the runtime tears it down on its own. The
+/// happy path claims within one poll tick (~1.2s); the window exists so an
+/// ABANDONED mint (browser crash after the token printed, pane never
+/// revisited) cannot keep the token in process memory — and replayable over
+/// the ws route — for the life of the process.
+pub const MINT_POST_EXIT_CLAIM_WINDOW: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentLoginTerminalStatus {
@@ -111,48 +119,46 @@ impl AgentLoginTerminalService {
         // flow 2): a second mint while one is open FOCUSES the open terminal —
         // returning its record is that focus, since the UI keys panels by id.
         // The second start's never-used scratch dir is removed on the spot.
-        if let Some(mint) = options.mint.as_ref() {
-            if let Some(existing) = self.live_mint_terminal_for_kind(&options.kind).await {
-                let _ = std::fs::remove_dir_all(&mint.scratch_dir);
+        //
+        // The guard's write lock is held from this check all the way through
+        // the spawn and the registry inserts: with a check-then-act (lock
+        // dropped in between) two concurrent starts both passed the check
+        // before either inserted, spawning two live mint PTYs and orphaning
+        // the first one's capture. The spawn itself is synchronous, so the
+        // lock is never held across an await other than the map inserts.
+        let mut mint_guard = if options.mint.is_some() {
+            let mut by_kind = self.mint_by_kind.write().await;
+            if let Some(existing) = self.check_mint_slot_locked(&mut by_kind, &options.kind).await {
+                drop(by_kind);
+                if let Some(mint) = options.mint.as_ref() {
+                    let _ = std::fs::remove_dir_all(&mint.scratch_dir);
+                }
                 return Ok(existing);
             }
-        }
-
-        let pty_system = native_pty_system();
-        let size = PtySize {
-            rows: options.rows,
-            cols: options.cols,
-            pixel_width: 0,
-            pixel_height: 0,
+            Some(by_kind)
+        } else {
+            None
         };
 
-        let pair = pty_system
-            .openpty(size)
-            .map_err(|e| anyhow::anyhow!("failed to open PTY: {e}"))?;
-
+        let spawned = match spawn_login_pty(&options) {
+            Ok(spawned) => spawned,
+            Err(error) => {
+                // A failed spawn leaves nothing behind: the mint guard was
+                // never inserted (the lock drops with this return) and the
+                // scratch dir the caller prepared is removed on the spot.
+                if let Some(mint) = options.mint.as_ref() {
+                    let _ = std::fs::remove_dir_all(&mint.scratch_dir);
+                }
+                return Err(error);
+            }
+        };
+        let SpawnedLoginPty {
+            master,
+            writer,
+            mut reader,
+            child,
+        } = spawned;
         let cwd = options.cwd.to_string_lossy().to_string();
-        let mut cmd = CommandBuilder::new(&options.program);
-        cmd.args(&options.args);
-        cmd.cwd(&cwd);
-        for (key, value) in &options.env {
-            cmd.env(key, value);
-        }
-        cmd.env("TERM", "xterm-256color");
-        remove_runtime_private_pty_env(&mut cmd);
-
-        let child = pair
-            .slave
-            .spawn_command(cmd)
-            .map_err(|e| anyhow::anyhow!("failed to spawn login command: {e}"))?;
-        let writer = pair
-            .master
-            .take_writer()
-            .map_err(|e| anyhow::anyhow!("failed to take PTY writer: {e}"))?;
-        let mut reader = pair
-            .master
-            .try_clone_reader()
-            .map_err(|e| anyhow::anyhow!("failed to clone PTY reader: {e}"))?;
-        let master = pair.master;
 
         let terminal_id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
@@ -196,14 +202,14 @@ impl AgentLoginTerminalService {
                 let mut mints = self.mints.write().await;
                 mints.insert(terminal_id.clone(), Arc::new(Mutex::new(state)));
             }
-            {
-                let mut by_kind = self.mint_by_kind.write().await;
+            if let Some(by_kind) = mint_guard.as_mut() {
                 by_kind.insert(options.kind.clone(), terminal_id.clone());
             }
         }
+        // The single-flight slot is taken; concurrent starts may proceed.
+        drop(mint_guard);
 
-        let terminals_ref = self.terminals.clone();
-        let mints_ref = self.mints.clone();
+        let service = self.clone();
         let tid = terminal_id.clone();
         tokio::task::spawn_blocking(move || {
             let mut buf = [0u8; 4096];
@@ -213,9 +219,9 @@ impl AgentLoginTerminalService {
                         let rt = tokio::runtime::Handle::current();
                         rt.block_on(async {
                             if is_mint {
-                                complete_mint_capture(&mints_ref, &tid).await;
+                                service.complete_mint_capture(&tid).await;
                             }
-                            let code = mark_terminal_exited(&terminals_ref, &tid).await;
+                            let code = mark_terminal_exited(&service.terminals, &tid).await;
                             let _ = hub.emit_exit(code).await;
                         });
                         break;
@@ -225,7 +231,7 @@ impl AgentLoginTerminalService {
                         let rt = tokio::runtime::Handle::current();
                         rt.block_on(async {
                             if is_mint {
-                                feed_mint_capture(&mints_ref, &tid, &data).await;
+                                feed_mint_capture(&service.mints, &tid, &data).await;
                             }
                             let _ = hub.emit_data(data, None, None).await;
                         });
@@ -234,9 +240,9 @@ impl AgentLoginTerminalService {
                         let rt = tokio::runtime::Handle::current();
                         rt.block_on(async {
                             if is_mint {
-                                complete_mint_capture(&mints_ref, &tid).await;
+                                service.complete_mint_capture(&tid).await;
                             }
-                            let code = mark_terminal_exited(&terminals_ref, &tid).await;
+                            let code = mark_terminal_exited(&service.terminals, &tid).await;
                             let _ = hub.emit_exit(code).await;
                         });
                         break;
@@ -285,7 +291,10 @@ impl AgentLoginTerminalService {
     /// The one-time mint-token handoff (seats v1): returns the captured token
     /// exactly when the capture is complete, wiping the runtime's buffer in
     /// the same breath — the courier holds the only remaining copy. The
-    /// scratch dir goes with it.
+    /// scratch dir goes with it, and so does the terminal-output replay
+    /// buffer: the token line the CLI printed flowed into it, and "buffer
+    /// wiped on handoff" must cover every runtime copy, not just the capture
+    /// (a ws reconnect must not be able to replay the claimed token).
     pub async fn claim_mint_token(&self, terminal_id: &str) -> Result<String, MintClaimError> {
         let state = {
             let mints = self.mints.read().await;
@@ -297,6 +306,8 @@ impl AgentLoginTerminalService {
         match state.capture.claim(now) {
             Some(token) => {
                 state.remove_scratch();
+                drop(state);
+                self.purge_replay(terminal_id).await;
                 Ok(token)
             }
             None => Err(MintClaimError::NotReady(state.capture.status(now))),
@@ -313,34 +324,110 @@ impl AgentLoginTerminalService {
         Some(state.capture.status(Instant::now()))
     }
 
-    /// The open (still Starting/Running) mint terminal for a harness kind, if
-    /// any — the single-flight guard's read side. A finished terminal releases
-    /// the slot.
-    async fn live_mint_terminal_for_kind(&self, kind: &str) -> Option<AgentLoginTerminalRecord> {
-        let terminal_id = {
-            let by_kind = self.mint_by_kind.read().await;
-            by_kind.get(kind).cloned()
-        }?;
-        let record = self.get_terminal(&terminal_id).await;
-        match record {
-            Some(record)
-                if matches!(
-                    record.status,
-                    AgentLoginTerminalStatus::Starting | AgentLoginTerminalStatus::Running
-                ) =>
-            {
-                Some(record)
-            }
-            _ => {
-                // Stale slot (terminal finished or vanished): release it so
-                // the next mint can start.
-                let mut by_kind = self.mint_by_kind.write().await;
-                if by_kind.get(kind).map(String::as_str) == Some(terminal_id.as_str()) {
-                    by_kind.remove(kind);
-                }
-                None
+    /// The single-flight check, run with the `mint_by_kind` write lock HELD
+    /// (the caller keeps holding it through spawn and reserve, which is what
+    /// makes the guard atomic): returns the still-open mint terminal for the
+    /// kind, if any. A finished or vanished terminal releases the slot — and
+    /// is torn down on the spot, so an exited-but-unclaimed Ready capture is
+    /// wiped rather than stranded behind its replacement.
+    async fn check_mint_slot_locked(
+        &self,
+        by_kind: &mut HashMap<String, String>,
+        kind: &str,
+    ) -> Option<AgentLoginTerminalRecord> {
+        let terminal_id = by_kind.get(kind).cloned()?;
+        if let Some(record) = self.get_terminal(&terminal_id).await {
+            if matches!(
+                record.status,
+                AgentLoginTerminalStatus::Starting | AgentLoginTerminalStatus::Running
+            ) {
+                return Some(record);
             }
         }
+        by_kind.remove(kind);
+        self.teardown_mint_remnant(&terminal_id).await;
+        None
+    }
+
+    /// Wipe what an abandoned mint left behind: the capture buffer (with any
+    /// unclaimed token), the scratch dir, and the replay copy of its output.
+    /// The terminal record itself stays readable (a poll sees Exited).
+    async fn teardown_mint_remnant(&self, terminal_id: &str) {
+        let mint = {
+            let mut mints = self.mints.write().await;
+            mints.remove(terminal_id)
+        };
+        if let Some(mint) = mint {
+            let mut state = mint.lock().await;
+            state.teardown();
+        }
+        self.purge_replay(terminal_id).await;
+    }
+
+    /// Zero and drop the terminal's buffered output frames (the ws replay
+    /// source). Live subscribers are unaffected; a reconnect sees a gap.
+    async fn purge_replay(&self, terminal_id: &str) {
+        let hub = {
+            let hubs = self.output_hubs.read().await;
+            hubs.get(terminal_id).cloned()
+        };
+        if let Some(hub) = hub {
+            hub.purge_replay().await;
+        }
+    }
+
+    /// Terminal exit is one of the two completion signals (the other is the
+    /// grace window, evaluated lazily at read/claim time). The scratch dir is
+    /// removed unconditionally — the exited CLI can no longer need its config
+    /// dir, and the dir's credential state must not outlive the terminal
+    /// (runtime.rs's "an aborted mint leaves nothing on disk"). A capture
+    /// that completed Ready but is never claimed is torn down after
+    /// [`MINT_POST_EXIT_CLAIM_WINDOW`], bounding how long an abandoned mint
+    /// keeps the token in memory.
+    async fn complete_mint_capture(&self, terminal_id: &str) {
+        let state = {
+            let map = self.mints.read().await;
+            map.get(terminal_id).cloned()
+        };
+        let Some(state) = state else {
+            return;
+        };
+        let ready = {
+            let mut state = state.lock().await;
+            let now = Instant::now();
+            state.capture.on_exit(now);
+            state.remove_scratch();
+            state.capture.status(now) == MintCaptureStatus::Ready
+        };
+        if ready {
+            let service = self.clone();
+            let tid = terminal_id.to_string();
+            tokio::spawn(async move {
+                tokio::time::sleep(MINT_POST_EXIT_CLAIM_WINDOW).await;
+                service.expire_unclaimed_mint(&tid).await;
+            });
+        }
+    }
+
+    /// The post-exit claim window lapsed: if the capture was never claimed,
+    /// wipe it (and the replay copy). The mints entry stays, so a late claim
+    /// gets a truthful `NotReady(Failed)` instead of `NotFound`.
+    async fn expire_unclaimed_mint(&self, terminal_id: &str) {
+        let state = {
+            let map = self.mints.read().await;
+            map.get(terminal_id).cloned()
+        };
+        let Some(state) = state else {
+            return;
+        };
+        {
+            let mut state = state.lock().await;
+            if state.capture.status(Instant::now()) == MintCaptureStatus::Consumed {
+                return;
+            }
+            state.teardown();
+        }
+        self.purge_replay(terminal_id).await;
     }
 }
 
@@ -397,13 +484,14 @@ impl AgentLoginTerminalHandle {
             let mut h = removed.lock().await;
             h.kill();
         }
-        {
+        let removed_hub = {
             let mut hubs = self.output_hubs.write().await;
-            hubs.remove(&self.terminal_id);
-        }
+            hubs.remove(&self.terminal_id)
+        };
         // Mint teardown: an unclaimed capture is an abort — wipe the buffer
         // and remove the scratch dir (a claimed one is already wiped; this is
-        // idempotent). The single-flight slot is released either way.
+        // idempotent). The replay copy of the output is zeroed too, and the
+        // single-flight slot is released either way.
         let mint = {
             let mut mints = self.mints.write().await;
             mints.remove(&self.terminal_id)
@@ -413,6 +501,9 @@ impl AgentLoginTerminalHandle {
             state.teardown();
             let kind = state.kind.clone();
             drop(state);
+            if let Some(hub) = removed_hub {
+                hub.purge_replay().await;
+            }
             let mut by_kind = self.mint_by_kind.write().await;
             if by_kind.get(&kind).map(String::as_str) == Some(self.terminal_id.as_str()) {
                 by_kind.remove(&kind);
@@ -516,20 +607,55 @@ async fn feed_mint_capture(mints: &MintRegistry, terminal_id: &str, data: &[u8])
     }
 }
 
-/// Terminal exit is one of the two completion signals (the other is the grace
-/// window, evaluated lazily at read/claim time). A failed capture (no match)
-/// wipes itself; its scratch dir goes with it.
-async fn complete_mint_capture(mints: &MintRegistry, terminal_id: &str) {
-    let state = {
-        let map = mints.read().await;
-        map.get(terminal_id).cloned()
+/// The synchronous PTY-spawn half of `start_terminal`, extracted so its
+/// failure paths share one cleanup site (and so the mint guard can stay held
+/// across it without threading through `?` returns).
+struct SpawnedLoginPty {
+    master: Box<dyn MasterPty + Send>,
+    writer: Box<dyn IoWrite + Send>,
+    reader: Box<dyn IoRead + Send>,
+    child: Box<dyn Child + Send>,
+}
+
+fn spawn_login_pty(options: &StartAgentLoginTerminalOptions) -> anyhow::Result<SpawnedLoginPty> {
+    let pty_system = native_pty_system();
+    let size = PtySize {
+        rows: options.rows,
+        cols: options.cols,
+        pixel_width: 0,
+        pixel_height: 0,
     };
-    if let Some(state) = state {
-        let mut state = state.lock().await;
-        let now = Instant::now();
-        state.capture.on_exit(now);
-        if state.capture.status(now) == MintCaptureStatus::Failed {
-            state.remove_scratch();
-        }
+
+    let pair = pty_system
+        .openpty(size)
+        .map_err(|e| anyhow::anyhow!("failed to open PTY: {e}"))?;
+
+    let cwd = options.cwd.to_string_lossy().to_string();
+    let mut cmd = CommandBuilder::new(&options.program);
+    cmd.args(&options.args);
+    cmd.cwd(&cwd);
+    for (key, value) in &options.env {
+        cmd.env(key, value);
     }
+    cmd.env("TERM", "xterm-256color");
+    remove_runtime_private_pty_env(&mut cmd);
+
+    let child = pair
+        .slave
+        .spawn_command(cmd)
+        .map_err(|e| anyhow::anyhow!("failed to spawn login command: {e}"))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| anyhow::anyhow!("failed to take PTY writer: {e}"))?;
+    let reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| anyhow::anyhow!("failed to clone PTY reader: {e}"))?;
+    Ok(SpawnedLoginPty {
+        master: pair.master,
+        writer,
+        reader,
+        child,
+    })
 }

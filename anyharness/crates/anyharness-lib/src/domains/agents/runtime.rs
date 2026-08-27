@@ -494,6 +494,32 @@ fn descriptor_for_kind(kind: &str) -> Result<AgentDescriptor, AgentRuntimeError>
     super::registry::descriptor(kind).ok_or_else(|| AgentRuntimeError::NotFound(kind.to_string()))
 }
 
+/// Sweep `<runtime_home>/agent-auth-mint/` at process startup. Mint state is
+/// memory-only, so every scratch dir found on disk when the process starts is
+/// an orphan of a previous process (crash, kill, reboot) — and its
+/// `claude-config/` can hold CLI-written credential state, which must not
+/// accumulate ("an aborted mint leaves nothing on disk"). Delete-all rather
+/// than age-based, mirroring `sweep_probe_scratch`'s startup reasoning: no
+/// live mint of THIS process can exist yet when this runs, and a runtime home
+/// has one runtime (the probe engine's one-engine-per-home lock is that law).
+pub fn sweep_mint_scratch(runtime_home: &std::path::Path) {
+    let root = runtime_home.join("agent-auth-mint");
+    let Ok(entries) = std::fs::read_dir(&root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let removed = if path.is_dir() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        if let Err(error) = removed {
+            tracing::warn!(path = %path.display(), %error, "failed to sweep orphaned mint scratch");
+        }
+    }
+}
+
 fn install_error_kind(error: &InstallError) -> &'static str {
     match error {
         InstallError::NotInstallable => "not_installable",

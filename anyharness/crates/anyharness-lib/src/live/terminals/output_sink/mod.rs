@@ -39,6 +39,15 @@ impl TerminalOutputHub {
         frames
     }
 
+    /// Zero and drop every buffered frame while keeping the sequence counter:
+    /// a later subscriber sees a replay gap, never the purged content. The
+    /// seat-mint handoff calls this — the token line the CLI printed lives in
+    /// this buffer too, and "wiped on handoff" must cover it.
+    pub(super) async fn purge_replay(&self) {
+        let mut replay = self.replay.lock().await;
+        replay.purge();
+    }
+
     pub(super) async fn emit_data(
         &self,
         data: Vec<u8>,

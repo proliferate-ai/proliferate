@@ -121,6 +121,11 @@ export function useSeatMintWorkflow(options: {
         });
         return;
       }
+      // Re-check AFTER the await: with setInterval, a slow GET lets a second
+      // tick start before this one resumes. Both passed the top-of-tick check,
+      // and without this guard both would claim — the loser's 409 then flips
+      // the UI to "mint failed" AFTER the winner already created the seat.
+      if (settled) return;
       const mintStatus = record.mintStatus;
       if (mintStatus === "ready") {
         settled = true;
