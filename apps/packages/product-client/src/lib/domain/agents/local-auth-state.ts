@@ -76,9 +76,12 @@ export function planLocalAuthStatePush(input: {
   if (input.state.harnesses.length === 0) {
     return { action: "clear", fingerprint };
   }
-  if (input.state.sequence <= 0) {
-    return { action: null, fingerprint };
-  }
+  // A nonempty document is pushed on its content alone. There is deliberately no
+  // sequence floor here: `revision === 0` used to mean "no selection rows", and
+  // the persisted per-surface counter now stamps every render >= 1 (slice 3), so
+  // a `sequence <= 0` guard could only ever DROP a real document silently. The
+  // runtime is the only ordering authority — it rejects any push whose sequence
+  // is below the one it persisted.
   return { action: "apply", fingerprint };
 }
 

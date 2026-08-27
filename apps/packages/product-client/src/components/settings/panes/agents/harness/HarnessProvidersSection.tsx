@@ -23,21 +23,29 @@ const ProviderPickerModal = lazy(async () => ({
 }));
 
 /**
- * OpenCode's providers-only section (design-handoff v2 §2): NO method chooser,
- * NO gateway. Header carries the one status badge + refresh; the body is a
- * summary row of overlapping provider icon tiles plus a Configure button that
- * opens the management modal. OpenCode's own CLI logins always apply alongside
- * these keys, so the quiet line says exactly that.
+ * The multi-source (providers-only) section, opencode's today (design-handoff v2
+ * §2): NO method chooser, NO gateway. Header carries the one status badge +
+ * refresh; the body is a summary row of overlapping provider icon tiles plus a
+ * Configure button that opens the management modal. The harness's own CLI logins
+ * always apply alongside these keys, so the quiet line says exactly that.
+ *
+ * The harness kind is a PROP, never a literal: this section mounts on
+ * `isMultiSourceHarness(kind)`, which derives from registry.json's
+ * `authCardinality` — so a data-only registry change adds a harness here, and a
+ * hardcoded "opencode" would have shown it opencode's status document, badge,
+ * and route readback.
  */
 export function HarnessProvidersSection({
+  harnessKind,
   editor,
 }: {
+  harnessKind: string;
   editor: HarnessAuthEditorApi;
 }) {
-  // OpenCode's badge is the runtime's status document, killing the old
+  // The badge is the runtime's status document, killing the old
   // `deriveProvidersStatus` unconditional green: a pane with no observation now
   // says so instead of claiming "Authenticated".
-  const authStatus = useHarnessStatus("opencode");
+  const authStatus = useHarnessStatus(harnessKind);
   const [modalOpen, setModalOpen] = useState(false);
   // The Configure trigger, not the modal, is the Class B loading treatment
   // (UX Latency + Transitions ADR §4.3, Rung 3): the modal chunk carries the
@@ -78,15 +86,21 @@ export function HarnessProvidersSection({
         ?? null,
     }));
 
-  // Qualification readback (tests/release chat-authroute.ts): opencode's
+  // Qualification readback (tests/release chat-authroute.ts): this harness's
   // active routes as whitespace-separated `<kind>:<route>` tokens, matched
-  // with the exact-token `~=` selector. CLI is always active (opencode's
-  // native logins coexist); api_key joins when any bound row is enabled.
+  // with the exact-token `~=` selector. CLI is always active (a multi-source
+  // harness's native logins coexist); api_key joins when any bound row is
+  // enabled.
   const selectedRoute = rows.some((row) => row.enabled)
-    ? "opencode:cli opencode:api_key"
-    : "opencode:cli";
+    ? `${harnessKind}:cli ${harnessKind}:api_key`
+    : `${harnessKind}:cli`;
 
-  const refreshing = editor.apiKeysQuery.isFetching || editor.selectionsQuery.isFetching;
+  // The status re-read counts too: the refresh affordance must not look inert
+  // while the document it re-reads is still in flight.
+  const refreshing =
+    authStatus.refreshing
+    || editor.apiKeysQuery.isFetching
+    || editor.selectionsQuery.isFetching;
   function handleRefresh() {
     // Re-read the document; the runtime owns every observation behind it.
     authStatus.refresh();
@@ -164,7 +178,7 @@ export function HarnessProvidersSection({
           data-harness-status="api_key"
         />
       )}
-      data-harness-auth-section="opencode"
+      data-harness-auth-section={harnessKind}
       data-harness-auth-delivery={editor.deliveryPending ? "pending" : "applied"}
       data-harness-selected-route={selectedRoute}
     >
