@@ -19,17 +19,26 @@ If ``config.yaml`` is genuinely absent in a deployed environment, the check
 degrades rather than crashing: a non-empty list reads ``ok`` with a delta noting
 the degraded check, an empty list still reads ``misconfigured``.
 
-Nothing here logs key material: the observing exception is sanitized (the
-decrypted virtual key substring is redacted) before it reaches Sentry, and only
-the harness_kind and the key row id are tagged.
+The tick runs in three phases so a LiteLLM outage can neither hold database
+locks nor page per key: (1) a short transaction lists the targets and decrypts
+their keys, (2) the HTTP probes run with NO transaction open, (3) a short
+transaction writes the verdicts. Errors aggregate — a tick with any errors logs
+one warning with counts; only an outage-shaped tick (errored past the floor and
+at least half the checked keys) raises ONE ``report_critical``.
+
+Nothing here logs key material: an observing exception is reduced immediately
+to a sanitized message string (the decrypted virtual key substring redacted);
+the raw exception object never leaves phase 2.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import UUID
 
 import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +75,44 @@ class VerificationResult:
     ok: int
     misconfigured: int
     errored: int
+
+
+@dataclass(frozen=True)
+class VerificationTarget:
+    """One active key to probe: id, kind, and the decrypted material.
+
+    The decrypted key exists only in memory between phases 1 and 2 — it is
+    never logged, and errors that might embed it are sanitized to strings
+    before they leave phase 2.
+    """
+
+    enrollment_key_id: UUID
+    harness_kind: str
+    virtual_key: str
+
+
+@dataclass(frozen=True)
+class KeyObservation:
+    """Phase 2's outcome for one target: a model list, or a sanitized error."""
+
+    enrollment_key_id: UUID
+    harness_kind: str
+    observed: list[str] | None
+    error: str | None
+
+
+class AgentGatewayVerificationErrors(Exception):
+    """An outage-shaped verification tick: errors past the aggregation floor.
+
+    Constructed (never raised) into ONE ``report_critical`` per tick —
+    replacing the per-key paging that turned a LiteLLM outage into hundreds
+    of fatal alerts per tick.
+    """
+
+
+# A tick pages only when errors clear BOTH this floor and half the checked
+# keys — a single flaky key warns, an outage pages once.
+_ERROR_ALERT_FLOOR = 10
 
 
 def load_expected_access_groups() -> dict[str, set[str]] | None:
@@ -139,50 +186,92 @@ def _sanitized(exc: Exception, virtual_key: str) -> RuntimeError:
     return RuntimeError(message)
 
 
-async def run_verification(db: AsyncSession) -> VerificationResult:
-    """Verify every active enrollment key's gateway model access, once.
+async def collect_verification_targets(db: AsyncSession) -> list[VerificationTarget]:
+    """Phase 1 (short transaction): active keys with material, decrypted.
 
-    Never raises for a single bad key: a per-key failure is reported (sanitized)
-    and skipped so the rest of the tick still runs, and it records no verdict.
+    Rows without stored key material (freshly created, not yet minted) have
+    nothing to verify and drop out here, leaving any prior verdict standing.
+    """
+    targets: list[VerificationTarget] = []
+    for key in await list_all_active_enrollment_keys(db):
+        virtual_key = await get_enrollment_key_virtual_key_decrypted(db, enrollment_key_id=key.id)
+        if virtual_key is None:
+            continue
+        targets.append(
+            VerificationTarget(
+                enrollment_key_id=key.id,
+                harness_kind=key.harness_kind,
+                virtual_key=virtual_key,
+            )
+        )
+    return targets
+
+
+async def probe_verification_targets(
+    targets: list[VerificationTarget],
+) -> list[KeyObservation]:
+    """Phase 2 (NO transaction): one LiteLLM observation per target.
+
+    Callers must not hold a database transaction across this call — an
+    outage's worth of HTTP timeouts would hold row locks for its whole
+    duration. A failing probe is reduced on the spot to a key-redacted
+    message string (an HTTP client error can stringify request headers, so
+    the raw exception object never leaves this function).
+    """
+    observations: list[KeyObservation] = []
+    for target in targets:
+        try:
+            observed = await litellm.list_models(virtual_key=target.virtual_key)
+        except Exception as exc:  # noqa: BLE001 - one bad key must not abort the tick
+            observations.append(
+                KeyObservation(
+                    enrollment_key_id=target.enrollment_key_id,
+                    harness_kind=target.harness_kind,
+                    observed=None,
+                    error=str(_sanitized(exc, target.virtual_key)),
+                )
+            )
+            continue
+        observations.append(
+            KeyObservation(
+                enrollment_key_id=target.enrollment_key_id,
+                harness_kind=target.harness_kind,
+                observed=list(observed),
+                error=None,
+            )
+        )
+    return observations
+
+
+async def record_verification_verdicts(
+    db: AsyncSession,
+    observations: list[KeyObservation],
+) -> VerificationResult:
+    """Phase 3 (short transaction): diff, write verdicts, report in aggregate.
+
+    Errored observations record NO verdict (a transient blip never overwrites
+    a last-known-good). Error reporting is aggregated: any errors log one
+    warning with counts; only an outage-shaped tick — ``errored`` at or past
+    ``max(_ERROR_ALERT_FLOOR, ceil(checked / 2))`` — raises ONE
+    ``report_critical``, never one per key.
     """
     expected_map = load_expected_access_groups()
-    keys = await list_all_active_enrollment_keys(db)
     ok = 0
     misconfigured = 0
     errored = 0
-    for key in keys:
-        virtual_key = await get_enrollment_key_virtual_key_decrypted(db, enrollment_key_id=key.id)
-        if virtual_key is None:
-            # No stored key material to check yet (a freshly created, not-yet-minted
-            # row). Nothing to verify; leave any prior verdict standing.
-            continue
-        try:
-            observed = await litellm.list_models(virtual_key=virtual_key)
-        except Exception as exc:  # noqa: BLE001 - one bad key must not abort the tick
+    sample_error: str | None = None
+    for observation in observations:
+        if observation.observed is None:
             errored += 1
-            # report_critical calls logger.exception, which formats the AMBIENT
-            # exception (sys.exc_info) traceback. Inside this block that is the raw
-            # exc, whose message/traceback can carry the decrypted virtual key. So
-            # re-raise the sanitized stand-in as the ambient exception (``from None``
-            # severs __context__ back to exc) and report from THAT block, so both
-            # the Sentry object and the logged traceback are key-redacted.
-            try:
-                raise _sanitized(exc, virtual_key) from None
-            except RuntimeError as clean_exc:
-                report_critical(
-                    clean_exc,
-                    tags={
-                        "domain": "agent_gateway",
-                        "action": "verification",
-                        "harness_kind": key.harness_kind,
-                        "enrollment_key_id": str(key.id),
-                    },
-                )
+            if sample_error is None:
+                sample_error = observation.error
             continue
-        status, delta = _diff_verdict(key.harness_kind, observed, expected_map)
+        status, delta = _diff_verdict(
+            observation.harness_kind, observation.observed, expected_map
+        )
         await record_enrollment_key_verification(
             db,
-            enrollment_key_id=key.id,
+            enrollment_key_id=observation.enrollment_key_id,
             status=status,
             delta=delta,
             verified_at=utcnow(),
@@ -191,9 +280,39 @@ async def run_verification(db: AsyncSession) -> VerificationResult:
             ok += 1
         else:
             misconfigured += 1
+    checked = len(observations)
+    if errored:
+        # The sanitized sample is key-redacted by construction (phase 2).
+        logger.warning(
+            "Agent gateway verification tick had errored keys",
+            extra={"checked": checked, "errored": errored, "sample_error": sample_error},
+        )
+    if errored >= max(_ERROR_ALERT_FLOOR, math.ceil(checked / 2)):
+        report_critical(
+            AgentGatewayVerificationErrors(
+                f"verification errored on {errored} of {checked} keys; "
+                f"sample: {sample_error}"
+            ),
+            tags={"domain": "agent_gateway", "action": "verification"},
+        )
     return VerificationResult(
-        checked=len(keys),
+        checked=checked,
         ok=ok,
         misconfigured=misconfigured,
         errored=errored,
     )
+
+
+async def run_verification(db: AsyncSession) -> VerificationResult:
+    """Verify every active enrollment key's gateway model access, once.
+
+    Single-session orchestration of the three phases, for callers (and tests)
+    that already hold a session. The production worker instead splits the
+    phases across two short transactions so the HTTP probes of phase 2 never
+    run inside one (see ``worker.run_verification_once``). Never raises for a
+    single bad key: failures aggregate into the result and phase 3's
+    reporting, and an errored key records no verdict.
+    """
+    targets = await collect_verification_targets(db)
+    observations = await probe_verification_targets(targets)
+    return await record_verification_verdicts(db, observations)

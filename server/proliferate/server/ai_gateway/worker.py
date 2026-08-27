@@ -42,7 +42,9 @@ from proliferate.server.ai_gateway.usage_import import (
 )
 from proliferate.server.ai_gateway.verification import (
     VerificationResult,
-    run_verification,
+    collect_verification_targets,
+    probe_verification_targets,
+    record_verification_verdicts,
 )
 
 logger = logging.getLogger(__name__)
@@ -181,8 +183,14 @@ async def stop_agent_gateway_usage_import(
 
 
 async def run_verification_once() -> VerificationResult:
+    # Three phases, two SHORT transactions: the LiteLLM probes in the middle
+    # run with no transaction open, so an outage's worth of HTTP timeouts
+    # (potentially many keys x the client timeout) never holds row locks.
     async with db_session.open_async_transaction() as db:
-        return await run_verification(db)
+        targets = await collect_verification_targets(db)
+    observations = await probe_verification_targets(targets)
+    async with db_session.open_async_transaction() as db:
+        return await record_verification_verdicts(db, observations)
 
 
 async def _verification_loop() -> None:

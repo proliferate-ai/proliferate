@@ -210,11 +210,18 @@ async def test_error_does_not_overwrite_a_prior_verdict(
 
 @pytest.mark.asyncio
 async def test_reported_error_redacts_the_virtual_key_everywhere(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """Rewritten for the aggregated error shape (safety-panel MAJOR 3): the
+    old per-key report_critical is gone, so this now proves redaction on BOTH
+    surviving surfaces — the per-tick warning log and the aggregated
+    report_critical (forced by pinning the alert floor to 1)."""
     enrollment_id = await _create_enrollment(db_session)
     await _mint_key(db_session, enrollment_id, "claude")
     _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}})
+    monkeypatch.setattr(verification, "_ERROR_ALERT_FLOOR", 1)
 
     # An error whose message embeds the decrypted virtual key (as a stringified
     # HTTP client error carrying an Authorization header might).
@@ -222,10 +229,7 @@ async def test_reported_error_redacts_the_virtual_key_everywhere(
     _fake_list_models(monkeypatch, {"sk-litellm-claude": leaky})
 
     # Exercise the REAL report_critical logging path (not a stub) by capturing on
-    # its own logger ("proliferate.critical" does not propagate). report_critical
-    # calls logger.exception, which formats the AMBIENT exception's traceback, so
-    # the key must be absent from the message, the exc_info-formatted traceback,
-    # AND any chained __context__/__cause__.
+    # its own logger ("proliferate.critical" does not propagate).
     records: list[logging.LogRecord] = []
 
     class _Capture(logging.Handler):
@@ -243,20 +247,63 @@ async def test_reported_error_redacts_the_virtual_key_everywhere(
     # the real emit path (the one carrying the exc_info traceback) actually runs.
     critical_logger.disabled = False
     try:
-        await verification.run_verification(db_session)
+        with caplog.at_level(
+            logging.WARNING, logger="proliferate.server.ai_gateway.verification"
+        ):
+            await verification.run_verification(db_session)
     finally:
         critical_logger.removeHandler(handler)
         critical_logger.setLevel(previous_level)
         critical_logger.disabled = previous_disabled
 
     critical_records = [r for r in records if "CRITICAL_FAILURE" in r.getMessage()]
-    assert critical_records, "an errored key must reach the critical logger"
+    assert critical_records, "an outage-shaped tick must reach the critical logger"
     for record in critical_records:
         rendered = record.getMessage()
         if record.exc_info is not None:
             rendered += "\n" + logging.Formatter().formatException(record.exc_info)
         assert "sk-litellm-claude" not in rendered, "the virtual key must never be logged"
         assert "[redacted]" in record.getMessage()
+    # The per-tick warning (the sub-threshold surface) must be redacted too.
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings, "an errored tick must log the aggregate warning"
+    for record in warnings:
+        assert "sk-litellm-claude" not in record.getMessage()
+        assert "sk-litellm-claude" not in str(getattr(record, "sample_error", ""))
+        assert "[redacted]" in str(getattr(record, "sample_error", ""))
+
+
+@pytest.mark.asyncio
+async def test_errors_below_the_floor_warn_without_paging(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """One flaky key is a warning, never a page (safety-panel MAJOR 3).
+
+    The old per-key report_critical turned a LiteLLM outage into hundreds of
+    fatal alerts per tick; below max(floor, half the checked keys), errors
+    now aggregate into a single warning with counts.
+    """
+    enrollment_id = await _create_enrollment(db_session)
+    await _mint_key(db_session, enrollment_id, "claude")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}})
+    _fake_list_models(
+        monkeypatch,
+        {"sk-litellm-claude": litellm.LiteLLMIntegrationError("boom", "transient")},
+    )
+    paged: list[Exception] = []
+    monkeypatch.setattr(
+        verification, "report_critical", lambda error, **kwargs: paged.append(error)
+    )
+
+    with caplog.at_level(logging.WARNING, logger="proliferate.server.ai_gateway.verification"):
+        result = await verification.run_verification(db_session)
+
+    assert result.errored == 1
+    assert paged == []  # below the floor: no fatal alert
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings and any(getattr(r, "errored", None) == 1 for r in warnings)
 
 
 def test_expected_config_resolves_from_source_tree() -> None:
