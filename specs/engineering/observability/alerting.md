@@ -154,6 +154,20 @@ No `info`. No per-team channels. A rule that does not fit one of these rows is n
 
 No product events. No tracker. No aggregation queue.
 
+### Honeycomb SLI triggers (2026-08-27, starting values)
+
+The five runtime SLIs (observability README §3 Flow 4) evaluate in Honeycomb's own trigger engine, not Grafana — the one-engine law covers log-sourced rules; lifecycle-record SLIs live beside their data. Their intent is `server/infra/observability/honeycomb/triggers/*.json` (applied/verified by `scripts/ops/honeycomb-triggers.mjs` on the monitor lane); the rows below are the thresholds of record, all **starting values** pending real traffic — re-tuning edits this table and the intent JSON in the same PR (`stamp` re-checksums).
+
+| Trigger | Window | Threshold (starting) | Severity |
+| --- | --- | --- | --- |
+| session-create failures (`outcome=failed` only; `rejected` never pages) | 15m | > 5 | warning |
+| agent-start failures | 15m | > 5 | warning |
+| time-to-first-output p95 (`first_output_ms`) | 15m | > 10s | warning |
+| launch-selection rejections (the four classifications) | 15m | > 5 | warning |
+| orphaned operations (`abandoned` terminals — the collector finalizes dead producers) | 15m | > 10 | warning |
+
+Routing: Honeycomb-native Slack recipient (Pablo creates it once in the Honeycomb UI; its id is checked into each intent file). Until the recipient exists, triggers evaluate with no destination and `verify` reports them `recipient pending`.
+
 ## 7. Fences
 
 - **Observability** owns the markers, the ID tuple, the closed Sentry

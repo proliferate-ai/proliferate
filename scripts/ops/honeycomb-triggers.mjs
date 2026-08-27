@@ -15,7 +15,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { canonicalize, redact, sha256 } from "./grafana-alerting.mjs";
 
@@ -70,7 +70,7 @@ export function validateIntent({ file, intent }) {
   if (!ALLOWED_DATASETS.includes(intent.dataset))
     errors.push(`${file}: dataset ${intent.dataset} is not in the closed list`);
   if (intent.checksum !== intentChecksum(intent))
-    errors.push(`${file}: checksum mismatch — re-stamp after editing`);
+    errors.push(`${file}: checksum mismatch — run \`honeycomb-triggers.mjs stamp\` after editing`);
   if (!Number.isInteger(intent.frequency) || intent.frequency < 60)
     errors.push(`${file}: frequency must be an integer >= 60s`);
   if ((intent.query?.time_range ?? 0) > intent.frequency * 4)
@@ -123,12 +123,25 @@ export function compareLive(intent, live) {
   if (live.frequency !== want.frequency) mismatches.push("frequency differs");
   if (live.threshold?.op !== want.threshold.op || live.threshold?.value !== want.threshold.value)
     mismatches.push("threshold differs");
-  const liveCalc = canonicalize(live.query?.calculations ?? []);
-  if (liveCalc !== canonicalize(want.query.calculations)) mismatches.push("calculation differs");
+  // The evaluation window and the combinator define what the threshold was
+  // tuned against; a UI widen is drift, not cosmetics.
+  if ((live.query?.time_range ?? 0) !== (want.query.time_range ?? 0))
+    mismatches.push("time_range differs");
+  if ((live.query?.filter_combination ?? "AND") !== (want.query.filter_combination ?? "AND"))
+    mismatches.push("filter_combination differs");
+  // Project both sides to the fields we own before comparing, so an
+  // API-normalized extra (a null column on COUNT, a null value on exists)
+  // is not perpetual false drift.
+  const normCalcs = (calcs) =>
+    canonicalize(
+      (calcs ?? []).map((c) => ({ op: c.op, ...(c.column != null ? { column: c.column } : {}) })),
+    );
+  if (normCalcs(live.query?.calculations) !== normCalcs(want.query.calculations))
+    mismatches.push("calculation differs");
   const normFilters = (filters) =>
     canonicalize(
       (filters ?? [])
-        .map((f) => ({ column: f.column, op: f.op, ...(f.value !== undefined ? { value: f.value } : {}) }))
+        .map((f) => ({ column: f.column, op: f.op, ...(f.value !== undefined && f.value !== null ? { value: f.value } : {}) }))
         .sort((a, b) => canonicalize(a).localeCompare(canonicalize(b))),
     );
   if (normFilters(live.query?.filters) !== normFilters(want.query.filters))
@@ -220,9 +233,28 @@ async function applyAll(env) {
   }
 }
 
+// Every trigger this tool manages carries the prefix, so a live trigger
+// wearing it without a matching intent is a stray (a renamed intent's
+// orphan, a deleted intent's survivor) and fails verify.
+export const MANAGED_PREFIX = "SLI: ";
+
+export function strayNames(intents, liveNames) {
+  const wanted = new Set(intents.map(({ intent }) => intent.name));
+  return liveNames.filter((name) => name.startsWith(MANAGED_PREFIX) && !wanted.has(name));
+}
+
 async function verifyAll(env) {
   const key = configKey(env);
   let clean = true;
+  const intents = loadIntents();
+  const datasets = [...new Set(intents.map(({ intent }) => intent.dataset))];
+  for (const dataset of datasets) {
+    const live = await listLive(key, dataset);
+    for (const stray of strayNames(intents, live.map((t) => t.name))) {
+      console.log(`STRAY: ${stray} (live in ${dataset}, no intent — delete it or restore its file)`);
+      clean = false;
+    }
+  }
   for (const { file, intent } of loadIntents()) {
     const errors = validateIntent({ file, intent });
     if (errors.length) throw new Error(errors.join("; "));
@@ -307,9 +339,28 @@ async function syntheticBreach() {
   requireLiveFlag();
   const key = process.env.HONEYCOMB_INGEST_KEY_DOGFOOD;
   if (!key) throw new Error("HONEYCOMB_INGEST_KEY_DOGFOOD is not set; the breach is dogfood-only by design");
+  // The Honeycomb environment is a property of the KEY, not of the payload's
+  // environment attribute — confirm before sending, so a production key
+  // pasted into the dogfood variable cannot land a synthetic breach in prod.
+  const auth = await api("GET", key, "/1/auth");
+  const slug = auth?.environment?.slug;
+  if (slug !== "dogfood")
+    throw new Error(`refusing: the key's environment is ${slug ?? "unconfirmable"}, not dogfood`);
   const payload = syntheticBreachPayload(8, BigInt(Date.now()) * 1_000_000n);
   await api("POST", key, "/v1/logs", payload);
   console.log("synthetic breach sent: 8 failed session.create terminals to dogfood (marker: synthetic_breach_o2)");
+}
+
+// Recomputes and writes every intent file's checksum. The offline pair of
+// check: a threshold tune is edit + stamp + commit, no hand-hashing.
+export function stamp(dir = TRIGGERS_DIR) {
+  for (const { file, intent } of loadIntents(dir)) {
+    const { checksum: _old, ...rest } = intent;
+    const stamped = { ...rest, checksum: intentChecksum(intent) };
+    const sorted = Object.fromEntries(Object.keys(stamped).sort().map((k) => [k, stamped[k]]));
+    fs.writeFileSync(path.join(dir, file), `${JSON.stringify(sorted, null, 2)}\n`);
+    console.log(`stamped: ${file}`);
+  }
 }
 
 function check() {
@@ -324,19 +375,29 @@ function check() {
   if (process.exitCode !== 1) console.log(`check ok: ${intents.length} trigger intents`);
 }
 
-const invokedAsMain =
-  process.argv[1] && import.meta.url === new URL(`file://${path.resolve(process.argv[1])}`).href;
+const invokedAsMain = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return (
+      import.meta.url ===
+      pathToFileURL(fs.realpathSync(path.resolve(process.argv[1]))).href
+    );
+  } catch {
+    return false;
+  }
+})();
 if (invokedAsMain) {
   const [, , verb, ...rest] = process.argv;
   const envArg = rest.includes("--env") ? rest[rest.indexOf("--env") + 1] : "dogfood";
   try {
     if (verb === "check") check();
+    else if (verb === "stamp") stamp();
     else if (verb === "apply") await applyAll(envArg);
     else if (verb === "verify") await verifyAll(envArg);
     else if (verb === "synthetic-breach") await syntheticBreach();
     else {
       console.error(
-        "usage: honeycomb-triggers.mjs check|apply|verify|synthetic-breach [--env dogfood|production]",
+        "usage: honeycomb-triggers.mjs check|stamp|apply|verify|synthetic-breach [--env dogfood|production]",
       );
       process.exitCode = 2;
     }

@@ -106,3 +106,34 @@ test("redaction strips long tokens and urls from anything the tool prints", () =
   assert.ok(!clean.includes("hcaik_0123456789abcdef"));
   assert.ok(!clean.includes("api.honeycomb.io"));
 });
+
+test("time_range and combinator drift are caught; API nulls are not false drift", async () => {
+  const { compareLive, apiBody, loadIntents } = await import("./honeycomb-triggers.mjs");
+  const [{ intent }] = loadIntents();
+  const base = apiBody(intent);
+  const widened = { ...base, query: { ...base.query, time_range: base.query.time_range * 4 } };
+  assert.ok(compareLive(intent, widened).includes("time_range differs"));
+  const flipped = { ...base, query: { ...base.query, filter_combination: "OR" } };
+  assert.ok(compareLive(intent, flipped).includes("filter_combination differs"));
+  const nulled = {
+    ...base,
+    query: {
+      ...base.query,
+      calculations: base.query.calculations.map((c) => ({ column: null, ...c })),
+      filters: base.query.filters.map((f) => (f.value === undefined ? { ...f, value: null } : f)),
+    },
+  };
+  const mismatches = compareLive(intent, nulled).filter((m) => !m.startsWith("recipient pending"));
+  assert.deepEqual(mismatches, [], "API-normalized nulls are not drift");
+});
+
+test("a live trigger wearing the managed prefix with no intent is a stray", async () => {
+  const { strayNames, loadIntents, MANAGED_PREFIX } = await import("./honeycomb-triggers.mjs");
+  const intents = loadIntents();
+  const live = [
+    ...intents.map(({ intent }) => intent.name),
+    `${MANAGED_PREFIX}renamed orphan`,
+    "someone else's trigger",
+  ];
+  assert.deepEqual(strayNames(intents, live), [`${MANAGED_PREFIX}renamed orphan`]);
+});

@@ -18,12 +18,16 @@ on:
       - "server/infra/observability/grafana/**"
       - "scripts/ops/grafana-*.mjs"
       - ".github/workflows/grafana-monitors.yml"
+      - "server/infra/observability/honeycomb/**"
+      - "scripts/ops/honeycomb-*.mjs"
   push:
     branches: [main]
     paths:
       - "server/infra/observability/grafana/**"
       - "scripts/ops/grafana-*.mjs"
       - ".github/workflows/grafana-monitors.yml"
+      - "server/infra/observability/honeycomb/**"
+      - "scripts/ops/honeycomb-*.mjs"
   schedule:
     # Nightly drift check, 09:17 UTC (~02:17 PT), off the busy top of the hour.
     - cron: "17 9 * * *"
@@ -172,7 +176,11 @@ jobs:
             echo '```'
             node scripts/ops/honeycomb-triggers.mjs verify --env dogfood
             echo '```'
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY" > verify-output.txt
+          if grep -qE "MISMATCH|MISSING|STRAY|FAIL" verify-output.txt; then
+            echo "::error title=Honeycomb verify failed::Live triggers do not match intent after apply. Read the receipt above."
+            exit 1
+          fi
 
   honeycomb-drift:
     name: Nightly Honeycomb drift check
