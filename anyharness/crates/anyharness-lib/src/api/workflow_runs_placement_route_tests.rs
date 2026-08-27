@@ -14,7 +14,7 @@ use crate::domains::workspaces::managed_root::canonical_managed_worktrees_root;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn repo_root_mode_reuses_the_workspace_and_enforces_one_live_run() {
-    let fixture = fixture("wf-route-reporoot");
+    let fixture = fixture("wf-route-reporoot").await;
     // The repo root's checkout is already a registered workspace, as it would
     // be for any repository the user opened before invoking a workflow.
     let existing = fixture
@@ -81,7 +81,7 @@ async fn repo_root_mode_reuses_the_workspace_and_enforces_one_live_run() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_failed_materialization_compensates_the_worktree_and_the_retry_succeeds() {
-    let fixture = fixture("wf-route-compensate");
+    let fixture = fixture("wf-route-compensate").await;
     // A regular FILE named `.proliferate` committed at the repo root makes
     // context materialization fail (the context dir cannot be created) AFTER
     // the worktree was cut — exactly the crash gap Ruling F compensates.

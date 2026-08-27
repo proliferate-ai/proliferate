@@ -20,7 +20,7 @@ fn node<'a>(projection: &'a Value, node_row_id: &str) -> &'a Value {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn commands_return_projections_and_map_the_error_codes() {
-    let fixture = fixture("wf-route-commands");
+    let fixture = fixture("wf-route-commands").await;
     let run_id = run_uuid(0x20);
     let body = fixture.snapshot(json!({
         "schemaVersion": 2,
@@ -116,7 +116,7 @@ async fn commands_return_projections_and_map_the_error_codes() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn fail_redo_answers_with_the_superseded_row_and_its_replacement() {
-    let fixture = fixture("wf-route-fail-redo");
+    let fixture = fixture("wf-route-fail-redo").await;
     let run_id = run_uuid(0x22);
     let body = fixture.snapshot(single_node_definition("blocking turn"));
     let (status, projection) = fixture
@@ -162,7 +162,7 @@ async fn fail_redo_answers_with_the_superseded_row_and_its_replacement() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn flip_type_flips_a_pending_node_and_the_flip_governs_the_advance() {
-    let fixture = fixture("wf-route-flip");
+    let fixture = fixture("wf-route-flip").await;
     let run_id = run_uuid(0x23);
     let body = fixture.snapshot(json!({
         "schemaVersion": 2,
@@ -228,7 +228,7 @@ async fn flip_type_flips_a_pending_node_and_the_flip_governs_the_advance() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn undo_advance_and_resume_map_the_illegal_and_missing_codes() {
-    let fixture = fixture("wf-route-undo-resume");
+    let fixture = fixture("wf-route-undo-resume").await;
     let run_id = run_uuid(0x24);
     let body = fixture.snapshot(single_node_definition("blocking turn"));
     let (status, projection) = fixture
@@ -288,7 +288,7 @@ async fn undo_advance_and_resume_map_the_illegal_and_missing_codes() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cancel_answers_with_the_cancelled_projection_and_disposes_the_running_session() {
-    let fixture = fixture("wf-route-cancel");
+    let fixture = fixture("wf-route-cancel").await;
     let run_id = run_uuid(0x27);
     let body = fixture.snapshot(single_node_definition("blocking turn"));
     let (status, projection) = fixture
@@ -346,7 +346,7 @@ async fn cancel_answers_with_the_cancelled_projection_and_disposes_the_running_s
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn adhoc_nodes_launch_beside_the_chain_via_the_route() {
-    let fixture = fixture("wf-route-adhoc");
+    let fixture = fixture("wf-route-adhoc").await;
     let run_id = run_uuid(0x26);
     let body = fixture.snapshot(single_node_definition("blocking turn"));
     let (status, projection) = fixture

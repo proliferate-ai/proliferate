@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn recovery_pages_past_sixty_four_live_candidates_to_repair_retired_tail() {
-    let _lock = test_support::lock_env();
+    let _lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = std::env::temp_dir().join(format!(

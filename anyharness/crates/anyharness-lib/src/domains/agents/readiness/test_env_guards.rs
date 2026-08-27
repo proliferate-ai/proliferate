@@ -42,7 +42,7 @@ impl Drop for PathEnvGuard {
     }
 }
 
-pub(super) use crate::app::test_support::lock_env;
+pub(super) use crate::app::test_support::lock_env_blocking;
 
 pub(super) struct EnvVarGuard {
     name: &'static str,

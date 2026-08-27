@@ -130,7 +130,7 @@ fn no_pick_anywhere_falls_back_to_the_app_default() {
 /// fallback are both if-absent writers.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn each_node_names_its_session_with_the_chain_mark() {
-    let fixture = fixture("wf-node-title");
+    let fixture = fixture("wf-node-title").await;
     fixture.start(
         "run-title",
         chain(vec![

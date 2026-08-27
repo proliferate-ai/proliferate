@@ -33,7 +33,7 @@ const DESTINATION_WORKSPACE_ID: &str = "mobility-destination";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn export_linearizes_after_actual_completion_admission_and_install_does_not_repeat_it() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let source_home = temp_runtime_home("completion-mobility-post");
@@ -128,7 +128,7 @@ async fn export_linearizes_after_actual_completion_admission_and_install_does_no
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn export_read_transaction_blocks_admission_and_installed_pre_snapshot_delivers_once() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let source_home = temp_runtime_home("completion-mobility-pre");

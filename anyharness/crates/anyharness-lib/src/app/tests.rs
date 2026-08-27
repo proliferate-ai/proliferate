@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
 
 use serde_json::json;
 
@@ -48,10 +47,7 @@ fn init_seed_repository(path: &Path) -> PathBuf {
 
 #[tokio::test(flavor = "current_thread")]
 async fn app_state_allows_missing_bearer_token_when_not_required() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
 
@@ -69,10 +65,7 @@ async fn app_state_allows_missing_bearer_token_when_not_required() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn app_state_rejects_missing_bearer_token_when_required() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
 
@@ -95,10 +88,7 @@ environment variable is missing or empty. Refusing to start without authenticati
 
 #[tokio::test(flavor = "current_thread")]
 async fn app_state_rejects_blank_bearer_token_when_required() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("   "));
     let _data_key_guard = test_support::set_data_key_env(None);
 
@@ -121,10 +111,7 @@ environment variable is missing or empty. Refusing to start without authenticati
 
 #[tokio::test(flavor = "current_thread")]
 async fn app_state_rejects_invalid_data_key() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(Some("not-base64"));
 
@@ -148,10 +135,7 @@ async fn app_state_rejects_invalid_data_key() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn app_state_wires_integration_gateway_extension_to_served_runtime_home() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
 
@@ -178,10 +162,7 @@ async fn app_state_wires_integration_gateway_extension_to_served_runtime_home() 
 
 #[tokio::test(flavor = "current_thread")]
 async fn app_state_launches_and_serves_workspace_mcp_for_an_eligible_session() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let runtime_home = PathBuf::from(format!(
@@ -442,10 +423,7 @@ async fn app_state_launches_and_serves_workspace_mcp_for_an_eligible_session() {
 
 #[test]
 fn proliferate_home_dir_name_uses_local_dir_for_debug_builds() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env_blocking();
     let _dev_guard = test_support::set_proliferate_dev_env(None);
 
     assert_eq!(proliferate_home_dir_name(true), ".proliferate-local");
@@ -453,10 +431,7 @@ fn proliferate_home_dir_name_uses_local_dir_for_debug_builds() {
 
 #[test]
 fn proliferate_home_dir_name_uses_local_dir_when_env_is_set() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env_blocking();
     let _dev_guard = test_support::set_proliferate_dev_env(Some("1"));
 
     assert_eq!(proliferate_home_dir_name(false), ".proliferate-local");
@@ -464,10 +439,7 @@ fn proliferate_home_dir_name_uses_local_dir_when_env_is_set() {
 
 #[test]
 fn proliferate_home_dir_name_uses_production_dir_for_release_without_env() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env_blocking();
     let _dev_guard = test_support::set_proliferate_dev_env(None);
 
     assert_eq!(proliferate_home_dir_name(false), ".proliferate");

@@ -134,7 +134,7 @@ fn read_pid(pid_file: &Path) -> Option<u32> {
 #[cfg(unix)]
 #[tokio::test]
 async fn cancelling_a_probe_kills_the_child_then_removes_the_scratch() {
-    let _env = lock_env();
+    let _env = lock_env().await;
     let home = TempRuntimeHome::new("cancel");
     home.write_state_json(&gateway_state(3, &[("opencode", "sk-vk")]));
     let pid_file = home.path().join("child.pid");
@@ -189,7 +189,7 @@ async fn cancelling_a_probe_kills_the_child_then_removes_the_scratch() {
 #[cfg(unix)]
 #[tokio::test]
 async fn a_timed_out_probe_kills_its_child_and_reports_a_timeout() {
-    let _env = lock_env();
+    let _env = lock_env().await;
     let home = TempRuntimeHome::new("timeout-real");
     home.write_state_json(&gateway_state(3, &[("opencode", "sk-vk")]));
     let pid_file = home.path().join("child.pid");

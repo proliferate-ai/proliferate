@@ -2,28 +2,37 @@
 # so the suppression is visible constitution rather than a silent config line.
 # A record here is `status = "leaks"` with a tracking issue; closing it means
 # fixing the sites and flipping the lint back on in the root Cargo.toml.
+# A closed record flips to `status = "holds"` with the native gate as its
+# engine and stays as the citable law.
 
 [[rule]]
 id = "AH-CLIPPY-1"
 title = "No mutex guard held across an await"
 owner = "anyharness"
-status = "leaks"
-gap = "#2276"
-enforced_by = "review"
-mode = "review"
+status = "holds"
+# The rust-lint job: cargo clippy --workspace --all-targets --keep-going -- -D warnings
+enforced_by = ".github/workflows/ci.yml"
+mode = "compiler"
 scope = "anyharness/crates/**, apps/desktop/src-tauri/**"
 
 rule = """A synchronous MutexGuard must not be held across an `.await` point
 (clippy `await_holding_lock`)."""
 alternative = """Drop the guard before the await — scope the critical section in a
 block that ends before `.await` — or use an async-aware mutex where the critical
-section genuinely spans the await."""
+section genuinely spans the await (the test-support env lock is the precedent:
+`tokio::sync::Mutex`, held across test bodies by design)."""
 why = """A guard held across an await can deadlock the runtime the moment the
-awaited task needs the same lock. 123 sites fire today (inventory 2026-08-26);
-each fix is a lock-scope restructure in the runtime that is the product, so the
-lint is `allow`ed in `[workspace.lints.clippy]` (root Cargo.toml) with this record
-as the tracked debt and #2276 as the queued careful pass — never a silent
-suppression. Ruled 2026-08-26 (lint wiring)."""
+awaited task needs the same lock. Debt history: 123 sites at the 2026-08-26
+inventory; the 2026-08-27 lock map (issue #2276) found ALL of them were one
+test-support pattern (the crate-wide env mutex held across async test bodies)
+plus one lexical false positive — zero production sites; the original "surgery
+in the runtime that is the product" framing was wrong. Resolved 2026-08-27 by
+switching `test_support::ENV_MUTEX` to `tokio::sync::Mutex` (async guards are
+this lint's sanctioned semantics), scoping the false positive, and removing
+the allow from `[workspace.lints.clippy]` — the lint now rides `-D warnings`
+in the rust-lint lane. Audit note: a targeted re-count needs
+`--force-warn clippy::await_holding_lock` (a plain `-W` after `-A warnings`
+silently yields zero on rustc 1.98)."""
 
 [rule.example]
 bad = "let guard = state.lock().unwrap(); client.send(&guard.payload).await;"

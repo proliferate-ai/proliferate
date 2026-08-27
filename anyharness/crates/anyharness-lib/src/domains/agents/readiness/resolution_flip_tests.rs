@@ -23,7 +23,7 @@ use crate::integrations::agent_cli::executable::make_executable;
 /// tree and never touches the user's PATH binary.
 #[test]
 fn a_managed_install_alongside_a_path_copy_leaves_the_path_copy_untouched() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let registry = built_in_registry();
     let grok = registry
         .into_iter()

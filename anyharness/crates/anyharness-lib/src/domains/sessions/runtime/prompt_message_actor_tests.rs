@@ -47,7 +47,7 @@ pub(crate) struct ScriptedAgent {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn send_message_real_actor_executes_idle_running_fifo_and_ignores_a_stale_wake() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("actor-fifo");
@@ -145,7 +145,7 @@ async fn send_message_real_actor_executes_idle_running_fifo_and_ignores_a_stale_
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn send_message_cold_runtime_reconstruction_replays_two_rows_once_in_order() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("actor-restart");

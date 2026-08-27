@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
 
@@ -264,10 +263,7 @@ fn run_git<const N: usize>(cwd: &Path, args: [&str; N]) {
 
 #[tokio::test]
 async fn health_route_remains_public_when_bearer_auth_is_configured() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let app = build_router(test_state(false));
 
@@ -286,10 +282,7 @@ async fn health_route_remains_public_when_bearer_auth_is_configured() {
 
 #[tokio::test]
 async fn protected_routes_require_bearer_auth_when_token_is_configured() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let app = build_router(test_state(false));
 
@@ -308,10 +301,7 @@ async fn protected_routes_require_bearer_auth_when_token_is_configured() {
 
 #[tokio::test]
 async fn protected_routes_allow_matching_bearer_auth_when_token_is_configured() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let app = build_router(test_state(false));
 
@@ -331,10 +321,7 @@ async fn protected_routes_allow_matching_bearer_auth_when_token_is_configured() 
 
 #[tokio::test]
 async fn scoped_direct_attach_jwt_filters_workspaces_and_honors_revocation() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("worker-secret"));
     let state = test_state(false);
     seed_workspace(&state, "workspace-claimed", "/tmp/claimed-workspace");
@@ -428,10 +415,7 @@ async fn scoped_direct_attach_jwt_filters_workspaces_and_honors_revocation() {
 
 #[tokio::test]
 async fn repo_root_resolve_route_accepts_post_and_persists_repo_root() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("repo-root-resolve");
     init_repo(repo_root.path());
@@ -468,10 +452,7 @@ async fn repo_root_resolve_route_accepts_post_and_persists_repo_root() {
 
 #[tokio::test]
 async fn worktree_create_without_target_path_uses_managed_slug_and_conflict_suffix() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let source = TempDirGuard::new("managed-worktree-source");
     let runtime_root = TempDirGuard::new("managed-worktree-runtime");
@@ -561,10 +542,7 @@ async fn worktree_create_without_target_path_uses_managed_slug_and_conflict_suff
 
 #[tokio::test]
 async fn legacy_repo_root_post_route_still_resolves_repo_root() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("repo-root-legacy-resolve");
     init_repo(repo_root.path());
@@ -601,10 +579,7 @@ async fn legacy_repo_root_post_route_still_resolves_repo_root() {
 
 #[tokio::test]
 async fn repo_root_pull_request_statuses_route_returns_coded_404_for_unknown_repo_root() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state(false);
     let app = build_router(state);
@@ -632,10 +607,7 @@ async fn repo_root_pull_request_statuses_route_returns_coded_404_for_unknown_rep
 
 #[tokio::test]
 async fn repo_root_pull_request_statuses_route_returns_empty_entries_without_active_branches() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("repo-root-pr-statuses-empty");
     let state = test_state(false);
@@ -675,10 +647,7 @@ async fn repo_root_pull_request_statuses_route_returns_empty_entries_without_act
 
 #[tokio::test]
 async fn repo_root_pull_request_statuses_route_maps_unsupported_remote() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("repo-root-pr-statuses-remote");
     init_repo(repo_root.path());
@@ -731,10 +700,7 @@ async fn repo_root_pull_request_statuses_route_maps_unsupported_remote() {
 
 #[tokio::test]
 async fn repo_root_file_read_route_reads_text_files() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("repo-root-read-file");
     init_repo(repo_root.path());
@@ -789,10 +755,7 @@ async fn repo_root_file_read_route_reads_text_files() {
 
 #[tokio::test]
 async fn repo_root_file_read_route_rejects_unsafe_paths() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("repo-root-read-unsafe-file");
     init_repo(repo_root.path());
@@ -844,10 +807,7 @@ async fn repo_root_file_read_route_rejects_unsafe_paths() {
 
 #[tokio::test]
 async fn terminal_create_accepts_local_workspace_path() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("terminal-no-repo-root");
     init_repo(repo_root.path());
@@ -891,10 +851,7 @@ async fn terminal_create_accepts_local_workspace_path() {
 
 #[tokio::test]
 async fn agent_login_terminal_routes_start_status_and_close_managed_npm_binary() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("agent-login-terminal");
     let state = test_state(false);
@@ -985,10 +942,7 @@ async fn agent_login_terminal_routes_start_status_and_close_managed_npm_binary()
 
 #[tokio::test]
 async fn terminal_title_route_updates_and_validates_title() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("terminal-title-update");
     init_repo(repo_root.path());
@@ -1120,10 +1074,7 @@ async fn terminal_title_route_updates_and_validates_title() {
 
 #[tokio::test]
 async fn workspace_mobility_preflight_warns_for_active_terminals_without_blocking() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("mobility-terminal-warning");
     init_repo(repo_root.path());
@@ -1202,10 +1153,7 @@ async fn workspace_mobility_preflight_warns_for_active_terminals_without_blockin
 
 #[tokio::test]
 async fn raw_notification_history_route_returns_persisted_notifications() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state(false);
     test_support::seed_workspace_with_repo_root(
@@ -1278,10 +1226,7 @@ async fn raw_notification_history_route_returns_persisted_notifications() {
 
 #[tokio::test]
 async fn restore_route_returns_cold_visible_session_without_live_handle() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state(false);
     test_support::seed_workspace_with_repo_root(
@@ -1361,10 +1306,7 @@ fn assert_repo_root_persisted(state: &AppState, canonical_path: &str, payload: &
 /// unchanged after the attempt.
 #[tokio::test]
 async fn the_runtime_exposes_no_catalog_push_route() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state(false);
     let version_before = state.catalog_sync_service.catalog_version();
@@ -1392,10 +1334,7 @@ async fn the_runtime_exposes_no_catalog_push_route() {
 
 #[tokio::test]
 async fn get_agent_catalog_version_returns_active_version_and_source() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state(false);
     let expected_version = state.catalog_sync_service.catalog_version();
@@ -1423,10 +1362,7 @@ async fn get_agent_catalog_version_returns_active_version_and_source() {
 
 #[tokio::test]
 async fn get_agent_catalog_version_requires_bearer_auth_when_configured() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let state = test_state(false);
     let app = build_router(state);
@@ -1448,10 +1384,7 @@ async fn get_agent_catalog_version_requires_bearer_auth_when_configured() {
 
 #[tokio::test]
 async fn get_agent_catalog_version_succeeds_with_valid_bearer_auth() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let state = test_state(false);
     let expected_version = state.catalog_sync_service.catalog_version();
@@ -1486,10 +1419,7 @@ async fn get_agent_catalog_version_succeeds_with_valid_bearer_auth() {
 /// guards against would be a serde-attribute change.
 #[tokio::test]
 async fn launch_probe_status_route_serves_one_composed_observation() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let app = build_router(test_state(false));
 
@@ -1568,10 +1498,7 @@ async fn launch_probe_status_route_serves_one_composed_observation() {
 /// query parameters are ignored).
 #[tokio::test]
 async fn launch_probe_refresh_takes_no_context_parameter() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let app = build_router(test_state(false));
 
@@ -1616,10 +1543,7 @@ async fn launch_probe_refresh_takes_no_context_parameter() {
 /// public.
 #[tokio::test]
 async fn launch_probe_routes_require_bearer_auth() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let app = build_router(test_state(false));
 
@@ -1655,10 +1579,7 @@ async fn launch_probe_routes_require_bearer_auth() {
 /// panicked, or errored would surface here as a changed status.
 #[tokio::test]
 async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engine() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let app = build_router(test_state(false));
 
@@ -1746,10 +1667,7 @@ async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engi
 /// where the outcome is observable: nothing written, not even a failed attempt.
 #[tokio::test]
 async fn the_install_endpoint_keeps_its_error_contract_while_poking() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let app = build_router(test_state(false));
 
@@ -1794,10 +1712,7 @@ async fn the_install_endpoint_keeps_its_error_contract_while_poking() {
 /// failure output).
 #[tokio::test]
 async fn agent_auth_state_routes_never_probe_while_the_automatic_engine_is_suppressed() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let state = test_state(false);
     let marker_path = state.runtime_home.join("probe-ran.marker");
@@ -1862,10 +1777,7 @@ async fn agent_auth_state_routes_never_probe_while_the_automatic_engine_is_suppr
 /// site the other test cannot reach.
 #[tokio::test]
 async fn the_install_endpoint_never_probes_while_the_automatic_engine_is_suppressed() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(Some("secret-token"));
     let state = test_state(false);
     let marker_path = state.runtime_home.join("probe-ran.marker");

@@ -12,7 +12,7 @@ use crate::persistence::Db;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn explicit_provider_fork_error_is_failed_and_same_key_retry_reports_errored_child() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-explicit-error");
@@ -88,7 +88,7 @@ async fn explicit_provider_fork_error_is_failed_and_same_key_retry_reports_error
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dropped_fork_response_parks_unknown_and_same_key_retry_never_redispatches() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-dropped-response");
@@ -163,7 +163,7 @@ async fn dropped_fork_response_parks_unknown_and_same_key_retry_never_redispatch
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn malformed_fork_result_parks_unknown_and_same_key_retry_never_redispatches() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-malformed-response");
@@ -239,7 +239,7 @@ async fn malformed_fork_result_parks_unknown_and_same_key_retry_never_redispatch
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn malformed_typed_fork_success_parks_unknown_without_persisting_or_redispatching() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-malformed-typed-success");
@@ -314,7 +314,7 @@ async fn malformed_typed_fork_success_parks_unknown_without_persisting_or_redisp
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn malformed_wire_after_claim_parks_unknown_and_never_redispatches() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-malformed-wire");
