@@ -144,7 +144,7 @@ export const selfhostInstall1: ScenarioDefinition = {
   title:
     "prove one real self-hosted installation: shipped installer on candidate bytes → claim → " +
     "Connect-Server trust → BYOK turn → invitee",
-  registryFlowRef: "specs/engineering/testing/flows.md#selfhost-install",
+  registryFlowRef: "tests/release/core-release-scenario-manifest.json#selfhost-install",
   lanes: ["selfhost"],
   requiredEnv: SELFHOST_REQUIRED_ENV,
   expandCells: (): ScenarioCellSpec[] =>

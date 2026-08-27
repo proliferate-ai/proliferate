@@ -131,7 +131,7 @@ export const selfhostCfn1: ScenarioDefinition = {
   title:
     "prove the SHIPPED CloudFormation wrapper installs the EXACT candidate: input digests, stack outputs, " +
     "DNS/TLS, and /meta version (shallow — no owner/invite/Desktop journey)",
-  registryFlowRef: "specs/engineering/testing/tier-3-scenario-contract.md#sh-cfn-wrapper",
+  registryFlowRef: "delivery/testing-cicd/archive/tier-3-scenario-contract.md#sh-cfn-wrapper",
   lanes: ["selfhost"],
   // Region + hosted zone are legitimately-provisioned world inputs. The two
   // CFN-specific inputs are NOT scenario-level requiredEnv: they are resolved in

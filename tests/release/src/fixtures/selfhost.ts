@@ -1,5 +1,5 @@
 /**
- * Self-hosting infrastructure fixture (specs/engineering/testing/self-hosting.md
+ * Self-hosting infrastructure fixture (delivery/testing-cicd/archive/self-hosting.md
  * §6). Wraps tests/release/scripts/selfhost-box.sh so a scenario can provision
  * and tear down its own throwaway EC2 self-hosted control plane, and holds the
  * SSH + first-run-claim helpers the self-hosting scenarios share.

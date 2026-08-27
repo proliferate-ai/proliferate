@@ -43,7 +43,7 @@ function fakeCell(harness: string, runtimeLane: "local" | "sandbox" = "local"): 
   return {
     cell_id: `T3-INT-1/${runtimeLane}/harness=${harness}`,
     scenario_id: "T3-INT-1",
-    registry_flow_ref: "specs/engineering/testing/scenarios.md#T3-INT-1",
+    registry_flow_ref: "tests/release/core-release-scenario-manifest.json#T3-INT-1",
     runtime_lane: runtimeLane,
     dimensions: { harness },
     required_env: [],

@@ -10,7 +10,7 @@
 
 import type { Tier2BillingEvidenceV1 } from "../../evidence/schema.js";
 import type { LedgerProbe, PolicyAsserter, StripeIdCollector } from "./types.js";
-import { withDb } from "../../../../intent/stack/billing-env.ts";
+import { withDb } from "./stack/billing-env.ts";
 
 const MAX_TIER2_TEST_CLOCK_IDS = 20;
 const MAX_TIER2_OBJECT_IDS = 50;

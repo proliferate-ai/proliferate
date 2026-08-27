@@ -141,7 +141,7 @@ endif
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
         server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
-        check check-max-lines check-server-boundaries test test-server fmt clippy \
+        gate check check-max-lines check-server-boundaries test test-server fmt clippy \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build dev-build rebuild \
         desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
@@ -571,7 +571,7 @@ db-ah:
 # Build a TEST-FLAVOR desktop app whose auto-updater points at a local manifest
 # server (UPDATER_URL) and trusts a throwaway key. For the tier-4 upgrade test.
 # The shipped tauri.conf.json is untouched -- a gitignored overlay is merged via
-# `tauri build --config`. See specs/engineering/testing/desktop-update-testing.md.
+# `tauri build --config`. See delivery/testing-cicd/archive/desktop-update-testing.md.
 #   make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json
 desktop-test-build:
 	@test -n "$(UPDATER_URL)" || { echo "UPDATER_URL is required. Example: make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json"; exit 1; }
@@ -815,7 +815,7 @@ publish-cloud-template-env-local:
 		fi
 
 # Tier-3 live end-to-end / tier-4 upgrade-path runner
-# (specs/engineering/testing/release-worlds-and-fixtures.md "Local And GitHub Actions
+# (delivery/testing-cicd/archive/release-worlds-and-fixtures.md "Local And GitHub Actions
 # Execution"). One runner
 # CLI with lane flags; this target is a thin wrapper so CI and laptops call it
 # identically. LANE=local|staging DESKTOP=web|native AGENTS=<list|all>
@@ -833,7 +833,7 @@ release-e2e:
 		$(if $(CANDIDATE_BUILD_MAP),--candidate-build-map $(CANDIDATE_BUILD_MAP),)
 
 # Assembles a CandidateBuildMapV1 for an already-built binary
-# (specs/engineering/testing/core-release-validation.md). BINARY defaults to the
+# (delivery/testing-cicd/archive/core-release-validation.md). BINARY defaults to the
 # release AnyHarness build; OUTPUT to tests/release/.output/candidate-build.json.
 CANDIDATE_MAP_BINARY ?= target/release/anyharness
 CANDIDATE_MAP_OUTPUT ?= tests/release/.output/candidate-build.json
@@ -843,7 +843,7 @@ qualification-candidate-build-map:
 		--output $(CANDIDATE_MAP_OUTPUT)
 
 # The real build→map→validate→materialize→launch→health→evidence proof
-# (specs/engineering/testing/core-release-validation.md; historical section
+# (delivery/testing-cicd/archive/core-release-validation.md; historical section
 # name: "Real handoff smoke").
 # Builds a release-mode AnyHarness stamped with the repository VERSION and the
 # current HEAD SHA, assembles the map, launches the exact bytes against an
@@ -855,7 +855,7 @@ qualification-candidate-build-map:
 # at target/release/ while cargo wrote somewhere else.
 # Validate and materialize a committed retained-release receipt — the exact
 # immutable production N-1 artifact set Tier 4 update proofs start from
-# (specs/engineering/testing/tier-4-scenario-contract.md "Artifact Identity").
+# (delivery/testing-cicd/archive/tier-4-scenario-contract.md "Artifact Identity").
 # Shape + policy validation run before any download; every byte is verified
 # against the receipt on every use (a cache hit is re-hashed, never trusted).
 # Read-only toward providers: LIVE=1 adds an E2B metadata lookup proving the
@@ -989,42 +989,11 @@ qualification-local-workspace:
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
 
-# Tier-2 strict billing qualification (PR 4). Boots the shared BootedStack
-# (real Server + Postgres + Redis + real Stripe test mode; AnyHarness runtime
-# skipped) and runs the authoritative T2-BILL-1..15 cells through the SAME
-# tests/release aggregate command as tier 3. PR-8 non-billing rows remain
-# manifest-deferred until one collector proves each complete guarantee with
-# truthful domain evidence.
-# No candidate build (Tier-2 boots from source) — `--source-candidate`
-# synthesizes the Server identity for the strict report. Selected financial
-# cells require a Stripe `sk_test_` key (env or `stripe config`); a missing key
-# in trusted CI is a FAILURE (fail-closed), never skip-as-success.
-#
-# PROFILE=<unique-name>       Names this run.
-# BEHAVIOR=diagnostic|strict
-QUALIFICATION_TIER2_BASE_DIR ?= $(CURDIR)/tests/release/.output/tier2
-qualification-tier2:
-	@test -n "$(BEHAVIOR)" || { echo "BEHAVIOR=<diagnostic|strict> is required."; exit 1; }
-	pnpm install --silent
-	pnpm exec playwright install --with-deps chromium
-	@run_id="qt2-$${PROFILE:-$$(whoami)}"; \
-	shard_id="1"; \
-	run_dir="$(QUALIFICATION_TIER2_BASE_DIR)/$$run_id/$$shard_id"; \
-	mkdir -p "$$run_dir/evidence"; \
-	cd tests/release && TIER2_INTENT_SKIP_RUNTIME=1 pnpm exec tsx src/cli/run.ts \
-		--behavior $(BEHAVIOR) \
-		--lane local \
-		--desktop web \
-		--agents claude \
-		--scenarios T2-BILL \
-		--source-candidate \
-		--run-id "$$run_id" --shard-id "$$shard_id" \
-		--output-dir "$$run_dir/evidence"
 # "Complete Local Workspace Qualification (Functional)" — the same three
 # exact local-world candidates as `qualification-local-workspace`
 # (`build-local-qualification-candidates.mjs`, unmodified), handed to the same
 # qualification runner, but driving the full LOCAL-1..7 functional cell set
-# (specs/engineering/testing/tier-3-scenario-contract.md §"Local cases")
+# (delivery/testing-cicd/archive/tier-3-scenario-contract.md §"Local cases")
 # instead of the single LOCAL-WORLD-SMOKE-1 infrastructure proof. This is the
 # ONE entrypoint; the release-e2e.yml manual job invokes this same target —
 # same build step, same runner invocation.
@@ -1282,126 +1251,6 @@ qualification-selfhost:
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
 
-# "Prove One Real Managed-Cloud Workspace": one exact candidate Server, one
-# exact set of Linux musl runtime binaries, and one exact candidate Desktop
-# renderer built for the public candidate-API origin, handed to the
-# qualification runner, provisioned as an isolated run-scoped EC2+E2B managed-
-# cloud world, and used through the real product UI for one cheap managed-
-# gateway turn inside a real E2B sandbox. One entrypoint, same as
-# `qualification-local-workspace`; GitHub Actions' manual `release-e2e.yml`
-# job invokes this same target. New builder file
-# (`scripts/ci-cd/build-cloud-qualification-candidates.mjs`) — the local-world
-# builder and target above stay untouched (extension contract: one builder per
-# world).
-#
-# PROFILE=<unique-name>   Names this run (becomes its run id). Never reuse a
-#                         PROFILE for two concurrent invocations.
-# BEHAVIOR=diagnostic|strict
-#
-# Locally, secret VALUES come from the same ignored, mode-0600 qualification
-# profile as the local-world target, extended with the cloud inputs (E2B,
-# GitHub App, AWS region/zone — see src/config/env-manifest.ts). In GitHub
-# Actions (GITHUB_ACTIONS=true) the `Qualification` environment supplies them
-# directly; this target does not read or expect the local file there. AWS
-# credentials themselves stay ambient (the `aws` CLI), never a manifest var.
-QUALIFICATION_MANAGED_CLOUD_BASE_DIR ?= $(CURDIR)/tests/release/.output/managed-cloud-world
-# Managed-cloud scenario selection. Each scenario owns a scoped world subtree;
-# sequential invocations may therefore share one parent PROFILE and exact
-# candidate map while keeping ledgers/secrets/world cleanup disjoint.
-CLOUD_SCENARIOS ?= CLOUD-PROVISION-1
-CLOUD_EVIDENCE_SUBDIR ?= evidence
-SHARED_TEMPLATE_CUSTODY_MODE ?= world_owned
-# A separate clean checkout of the canonical repository pinned to the trusted
-# default-branch cleanup revision. Candidate checkout bytes cannot authorize
-# their own LiteLLM hard-cancel reconciliation.
-QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY ?=
-QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH ?= main
-qualification-managed-cloud:
-	@test -n "$(PROFILE)" || { \
-		echo "PROFILE=<unique-name> is required, e.g. make qualification-managed-cloud PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
-		exit 1; \
-	}
-	@test -n "$(BEHAVIOR)" || { \
-		echo "BEHAVIOR=<diagnostic|strict> is required."; \
-		exit 1; \
-	}
-	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
-		test -f "$(QUALIFICATION_INFRA_ENV)" || { \
-			echo "Missing qualification secret profile at $(QUALIFICATION_INFRA_ENV)."; \
-			echo "It must define the LiteLLM inputs plus the cloud inputs named in tests/release/src/config/env-manifest.ts (mode 0600, never committed)."; \
-			exit 1; \
-		}; \
-		perm=$$(stat -f '%Lp' "$(QUALIFICATION_INFRA_ENV)" 2>/dev/null || stat -c '%a' "$(QUALIFICATION_INFRA_ENV)"); \
-		test "$$perm" = "600" || { \
-			echo "$(QUALIFICATION_INFRA_ENV) must be mode 0600 (got $$perm). Run: chmod 600 $(QUALIFICATION_INFRA_ENV)"; \
-			exit 1; \
-		}; \
-	fi
-	@if [ "$$GITHUB_ACTIONS" = "true" ]; then \
-		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
-		export AGENT_GATEWAY_LITELLM_BASE_URL; \
-	else \
-		set -a; \
-		. "$(QUALIFICATION_INFRA_ENV)"; \
-		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
-		set +a; \
-		export AGENT_GATEWAY_LITELLM_BASE_URL; \
-	fi; \
-	test -n "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)" || { \
-		echo "QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY=<clean trusted-default-branch checkout> is required before managed-cloud build or provider work."; \
-		exit 1; \
-	}; \
-	run_id="qlc-$(PROFILE)"; \
-	shard_id="1"; \
-	run_dir="$(QUALIFICATION_MANAGED_CLOUD_BASE_DIR)/$$run_id/$$shard_id"; \
-	mkdir -p "$$run_dir/preflight"; \
-	source_sha=$$(git rev-parse HEAD); \
-	attempt="$${GITHUB_RUN_ATTEMPT:-1}"; \
-	candidate_map="$$run_dir/candidate-build.json"; \
-	if [ "$(REUSE_CANDIDATES)" = "1" ]; then \
-		test -f "$$candidate_map" || { \
-			echo "REUSE_CANDIDATES=1 requires the existing candidate map at $$candidate_map; refusing a silent rebuild."; \
-			exit 2; \
-		}; \
-		test -f "$$run_dir/cloud-world-subdomain.json" || { \
-			echo "REUSE_CANDIDATES=1 requires cloud-world-subdomain.json beside the candidate map."; \
-			exit 2; \
-		}; \
-		node scripts/ci-cd/qualification-preflight.mjs \
-			--world managed-cloud --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
-			--scenarios "$(CLOUD_SCENARIOS)" --artifact-mode reuse --candidate-build-map "$$candidate_map" \
-			--cleanup-attestation-repository "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)" \
-			--cleanup-attestation-default-branch "$(QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH)" \
-			--cleanup-attestations "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)/tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json" \
-			--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
-		echo "[reuse] REUSE_CANDIDATES=1 — exact candidate cache verified at $$candidate_map"; \
-	else \
-		node scripts/ci-cd/qualification-preflight.mjs \
-			--world managed-cloud --source-sha "$$source_sha" --run-id "$$run_id" --shard-id "$$shard_id" --attempt "$$attempt" \
-			--scenarios "$(CLOUD_SCENARIOS)" --artifact-mode build \
-			--cleanup-attestation-repository "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)" \
-			--cleanup-attestation-default-branch "$(QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH)" \
-			--cleanup-attestations "$(QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY)/tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json" \
-			--output "$$run_dir/preflight/qualification-preflight.json" || exit $$?; \
-	fi; \
-	pnpm install --silent; \
-	pnpm exec playwright install --with-deps chromium; \
-	if ! { [ "$(REUSE_CANDIDATES)" = "1" ] && [ -f "$$candidate_map" ]; }; then \
-		build_summary=$$(node scripts/ci-cd/build-cloud-qualification-candidates.mjs \
-			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir") || exit $$?; \
-		echo "$$build_summary"; \
-		candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
-	fi; \
-	cd tests/release && RELEASE_E2E_SHARED_TEMPLATE_CUSTODY="$(SHARED_TEMPLATE_CUSTODY_MODE)" pnpm exec tsx src/cli/run.ts \
-		--behavior $(BEHAVIOR) \
-		--lane cloud \
-		--desktop web \
-		--agents claude \
-		--scenarios "$(CLOUD_SCENARIOS)" \
-		--candidate-build-map "$$candidate_map" \
-		--run-id "$$run_id" --shard-id "$$shard_id" \
-		--output-dir "$$run_dir/$(CLOUD_EVIDENCE_SUBDIR)"
-
 stripe-setup-test:
 	@command -v stripe >/dev/null 2>&1 || { \
 		echo "Stripe CLI is required. Install it and run \`stripe login\`."; \
@@ -1570,9 +1419,16 @@ install: git-hooks
 
 # Point git at the checked-in hooks. Idempotent, safe to re-run, and local to
 # this clone/worktree (never committed state). See guides/local/README.md.
+# The pre-push gate: change-scoped local mirror of the merge gate
+# (delivery/testing-cicd/delivery-spec-make-gate.md). `make gate` by hand or
+# via the pre-push hook; `python3 scripts/gate --list` shows what a diff selects.
+gate:
+	@python3 scripts/gate
+
 git-hooks:
 	@git config core.hooksPath scripts/git-hooks
-	@echo "git hooks enabled (core.hooksPath=scripts/git-hooks); bypass a single commit with --no-verify."
+	@echo "git hooks enabled (core.hooksPath=scripts/git-hooks): pre-commit formats staged files, pre-push runs 'make gate'."
+	@echo "escape hatch: PROLIFERATE_SKIP_HOOKS=1"
 
 # --- Sidecar staging ---
 

@@ -31,7 +31,7 @@ import {
 
 /**
  * T3-SEC-MAT-1 — secrets materialize.
- * specs/engineering/testing/scenarios.md#T3-SEC-MAT-1
+ * tests/release/core-release-scenario-manifest.json#T3-SEC-MAT-1
  *
  * #1042: the `current_product_user` gate lifted 2026-07-09 (PR #1023); the
  * personal secret PUT already succeeded for real. This finishes the rest:
@@ -68,7 +68,7 @@ import {
 export const t3SecMat1: ScenarioDefinition = {
   id: "T3-SEC-MAT-1",
   title: "secrets materialize",
-  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-SEC-MAT-1",
+  registryFlowRef: "tests/release/core-release-scenario-manifest.json#T3-SEC-MAT-1",
   lanes: ["sandbox"],
   requiredEnv: ["RELEASE_E2E_SERVER_URL"],
   plan: () => [
