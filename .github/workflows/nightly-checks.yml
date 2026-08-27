@@ -1,0 +1,325 @@
+name: Nightly Checks
+
+# The slow-but-real set — suites too slow or too credentialed for the PR
+# merge gate that must still actually run (the census law, ruled 2026-08-26:
+# a dispatch-only lane doesn't exist). Nothing here gates a merge. Each job
+# is censused in lints/product/lanes.toml; delivery spec:
+# delivery/testing-cicd/delivery-spec-lane-census.md.
+#
+#   scroll-physics            — transcript renderer in real Chromium + WebKit
+#                               (verbatim from the deleted ci-heavy-lanes.yml)
+#   workflow-canvas           — builder canvas pointer/stacking in real Chromium
+#   anyharness-attached       — real-agent runtime compatibility suite
+#                               (absorbed from agent-runtime-compat.yml)
+#   release-harness-selfcheck — the qualification runner's own typecheck + tests
+#   report-red                — ONE Slack line when anything above is red;
+#                               green nights say nothing.
+#
+# The staging e2e battery is NOT here — it lives in release-e2e.yml (the
+# e2e-observable slice), which owns its own cron and digest.
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # ~02:00 PT
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Scroll-physics tier: the real transcript renderer driven by a scripted
+  # streaming fixture in real Chromium AND real WebKit. The suite runs
+  # workers=1 by config; both browser engines are required because scroll
+  # physics differ between Blink and WebKit.
+  scroll-physics:
+    name: Transcript scroll physics (chromium + webkit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Builds product-client's own dist (and the shared packages it depends
+      # on) so the fixture resolves the real transcript through `#product/*`.
+      - name: Build shared packages
+        run: pnpm shared:build
+
+      # Cheap compile-only check over the fixture's tsconfig.json (no
+      # browsers). Catches SDK event-schema drift before spending time
+      # installing browser engines.
+      - name: Typecheck scroll-physics fixture
+        run: pnpm --filter @proliferate/product-client typecheck:scroll-physics
+
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: |
+          version=$(grep -m1 '^  playwright-core@' pnpm-lock.yaml | sed -E 's/^  playwright-core@([0-9.]+):.*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Keyed separately (chromium-webkit) from the chromium-only job since
+      # this job installs a superset of browsers.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-chromium-webkit
+
+      - name: Install Playwright chromium + webkit
+        run: |
+          sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"
+          pnpm --filter @proliferate/product-client exec playwright install --with-deps chromium webkit
+
+      - name: Run scroll-physics suite
+        run: pnpm --filter @proliferate/product-client test:scroll-physics
+
+      - name: Upload scroll-physics test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scroll-physics-test-results
+          path: apps/packages/product-client/qualification/scroll-physics/test-results/
+          retention-days: 7
+
+  # Workflow-canvas suite: the builder canvas's real stacking, hit testing,
+  # pointer capture and routing — the part a simulated DOM cannot answer for.
+  # Chromium only: nothing here is engine-specific.
+  workflow-canvas:
+    name: Workflow canvas pointer suite (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm shared:build
+
+      - name: Typecheck workflow-canvas fixture
+        run: pnpm --filter @proliferate/product-client typecheck:workflow-canvas
+
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: |
+          version=$(grep -m1 '^  playwright-core@' pnpm-lock.yaml | sed -E 's/^  playwright-core@([0-9.]+):.*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-chromium
+
+      - name: Install Playwright chromium
+        run: |
+          sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"
+          pnpm --filter @proliferate/product-client exec playwright install --with-deps chromium
+
+      - name: Run workflow-canvas suite
+        run: pnpm --filter @proliferate/product-client test:workflow-canvas
+
+      - name: Upload workflow-canvas test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-canvas-test-results
+          path: apps/packages/product-client/qualification/workflow-canvas/test-results/
+          retention-days: 7
+
+  # Real AnyHarness local runtime compatibility: the runtime standalone suite
+  # attached to real agents with the configured credentials. Verbatim move
+  # from agent-runtime-compat.yml (deleted with this lane's arrival).
+  anyharness-attached:
+    name: Real AnyHarness local runtime compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+      ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON: ${{ secrets.ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON }}
+      ANYHARNESS_TEST_CODEX_AUTH_JSON: ${{ secrets.ANYHARNESS_TEST_CODEX_AUTH_JSON }}
+      GITHUB_TOKEN: ${{ secrets.ANYHARNESS_TEST_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.ANYHARNESS_TEST_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+      ANYHARNESS_TEST_FIXTURE_REPO_URL: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_URL }}
+      ANYHARNESS_TEST_FIXTURE_REPO_REF: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_REF }}
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libcap-dev
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install repo dependencies
+        run: pnpm install
+
+      - name: Validate required agent secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${ANTHROPIC_API_KEY:-}" && -z "${ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON:-}" ]]; then
+            echo "Claude compatibility requires ANTHROPIC_API_KEY or ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON" >&2
+            exit 1
+          fi
+
+          if [[ -z "${OPENAI_API_KEY:-}" && -z "${CODEX_API_KEY:-}" && -z "${ANYHARNESS_TEST_CODEX_AUTH_JSON:-}" ]]; then
+            echo "Codex compatibility requires OPENAI_API_KEY, CODEX_API_KEY, or ANYHARNESS_TEST_CODEX_AUTH_JSON" >&2
+            exit 1
+          fi
+
+      - name: Seed Claude auth
+        if: env.ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          home = Path.home()
+          payload = os.environ["ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON"]
+          data = json.loads(payload)
+
+          if "claudeAiOauth" in data:
+              target = home / ".claude" / ".credentials.json"
+              target.parent.mkdir(parents=True, exist_ok=True)
+          else:
+              target = home / ".claude.json"
+
+          target.write_text(payload)
+          target.chmod(0o600)
+          PY
+
+      - name: Seed Codex auth
+        if: env.ANYHARNESS_TEST_CODEX_AUTH_JSON != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$HOME/.codex"
+          printf '%s' "$ANYHARNESS_TEST_CODEX_AUTH_JSON" > "$HOME/.codex/auth.json"
+          chmod 600 "$HOME/.codex/auth.json"
+
+      - name: Prepare AnyHarness runtime compatibility environment
+        id: prepare-runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          STATE_FILE="$RUNNER_TEMP/anyharness-agent-runtime-state.json"
+          ENV_FILE="$RUNNER_TEMP/anyharness-agent-runtime.env"
+
+          node scripts/setup-agent-runtime-suite.mjs prepare \
+            --state-file "$STATE_FILE" \
+            --env-output-file "$ENV_FILE"
+
+          cat "$ENV_FILE" >> "$GITHUB_ENV"
+          echo "state_file=$STATE_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Run real-agent compatibility scenarios
+        run: pnpm test:agent:runtime:attached
+
+      - name: Cleanup AnyHarness runtime compatibility environment
+        if: always() && steps.prepare-runtime.outputs.state_file != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/setup-agent-runtime-suite.mjs cleanup \
+            --state-file "${{ steps.prepare-runtime.outputs.state_file }}"
+
+  # The qualification runner's own proof — so the release harness cannot rot
+  # unnoticed between releases (it left the PR path in the 2026-08 cull).
+  release-harness-selfcheck:
+    name: Release harness self-check (typecheck + unit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck qualification runner
+        run: pnpm -C tests/release typecheck
+
+      - name: Test qualification runner
+        run: pnpm -C tests/release test
+
+  # Red-only reporting: exactly one Slack line naming the failed suites.
+  # Green nights post nothing (the alerting rule: only "actually broken").
+  report-red:
+    name: Report red suites (Slack, red only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [scroll-physics, workflow-canvas, anyharness-attached, release-harness-selfcheck]
+    if: always() && contains(join(needs.*.result, ','), 'failure')
+    env:
+      NEEDS_JSON: ${{ toJSON(needs) }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_ENGINEERING_ALERTS_WEBHOOK_URL }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Post one red line
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=$(printf '%s' "$NEEDS_JSON" | jq -r 'to_entries | map(select(.value.result == "failure") | .key) | join(", ")')
+          text="nightly-checks red ($(date -u +%Y-%m-%d)): ${failed} — ${RUN_URL}"
+          echo "$text"
+          if [[ -z "${SLACK_WEBHOOK_URL:-}" ]]; then
+            echo "SLACK_ENGINEERING_ALERTS_WEBHOOK_URL is not provisioned; the red is visible on the run only." >&2
+            exit 0
+          fi
+          payload=$(jq -cn --arg text "$text" '{text: $text}')
+          curl -sS -f -X POST -H 'Content-Type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
