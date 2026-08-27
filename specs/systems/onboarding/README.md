@@ -58,7 +58,7 @@ Auth session state itself is host-owned (`ProductHost.auth`); the product reads 
 | Host auth (Desktop/Web) | `ProductHost.auth` state, GitHub and password sign-in transports | [use-login-page.ts](../../../apps/packages/product-client/src/hooks/auth/facade/use-login-page.ts), [use-github-sign-in.ts](../../../apps/packages/product-client/src/hooks/auth/workflows/use-github-sign-in.ts), [use-password-sign-in.ts](../../../apps/packages/product-client/src/hooks/auth/workflows/use-password-sign-in.ts) |
 | Product auth (Cloud) | readiness, linked providers, min-version | [use-product-auth.ts](../../../apps/packages/product-client/src/hooks/auth/facade/use-product-auth.ts), [auth-probes.ts](../../../apps/packages/product-client/src/lib/access/cloud/auth-probes.ts) |
 | Runtime agent catalog (`agents`) | install state, reconcile job snapshot (the live install source for the readiness card) | [use-home-installation-readiness.ts](../../../apps/packages/product-client/src/hooks/home/derived/use-home-installation-readiness.ts), `useAgentReconcileStatusQuery` |
-| Agent auth + gateway (Cloud `auth`, `agent-gateway`) | first-run adoption posts selections; the setting-up step polls `applied` acks at 3 s for a ~20 s grace window, then auto-advances | [use-first-run-auth-adoption.ts](../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-first-run-auth-adoption.ts), [use-auth-setup-onboarding-step.ts](../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-auth-setup-onboarding-step.ts) |
+| Agent auth + gateway (Cloud `auth`, `agent-gateway`) | first-run adoption posts selections; the setting-up step polls `applied` acks at 3 s for a ~20 s grace window (`AUTH_SETUP_GRACE_MS`), then auto-advances — the auto-advance retires with agent_auth slice 3 (ruled 2026-08-27): the card binds to the status document and advances only on real completion | [use-first-run-auth-adoption.ts](../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-first-run-auth-adoption.ts), [use-auth-setup-onboarding-step.ts](../../../apps/packages/product-client/src/hooks/agents/lifecycle/use-auth-setup-onboarding-step.ts) |
 | Desktop worker enrollment (Cloud `desktop-workers`) | on every authenticated Desktop boot, enroll a dispatch worker for this install under the active organization, with a bounded retry guard; the enrollment carries the integration-gateway identity dotfile that local sessions use | [use-desktop-worker-enrollment.ts](../../../apps/packages/product-client/src/hooks/cloud/lifecycle/use-desktop-worker-enrollment.ts), [ensure-desktop-worker.ts](../../../apps/packages/product-client/src/lib/workflows/cloud/ensure-desktop-worker.ts) |
 | Launch options (runtime-observed) | Home target picker and model selection before any session exists | [use-home-target-agent-launch-options.ts](../../../apps/packages/product-client/src/hooks/home/derived/use-home-target-agent-launch-options.ts) |
 | Workspace surface | first workspace creation and the pending shell | [use-home-next-launch.ts](../../../apps/packages/product-client/src/hooks/home/workflows/use-home-next-launch.ts) → [../workspaces/README.md](../workspaces/README.md) |
@@ -75,7 +75,10 @@ Auth session state itself is host-owned (`ProductHost.auth`); the product reads 
 - **Setup never hard-blocks the first prompt.** The auth-setup step
   auto-advances after its grace window and the harness pane's ordinary
   pending indicator carries on; both outcomes latch so the card never
-  resurrects on a later manual edit.
+  resurrects on a later manual edit. (The grace-window auto-advance
+  retires with agent_auth slice 3, ruled 2026-08-27 — the step becomes
+  status-document-bound, advancing only on real completion, with each
+  badge's next-action affordance keeping the first prompt reachable.)
 - **Intent survives blockers.** The Home draft and deferred launch persist
   across a readiness change and resume through the normal launch path
   ([use-home-deferred-launch-runner.ts](../../../apps/packages/product-client/src/hooks/home/lifecycle/use-home-deferred-launch-runner.ts)).
