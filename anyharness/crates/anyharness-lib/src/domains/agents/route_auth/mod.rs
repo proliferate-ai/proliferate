@@ -420,12 +420,17 @@ fn launch_route_selection_failure_rotated_for_server(
 }
 
 /// The seat-rotation seam (work order G): run the pure decision over the
-/// profile's seat pool in DOCUMENT order, then filter the sources so exactly
-/// the chosen seat remains among the seat sources (non-seat sources are never
-/// touched). When no seat can serve — the pool is all-cooling, or the pin is
-/// cooling — a profile that ALSO carries a non-seat source (gateway/api_key/
-/// provider_config) drops its seats and renders the rest (gateway fallback);
-/// a seat-only profile refuses with the matching typed error.
+/// profile's seat pool in DOCUMENT order (deduplicated — `rotation::seat_pool`),
+/// then reduce the sources so the chosen seat renders ALONE: every other
+/// source, seat or not, is dropped. A gateway/api_key/provider_config source
+/// beside a pool is fallback-only — rendering it next to the seat would hand
+/// the CLI two competing credentials (`ANTHROPIC_AUTH_TOKEN` +
+/// `CLAUDE_CODE_OAUTH_TOKEN`) while `serving_seat_id` names the seat, so a
+/// limit error would cool the seat no matter which credential the CLI used.
+/// When no seat can serve — the pool is all-cooling, or the pin is cooling —
+/// a profile that ALSO carries a non-seat source drops its seats and renders
+/// the rest (the gateway fallback, `serving_seat_id = None`); a seat-only
+/// profile refuses with the matching typed error.
 ///
 /// Pure with respect to rotation state: reads the store, never writes it —
 /// which is what makes the create-time preview and the launch render safe to
@@ -435,14 +440,7 @@ fn apply_rotation_seam(
     store: &SeatCoolingStore,
 ) -> Result<(), RouteAuthError> {
     use profile::ResolvedSource;
-    let pool: Vec<String> = sources
-        .sources
-        .iter()
-        .filter_map(|source| match source {
-            ResolvedSource::Seat(seat) => Some(seat.seat_id.clone()),
-            _ => None,
-        })
-        .collect();
+    let pool = rotation::seat_pool(sources);
     if pool.is_empty() {
         return Ok(());
     }
@@ -451,9 +449,14 @@ fn apply_rotation_seam(
     let last_served = store.last_served(&sources.harness_kind);
     match rotation::decide_rotation(&pool, sources.rotate, last_served.as_deref(), &cooling) {
         RotationDecision::Serve { seat_id } => {
-            sources.sources.retain(|source| match source {
-                ResolvedSource::Seat(seat) => seat.seat_id == seat_id,
-                _ => true,
+            // Exactly one source survives: the FIRST occurrence of the chosen
+            // seat (a repeated id must not render twice either).
+            let mut kept = false;
+            sources.sources.retain(|source| {
+                let hit = !kept
+                    && matches!(source, ResolvedSource::Seat(seat) if seat.seat_id == seat_id);
+                kept |= hit;
+                hit
             });
             Ok(())
         }

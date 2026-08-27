@@ -5,7 +5,9 @@
 
 use serde_json::{json, Value};
 
-use crate::domains::agents::seat_cooling::{next_five_hour_window_top, SeatCoolingStore};
+use crate::domains::agents::seat_cooling::{
+    next_five_hour_window_top, SeatCoolingStore, MAX_COOLING_S,
+};
 use crate::integrations::acp::provider_errors::classify_seat_usage_limit_error;
 use crate::persistence::Db;
 
@@ -88,6 +90,60 @@ fn rotation_skips_cooling_and_round_robins() {
     }
     // a (first), then c (b skipped as cooling), then wrap to a, then c again.
     assert_eq!(served, ["seat-a", "seat-c", "seat-a", "seat-c"]);
+}
+
+/// A chosen seat renders ALONE: with a gateway source beside the pool and
+/// nothing cooling, the launch carries the seat's `CLAUDE_CODE_OAUTH_TOKEN`
+/// and NOT the gateway's `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL` — one
+/// credential, so a limit error cools the seat that actually served. The
+/// gateway is fallback-only (the all-cooling test below).
+#[test]
+fn chosen_seat_renders_alone_beside_a_gateway_source() {
+    let home = TempHome::new("seat-renders-alone");
+    home.write_state_json(&claude_state(
+        vec![gateway(), seat("seat-a"), seat("seat-b")],
+        None,
+    ));
+    let store = store();
+    let rendered = resolve_launch_route_auth_rotated_for_server(
+        home.path(),
+        "claude",
+        &NoPlanResolver,
+        &store,
+        None,
+    )
+    .expect("seat render");
+    assert_eq!(rendered.serving_seat_id.as_deref(), Some("seat-a"));
+    assert_eq!(
+        rendered.set.get("CLAUDE_CODE_OAUTH_TOKEN").map(String::as_str),
+        Some("sk-ant-oat01-seat-a")
+    );
+    assert!(
+        !rendered.set.contains_key("ANTHROPIC_AUTH_TOKEN"),
+        "the gateway token must not ride beside the seat: {:?}",
+        rendered.set.keys().collect::<Vec<_>>()
+    );
+    assert!(!rendered.set.contains_key("ANTHROPIC_BASE_URL"));
+}
+
+/// A document that repeats a seat id (`[a, a, b]`) must not stall the wheel
+/// on `a`: the pool is deduplicated before deciding, so launches alternate
+/// a, b, a, b — and the chosen seat renders once.
+#[test]
+fn duplicate_seat_ids_do_not_stall_round_robin() {
+    let home = TempHome::new("rotation-duplicate-ids");
+    home.write_state_json(&claude_state(
+        vec![seat("seat-a"), seat("seat-a"), seat("seat-b")],
+        None,
+    ));
+    let store = store();
+    let mut served = Vec::new();
+    for _ in 0..4 {
+        let seat_id = launch(&home, &store);
+        store.confirm_served("claude", &seat_id, now());
+        served.push(seat_id);
+    }
+    assert_eq!(served, ["seat-a", "seat-b", "seat-a", "seat-b"]);
 }
 
 /// A pool that is entirely cooling: with a gateway source beside the pool the
@@ -222,6 +278,56 @@ fn limit_error_marks_seat_cooling_until_reset() {
     );
 }
 
+/// The store's clamp: a provider epoch far in the future (the classifier only
+/// shape-checks ten digits) cools for at most one week from the observation,
+/// never for centuries.
+#[test]
+fn absurd_reset_epoch_is_clamped_to_one_week() {
+    let store = store();
+    let now_epoch_s = now();
+    let observation =
+        classify_seat_usage_limit_error("usage limit reached|9999999999").expect("classified");
+    let requested = observation.reset_at_epoch_s.expect("ten digits parse");
+    store.mark_cooling("seat-a", "claude", requested, Some(observation.window), now_epoch_s);
+    assert_eq!(
+        store.cooling_until("seat-a", now_epoch_s),
+        Some(now_epoch_s + MAX_COOLING_S)
+    );
+}
+
+/// The store's never-shorten rule: a weekly limit observed with a parseable
+/// reset is not cut back by a later prose-only observation (whose fallback is
+/// the next 5-hour top) — `max(existing_unexpired, new)` wins, window label
+/// included. An EXPIRED row, by contrast, is replaced outright.
+#[test]
+fn a_longer_unexpired_cooling_is_never_shortened() {
+    let store = store();
+    let now_epoch_s = now();
+    let weekly_reset = now_epoch_s + 3 * 24 * 3_600;
+    store.mark_cooling("seat-a", "claude", weekly_reset, Some("seven_day"), now_epoch_s);
+
+    // A later, shorter observation (the 5-hour fallback) leaves the deadline.
+    let five_hour_top = next_five_hour_window_top(now_epoch_s + 60);
+    assert!(five_hour_top < weekly_reset);
+    store.mark_cooling("seat-a", "claude", five_hour_top, Some("five_hour"), now_epoch_s + 60);
+    assert_eq!(store.cooling_until("seat-a", now_epoch_s + 60), Some(weekly_reset));
+    assert_eq!(
+        store.cooling_map("claude", now_epoch_s + 60).get("seat-a"),
+        Some(&weekly_reset)
+    );
+
+    // A later, LONGER observation still extends.
+    let extended = weekly_reset + 3_600;
+    store.mark_cooling("seat-a", "claude", extended, Some("seven_day"), now_epoch_s + 120);
+    assert_eq!(store.cooling_until("seat-a", now_epoch_s + 120), Some(extended));
+
+    // Once the row has expired, a fresh (shorter) mark replaces it normally.
+    let after_expiry = extended + 1;
+    let fresh = after_expiry + 1_800;
+    store.mark_cooling("seat-a", "claude", fresh, Some("five_hour"), after_expiry);
+    assert_eq!(store.cooling_until("seat-a", after_expiry), Some(fresh));
+}
+
 /// Cooling is durable: mark, drop the Db handle, reopen the same runtime
 /// home, still cooling — and an expired record reads as not-cooling.
 #[test]
@@ -266,7 +372,11 @@ fn last_served_advances_only_on_successful_spawn() {
 
 /// The frozen refusal copy, pinned exactly. The `{time}` piece is produced by
 /// the same local-time helper the copy uses (its own formatting rules are
-/// pinned with injected timestamps in refusal.rs).
+/// pinned with injected timestamps in refusal.rs). That helper reads the
+/// clock itself on every call, so the reset used here sits three days out:
+/// whichever instant either call observes, the reset is on a different local
+/// day and the dated form renders — no day-roll between the two reads can
+/// change the expectation.
 #[test]
 fn refusal_copy_is_pinned_exactly() {
     assert_eq!(
@@ -293,7 +403,7 @@ fn refusal_copy_is_pinned_exactly() {
         "The auth method selected for claude can't be used right now — \
          the credits behind it ran out. Pick or fix a method in Settings → Agents."
     );
-    let reset = now() + 3_600;
+    let reset = now() + 3 * 24 * 3_600;
     assert_eq!(
         LaunchRefusal::SeatCooling {
             seat: "seat-a".into(),

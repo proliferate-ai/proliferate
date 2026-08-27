@@ -11,13 +11,15 @@ use std::path::Path;
 use crate::domains::agents::auth_state::SeatRotationReadout;
 use crate::domains::agents::seat_cooling::SeatCoolingStore;
 
-use super::profile::{resolve_profile, AgentRuntimeAuthProfile, ResolvedSource};
+use super::profile::{resolve_profile, AgentRuntimeAuthProfile, HarnessSources, ResolvedSource};
 use super::{current_server_origin, load_effective_state};
 
 /// What the next launch should do about seats.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RotationDecision {
-    /// Serve this seat (the only seat source the launch render keeps).
+    /// Serve this seat — ALONE: the launch render keeps exactly this seat
+    /// source and drops every other source (seat or not), so the CLI sees one
+    /// credential and a limit error cools the seat that actually served.
     Serve { seat_id: String },
     /// Every seat in the pool is cooling; `earliest_reset_epoch_s` is the
     /// earliest deadline among the pool's cooling records.
@@ -29,9 +31,27 @@ pub enum RotationDecision {
     },
 }
 
+/// The seat pool a profile carries, in DOCUMENT order, with duplicate ids
+/// collapsed to their first occurrence. Both the launch seam and the read-path
+/// derivation build their pool here, so a document that repeats a seat id
+/// (a server-side expansion bug, or a hand-edited state file) cannot stall
+/// round-robin: `decide_rotation` locates `last_served` by first match, and a
+/// repeated id would otherwise re-serve itself forever.
+pub fn seat_pool(sources: &HarnessSources) -> Vec<String> {
+    let mut pool: Vec<String> = Vec::new();
+    for source in &sources.sources {
+        if let ResolvedSource::Seat(seat) = source {
+            if !pool.iter().any(|id| *id == seat.seat_id) {
+                pool.push(seat.seat_id.clone());
+            }
+        }
+    }
+    pool
+}
+
 /// The pure rotation decision. `pool` is the profile's seat ids in DOCUMENT
-/// order (authoritative; must be non-empty), `cooling` is seat_id → deadline,
-/// already filtered to still-cooling rows.
+/// order (authoritative, deduplicated — see [`seat_pool`]), `cooling` is
+/// seat_id → deadline, already filtered to still-cooling rows.
 ///
 /// - `rotate == true`: true round-robin — start at the seat AFTER
 ///   `last_served` in cyclic document order (absent or not in the pool →
@@ -39,13 +59,21 @@ pub enum RotationDecision {
 /// - `rotate == false`: the candidate is `last_served` if still in the pool,
 ///   else the first seat; a cooling candidate refuses rather than advancing —
 ///   the pin means launches WAIT for that login.
+///
+/// Total on every input: an EMPTY pool (both callers guard it, but this is a
+/// public function) reads as "no seat can serve" — `AllCooling` with no
+/// deadline to name (`earliest_reset_epoch_s: 0`) — never a panic.
 pub fn decide_rotation(
     pool: &[String],
     rotate: bool,
     last_served: Option<&str>,
     cooling: &BTreeMap<String, i64>,
 ) -> RotationDecision {
-    debug_assert!(!pool.is_empty(), "rotation decision requires a seat pool");
+    if pool.is_empty() {
+        return RotationDecision::AllCooling {
+            earliest_reset_epoch_s: 0,
+        };
+    }
     if !rotate {
         let candidate = last_served
             .filter(|seat| pool.iter().any(|id| id == seat))
@@ -113,14 +141,7 @@ pub fn seat_rotation_readout(
     else {
         return SeatRotationReadout::default();
     };
-    let pool: Vec<String> = sources
-        .sources
-        .iter()
-        .filter_map(|source| match source {
-            ResolvedSource::Seat(seat) => Some(seat.seat_id.clone()),
-            _ => None,
-        })
-        .collect();
+    let pool = seat_pool(&sources);
     if pool.is_empty() {
         return SeatRotationReadout::default();
     }
@@ -227,6 +248,38 @@ mod tests {
                 earliest_reset_epoch_s: 200
             }
         );
+    }
+
+    #[test]
+    fn an_empty_pool_never_panics_in_either_mode() {
+        let empty: Vec<String> = Vec::new();
+        let none = BTreeMap::new();
+        let expected = RotationDecision::AllCooling {
+            earliest_reset_epoch_s: 0,
+        };
+        assert_eq!(decide_rotation(&empty, true, None, &none), expected);
+        assert_eq!(decide_rotation(&empty, true, Some("a"), &none), expected);
+        // rotate=false used to index pool[0] — a pinned decision over nothing.
+        assert_eq!(decide_rotation(&empty, false, None, &none), expected);
+        assert_eq!(decide_rotation(&empty, false, Some("a"), &none), expected);
+    }
+
+    #[test]
+    fn seat_pool_keeps_document_order_and_drops_repeated_ids() {
+        use super::super::profile::SeatProfile;
+        let seat = |id: &str| {
+            ResolvedSource::Seat(SeatProfile {
+                seat_id: id.to_string(),
+                env: BTreeMap::new(),
+            })
+        };
+        let sources = HarnessSources {
+            harness_kind: "claude".into(),
+            revision: 1,
+            sources: vec![seat("a"), seat("a"), seat("b"), seat("a")],
+            rotate: true,
+        };
+        assert_eq!(seat_pool(&sources), pool(&["a", "b"]));
     }
 
     #[test]

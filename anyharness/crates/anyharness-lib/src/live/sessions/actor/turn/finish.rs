@@ -384,17 +384,23 @@ impl SessionActor {
     /// A classified seat usage-limit error: mark the serving seat cooling
     /// (locally — never a network call) and build the typed turn-error
     /// details. The cooling deadline is the reset the error carried, else the
-    /// top of the next 5-hour window (`seat_cooling::next_five_hour_window_top`).
+    /// top of the next 5-hour window (`seat_cooling::next_five_hour_window_top`),
+    /// clamped to one week (`seat_cooling::clamp_cooling_deadline`) so the
+    /// reported `reset_at` matches what the store can actually hold.
     /// `seat_id` is the vault uuid — never the token.
     fn observe_seat_usage_limit(
         &self,
         seat_id: String,
         observation: crate::integrations::acp::provider_errors::SeatUsageLimitObservation,
     ) -> anyharness_contract::v1::ErrorEventDetails {
+        use crate::domains::agents::seat_cooling::{clamp_cooling_deadline, next_five_hour_window_top};
         let now_epoch_s = chrono::Utc::now().timestamp();
-        let cooling_until_epoch_s = observation.reset_at_epoch_s.unwrap_or_else(|| {
-            crate::domains::agents::seat_cooling::next_five_hour_window_top(now_epoch_s)
-        });
+        let cooling_until_epoch_s = clamp_cooling_deadline(
+            now_epoch_s,
+            observation
+                .reset_at_epoch_s
+                .unwrap_or_else(|| next_five_hour_window_top(now_epoch_s)),
+        );
         if let Some(store) = self.caps.seat_cooling.as_ref() {
             store.mark_cooling(
                 &seat_id,
