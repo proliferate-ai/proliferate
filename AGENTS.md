@@ -68,7 +68,7 @@ system spec (next section) owns the behavior.
 | `cloud/sdk/**`, `cloud/sdk-react/**`, `anyharness/sdk/**`, `anyharness/sdk-react/**` | [`specs/areas/frontend.md`](specs/areas/frontend.md) (SDK section) |
 | UI: components, styling, tokens, theme | [`specs/DESIGN_SYSTEM.md`](specs/DESIGN_SYSTEM.md) |
 | User-facing copy, naming, product feel | [`specs/product-sense.md`](specs/product-sense.md) |
-| `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**`, `scripts/agent-gateway-smoke/**` | [`specs/engineering/testing/README.md`](specs/engineering/testing/README.md) |
+| `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**`, `scripts/agent-gateway-smoke/**` | [`specs/engineering/testing/README.md`](specs/engineering/testing/README.md) |
 | Telemetry and scrubber sources in any area (`**/telemetry/**`, `**/telemetry.rs`, `server/proliferate/integrations/sentry/**`, `server/proliferate/middleware/logging.py`), `server/infra/observability/**` | [`specs/engineering/observability/standard.md`](specs/engineering/observability/standard.md) |
 | `scripts/check_*`, `lints/**`, `MANIFEST.toml` files, checker allowlists and ratchets | Constitution — see [Repository-wide rules](#repository-wide-rules) |
 | `adrs/**` — writing or reviewing a decision record | [`guides/process/adrs.md`](guides/process/adrs.md) |

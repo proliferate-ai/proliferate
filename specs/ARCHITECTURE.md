@@ -95,7 +95,7 @@ Testing, observability, alerting, the building loop, and the customer loop are s
 
 The one property they all serve is **legibility by session id**: every user action, agent turn, gateway call, and failure is one readable story keyed by the session it belongs to — readable by a person, and machine-legible (stable names, ids, links across Sentry, Grafana, and Honeycomb) for the agents that triage and fix from it.
 
-Their specs live at `specs/engineering/<name>/README.md` — `testing`, `observability`, `shipping`, `security`, `customer-loop`. Alongside them, [`specs/engineering/testing/README.md`](engineering/testing/README.md) and [`specs/engineering/observability/standard.md`](engineering/observability/standard.md) are the per-PR law.
+Their specs live at `specs/engineering/<name>/README.md` — `testing`, `observability`, `ci-cd`, `security`, `customer-loop`. The per-PR law is [`specs/engineering/testing/README.md`](engineering/testing/README.md) (what must be proven) with [`specs/engineering/observability/standard.md`](engineering/observability/standard.md); how we build is [`specs/BUILDING.md`](BUILDING.md).
 
 ## Read order for grokking the repo
 

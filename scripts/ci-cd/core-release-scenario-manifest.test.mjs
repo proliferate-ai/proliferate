@@ -281,10 +281,10 @@ test("runtime activation authority is Worker mailbox to Supervisor, never Worker
 test("every local link in the canonical testing contracts resolves", () => {
   const unresolved = [];
   for (const { contents, baseDir, label } of [
-    { contents: contract, baseDir: testingDir, label: "core" },
-    { contents: tier3Contract, baseDir: testingDir, label: "tier3" },
-    { contents: tier4Contract, baseDir: testingDir, label: "tier4" },
-    { contents: worldsContract, baseDir: testingDir, label: "worlds" },
+    { contents: contract, baseDir: archiveDir, label: "core" },
+    { contents: tier3Contract, baseDir: archiveDir, label: "tier3" },
+    { contents: tier4Contract, baseDir: archiveDir, label: "tier4" },
+    { contents: worldsContract, baseDir: archiveDir, label: "worlds" },
   ]) {
     for (const match of contents.matchAll(/\]\(([^)]+)\)/g)) {
       const target = match[1].trim();
