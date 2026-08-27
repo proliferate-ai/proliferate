@@ -61,6 +61,7 @@ def _inputs(
     gateway_virtual_key: str | None = "sk-litellm-vk",
     gateway_virtual_keys: dict[str, str] | None = None,
     gateway_base_url: str | None = "https://llm.proliferate.ai",
+    seat_values: tuple[tuple[uuid.UUID, str], ...] = (),
 ) -> agent_auth.AgentAuthStateInputs:
     """Build ``AgentAuthStateInputs``.
 
@@ -92,6 +93,7 @@ def _inputs(
         gateway_virtual_keys=gateway_virtual_keys,
         gateway_base_url=gateway_base_url,
         harness_settings={},
+        seat_values=seat_values,
     )
 
 
@@ -385,6 +387,97 @@ class TestRenderAgentAuthState:
         assert first == second
         assert fp1 == fp2
         _ = key_id
+
+
+class TestRenderSeatSources:
+    """Seats v1 (slice 1): the pool seat row expands to wire sources."""
+
+    def test_pool_row_expands_to_every_active_seat_in_vault_order(self) -> None:
+        seat_a = uuid.uuid4()
+        seat_b = uuid.uuid4()
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (_selection(harness="claude", source_kind="seat"),),
+                seat_values=((seat_a, "sk-ant-oat01-token-a"), (seat_b, "sk-ant-oat01-token-b")),
+            )
+        )
+        assert state["harnesses"] == [
+            {
+                "harness_kind": "claude",
+                "sources": [
+                    {
+                        "kind": "seat",
+                        "env": {"CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oat01-token-a"},
+                        "seat_id": str(seat_a),
+                    },
+                    {
+                        "kind": "seat",
+                        "env": {"CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oat01-token-b"},
+                        "seat_id": str(seat_b),
+                    },
+                ],
+            }
+        ]
+
+    def test_pinned_seat_row_renders_exactly_that_seat(self) -> None:
+        seat_a = uuid.uuid4()
+        seat_b = uuid.uuid4()
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (_selection(harness="claude", source_kind="seat", api_key_id=seat_b),),
+                seat_values=((seat_a, "sk-tok-a"), (seat_b, "sk-tok-b")),
+            )
+        )
+        sources = state["harnesses"][0]["sources"]
+        assert [source["seat_id"] for source in sources] == [str(seat_b)]
+
+    def test_revoked_seats_leave_the_entry_present_but_empty(self) -> None:
+        # The acceptance gate's secondary check: revoking the seat removes it
+        # from the next render, and the harness fails closed at launch —
+        # sources: [] on a PRESENT entry, never a vanished entry.
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (_selection(harness="claude", source_kind="seat"),),
+                seat_values=(),
+            )
+        )
+        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+
+    def test_pinned_seat_that_vanished_fails_closed_too(self) -> None:
+        pinned = uuid.uuid4()
+        other = uuid.uuid4()
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (_selection(harness="claude", source_kind="seat", api_key_id=pinned),),
+                seat_values=((other, "sk-tok-other"),),
+            )
+        )
+        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+
+    def test_seat_row_on_a_seatless_harness_is_dropped(self) -> None:
+        # The validator forbids this at write time; the renderer defends too
+        # rather than trusting that gate alone (same posture as the
+        # provider-config translation table).
+        seat = uuid.uuid4()
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (_selection(harness="codex", source_kind="seat"),),
+                seat_values=((seat, "sk-tok"),),
+            )
+        )
+        assert state["harnesses"] == [{"harness_kind": "codex", "sources": []}]
+
+    def test_no_token_material_beyond_the_env_map(self) -> None:
+        seat = uuid.uuid4()
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (_selection(harness="claude", source_kind="seat"),),
+                seat_values=((seat, "sk-ant-oat01-secret"),),
+            )
+        )
+        source = state["harnesses"][0]["sources"][0]
+        assert set(source) == {"kind", "env", "seat_id"}
+        assert set(source["env"]) == {"CLAUDE_CODE_OAUTH_TOKEN"}
 
 
 class TestTranslateProviderConfigEnv:

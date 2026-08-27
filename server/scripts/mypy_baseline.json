@@ -435,12 +435,6 @@
       "count": 1
     },
     {
-      "path": "proliferate/server/agent_auth/state_render.py",
-      "code": "arg-type",
-      "message": "Argument 1 to \"append\" of \"list\" has incompatible type \"tuple[tuple[str, str], dict[str, object]]\"; expected \"tuple[str, dict[str, object]]\"",
-      "count": 1
-    },
-    {
       "path": "proliferate/server/ai_magic/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",

@@ -31,6 +31,18 @@ def _api_key(
     )
 
 
+def _seat(
+    *,
+    api_key_id: uuid.UUID | None = None,
+    enabled: bool = True,
+) -> DesiredAuthSource:
+    return DesiredAuthSource(
+        source_kind="seat",
+        api_key_id=api_key_id,
+        enabled=enabled,
+    )
+
+
 class TestAuthSelectionRules:
     def test_cursor_rejects_gateway_but_allows_api_key(self) -> None:
         # Cursor has no gateway recipe (agent-auth.md: "typed refusal, no
@@ -114,6 +126,75 @@ class TestAuthSelectionRules:
             harness_kind="claude",
             sources=[_api_key(env_var_name="A" + "B" * 127)],
         )
+
+
+class TestSeatSelectionRules:
+    """Seats v1: the single-source radio counts KINDS, not seats.
+
+    The pool selection shape (agent_auth spec §4 cell 1): one enabled seat
+    row satisfies the radio however many seats the pool holds, and several
+    enabled seat rows (the pool row plus pins) are still ONE selected method
+    — while mixing a seat with any other kind, or stacking any non-seat
+    kind, stays illegal.
+    """
+
+    def test_one_enabled_seat_row_is_legal_for_claude(self) -> None:
+        validate_auth_selection_set(harness_kind="claude", sources=[_seat()])
+
+    def test_pinned_seat_row_is_legal_too(self) -> None:
+        validate_auth_selection_set(
+            harness_kind="claude",
+            sources=[_seat(api_key_id=uuid.uuid4())],
+        )
+
+    def test_multiple_enabled_seat_rows_count_as_one_kind(self) -> None:
+        # The radio counts kinds: N seat rows are still the one "seat" method.
+        validate_auth_selection_set(
+            harness_kind="claude",
+            sources=[
+                _seat(),
+                _seat(api_key_id=uuid.uuid4()),
+                _seat(api_key_id=uuid.uuid4()),
+            ],
+        )
+
+    def test_seat_plus_gateway_enabled_is_two_kinds_and_illegal(self) -> None:
+        with pytest.raises(SelectionRuleError, match="at most one enabled auth method"):
+            validate_auth_selection_set(
+                harness_kind="claude",
+                sources=[_seat(), _gateway()],
+            )
+
+    def test_seat_plus_api_key_enabled_is_two_kinds_and_illegal(self) -> None:
+        with pytest.raises(SelectionRuleError, match="at most one enabled auth method"):
+            validate_auth_selection_set(
+                harness_kind="claude",
+                sources=[_seat(), _api_key()],
+            )
+
+    def test_disabled_siblings_do_not_count(self) -> None:
+        # Cardinality gates the ENABLED set only, unchanged for seats.
+        validate_auth_selection_set(
+            harness_kind="claude",
+            sources=[_seat(), _gateway(enabled=False), _api_key(enabled=False)],
+        )
+
+    def test_two_enabled_api_key_rows_are_still_illegal_for_claude(self) -> None:
+        # Kind-counting must NOT loosen the non-seat law: two rows of one
+        # non-seat kind remain one-too-many for a radio harness.
+        with pytest.raises(SelectionRuleError, match="at most one enabled auth source"):
+            validate_auth_selection_set(
+                harness_kind="claude",
+                sources=[
+                    _api_key(env_var_name="ANTHROPIC_API_KEY"),
+                    _api_key(env_var_name="ANTHROPIC_AUTH_TOKEN"),
+                ],
+            )
+
+    def test_seat_rejected_for_harness_without_a_seat_recipe(self) -> None:
+        for harness in ("codex", "grok", "cursor", "opencode"):
+            with pytest.raises(SelectionRuleError, match="no seat recipe"):
+                validate_auth_selection_set(harness_kind=harness, sources=[_seat()])
 
 
 class TestRedactedHint:

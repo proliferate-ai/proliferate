@@ -31,15 +31,19 @@ if TYPE_CHECKING:
     from proliferate.server.agent_auth.service import OrgAgentPolicySnapshot
 
 AgentAuthSurface = Literal["local", "cloud"]
-AgentAuthSourceKind = Literal["gateway", "api_key"]
+AgentAuthSourceKind = Literal["gateway", "api_key", "seat"]
 # state.json WIRE source kinds: the DB source kinds plus `provider_config`,
 # the render-time wire shape of an api_key selection referencing a typed
 # vault entry (constants.agent_gateway.AGENT_AUTH_SOURCE_PROVIDER_CONFIG).
-AgentAuthStateSourceKind = Literal["gateway", "api_key", "provider_config"]
-# The vault's closed kind vocabulary (agent-auth.md's "The vault" table);
+AgentAuthStateSourceKind = Literal["gateway", "api_key", "provider_config", "seat"]
+# The vault's closed kind vocabulary (agent_auth spec §2 "The vault");
 # mirrors constants.agent_gateway.AGENT_API_KEY_KINDS.
-AgentApiKeyKind = Literal["api_key", "aws_bedrock", "azure_openai"]
+AgentApiKeyKind = Literal["api_key", "aws_bedrock", "azure_openai", "anthropic_subscription"]
 AgentProviderConfigKind = Literal["aws_bedrock", "azure_openai"]
+# The kinds POST /keys accepts: the bare-secret default, or a seat — the mint
+# flow's courier upload (agent_auth spec §3 flow 2). Typed provider configs
+# keep their own route (POST /keys/provider-config).
+AgentApiKeyCreateKind = Literal["api_key", "anthropic_subscription"]
 
 
 class AgentGatewayBaseModel(BaseModel):
@@ -61,8 +65,22 @@ class AgentApiKeyResponse(AgentGatewayBaseModel):
 
 
 class AgentApiKeyCreateRequest(AgentGatewayBaseModel):
-    title: str
+    """Create a bare key — or, with ``kind='anthropic_subscription'``, a seat.
+
+    The seat path is the mint flow's one upward secret write (agent_auth spec
+    §3 flow 2): ``value`` is the captured ``claude setup-token`` credential,
+    and the mint label fields carry the user-entered seat identity — the
+    system can learn neither email nor plan from the token, so the mint sheet
+    asks. ``title`` is optional for a seat: the server composes it from
+    ``email`` + ``planTier``, defaulting to "Max seat N".
+    """
+
+    title: str | None = None
     value: str
+    kind: AgentApiKeyCreateKind = "api_key"
+    # Mint label fields (seat kind only; ignored for a bare key).
+    email: str | None = None
+    plan_tier: str | None = Field(default=None, alias="planTier")
 
 
 class AgentProviderConfigCreateRequest(AgentGatewayBaseModel):
@@ -141,7 +159,12 @@ class AgentAuthStateSource(BaseModel):
     env_var_name: str | None = None
     value: str | None = None
     config_kind: AgentProviderConfigKind | None = None
+    # `provider_config` and `seat`: the harness's already-resolved env map
+    # (a seat's is exactly {CLAUDE_CODE_OAUTH_TOKEN: token}).
     env: dict[str, str] | None = None
+    # `seat` only: the vault entry id, so the runtime can name the serving
+    # seat in its status document without ever echoing the token.
+    seat_id: str | None = None
 
 
 class AgentAuthStateHarness(BaseModel):

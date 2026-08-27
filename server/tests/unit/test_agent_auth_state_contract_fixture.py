@@ -36,11 +36,18 @@ class TestAgentAuthStateContractFixture:
         for entry in fixture["harnesses"]:
             assert set(entry) <= {"harness_kind", "sources", "settings"}
             for source in entry["sources"]:
-                assert source["kind"] in ("gateway", "api_key", "provider_config")
+                assert source["kind"] in ("gateway", "api_key", "provider_config", "seat")
                 if source["kind"] == "gateway":
                     assert set(source) == {"kind", "base_url", "key"}
                 elif source["kind"] == "api_key":
                     assert set(source) == {"kind", "env_var_name", "value"}
+                elif source["kind"] == "seat":
+                    assert set(source) == {"kind", "env", "seat_id"}
+                    # The env map is ALREADY the harness's real env-var name —
+                    # exactly one, the seat token (agent_auth spec §2's wire
+                    # table); seat_id is the vault entry id, never the token.
+                    assert set(source["env"]) == {"CLAUDE_CODE_OAUTH_TOKEN"}
+                    assert isinstance(source["seat_id"], str) and source["seat_id"]
                 else:
                     assert set(source) == {"kind", "config_kind", "env"}
                     assert isinstance(source["env"], dict)
@@ -160,6 +167,34 @@ class TestAgentAuthStateContractFixture:
             for entry in state["harnesses"]
         }
         assert rendered_keys == fixture_keys
+
+    def test_the_fixtures_seat_source_is_what_this_renderer_emits(self) -> None:
+        # Seats v1 (slice 1): claude's fixture entry is one seat source — the
+        # single-seat shape the renderer emits when a pool seat selection meets
+        # one active vault seat. Feed the renderer the fixture's own seat
+        # inputs and require byte-identical output for the claude entry.
+        fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+        fixture_claude = next(
+            entry for entry in fixture["harnesses"] if entry["harness_kind"] == "claude"
+        )
+        assert [source["kind"] for source in fixture_claude["sources"]] == ["seat"]
+        fixture_seat = fixture_claude["sources"][0]
+
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (_selection(harness="claude", source_kind="seat"),),
+                seat_values=(
+                    (
+                        uuid.UUID(fixture_seat["seat_id"]),
+                        fixture_seat["env"]["CLAUDE_CODE_OAUTH_TOKEN"],
+                    ),
+                ),
+            )
+        )
+        rendered_claude = next(
+            entry for entry in state["harnesses"] if entry["harness_kind"] == "claude"
+        )
+        assert rendered_claude["sources"] == fixture_claude["sources"]
 
     def test_the_fixtures_provider_config_source_is_a_resolved_env_map(self) -> None:
         # §4.3's ruling: opencode's third source demonstrates additive

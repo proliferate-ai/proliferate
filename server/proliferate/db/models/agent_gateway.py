@@ -50,7 +50,7 @@ class AgentApiKey(Base):
             name="ck_agent_api_key_status",
         ),
         CheckConstraint(
-            "kind IN ('api_key', 'aws_bedrock', 'azure_openai')",
+            "kind IN ('api_key', 'aws_bedrock', 'azure_openai', 'anthropic_subscription')",
             name="ck_agent_api_key_kind",
         ),
         Index("ix_agent_api_key_user_status", "user_id", "status"),
@@ -86,10 +86,12 @@ class AgentApiKey(Base):
 class AgentAuthSelection(Base):
     """One wiring row per (user, harness, surface, source_kind, env_var_name).
 
-    A row is either the gateway (``source_kind='gateway'``, no key/env) or a
-    single direct api_key (``source_kind='api_key'``, both api_key_id and
-    env_var_name set). Native == the empty state (zero enabled rows for a
-    scope). Single-source harnesses keep exactly one enabled row; OpenCode
+    A row is the gateway (``source_kind='gateway'``, no key/env), a single
+    direct api_key (``source_kind='api_key'``, both api_key_id and
+    env_var_name set), or a seat (``source_kind='seat'``: ``api_key_id`` NULL
+    = "use my seat pool", non-null pins one ``anthropic_subscription`` vault
+    entry; never an env_var_name). Native == the empty state (zero enabled
+    rows for a scope). Single-source harnesses keep exactly one enabled row; OpenCode
     composes the gateway plus any number of api_key rows. ``provider_hint`` is
     display-only (a registry provider id) with zero launch semantics; the
     renderer never puts it on the wire.
@@ -110,7 +112,7 @@ class AgentAuthSelection(Base):
             name="ck_agent_auth_selection_surface",
         ),
         CheckConstraint(
-            "source_kind IN ('gateway', 'api_key')",
+            "source_kind IN ('gateway', 'api_key', 'seat')",
             name="ck_agent_auth_selection_source_kind",
         ),
         # As tight as one table can express: an api_key row always references
@@ -129,6 +131,16 @@ class AgentAuthSelection(Base):
         CheckConstraint(
             "source_kind != 'gateway' OR (api_key_id IS NULL AND env_var_name IS NULL)",
             name="ck_agent_auth_selection_gateway_shape",
+        ),
+        # A seat row never names an env var (the seat recipe owns its env
+        # mapping). api_key_id stays free: NULL means "use my seat pool", a
+        # non-null id pins one seat — and that the referenced entry is an
+        # anthropic_subscription row is the store write gate's job (a CHECK
+        # cannot join agent_api_key to see the kind, same as the api_key
+        # bare-XOR-typed law above).
+        CheckConstraint(
+            "source_kind != 'seat' OR env_var_name IS NULL",
+            name="ck_agent_auth_selection_seat_shape",
         ),
         # The scope UNIQUE treats gateway rows (env_var_name IS NULL) as
         # distinct, so enforce "at most one gateway per scope" separately.

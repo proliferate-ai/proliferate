@@ -21,7 +21,7 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.permissions import CurrentOrgUser, current_path_org_admin
-from proliferate.server.agent_auth import harness_settings, service
+from proliferate.server.agent_auth import harness_settings, seats, service
 from proliferate.server.agent_auth.models import (
     AgentApiKeyCreateRequest,
     AgentApiKeyResponse,
@@ -83,6 +83,29 @@ async def create_agent_api_key_endpoint(
     db: AsyncSession = Depends(get_async_session, scope="function"),
     user: User = Depends(current_product_user),
 ) -> AgentApiKeyResponse:
+    """Create a bare vault key — or a seat, the mint flow's courier upload.
+
+    ``kind='anthropic_subscription'`` is the one upward secret path of the
+    seat mint (agent_auth spec §3 flow 2): the runtime captured the token in
+    memory, the courier POSTs it here exactly once, and the label fields
+    carry the user-entered seat identity.
+    """
+    if body.kind == "anthropic_subscription":
+        record = await seats.create_seat(
+            db,
+            user_id=user.id,
+            token=body.value,
+            title=body.title,
+            email=body.email,
+            plan_tier=body.plan_tier,
+        )
+        return api_key_payload(record)
+    if body.title is None:
+        raise CloudApiError(
+            "invalid_agent_api_key_title",
+            "Title is required for an api_key vault entry.",
+            status_code=400,
+        )
     record = await service.create_api_key(
         db,
         user_id=user.id,

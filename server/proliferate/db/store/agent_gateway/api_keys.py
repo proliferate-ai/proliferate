@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
+    AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION,
     AGENT_API_KEY_KIND_API_KEY,
     AGENT_API_KEY_STATUS_ACTIVE,
     AGENT_API_KEY_STATUS_REVOKED,
@@ -93,6 +94,38 @@ async def create_agent_provider_config(
     return api_key_record(row)
 
 
+async def create_agent_seat(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    title: str,
+    value: str,
+) -> AgentApiKeyRecord:
+    """Create a seat vault entry (``kind='anthropic_subscription'``).
+
+    ``value`` is the mint flow's captured ``claude setup-token`` credential —
+    one opaque secret string, encrypted exactly like a bare key. The title is
+    the user-entered seat identity (email + optional plan tag), composed by
+    the service layer; this store only persists it.
+    """
+    if not title.strip():
+        raise ValueError("Agent seat title must not be empty.")
+    if not value:
+        raise ValueError("Agent seat token must not be empty.")
+    row = AgentApiKey(
+        user_id=user_id,
+        title=title,
+        kind=AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION,
+        value_ciphertext=encrypt_text(value, secret=settings.cloud_secret_key),
+        encryption_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+        redacted_hint=build_redacted_hint(value),
+        status=AGENT_API_KEY_STATUS_ACTIVE,
+    )
+    db.add(row)
+    await db.flush()
+    return api_key_record(row)
+
+
 async def revoke_agent_api_key(
     db: AsyncSession,
     *,
@@ -160,6 +193,72 @@ async def get_agent_api_key_decrypted(
     return api_key_record(row), decrypt_text(
         row.value_ciphertext, secret=settings.cloud_secret_key
     )
+
+
+async def get_agent_seat_decrypted(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    api_key_id: UUID,
+) -> tuple[AgentApiKeyRecord, str] | None:
+    """Decrypt one active seat entry for the renderer (a pinned seat row).
+
+    Kind-scoped to ``anthropic_subscription`` so a selection pinning a
+    non-seat vault entry resolves to nothing (its source is then dropped and
+    the harness fails closed at launch). Decryption happens in the render
+    path only, same trust model as ``get_agent_api_key_decrypted``.
+    """
+    row = (
+        await db.execute(
+            select(AgentApiKey).where(
+                AgentApiKey.id == api_key_id,
+                AgentApiKey.user_id == user_id,
+                AgentApiKey.status == AGENT_API_KEY_STATUS_ACTIVE,
+                AgentApiKey.kind == AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    return api_key_record(row), decrypt_text(
+        row.value_ciphertext, secret=settings.cloud_secret_key
+    )
+
+
+async def list_agent_seats_decrypted(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> list[tuple[AgentApiKeyRecord, str]]:
+    """Decrypt every ACTIVE seat entry, in vault order (``created_at``).
+
+    The renderer expands a pool seat row (``api_key_id`` NULL) into one wire
+    source per active seat, in exactly this order (agent_auth spec §2's "seat
+    selection shape"). A revoked seat is simply absent, so its source
+    vanishes at the next render pass.
+    """
+    rows = (
+        (
+            await db.execute(
+                select(AgentApiKey)
+                .where(
+                    AgentApiKey.user_id == user_id,
+                    AgentApiKey.status == AGENT_API_KEY_STATUS_ACTIVE,
+                    AgentApiKey.kind == AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION,
+                )
+                .order_by(AgentApiKey.created_at, AgentApiKey.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        (
+            api_key_record(row),
+            decrypt_text(row.value_ciphertext, secret=settings.cloud_secret_key),
+        )
+        for row in rows
+    ]
 
 
 async def get_agent_provider_config_decrypted(

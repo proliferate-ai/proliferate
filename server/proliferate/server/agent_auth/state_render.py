@@ -97,9 +97,11 @@ from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_KIND_AWS_BEDROCK,
     AGENT_API_KEY_KIND_AZURE_OPENAI,
+    AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS,
     AGENT_AUTH_SOURCE_API_KEY,
     AGENT_AUTH_SOURCE_GATEWAY,
     AGENT_AUTH_SOURCE_PROVIDER_CONFIG,
+    AGENT_AUTH_SOURCE_SEAT,
     AGENT_AUTH_STATE_VERSION,
     AGENT_AUTH_SURFACE_CLOUD,
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
@@ -141,6 +143,12 @@ class AgentAuthStateInputs:
     each harness needs its own translation). A revoked or vanished typed entry
     is simply absent here too (its source is then dropped, same as
     ``api_key_values``).
+
+    ``seat_values`` is every ACTIVE seat (``anthropic_subscription``) entry's
+    ``(id, decrypted token)``, **in vault order** (``created_at``) — the order
+    the renderer expands a pool seat row into wire sources (agent_auth spec
+    §2's "seat selection shape"). A revoked seat is simply absent, so its
+    source vanishes at the next render pass.
     """
 
     user_id: UUID
@@ -152,6 +160,7 @@ class AgentAuthStateInputs:
     gateway_virtual_keys: Mapping[str, str]  # keyed by harness_kind
     gateway_base_url: str | None
     harness_settings: Mapping[str, dict[str, object]]  # keyed by harness_kind
+    seat_values: tuple[tuple[UUID, str], ...] = ()
 
 
 def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, object], str]:
@@ -177,10 +186,20 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
     # configured this one" and the runtime uses the native login. Dropping the
     # harness entirely collapsed those two into one, so an exhausted gateway
     # budget silently billed the user's personal provider account.
-    by_harness: dict[str, list[tuple[str, dict[str, object]]]] = {
+    by_harness: dict[str, list[tuple[tuple[str, str], dict[str, object]]]] = {
         selection.harness_kind: [] for selection in inputs.selections
     }
     for selection in inputs.selections:
+        # A seat selection is the one row that expands to MANY wire sources
+        # (the pool, in vault order); every other kind renders at most one.
+        # Every expanded seat source shares one sort key, and Python's sort is
+        # stable, so vault order survives the per-harness (kind, env) sort.
+        if selection.source_kind == AGENT_AUTH_SOURCE_SEAT:
+            for seat_source in _render_seat_sources(inputs, selection):
+                by_harness[selection.harness_kind].append(
+                    ((str(seat_source["kind"]), ""), seat_source)
+                )
+            continue
         source = _render_source(inputs, selection)
         if source is None:
             continue
@@ -229,6 +248,46 @@ def _render_source(
             return _render_provider_config_source(inputs, selection)
         return _render_api_key_source(inputs, selection)
     return None
+
+
+def _render_seat_sources(
+    inputs: AgentAuthStateInputs,
+    selection: AgentAuthSelectionRecord,
+) -> list[dict[str, object]]:
+    """Expand one seat selection row into its wire sources (spec §2).
+
+    ``api_key_id`` NULL is the pool: every active seat, in vault order — the
+    runtime owns which one serves (slice 1: the first; rotation is slice 2).
+    A non-null id pins one seat. A revoked/vanished seat is simply absent
+    from ``seat_values``, so its source drops and the harness entry fails
+    closed at the next pass — same never-abort contract as every other
+    unsatisfiable source.
+
+    The env map is ALREADY the harness's real env-var name
+    (``CLAUDE_CODE_OAUTH_TOKEN``), mirroring the provider_config wire ruling:
+    the runtime ``.set()``s exact keys, never renames. Seats are claude-only
+    this slice (the validator enforces it at write time); a seat row on any
+    other harness is dropped here too rather than trusted.
+    """
+    if selection.harness_kind not in AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS:
+        logger.warning(
+            "Skipping seat source for harness without a seat recipe (harness=%s)",
+            selection.harness_kind,
+        )
+        return []
+    seats = inputs.seat_values
+    if selection.api_key_id is not None:
+        seats = tuple(
+            (seat_id, token) for seat_id, token in seats if seat_id == selection.api_key_id
+        )
+    return [
+        {
+            "kind": AGENT_AUTH_SOURCE_SEAT,
+            "env": {"CLAUDE_CODE_OAUTH_TOKEN": token},
+            "seat_id": str(seat_id),
+        }
+        for seat_id, token in seats
+    ]
 
 
 def _render_gateway_source(
@@ -562,6 +621,15 @@ async def _load_state_inputs(
                         surface,
                     )
 
+    seat_values: tuple[tuple[UUID, str], ...] = ()
+    if any(selection.source_kind == AGENT_AUTH_SOURCE_SEAT for selection in enabled):
+        seat_values = tuple(
+            (record.id, token)
+            for record, token in await agent_gateway_store.list_agent_seats_decrypted(
+                db, user_id=user_id
+            )
+        )
+
     harness_settings = await agent_gateway_store.list_harness_settings_for_surface(
         db,
         user_id=user_id,
@@ -578,4 +646,5 @@ async def _load_state_inputs(
         gateway_virtual_keys=gateway_virtual_keys,
         gateway_base_url=settings.agent_gateway_litellm_public_base_url or None,
         harness_settings=harness_settings,
+        seat_values=seat_values,
     )

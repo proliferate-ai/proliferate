@@ -17,6 +17,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
+    AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION,
     AGENT_API_KEY_KIND_API_KEY,
     AGENT_API_KEY_STATUS_ACTIVE,
     AGENT_API_KEY_TYPED_KINDS,
@@ -24,6 +25,7 @@ from proliferate.constants.agent_gateway import (
     AGENT_AUTH_SOURCE_API_KEY,
     AGENT_AUTH_SOURCE_GATEWAY,
     AGENT_AUTH_SOURCE_KINDS,
+    AGENT_AUTH_SOURCE_SEAT,
     AGENT_AUTH_SURFACES,
 )
 from proliferate.db.models.agent_gateway import AgentApiKey, AgentAuthSelection
@@ -39,7 +41,9 @@ from proliferate.lib.infra.time.wall_clock import utcnow
 # entry for a TYPED api_key source, whose env_var_name is None by law (the
 # typed kind carries its own env mapping), so only the entry itself can
 # distinguish two typed sources. Gateway rows share the (gateway, None, None)
-# identity, so at most one may exist per scope.
+# identity, so at most one may exist per scope. Seat rows never carry an
+# env_var_name either, so the referenced entry is their identity too: the
+# pool row is (seat, None, None) and each pin is (seat, None, <entry id>).
 _SourceKey = tuple[str, str | None, UUID | None]
 
 
@@ -48,6 +52,8 @@ def _source_key(
     env_var_name: str | None,
     api_key_id: UUID | None,
 ) -> _SourceKey:
+    if source_kind == AGENT_AUTH_SOURCE_SEAT:
+        return (source_kind, None, api_key_id)
     if source_kind == AGENT_AUTH_SOURCE_API_KEY and env_var_name is None:
         return (source_kind, None, api_key_id)
     return (source_kind, env_var_name, None)
@@ -75,6 +81,13 @@ def _validate_source(*, surface: str, source: DesiredAuthSource) -> None:
         # row's kind, which only _assert_keys_usable's query can see.
         if source.api_key_id is None:
             raise ValueError("An api_key source requires an api_key_id.")
+    elif source.source_kind == AGENT_AUTH_SOURCE_SEAT:
+        # api_key_id stays free (NULL = "use my seat pool"; non-null pins one
+        # seat — that the pinned entry is an anthropic_subscription row is
+        # _assert_keys_usable's cross-table check). The seat recipe owns its
+        # env mapping, so a named env var is a shape error.
+        if source.env_var_name is not None:
+            raise ValueError("A seat source must not carry an env_var_name.")
     else:  # gateway
         if source.api_key_id is not None or source.env_var_name is not None:
             raise ValueError("A gateway source must not carry an api_key_id or env_var_name.")
@@ -90,7 +103,7 @@ async def _assert_keys_usable(
 ) -> None:
     """The kind-aware write gate over every referenced vault entry.
 
-    Three laws, in order:
+    Four laws, in order:
 
     - every referenced id must be an active vault entry owned by the caller
       (``AgentApiKeyNotUsableError`` otherwise — a revoked, foreign, or
@@ -100,18 +113,22 @@ async def _assert_keys_usable(
       requires an ``env_var_name``, a typed entry (``aws_bedrock``,
       ``azure_openai``) must not carry one — the typed kind carries its own
       env mapping. Enforced here, not in SQL, because it spans tables;
+    - a ``seat`` row that pins an entry must pin an ``anthropic_subscription``
+      one — and, symmetrically, an ``api_key`` row may never reference a seat
+      entry (the seat recipe, not an env var, is how a seat reaches a launch);
     - a typed entry's kind must be one of ``supported_provider_config_kinds``
       — the harness's registry-declared, non-pending providerConfig
       vocabulary, supplied by the caller (the store cannot read the registry
       itself: store→server import boundary). The default empty vocabulary
       fails closed (``AgentProviderConfigNotSupportedError``).
     """
-    api_key_sources = [
+    referencing_sources = [
         source
         for source in sources
-        if source.source_kind == AGENT_AUTH_SOURCE_API_KEY and source.api_key_id is not None
+        if source.source_kind in (AGENT_AUTH_SOURCE_API_KEY, AGENT_AUTH_SOURCE_SEAT)
+        and source.api_key_id is not None
     ]
-    api_key_ids = {source.api_key_id for source in api_key_sources if source.api_key_id}
+    api_key_ids = {source.api_key_id for source in referencing_sources if source.api_key_id}
     if not api_key_ids:
         return
     rows = (
@@ -128,15 +145,27 @@ async def _assert_keys_usable(
         raise AgentApiKeyNotUsableError(
             "api_key_id must reference an active key owned by the user."
         )
-    for source in api_key_sources:
+    for source in referencing_sources:
         assert source.api_key_id is not None  # narrowed by the filter above
         kind = kind_by_id[source.api_key_id]
+        if source.source_kind == AGENT_AUTH_SOURCE_SEAT:
+            if kind != AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION:
+                raise ValueError(
+                    "A seat selection must pin an anthropic_subscription vault "
+                    f"entry, not a '{kind}' one."
+                )
+            continue
         if kind == AGENT_API_KEY_KIND_API_KEY:
             if source.env_var_name is None:
                 raise ValueError(
                     "An api_key source referencing a bare key requires an env_var_name."
                 )
             continue
+        if kind == AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION:
+            raise ValueError(
+                "An api_key source must not reference a seat "
+                "(anthropic_subscription) vault entry — wire a seat row instead."
+            )
         if kind not in AGENT_API_KEY_TYPED_KINDS:  # pragma: no cover - DB CHECK bound
             raise AgentApiKeyNotUsableError(f"Unknown vault entry kind: {kind}.")
         if source.env_var_name is not None:

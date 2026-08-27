@@ -13,8 +13,10 @@ from collections.abc import Sequence
 
 from proliferate.constants.agent_gateway import (
     AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
+    AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS,
     AGENT_AUTH_SOURCE_API_KEY,
     AGENT_AUTH_SOURCE_GATEWAY,
+    AGENT_AUTH_SOURCE_SEAT,
 )
 from proliferate.db.store.agent_gateway.records import DesiredAuthSource
 
@@ -55,6 +57,11 @@ def validate_auth_selection_set(
                     f"Harness '{harness_kind}' has no gateway recipe; "
                     "a gateway source is not allowed."
                 )
+        elif source.source_kind == AGENT_AUTH_SOURCE_SEAT:
+            if harness_kind not in AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS:
+                raise SelectionRuleError(
+                    f"Harness '{harness_kind}' has no seat recipe; a seat source is not allowed."
+                )
         elif source.source_kind == AGENT_AUTH_SOURCE_API_KEY:
             # env_var_name is optional at this layer: a source referencing a
             # TYPED vault entry (aws_bedrock/azure_openai) carries none by law
@@ -69,9 +76,22 @@ def validate_auth_selection_set(
                 )
 
     # Cardinality gates the ENABLED set only; disabled rows never launch.
+    # The single-source radio counts KINDS, not rows (agent_auth spec §4 cell
+    # 1's "seat selection shape"): one enabled seat row satisfies it however
+    # many seats the pool holds, and several enabled seat rows (the pool row
+    # plus pins, or multiple pins) are still ONE selected method. Every
+    # non-seat kind keeps the strict one-enabled-row law.
     enabled = [source for source in sources if source.enabled]
     if harness_kind not in MULTI_SOURCE_HARNESSES and len(enabled) > 1:
-        raise SelectionRuleError(
-            f"Harness '{harness_kind}' allows at most one enabled auth source "
-            f"(got {len(enabled)})."
-        )
+        enabled_kinds = {source.source_kind for source in enabled}
+        if len(enabled_kinds) > 1:
+            raise SelectionRuleError(
+                f"Harness '{harness_kind}' allows at most one enabled auth "
+                f"method (got {len(enabled_kinds)}: "
+                f"{', '.join(sorted(enabled_kinds))})."
+            )
+        if enabled_kinds != {AGENT_AUTH_SOURCE_SEAT}:
+            raise SelectionRuleError(
+                f"Harness '{harness_kind}' allows at most one enabled auth source "
+                f"(got {len(enabled)})."
+            )

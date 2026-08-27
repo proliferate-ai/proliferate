@@ -8,9 +8,11 @@
       "harness_kind": "claude",
       "sources": [
         {
-          "kind": "gateway",
-          "base_url": "https://llm.proliferate.example",
-          "key": "sk-vk-claude-0001"
+          "kind": "seat",
+          "env": {
+            "CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oat01-Kx3mQ9rT5vW7yZ1aB2cD4eF6gH8jL0nP-seatAA"
+          },
+          "seat_id": "30000000-0000-4000-8000-000000000021"
         }
       ]
     },
