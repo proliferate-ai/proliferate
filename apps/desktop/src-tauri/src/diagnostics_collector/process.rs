@@ -249,6 +249,21 @@ impl CollectorProcessLauncher {
         if let Some(install_id) = self.install_id.as_deref() {
             command.args(["--install-id", install_id]);
         }
+        // Read at every launch, not at discovery, so a restart after sign-in
+        // stamps the user the install now belongs to. Same domain filter as
+        // the install id: an out-of-range value drops the attribute, never
+        // the collector.
+        if let Some(user_id) = retain_valid_install_id(super::identity::current_user_id()) {
+            command.args(["--user-id", &user_id]);
+        }
+        // The Honeycomb destination, only in the hosted-product mode
+        // (`export_destination.rs`). Absent, the collector's export leg is
+        // `Sink::Off`: no queue, no task, nothing leaves.
+        for (key, value) in super::export_destination::export_env(
+            crate::desktop_telemetry_mode::resolve_desktop_telemetry_mode(),
+        ) {
+            command.env(key, value);
+        }
 
         // SAFETY: after fork and before exec this closure performs only two raw,
         // checked fcntl calls. It allocates, formats, logs, and locks nothing.

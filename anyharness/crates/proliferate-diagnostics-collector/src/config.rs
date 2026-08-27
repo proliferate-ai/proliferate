@@ -90,6 +90,10 @@ pub struct CollectorConfig {
     /// `None` means the host had no identity to give, and the attribute is
     /// then absent rather than empty or invented.
     pub install_id: Option<String>,
+    /// The signed-in user's id, stamped onto exported records as the
+    /// `proliferate.user_id` resource attribute under the same host-owned
+    /// rule as `install_id`: passed in, never derived, absent when signed out.
+    pub user_id: Option<String>,
     pub runtime_limits: RuntimeLimits,
     pub auto_ready: bool,
 }
@@ -102,6 +106,7 @@ impl std::fmt::Debug for CollectorConfig {
             .field("release", &self.release)
             .field("environment", &self.environment)
             .field("install_id", &self.install_id)
+            .field("user_id", &self.user_id)
             .field("runtime_limits", &self.runtime_limits)
             .field("auto_ready", &self.auto_ready)
             .finish()
@@ -121,6 +126,7 @@ impl CollectorConfig {
             release: "standalone".to_owned(),
             environment: "local".to_owned(),
             install_id: None,
+            user_id: None,
             runtime_limits: RuntimeLimits::default(),
             auto_ready: true,
         }

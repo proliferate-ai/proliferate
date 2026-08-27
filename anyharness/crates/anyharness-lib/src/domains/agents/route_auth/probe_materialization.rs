@@ -69,7 +69,11 @@ pub fn probe_auth_material(
     runtime_home: &Path,
     harness_kind: &str,
 ) -> Result<ProbeAuthMaterial, RouteAuthError> {
-    probe_auth_material_for_server(runtime_home, harness_kind, current_server_origin().as_deref())
+    probe_auth_material_for_server(
+        runtime_home,
+        harness_kind,
+        current_server_origin().as_deref(),
+    )
 }
 
 /// Core of [`probe_auth_material`], parameterized on the current server origin so
@@ -168,6 +172,81 @@ impl ProbeAuthMaterial {
     #[cfg(test)]
     pub(crate) fn profile(&self) -> &AgentRuntimeAuthProfile {
         &self.profile
+    }
+
+    /// The closed route label the probe's `anyharness.model.request` lifecycle
+    /// record carries (`observability::lifecycle::begin_model_request`). A
+    /// label, never a credential: it names which kind of auth source the
+    /// probe exercised, collapsed to `mixed` when several kinds are enabled.
+    pub(crate) fn route_label(&self) -> &'static str {
+        match &self.profile {
+            AgentRuntimeAuthProfile::Native => "native",
+            AgentRuntimeAuthProfile::Sources(sources) => {
+                let mut kinds = sources
+                    .sources
+                    .iter()
+                    .map(|source| match source {
+                        ResolvedSource::Gateway(_) => "gateway",
+                        ResolvedSource::ApiKey(_) => "api_key",
+                        ResolvedSource::ProviderConfig(_) => "provider_config",
+                    })
+                    .collect::<Vec<_>>();
+                kinds.sort_unstable();
+                kinds.dedup();
+                match kinds.as_slice() {
+                    [] => "none",
+                    [one] => one,
+                    _ => "mixed",
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod route_label_tests {
+    use super::*;
+    use crate::domains::agents::route_auth::profile::{
+        ApiKeyProfile, GatewayProfile, HarnessSources, ResolvedSource,
+    };
+
+    fn material(profile: AgentRuntimeAuthProfile) -> ProbeAuthMaterial {
+        ProbeAuthMaterial {
+            harness_kind: "claude_code".to_owned(),
+            env_value_digests: Vec::new(),
+            state_revision: 1,
+            profile,
+        }
+    }
+
+    /// The labels are a closed set: native · none · gateway · api_key ·
+    /// provider_config · mixed. They ride an exported record, so a new
+    /// variant here must land in this list deliberately.
+    #[test]
+    fn route_labels_are_closed_and_collapse_to_mixed() {
+        assert_eq!(
+            material(AgentRuntimeAuthProfile::Native).route_label(),
+            "native"
+        );
+        let sources = |list: Vec<ResolvedSource>| {
+            material(AgentRuntimeAuthProfile::Sources(HarnessSources {
+                harness_kind: "claude_code".to_owned(),
+                revision: 1,
+                sources: list,
+            }))
+        };
+        assert_eq!(sources(vec![]).route_label(), "none");
+        let gateway = ResolvedSource::Gateway(GatewayProfile {
+            base_url: "https://gw.example".to_owned(),
+            key: "k".to_owned(),
+        });
+        let api_key = ResolvedSource::ApiKey(ApiKeyProfile {
+            env_var_name: "X".to_owned(),
+            value: "v".to_owned(),
+        });
+        assert_eq!(sources(vec![gateway.clone()]).route_label(), "gateway");
+        assert_eq!(sources(vec![api_key.clone()]).route_label(), "api_key");
+        assert_eq!(sources(vec![gateway, api_key]).route_label(), "mixed");
     }
 }
 

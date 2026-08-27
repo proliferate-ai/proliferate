@@ -34,6 +34,11 @@ struct Args {
     /// derives, generates, or persists one. Omitted means no attribute.
     #[arg(long)]
     install_id: Option<String>,
+    /// The signed-in user's id, stamped on exported records as the
+    /// `proliferate.user_id` resource attribute. Id only, never an email;
+    /// the host passes it when a user is signed in and omits it otherwise.
+    #[arg(long)]
+    user_id: Option<String>,
 }
 
 #[tokio::main]
@@ -44,8 +49,14 @@ async fn main() -> anyhow::Result<()> {
         // job asserts on, and the marker is the same string the job greps the
         // packaged binary for, which keeps the compiled constant reachable so
         // the linker cannot drop it.
-        println!("{}", proliferate_diagnostics_collector::export_policy_name());
-        eprintln!("{}", proliferate_diagnostics_collector::export_policy_marker());
+        println!(
+            "{}",
+            proliferate_diagnostics_collector::export_policy_name()
+        );
+        eprintln!(
+            "{}",
+            proliferate_diagnostics_collector::export_policy_marker()
+        );
         std::io::stdout().flush()?;
         return Ok(());
     }
@@ -60,6 +71,7 @@ async fn main() -> anyhow::Result<()> {
     config.release = args.release;
     config.environment = args.environment;
     config.install_id = args.install_id;
+    config.user_id = args.user_id;
     let server = CollectorServer::start(config).await?;
     let descriptor = server.connection_descriptor(capability_fd as u32)?;
     let core = server.core();

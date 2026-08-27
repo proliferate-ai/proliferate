@@ -89,6 +89,10 @@ pub struct SessionEventSink {
     /// is inert in a process with no diagnostics producer, which is every
     /// test.
     turn_lifecycle: Option<crate::observability::lifecycle::RuntimeLifecycleOperation>,
+    /// Whether the open turn has already stamped `first_output_ms` on its
+    /// guard. Reset whenever a turn opens; set when the first assistant item
+    /// opens, so a turn with many assistant items reports the first only.
+    turn_first_output_stamped: bool,
 }
 
 impl SessionEventSink {
@@ -123,6 +127,7 @@ impl SessionEventSink {
             on_interaction_requested: None,
             on_interaction_resolved: None,
             turn_lifecycle: None,
+            turn_first_output_stamped: false,
         }
     }
 
@@ -158,6 +163,7 @@ impl SessionEventSink {
             on_interaction_requested: None,
             on_interaction_resolved: None,
             turn_lifecycle: None,
+            turn_first_output_stamped: false,
         }
     }
 

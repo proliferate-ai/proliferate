@@ -301,19 +301,41 @@ pub async fn get_auth_session() -> Result<Option<AuthSessionRecord>, String> {
 }
 
 #[tauri::command]
-pub async fn set_auth_session(session: AuthSessionRecord) -> Result<(), String> {
-    let _guard = SECRET_FILE_LOCK
-        .lock()
-        .map_err(|_| "secret file lock poisoned".to_string())?;
-    write_secret_file(&auth_session_file_path()?, &session)
+pub async fn set_auth_session(app: tauri::AppHandle, session: AuthSessionRecord) -> Result<(), String> {
+    let written = {
+        let _guard = SECRET_FILE_LOCK
+            .lock()
+            .map_err(|_| "secret file lock poisoned".to_string())?;
+        write_secret_file(&auth_session_file_path()?, &session)
+    };
+    if written.is_ok() {
+        crate::diagnostics_collector::identity::apply_auth_change(&app, Some(session.user_id.clone()));
+    }
+    written
 }
 
 #[tauri::command]
-pub async fn clear_auth_session() -> Result<(), String> {
-    let _guard = SECRET_FILE_LOCK
-        .lock()
-        .map_err(|_| "secret file lock poisoned".to_string())?;
-    delete_file_if_exists(&auth_session_file_path()?)
+pub async fn clear_auth_session(app: tauri::AppHandle) -> Result<(), String> {
+    let deleted = {
+        let _guard = SECRET_FILE_LOCK
+            .lock()
+            .map_err(|_| "secret file lock poisoned".to_string())?;
+        delete_file_if_exists(&auth_session_file_path()?)
+    };
+    crate::diagnostics_collector::identity::apply_auth_change(&app, None);
+    deleted
+}
+
+/// The signed-in user's id from the persisted session, for the collector
+/// host's identity stamp. Id only — the record's email never leaves this
+/// function. `None` when no session is stored or the app dir is unavailable.
+pub(crate) fn read_auth_session_user_id() -> Option<String> {
+    let path = auth_session_file_path().ok()?;
+    read_json_file::<AuthSessionRecord>(&path)
+        .ok()
+        .flatten()
+        .map(|session| session.user_id)
+        .filter(|user_id| !user_id.trim().is_empty())
 }
 
 #[tauri::command]

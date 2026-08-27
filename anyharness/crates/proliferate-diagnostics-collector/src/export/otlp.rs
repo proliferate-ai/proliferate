@@ -9,10 +9,10 @@ use std::collections::BTreeMap;
 
 use chrono::DateTime;
 use proliferate_diagnostics_protocol::v1::types::{
-    ArgumentValueV1, CollectorAcceptedRecordV1, ComponentV1, DetailedKindV1,
-    LifecycleFinalizerV1, LifecyclePhaseV1, MetadataPhaseV1, PrivacyClassificationV1,
-    ProducerRecordV1, RecordClassV1, RedactionClassificationV1, SchemaVersionV1, SeverityV1,
-    SourceV1, StandardStreamV1, TerminalOutcomeV1,
+    ArgumentValueV1, CollectorAcceptedRecordV1, ComponentV1, DetailedKindV1, LifecycleFinalizerV1,
+    LifecyclePhaseV1, MetadataPhaseV1, PrivacyClassificationV1, ProducerRecordV1, RecordClassV1,
+    RedactionClassificationV1, SchemaVersionV1, SeverityV1, SourceV1, StandardStreamV1,
+    TerminalOutcomeV1,
 };
 use serde_json::{json, Map, Value};
 
@@ -41,9 +41,10 @@ struct ResourceKey {
 /// refused is returned so exporter health can report it.
 pub(super) fn encode_batch(
     install_id: Option<&str>,
+    user_id: Option<&str>,
     records: &[CollectorAcceptedRecordV1],
 ) -> (Value, u64) {
-    encode_batch_with_policy(EXPORT_POLICY, install_id, records)
+    encode_batch_with_policy(EXPORT_POLICY, install_id, user_id, records)
 }
 
 /// The policy-parameterised encoder. Production always passes the compiled
@@ -53,6 +54,7 @@ pub(super) fn encode_batch(
 pub(super) fn encode_batch_with_policy(
     policy: ExportPolicy,
     install_id: Option<&str>,
+    user_id: Option<&str>,
     records: &[CollectorAcceptedRecordV1],
 ) -> (Value, u64) {
     let dev_tag = super::dev_tag();
@@ -81,7 +83,7 @@ pub(super) fn encode_batch_with_policy(
         .into_iter()
         .map(|(key, scopes)| {
             json!({
-                "resource": { "attributes": resource_attributes(&key, dev_tag, install_id) },
+                "resource": { "attributes": resource_attributes(&key, dev_tag, install_id, user_id) },
                 "scopeLogs": scopes
                     .into_iter()
                     .map(|(version, log_records)| json!({
@@ -102,6 +104,7 @@ fn resource_attributes(
     key: &ResourceKey,
     dev_tag: Option<&str>,
     install_id: Option<&str>,
+    user_id: Option<&str>,
 ) -> Vec<Value> {
     let mut attributes = vec![
         attribute("service.name", string_value(component_name(key.component))),
@@ -125,6 +128,13 @@ fn resource_attributes(
         // the host has none to give.
         attributes.push(attribute("proliferate.install_id", string_value(install)));
     }
+    if let Some(user) = user_id {
+        // The signed-in account, stamped by the collector from a value its
+        // host passed in, so a record from one install can be joined to the
+        // account that saw the failure. An id only — never an email — and
+        // absent entirely when nobody is signed in.
+        attributes.push(attribute("proliferate.user_id", string_value(user)));
+    }
     if let Some(tag) = dev_tag {
         // Identifies whose desktop produced the record when teammates share
         // one dogfood environment. Absent unless configured.
@@ -139,19 +149,28 @@ fn log_record(policy: ExportPolicy, accepted: &CollectorAcceptedRecordV1) -> Val
     let mut log = Map::new();
     log.insert(
         "timeUnixNano".to_owned(),
-        json!(nanos(&record.source_timestamp).unwrap_or(observed.unwrap_or(0)).to_string()),
+        json!(nanos(&record.source_timestamp)
+            .unwrap_or(observed.unwrap_or(0))
+            .to_string()),
     );
     log.insert(
         "observedTimeUnixNano".to_owned(),
         json!(observed.unwrap_or(0).to_string()),
     );
-    log.insert("severityNumber".to_owned(), json!(severity_number(record.severity)));
+    log.insert(
+        "severityNumber".to_owned(),
+        json!(severity_number(record.severity)),
+    );
     log.insert(
         "severityText".to_owned(),
         json!(severity_text(record.severity)),
     );
     log.insert("body".to_owned(), string_value(body_text(record)));
-    if let Some(trace_id) = record.trace_id.as_deref().filter(|value| is_trace_id(value)) {
+    if let Some(trace_id) = record
+        .trace_id
+        .as_deref()
+        .filter(|value| is_trace_id(value))
+    {
         log.insert("traceId".to_owned(), json!(trace_id.to_ascii_lowercase()));
     }
     log.insert("attributes".to_owned(), json!(attributes(policy, accepted)));
@@ -180,7 +199,10 @@ fn attributes(policy: ExportPolicy, accepted: &CollectorAcceptedRecordV1) -> Vec
             "proliferate.component",
             string_value(component_name(record.component)),
         ),
-        attribute("proliferate.source", string_value(source_name(record.source))),
+        attribute(
+            "proliferate.source",
+            string_value(source_name(record.source)),
+        ),
         // Also the resource's `service.instance.id`. Repeating it on the record
         // keeps producer identity queryable without a resource join.
         attribute(
@@ -207,10 +229,16 @@ fn attributes(policy: ExportPolicy, accepted: &CollectorAcceptedRecordV1) -> Vec
             "proliferate.retention_cursor",
             int_value(accepted.retention_cursor),
         ),
-        attribute("proliferate.operation_id", string_value(&record.operation_id)),
+        attribute(
+            "proliferate.operation_id",
+            string_value(&record.operation_id),
+        ),
     ];
     for (key, value) in [
-        ("proliferate.parent_operation_id", &record.parent_operation_id),
+        (
+            "proliferate.parent_operation_id",
+            &record.parent_operation_id,
+        ),
         ("proliferate.trace_id", &record.trace_id),
         ("proliferate.workspace_id", &record.workspace_id),
         ("proliferate.session_id", &record.session_id),
@@ -220,7 +248,10 @@ fn attributes(policy: ExportPolicy, accepted: &CollectorAcceptedRecordV1) -> Vec
         ("proliferate.target_id", &record.target_id),
         ("proliferate.prompt_id", &record.prompt_id),
         ("proliferate.workflow_id", &record.workflow_id),
-        ("proliferate.error_classification", &record.error_classification),
+        (
+            "proliferate.error_classification",
+            &record.error_classification,
+        ),
     ] {
         if let Some(value) = value {
             attributes.push(attribute(key, string_value(value)));
@@ -279,7 +310,10 @@ fn push_lifecycle_attributes(attributes: &mut Vec<Value>, record: &ProducerRecor
         );
         push_optional_phase(attributes, "proliferate.lifecycle.model.phase", model.phase);
         for (key, value) in [
-            ("proliferate.lifecycle.model.input_tokens", model.input_tokens),
+            (
+                "proliferate.lifecycle.model.input_tokens",
+                model.input_tokens,
+            ),
             (
                 "proliferate.lifecycle.model.output_tokens",
                 model.output_tokens,
@@ -301,7 +335,11 @@ fn push_lifecycle_attributes(attributes: &mut Vec<Value>, record: &ProducerRecor
             "proliferate.lifecycle.plugin.kind",
             plugin.kind.as_deref(),
         );
-        push_optional_phase(attributes, "proliferate.lifecycle.plugin.phase", plugin.phase);
+        push_optional_phase(
+            attributes,
+            "proliferate.lifecycle.plugin.phase",
+            plugin.phase,
+        );
         if let Some(duration_ms) = plugin.duration_ms {
             attributes.push(attribute(
                 "proliferate.lifecycle.plugin.duration_ms",

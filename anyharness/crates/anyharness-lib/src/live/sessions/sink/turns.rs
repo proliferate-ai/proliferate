@@ -19,6 +19,7 @@ impl SessionEventSink {
         let turn_id = uuid::Uuid::new_v4().to_string();
         tracing::debug!(turn_id = %turn_id, "event_sink: beginning turn");
         self.turn_assistant_messages.clear();
+        self.turn_first_output_stamped = false;
         self.current_turn_id = Some(turn_id.clone());
         self.engine_initiated_turn = false;
         self.turn_lifecycle = Some(lifecycle::begin_turn_execute(
@@ -118,6 +119,7 @@ impl SessionEventSink {
         let turn_id = uuid::Uuid::new_v4().to_string();
         tracing::debug!(turn_id = %turn_id, "event_sink: opening engine-initiated turn");
         self.turn_assistant_messages.clear();
+        self.turn_first_output_stamped = false;
         self.current_turn_id = Some(turn_id.clone());
         self.engine_initiated_turn = true;
         self.engine_turn_has_events = false;
@@ -169,6 +171,21 @@ impl SessionEventSink {
 }
 
 impl SessionEventSink {
+    /// Records time-to-first-output on the open turn's guard, once per turn.
+    /// The first assistant item to open is the first output; later items and
+    /// engine-initiated turns without a guard stamp nothing.
+    pub(in crate::live::sessions) fn stamp_first_output(&mut self) {
+        if self.turn_first_output_stamped {
+            return;
+        }
+        let Some(operation) = self.turn_lifecycle.as_mut() else {
+            return;
+        };
+        let elapsed = operation.elapsed_ms();
+        operation.append([lifecycle::turn_first_output(elapsed)]);
+        self.turn_first_output_stamped = true;
+    }
+
     /// Closes the open turn's lifecycle operation with the stop reason the
     /// turn actually ended on. A turn with no open guard (a subagent-wake turn,
     /// or a sink restored from a staged snapshot) closes nothing rather than

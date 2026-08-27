@@ -168,10 +168,112 @@ pub fn turn_stop_reason(stop_reason: &str) -> LifecycleArgument {
     }
 }
 
+/// Attaches the elapsed time to the turn's first assistant output. The sink
+/// calls this once per turn, when the first assistant item opens; the guard
+/// stamps `duration_ms` itself at terminal time.
+pub fn turn_first_output(elapsed_ms: i64) -> LifecycleArgument {
+    LifecycleArgument {
+        name: proliferate_diagnostics_client::lifecycle::FIRST_OUTPUT_FIELD,
+        value: ArgumentValueV1::Integer(elapsed_ms.max(0)),
+    }
+}
+
+/// One real provider request the runtime itself makes: the launch probe's
+/// verification call. Harness-internal model traffic is the harness's, not
+/// ours, and is never observed here.
+pub const MODEL_REQUEST: &str = "anyharness.model.request";
+
+/// Begins `anyharness.model.request` for a launch-probe attempt.
+///
+/// A probe runs per harness, outside any session, so the record correlates
+/// on the install and the operation only. `route` is the closed label of the
+/// auth route the probe exercised (`ProbeAuthMaterial::route_label`).
+pub fn begin_model_request(agent_kind: &str, route: &'static str) -> LifecycleOperation {
+    LifecycleOperation::begin_with_arguments(
+        MODEL_REQUEST,
+        DiagnosticCorrelation::default(),
+        vec![
+            LifecycleArgument {
+                name: "agent_kind",
+                value: enum_value(agent_kind),
+            },
+            LifecycleArgument {
+                name: "route",
+                value: enum_value(route),
+            },
+        ],
+    )
+}
+
+/// Maps a launch-probe failure code onto the closed `model.request`
+/// classification list. The probe's taxonomy is about the probe engine
+/// (spawn, timeout, vanish); the exported list is about the provider, so the
+/// mapping is deliberately coarse and every branch lands on a listed value —
+/// an unlisted classification would degrade the record to `abandoned`.
+pub fn model_request_classification(probe_code: &str) -> Option<&'static str> {
+    match probe_code {
+        "cancelled" => None,
+        "timeout" => Some("network_connection"),
+        "model_controls_incomplete" => Some("provider_model_configuration_unsupported"),
+        _ => Some(INTERNAL_ERROR),
+    }
+}
+
+/// The terminal outcome for a probe failure code: cancellation is neither a
+/// failure nor a rejection.
+pub fn model_request_outcome(probe_code: &str) -> TerminalOutcomeV1 {
+    match probe_code {
+        "cancelled" => TerminalOutcomeV1::Cancelled,
+        "timeout" => TerminalOutcomeV1::TimedOut,
+        _ => TerminalOutcomeV1::Failed,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use proliferate_diagnostics_client::lifecycle::safe_fields;
+
+    /// The session id rides every lifecycle phase where it exists at emit
+    /// time: turn and agent-start guards carry it from `started`; a create
+    /// guard carries a preselected id from `started` and learns a minted one
+    /// for its terminal. Pinned so the Honeycomb join never regresses to
+    /// terminal-only.
+    #[test]
+    fn session_id_rides_every_phase_where_it_exists() {
+        let turn = begin_turn_execute("session-1", "turn-1", false);
+        assert_eq!(turn.correlation().session_id.as_deref(), Some("session-1"));
+        assert_eq!(turn.correlation().turn_id.as_deref(), Some("turn-1"));
+
+        let start = begin_agent_start("workspace-1", "session-1", "claude_code", "cold", false);
+        assert_eq!(start.correlation().session_id.as_deref(), Some("session-1"));
+
+        let preselected = begin_session_create(
+            "workspace-1",
+            "claude_code",
+            Some("session-9"),
+            false,
+            false,
+            0,
+            "chat",
+        );
+        assert_eq!(
+            preselected.correlation().session_id.as_deref(),
+            Some("session-9")
+        );
+
+        let mut minted =
+            begin_session_create("workspace-1", "claude_code", None, false, false, 0, "chat");
+        assert!(
+            minted.correlation().session_id.is_none(),
+            "not known at admission"
+        );
+        minted.learn_session_id("session-2");
+        assert_eq!(
+            minted.correlation().session_id.as_deref(),
+            Some("session-2")
+        );
+    }
 
     /// Every argument this module can produce must be in the producer's closed
     /// safe-field list for its operation, or the producer silently drops it and
@@ -194,9 +296,40 @@ mod tests {
         }
 
         let turn_execute = safe_fields(TURN_EXECUTE).expect("operation is owned");
-        for field in ["stop_reason", "engine_initiated"] {
+        for field in [
+            "stop_reason",
+            "engine_initiated",
+            "duration_ms",
+            "first_output_ms",
+        ] {
             assert!(turn_execute.contains(&field), "{field} is not safe-listed");
         }
+
+        let model_request = safe_fields(MODEL_REQUEST).expect("operation is owned");
+        for field in ["agent_kind", "route"] {
+            assert!(
+                turn_execute.contains(&field) || model_request.contains(&field),
+                "{field} is not safe-listed"
+            );
+        }
+        let classifications =
+            proliferate_diagnostics_client::lifecycle::classifications(MODEL_REQUEST)
+                .expect("operation is owned");
+        // materialization_failed is deliberately absent: a probe that never
+        // assembled a request emits no model.request record (attempt.rs).
+        for code in [
+            "timeout",
+            "model_controls_incomplete",
+            "probe_failed",
+            "runner_vanished",
+        ] {
+            let classification = model_request_classification(code).expect("a failure classifies");
+            assert!(
+                classifications.contains(&classification),
+                "{classification} is not listed for {code}"
+            );
+        }
+        assert!(model_request_classification("cancelled").is_none());
 
         let agent_start = safe_fields(AGENT_START).expect("operation is owned");
         for field in ["agent_kind", "startup_strategy", "has_system_prompt_append"] {
