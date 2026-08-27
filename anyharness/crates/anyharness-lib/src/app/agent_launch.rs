@@ -107,17 +107,108 @@ pub(super) fn build_agent_stack(
     }
 }
 
-/// The status module's startup pass (agent_auth spec §2): every persisted
-/// document is re-served STALE until the startup probes re-verify it, every
-/// installed harness gets a row, and a harness that appeared with no install
-/// event raises `FirstDetected`. Blocking-pool work (sqlite + fs); the caller
+/// The agents startup work, ONE sequenced task: the status module's startup
+/// pass first (agent_auth spec §2 — every persisted document is re-served
+/// STALE until re-verified, every installed harness gets a row, a harness
+/// that appeared with no install event raises `FirstDetected`), THEN the
+/// runtime's startup pass (seed hydration, the full reconcile, and the
+/// launch-probe pokes it ends with).
+///
+/// The order is load-bearing. These used to be two independent spawns, so a
+/// startup probe could VERIFY a harness before the stale-mark pass reached
+/// its row — and the pass then re-dimmed a fresh document with no admitted
+/// attempt behind the mark and no recovery timer armed: stale until an
+/// unrelated event refreshed it. Running the stale-mark pass to completion
+/// before anything that can complete a probe makes "stale until re-verified"
+/// true in both directions. Fire-and-forget from the app's view; the caller
 /// suppresses it under `cfg(test)` with the other startup side effects.
 #[cfg_attr(test, allow(dead_code))]
-pub(super) fn spawn_status_startup_pass(
+pub(super) fn spawn_agent_startup_passes(
+    agent_runtime: &Arc<AgentRuntime>,
     agent_status_service: &Arc<AgentStatusService>,
     automatic_poke_engine: &Option<Arc<LaunchProbeService>>,
 ) {
     let status = agent_status_service.clone();
     let poke_engine = automatic_poke_engine.clone();
-    tokio::task::spawn_blocking(move || status.startup_pass(&poke_engine));
+    let runtime = agent_runtime.clone();
+    tokio::spawn(async move {
+        status_pass_then_startup_pokes(&status, &poke_engine, move || {
+            runtime.spawn_startup_pass();
+        })
+        .await;
+    });
+}
+
+/// The sequencing primitive, split out so the ORDER is what a test drives:
+/// the status startup pass runs to completion on the blocking pool (sqlite +
+/// fs work), and only then do the startup pokes fire. `startup_pokes` is
+/// everything that can complete a probe at boot — in production,
+/// [`AgentRuntime::spawn_startup_pass`].
+async fn status_pass_then_startup_pokes(
+    agent_status_service: &Arc<AgentStatusService>,
+    automatic_poke_engine: &Option<Arc<LaunchProbeService>>,
+    startup_pokes: impl FnOnce() + Send + 'static,
+) {
+    let status = agent_status_service.clone();
+    let poke_engine = automatic_poke_engine.clone();
+    // If the blocking pool refused the pass (shutdown), skip the pokes too
+    // rather than fire them against un-marked rows.
+    if tokio::task::spawn_blocking(move || status.startup_pass(&poke_engine))
+        .await
+        .is_ok()
+    {
+        startup_pokes();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use chrono::{TimeZone, Utc};
+
+    use crate::domains::agents::launch_probe::test_support::FixedTargets;
+    use crate::domains::agents::route_auth::test_support::TempHome;
+    use crate::domains::agents::status::{AgentStatusService, ProbeVerdict, RefreshCause};
+    use crate::persistence::Db;
+
+    /// The startup ordering (review m3): the stale-mark pass completes BEFORE
+    /// the startup pokes run, so a startup probe's fresh verify lands AFTER
+    /// the mark and the document ends verified and fresh. With the spawns
+    /// unordered, a verify that beat the pass was re-dimmed by it — a fresh
+    /// document served stale with no admitted attempt and no recovery timer.
+    ///
+    /// The closure stands in for the startup pokes' effect (the probe engine
+    /// verifying the harness) at exactly the point in time the sequencing
+    /// guarantees. Falsify by swapping the pass and the pokes in
+    /// `status_pass_then_startup_pokes`: the document then ends stale.
+    #[tokio::test]
+    async fn the_startup_pass_lands_before_the_startup_pokes_so_a_fresh_verify_is_not_redimmed() {
+        let home = TempHome::new("startup-pass-order");
+        let status = Arc::new(AgentStatusService::with_parts(
+            Db::open(home.path()).expect("open db"),
+            home.path().to_path_buf(),
+            Arc::new(FixedTargets::single("codex")),
+            vec!["codex".to_string()],
+            home.path().join("detection-home"),
+        ));
+        // A persisted row from a previous run — the thing the pass stale-marks.
+        status.refresh("codex", RefreshCause::AuthApplied);
+        let t_ok = Utc.with_ymd_and_hms(2026, 8, 27, 13, 0, 0).unwrap();
+
+        let verify_status = status.clone();
+        super::status_pass_then_startup_pokes(&status, &None, move || {
+            verify_status.probe_verified("codex", t_ok);
+        })
+        .await;
+
+        let doc = status.read("codex").expect("codex row");
+        assert_eq!(doc.probe.verdict, ProbeVerdict::Verified);
+        assert_eq!(doc.probe.at, Some(t_ok.to_rfc3339()));
+        assert!(
+            !doc.probe.stale,
+            "the stale-mark pass ran first, so the startup verify is served \
+             fresh; the inverted order re-dims a verified document"
+        );
+    }
 }

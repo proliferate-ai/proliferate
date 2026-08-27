@@ -564,14 +564,14 @@ impl AppState {
         // Drive the emulated-loop scheduler (fires only live+idle sessions).
         #[cfg(not(test))]
         loop_scheduler.clone().spawn();
-        // Hydrate the bundled agent seed (if pending) and run an installed-only
-        // reconcile against the catalog pins — desktop sidecar AND cloud workers,
-        // non-blocking + best-effort. See AgentRuntime::spawn_startup_pass.
+        // Agents startup, ONE sequenced task: the status stale-mark pass, THEN
+        // the runtime pass whose pokes can verify rows (see agent_launch.rs).
         #[cfg(not(test))]
-        agent_runtime.clone().spawn_startup_pass();
-        // The status module's startup pass (stale-mark, refresh, FirstDetected).
-        #[cfg(not(test))]
-        agent_launch::spawn_status_startup_pass(&agent_status_service, &automatic_poke_engine);
+        agent_launch::spawn_agent_startup_passes(
+            &agent_runtime,
+            &agent_status_service,
+            &automatic_poke_engine,
+        );
         Ok(Self {
             runtime_home,
             runtime_base_url,
