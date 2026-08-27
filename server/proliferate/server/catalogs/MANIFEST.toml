@@ -4,7 +4,7 @@
 # permission-by-intention: the checker fails on drift in either direction.
 
 name = "catalogs"
-spec = "specs/systems/agent_auth/models.md"
+spec = "specs/systems/harnesses/launch-options.md"
 owns = "Agent catalog serving: signed catalog documents and their distribution endpoints."
 
 public_surface = [
