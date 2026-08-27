@@ -1,8 +1,4 @@
-"""Renderer tests for the agent-auth state document (`agent_auth.state_render`).
-
-The sandbox-push half of the original module left with the cloud sandbox stack.
-
-Unit tests for cloud agent-auth state rendering (state.json v2)."""
+"""Renderer tests for the agent-auth state document (state.json v2)."""
 
 from __future__ import annotations
 
@@ -22,9 +18,15 @@ FIXTURE_PATH = REPO_ROOT / "fixtures/contracts/agent-auth-state/v2.json"
 USER_ID = uuid.uuid4()
 NOW = datetime(2026, 7, 1, tzinfo=UTC)
 REVISION = 4211
+_NOT_READY = agent_auth.UNSATISFIED_GATEWAY_NOT_READY
+_KEY_REVOKED = agent_auth.UNSATISFIED_KEY_REVOKED
+_SEATS_GONE = agent_auth.UNSATISFIED_SEATS_GONE
+_UNSUPPORTED = agent_auth.UNSATISFIED_UNSUPPORTED
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-FIXTURE_PATH = REPO_ROOT / "fixtures/contracts/agent-auth-state/v2.json"
+
+def _unsatisfied(harness: str, reason: str) -> dict[str, object]:
+    # A present-but-empty entry naming its why (slice 2's refusal law).
+    return {"harness_kind": harness, "sources": [], "unsatisfied_reason": reason}
 
 
 def _selection(
@@ -262,7 +264,7 @@ class TestRenderAgentAuthState:
                 gateway_virtual_key=None,
             )
         )
-        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+        assert state["harnesses"] == [_unsatisfied("claude", _NOT_READY)]
         assert state["version"] == 2
         assert state["revision"] == REVISION
 
@@ -290,7 +292,7 @@ class TestRenderAgentAuthState:
                 gateway_base_url=None,
             )
         )
-        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+        assert state["harnesses"] == [_unsatisfied("claude", _NOT_READY)]
         assert any(
             "gateway selection dropped" in message
             and "agent_gateway_litellm_public_base_url is not configured" in message
@@ -308,7 +310,7 @@ class TestRenderAgentAuthState:
             )
             # The SOURCE is dropped; the harness entry survives empty so the
             # runtime refuses the launch instead of falling back to native.
-            assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}], status
+            assert state["harnesses"] == [_unsatisfied("claude", _NOT_READY)], status
 
     def test_each_gateway_harness_carries_its_own_key(self) -> None:
         """Two gateway harnesses render two DISTINCT keys (R2's whole point).
@@ -375,7 +377,6 @@ class TestRenderAgentAuthState:
         assert before != after
 
     def test_ordering_is_independent_of_input_order(self) -> None:
-        key_id = uuid.uuid4()
         forward = (
             _selection(harness="claude", source_kind="gateway"),
             _selection(harness="codex", source_kind="gateway"),
@@ -386,7 +387,6 @@ class TestRenderAgentAuthState:
         assert [h["harness_kind"] for h in first["harnesses"]] == ["claude", "codex"]
         assert first == second
         assert fp1 == fp2
-        _ = key_id
 
 
 class TestRenderSeatSources:
@@ -460,7 +460,7 @@ class TestRenderSeatSources:
                 seat_values=(),
             )
         )
-        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+        assert state["harnesses"] == [_unsatisfied("claude", _SEATS_GONE)]
 
     def test_pinned_seat_that_vanished_fails_closed_too(self) -> None:
         pinned = uuid.uuid4()
@@ -471,7 +471,7 @@ class TestRenderSeatSources:
                 seat_values=((other, "sk-tok-other"),),
             )
         )
-        assert state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+        assert state["harnesses"] == [_unsatisfied("claude", _SEATS_GONE)]
 
     def test_seat_row_on_a_seatless_harness_is_dropped(self) -> None:
         # The validator forbids this at write time; the renderer defends too
@@ -484,7 +484,7 @@ class TestRenderSeatSources:
                 seat_values=((seat, "sk-tok"),),
             )
         )
-        assert state["harnesses"] == [{"harness_kind": "codex", "sources": []}]
+        assert state["harnesses"] == [_unsatisfied("codex", _UNSUPPORTED)]
 
     def test_no_token_material_beyond_the_env_map(self) -> None:
         seat = uuid.uuid4()
@@ -692,7 +692,7 @@ class TestRenderProviderConfigSource:
                 provider_config_values={},
             )
         )
-        assert state["harnesses"] == [{"harness_kind": "codex", "sources": []}]
+        assert state["harnesses"] == [_unsatisfied("codex", _KEY_REVOKED)]
 
     def test_unsupported_combination_drops_the_source(self) -> None:
         key_id = uuid.uuid4()
@@ -713,8 +713,8 @@ class TestRenderProviderConfigSource:
                 },
             )
         )
-        # A4 fail-closed: entry retained, sources empty.
-        assert state["harnesses"] == [{"harness_kind": "codex", "sources": []}]
+        # A4 fail-closed: entry retained, sources empty, reason named.
+        assert state["harnesses"] == [_unsatisfied("codex", _UNSUPPORTED)]
 
     def test_composes_with_gateway_and_bare_api_key_sources(self) -> None:
         # The opencode three-way composition the contract fixture (§4.3)

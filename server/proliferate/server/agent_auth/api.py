@@ -34,6 +34,7 @@ from proliferate.server.agent_auth.models import (
     AgentGatewayCapabilitiesResponse,
     AgentGatewayEnrollmentResponse,
     AgentProviderConfigCreateRequest,
+    AgentSeatLimitHitRequest,
     OrgAgentPolicyResponse,
     OrgAgentPolicyUpdateRequest,
     OrgAgentPolicyViolationListResponse,
@@ -146,6 +147,35 @@ async def revoke_agent_api_key_endpoint(
 ) -> AgentApiKeyResponse:
     record = await service.revoke_api_key(db, user_id=user.id, api_key_id=key_id)
     return api_key_payload(record)
+
+
+# --------------------------------------------------------------------------- #
+# Seats
+# --------------------------------------------------------------------------- #
+
+
+@router.post("/seats/{key_id}/limit-hit", status_code=204)
+async def report_seat_limit_hit_endpoint(
+    key_id: UUID,
+    body: AgentSeatLimitHitRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> None:
+    """Relay a runtime-observed seat limit hit (agent_auth spec §3 flow 5).
+
+    The courier reports the hard signal upward fire-and-forget: cooling and
+    the rotation decision stay runtime-local, this route only feeds the
+    meters and the audit events (``agent_seat_limit_hit``, plus
+    ``agent_seat_rotated`` when another active seat means rotation follows).
+    404 for a foreign, vanished, or non-seat key; 204 with no body on success.
+    """
+    await seats.report_seat_limit_hit(
+        db,
+        user_id=user.id,
+        api_key_id=key_id,
+        window=body.window,
+        reset_at=body.reset_at,
+    )
 
 
 # --------------------------------------------------------------------------- #

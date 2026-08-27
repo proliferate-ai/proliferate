@@ -14,11 +14,6 @@ max_lines = 563
 reason = "C-train composition: C-2 agent_auth_delivery_ack model joins the B/D cut; agent_gateway_enrollment_key model added for per-(subject,harness) scoped virtual keys (B2), then the agent_model_snapshot re-key (B4) documented why its scope carries NO unique key and what that costs the reader (the active row is plural in principle, so reads tie-break on id); AgentApiKey gains a kind column (D1); a module split is deferred to the model-taxonomy pass rather than done mid-stack; typed-config write gate loosens ck_agent_auth_selection_api_key_shape with a why-not-tighter comment; SG12 keeps the base docstring intact while the direct wall-clock owner import adds one line ; +8: FR-3 adds the three nullable gateway-verification columns (status, delta, verified_at) on the enrollment_key model ; +12: seats v1 adds the seat source_kind CHECK, the seat-shape CHECK, and the docstring rows for the seat selection shape"
 
 [[max_lines]]
-path = "server/proliferate/server/agent_auth/state_render.py"
-max_lines = 650
-reason = "THE renderer (agent_auth spec §4 cell 1): one file owns the full-desired-state document — gateway/api_key/provider_config source arms, the provider-config translation table, and seats v1's pool-expansion arm (_render_seat_sources: vault-order expansion, pinning, the claude-only defense) plus the input assembly; splitting the arms apart would split the one place the wire shape is decided"
-
-[[max_lines]]
 path = "server/proliferate/db/store/organizations.py"
 max_lines = 721
 reason = "D1 adds get_default_organization_for_user (earliest active membership = signup placement org, the v1 payer law); SG09 review restores the collision-ladder and race-backstop rationale; SSO cull removed JIT membership persistence and slug login resolution; split pending with the org-store taxonomy pass"
@@ -45,8 +40,8 @@ reason = "delivery-ack hardening (server-bounded ack revision + trust-boundary d
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_api.py"
-max_lines = 1369
-reason = "C-train composition; P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model; state coverage now seeds a per-harness child key (B3 renderer); C1 adds cursor gateway-rejected/api_key-accepted (local + cloud) selection cases, plus the disabled gateway-marker-row asserts restored on review fix; +provider-config kind coverage (D1); +per-kind required-field validation coverage (D1 fix cycle, review finding 6); +structural route-shape pin for the S1 /agent-auth vs /agent-gateway split (cycle-2 fix) D train rewrites the enrollment-shape cases org-only (D2) and drops the personal-subject fixtures; typed-config write gate adds typed-selection PUT coverage (open combos, pending/undeclared refusals, A6 shape pins, R5 azure field-set pin, A5 write-to-render state case); split pending with the suite taxonomy pass ; +122: seats v1 mint-intake and render roundtrip cases (TestSeatMintIntakeAndRender); +5: the missing-title case moved to the typed 400 (seats v1 made title schema-optional)"
+max_lines = 1367
+reason = "C-train composition; P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model; state coverage now seeds a per-harness child key (B3 renderer); C1 adds cursor gateway-rejected/api_key-accepted (local + cloud) selection cases, plus the disabled gateway-marker-row asserts restored on review fix; +provider-config kind coverage (D1); +per-kind required-field validation coverage (D1 fix cycle, review finding 6); +structural route-shape pin for the S1 /agent-auth vs /agent-gateway split (cycle-2 fix) D train rewrites the enrollment-shape cases org-only (D2) and drops the personal-subject fixtures; typed-config write gate adds typed-selection PUT coverage (open combos, pending/undeclared refusals, A6 shape pins, R5 azure field-set pin, A5 write-to-render state case); split pending with the suite taxonomy pass ; +122: seats v1 mint-intake and render roundtrip cases (TestSeatMintIntakeAndRender); +5: the missing-title case moved to the typed 400 (seats v1 made title schema-optional) ; -2 net: slice 2 pins the seat limit-hit route in the S1 route-shape list while collapsing the old-prefix 404 loop's wrapped tuple; the limit-hit suite itself is the new test_agent_seat_limit_hit.py"
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_enrollment.py"
