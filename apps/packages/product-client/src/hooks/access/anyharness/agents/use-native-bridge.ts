@@ -6,7 +6,7 @@ import {
 } from "#product/lib/access/anyharness/agent-auth";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
-function nativeBridgeKey(runtimeUrl: string, cacheScopeKey: string) {
+export function nativeBridgeKey(runtimeUrl: string, cacheScopeKey: string) {
   return ["anyharness", cacheScopeKey, runtimeUrl, "agent-auth", "native-bridge"] as const;
 }
 

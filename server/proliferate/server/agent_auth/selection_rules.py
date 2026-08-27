@@ -81,8 +81,8 @@ def validate_auth_selection_set(
                 named = f"Naming the environment variable {name!r} alone" if name else "Naming an environment variable alone"
                 raise SelectionRuleError(
                     f"{named} isn't supported anymore — the machine's own value "
-                    "never reaches the launch. Save the key itself in "
-                    "Settings → Agents and select it here."
+                    "never reaches the launch. Save the key itself and select "
+                    "it in the harness's Authentication section."
                 )
 
     # Cardinality gates the ENABLED set only; disabled rows never launch.

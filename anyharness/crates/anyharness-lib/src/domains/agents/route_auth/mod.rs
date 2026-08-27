@@ -42,7 +42,7 @@ pub(crate) mod test_support;
 use std::path::{Path, PathBuf};
 
 pub use native_bridge::{
-    clear_native_bridge_flag, clear_native_bridge_flags_for_document, legacy_native_granted,
+    clear_native_bridge_flag, clear_native_bridge_flags_for_document, launch_native_grant,
     pending_native_bridge_harnesses, seed_native_bridge_at_startup, seed_native_bridge_once,
     NativeBridgeSeedOutcome,
 };
@@ -151,9 +151,12 @@ pub enum AbsentHarnessPolicy {
 ///
 /// The refusal cutover (the typed refusal set, slice 2 of the auth rebuild)
 /// changes this constant to [`AbsentHarnessPolicy::Refuse`] and nothing else:
-/// every launch-path caller already resolves through
-/// [`resolve_profile_bridged`], so the bridge's grant is honored the moment
-/// the flip lands. Pre-cutover native users never see the refusal.
+/// every absent-harness decision — the launch render, the launch-options
+/// probe's scratch materialization, the create-time selection gate — resolves
+/// through [`resolve_profile_for_launch`], and the bridge's launch grant
+/// FAILS OPEN on a machine whose one-time seed pass has not recorded an
+/// answer yet ([`native_bridge::launch_native_grant`]), so no startup
+/// ordering can refuse a pre-cutover native user.
 pub const ABSENT_HARNESS_POLICY: AbsentHarnessPolicy = AbsentHarnessPolicy::Native;
 
 /// [`resolve_profile`] with the native-migration bridge in front of the
@@ -190,8 +193,9 @@ pub fn resolve_profile_bridged(
 }
 
 /// The launch-path resolution: [`resolve_profile_bridged`] under this build's
-/// [`ABSENT_HARNESS_POLICY`] with the bridge's grant read from the runtime home.
-fn resolve_profile_for_launch(
+/// [`ABSENT_HARNESS_POLICY`] with the bridge's launch grant read from the
+/// runtime home. Also the probe's resolution (probe env == launch env).
+pub(crate) fn resolve_profile_for_launch(
     runtime_home: &Path,
     state: Option<&AgentAuthState>,
     harness_kind: &str,
@@ -200,7 +204,7 @@ fn resolve_profile_for_launch(
         state,
         harness_kind,
         ABSENT_HARNESS_POLICY,
-        native_bridge::legacy_native_granted(runtime_home, harness_kind),
+        native_bridge::launch_native_grant(runtime_home, harness_kind),
     )
 }
 
@@ -296,11 +300,16 @@ pub fn launch_route_provides_credentials(runtime_home: &Path, harness_kind: &str
 /// Core of [`launch_route_provides_credentials`], parameterized on the current
 /// server origin so the server-switch guard is unit-testable without mutating
 /// process-global env state. Deliberately mirrors
-/// [`resolve_launch_route_auth_for_server`]'s state load + origin filter +
-/// [`resolve_profile`] so readiness and launch never disagree on whether a
-/// route is in effect. A malformed/unresolvable state is treated as "no route"
-/// (native readiness governs) rather than an error — readiness must never fail
-/// closed on a state file the launcher itself tolerates.
+/// [`resolve_launch_route_auth_for_server`]'s state load + origin filter so
+/// readiness and launch never disagree on whether a route is in effect. This
+/// one stays on the RAW [`resolve_profile`] on purpose: it only asks "does the
+/// enrolled state provide a non-native route?", and the native-migration
+/// bridge can never produce one — a bridged absent harness is `Native` (route
+/// provides nothing) and a refused absent harness is an error (route provides
+/// nothing), so the raw and bridged answers are provably identical here. A
+/// malformed/unresolvable state is treated as "no route" (native readiness
+/// governs) rather than an error — readiness must never fail closed on a
+/// state file the launcher itself tolerates.
 fn launch_route_provides_credentials_for_server(
     runtime_home: &Path,
     harness_kind: &str,

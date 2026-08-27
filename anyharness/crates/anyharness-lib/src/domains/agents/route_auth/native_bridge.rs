@@ -34,11 +34,21 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
 use super::state::AgentAuthState;
 use super::RouteAuthError;
+
+/// One process-wide lock over every bridge-file MUTATION (seed and the two
+/// clears). The file is a load-modify-write document with no revision column;
+/// without the lock, the startup seed racing a `PUT /v1/agent-auth/state` (or
+/// a dismiss) can resurrect a flag the user just cleared, or flag a harness a
+/// concurrent document just configured. Reads stay lock-free — a torn read is
+/// impossible (writes are atomic temp+rename) and staleness only delays a
+/// banner refresh.
+static BRIDGE_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 
 /// Relative path of the bridge file under the runtime home, beside
 /// `agent-auth/state.json`.
@@ -74,14 +84,33 @@ pub fn native_bridge_path(runtime_home: &Path) -> PathBuf {
         .fold(runtime_home.to_path_buf(), |path, segment| path.join(segment))
 }
 
-/// Read the bridge. `Ok(None)` when the seed pass never ran here. A file that
-/// cannot be parsed reads as `None` too (and is logged): the seed pass then
-/// rewrites it, which is the only recovery a corrupted marker admits.
-pub fn load_native_bridge(runtime_home: &Path) -> Result<Option<NativeBridge>, RouteAuthError> {
+/// The four states the on-disk bridge file can be in. Every public read maps
+/// this to its own fail direction; keeping the classification in one place is
+/// what keeps those directions consistent.
+enum BridgeFile {
+    /// No file: the one-time migration never ran on this runtime home.
+    Absent,
+    /// A file this build wrote (version 1).
+    Current(NativeBridge),
+    /// A parseable file with a version this build does not know — written by
+    /// a NEWER build. Never overwritten, never interpreted: the seed treats it
+    /// as already-migrated (a rollback must not clobber a newer build's data
+    /// and re-run a one-time migration), the launch grant fails open toward
+    /// native, and the pane lists nothing.
+    UnknownVersion,
+    /// Unreadable/unparseable. The seed rewrites it (the only recovery a
+    /// corrupted marker admits — this can re-prompt a user who already acted,
+    /// a documented trade-off); the launch grant fails open toward native.
+    Malformed,
+}
+
+fn read_bridge_file(runtime_home: &Path) -> Result<BridgeFile, RouteAuthError> {
     let path = native_bridge_path(runtime_home);
     let contents = match fs::read(&path) {
         Ok(contents) => contents,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(BridgeFile::Absent)
+        }
         Err(error) => {
             return Err(RouteAuthError::Materialize {
                 detail: format!("failed to read {}: {error}", path.display()),
@@ -89,36 +118,61 @@ pub fn load_native_bridge(runtime_home: &Path) -> Result<Option<NativeBridge>, R
         }
     };
     match serde_json::from_slice::<NativeBridge>(&contents) {
-        Ok(bridge) if bridge.version == NATIVE_BRIDGE_VERSION => Ok(Some(bridge)),
+        Ok(bridge) if bridge.version == NATIVE_BRIDGE_VERSION => Ok(BridgeFile::Current(bridge)),
         Ok(bridge) => {
             tracing::warn!(
                 path = %path.display(),
                 version = bridge.version,
-                "native-bridge file has an unknown version; treating as unseeded"
+                "native-bridge file has an unknown (newer) version; leaving it untouched"
             );
-            Ok(None)
+            Ok(BridgeFile::UnknownVersion)
         }
         Err(error) => {
             tracing::warn!(
                 path = %path.display(),
                 %error,
-                "native-bridge file is malformed; treating as unseeded"
+                "native-bridge file is malformed; the seed pass will rewrite it"
             );
-            Ok(None)
+            Ok(BridgeFile::Malformed)
         }
     }
 }
 
-/// Does `harness_kind` still carry the legacy flag on this machine? Any read
-/// failure answers `false` (no grant) and is logged — the flag is a grant, and
-/// a grant that cannot be read is not held.
-pub fn legacy_native_granted(runtime_home: &Path, harness_kind: &str) -> bool {
-    match load_native_bridge(runtime_home) {
-        Ok(Some(bridge)) => bridge.harnesses.contains(harness_kind),
-        Ok(None) => false,
+/// Read the bridge as this build understands it. `Ok(None)` when no
+/// version-1 document exists (absent, malformed, or a newer version).
+pub fn load_native_bridge(runtime_home: &Path) -> Result<Option<NativeBridge>, RouteAuthError> {
+    Ok(match read_bridge_file(runtime_home)? {
+        BridgeFile::Current(bridge) => Some(bridge),
+        BridgeFile::Absent | BridgeFile::UnknownVersion | BridgeFile::Malformed => None,
+    })
+}
+
+/// The LAUNCH-side grant: may `harness_kind` keep native behavior when it is
+/// absent from the applied document and the absent-harness policy says refuse?
+///
+/// Fails OPEN toward native everywhere the machine's migration state is not
+/// positively known — the bridge exists so a working native setup is never
+/// converted into a refusal, and refusing is only ever correct on a machine
+/// whose one-time seed pass has run and recorded that this harness holds no
+/// flag:
+///
+/// - no marker file → `true`: the migration has not run here yet (first boot
+///   of a bridge-aware build races the async seed pass; an upgrade straight
+///   past the bridge build lands here too);
+/// - malformed / unknown-version marker → `true` (and logged);
+/// - a current marker → set membership, the one place `false` can come from.
+pub fn launch_native_grant(runtime_home: &Path, harness_kind: &str) -> bool {
+    match read_bridge_file(runtime_home) {
+        Ok(BridgeFile::Current(bridge)) => bridge.harnesses.contains(harness_kind),
+        Ok(BridgeFile::Absent) => true,
+        Ok(BridgeFile::UnknownVersion) | Ok(BridgeFile::Malformed) => true,
         Err(error) => {
-            tracing::warn!(harness_kind, %error, "native-bridge unreadable; no legacy grant");
-            false
+            tracing::warn!(
+                harness_kind,
+                %error,
+                "native-bridge unreadable; failing open toward native"
+            );
+            true
         }
     }
 }
@@ -131,23 +185,40 @@ pub fn pending_native_bridge_harnesses(runtime_home: &Path) -> Result<BTreeSet<S
 }
 
 /// The one-time migration. Grants the legacy flag to every kind in
-/// `harness_kinds` that is ABSENT from `applied` (no entry at all — a
-/// present-but-empty entry is an explicit selection, never bridged) and for
+/// `harness_kinds` that is ABSENT from the applied document (no entry at all —
+/// a present-but-empty entry is an explicit selection, never bridged) and for
 /// which `natively_authenticated(kind)` holds. Idempotent: a runtime home that
-/// already carries the file is left untouched, whatever detection says now.
+/// already carries the file (including one written by a newer build) is left
+/// untouched, whatever detection says now.
+///
+/// `load_applied` is a CLOSURE, called under the bridge mutation lock, so the
+/// document consulted is the one persisted at write time — a `PUT
+/// /v1/agent-auth/state` landing while the seed runs either persists before
+/// this reads (its harnesses are never flagged) or its flag-clear serializes
+/// after this write (the flag is dropped again). No interleaving can flag a
+/// just-configured harness.
 pub fn seed_native_bridge_once(
     runtime_home: &Path,
-    applied: Option<&AgentAuthState>,
+    load_applied: &dyn Fn() -> Option<AgentAuthState>,
     harness_kinds: &[&str],
     natively_authenticated: &dyn Fn(&str) -> bool,
     seeded_at: &str,
 ) -> Result<NativeBridgeSeedOutcome, RouteAuthError> {
-    if load_native_bridge(runtime_home)?.is_some() {
-        return Ok(NativeBridgeSeedOutcome::AlreadySeeded);
+    let _guard = BRIDGE_MUTATION_LOCK.lock().expect("bridge lock poisoned");
+    match read_bridge_file(runtime_home)? {
+        BridgeFile::Current(_) | BridgeFile::UnknownVersion => {
+            return Ok(NativeBridgeSeedOutcome::AlreadySeeded)
+        }
+        BridgeFile::Absent | BridgeFile::Malformed => {}
     }
+    let applied = load_applied();
     let harnesses: BTreeSet<String> = harness_kinds
         .iter()
-        .filter(|kind| applied.is_none_or(|state| state.sources_for(kind).is_none()))
+        .filter(|kind| {
+            applied
+                .as_ref()
+                .is_none_or(|state| state.sources_for(kind).is_none())
+        })
         .filter(|kind| natively_authenticated(kind))
         .map(|kind| (*kind).to_string())
         .collect();
@@ -161,8 +232,13 @@ pub fn seed_native_bridge_once(
 }
 
 /// Drop one harness's flag (the dismiss-to-configure act). Returns whether a
-/// flag was actually held. A never-seeded runtime home is a no-op `false`.
-pub fn clear_native_bridge_flag(runtime_home: &Path, harness_kind: &str) -> Result<bool, RouteAuthError> {
+/// flag was actually held. A never-seeded (or newer-versioned) runtime home is
+/// a no-op `false` — clearing never creates or rewrites a marker.
+pub fn clear_native_bridge_flag(
+    runtime_home: &Path,
+    harness_kind: &str,
+) -> Result<bool, RouteAuthError> {
+    let _guard = BRIDGE_MUTATION_LOCK.lock().expect("bridge lock poisoned");
     let Some(mut bridge) = load_native_bridge(runtime_home)? else {
         return Ok(false);
     };
@@ -182,6 +258,7 @@ pub fn clear_native_bridge_flags_for_document(
     runtime_home: &Path,
     document: &AgentAuthState,
 ) -> Result<(), RouteAuthError> {
+    let _guard = BRIDGE_MUTATION_LOCK.lock().expect("bridge lock poisoned");
     let Some(mut bridge) = load_native_bridge(runtime_home)? else {
         return Ok(());
     };
@@ -221,13 +298,18 @@ pub fn seed_native_bridge_at_startup(runtime_home: &Path) {
     if matches!(load_native_bridge(runtime_home), Ok(Some(_))) {
         return;
     }
-    let applied = match super::load_effective_state(runtime_home, super::current_server_origin().as_deref()) {
-        Ok(state) => state,
-        Err(error) => {
-            // A document the launcher cannot read is native for the launcher
-            // too; the seed pass sees the same absence.
-            tracing::debug!(%error, "agent-auth state unreadable at bridge seed; treating as absent");
-            None
+    // Loaded lazily INSIDE the seed's lock (see `seed_native_bridge_once`), so
+    // the document consulted is the one persisted at decision time.
+    let load_applied = || {
+        match super::load_effective_state(runtime_home, super::current_server_origin().as_deref())
+        {
+            Ok(state) => state,
+            Err(error) => {
+                // A document the launcher cannot read is native for the
+                // launcher too; the seed pass sees the same absence.
+                tracing::debug!(%error, "agent-auth state unreadable at bridge seed; treating as absent");
+                None
+            }
         }
     };
     let descriptors = built_in_registry();
@@ -248,7 +330,13 @@ pub fn seed_native_bridge_at_startup(runtime_home: &Path) {
         .map(|descriptor| descriptor.kind.as_str())
         .collect();
     let seeded_at = chrono::Utc::now().to_rfc3339();
-    match seed_native_bridge_once(runtime_home, applied.as_ref(), &kinds, &natively_authenticated, &seeded_at) {
+    match seed_native_bridge_once(
+        runtime_home,
+        &load_applied,
+        &kinds,
+        &natively_authenticated,
+        &seeded_at,
+    ) {
         Ok(NativeBridgeSeedOutcome::Seeded { harnesses }) => {
             tracing::info!(?harnesses, "native-migration bridge seeded");
         }
@@ -296,10 +384,16 @@ mod tests {
         .expect("document")
     }
 
-    fn seed(home: &Path, applied: Option<&AgentAuthState>, native: &[&str]) -> NativeBridgeSeedOutcome {
+    fn seed(
+        home: &Path,
+        applied: Option<&AgentAuthState>,
+        native: &[&str],
+    ) -> NativeBridgeSeedOutcome {
         let native: Vec<String> = native.iter().map(|kind| kind.to_string()).collect();
         let predicate = move |kind: &str| native.iter().any(|native| native == kind);
-        seed_native_bridge_once(home, applied, ALL_KINDS, &predicate, "2026-08-27T00:00:00Z")
+        let applied = applied.cloned();
+        let load_applied = move || applied.clone();
+        seed_native_bridge_once(home, &load_applied, ALL_KINDS, &predicate, "2026-08-27T00:00:00Z")
             .expect("seed")
     }
 
@@ -319,9 +413,9 @@ mod tests {
         let expected: BTreeSet<String> = ["codex".to_string()].into_iter().collect();
         assert_eq!(outcome, NativeBridgeSeedOutcome::Seeded { harnesses: expected.clone() });
         assert_eq!(granted(&home), expected);
-        assert!(!legacy_native_granted(&home, "claude"), "configured harness is never bridged");
-        assert!(!legacy_native_granted(&home, "grok"), "present-but-empty is a selection, not bridged");
-        assert!(!legacy_native_granted(&home, "cursor"), "absent but not logged in: nothing to keep");
+        assert!(!launch_native_grant(&home, "claude"), "configured harness is never bridged");
+        assert!(!launch_native_grant(&home, "grok"), "present-but-empty is a selection, not bridged");
+        assert!(!launch_native_grant(&home, "cursor"), "absent but not logged in: nothing to keep");
         let _ = fs::remove_dir_all(home);
     }
 
@@ -356,8 +450,18 @@ mod tests {
     #[test]
     fn pre_cutover_native_user_first_launch_prompts_not_refuses() {
         let home = temp_home("native-bridge-first-launch");
+
+        // BEFORE the machine's one-time migration has run (no marker file —
+        // e.g. the first boot of the cutover build races the async seed pass),
+        // the launch grant fails OPEN: a native user can never be refused by
+        // an ordering accident.
+        assert!(
+            launch_native_grant(&home, "claude"),
+            "an unmigrated machine grants native at launch"
+        );
+
         seed(&home, None, &["claude"]);
-        let granted = legacy_native_granted(&home, "claude");
+        let granted = launch_native_grant(&home, "claude");
         assert!(granted);
 
         let bridged = resolve_profile_bridged(None, "claude", AbsentHarnessPolicy::Refuse, granted)
@@ -419,15 +523,15 @@ mod tests {
 
         // Dismiss-to-configure: the explicit act.
         assert!(clear_native_bridge_flag(&home, "grok").expect("clear"));
-        assert!(!legacy_native_granted(&home, "grok"));
+        assert!(!launch_native_grant(&home, "grok"));
         assert!(!clear_native_bridge_flag(&home, "grok").expect("clear again"), "second clear is inert");
 
         // Configuring (mint / key / gateway): an applied document naming the
         // harness — whether or not its sources are satisfiable right now.
         let applied = document(&[("claude", true), ("codex", false)]);
         clear_native_bridge_flags_for_document(&home, &applied).expect("clear for document");
-        assert!(!legacy_native_granted(&home, "claude"));
-        assert!(!legacy_native_granted(&home, "codex"));
+        assert!(!launch_native_grant(&home, "claude"));
+        assert!(!launch_native_grant(&home, "codex"));
         assert!(granted(&home).is_empty());
 
         // The migration marker survives every clear: acting never re-opens
@@ -443,21 +547,49 @@ mod tests {
         assert!(!clear_native_bridge_flag(&home, "claude").expect("clear"));
         clear_native_bridge_flags_for_document(&home, &document(&[("claude", true)])).expect("clear doc");
         assert!(!native_bridge_path(&home).exists(), "clearing never creates the marker");
-        assert!(!legacy_native_granted(&home, "claude"));
+        // The pane lists nothing on an unmigrated machine…
+        assert!(granted(&home).is_empty());
+        // …while launches fail OPEN toward native until the seed runs.
+        assert!(launch_native_grant(&home, "claude"));
         let _ = fs::remove_dir_all(home);
     }
 
     #[test]
-    fn a_malformed_bridge_file_grants_nothing_and_is_reseeded() {
+    fn a_malformed_bridge_file_fails_open_lists_nothing_and_is_reseeded() {
         let home = temp_home("native-bridge-malformed");
         let path = native_bridge_path(&home);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, b"{not json").unwrap();
 
-        assert!(!legacy_native_granted(&home, "claude"));
+        // Fail open at launch (never convert a working setup into a refusal
+        // over a corrupted marker), list nothing in the pane, and let the
+        // seed pass rewrite it — the documented recovery, which can re-prompt
+        // a user who already acted.
+        assert!(launch_native_grant(&home, "claude"));
         assert!(granted(&home).is_empty());
         assert!(matches!(seed(&home, None, &["claude"]), NativeBridgeSeedOutcome::Seeded { .. }));
-        assert!(legacy_native_granted(&home, "claude"));
+        assert!(launch_native_grant(&home, "claude"));
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn an_unknown_version_bridge_is_never_overwritten_and_fails_open() {
+        // A rollback scenario: a NEWER build wrote a version-2 file. This
+        // build must not clobber it (the one-time migration already ran),
+        // must not interpret it (lists nothing, dismiss is inert), and must
+        // fail open at launch.
+        let home = temp_home("native-bridge-newer");
+        let path = native_bridge_path(&home);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let newer = br#"{"version": 2, "seeded_at": "2027-01-01T00:00:00Z", "harnesses": ["claude"]}"#;
+        fs::write(&path, newer).unwrap();
+
+        assert_eq!(seed(&home, None, &["codex"]), NativeBridgeSeedOutcome::AlreadySeeded);
+        assert!(launch_native_grant(&home, "claude"));
+        assert!(launch_native_grant(&home, "codex"), "unknown contents fail open for every kind");
+        assert!(granted(&home).is_empty());
+        assert!(!clear_native_bridge_flag(&home, "claude").expect("clear"), "dismiss is inert");
+        assert_eq!(fs::read(&path).unwrap(), newer.to_vec(), "the newer file is byte-identical");
         let _ = fs::remove_dir_all(home);
     }
 

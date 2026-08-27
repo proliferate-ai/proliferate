@@ -19,8 +19,7 @@ use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::route_auth::{
     apply_state_file, clear_native_bridge_flag, clear_native_bridge_flags_for_document,
-    clear_state_file, native_bridge, pending_native_bridge_harnesses, AgentAuthState,
-    RouteAuthError,
+    clear_state_file, native_bridge, AgentAuthState, RouteAuthError,
 };
 
 #[utoipa::path(
@@ -114,13 +113,14 @@ pub async fn delete_agent_auth_state(
 pub async fn get_native_bridge(
     State(state): State<AppState>,
 ) -> Result<Json<NativeBridgeResponse>, ApiError> {
-    let seeded = native_bridge::load_native_bridge(&state.runtime_home)
-        .map_err(map_route_auth_error)?
-        .is_some();
-    let harnesses = pending_native_bridge_harnesses(&state.runtime_home)
-        .map_err(map_route_auth_error)?
-        .into_iter()
-        .collect();
+    // One read serves both fields — two reads could interleave with a
+    // concurrent dismiss and answer an incoherent (seeded, harnesses) pair.
+    let bridge =
+        native_bridge::load_native_bridge(&state.runtime_home).map_err(map_route_auth_error)?;
+    let seeded = bridge.is_some();
+    let harnesses = bridge
+        .map(|bridge| bridge.harnesses.into_iter().collect())
+        .unwrap_or_default();
     Ok(Json(NativeBridgeResponse { seeded, harnesses }))
 }
 
