@@ -195,6 +195,7 @@ function HarnessAuthMethods({
       action={(
         <HarnessAuthEvidenceBadge
           status={authStatus}
+          nativeDetected={nativeDetected}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           data-harness-status={selectedMethod === "cli" ? "native" : selectedMethod}

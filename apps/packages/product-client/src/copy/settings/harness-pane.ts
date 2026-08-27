@@ -239,6 +239,12 @@ export const HARNESS_PANE_COPY = {
   // The merged header status badge (design-handoff v2): the state is said
   // exactly once, in the Authentication/Providers section header.
   authBadgeAuthenticated: "Authenticated",
+  // Founder-ruled 2026-08-27: native auth is a PERMANENT supported method — the
+  // refusal cutover is cancelled. A detected native login with nothing routed
+  // applied and a green probe is a healthy terminal state in its own words,
+  // never "Not configured", never a warning, never a nag toward a managed
+  // method (the mint offer stays an optional upgrade).
+  authBadgeUsingOwnLogin: "Using your own login",
   authBadgeNotConfigured: "Not configured",
   authBadgeNotAuthenticated: "Not authenticated",
   // The status document's remaining badge words (agent_auth §2). No document at

@@ -5,12 +5,12 @@ import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
  * tone, and an age string, nothing else.
  *
  * There is no derivation here and there must never be one. Every function below
- * takes the document's own `probe` / `applied` fields and answers a rendering
- * question about them; none of them reads `readiness`, `credentialState`,
- * `cliAuthState`, install state, or a query's loading flag, and none of them
- * invents a state the runtime does not hold. `agent-auth-evidence.ts` — which
- * projected a client-side derivation — is deleted, and FE-PATHS-1 keeps it
- * deleted.
+ * takes the document's own fields — `probe`, `applied`, and the `native` method
+ * row's `detected` — and answers a rendering question about them; none of them
+ * reads `readiness`, `credentialState`, `cliAuthState`, install state, or a
+ * query's loading flag, and none of them invents a state the runtime does not
+ * hold. `agent-auth-evidence.ts` — which projected a client-side derivation —
+ * is deleted, and FE-PATHS-1 keeps it deleted.
  */
 
 export type AuthStatusTone = "success" | "warning" | "destructive" | "neutral";
@@ -20,6 +20,15 @@ export interface HarnessStatusFacts {
   applied: { kind: string; seat_id?: string | null } | null;
   /** The last observation. Null ONLY when the runtime holds no document. */
   probe: { verdict: string; at?: string | null; stale: boolean } | null;
+  /**
+   * The `native` method row's `detected` — the document's own statement that a
+   * working native login exists on this machine. Optional because not every
+   * caller holds the method rows; absent reads as "not stated", never as a
+   * deficiency. Founder-ruled 2026-08-27: native is a PERMANENT supported
+   * method, and this fact is what words a green, nothing-applied harness as
+   * "Using your own login".
+   */
+  nativeDetected?: boolean;
 }
 
 /**
@@ -58,12 +67,23 @@ export function statusTone(status: HarnessStatusFacts): AuthStatusTone {
 export function statusLabel(status: HarnessStatusFacts): string {
   const probe = status.probe;
   if (probe === null) return HARNESS_PANE_COPY.authBadgeWaitingStatus;
-  if (isStatusGreen(status)) return HARNESS_PANE_COPY.authBadgeAuthenticated;
+  if (isStatusGreen(status)) {
+    // Founder-ruled 2026-08-27: native is a PERMANENT supported method. A green
+    // observation with nothing routed applied and a detected native login is a
+    // healthy terminal state named in its own words — never "Not configured",
+    // never a nag toward a managed method.
+    return status.applied === null && status.nativeDetected === true
+      ? HARNESS_PANE_COPY.authBadgeUsingOwnLogin
+      : HARNESS_PANE_COPY.authBadgeAuthenticated;
+  }
   switch (probe.verdict) {
     case "failed":
       return HARNESS_PANE_COPY.authBadgeNotAuthenticated;
     case "verified":
     case "unverified":
+      // "Not configured" is the NON-green nothing-applied case only — nothing
+      // routed AND no verified observation. A working native login never reads
+      // it: its green probe takes the arm above (ruled 2026-08-27).
       return status.applied === null
         ? HARNESS_PANE_COPY.authBadgeNotConfigured
         : HARNESS_PANE_COPY.authBadgeNotVerified;

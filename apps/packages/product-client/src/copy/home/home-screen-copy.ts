@@ -19,10 +19,16 @@ export const HOME_SCREEN_LABELS = {
   // cannot attribute falls through to authSetupOpenAgents — the generic action
   // is the floor, never a stand-in for a cause we actually hold.
   //
-  // `applied === null`: the document says no method is applied for this harness.
+  // `applied === null` with NO detected native login: the document says no
+  // method is applied and the machine holds no working login of its own.
+  // Founder-ruled 2026-08-27: native is a permanent supported method, so a
+  // native-detected, probe-green harness never reaches this arm — it is a
+  // healthy terminal ("Using your own login"), not a deficiency.
   authSetupChooseSourceAction: "Choose a source",
   // The `native` row's `offer: "mint_seat"` on a DETECTED login: the login
-  // already on this machine can be captured as a portable seat.
+  // already on this machine can be captured as a portable seat. An optional
+  // upgrade affordance (ruled 2026-08-27), never conflated with seat status
+  // and never a nag.
   authSetupUseLoginAction: "Use your existing login",
   // The dims-never-extinguishes line and the evidence age are the DOCUMENT's own
   // words (HARNESS_PANE_COPY.authStaleLastChecked / authBadgeRechecking /

@@ -142,6 +142,28 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
     expect(isGreen()).toBe(false);
   });
 
+  it("words a green native login with nothing applied as the user's own (ruled 2026-08-27)", () => {
+    // Native is a PERMANENT supported method: detected login + green probe +
+    // nothing routed applied is a healthy terminal — success tone, the native
+    // wording, its evidence age, and nothing that reads like a deficiency.
+    render(
+      <HarnessAuthEvidenceBadge
+        status={statusFor({
+          applied: null,
+          probe: { verdict: "verified", at: OBSERVED_AT, stale: false },
+        })}
+        nativeDetected
+        refreshing={false}
+        onRefresh={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Using your own login")).toBeTruthy();
+    expect(screen.getByText("verified 2m ago")).toBeTruthy();
+    expect(isGreen()).toBe(true);
+    expect(screen.queryByText("Not configured")).toBeNull();
+  });
+
   it("never greens an unknown future verdict, and fakes no evidence age", () => {
     render(
       <HarnessAuthEvidenceBadge

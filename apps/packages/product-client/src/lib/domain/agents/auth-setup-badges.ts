@@ -27,7 +27,10 @@ import {
  * TERMINAL DOES NOT MEAN FINISHED — it means the card is no longer the thing
  * waiting. Every state the document can report is terminal:
  *
- * - green (a dated observation) — launchable;
+ * - green (a dated observation) — launchable. Founder-ruled 2026-08-27: native
+ *   is a PERMANENT supported method, so a native-detected harness with nothing
+ *   routed applied and a green probe is a HEALTHY terminal here — worded
+ *   "Using your own login", never "choose a source", never a warning;
  * - a stale document — the dimmed light. Its last observation is on screen with
  *   the ruled stale marker ("last checked <age> ago — retrying", founder-ruled
  *   2026-08-27), and a stale document with NOTHING observed is terminal
@@ -130,7 +133,11 @@ function resolveActionLabel(
   if (status.applied === null) {
     // The runtime offers to capture a login already on this machine as a
     // portable seat (`native` row, `offer: "mint_seat"`) — a better first move
-    // than picking a method from scratch.
+    // than picking a method from scratch. An OPTIONAL upgrade affordance
+    // (ruled 2026-08-27), never a nag: a native-detected harness whose probe is
+    // green never reaches this resolver at all (its row is the healthy green
+    // terminal, action-free), so this only ever names a way forward for a
+    // harness the document does not call verified.
     const mintable = status.methods.some(
       (row) =>
         row.kind === "native" && row.detected === true && row.offer === "mint_seat",
@@ -140,6 +147,18 @@ function resolveActionLabel(
       : HOME_SCREEN_LABELS.authSetupChooseSourceAction;
   }
   return null;
+}
+
+/**
+ * The `native` method row's `detected` — the document's own statement that a
+ * working login already exists on this machine (agent_auth §2). Founder-ruled
+ * 2026-08-27: native is a permanent supported method, and this fact is what
+ * words a green, nothing-applied harness as "Using your own login".
+ */
+function nativeLoginDetected(status: AgentAuthStatusDoc): boolean {
+  return status.methods.some(
+    (row) => row.kind === "native" && row.detected === true,
+  );
 }
 
 /** The evidence age or the stale marker — the document's own lines. */
@@ -201,12 +220,20 @@ export function deriveOnboardingAgentBadge(
     };
   }
 
-  const facts = { applied: status.applied ?? null, probe: status.probe };
+  const facts = {
+    applied: status.applied ?? null,
+    probe: status.probe,
+    nativeDetected: nativeLoginDetected(status),
+  };
   const label = statusLabel(facts);
   const tone = statusTone(facts);
   const detail = resolveDetail(status);
 
   if (isStatusGreen(facts)) {
+    // A native-detected harness with nothing routed applied lands here too when
+    // its probe is green (founder-ruled 2026-08-27: native is permanent):
+    // terminal, launchable, worded "Using your own login", no action offered —
+    // the mint offer is the pane's optional upgrade, never this row's ask.
     return {
       ...base,
       phase: "ready",

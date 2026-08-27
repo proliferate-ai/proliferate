@@ -195,6 +195,34 @@ describe("deriveOnboardingAgentBadge — the status document, verbatim", () => {
     expect(badge.actionLabel).toBe(HOME_SCREEN_LABELS.authSetupChooseSourceAction);
   });
 
+  it("treats native-detected + probe-green + nothing-applied as a HEALTHY terminal", () => {
+    // Founder-ruled 2026-08-27: native is a PERMANENT supported method — someone
+    // with a working native login keeps launching natively indefinitely. This
+    // state is terminal AND launchable, worded in its own voice, success-toned,
+    // with NO action asked of the user (the mint offer is the pane's optional
+    // upgrade, never this row's nag).
+    const badge = deriveOnboardingAgentBadge(
+      agentFor({
+        authStatus: statusFor(
+          { verdict: "verified", at: OBSERVED_AT },
+          {
+            applied: null,
+            methods: [
+              { kind: "native", applied: false, detected: true, offer: "mint_seat" },
+            ],
+          },
+        ),
+      }),
+    );
+
+    expect(badge.phase).toBe("ready");
+    expect(badge.terminal).toBe(true);
+    expect(badge.launchable).toBe(true);
+    expect(badge.tone).toBe("success");
+    expect(badge.label).toBe(HARNESS_PANE_COPY.authBadgeUsingOwnLogin);
+    expect(badge.actionLabel).toBeNull();
+  });
+
   it("offers the DETECTED native login as a seat when the runtime offers it", () => {
     // The `native` row's own statement (detected + offer: "mint_seat"): the login
     // already on this machine can be captured as a portable seat.

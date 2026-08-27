@@ -86,6 +86,24 @@ describe("CliDetails", () => {
     expect(screen.queryByRole("button", { name: "Authenticate" })).toBeNull();
   });
 
+  it("never nags a green NATIVE login with nothing applied (ruled 2026-08-27)", () => {
+    // Native is a PERMANENT supported method: a harness launching on its own
+    // detected login with a green probe is a healthy terminal. This area stays
+    // empty for it — no Authenticate prompt, no push toward a managed method.
+    // The mint offer lives in the pane's method cards as an optional upgrade.
+    state.status = harnessStatusFixture({
+      applied: null,
+      probe: { verdict: "verified", at: "2026-08-27T00:00:00Z", stale: false },
+    });
+
+    const { container } = render(
+      <CliDetails harnessKind="claude" editor={editorFor({ ...CLAUDE, readiness: "ready" })} />,
+    );
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByRole("button", { name: "Authenticate" })).toBeNull();
+  });
+
   it.each([
     ["a failed observation", () => harnessStatusFixture({
       applied: { kind: "seat", seat_id: "seat-1" },

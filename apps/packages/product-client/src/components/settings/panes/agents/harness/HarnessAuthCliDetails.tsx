@@ -20,6 +20,12 @@ import { isStatusGreen } from "#product/lib/domain/settings/agent-auth-status-pr
  * Authenticate button: a dead end). An affordance is never gated on agreement
  * between two sources; it is offered whenever the document is not green.
  *
+ * Founder-ruled 2026-08-27: native is a PERMANENT supported method. A harness
+ * launching on its own detected login with a green probe is a healthy terminal
+ * state — this area renders nothing for it (the header badge says "Using your
+ * own login"), and nothing here nags toward a managed method. Authenticate and
+ * the mint offer stay OFFERED affordances for the non-green states only.
+ *
  * Both surfaces share this component: the login-terminal workflow resolves a
  * surface-aware runtime connection (local desktop runtime vs. the Cloud
  * sandbox), so nothing here branches on surface.

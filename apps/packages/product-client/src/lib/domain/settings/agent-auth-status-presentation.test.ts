@@ -71,6 +71,20 @@ describe("statusTone", () => {
     expect(statusTone(facts({ applied: null }))).toBe("neutral");
   });
 
+  it("is success for a green native login with nothing applied (ruled 2026-08-27)", () => {
+    // Native is a permanent supported method: a working own-login harness is
+    // healthy, never warning-toned, never gated.
+    expect(
+      statusTone(
+        facts({
+          applied: null,
+          nativeDetected: true,
+          probe: { verdict: "verified", at: OBSERVED_AT, stale: false },
+        }),
+      ),
+    ).toBe("success");
+  });
+
   it("keeps an unknown verdict neutral, never success", () => {
     expect(
       statusTone(facts({ probe: { verdict: "quantum_ok", at: OBSERVED_AT, stale: false } })),
@@ -92,6 +106,39 @@ describe("statusLabel", () => {
     ).toBe("Not authenticated");
     expect(statusLabel(facts())).toBe("Not verified");
     expect(statusLabel(facts({ applied: null }))).toBe("Not configured");
+  });
+
+  it("words a green, nothing-applied, native-detected harness in its own voice", () => {
+    // Founder-ruled 2026-08-27: native is a PERMANENT supported method. This is
+    // a healthy terminal state, not a deficiency — never "Not configured".
+    expect(
+      statusLabel(
+        facts({
+          applied: null,
+          nativeDetected: true,
+          probe: { verdict: "verified", at: OBSERVED_AT, stale: false },
+        }),
+      ),
+    ).toBe("Using your own login");
+    // With a routed method applied, green keeps its plain word.
+    expect(
+      statusLabel(
+        facts({
+          nativeDetected: true,
+          probe: { verdict: "verified", at: OBSERVED_AT, stale: false },
+        }),
+      ),
+    ).toBe("Authenticated");
+    // Nothing applied and NO native detection keeps the honest non-green words.
+    expect(
+      statusLabel(
+        facts({
+          applied: null,
+          nativeDetected: false,
+          probe: { verdict: "unverified", at: null, stale: false },
+        }),
+      ),
+    ).toBe("Not configured");
   });
 });
 

@@ -22,24 +22,34 @@ import {
  */
 export function HarnessAuthEvidenceBadge({
   status,
+  nativeDetected,
   refreshing,
   onRefresh,
   "data-harness-status": dataHarnessStatus,
 }: {
   status: HarnessStatus;
+  /**
+   * The `native` method row's `detected` (door 2, `useMethods`) — the document's
+   * own fact, passed in because the status hook deliberately does not re-expose
+   * the method rows. Founder-ruled 2026-08-27: native is a PERMANENT supported
+   * method, and this is what words a green, nothing-applied harness as
+   * "Using your own login" instead of a deficiency.
+   */
+  nativeDetected?: boolean;
   refreshing: boolean;
   onRefresh: () => void;
   "data-harness-status"?: string;
 }) {
+  const facts = { ...status, nativeDetected: nativeDetected ?? false };
   // The wall clock, not an injected one: the evidence age is read at render, and
   // a `now` prop that only a test ever passed was shipped surface with no
   // production caller (its suite pins `Date.now` instead).
-  const evidenceLine = statusEvidenceLine(status);
-  const rechecking = statusRecheckingMarker(status);
+  const evidenceLine = statusEvidenceLine(facts);
+  const rechecking = statusRecheckingMarker(facts);
   return (
     <>
       <Badge
-        tone={statusTone(status)}
+        tone={statusTone(facts)}
         data-harness-status={dataHarnessStatus}
         data-harness-probe-verdict={status.probe?.verdict ?? "unknown"}
         data-harness-probe-stale={status.probe?.stale ? "true" : "false"}
@@ -48,7 +58,7 @@ export function HarnessAuthEvidenceBadge({
           aria-hidden
           className="icon-status mr-1.5 inline-block shrink-0 rounded-full bg-current"
         />
-        {statusLabel(status)}
+        {statusLabel(facts)}
         {evidenceLine ? (
           <span className="ml-1.5 font-normal opacity-70" data-harness-evidence-age>
             {evidenceLine}
