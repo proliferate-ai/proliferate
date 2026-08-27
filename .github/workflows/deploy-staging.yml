@@ -4,10 +4,18 @@
 # Operators keep workflow_dispatch for reruns, forced surfaces, and dry runs.
 # Production is untouched by this path: release.yml stays its only entrypoint.
 name: Deploy Staging
+# The UI otherwise shows the default-branch head for every workflow_run event,
+# which reads as "deploying X" while actually deploying Y.
+run-name: "Deploy Staging · ${{ github.event.workflow_run.head_sha || github.event.inputs.ref || github.sha }} · ${{ github.event_name }}"
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    # Either rollup's completion can be the one that finds both green; the plan
+    # deploys only when CI AND Server CI are both success for the deploy head,
+    # and the earlier event exits neutrally. Re-running a red rollup to green
+    # re-fires this trigger (the old in-job poll caught neither re-runs nor
+    # anything beyond its 45-minute window).
+    workflows: ["CI", "Server CI"]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -26,6 +34,11 @@ on:
         type: string
       dry_run:
         description: Plan only; do not deploy.
+        default: false
+        required: false
+        type: boolean
+      allow_regression:
+        description: Deploy even if the ref is behind the last deployed commit (deliberate rollback).
         default: false
         required: false
         type: boolean
@@ -57,6 +70,7 @@ jobs:
     outputs:
       base_sha: ${{ steps.detect.outputs.base_sha }}
       head_sha: ${{ steps.detect.outputs.head_sha }}
+      proceed: ${{ steps.head.outputs.proceed }}
       dry_run: ${{ steps.meta.outputs.dry_run }}
       server: ${{ steps.detect.outputs.server }}
       workers: ${{ steps.detect.outputs.workers }}
@@ -83,96 +97,179 @@ jobs:
         run: |
           set -euo pipefail
           head_sha="$(git rev-parse HEAD)"
-          fallback="$(git rev-parse "${head_sha}^" 2>/dev/null || git rev-list --max-parents=0 "$head_sha" | tail -n1)"
           dry_run="${DRY_RUN:-false}"
           {
             echo "head_sha=$head_sha"
-            echo "fallback_sha=$fallback"
             echo "dry_run=$dry_run"
           } >> "$GITHUB_OUTPUT"
         env:
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
 
-      - name: Wait for Server CI if present
+      - name: Resolve the deploy head and base
+        id: head
+        # One step owns "what do we deploy, from what base, and may we":
+        #   1. Auto runs advance to the NEWEST first-parent main commit
+        #      at-or-after the event head whose CI and Server CI rollups are
+        #      both success — deploys converge on the newest proven commit no
+        #      matter which rollup finished last or in what order the events
+        #      arrive (post-merge refuter findings on #2269: completion-order
+        #      latest-wins could cancel a newer commit's deploy in favor of an
+        #      older one's). If nothing at-or-after the head is fully green
+        #      yet, exit neutrally: a later completion event will deploy.
+        #   2. Dispatch runs deploy the operator's exact ref, single-shot
+        #      checked: an existing red or pending rollup refuses out loud; a
+        #      missing rollup warns and continues (operator judgment).
+        #   3. The regression guard: never deploy a head that the last
+        #      successfully deployed commit does not precede — an out-of-order
+        #      event cannot roll staging backwards.
         run: |
           set -euo pipefail
-          head_sha="${{ steps.meta.outputs.head_sha }}"
+          event_head="${{ steps.meta.outputs.head_sha }}"
 
-          for _ in $(seq 1 90); do
-            mapfile -t runs < <(
-              gh run list \
-                --workflow server-ci.yml \
-                --commit "$head_sha" \
-                --limit 20 \
-                --json databaseId,status,conclusion,url \
-                --jq '.[] | select(.conclusion != "skipped") | [.databaseId, .status, (.conclusion // ""), .url] | @tsv'
-            )
+          rollup_status() {
+            local sha="$1" wf="$2"
+            # Any completed success for the SHA counts (same commit = same
+            # code): a later cancelled duplicate run must not mask an earlier
+            # green one.
+            gh run list \
+              --workflow "$wf" \
+              --commit "$sha" \
+              --limit 10 \
+              --json createdAt,status,conclusion \
+              --jq '[.[] | select(.conclusion != "skipped")] as $runs
+                    | if ($runs | length) == 0 then "missing"
+                      elif ($runs | any(.status == "completed" and .conclusion == "success")) then "success"
+                      elif ($runs | any(.status != "completed")) then "pending"
+                      else ($runs | sort_by(.createdAt) | last | .conclusion) end'
+          }
 
-            if [[ "${#runs[@]}" -eq 0 ]]; then
-              echo "No Server CI run found for $head_sha; continuing."
+          deploy_head=""
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            git fetch --quiet origin main
+            while read -r candidate; do
+              git merge-base --is-ancestor "$event_head" "$candidate" || continue
+              green=true
+              for wf in ci.yml server-ci.yml; do
+                status="$(rollup_status "$candidate" "$wf")"
+                echo "$wf @ ${candidate:0:9}: $status"
+                # Server CI's push trigger is PATH-FILTERED (server/**,
+                # catalogs/**, locks…), so most main commits have no Server CI
+                # run at all — `missing` is green for it. CI's push trigger is
+                # unfiltered: a missing CI run is genuinely not-proven.
+                case "$wf:$status" in
+                  ci.yml:success) ;;
+                  server-ci.yml:success | server-ci.yml:missing) ;;
+                  *)
+                    green=false
+                    break
+                    ;;
+                esac
+              done
+              if [[ "$green" == "true" ]]; then
+                deploy_head="$candidate"
+                break
+              fi
+            done < <(git rev-list --first-parent --max-count=30 origin/main)
+
+            if [[ -z "$deploy_head" ]]; then
+              echo "No fully green main commit at-or-after $event_head yet; the other rollup's completion event will deploy."
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-
-            pending=0
-            for run in "${runs[@]}"; do
-              IFS=$'\t' read -r run_id status conclusion url <<< "$run"
-              if [[ "$status" != "completed" ]]; then
-                echo "Server CI $run_id is $status; waiting. $url"
-                pending=1
-                continue
-              fi
-              if [[ "$conclusion" != "success" ]]; then
-                echo "Server CI $run_id finished with $conclusion. $url" >&2
-                exit 1
-              fi
+          else
+            deploy_head="$event_head"
+            for wf in ci.yml server-ci.yml; do
+              status="$(rollup_status "$deploy_head" "$wf")"
+              case "$status" in
+                success) echo "$wf green for $deploy_head." ;;
+                missing) echo "::warning::No $wf run found for $deploy_head; continuing on operator judgment." ;;
+                *)
+                  echo "::error::$wf for $deploy_head is $status; deploy refused. Re-dispatch once it is green." >&2
+                  exit 1
+                  ;;
+              esac
             done
+          fi
 
-            if [[ "$pending" == "0" ]]; then
-              echo "Server CI succeeded for $head_sha."
+          fallback="$(git rev-parse "${deploy_head}^" 2>/dev/null || git rev-list --max-parents=0 "$deploy_head" | tail -n1)"
+          base_sha="$(
+            node scripts/ci-cd/resolve-deploy-base.mjs \
+              --workflow deploy-staging.yml \
+              --branch main \
+              --head "$deploy_head" \
+              --fallback "$fallback" \
+              --required-artifact deploy-summary-staging
+          )"
+          base_mode="$(grep '^base_mode=' "$GITHUB_OUTPUT" | tail -n1 | cut -d= -f2)"
+          already_deployed="$(grep '^already_deployed=' "$GITHUB_OUTPUT" | tail -n1 | cut -d= -f2)"
+
+          # Both rollups fire one event each per commit; when the earlier
+          # event's run executes after both are already green, it would resolve
+          # the SAME deploy head — and the base scan's self-exclusion would
+          # anchor it on the OLDER base, re-deploying an identical delta twice.
+          # Operator dispatch stays allowed to re-deploy on purpose.
+          if [[ "${{ github.event_name }}" == "workflow_run" && "$already_deployed" == "true" ]]; then
+            echo "$deploy_head is already the newest deployed head (duplicate rollup event); nothing to do."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # A force-push can remove the last-deployed commit from history; an
+          # unresolvable base is staleness (deploy everything), never a wedge.
+          if [[ "$base_mode" == "resolved" ]] && ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+            echo "::warning::Last deployed commit $base_sha is absent from this history (force-push?); treating the base as stale and deploying the full surface set."
+            base_sha="$fallback"
+            base_mode="fallback"
+            {
+              echo "base_sha=$base_sha"
+              echo "base_mode=fallback"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ "$base_mode" == "resolved" ]] && ! git merge-base --is-ancestor "$base_sha" "$deploy_head"; then
+            if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+              echo "Regression guard: last deployed $base_sha is not an ancestor of $deploy_head; refusing to move staging backwards."
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
               exit 0
+            elif [[ "${{ github.event.inputs.allow_regression }}" == "true" ]]; then
+              echo "::warning::Deploying $deploy_head although it is behind the last deployed $base_sha (allow_regression)."
+            else
+              echo "::error::$deploy_head is behind the last deployed $base_sha. Re-dispatch with allow_regression: true to roll staging back deliberately." >&2
+              exit 1
             fi
+          fi
 
-            sleep 30
-          done
-
-          echo "Timed out waiting for Server CI for $head_sha." >&2
-          exit 1
+          {
+            echo "deploy_head=$deploy_head"
+            echo "base_sha=$base_sha"
+            echo "proceed=true"
+          } >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Resolve previous successful staging deploy
-        id: base
-        run: >
-          node scripts/ci-cd/resolve-deploy-base.mjs
-          --workflow deploy-staging.yml
-          --branch main
-          --head "${{ steps.meta.outputs.head_sha }}"
-          --fallback "${{ steps.meta.outputs.fallback_sha }}"
-          --required-artifact deploy-summary-staging
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
       - name: Detect deploy surfaces
+        if: ${{ steps.head.outputs.proceed == 'true' }}
         id: detect
         run: >
           node scripts/ci-cd/detect-deploy-surfaces.mjs
-          --base "${{ steps.base.outputs.base_sha }}"
-          --head "${{ steps.meta.outputs.head_sha }}"
+          --base "${{ steps.head.outputs.base_sha }}"
+          --head "${{ steps.head.outputs.deploy_head }}"
           --force "$FORCE_SURFACES"
           --only "$ONLY_SURFACES"
         env:
           # A staleness fallback (no resolvable prior deploy) must deploy the
           # full surface set, not head^-diff to a near-no-op — unless the
           # operator explicitly chose surfaces.
-          FORCE_SURFACES: ${{ github.event.inputs.force_surfaces || (steps.base.outputs.base_mode == 'fallback' && 'all') || '' }}
+          FORCE_SURFACES: ${{ github.event.inputs.force_surfaces || (steps.head.outputs.base_mode == 'fallback' && 'all') || '' }}
           ONLY_SURFACES: ${{ github.event.inputs.only_surfaces || '' }}
 
       - name: Summarize plan
+        if: ${{ steps.head.outputs.proceed == 'true' }}
         run: |
           {
             echo "### Staging deploy plan"
             echo "- Trigger: \`${{ github.event_name }}\`"
-            echo "- Base: \`${{ steps.detect.outputs.base_sha }}\` (\`${{ steps.base.outputs.base_mode }}\`)"
+            echo "- Base: \`${{ steps.detect.outputs.base_sha }}\` (\`${{ steps.head.outputs.base_mode }}\`)"
             echo "- Head: \`${{ steps.detect.outputs.head_sha }}\`"
             echo "- Changed files: \`${{ steps.detect.outputs.changed_files_count }}\`"
             echo "- Dry run: \`${{ steps.meta.outputs.dry_run }}\`"
@@ -195,7 +292,7 @@ jobs:
 
   deploy-server:
     needs: [plan]
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.proceed == 'true' && needs.plan.outputs.dry_run != 'true' }}
     uses: ./.github/workflows/_deploy-server.yml
     with:
       environment: staging
@@ -205,7 +302,7 @@ jobs:
 
   deploy-litellm:
     needs: [plan]
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.proceed == 'true' && needs.plan.outputs.dry_run != 'true' }}
     uses: ./.github/workflows/_deploy-litellm.yml
     with:
       environment: staging
@@ -215,7 +312,7 @@ jobs:
 
   deploy-web:
     needs: [plan, deploy-server]
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.proceed == 'true' && needs.plan.outputs.dry_run != 'true' }}
     uses: ./.github/workflows/_deploy-web.yml
     with:
       environment: staging
@@ -225,7 +322,7 @@ jobs:
 
   deploy-desktop:
     needs: [plan]
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.proceed == 'true' && needs.plan.outputs.dry_run != 'true' }}
     permissions:
       contents: write
       id-token: write
@@ -245,7 +342,9 @@ jobs:
       - deploy-litellm
       - deploy-web
       - deploy-desktop
-    if: ${{ always() && needs.plan.result == 'success' }}
+    # A guarded run (proceed=false) writes no summary artifact: the artifact is
+    # the base-resolution anchor, and an undeployed head must never become one.
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.proceed == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Write deploy summary artifact

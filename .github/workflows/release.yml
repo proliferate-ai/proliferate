@@ -1,10 +1,10 @@
 # The one pipeline that moves Main to Production.
 #
-# States: Main (passed CI), Staging (deployed, not e2e-proven), Production.
-# Merging to main deploys nothing; continuous staging is retired and
-# `deploy-staging.yml` is manual-only. This workflow is the single transition
-# from a main commit to production, run unattended by the daily cron or
-# dispatched by hand.
+# States: Main (passed CI), Staging (auto-deployed from green main, the
+# standing e2e world), Production. `deploy-staging.yml` owns main -> staging;
+# this workflow is the single transition from a main commit to production —
+# run unattended by the daily cron (transitional: it retires once the nightly
+# e2e battery stands and promotion becomes deliberate) or dispatched by hand.
 #
 # Hotfix and promote are inputs here, not separate files:
 #   hotfix  = ref (exact commit on main) + surfaces (exact set)
