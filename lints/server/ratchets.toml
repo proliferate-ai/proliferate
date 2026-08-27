@@ -50,8 +50,8 @@ reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_zero_grant_guard.py"
-max_lines = 1016
-reason = "slice 5's reclaim + guard proofs, then the safety-panel probes committed as regressions: paid-top-up orphan, second human's allocation on the orphan, destination-already-funded, non-paging classifications (no identity / invitee org), page-once-per-org, and the loop-cadence test; the re-audit round adds the TOCTOU abort (a grant landing in the window between the purity read and the ledger move) and the page/heal/re-break eviction proof; the third audit adds the destination-side window abort (the only place money could increase without entitlement), the usage-side window abort, and the truncated-feed eviction proof — each needs the full orphan+enrollment fixture plus a racing-move seam; splits with the suite taxonomy pass"
+max_lines = 1104
+reason = "slice 5's reclaim + guard proofs, then the safety-panel probes committed as regressions: paid-top-up orphan, second human's allocation on the orphan, destination-already-funded, non-paging classifications (no identity / invitee org), page-once-per-org, and the loop-cadence test; the re-audit round adds the TOCTOU abort (a grant landing in the window between the purity read and the ledger move) and the page/heal/re-break eviction proof; the third audit adds the destination-side window abort (the only place money could increase without entitlement), the usage-side window abort, and the truncated-feed eviction proof — each needs the full orphan+enrollment fixture plus a racing-move seam; the fourth pass adds the sweep-continues-after-a-race proof (two orgs, one racing, one healable); splits with the suite taxonomy pass"
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_migration.py"

@@ -208,14 +208,24 @@ async def run_verification_once(*, outage_already_paged: bool = False) -> Verifi
 
 async def _verification_loop() -> None:
     # Process-local "already paged this outage" flag: a persistent outage pages
-    # on its first tick only, and the first clean tick clears the flag so the
-    # NEXT outage pages again. A restart re-pages once — accepted, same as the
-    # zero-grant guard's suppression set.
+    # on its first tick only, and the flag is cleared when a tick comes back
+    # ERROR-FREE, so the NEXT outage pages again. A restart re-pages once —
+    # accepted, same as the zero-grant guard's suppression set.
+    #
+    # F7 (pre-existing, not what this flag covers): the `except` below has no
+    # once-per-incident suppression, so a tick that RAISES pages every
+    # interval. That shape is identical in all four worker loops here and is
+    # the codebase-wide convention for loop-level failures; changing it is a
+    # separate, cross-cutting decision.
     outage_paged = False
     while True:
         try:
             result = await run_verification_once(outage_already_paged=outage_paged)
-            outage_paged = result.outage_detected
+            # Hold the flag while ANY errors persist, not merely while the tick
+            # still meets the outage bar: a provider flapping across that
+            # boundary (outage → partial → outage) is ONE incident and must not
+            # page twice. Release only on a fully error-free tick.
+            outage_paged = result.outage_detected or (result.errored > 0 and outage_paged)
             if result.misconfigured or result.errored:
                 logger.info(
                     "Agent gateway verification tick recorded verdicts",

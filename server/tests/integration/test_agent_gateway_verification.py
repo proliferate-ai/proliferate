@@ -396,6 +396,55 @@ async def test_persistent_outage_pages_once_then_again_after_recovery(
     assert len(paged) == 2
 
 
+@pytest.mark.asyncio
+async def test_flapping_provider_is_one_incident_not_two_pages(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit F6: the flag releases on an ERROR-FREE tick, not any non-outage one.
+
+    Clearing on ``outage_detected`` alone let a provider flapping across the
+    outage bar (outage → partial → outage) page twice for a single incident.
+    The loop's rule holds the flag while any errors persist; only a fully
+    error-free tick releases it.
+    """
+    enrollment_id = await _create_enrollment(db_session)
+    await _mint_key(db_session, enrollment_id, "claude")
+    await _mint_key(db_session, enrollment_id, "codex")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}, "codex": {"gpt-5"}})
+    paged: list[Exception] = []
+    monkeypatch.setattr(
+        verification, "report_critical", lambda error, **kwargs: paged.append(error)
+    )
+    boom = litellm.LiteLLMIntegrationError("down", "transient")
+    both_down = {"sk-litellm-claude": boom, "sk-litellm-codex": boom}
+    one_down = {"sk-litellm-claude": boom, "sk-litellm-codex": ["gpt-5"]}
+    all_healthy = {"sk-litellm-claude": ["claude-sonnet"], "sk-litellm-codex": ["gpt-5"]}
+
+    async def tick(mapping: dict[str, object], flag: bool) -> bool:
+        _fake_list_models(monkeypatch, mapping)
+        targets = await verification.collect_verification_targets(db_session)
+        observations = await verification.probe_verification_targets(targets)
+        result = await verification.record_verification_verdicts(
+            db_session, observations, outage_already_paged=flag
+        )
+        # The loop's exact rule (worker._verification_loop).
+        return result.outage_detected or (result.errored > 0 and flag)
+
+    # One flapping incident: total outage, partial recovery, total outage again.
+    flag = await tick(both_down, False)
+    assert len(paged) == 1
+    flag = await tick(one_down, flag)  # still erroring — same incident
+    assert flag is True
+    flag = await tick(both_down, flag)
+    assert len(paged) == 1  # ONE page for the whole flap
+
+    # A genuinely error-free tick releases the flag; the next outage pages.
+    flag = await tick(all_healthy, flag)
+    assert flag is False
+    flag = await tick(both_down, flag)
+    assert len(paged) == 2
+
+
 def test_expected_config_resolves_from_source_tree() -> None:
     """The expected-set source must resolve without monkeypatching.
 

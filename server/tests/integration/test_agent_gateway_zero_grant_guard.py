@@ -957,6 +957,94 @@ async def test_healed_org_is_evicted_even_when_the_feed_is_truncated(
 
 
 @pytest.mark.asyncio
+async def test_raced_reclaim_pages_once_and_the_sweep_continues(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit N-a: one signal per race, and one bad org cannot abort the sweep.
+
+    A race reached through the sweep used to page twice — once as
+    ``orphan_reclaim`` from the reclaim, then again as ``zero_grant_check``
+    when the re-raise hit the worker's guard ``except`` — and it aborted the
+    remaining orgs. The heal loop now catches it, counts it, and continues.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    paged = _capture_report_critical(monkeypatch)
+
+    # Org A: a grantless enrollment whose heal goes through the reclaim, which
+    # will race. Its identity's claim sits on an orphan.
+    github_subject = f"gh-sweeprace-{uuid.uuid4().hex[:8]}"
+    await _fabricate_orphan_claim(db_session, github_subject=github_subject, consumed_usd=0.0)
+    raced_user = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=raced_user, provider_subject=github_subject)
+    raced_org = await _place_in_org(db_session, user_id=raced_user)
+    raced_enrollment = await ensure_org_enrollment(db_session, raced_org, raced_user)
+    await _backdate_enrollment(db_session, raced_enrollment.id, hours=2)
+
+    # Org B: an ordinary healable grantless enrollment that must still be
+    # processed after org A's race.
+    healable_user = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=healable_user)
+    healable_org = await _place_in_org(db_session, user_id=healable_user)
+    healable_enrollment = await ensure_org_enrollment(db_session, healable_org, healable_user)
+    await _backdate_enrollment(db_session, healable_enrollment.id, hours=2)
+
+    real_move = store.move_llm_credit_ledger
+
+    async def racing_move(
+        db: AsyncSession,
+        *,
+        from_billing_subject_id: uuid.UUID,
+        to_billing_subject_id: uuid.UUID,
+    ) -> tuple[int, int]:
+        await store.create_llm_credit_grant(
+            db,
+            billing_subject_id=from_billing_subject_id,
+            user_id=None,
+            source=LLM_CREDIT_SOURCE_ADMIN,
+            amount_usd=Decimal("99"),
+            source_ref=f"admin:{uuid.uuid4().hex[:8]}",
+        )
+        return await real_move(
+            db,
+            from_billing_subject_id=from_billing_subject_id,
+            to_billing_subject_id=to_billing_subject_id,
+        )
+
+    monkeypatch.setattr(free_credits.agent_gateway_store, "move_llm_credit_ledger", racing_move)
+
+    result = await run_zero_grant_check(db_session)
+
+    # The sweep did not abort: both orgs were seen, the race was counted, and
+    # org B — listed AFTER the racing org — still healed.
+    assert result.checked == 2
+    assert result.raced == 1
+    assert healable_org in result.healed_organization_ids
+    # The racing org also reads as healed here: its ledger UPDATE is still
+    # visible in this uncommitted session, and discarding it is what the
+    # reclaim's raise buys via the caller's transaction rollback (the worker's
+    # open_async_transaction). Only the sweep's continuation is asserted.
+    healable_subject = await ensure_organization_billing_subject(db_session, healable_org)
+    balance = await store.get_remaining_credit_usd(db_session, healable_subject.id)
+    assert balance.granted_usd == Decimal("5")
+
+    # Exactly ONE page for the race, tagged as the reclaim's own action.
+    reclaim_pages = [
+        (error, kwargs)
+        for error, kwargs in paged
+        if isinstance(error, AgentGatewayReclaimLedgerRaced)
+    ]
+    assert len(reclaim_pages) == 1
+    assert reclaim_pages[0][1]["tags"]["action"] == "orphan_reclaim"
+    assert not any(
+        kwargs["tags"].get("action") == "zero_grant_check"
+        and isinstance(error, AgentGatewayReclaimLedgerRaced)
+        for error, kwargs in paged
+    )
+
+
+@pytest.mark.asyncio
 async def test_backfill_loop_runs_zero_grant_check_on_its_own_cadence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

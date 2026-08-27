@@ -151,6 +151,16 @@ async def move_llm_credit_ledger(
     GitHub-identity dedupe.
 
     Returns ``(moved_grants, moved_usage_events)``.
+
+    F8, for whoever next touches the D-3 caller: the ``source_ref`` rewrite is
+    skipped when the destination's ``free_signup:<dest>`` ref already exists,
+    which leaves a stale ``free_signup:<X>`` ref living on a subject that is
+    NOT X. ``create_llm_credit_grant`` dedupes on ``source_ref`` alone, so a
+    later signup grant for X returns that OTHER subject's row — reading as
+    "already granted" when X has nothing. The orphan reclaim is immune (its P4
+    check plus its post-move destination invariant refuse exactly this shape),
+    but this primitive itself is unguarded, so the D-3 migration path can still
+    reach it. Guard at the call site before relying on the returned grant.
     """
     old_free_signup_ref = f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{from_billing_subject_id}"
     new_free_signup_ref = f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{to_billing_subject_id}"

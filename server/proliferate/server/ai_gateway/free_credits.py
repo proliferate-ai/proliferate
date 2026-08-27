@@ -84,7 +84,10 @@ class ZeroGrantCheckResult:
     ``healed`` counts enrollments whose grant landed this pass; ``alerted``
     counts ORGS newly paged this pass (still-grantless, pageable, and not in
     the caller's already-alerted set). Classified-unhealable enrollments and
-    repeat orgs appear in neither — they are logged, never paged.
+    repeat orgs appear in neither — they are logged, never paged. ``raced``
+    counts heal attempts abandoned because the reclaim hit its own ledger
+    invariant; those already paged as ``orphan_reclaim`` and are not
+    re-reported here.
     """
 
     checked: int
@@ -92,6 +95,7 @@ class ZeroGrantCheckResult:
     alerted: int
     healed_organization_ids: tuple[UUID, ...]
     alerted_organization_ids: tuple[UUID, ...]
+    raced: int = 0
 
 
 def free_credit_amount_usd() -> Decimal:
@@ -189,6 +193,12 @@ async def _reclaim_orphaned_allocation(
         and orphan_grants[0].source == LLM_CREDIT_SOURCE_FREE_SIGNUP
         and orphan_grants[0].source_ref == own_signup_ref
     )
+    # These allocation counts are deliberately UNLOCKED and have no post-move
+    # invariant, unlike the grant and usage reads. That is safe for exactly one
+    # reason: ``move_agent_gateway_free_credit_allocation`` below is
+    # identity-filtered, so a foreign claim INSERTed into this window provably
+    # does not move — it is not this identity's. Widen that filter and this
+    # window becomes a real hole; keep the filter, or add an invariant first.
     orphan_allocations = await count_agent_gateway_free_credit_allocations_for_subject(
         db, billing_subject_id=owner.id
     )
@@ -417,6 +427,12 @@ async def run_zero_grant_check(
     Orgs that stop being broken are evicted from that set, so an org which
     breaks, heals, and breaks again pages once per break rather than being
     silenced for the process's lifetime.
+
+    A heal whose reclaim trips its own ledger invariant
+    (:class:`AgentGatewayReclaimLedgerRaced`) is counted in ``raced`` and the
+    sweep CONTINUES: that race already rolled its money back and already paged
+    under ``orphan_reclaim``, so re-raising would both double-page one incident
+    and let a single org abort the rest of the sweep.
     """
     cutoff = utcnow() - timedelta(seconds=max_age_seconds)
     listed = await agent_gateway_store.list_active_org_enrollments_with_zero_grants(
@@ -436,9 +452,26 @@ async def run_zero_grant_check(
             healed_organization_ids=(),
             alerted_organization_ids=(),
         )
+    raced = 0
     for enrollment in listed:
-        if enrollment.user_id is not None:
+        if enrollment.user_id is None:
+            continue
+        try:
             await ensure_signup_free_credit_grant(db, enrollment.user_id)
+        except AgentGatewayReclaimLedgerRaced:
+            # The reclaim already rolled its own money back and already paged
+            # as `orphan_reclaim`. Swallow it here so the sweep is ONE signal
+            # per incident (letting it reach the worker's guard `except` would
+            # page the same race a second time as `zero_grant_check`) and so a
+            # single raced org cannot abort the rest of the sweep.
+            raced += 1
+            logger.warning(
+                "Agent gateway zero-grant heal skipped: orphan reclaim raced",
+                extra={
+                    "enrollment_id": str(enrollment.id),
+                    "organization_id": str(enrollment.organization_id),
+                },
+            )
     listed_ids = {enrollment.id for enrollment in listed}
     still_grantless_ids = {
         enrollment.id
@@ -529,4 +562,5 @@ async def run_zero_grant_check(
         alerted=len(new_org_ids),
         healed_organization_ids=healed_org_ids,
         alerted_organization_ids=new_org_ids,
+        raced=raced,
     )

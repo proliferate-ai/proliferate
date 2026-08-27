@@ -73,8 +73,10 @@ class VerificationResult:
 
     ``outage_detected`` says the tick met the outage bar (whether or not it
     paged — a persistent outage pages only on its first tick). The worker
-    keeps it as its "already paged this outage" flag: a tick that comes back
-    False clears the flag, so the NEXT outage pages again.
+    combines it with ``errored`` to carry its "already paged this outage"
+    flag: the flag is held while ANY errors persist and cleared only when a
+    tick comes back error-free, so the NEXT outage pages again while a
+    provider flapping across the outage bar stays one incident.
     """
 
     checked: int
@@ -306,7 +308,7 @@ async def record_verification_verdicts(
     outage_detected = total_outage or errored >= max(_ERROR_ALERT_FLOOR, math.ceil(checked / 2))
     # Page the OUTAGE, not every tick of it: a persistent outage would
     # otherwise page on its own interval forever (~96/day at the default). The
-    # caller carries the flag and clears it on the first clean tick.
+    # caller carries the flag and clears it when a tick comes back error-free.
     if outage_detected and not outage_already_paged:
         report_critical(
             AgentGatewayVerificationErrors(
