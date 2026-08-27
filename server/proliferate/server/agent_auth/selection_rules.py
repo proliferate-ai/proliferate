@@ -78,7 +78,11 @@ def validate_auth_selection_set(
             # the DB-coherence belt; the cleanup migration
             # (retire_env_passthrough_selections) removed any stored rows.
             if source.api_key_id is None:
-                named = f"Naming the environment variable {name!r} alone" if name else "Naming an environment variable alone"
+                named = (
+                    f"Naming the environment variable {name!r} alone"
+                    if name
+                    else "Naming an environment variable alone"
+                )
                 raise SelectionRuleError(
                     f"{named} isn't supported anymore — the machine's own value "
                     "never reaches the launch. Save the key itself and select "
