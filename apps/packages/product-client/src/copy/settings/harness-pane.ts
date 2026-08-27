@@ -242,6 +242,14 @@ export const HARNESS_PANE_COPY = {
   authBadgeNotConfigured: "Not configured",
   authBadgeNotAuthenticated: "Not authenticated",
   authBadgeEnrollmentFailed: "Enrollment failed",
+  // The status document's remaining badge words (agent_auth §2). No document at
+  // all reads "Waiting for status" — neutral, and it gates nothing.
+  authBadgeWaitingStatus: "Waiting for status",
+  authBadgeNotVerified: "Not verified",
+  // The dims-never-extinguishes marker: a stale document keeps its last
+  // observation on screen and says a re-probe is running. Never a spinner.
+  authBadgeRechecking: "re-checking",
+  authEvidenceVerifiedAgo: (age: string) => `verified ${age} ago`,
   // API key detail — the three configuration paths.
   segmentPasteKey: "Paste key",
   segmentSavedKeys: "Saved keys",

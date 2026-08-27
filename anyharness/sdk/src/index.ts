@@ -52,6 +52,7 @@ export type {
   AgentAuthStateDocument,
   ApplyAgentAuthStateResponse,
 } from "./types/agent-auth.js";
+export type { AgentAuthStatusDoc, AgentAuthMethodRow } from "./client/agent-auth.js";
 
 export type {
   AgentInstallState,
@@ -586,6 +587,7 @@ export * from "./types/workflow-runs-v2.js";
 
 export { streamSession } from "./streams/sessions.js";
 export type { SessionStreamOptions, SessionStreamHandle } from "./streams/sessions.js";
+export { streamAgentAuthStatus } from "./streams/agent-auth-status.js";
 
 export { connectFeed } from "./streams/feeds.js";
 export type {

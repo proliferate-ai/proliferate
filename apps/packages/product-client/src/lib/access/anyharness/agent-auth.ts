@@ -1,7 +1,10 @@
 import type {
+  AgentAuthMethodRow,
   AgentAuthStateDocument,
+  AgentAuthStatusDoc,
   AnyHarnessRequestOptions,
 } from "@anyharness/sdk";
+import { streamAgentAuthStatus } from "@anyharness/sdk";
 import {
   getAnyHarnessClient,
   type AnyHarnessClientConnection,
@@ -20,4 +23,63 @@ export function clearAgentAuthState(
   options?: AnyHarnessRequestOptions,
 ) {
   return getAnyHarnessClient(connection).agentAuth.clearState(options);
+}
+
+/**
+ * One harness's status document, or `null` when the runtime holds no row for a
+ * known harness kind (`GET /status?harness=` answers `[]`). An UNKNOWN harness
+ * kind is a 404 and stays an error — the two are different facts.
+ */
+export async function getHarnessAuthStatus(
+  connection: AnyHarnessClientConnection,
+  harnessKind: string,
+  options?: AnyHarnessRequestOptions,
+): Promise<AgentAuthStatusDoc | null> {
+  const documents = await getAnyHarnessClient(connection).agentAuth.status(
+    harnessKind,
+    options,
+  );
+  return documents.find((document) => document.harness_kind === harnessKind)
+    ?? null;
+}
+
+/**
+ * The status subscription's handle. Declared here rather than re-exported from
+ * the SDK barrel, which sits at its line cap: the shape is one method, and the
+ * access layer is the only caller that holds it.
+ */
+export interface HarnessAuthStatusStreamHandle {
+  close: (reason?: unknown) => void;
+}
+
+/** One harness's method rows, straight from its status document (door 2). */
+export function getHarnessAuthMethods(
+  connection: AnyHarnessClientConnection,
+  harnessKind: string,
+  options?: AnyHarnessRequestOptions,
+): Promise<AgentAuthMethodRow[]> {
+  return getAnyHarnessClient(connection).agentAuth.methods(harnessKind, options);
+}
+
+/**
+ * Subscribe every harness's status documents: a snapshot per current document
+ * on connect, then one event per change. The runtime's local API is
+ * bearer-authed, so this is the SDK's fetch-based SSE helper rather than
+ * `EventSource` (which cannot carry a header) — the same transport the session
+ * stream uses.
+ */
+export function openHarnessAuthStatusStream(
+  connection: AnyHarnessClientConnection,
+  handlers: {
+    onEvent: (document: AgentAuthStatusDoc) => void;
+    onError?: (error: Error) => void;
+    onOpen?: () => void;
+    onClose?: () => void;
+  },
+): HarnessAuthStatusStreamHandle {
+  return streamAgentAuthStatus({
+    baseUrl: connection.runtimeUrl,
+    authToken: connection.authToken ?? undefined,
+    ...handlers,
+  });
 }

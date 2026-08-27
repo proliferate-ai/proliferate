@@ -56,6 +56,48 @@ export function anyHarnessWorkspaceAgentReconcileStatusKey(
   ] as const;
 }
 
+/**
+ * One harness's status document (agent_auth spec §2). Nested under the agents
+ * key on purpose: the events that invalidate the agents projection are the same
+ * events that produce a new status document, so an agents-scope invalidation
+ * re-reads status too.
+ */
+export function anyHarnessAgentAuthStatusKey(
+  runtimeUrl: string | null | undefined,
+  harnessKind: string | null | undefined,
+  cacheScopeKey: string | null | undefined,
+) {
+  return [
+    ...anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
+    "agent-auth-status",
+    harnessKind ?? "",
+  ] as const;
+}
+
+/** Every harness's status documents under one runtime (invalidation prefix). */
+export function anyHarnessAgentAuthStatusPrefixKey(
+  runtimeUrl: string | null | undefined,
+  cacheScopeKey: string | null | undefined,
+) {
+  return [
+    ...anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
+    "agent-auth-status",
+  ] as const;
+}
+
+/** One harness's method rows, served from its status document. */
+export function anyHarnessAgentAuthMethodsKey(
+  runtimeUrl: string | null | undefined,
+  harnessKind: string | null | undefined,
+  cacheScopeKey: string | null | undefined,
+) {
+  return [
+    ...anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
+    "agent-auth-methods",
+    harnessKind ?? "",
+  ] as const;
+}
+
 export function anyHarnessAgentLaunchOptionsKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,
