@@ -27,7 +27,13 @@ Organization Standard anatomy for the `support` system; the body below is the la
   Sentry project/event pairs, the `support_report_id:<id>` Sentry query, and
   a prefilled file-an-issue link);
   `desktop.support_snapshot.prepare|submit` lifecycles; `tracker_summary`
-  and `client_release_id` projections on the row.
+  and `client_release_id` projections on the row;
+  `support.report.captured` — one structured server log marker at capture
+  completion carrying `support_report_id`, the bound `session_id`s, and
+  `release_id`, so a report is queryable from a session id and not only
+  readable in Slack (seam change requested by
+  [observability](../../engineering/observability/README.md) §Consumes,
+  2026-08-26; build rides the observability spec PR's delta row 17).
 - **Fences:** no issue triage, repair, release tracking or outreach (the
   issue-lifecycle loop was retired in the 2026-08 cull); support never
   publishes report content anywhere; secret scrubbing obeys
