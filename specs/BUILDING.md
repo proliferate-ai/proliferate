@@ -6,7 +6,7 @@ norms live in [testing](engineering/testing/README.md), the machine in
 Pablo may reword)* carry his recorded rulings verbatim-in-substance,
 awaiting his own phrasing.
 
-## How we build here *(ruled 2026-08-26; Pablo may reword)*
+## How we build here *(drafted from the 2026-08-26 rulings — Pablo's pen)*
 
 Specs first: the spec is ground truth, and code that disagrees with it is
 a bug in one of them — raised, never silently absorbed. Small honest PRs
@@ -61,9 +61,10 @@ restated here — the testing spec decides.
 
 Every non-trivial PR gets a **completed** fresh-context refuter before
 merge; an inline self-review is a fallback note, never a pass.
-*(ruled; Pablo may reword:)* Pablo personally reviews: growth of the lint
-constitution (`lints/` net-new entries), spec changes, seam changes, and
-anything under Shape. Everything else merges on green + refuter.
+*(proposed — Pablo to confirm:)* Pablo personally reviews growth of the
+lint constitution (`lints/` net-new entries — already CODEOWNERS-gated),
+spec changes, seam changes, and anything under Shape. Everything else
+merges on green + refuter.
 
 ## 6 · For agents specifically
 

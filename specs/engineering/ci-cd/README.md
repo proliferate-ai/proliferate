@@ -62,7 +62,8 @@ Merge-gating: `ci.yml` (~6 min wall) + `server-ci.yml` (~5) + CodeQL ×3
 Deploy/release: `deploy-staging.yml`, `release.yml` (the 09:00 UTC prod
 cron), the reusable `_build-server` / `_deploy-*` lanes,
 `release-desktop`, `release-runtime`, `release-e2e*`, catalog lanes,
-`self-host-smoke`, the Windows canaries. Deleted 2026-08 (#2253, on
+`self-host-smoke`, the three Windows lanes (path-filtered, outside every
+rollup). Deleted 2026-08 (#2253, on
 record): `intent-tests.yml`, `ci-heavy-lanes.yml`,
 `release-e2e-hard-cancel-cleanup.yml`, the broken managed-cloud job, the
 retired T3-SH-1 references.
@@ -199,15 +200,24 @@ change detection deferred (a cost optimization, not a fix; it adds a
 
 ## Known gaps — the build list, in blocking order
 
+Each gap is frozen as a delivery spec under
+[delivery/testing-cicd/](../../../delivery/testing-cicd/) before its code
+lands.
+
 - [ ] Staging fix ladder (audited 2026-08-26): rewrite the two
-      trigger-doctrine tests + wire push:main → re-mint the e2e session
-      credential *with a durable rotation write-back* → map the ~9
-      provisioned-but-unmapped env vars → strip `continue-on-error` →
-      restore the nightly cron as the battery → **artifact handoff** (the
-      digest e2e validates must be the digest prod runs).
-- [ ] The lane census + checker do not exist; `nightly-checks.yml` does not
-      exist (the slow-but-real set is homeless).
-- [ ] `make gate` + the hooks do not exist; the hollow vitest suites are
-      unwired.
+      trigger-doctrine tests + wire push:main
+      ([staging-pipeline](../../../delivery/testing-cicd/delivery-spec-staging-pipeline.md))
+      → re-mint the e2e session credential *with a durable rotation
+      write-back* → map the ~9 provisioned-but-unmapped env vars → strip
+      `continue-on-error` → restore the nightly cron as the battery
+      ([e2e-observable](../../../delivery/testing-cicd/delivery-spec-e2e-observable.md))
+      → **artifact handoff** (the digest e2e validates must be the digest
+      prod runs; not yet frozen).
+- [ ] The lane census + checker and `nightly-checks.yml` do not exist
+      ([lane-census](../../../delivery/testing-cicd/delivery-spec-lane-census.md)).
+- [ ] `make gate` + the hooks do not exist
+      ([make-gate](../../../delivery/testing-cicd/delivery-spec-make-gate.md));
+      the rust lint job and the hollow vitest suites are unwired
+      ([lint-wiring](../../../delivery/testing-cicd/delivery-spec-lint-wiring.md)).
 - [ ] Staging has no background plane (worker/beat services unset) and no
       staleness detection; the E2B webhook 401s on staging.

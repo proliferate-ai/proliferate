@@ -38,12 +38,13 @@ The estate is two halves:
   [lints/native-tools.md](../../../lints/native-tools.md), not wrapped in
   records — thousands of upstream rules, tool-native config, versioned by
   others): **ruff** (lint + format — our black+flake8+isort) · **Biome**
-  format-only for TS/CSS/JSON (adopted 2026-08-26; Markdown deliberately
-  unformatted — `check_docs` polices what matters there) · **rustfmt** +
-  **clippy** (ruled into CI 2026-08-26: mechanical warnings fixed; judgment
-  lints on *provisional* `allow` with rule ids, revisited in the code-debt
-  migration; `await_holding_lock` = a tracked debt row with a careful
-  dedicated pass queued; then `-D warnings`) · **mypy** strict + the
+  format-only for TS/CSS/JSON (ruled 2026-08-26, wiring in flight; Markdown
+  deliberately unformatted — `check_docs` polices what matters there) ·
+  **rustfmt** + **clippy** (ruled into CI 2026-08-26, wiring in flight —
+  the plan: mechanical warnings fixed; judgment lints on *provisional*
+  `allow` with rule ids, revisited in the code-debt migration;
+  `await_holding_lock` = a tracked debt row with a careful dedicated pass
+  queued; then `-D warnings`) · **mypy** strict + the
   149-entry census ratchet · **tsc** — deliberately the *only* TS linter
   (no ESLint, by ruling) · **CodeQL**.
 - **Built** (201 records, ~24 Python engines): only laws no off-the-shelf

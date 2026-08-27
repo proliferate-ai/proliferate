@@ -101,7 +101,8 @@ invoked by the release pipeline.
 ## Known gaps
 
 - [ ] The staging battery is being rebuilt (credential write-back, env
-      mapping, unmasking, nightly cadence — the e2e-observable slice).
+      mapping, unmasking, nightly cadence — frozen as
+      [delivery-spec-e2e-observable.md](../../../delivery/testing-cicd/delivery-spec-e2e-observable.md)).
 - [ ] The desktop spine journey's mechanism is unverified (ranked options
       above); built after the battery stands.
 - [ ] Packaged-upgrade cells are partially manual.
