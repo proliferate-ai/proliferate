@@ -85,8 +85,7 @@ impl Drop for WorkflowFixture {
     }
 }
 
-/// Boot the app over a db that may already hold workflow rows (the boot-fence
-/// scenario creates its run BEFORE the app exists — the crash-window shape).
+/// Boot over a db that may already hold workflow rows (the boot-fence shape).
 async fn boot_fixture(label: &str, prepare: impl FnOnce(&Db, &PathBuf)) -> WorkflowFixture {
     let env_lock = test_support::lock_env().await;
     let bearer = test_support::set_bearer_token_env(None);

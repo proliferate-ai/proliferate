@@ -15,7 +15,7 @@ reason = "existing AnyHarness oversized file (+hosting schema registration, +age
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/router_tests.rs"
-max_lines = 1904
+max_lines = 1816
 reason = "existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version tests, +managed default-placement route test, +model-snapshot status route shape/auth tests, +agent-auth/install poke contract tests, +agent-auth/install poke-suppression proofs against the automatic_poke_engine seam (F-036 cycle-2 review item 1); the catalog-push handler tests are gone with the heartbeat transport)"
 
 [[max_lines]]
@@ -65,7 +65,7 @@ reason = "existing AnyHarness oversized test file"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs"
-max_lines = 1158
+max_lines = 1133
 reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block); the same-payload resume lives in checkpoint_linkage_tests.rs with the Lane H NULL-linkage pins, and the rung-3 provider-anchor gates plus shared fixtures live in fork_anchor_gate_tests.rs"
 
 [[max_lines]]

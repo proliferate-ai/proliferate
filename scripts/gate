@@ -463,10 +463,45 @@ def build_checks(
             # warning must fail here, not first in CI) and --keep-going (every
             # failing crate reports in one run); scoped to touched crates for
             # speed where the diff allows.
+            #
+            # Platform-skew carve-out (the lint-wiring ruling): Linux CI is the
+            # clippy AUTHORITY for the desktop crate — its macOS-native half is
+            # crate-allowed on Linux (`not(target_os = "macos")` cfg_attr in
+            # its lib.rs), so a macOS gate run sees macOS-only-unused imports
+            # the authority deliberately does not judge, and cannot reproduce
+            # the authoritative verdict. On macOS the gate therefore excludes
+            # that crate LOUDLY rather than failing every push on findings the
+            # constitution assigns to Linux; a Linux gate run judges it fully.
+            clippy_target = target
+            clippy_note = ""
+            if sys.platform == "darwin":
+                # `proliferate-debug` is excluded with it: the debug shell
+                # builds the desktop lib as a path dependency, which would
+                # re-lint the same files through the back door.
+                desktop_crates = ("proliferate", "proliferate-debug")
+                workspace_minus_desktop = "--workspace " + " ".join(
+                    f"--exclude {c}" for c in desktop_crates
+                )
+                excluded_note = (
+                    " (desktop crate excluded on macOS — Linux CI is its clippy authority)"
+                )
+                if scope.rust_workspace:
+                    clippy_target = workspace_minus_desktop
+                    clippy_note = excluded_note
+                else:
+                    touched = sorted(crates_for_paths(scope.rust_paths, repo))
+                    kept = [c for c in touched if c not in desktop_crates]
+                    if len(kept) != len(touched):
+                        clippy_note = excluded_note
+                    clippy_target = (
+                        " ".join(f"-p {c}" for c in kept)
+                        if kept
+                        else workspace_minus_desktop
+                    )
             checks.append(
                 Check(
-                    "rust: clippy",
-                    f"cargo clippy {target} --all-targets --keep-going -- -D warnings",
+                    "rust: clippy" + clippy_note,
+                    f"cargo clippy {clippy_target} --all-targets --keep-going -- -D warnings",
                 )
             )
             if have_nextest:

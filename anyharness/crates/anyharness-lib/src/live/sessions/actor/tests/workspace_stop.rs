@@ -478,14 +478,9 @@ async fn stop_and_await_kill_escalation_can_leave_the_agents_own_output_torn_mid
         .run_until(async move {
             let dir = temp_dir("resume-soak");
             let transcript = dir.join("transcript.jsonl");
-            // The TERM trap is installed FIRST: the test polls for the third
-            // record as its readiness marker, so everything before that marker
-            // must already hold — installing the trap after it left a gap
-            // where a fast stop's TERM killed the shell before immunity was in
-            // place (the 57ms flake on PR #2279). Then two complete records
-            // and a third deliberately left open (no closing quote/brace/
-            // newline) — so any kill that reaches the agent lands mid-record
-            // as file-content state, deterministically, not as a timing race.
+            // Trap FIRST: the test polls for the third record as readiness, so
+            // TERM-immunity must precede it (trap-after left the 57ms gap that
+            // flaked #2279); the open third record makes the tear file-state.
             let script = format!(
                 "trap '' TERM; \
                  printf '{{\"type\":\"user\",\"line\":1}}\\n' >> {path}; \
