@@ -2,54 +2,51 @@ import type { AgentSummary } from "@anyharness/sdk";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
 import { getAgentDisplayLabel } from "#product/lib/domain/agents/provider-display";
 import {
-  isEvidenceGreen,
-  labelForDisplay,
-  labelForNextAction,
-  toneForDisplay,
-  type AuthEvidenceTone,
-} from "#product/lib/domain/settings/agent-auth-evidence";
+  isStatusGreen,
+  statusLabel,
+  statusTone,
+  type AuthStatusTone,
+} from "#product/lib/domain/settings/agent-auth-status-presentation";
 
 /**
- * Evidence-bound onboarding badges (agent-auth.md rung 7, flag
- * agentAuthEvidencePanes).
+ * Onboarding badges bound to the machine's status document (agent_auth spec §4
+ * cell 4: "The onboarding card is state-bound, never timed").
  *
- * The flag-ON onboarding card replaces the ~20s timer with per-agent badges
- * bound to the REAL states an agent moves through on a fresh install:
+ * Two inputs, both facts the runtime holds:
  *
  * - install progress — `installState` (`installing` is still-progressing;
- *   `install_required`/`failed` is an actionable next step)
- * - state.json ack + probe/derivation — the runtime's derived `authState`
- *   (`display`, `nextAction`, `facts.probe`)
+ *   `install_required`/`failed` is an actionable next step). This is harnesses'
+ *   field and stays.
+ * - auth truth — `authStatus`, the per-harness status document, rendered
+ *   verbatim. Nothing here re-derives a state from `readiness`,
+ *   `credentialState`, or `cliAuthState`.
  *
- * The card completes when EVERY adopted agent reaches a terminal state:
- * launchable (`usable`/`authenticated`) or actionable (a terminal display that
- * carries a next-action affordance routing to the harness pane). A stuck probe
- * (`backoff`) is terminal too — it shows its next-attempt countdown rather than
- * an eternal spinner. Nothing here is timer-driven: completion is a function of
- * the observed states alone.
+ * The card completes when EVERY adopted agent reaches a terminal state: green
+ * (a dated observation), an actionable next step, or a STALE document whose last
+ * observation is on screen while the runtime re-probes. A stale document is
+ * terminal precisely so the card never waits on a probe forever — the dimmed
+ * light is a state, not a spinner. Nothing here is timer-driven.
  */
 
 export type OnboardingAgentPhase =
   /** installing artifacts (installState === "installing") */
   | "installing"
-  /** a probe is running or queued */
-  | "probing"
-  /** acknowledged/preparing, waiting on the next observation (ack, trial) */
+  /** the runtime owes this harness its first observation */
   | "waiting"
-  /** the probe is in backoff — stuck, but shown with its next attempt */
-  | "backoff"
-  /** a terminal state whose next action routes the user to the pane */
+  /** stale: the last observation is shown while a re-probe runs */
+  | "rechecking"
+  /** a terminal state whose row routes the user to the pane */
   | "actionable"
-  /** launchable: a green evidence-backed terminal */
+  /** launchable: a green, dated observation */
   | "ready";
 
 export interface OnboardingAgentBadge {
   harnessKind: string;
   displayName: string;
   phase: OnboardingAgentPhase;
-  /** Badge text — the derived display's label, or a pre-derivation phase. */
+  /** Badge text — the document's own words, or a pre-document phase. */
   label: string;
-  tone: AuthEvidenceTone;
+  tone: AuthStatusTone;
   /** True while the state is still progressing (spinner, no affordance yet). */
   pending: boolean;
   /** True once the card no longer waits on this agent. */
@@ -57,35 +54,33 @@ export interface OnboardingAgentBadge {
   /** True when the agent is launchable and needs no user action. */
   launchable: boolean;
   /**
-   * The single next-action affordance label from `authState.nextAction`, or
-   * null when the state offers no explicit action. A null action on a
-   * non-launchable terminal is never a dead end: the whole badge routes to the
-   * agent pane regardless (see `OnboardingAgentBadge.terminal`).
+   * True when the document is stale: the label above IS the last observation and
+   * a re-probe is running. Rendered as a marker, never as loading.
+   */
+  rechecking: boolean;
+  /**
+   * The install affordance label, or null. Every other state's affordance is
+   * the row itself routing to the agent pane, so a null action is never a dead
+   * end (see `OnboardingAgentBadge.terminal`).
    */
   actionLabel: string | null;
-  /** Backoff only: ISO time of the next probe attempt. */
-  nextAttemptAt: string | null;
-  /** Backoff only: the last probe failure detail, when the runtime reported it. */
-  lastFailureDetail: string | null;
 }
 
 function baseFields(agent: AgentSummary) {
   return {
     harnessKind: agent.kind,
     displayName: agent.displayName,
-    nextAttemptAt: null as string | null,
-    lastFailureDetail: null as string | null,
+    rechecking: false,
   };
 }
 
 /**
  * Map one adopted agent's real states onto its onboarding badge.
  *
- * The live install signal wins over a not-yet-derived `authState`: a harness
- * still downloading reads "installing" even before the runtime folds a
- * derivation. Once a derivation exists the badge is a verbatim projection of
- * it (label, tone, next action) with the probe lifecycle deciding pending vs
- * terminal — the same derivation the settings panes render, never a re-fold.
+ * The live install signal wins over an absent document: a harness still
+ * downloading reads "installing" even before the runtime holds a status row.
+ * Once a document exists the badge is a verbatim projection of it — the same
+ * document the settings panes render, never a second fold.
  */
 export function deriveOnboardingAgentBadge(
   agent: AgentSummary,
@@ -105,80 +100,37 @@ export function deriveOnboardingAgentBadge(
     };
   }
 
-  const authState = agent.authState;
-  if (!authState) {
-    // No derivation yet. A missing/failed install is an actionable terminal so
-    // the user is never stuck; otherwise the projection is still filling in —
-    // a bound pending state, resolved by the next poll, not a timer.
-    if (
-      agent.installState === "install_required"
-      || agent.installState === "failed"
-    ) {
-      return {
-        ...base,
-        phase: "actionable",
-        label: HOME_SCREEN_LABELS.authSetupNeedsInstall,
-        tone: "neutral",
-        pending: false,
-        terminal: true,
-        launchable: false,
-        actionLabel: labelForNextAction("install"),
-      };
-    }
-    // Install complete but the runtime has not folded a derivation. Rather
-    // than a pending state that could spin forever against a runtime that
-    // never fills `authState`, this is an actionable terminal: the card can
-    // complete, and the pane fallback affordance keeps it from being a dead
-    // end. A real derivation, once it lands, replaces this on the next poll.
+  const status = agent.authStatus ?? null;
+  if (!status) {
+    // No document yet. A missing/failed install is an actionable terminal so the
+    // user is never stuck; otherwise the runtime simply has not written a status
+    // row for this harness — an actionable terminal too, so the card can
+    // complete and the pane affordance keeps it from being a dead end.
     return {
       ...base,
       phase: "actionable",
-      label: HOME_SCREEN_LABELS.authSetupWaitingStatus,
+      label:
+        agent.installState === "install_required"
+        || agent.installState === "failed"
+          ? HOME_SCREEN_LABELS.authSetupNeedsInstall
+          : HOME_SCREEN_LABELS.authSetupWaitingStatus,
       tone: "neutral",
       pending: false,
       terminal: true,
       launchable: false,
-      actionLabel: null,
+      actionLabel:
+        agent.installState === "install_required"
+        || agent.installState === "failed"
+          ? HOME_SCREEN_LABELS.authSetupInstallAction
+          : null,
     };
   }
 
-  const probe = authState.facts.probe;
-  const tone = toneForDisplay(authState.display);
-  const label = labelForDisplay(authState.display);
-  const actionLabel = labelForNextAction(authState.nextAction);
+  const facts = { applied: status.applied ?? null, probe: status.probe };
+  const label = statusLabel(facts);
+  const tone = statusTone(facts);
 
-  // A stuck probe is terminal for the card: it shows the backoff and the next
-  // attempt, never an eternal spinner.
-  if (probe.phase === "backoff") {
-    return {
-      ...base,
-      phase: "backoff",
-      label,
-      tone,
-      pending: false,
-      terminal: true,
-      launchable: false,
-      actionLabel,
-      nextAttemptAt: probe.nextAttemptAt ?? null,
-      lastFailureDetail: probe.lastFailureDetail ?? null,
-    };
-  }
-
-  if (probe.phase === "running" || probe.phase === "queued") {
-    return {
-      ...base,
-      phase: "probing",
-      label,
-      tone,
-      pending: true,
-      terminal: false,
-      launchable: false,
-      actionLabel,
-    };
-  }
-
-  if (isEvidenceGreen(authState.display)) {
-    // The two launchable, evidence-backed terminals (usable/authenticated).
+  if (isStatusGreen(facts)) {
     return {
       ...base,
       phase: "ready",
@@ -187,40 +139,58 @@ export function deriveOnboardingAgentBadge(
       pending: false,
       terminal: true,
       launchable: true,
+      // Green stays green while a re-probe runs: the light dims, it never goes
+      // out, and a launch the document can satisfy is not gated on the probe.
+      rechecking: status.probe.stale,
       actionLabel: null,
     };
   }
 
-  switch (authState.display) {
-    case "selected":
-      // Acknowledged and satisfiable, waiting on the first probe/trial. Bound
-      // to the real state — it advances when the probe runs, not on a clock.
-      return {
-        ...base,
-        phase: "waiting",
-        label,
-        tone,
-        pending: true,
-        terminal: false,
-        launchable: false,
-        actionLabel,
-      };
-    default:
-      // not_installed, unsupported, misconfigured, expired, unavailable,
-      // installed: terminal states that carry a next action routing to the
-      // pane (unsupported's action is "none", and the whole badge still routes
-      // there, so no terminal is ever a dead end).
-      return {
-        ...base,
-        phase: "actionable",
-        label,
-        tone,
-        pending: false,
-        terminal: true,
-        launchable: false,
-        actionLabel,
-      };
+  if (status.probe.stale) {
+    // Stale WITHOUT any observation is the first probe still running: a bound
+    // pending row. Stale WITH one is the dimmed light — terminal, showing the
+    // last observation and its re-checking marker rather than a spinner.
+    const observed = Boolean(status.probe.at);
+    return {
+      ...base,
+      phase: observed ? "rechecking" : "waiting",
+      label,
+      tone,
+      pending: !observed,
+      terminal: observed,
+      launchable: false,
+      rechecking: true,
+      actionLabel: null,
+    };
   }
+
+  if (status.probe.verdict === "unverified" && status.applied !== null) {
+    // A method is applied and the runtime owes this harness an observation.
+    // Bound to the real state — it advances when the probe runs, not on a clock.
+    return {
+      ...base,
+      phase: "waiting",
+      label,
+      tone,
+      pending: true,
+      terminal: false,
+      launchable: false,
+      actionLabel: null,
+    };
+  }
+
+  // A failed observation, or nothing configured: terminal states whose row
+  // routes to the pane.
+  return {
+    ...base,
+    phase: "actionable",
+    label,
+    tone,
+    pending: false,
+    terminal: true,
+    launchable: false,
+    actionLabel: null,
+  };
 }
 
 /**
@@ -242,9 +212,8 @@ function missingAgentBadge(kind: string): OnboardingAgentBadge {
     pending: true,
     terminal: false,
     launchable: false,
+    rechecking: false,
     actionLabel: null,
-    nextAttemptAt: null,
-    lastFailureDetail: null,
   };
 }
 

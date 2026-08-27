@@ -16,15 +16,8 @@ import {
 } from "#product/lib/domain/settings/harness-auth-sources";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
-import {
-  deriveAuthStatus,
-  HarnessAuthStatusAction,
-} from "#product/components/settings/panes/agents/harness/HarnessAuthStatusBadge";
-import {
-  HarnessAuthEvidenceBadge,
-  HarnessAuthEvidenceSummary,
-} from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
-import { isFeatureEnabled } from "#product/config/feature-flags";
+import { HarnessAuthEvidenceBadge } from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
+import { useHarnessStatus } from "#product/hooks/access/anyharness/agent-auth/use-harness-status";
 
 export type { AuthMethod };
 
@@ -98,6 +91,10 @@ function HarnessAuthMethods({
 }: HarnessAuthMethodsProps): ReactNode {
   const { invalidateAgentListResources } = useAgentResourcesCache();
   const [cliRefreshing, setCliRefreshing] = useState(false);
+  // The ONE seam to the machine's auth truth: subscribed on mount, re-read at
+  // the pane's boundaries. Nothing below derives a pane state from readiness,
+  // credentialState, or cliAuthState.
+  const authStatus = useHarnessStatus(harnessKind);
 
   if (editor.selectionsQuery.isLoading) {
     return (
@@ -129,9 +126,9 @@ function HarnessAuthMethods({
   const nativeCardDisallowed = editor.nativeDisallowed && selectedMethod !== "cli";
 
   // The merged header state (design-handoff v2): status is said exactly once,
-  // as a badge next to the section title. The refresh re-reads the queries
-  // that back the SELECTED method's state.
-  const status = deriveAuthStatus(selectedMethod, editor);
+  // as a badge next to the section title — and it is the runtime's document, not
+  // a recomputation from the selected method. The refresh re-reads that document
+  // plus the queries backing the selected method's editable material.
   const refreshing =
     selectedMethod === "gateway"
       ? editor.capabilitiesQuery.isFetching || editor.enrollmentQuery.isFetching
@@ -140,6 +137,8 @@ function HarnessAuthMethods({
         : cliRefreshing;
 
   function handleRefresh() {
+    // The frontend never probes: it re-reads the document the runtime holds.
+    authStatus.refresh();
     switch (selectedMethod) {
       case "gateway":
         void editor.capabilitiesQuery.refetch();
@@ -172,36 +171,21 @@ function HarnessAuthMethods({
   const seatCapable = isSeatCapableHarness(harnessKind);
   const cardCount = (gatewayCapable ? 3 : 2) + (seatCapable ? 1 : 0);
 
-  // Flag-ON path (ADR agent-auth rung 6): render the runtime's DERIVED
-  // authState verbatim — evidence-backed badge + next-action/probe/handoff
-  // lead — instead of the legacy locally-derived status. Falls back to the old
-  // badge only when the flag is off or the runtime carries no derived state.
-  const evidenceOn = isFeatureEnabled("agentAuthEvidencePanes");
-  const authState = evidenceOn ? editor.localAgent?.authState ?? null : null;
-
   return (
     <SettingsSection
       title={HARNESS_PANE_COPY.authenticationTitle}
       description={HARNESS_PANE_COPY.authenticationDescription(displayName, surface)}
       titleWeight="emphasized"
       surface="plain"
-      action={authState ? (
+      action={(
         <HarnessAuthEvidenceBadge
-          authState={authState}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          data-harness-status={selectedMethod === "cli" ? "native" : selectedMethod}
-        />
-      ) : (
-        <HarnessAuthStatusAction
-          status={status}
+          status={authStatus}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           data-harness-status={selectedMethod === "cli" ? "native" : selectedMethod}
         />
       )}
     >
-      {authState ? <HarnessAuthEvidenceSummary authState={authState} /> : null}
       {editor.harnessDisallowed ? (
         <p className="pb-2 text-ui-sm text-muted-foreground">{POLICY_TOOLTIP}.</p>
       ) : null}

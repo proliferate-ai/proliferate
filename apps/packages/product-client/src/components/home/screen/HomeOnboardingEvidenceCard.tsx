@@ -10,53 +10,23 @@ import type {
   OnboardingAgentBadge,
 } from "#product/lib/domain/agents/auth-setup-badges";
 
-/** Coarse remaining-time label until an ISO `nextAttemptAt`, or null if past. */
-function formatProbeCountdown(nextAttemptAt: string, now: number): string | null {
-  const target = Date.parse(nextAttemptAt);
-  if (Number.isNaN(target)) return null;
-  const remaining = Math.round((target - now) / 1000);
-  if (remaining <= 0) return null;
-  if (remaining < 60) return `${remaining}s`;
-  return `${Math.round(remaining / 60)}m`;
-}
-
 /**
- * One agent's onboarding row (agent-auth.md rung 7, flag agentAuthEvidencePanes).
- * The badge label and tone are the runtime's derived state, verbatim. Every
- * NON-launchable terminal state carries an affordance routing to the agent
- * pane, so no state the card shows is a dead end; a stuck probe (backoff) shows
- * its next-attempt countdown rather than an eternal spinner. Launchable
- * (usable/authenticated) states need no action.
+ * One agent's onboarding row (agent_auth §4 cell 4). The badge label and tone
+ * are the runtime's status document, verbatim. Every NON-launchable terminal
+ * state carries an affordance routing to the agent pane, so no state the card
+ * shows is a dead end; a stale document shows its LAST OBSERVATION with a
+ * re-checking line rather than an eternal spinner.
  */
 function AuthSetupEvidenceRow({
   badge,
   onOpenAgents,
-  now,
 }: {
   badge: OnboardingAgentBadge;
   onOpenAgents: () => void;
-  now: number;
 }) {
-  const countdown =
-    badge.phase === "backoff" && badge.nextAttemptAt
-      ? formatProbeCountdown(badge.nextAttemptAt, now)
-      : null;
   const affordanceLabel = badge.launchable
     ? null
     : badge.actionLabel ?? HOME_SCREEN_LABELS.authSetupOpenAgents;
-  // The backoff line is shown VISIBLY (spec rung 7): a static next-attempt
-  // countdown (non-ticking, matching the rung-6 evidence summary's convention)
-  // and the last-failure detail, clamped so a long provider message stays one
-  // line rather than reflowing the card.
-  const backoffLine =
-    badge.phase === "backoff"
-      ? [
-          countdown ? `Next attempt in ${countdown}.` : "Retrying shortly.",
-          badge.lastFailureDetail ?? "",
-        ]
-          .join(" ")
-          .trim()
-      : null;
   return (
     <div
       className="flex min-w-0 flex-col gap-0.5"
@@ -91,12 +61,14 @@ function AuthSetupEvidenceRow({
           ) : null}
         </span>
       </div>
-      {backoffLine ? (
+      {badge.rechecking ? (
+        // Stale renders as stale, never as loading: the badge above is the last
+        // observation, and this line says the runtime is re-probing.
         <span
           className="line-clamp-1 pl-7 text-ui-sm text-muted-foreground"
-          data-agent-onboarding-next-attempt
+          data-agent-onboarding-rechecking
         >
-          {backoffLine}
+          {HOME_SCREEN_LABELS.authSetupRechecking}
         </span>
       ) : null}
     </div>
@@ -104,20 +76,17 @@ function AuthSetupEvidenceRow({
 }
 
 /**
- * Evidence-bound "setting up" card (agent-auth.md rung 7): the flag-ON
- * replacement for the timer card. It lists a per-agent badge bound to the real
- * install/ack/probe states, and disappears once every adopted agent is
- * terminal (state-bound completion, no timer). While shown, each terminal row
- * carries its next-action affordance.
+ * The state-bound "setting up" card (agent_auth §4 cell 4). It lists a per-agent
+ * badge bound to the real install state and the runtime's status document, and
+ * disappears once every adopted agent is terminal (state-bound completion, no
+ * timer). While shown, each non-launchable row carries its affordance.
  */
 export function AuthSetupEvidenceCard({
   evidence,
   onOpenAgents,
-  now = Date.now(),
 }: {
   evidence: AuthSetupEvidence;
   onOpenAgents: () => void;
-  now?: number;
 }) {
   if (evidence.badges.length === 0) {
     return null;
@@ -147,7 +116,6 @@ export function AuthSetupEvidenceCard({
             key={badge.harnessKind}
             badge={badge}
             onOpenAgents={onOpenAgents}
-            now={now}
           />
         ))}
       </div>

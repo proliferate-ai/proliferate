@@ -45,7 +45,6 @@ export function HomeNextScreen() {
     onboardingCards,
     isAddingRepo,
     handleHomeAction,
-    authSetupStep,
     authSetupEvidence,
   } = useHomeScreen();
   const homeNext = useHomeNextState({
@@ -118,7 +117,6 @@ export function HomeNextScreen() {
   // card.
   const readinessCard = useHomeInstallationReadiness(homeNext.modelGate.kind);
   const homeOnboardingVisible = onboardingCards.length > 0
-    || authSetupStep === "settingUp"
     || (authSetupEvidence !== undefined && authSetupEvidence !== null)
     || readinessCard !== null;
   // One mapping, keyed on the gate. Every silent arm is silent on purpose:
@@ -226,7 +224,6 @@ export function HomeNextScreen() {
                     cards={onboardingCards}
                     isAddingRepo={isAddingRepo}
                     onSelect={(card) => handleHomeAction(card.id)}
-                    authSetup={authSetupStep}
                     authSetupEvidence={authSetupEvidence}
                     readinessCard={readinessCard}
                     onOpenAgents={() => handleHomeAction("agent-settings")}
