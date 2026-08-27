@@ -11,7 +11,14 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 export interface SeatRotateSettingApi {
   /** The rider value — `rotate` defaults to true when the rider carries none. */
   rotateEnabled: boolean;
-  /** True once the settings rider has been read at least once. */
+  /**
+   * True once BOTH reads behind a write have landed: the settings rider AND
+   * the selections the editor seeds its state from. The switch must stay
+   * disabled (and `setRotate` a no-op) until then — the PUT below sends the
+   * editor's state as the full desired source list, and before the seed that
+   * state is the default (seatEnabled=false, rows=[]), so a click in that
+   * window would PUT `sources: []` and disable the seat pool server-side.
+   */
   loaded: boolean;
   busy: boolean;
   setRotate: (next: boolean) => void;
@@ -45,7 +52,18 @@ export function useSeatRotateSetting(
   const rotate = harnessSettings["rotate"];
   const rotateEnabled = typeof rotate === "boolean" ? rotate : true;
 
+  // The editor seeds `editorState` from the selections query in an effect that
+  // runs once that query resolves — so a resolved selections query is the
+  // seeded-editor signal (React flushes passive effects before dispatching a
+  // discrete event like the switch click, so a click can never observe the
+  // resolved-but-not-yet-seeded render). Until then the editor's state is the
+  // unseeded default and MUST NOT be written anywhere.
+  const editorSeeded = editor.selectionsQuery.data !== undefined;
+
   function setRotate(next: boolean) {
+    if (!editorSeeded) {
+      return;
+    }
     putSelections.mutate(
       {
         harnessKind,
@@ -67,7 +85,7 @@ export function useSeatRotateSetting(
 
   return {
     rotateEnabled,
-    loaded: settingsQuery.data !== undefined,
+    loaded: settingsQuery.data !== undefined && editorSeeded,
     busy: putSelections.isPending,
     setRotate,
   };
