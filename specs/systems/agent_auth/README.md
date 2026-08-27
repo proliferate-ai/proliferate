@@ -210,7 +210,15 @@ source = { kind: "gateway",         base_url, key }
        | { kind: "seat",            env: {CLAUDE_CODE_OAUTH_TOKEN: value}, seat_id }
 ```
 
-Two fields govern delivery: `sequence` travels **in the document** (monotonic per surface, bumped by every render whose content changed) and orders pushes — the runtime rejects a push whose sequence is below the persisted one; `fingerprint` (a content hash of the canonical harnesses array) travels **only as a `GET /state` rider** and detects change. A render that changes nothing changes neither, and downstream invalidation keys on per-harness content, never on the document's sequence. The wire shape change (revision → sequence) is made by changing the contract fixture, which breaks whichever side lags. `issuing_server_origin` is the server-switch guard: the courier stamps the origin it fetched from, and the runtime treats a document from any other origin as absent. A harness whose selected sources cannot be satisfied keeps its entry with the dead source omitted — present-but-empty fails closed at launch, with the refusal naming the actual reason. `GET /state` adds two response-only riders the courier strips before pushing: `fingerprint`, and `harness_settings` (the surface's full settings map, so an unconfigured harness's toggles still reach the pane).
+How delivery is governed:
+
+- **`sequence`** — in the document. Monotonic per surface, bumped only by a render whose content changed; the runtime rejects any push whose sequence is below the persisted one.
+- **`fingerprint`** — a `GET /state` rider only, never in the document. A content hash of the canonical harnesses array; pure change detection.
+- **A no-op render changes neither.** Downstream invalidation keys on per-harness content, never on the document's sequence.
+- **`issuing_server_origin`** — the server-switch guard. The courier stamps the origin it fetched from; the runtime treats a document from any other origin as absent.
+- **Unsatisfiable sources stay visible.** The harness keeps its entry with the dead source omitted — present-but-empty fails closed at launch, and the refusal names the actual reason.
+- **Two riders on `GET /state`**, stripped by the courier before the push: `fingerprint`, and `harness_settings` (the surface's full settings map, so an unconfigured harness's toggles still reach the pane).
+- **Shape changes go through the fixture** — change the contract fixture and whichever side lags breaks.
 
 ### Runtime persistent state (`<runtime_home>/`, mode 0600)
 
@@ -243,7 +251,14 @@ Five flows. Together they exercise every door in §1 and touch every table in §
 
 ### Flow 1 — Changing an agent's auth method, and having it actually apply
 
-Triggered by picking a method in settings. The write is validated (legality rules, org policy — a violating write gets a 403 at write time, never a launch failure later), stored as full desired state for the scope, and re-rendered; the courier delivers; the runtime applies and pokes the probe engine — **probing only the harnesses whose content changed**; the ack closes the loop, and a selection reads "applied" only when the ack carries the current revision and fingerprint. **A change isn't real until the machine has confirmed it.** Apply is two steps with distinct failure meanings: the state file persists once the document validates (this is what the ack acknowledges), and per-harness materialization failures surface in that harness's status document without blocking the ack — delivery truth and harness health are separate facts with separate owners. Failure exits: `400` illegal selection set · `403 policy_violation` · `AGENT_ROUTE_STATE_STALE` on an out-of-order push.
+Triggered by picking a method in settings. **A change isn't real until the machine has confirmed it.**
+
+- **Validate at write time** — legality rules + org policy; a violating write gets a `403` there, never a launch failure later.
+- **Store full desired state** for the scope, re-render, and let the courier deliver.
+- **Apply, then poke** — the runtime applies the document and pokes the probe engine for **only the harnesses whose content changed**.
+- **Ack closes the loop** — a selection reads "applied" only when the ack carries the current sequence and fingerprint.
+- **Apply is two steps with different failure meanings:** the state file persists once the document validates (that is what the ack acknowledges); a per-harness materialization failure surfaces in that harness's status document without blocking the ack. Delivery truth and harness health are separate facts with separate owners.
+- **Failure exits:** `400` illegal selection set · `403 policy_violation` · `AGENT_ROUTE_STATE_STALE` on an out-of-order push.
 
 ```mermaid
 sequenceDiagram
@@ -264,7 +279,17 @@ sequenceDiagram
 
 ### Flow 2 — Storing auth material: credentials and plans
 
-Everything that puts a secret into the vault or takes one out. Saving a bare API key or a typed provider config is a settings write straight into the vault. Minting a seat is the one upward secret path: the runtime's login terminal runs `claude setup-token` in an isolated directory and captures the printed token **in memory only** — the capture rule is the last non-empty line of terminal output matching `^sk-ant-[A-Za-z0-9_-]{40,}$` (the `oat01` infix is server-issued and version-suffixed — observed today, not contract; the loose prefix survives a version bump), the flow completes on terminal exit (or a 60-second grace after the pattern appears, whichever first), and mints are single-flight per harness — new machinery: today's login-terminal service spawns unconditionally. The seat's identity is user-entered at mint — the design renders each login as email + plan, and the system can learn neither (setup-tokens carry no profile scope), so the mint sheet asks for the account email (the user just signed into it in the browser) and optionally the plan tier, stored as `title` and a display tag, defaulting to "Max seat N" when skipped. The token is handed to the courier and uploaded into the vault; if capture fails at any step, the buffer is wiped and nothing was persisted anywhere. Revoking a key that an enabled selection references refuses with `409 agent_api_key_referenced`, naming the harnesses using it — keys disable, they never dangle. Every change here ends in a re-render and re-delivery (flow 1's tail). **Seat verification is the ordinary launch probe** run under the seat's isolated home after apply — no separate mechanism; a failed verification leaves the seat saved and the status document showing it unverified with the probe's failure detail, retried on the engine's normal backoff. (Prior art for the capture step: the claude adapter already exports portable auth from the macOS keychain for relocated homes — `auth/claude.rs`'s portable-auth export — the mint capture generalizes that move, it does not invent one.)
+Everything that puts a secret into the vault or takes one out. Every change here ends in a re-render and re-delivery (flow 1's tail).
+
+- **Saving a key** — a bare API key or a typed provider config is a settings write straight into the vault.
+- **Minting a seat** is the one upward secret path. The login terminal runs `claude setup-token` in an isolated directory; the token is captured **in memory only** and handed straight to the courier for the vault upload. If capture fails at any step, the buffer is wiped and nothing was persisted anywhere.
+    - Capture rule: the last non-empty line of terminal output matching `^sk-ant-[A-Za-z0-9_-]{40,}$` (the `oat01` infix is server-issued, observed not contractual — the loose prefix survives a version bump).
+    - Completion: terminal exit, or a 60-second grace after the pattern appears, whichever comes first.
+    - Single-flight per harness — a second mint focuses the open terminal. (New machinery: today's login-terminal service spawns unconditionally.)
+    - Identity is user-entered: the system can learn neither email nor plan (setup-tokens carry no profile scope), so the mint sheet asks for the account email and optionally the plan tier — stored as `title` + a display tag, defaulting to "Max seat N".
+    - Prior art: the claude adapter's portable-auth keychain export (`auth/claude.rs`) — the capture generalizes an existing move.
+- **Verification is the ordinary launch probe**, run under the seat's isolated home after apply — no separate mechanism. A failed verification leaves the seat saved, shown unverified with the probe's failure detail, retried on the engine's normal backoff.
+- **Revoking an in-use key refuses** with `409 agent_api_key_referenced`, naming the harnesses using it — keys disable, they never dangle.
 
 ```mermaid
 sequenceDiagram
@@ -287,7 +312,14 @@ sequenceDiagram
 
 ### Flow 3 — Configuring an agent for launch with the proper auth
 
-The heart of the system, triggered by every session create, resume, and fork. The runtime loads the applied document (checking the origin guard), resolves the harness's profile, and picks the source. For seats, the scheduler round-robins over active seats and skips cooling ones. For a headless run the ladder ran **server-side at placement** (`resolve_headless`: run override → the subject's own selection → the org default → a loud refusal, and **no branch may resolve to another person's vault row**); the resolved source travels in the run's own rendered document, and the runtime never runs the ladder. The recipes render the world the harness runs in, and the spawn applies the answer **last**: env to set, env to strip, so a leftover `ANTHROPIC_API_KEY` on the machine can never outrank the chosen method. It refuses — always with words — when nothing is configured (`NoConfiguredSource`), when the selected source can't be satisfied (`SourceUnsatisfied`, naming why: out of credits, key revoked), when every seat is cooling (`AllSeatsCooling`, naming the earliest reset), or when the state file is malformed.
+The heart of the system, triggered by every session create, resume, and fork.
+
+- **Load** the applied document, checking the origin guard.
+- **Pick the source** from the harness's profile. Seats: round-robin over active seats, skipping cooling ones.
+- **Headless runs resolved earlier, server-side at placement** — `resolve_headless`: run override → the subject's own selection → the org default → a loud refusal, and **no branch may resolve to another person's vault row**. The resolved source travels in the run's own rendered document; the runtime never runs the ladder.
+- **Render the recipes** (the per-harness application recipes in §4, cell 2) into the world the harness runs in.
+- **Apply the answer last** at spawn: env to set, env to strip — a leftover `ANTHROPIC_API_KEY` on the machine can never outrank the chosen method.
+- **Refuse with words, always:** `NoConfiguredSource` (nothing configured) · `SourceUnsatisfied` naming why (out of credits, key revoked) · `AllSeatsCooling` naming the earliest reset · a malformed state file.
 
 ```mermaid
 sequenceDiagram
@@ -315,7 +347,12 @@ launch_facts(harness, ws):
 
 ### Flow 4 — Detecting the authentication status of a harness
 
-Triggered by app start, an applied auth change, an install, a login-terminal exit, a backoff expiry, or a manual refresh — the probe engine's closed event set, which **includes its own recovery events**, so a missed probe heals without a human. Detection reads what exists (files, keychain, env — never writing any of it, and reading only the workspace's composed env for workspace checks, never the host's ambient one); the probe verifies what actually works; both land in the per-harness status document, which is also where a detected native login carries its "make this a seat" offer. **A harness reads green only on dated evidence** — a probe observation, a key-scoped gateway check, or an acknowledged applied route — never on bare file or keychain presence. A failed probe marks the document stale rather than dark: **a probe failure dims the light, it never turns it off.**
+Triggered by the probe engine's closed event set: app start, an applied auth change, an install, a login-terminal exit, a backoff expiry, a manual refresh. The set **includes its own recovery events**, so a missed probe heals without a human.
+
+- **Detection reads what exists** — files, keychain, env — and never writes any of it. Workspace checks read only the workspace's composed env, never the host's ambient one.
+- **The probe verifies what actually works.** Detection and verification both land in the per-harness status document — which is also where a detected native login carries its "make this a seat" offer.
+- **Green needs dated evidence** — a probe observation, a key-scoped gateway check, or an acknowledged applied route. Bare file or keychain presence never yields green.
+- **A probe failure dims the light, it never turns it off** — the document goes stale, not dark, and the last observation stays visible while the re-probe runs.
 
 ```mermaid
 sequenceDiagram
@@ -334,7 +371,20 @@ sequenceDiagram
 
 ### Flow 5 — Detecting the status of a plan
 
-Two signals, one picture. The **usage probe** is the soft signal: the server makes a one-token request with each active seat's token and parses the response's rate-limit headers — live 5-hour and 7-day utilization plus reset times, account-global — into `seat_usage_sample`, feeding the settings meters. Cadence is config (`agent_seat_usage_probe_active_interval`, default 5 minutes while any session runs on the seat; `_idle_interval`, default 30 minutes; off for revoked seats; a settings-pane open forces one sample). The request goes through the same pinned-address egress rules as every outbound call; provider errors record a `probe_failed` sample and back off exponentially to a one-hour cap. Samples older than 30 days are pruned by the writer; the meters read only the latest per seat. **Advisory only, never a launch gate**: the surface is undocumented, so control never depends on it. Observed **limit errors** are the hard signal: a seat that hits its limit mid-session is marked cooling (runtime-local, until the reset time the error carries), the next launch rotates to the next active seat or falls back to the gateway, the user is offered a relaunch, and the hit is reported upward through the courier as `agent_seat_limit_hit` so the meters and any future cross-machine reconciliation see it.
+Two signals, one picture.
+
+**The usage probe — the soft signal, advisory only, never a launch gate** (the header surface is undocumented, so control never depends on it):
+
+- A one-token request per active seat; the response's rate-limit headers carry live 5-hour and 7-day utilization plus resets, account-global → `seat_usage_sample` → the meters.
+- Cadence is config: `agent_seat_usage_probe_active_interval` (default 5 min while a session runs on the seat) · `_idle_interval` (default 30 min) · off for revoked seats · a settings-pane open forces one sample.
+- The request rides the same pinned-address egress rules as every outbound call; provider errors record a `probe_failed` sample and back off exponentially to a one-hour cap.
+- Samples older than 30 days are pruned by the writer; the meters read only the latest per seat.
+
+**Observed limit errors — the hard signal:**
+
+- A seat that hits its limit mid-session is marked cooling, runtime-local, until the reset time the error carries.
+- The next launch rotates to the next active seat, or falls back to the gateway; the user is offered a relaunch.
+- The hit is reported upward through the courier as `agent_seat_limit_hit`, so the meters and any future cross-machine reconciliation see it.
 
 ```mermaid
 sequenceDiagram
@@ -528,7 +578,24 @@ The per-harness recipe table — the one place "every harness has its own way of
 | grok | isolated `HOME`, `GROK_MODELS_BASE_URL`, `XAI_API_KEY` | the named env var | — |
 | cursor | typed refusal — no gateway route exists | the named env var (`CURSOR_API_KEY`) | — |
 
-A recipe never chooses a model. Ambient sanitization is **claude's** full treatment, applied on every routed claude launch: the rerouting flags (`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY`, `AWS_BEARER_TOKEN_BEDROCK`) are always stripped — a rerouting flag is exempt only when it is itself a provider_config key of the route — and every Anthropic selector the route did not itself set is removed; other harnesses strip exactly what their recipe names (codex's gateway route removes `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`; opencode and grok strip nothing). Removal wins over inherited values, applied last at spawn. Adding a harness means: declare its auth vocabulary in the registry, add its cardinality row, write its recipe. Nothing else changes.
+**The application recipes, exactly** — how a rendered source becomes the harness's world. This is the spec-first change surface: a structural change to how any harness receives auth is made HERE, then in `render.rs`.
+
+- **claude · gateway** — env only, no files: set `ANTHROPIC_BASE_URL` (proxy, trailing slash trimmed) + `ANTHROPIC_AUTH_TOKEN` (the scoped key) + `CLAUDE_CONFIG_DIR` → the stable isolated `claude-config/` dir (empty on purpose: it exists so an ambient `~/.claude` cannot defeat the env).
+- **claude · seat** — env only: set `CLAUDE_CODE_OAUTH_TOKEN` + `CLAUDE_CONFIG_DIR` → that seat's own dir (`claude-config-<seat>/`), which also neutralizes `apiKeyHelper` and ambient settings.
+- **claude · api_key / provider_config** — the named env var, or the provider env set: Bedrock = `CLAUDE_CODE_USE_BEDROCK=1` + `AWS_BEARER_TOKEN_BEDROCK` + `AWS_REGION`; Azure/Foundry = claude's Foundry vars (cell pending live verification).
+- **codex · gateway** — one file + two vars: write `config.toml` into a sequence-keyed `codex-home-<seq>/` declaring the single provider (`proliferate`, `base_url` suffixed `/v1`, `env_key = "PROLIFERATE_GATEWAY_KEY"`, `wire_api = "responses"`, **no model pin**); set `CODEX_HOME` → that dir + `PROLIFERATE_GATEWAY_KEY` = the scoped key.
+- **codex · api_key** — the named env var only. Seat route is phase 2 (the refreshing-file shape).
+- **opencode · gateway** — one file + three vars: write `opencode.json` (adds only the `proliferate` provider: `apiKey: "{env:PROLIFERATE_GATEWAY_KEY}"` + the exact live gateway model list from the plan seam); set `XDG_CONFIG_HOME` → the isolated dir, `OPENCODE_CONFIG` → the file path, `PROLIFERATE_GATEWAY_KEY` = the scoped key. **`XDG_DATA_HOME` stays ambient on purpose** — coexistence with native provider logins is opencode's model.
+- **opencode · api_key** — the named env var, additive beside gateway and native.
+- **grok · gateway** — env only: `HOME` → sequence-keyed `grok-home-<seq>/`, `GROK_MODELS_BASE_URL` (proxy), `XAI_API_KEY` (the scoped key).
+- **cursor** — gateway is a typed refusal (no route exists); api_key sets `CURSOR_API_KEY`.
+
+Rules that hold across every recipe:
+
+- **A recipe never chooses a model.** Config files carry providers and credentials, never a model pin; the persisted launch intent is the only explicit selection.
+- **Isolation follows the route.** A routed home contains only that route's material; native credentials are never copied in, and a routed launch never falls back to the ambient login.
+- **Sanitization:** claude gets the full treatment on every routed launch — the rerouting flags (`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY`, `AWS_BEARER_TOKEN_BEDROCK`) always stripped (exempt only when the flag is itself a provider_config key of the route), plus every Anthropic selector the route did not set. Other harnesses strip exactly what their recipe names (codex's gateway route removes `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`; opencode and grok strip nothing). Removal wins over inherited values, applied last at spawn.
+- **Adding a harness** = declare its auth vocabulary in the registry + add its cardinality row + write its recipe here and in `render.rs`. Nothing else changes.
 
 **Rotation ownership.** The rendered document carries **every active seat** for a harness as sources, in vault order; the runtime owns the rotation decision, because the runtime is where limit errors are observed. It keeps a per-seat cooling record (seat id, cooling_until) beside the status documents, picks the next non-cooling seat round-robin at each launch, and reports every limit hit upward through the courier as an `agent_seat_limit_hit` event so the server's meters and any future cross-machine reconciliation see it. The status document exposes the serving seat and the next in line (the design's serving-now / next-up tags), and rotation is a per-harness toggle riding `agent_auth_harness_settings` — off pins the applied seat. The server never picks seats; it only supplies the pool.
 
