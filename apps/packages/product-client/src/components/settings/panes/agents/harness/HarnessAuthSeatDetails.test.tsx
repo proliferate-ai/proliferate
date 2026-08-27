@@ -50,6 +50,9 @@ function editorApi(overrides: {
   return {
     authReady: true,
     apiKeysQuery: { data: overrides.seats ?? [] },
+    // A resolved selections query is the hook's seeded-editor signal; these
+    // tests all render a post-seed editor.
+    selectionsQuery: { data: [] },
     editorState: {
       gatewayEnabled: false,
       seatEnabled: overrides.seatEnabled ?? true,
