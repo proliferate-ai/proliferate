@@ -212,6 +212,14 @@ class BuildChecksTests(unittest.TestCase):
         self.assertIn("--workspace", clippy.cmd)
         self.assertNotIn("-D warnings", clippy.cmd)  # info mode until lint-wiring lands
 
+    def test_missing_nextest_is_a_loud_skip_not_a_fail(self):
+        scope = gate.classify(["anyharness/crates/anyharness-lib/src/lib.rs"])
+        checks = gate.build_checks(scope, **self._base_kwargs(have_nextest=False))
+        nextest = next(c for c in checks if c.name == "rust: nextest")
+        self.assertIsNone(nextest.cmd)
+        self.assertTrue(nextest.loud)
+        self.assertTrue(any(c.name.startswith("rust: clippy") and c.cmd for c in checks))
+
     def test_scripts_diff_adds_checker_proofs(self):
         scope = gate.classify(["scripts/check_docs.py"])
         checks = gate.build_checks(scope, **self._base_kwargs())

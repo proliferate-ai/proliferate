@@ -54,13 +54,18 @@ if [ -n "$py_files" ]; then
   fi
 fi
 
-# --- Rust: cargo fmt over the workspace when any .rs is staged --------------
+# --- Rust: rustfmt over the staged .rs files only ----------------------------
 rs_files=$(printf '%s\n' "$staged" | grep -E '\.rs$' || true)
 if [ -n "$rs_files" ]; then
   if command -v cargo >/dev/null 2>&1; then
-    if cargo fmt --all >/dev/null 2>&1; then
+    rs_existing=""
+    for f in $rs_files; do
+      [ -f "$f" ] && rs_existing="$rs_existing $f"
+    done
+    # shellcheck disable=SC2086
+    if [ -n "$rs_existing" ] && cargo fmt -- $rs_existing >/dev/null 2>&1; then
       # shellcheck disable=SC2086
-      git add $rs_files 2>/dev/null || warn "could not restage formatted rust files"
+      git add $rs_existing 2>/dev/null || warn "could not restage formatted rust files"
     else
       warn "cargo fmt failed; commit proceeds unformatted (the gate will tell you)."
     fi

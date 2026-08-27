@@ -264,6 +264,17 @@ def tool_exists(tool: str) -> bool:
     return which(tool) is not None
 
 
+def nextest_installed() -> bool:
+    """cargo-nextest is a separate binary; without it `cargo nextest` is a usage error."""
+    try:
+        proc = subprocess.run(
+            ["cargo", "nextest", "--version"], capture_output=True, text=True, check=False
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0
+
+
 # ---------------------------------------------------------------------------
 # Check assembly
 # ---------------------------------------------------------------------------
@@ -288,6 +299,7 @@ def build_checks(
     have_uv: bool,
     have_pnpm: bool,
     have_cargo: bool,
+    have_nextest: bool = True,
 ) -> list[Check]:
     checks: list[Check] = []
 
@@ -346,7 +358,17 @@ def build_checks(
             # Info mode until the lint-wiring slice lands the allow-list:
             # no -D warnings, so warnings alone exit 0; a compile error fails.
             checks.append(Check("rust: clippy (info mode)", f"cargo clippy {target}"))
-            checks.append(Check("rust: nextest", f"cargo nextest run {target}"))
+            if have_nextest:
+                checks.append(Check("rust: nextest", f"cargo nextest run {target}"))
+            else:
+                checks.append(
+                    Check(
+                        "rust: nextest",
+                        None,
+                        skip_reason="cargo-nextest not installed (cargo install cargo-nextest) — CI is authoritative",
+                        loud=True,
+                    )
+                )
 
     if scope.any_frontend() or scope.sdk or scope.sdk_react:
         if not have_pnpm:
@@ -438,7 +460,7 @@ def main(argv: list[str] | None = None) -> int:
             stream.reconfigure(line_buffering=True)
 
     paths, warning = changed_files(REPO)
-    if warning:
+    if warning and not args.all:
         print(f"[gate] WARNING: {warning}", file=sys.stderr)
         scope = Scope()
     elif args.all:
@@ -460,6 +482,7 @@ def main(argv: list[str] | None = None) -> int:
         have_uv=tool_exists("uv"),
         have_pnpm=tool_exists("pnpm"),
         have_cargo=tool_exists("cargo"),
+        have_nextest=tool_exists("cargo") and nextest_installed(),
     )
 
     if args.list:
