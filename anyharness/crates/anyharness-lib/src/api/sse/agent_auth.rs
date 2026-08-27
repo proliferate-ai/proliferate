@@ -101,11 +101,15 @@ mod tests {
     #[tokio::test]
     async fn a_lagging_client_ends_the_stream_instead_of_missing_changes() {
         let (tx, rx) = broadcast::channel(2);
-        // Overflow the channel: the receiver's next poll is `Lagged`.
+        // Overflow the channel: the receiver's next poll is `Lagged`, and two
+        // documents are still buffered behind it. Dropping the sender means a
+        // stream that CONTINUES past the lag still terminates — so this test
+        // fails with two events rather than hanging when the property is gone.
         for index in 0..5 {
             tx.send(doc(&format!("harness-{index}")))
                 .expect("a live receiver exists");
         }
+        drop(tx);
         let events: Vec<_> = live_status_stream(rx).collect().await;
         assert!(
             events.is_empty(),
