@@ -7,6 +7,35 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- DEV-ONLY light-mode profile hook (worktree branch, never merges):
+         ?profile=codex|paper|structured|soft-depth applies that candidate and
+         pins light mode against the app's dark-at-init default; ?profile=off
+         clears it. The choice sticks in localStorage across reloads. -->
+    <script>
+      (function () {
+        var KEY = "dev-theme-profile";
+        var params = new URLSearchParams(location.search);
+        var fromUrl = params.get("profile");
+        if (fromUrl === "off" || fromUrl === "") {
+          try { localStorage.removeItem(KEY); } catch (e) {}
+          return;
+        }
+        var profile;
+        try { profile = fromUrl || localStorage.getItem(KEY); } catch (e) { profile = fromUrl; }
+        if (!profile) return;
+        try { localStorage.setItem(KEY, profile); } catch (e) {}
+        var el = document.documentElement;
+        function apply() {
+          el.setAttribute("data-mode", "light");
+          el.style.colorScheme = "light";
+          el.setAttribute("data-theme-profile", profile);
+        }
+        apply();
+        new MutationObserver(function () {
+          if (el.getAttribute("data-mode") !== "light") apply();
+        }).observe(el, { attributes: true, attributeFilter: ["data-mode"] });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
