@@ -8,7 +8,7 @@ use crate::domains::agents::installer::manifest::{read_manifest, role_name};
 use crate::domains::agents::model::{ResolvedArtifact, SpawnSpec};
 use crate::domains::agents::readiness::service::resolve_agent_unrouted;
 use crate::domains::agents::registry;
-use crate::domains::agents::route_auth::state::load_state_file;
+use crate::domains::agents::route_auth::{current_server_origin, load_effective_state};
 
 /// Hash only product-owned launch-option inputs. Workspace/session environment
 /// is deliberately absent from this function and from every caller.
@@ -18,10 +18,10 @@ use crate::domains::agents::route_auth::state::load_state_file;
 /// and override-backed harnesses, which have no installer manifest at all.
 pub fn compute_harness_basis_revision(runtime_home: &Path, harness_kind: &str) -> String {
     let mut hasher = Sha256::new();
-    // v3 adds model-scoped control observations. Folding the observation
-    // schema into the basis prevents a runtime upgrade from continuing to
-    // serve a persisted flat v2 row under the new admission rules.
-    hasher.update(b"harness-launch-options-v3\0");
+    // v4 replaces the global-document fold with the harness's OWN auth-entry
+    // content hash (below) — the fold change legitimately invalidates every
+    // basis once at upgrade. v3 added model-scoped control observations.
+    hasher.update(b"harness-launch-options-v4\0");
     hasher.update(harness_kind.as_bytes());
     hasher.update(b"\0");
 
@@ -64,18 +64,52 @@ pub fn compute_harness_basis_revision(runtime_home: &Path, harness_kind: &str) -
         hash_field(&mut hasher, b"unregistered-harness");
     }
 
-    let auth_sequence = load_state_file(runtime_home)
-        .ok()
-        .flatten()
-        .map(|state| state.sequence)
-        .unwrap_or(0);
-    hasher.update(auth_sequence.to_be_bytes());
+    hash_harness_auth_entry(&mut hasher, runtime_home, harness_kind);
 
     let mut revision = String::with_capacity(64);
     for byte in hasher.finalize() {
         let _ = write!(&mut revision, "{byte:02x}");
     }
     revision
+}
+
+/// Fold the harness's OWN entry from the applied agent-auth document — a
+/// content hash, never the document's global `sequence`.
+///
+/// The old fold hashed the whole document's sequence, so EVERY push
+/// invalidated EVERY harness's launch options — a re-render that changed only
+/// grok's auth made codex's persisted observation unservable (the probe-decay
+/// bug's first half). Downstream invalidation keys on per-harness content
+/// (spec §2, "A no-op render changes neither"), so this hashes exactly what a
+/// launch render would consume for THIS harness:
+///
+/// - the SAME effective-state seam launches use ([`load_effective_state`]
+///   with the current server origin), so an origin-mismatched or absent
+///   document reads as no entry here exactly as it renders native there;
+/// - the harness's `HarnessAuth` entry serialized canonically (serde_json
+///   without `preserve_order`, so `settings` maps are key-sorted) when
+///   present, else a `no-auth-entry` marker;
+/// - a malformed/unreadable state file hashes as absent, matching the render
+///   plane's tolerance (readiness must not churn a basis the launcher itself
+///   tolerates).
+fn hash_harness_auth_entry(hasher: &mut Sha256, runtime_home: &Path, harness_kind: &str) {
+    let entry_bytes = load_effective_state(runtime_home, current_server_origin().as_deref())
+        .ok()
+        .flatten()
+        .and_then(|state| {
+            state
+                .harnesses
+                .iter()
+                .find(|entry| entry.harness_kind == harness_kind)
+                .and_then(|entry| serde_json::to_vec(entry).ok())
+        });
+    match entry_bytes {
+        Some(bytes) => {
+            hash_field(hasher, b"auth-entry");
+            hash_field(hasher, &bytes);
+        }
+        None => hash_field(hasher, b"no-auth-entry"),
+    }
 }
 
 fn effective_ambient_native_override(harness_kind: &str) -> Option<PathBuf> {
@@ -327,6 +361,114 @@ mod tests {
         let mut changed_cwd = base.clone();
         changed_cwd.cwd = Some(PathBuf::from("/tmp/adapter-b"));
         assert_ne!(spawn_spec_digest(&base), spawn_spec_digest(&changed_cwd));
+    }
+
+    fn write_state_json(home: &Path, value: &serde_json::Value) {
+        let path = crate::domains::agents::route_auth::state_file_path(home);
+        std::fs::create_dir_all(path.parent().expect("state parent")).expect("create agent-auth");
+        std::fs::write(&path, serde_json::to_vec_pretty(value).expect("serialize"))
+            .expect("write state");
+    }
+
+    fn state_doc(sequence: i64, harnesses: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "version": 2,
+            "sequence": sequence,
+            "harnesses": harnesses,
+        })
+    }
+
+    fn codex_entry(key: &str) -> serde_json::Value {
+        serde_json::json!({
+            "harness_kind": "codex",
+            "sources": [{ "kind": "gateway", "base_url": "https://gw.example", "key": key }],
+        })
+    }
+
+    fn grok_entry(key: &str) -> serde_json::Value {
+        serde_json::json!({
+            "harness_kind": "grok",
+            "sources": [{ "kind": "api_key", "env_var_name": "XAI_API_KEY", "value": key }],
+        })
+    }
+
+    /// The probe-decay fix, pinned from both sides:
+    /// - a push that changed ONLY the sequence (identical harness entry) leaves
+    ///   the basis unchanged — a no-op render cannot invalidate launch options;
+    /// - a push that changed ONLY ANOTHER harness's entry leaves this
+    ///   harness's basis unchanged — changing grok's auth cannot dim codex;
+    /// - a push that changed THIS harness's entry changes the basis (the
+    ///   regression guard: content still invalidates).
+    #[test]
+    fn basis_ignores_noop_renders() {
+        let home = TestDir::new("basis-noop-renders");
+
+        write_state_json(
+            home.path(),
+            &state_doc(1, serde_json::json!([codex_entry("sk-vk-1"), grok_entry("xai-1")])),
+        );
+        let baseline = compute_harness_basis_revision(home.path(), "codex");
+
+        // Sequence moved, codex's entry byte-identical → basis unchanged.
+        write_state_json(
+            home.path(),
+            &state_doc(2, serde_json::json!([codex_entry("sk-vk-1"), grok_entry("xai-1")])),
+        );
+        assert_eq!(
+            compute_harness_basis_revision(home.path(), "codex"),
+            baseline,
+            "a sequence-only push must not invalidate the harness's basis"
+        );
+
+        // Only grok's entry changed → codex's basis still unchanged.
+        write_state_json(
+            home.path(),
+            &state_doc(3, serde_json::json!([codex_entry("sk-vk-1"), grok_entry("xai-2")])),
+        );
+        assert_eq!(
+            compute_harness_basis_revision(home.path(), "codex"),
+            baseline,
+            "another harness's auth change must not invalidate this harness's basis"
+        );
+
+        // Codex's own entry changed → the basis moves.
+        write_state_json(
+            home.path(),
+            &state_doc(4, serde_json::json!([codex_entry("sk-vk-2"), grok_entry("xai-2")])),
+        );
+        assert_ne!(
+            compute_harness_basis_revision(home.path(), "codex"),
+            baseline,
+            "the harness's own auth change must invalidate its basis"
+        );
+    }
+
+    /// Absent entry, present entry, and malformed state are three distinct
+    /// worlds only where the render plane treats them distinctly: absent and
+    /// malformed both render tolerantly (no route), so both hash as absent.
+    #[test]
+    fn basis_hashes_malformed_state_as_absent() {
+        let home = TestDir::new("basis-malformed-absent");
+        let absent = compute_harness_basis_revision(home.path(), "codex");
+
+        let path = crate::domains::agents::route_auth::state_file_path(home.path());
+        std::fs::create_dir_all(path.parent().expect("state parent")).expect("create agent-auth");
+        std::fs::write(&path, b"{ not json").expect("write malformed state");
+        assert_eq!(
+            compute_harness_basis_revision(home.path(), "codex"),
+            absent,
+            "a malformed state file must hash as no entry, matching render tolerance"
+        );
+
+        write_state_json(
+            home.path(),
+            &state_doc(1, serde_json::json!([codex_entry("sk-vk-1")])),
+        );
+        assert_ne!(
+            compute_harness_basis_revision(home.path(), "codex"),
+            absent,
+            "a present entry must hash differently from no entry"
+        );
     }
 
     #[test]
