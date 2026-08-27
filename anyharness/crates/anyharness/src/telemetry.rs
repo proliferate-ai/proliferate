@@ -35,6 +35,9 @@ use crate::{
 };
 
 mod scrub;
+mod session_tag;
+
+use session_tag::{session_id_for_event, SessionIdSpanLayer, SESSION_ID_SPAN_FIELD};
 
 const ANYHARNESS_TELEMETRY_MODE: &str = "hosted_product";
 const ANYHARNESS_RECORD_NAME_PREFIX: &str = "anyharness.";
@@ -172,6 +175,11 @@ where
         if is_runtime_incident {
             sentry_event.fingerprint =
                 Cow::Owned(vec![Cow::Borrowed(RUNTIME_INCIDENT_FINGERPRINT)]);
+        }
+        if let Some(session_id) = session_id_for_event(event, &context) {
+            sentry_event
+                .tags
+                .insert(SESSION_ID_SPAN_FIELD.to_string(), session_id);
         }
         mappings.push(sentry_tracing::EventMapping::Event(sentry_event));
     }
@@ -330,6 +338,7 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
 
     tracing_subscriber::registry()
         .with(console_layer)
+        .with(SessionIdSpanLayer)
         .with(sentry_tracing::layer().event_mapper(sentry_event_mapper))
         .with(diagnostics_layer)
         .with(file_sink.as_ref().map(|sink| {
