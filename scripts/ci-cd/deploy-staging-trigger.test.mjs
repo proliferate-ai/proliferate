@@ -37,17 +37,42 @@ const MAIN_BRANCH_FILTER = /branches:\s*(?:\[[^\]]*\bmain\b[^\]]*\]|(?:\r?\n\s*-
 // deploy-environment casing test below.
 const PRODUCTION_ENVIRONMENT = /environment:\s*["']?[Pp]roduction["']?/;
 
-test("staging runs only when an operator dispatches it", () => {
+test("staging deploys from green main and from an operator", () => {
   const triggers = triggerBlock(workflow, "deploy-staging.yml");
 
-  assert.match(triggers, /^on:\n  workflow_dispatch:$/m);
-  assert.doesNotMatch(triggers, /workflow_run:/);
+  // The one automated transition: a completed `CI` run on main.
+  assert.match(
+    triggers,
+    /workflow_run:\n    workflows: \["CI"\]\n    types: \[completed\]\n    branches: \[main\]/,
+  );
+  // Operators keep dispatch for reruns, forced surfaces, and dry runs.
+  assert.match(triggers, /workflow_dispatch:/);
   assert.doesNotMatch(triggers, /\bpush:/);
   assert.doesNotMatch(triggers, /\bschedule:/);
+
+  // Auto runs deploy only what CI proved: the plan job refuses non-success
+  // conclusions, and the checkout pins the triggering run's exact head SHA.
+  assert.match(
+    workflow,
+    /github\.event_name != 'workflow_run' \|\| github\.event\.workflow_run\.conclusion == 'success'/,
+  );
+  assert.match(
+    workflow,
+    /ref: \$\{\{ github\.event\.inputs\.ref \|\| github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/,
+  );
+
+  // Latest-wins staggering: one running plus one pending, never cancel a
+  // deploy mid-roll.
   assert.match(workflow, /^  cancel-in-progress: false$/m);
+
+  // A staleness fallback deploys everything unless the operator chose surfaces.
+  assert.match(
+    workflow,
+    /FORCE_SURFACES: \$\{\{ github\.event\.inputs\.force_surfaces \|\| \(steps\.base\.outputs\.base_mode == 'fallback' && 'all'\) \|\| '' \}\}/,
+  );
 });
 
-test("merging to main deploys nothing", () => {
+test("deploy-staging is the only workflow that auto-deploys from main", () => {
   const automatic = [];
   for (const name of workflowNames()) {
     const source = read(name);
@@ -60,7 +85,9 @@ test("merging to main deploys nothing", () => {
     }
   }
 
-  assert.deepEqual(automatic, []);
+  // Staging is the sanctioned automatic transition; production reaches a
+  // deploy lane only through release.yml's cron/dispatch (pinned below).
+  assert.deepEqual(automatic, ["deploy-staging.yml"]);
 });
 
 test("release.yml is the only entrypoint into a production deploy lane", () => {

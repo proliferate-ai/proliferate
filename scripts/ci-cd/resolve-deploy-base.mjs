@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import { pathToFileURL } from "node:url";
 
 import {
   listSuccessfulWorkflowRuns,
@@ -71,12 +72,24 @@ function fallbackSha(parsed) {
   return parsed.fallback || parsed.head;
 }
 
-function writeGithubOutput(baseSha) {
+// The resolution contract: a real prior deploy yields `resolved`; every other
+// path (no token, no candidate run, no live artifact) is a `fallback` and the
+// caller must treat the base as unreliable — deploy-staging.yml forces the full
+// surface set on fallback so a long-idle environment cannot head^-diff to a
+// near-no-op.
+export function resolutionOutputs(deployHeadSha, parsed) {
+  if (deployHeadSha) {
+    return { baseSha: deployHeadSha, baseMode: "resolved" };
+  }
+  return { baseSha: fallbackSha(parsed), baseMode: "fallback" };
+}
+
+function writeGithubOutput(baseSha, baseMode) {
   const outputPath = process.env.GITHUB_OUTPUT;
   if (!outputPath) {
     return;
   }
-  fs.appendFileSync(outputPath, `base_sha=${baseSha}\n`);
+  fs.appendFileSync(outputPath, `base_sha=${baseSha}\nbase_mode=${baseMode}\n`);
 }
 
 async function resolveCandidateDeployHeadSha(candidate, artifactName, token) {
@@ -111,8 +124,9 @@ async function main() {
 
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (!token) {
-    const baseSha = fallbackSha(parsed);
-    writeGithubOutput(baseSha);
+    const { baseSha, baseMode } = resolutionOutputs("", parsed);
+    writeGithubOutput(baseSha, baseMode);
+    console.error(`base_mode=${baseMode} (no token)`);
     console.log(baseSha);
     return;
   }
@@ -160,9 +174,12 @@ async function main() {
     );
   }
 
-  const baseSha = run?.deployHeadSha || fallbackSha(parsed);
-  writeGithubOutput(baseSha);
+  const { baseSha, baseMode } = resolutionOutputs(run?.deployHeadSha || "", parsed);
+  writeGithubOutput(baseSha, baseMode);
+  console.error(`base_mode=${baseMode}`);
   console.log(baseSha);
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}
