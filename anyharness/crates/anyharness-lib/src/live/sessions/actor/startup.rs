@@ -243,7 +243,7 @@ impl SessionActor {
             .close
             .is_some();
         let (native_session_id, mut native_startup_state, startup_disposition) = native_session;
-        native_startup_state.absorb_init_meta_model_state(init_response.meta.as_ref());
+        native_startup_state.absorb_init_meta_model_menu(init_response.meta.as_ref());
         let mut startup_state: SessionStartupState = native_startup_state.into();
         startup_state.prompt_capabilities =
             capabilities_from_acp(Some(&init_response.agent_capabilities.prompt_capabilities));
