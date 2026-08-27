@@ -42,6 +42,13 @@ export function agentAuthStateKey(surface: string) {
   return [...agentAuthStateRootKey(), surface] as const;
 }
 
+// Under the state root ON PURPOSE: every invalidation that re-pulls the state
+// document (selection PUT, vault create/revoke, seat mint, enrollment sync)
+// re-reads the settings rider on the same chain.
+export function agentAuthHarnessSettingsKey(surface: string) {
+  return [...agentAuthStateRootKey(), surface, "harness-settings"] as const;
+}
+
 export function agentGatewayCapabilitiesKey() {
   return [...agentGatewayRootKey(), "capabilities"] as const;
 }

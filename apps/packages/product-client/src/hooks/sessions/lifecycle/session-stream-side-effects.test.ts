@@ -26,6 +26,11 @@ const mocks = vi.hoisted(() => ({
   notifyTurnEnd: vi.fn(),
   notifyUserFacingTurnEnd: vi.fn(),
   clearPendingConfigRollbackCheck: vi.fn(),
+  relaySeatLimitHit: vi.fn(),
+}));
+
+vi.mock("#product/lib/access/cloud/seat-limit-report", () => ({
+  relaySeatLimitHit: mocks.relaySeatLimitHit,
 }));
 
 vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
@@ -188,6 +193,25 @@ describe("applyBatchedStreamSideEffects", () => {
     expect(mocks.notifyTurnEnd).toHaveBeenNthCalledWith(1, "session-1", "turn_ended");
     expect(mocks.notifyTurnEnd).toHaveBeenNthCalledWith(2, "session-1", "error");
     expect(mocks.notifyUserFacingTurnEnd).not.toHaveBeenCalled();
+  });
+
+  it("relays a seat_usage_limit error through the courier report, plain errors not", () => {
+    applyBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [
+        errorEvent(2),
+        seatLimitErrorEvent(3),
+      ],
+    });
+
+    expect(mocks.relaySeatLimitHit).toHaveBeenCalledTimes(1);
+    expect(mocks.relaySeatLimitHit).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      seq: 3,
+      seatId: "seat-1",
+      window: "five_hour",
+      resetAt: "2026-08-27T18:00:00Z",
+    });
   });
 
   it("emits user-facing completion only for explicitly root sessions", () => {
@@ -450,6 +474,26 @@ function errorEvent(seq: number): SessionEventEnvelope {
       type: "error",
       message: "failed",
     },
+  };
+}
+
+function seatLimitErrorEvent(seq: number): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    event: {
+      type: "error",
+      message: "seat usage limit reached",
+      code: "seat_usage_limit",
+      details: {
+        kind: "seat_usage_limit",
+        seatId: "seat-1",
+        window: "five_hour",
+        resetAt: "2026-08-27T18:00:00Z",
+      },
+    } as unknown as SessionEventEnvelope["event"],
   };
 }
 

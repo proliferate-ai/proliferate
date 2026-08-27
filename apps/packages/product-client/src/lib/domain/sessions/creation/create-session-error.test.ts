@@ -63,6 +63,73 @@ describe("session create failure presentation", () => {
     ).toBe(false);
   });
 
+  it("keeps the server-sent words for the launch-refusal codes", () => {
+    // agent_auth flow 3: the runtime 409 carries plain-words detail since
+    // slice 1 — those words always win over any client copy.
+    const cooling = anyHarnessError(
+      "AGENT_ROUTE_SEAT_COOLING",
+      "Your Claude.ai login is cooling down until 6:00 PM.",
+    );
+    const allCooling = anyHarnessError(
+      "AGENT_ROUTE_ALL_SEATS_COOLING",
+      "All Claude.ai logins are cooling — the earliest resets at 6:00 PM.",
+    );
+    const missing = anyHarnessError(
+      "AGENT_ROUTE_SELECTION_MISSING",
+      "Claude Code isn't set up — pick a method in Settings.",
+    );
+
+    expect(formatSessionCreateFailureMessage(cooling)).toBe(
+      "Your Claude.ai login is cooling down until 6:00 PM.",
+    );
+    expect(formatSessionCreateFailureMessage(allCooling)).toBe(
+      "All Claude.ai logins are cooling — the earliest resets at 6:00 PM.",
+    );
+    expect(formatSessionCreateFailureMessage(missing)).toBe(
+      "Claude Code isn't set up — pick a method in Settings.",
+    );
+    // The cause path (one wrap) reaches the same words.
+    const wrapped = new Error("Failed to create session");
+    (wrapped as Error & { cause?: unknown }).cause = cooling;
+    expect(formatSessionCreateCause(wrapped)).toBe(
+      "Your Claude.ai login is cooling down until 6:00 PM.",
+    );
+  });
+
+  it("never renders a bare AGENT_ROUTE_*/SEAT_* code to a human", () => {
+    // A refusal that arrived with the code echoed as its own detail falls to
+    // the plain-words fallback copy, never the code string.
+    for (
+      const code of [
+        "AGENT_ROUTE_SEAT_COOLING",
+        "AGENT_ROUTE_ALL_SEATS_COOLING",
+        "AGENT_ROUTE_SELECTION_MISSING",
+      ]
+    ) {
+      const bare = anyHarnessError(code, code);
+      const message = formatSessionCreateFailureMessage(bare);
+      expect(message).not.toContain(code);
+      expect(message).not.toMatch(/^[A-Z][A-Z0-9_]*$/);
+      // The fallback names the cause, not generic envelope boilerplate.
+      expect(message.length).toBeGreaterThan(20);
+      expect(formatSessionCreateCause(bare)).toBe(message);
+    }
+    expect(
+      formatSessionCreateFailureMessage(
+        anyHarnessError("AGENT_ROUTE_SELECTION_MISSING", "AGENT_ROUTE_SELECTION_MISSING"),
+      ),
+    ).toBe("This agent isn't set up to authenticate yet. Pick a method in Settings.");
+    // An UNKNOWN coded failure whose message is a naked code degrades to the
+    // generic plain-words fallback.
+    const unknown = new Error("SEAT_ROTATION_EXPLODED");
+    expect(formatSessionCreateFailureMessage(unknown)).toBe(
+      "The session could not start. Try again.",
+    );
+    expect(formatSessionCreateCause(unknown)).toBe(
+      "The session could not start. Try again.",
+    );
+  });
+
   it("preserves generic errors", () => {
     const error = new Error("network down");
 

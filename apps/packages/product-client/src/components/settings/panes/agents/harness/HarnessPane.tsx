@@ -304,7 +304,7 @@ function HarnessAuthSurface({
           {selectedMethod === "api_key" ? (
             <ApiKeyDetails harnessKind={harnessKind} editor={editor} />
           ) : selectedMethod === "seat" ? (
-            <SeatDetails editor={editor} />
+            <SeatDetails editor={editor} surface={surface} />
           ) : selectedMethod === "cli" ? (
             <CliDetails editor={editor} />
           ) : null}

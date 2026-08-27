@@ -1,30 +1,46 @@
 import { useCallback, useState } from "react";
-import type { AgentApiKey } from "@proliferate/cloud-sdk";
+import type { AgentApiKey, AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { useRevokeAgentApiKey } from "@proliferate/cloud-sdk-react";
+import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
+import { Switch } from "#product/primitives/Switch";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { AgentLoginTerminalPanel } from "#product/components/agents/AgentLoginTerminalPanel";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { formatSeatResetTime } from "#product/domain/chats/transcript/seat-usage-limit";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { useSeatMintWorkflow } from "#product/hooks/agents/workflows/use-seat-mint-workflow";
+import { useSeatRotateSetting } from "#product/hooks/agents/workflows/use-seat-rotate-setting";
+import { readAuthRotation } from "#product/lib/domain/settings/agent-auth-rotation";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
- * The Claude.ai logins section, single-seat subset (seats v1 — Auth Options
- * v2 design, the slice-1 cut): the seat list with labels, the "Add a
- * Claude.ai login" affordance, the mint sheet (email + optional plan tier,
- * defaulting server-side to "Max seat N"), and the inline waiting-for-sign-in
- * row with the mint terminal. Meters, serving-now/next-up tags, and the
- * rotate switch are later slices.
+ * The Claude.ai logins section (seats v1 + slice 2, Auth Options v2 design):
+ * the seat list with labels and serving-now/next-up tags, the all-cooling
+ * line, the rotate switch, the "Add a Claude.ai login" affordance, the mint
+ * sheet (email + optional plan tier, defaulting server-side to "Max seat N"),
+ * and the inline waiting-for-sign-in row with the mint terminal. Meters are a
+ * later slice.
+ *
+ * The tags render the runtime's rotation status VERBATIM (agent_auth §4
+ * "Rotation ownership": servingSeatId / nextSeatId / coolingUntil on the
+ * agent summary's authState) — the frontend derives nothing.
  *
  * Seat identity is user-entered by design: a setup-token carries no profile
  * scope, so the system can learn neither email nor plan on its own.
  */
-export function SeatDetails({ editor }: { editor: HarnessAuthEditorApi }) {
+export function SeatDetails({
+  editor,
+  surface,
+}: {
+  editor: HarnessAuthEditorApi;
+  surface: AgentAuthSurface;
+}) {
   const showToast = useToastStore((state) => state.show);
   const revokeKey = useRevokeAgentApiKey();
+  const rotateSetting = useSeatRotateSetting("claude", surface, editor);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [planTier, setPlanTier] = useState("");
@@ -32,6 +48,10 @@ export function SeatDetails({ editor }: { editor: HarnessAuthEditorApi }) {
   const seats = (editor.apiKeysQuery.data ?? []).filter(
     (key) => key.kind === "anthropic_subscription" && key.status === "active",
   );
+  const rotation = readAuthRotation(editor.localAgent?.authState);
+  const coolingResetTime = rotation.coolingUntil === null
+    ? null
+    : formatSeatResetTime(rotation.coolingUntil);
 
   const handleSeatAdded = useCallback((seat: AgentApiKey) => {
     showToast(HARNESS_PANE_COPY.seatAddedToast(seat.title), "info");
@@ -95,6 +115,15 @@ export function SeatDetails({ editor }: { editor: HarnessAuthEditorApi }) {
               <span className="font-mono text-ui-sm font-normal text-muted-foreground">
                 {seat.redactedHint}
               </span>
+              {seat.id === rotation.servingSeatId ? (
+                <Badge size="micro" tone="success" data-seat-serving-now={seat.id}>
+                  {HARNESS_PANE_COPY.seatServingNowTag}
+                </Badge>
+              ) : seat.id === rotation.nextSeatId ? (
+                <Badge size="micro" data-seat-next-up={seat.id}>
+                  {HARNESS_PANE_COPY.seatNextUpTag}
+                </Badge>
+              ) : null}
             </span>
           }
         >
@@ -109,6 +138,27 @@ export function SeatDetails({ editor }: { editor: HarnessAuthEditorApi }) {
           </Button>
         </SettingsRow>
       ))}
+
+      {coolingResetTime !== null ? (
+        <p className="text-ui-sm text-muted-foreground" data-seat-cooling-line>
+          {HARNESS_PANE_COPY.seatCoolingLine(coolingResetTime)}
+        </p>
+      ) : null}
+
+      {seats.length > 0 ? (
+        <SettingsRow
+          data-seat-rotate-row
+          label={HARNESS_PANE_COPY.seatRotateLabel}
+          description={HARNESS_PANE_COPY.seatRotateDescription}
+        >
+          <Switch
+            checked={rotateSetting.rotateEnabled}
+            disabled={!rotateSetting.loaded || rotateSetting.busy}
+            aria-label={HARNESS_PANE_COPY.seatRotateLabel}
+            onChange={(next) => rotateSetting.setRotate(next)}
+          />
+        </SettingsRow>
+      ) : null}
 
       {minting ? (
         // The inline waiting-for-sign-in row + the mint terminal (the

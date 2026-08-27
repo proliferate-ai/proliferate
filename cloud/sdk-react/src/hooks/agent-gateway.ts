@@ -32,6 +32,7 @@ import {
 import { useCloudClient } from "../context/CloudClientProvider.js";
 import {
   agentApiKeysKey,
+  agentAuthHarnessSettingsKey,
   agentAuthSelectionsKey,
   agentAuthSelectionsRootKey,
   agentAuthStateKey,
@@ -150,6 +151,34 @@ export function useAgentAuthState(surface: AgentAuthSurface, enabled = true) {
   return useQuery<AgentAuthState>({
     queryKey: agentAuthStateKey(surface),
     queryFn: () => getAgentAuthState(surface, client),
+    enabled,
+  });
+}
+
+/** The `harness_settings` rider off `GET /state`: `{harnessKind: {key: bool}}`. */
+export type AgentAuthHarnessSettingsMap = NonNullable<
+  AgentAuthState["harness_settings"]
+>;
+
+/**
+ * The settings pane's toggle read (agent_auth spec §2, the `harness_settings`
+ * rider on `GET /state` — the spec-sanctioned pane read for per-harness
+ * toggles like `rotate`). SELECTS ONLY THE RIDER: the queryFn extracts
+ * `harness_settings` and drops the rest of the response, so the cache never
+ * holds the state.json document body — it carries the caller's decrypted
+ * credential material (see `useAgentAuthState`).
+ */
+export function useAgentAuthHarnessSettings(
+  surface: AgentAuthSurface,
+  enabled = true,
+) {
+  const client = useCloudClient();
+  return useQuery<AgentAuthHarnessSettingsMap>({
+    queryKey: agentAuthHarnessSettingsKey(surface),
+    queryFn: async () => {
+      const state = await getAgentAuthState(surface, client);
+      return state.harness_settings ?? {};
+    },
     enabled,
   });
 }

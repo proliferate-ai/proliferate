@@ -1,11 +1,15 @@
 import type { ErrorItem } from "@anyharness/sdk";
+import {
+  formatSeatResetTime,
+  readSeatUsageLimitDetails,
+} from "./seat-usage-limit";
 
 export interface SessionErrorPresentation {
   title: string;
   description: string;
   technicalDetail: string | null;
   fallbackModelLabel: string | null;
-  recoveryAction: "choose_model" | null;
+  recoveryAction: "choose_model" | "relaunch_session" | null;
 }
 
 const GENERIC_ERROR_TITLE = "Chat stopped";
@@ -48,6 +52,27 @@ export function presentSessionError(item: ErrorItem): SessionErrorPresentation {
       technicalDetail: technicalMessage,
       fallbackModelLabel,
       recoveryAction: null,
+    };
+  }
+
+  // Seat plan limit (agent_auth flow 5). The reader feature-detects the
+  // `seat_usage_limit` kind by string value — the Rust variant ships in the
+  // same slice as this arm. Plain words, never the runtime code; the trailing
+  // sentence stays even for a one-seat pool (the pool size is not knowable
+  // here, and under rotation the sentence is true — the next launch lands on
+  // the next non-cooling login, which may be this one after its reset).
+  const seatLimit = readSeatUsageLimitDetails(item.details);
+  if (seatLimit) {
+    const resetTime = formatSeatResetTime(seatLimit.resetAt);
+    const resetClause = resetTime === null ? "" : ` It resets at ${resetTime}.`;
+    return {
+      title: "Claude.ai plan limit reached",
+      description:
+        `This session's Claude.ai login hit its plan limit.${resetClause}`
+        + " The next session starts on your next login automatically.",
+      technicalDetail: technicalMessage,
+      fallbackModelLabel: null,
+      recoveryAction: "relaunch_session",
     };
   }
 
