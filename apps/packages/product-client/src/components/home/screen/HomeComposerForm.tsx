@@ -163,7 +163,7 @@ export function HomeComposerForm({
     <>
       <DebugProfiler id="home-target-picker">
         <div
-          className="relative z-0 -mx-px -mb-[18px] flex min-w-0 flex-wrap items-center justify-start gap-1 overflow-hidden rounded-t-composer bg-surface-elevated-secondary px-2 pb-[27px] pt-2"
+          className="relative z-0 mx-4 -mb-[18px] flex min-w-0 flex-wrap items-center justify-start gap-1 overflow-hidden rounded-t-2xl bg-surface-elevated-secondary px-2 pb-[25px] pt-1.5"
           data-home-launch-utility-bar
         >
           {targetPickerSlot}
