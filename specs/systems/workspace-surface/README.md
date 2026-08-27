@@ -172,7 +172,7 @@ Target moves (later sweep wave): `components/workspace/shell` + `hooks/workspace
   the primitives closure and Radix containment in
   [check_frontend_boundaries.py](../../../scripts/check_frontend_boundaries.py).
 - Manual: workspace, files, terminal, and git rows of
-  [manual-release-qa.md](../../engineering/testing/manual-release-qa.md).
+  [manual-release-qa.md](../../../guides/deploying/manual-release-qa.md).
 
 ## Known gaps / follow-ups
 

@@ -60,12 +60,12 @@ class DocumentationIntegrityTest(unittest.TestCase):
             "specs/systems/workspaces/README.md",
             "specs/engineering/testing/README.md",
             "specs/engineering/observability/README.md",
-            "specs/engineering/shipping/README.md",
+            "specs/engineering/ci-cd/README.md",
             "specs/engineering/security/README.md",
             "specs/engineering/customer-loop/README.md",
             "guides/operating/README.md",
             "guides/operating/analytics/README.md",
-            "specs/engineering/testing/manual-release-qa.md",
+            "guides/deploying/manual-release-qa.md",
         }
 
         self.assertLessEqual(required_indexes, set(check_docs.REQUIRED_READMES))
@@ -88,11 +88,12 @@ class DocumentationIntegrityTest(unittest.TestCase):
                 "README.md",
                 "ARCHITECTURE.md",
                 "DESIGN_SYSTEM.md",
+                "BUILDING.md",
                 "product-sense.md",
                 "authoring.md",
             },
         )
-        self.assertIn("specs/engineering/testing/standard.md", check_docs.REQUIRED_READMES)
+        self.assertIn("specs/engineering/testing/README.md", check_docs.REQUIRED_READMES)
         legacy_testing_standard = "specs/" + "TESTING.md"
         self.assertNotIn(legacy_testing_standard, check_docs.REQUIRED_READMES)
 

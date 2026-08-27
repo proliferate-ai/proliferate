@@ -1,6 +1,6 @@
 /**
  * Integration-gateway fixture for T3-INT-1's harness-use half
- * (specs/engineering/testing/scenarios.md#T3-INT-1).
+ * (tests/release/core-release-scenario-manifest.json#T3-INT-1).
  *
  * The audit row PR #1101 added (`cloud_integration_tool_call_event`) is written
  * server-side by `call_provider_tool`

@@ -1,6 +1,6 @@
 /**
  * Declared manifest of every environment variable the tier-3 release-e2e
- * runner needs. Per specs/engineering/testing/release-worlds-and-fixtures.md ("Local And
+ * runner needs. Per delivery/testing-cicd/archive/release-worlds-and-fixtures.md ("Local And
  * GitHub Actions Execution"): every key is inventoried here with where to
  * obtain it. A missing
  * credential does not fail the whole run — the runner reports just the

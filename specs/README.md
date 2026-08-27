@@ -72,8 +72,8 @@ Cross-cutting: these own no product state and consume every system's `Emits` and
 - [customer-loop](engineering/customer-loop/README.md) — report → receipt → issue → fix → closeout.
 - [observability](engineering/observability/README.md) — one legible story per session; Sentry, Grafana, Honeycomb; SLIs; [alerting](engineering/observability/alerting.md) (what is "actually broken", non-noisy) and [analytics](engineering/observability/analytics.md) as sections; the per-PR standard is [standard.md](engineering/observability/standard.md).
 - [security](engineering/security/README.md) — *target.* Secret ownership and custody, scrubbing, break-glass, token scopes, rotation.
-- [shipping](engineering/shipping/README.md) — the building loop (spec → delivery spec → PR → review → merge) and [release delivery](engineering/shipping/release-delivery.md) (build → qualify → promote → rollback).
-- [testing](engineering/testing/README.md) — tiers, the issue-to-test loop, scenario contracts; the per-PR standard is [standard.md](engineering/testing/standard.md).
+- [ci-cd](engineering/ci-cd/README.md) — the machine, zero norms: the lane census, the merge train, the CD line (green main → staging → deliberate prod promote); the per-event wiring is [pipelines.md](engineering/ci-cd/pipelines.md) and the artifact identities are [release-delivery.md](engineering/ci-cd/release-delivery.md).
+- [testing](engineering/testing/README.md) — every norm: the two blocks (merge block gates merges, worlds gate releases), the laws, where a change's tests go; [lints.md](engineering/testing/lints.md) is the read-half constitution and [release.md](engineering/testing/release.md) the worlds datasheet. How we build is [BUILDING.md](BUILDING.md).
 
 ### Areas (`areas/<tree>.md`)
 

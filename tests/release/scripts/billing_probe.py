@@ -1,4 +1,4 @@
-"""Billing DB seam for T3-BILL-1 / T3-BILL-2 (specs/engineering/testing/scenarios.md).
+"""Billing DB seam for T3-BILL-1 / T3-BILL-2 (tests/release/core-release-scenario-manifest.json).
 
 Same in-process-against-the-real-DB seam as ``prov1_fallback.py``: a scenario's
 metering and grant assertions read the real billing ledger tables the product

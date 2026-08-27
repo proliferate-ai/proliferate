@@ -36,7 +36,7 @@ apps/desktop/src-tauri/
 | --- | --- |
 | [AnyHarness Sidecar](#anyharness-sidecar) (this document) | How packaged Desktop bundles, finds, launches, monitors, and restarts the local AnyHarness runtime. |
 | [Agent Seeds](#agent-seeds) (this document) | How bundled agent seeds are built, packaged, hydrated, tracked, repaired, and distinguished from downloaded artifacts. |
-| `specs/engineering/shipping/desktop-updates.md` and `guides/deploying/releases.md` | Product behavior and release mechanics to read together when changing `tauri.conf.json` updater configuration, updater manifests, or packaged update behavior. |
+| `specs/engineering/ci-cd/desktop-updates.md` and `guides/deploying/releases.md` | Product behavior and release mechanics to read together when changing `tauri.conf.json` updater configuration, updater manifests, or packaged update behavior. |
 
 ## Rules
 

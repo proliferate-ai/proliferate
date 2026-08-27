@@ -566,7 +566,7 @@ jobs:
   #       third-party.
   #
   # Any change to the set of required checks belongs in this comment and in
-  # specs/engineering/shipping/release-delivery.md, in the same commit.
+  # specs/engineering/ci-cd/release-delivery.md, in the same commit.
   # ---------------------------------------------------------------------------
 
   # ---------------------------------------------------------------------------
