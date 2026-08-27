@@ -291,7 +291,7 @@ function HarnessAuthSurface({
   return (
     <>
       {multiSource ? (
-        <HarnessProvidersSection editor={editor} />
+        <HarnessProvidersSection harnessKind={harnessKind} editor={editor} />
       ) : (
         <HarnessAuthSection
           harnessKind={harnessKind}
@@ -306,7 +306,7 @@ function HarnessAuthSurface({
           ) : selectedMethod === "seat" ? (
             <SeatDetails editor={editor} surface={surface} />
           ) : selectedMethod === "cli" ? (
-            <CliDetails editor={editor} />
+            <CliDetails harnessKind={harnessKind} editor={editor} />
           ) : null}
         </HarnessAuthSection>
       )}

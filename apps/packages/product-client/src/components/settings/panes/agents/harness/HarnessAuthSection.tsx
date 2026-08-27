@@ -1,11 +1,10 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { Check, KeyRound } from "#product/primitives/icons/core";
+import { KeyRound } from "#product/primitives/icons/core";
 import { CircleUser, CloudIcon } from "#product/primitives/icons/platform";
 import { SquareTerminal } from "#product/primitives/icons/workspace";
-import { Button } from "#product/primitives/Button";
-import { IconTile } from "#product/primitives/IconTile";
+import { MethodCard } from "#product/components/settings/panes/agents/harness/HarnessAuthMethodCard";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { gatewaySubtitle } from "#product/copy/settings/agent-auth-copy";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
@@ -17,7 +16,10 @@ import {
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { HarnessAuthEvidenceBadge } from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
-import { useHarnessStatus } from "#product/hooks/access/anyharness/agent-auth/use-harness-status";
+import {
+  useHarnessStatus,
+  useMethods,
+} from "#product/hooks/access/anyharness/agent-auth/use-harness-status";
 
 export type { AuthMethod };
 
@@ -95,6 +97,12 @@ function HarnessAuthMethods({
   // the pane's boundaries. Nothing below derives a pane state from readiness,
   // credentialState, or cliAuthState.
   const authStatus = useHarnessStatus(harnessKind);
+  // The picker's own truth (door 2): the native row's `detected` is the machine's
+  // answer to "is there already a working login here", which is the only honest
+  // thing the CLI card can say about itself.
+  const nativeDetected = useMethods(harnessKind).some(
+    (row) => row.kind === "native" && row.detected === true,
+  );
 
   if (editor.selectionsQuery.isLoading) {
     return (
@@ -128,13 +136,16 @@ function HarnessAuthMethods({
   // The merged header state (design-handoff v2): status is said exactly once,
   // as a badge next to the section title — and it is the runtime's document, not
   // a recomputation from the selected method. The refresh re-reads that document
-  // plus the queries backing the selected method's editable material.
+  // plus the queries backing the selected method's editable material, so the
+  // status re-read ALWAYS counts: without it a method with no extra query of its
+  // own (seat) refreshed for real while the control looked inert.
   const refreshing =
-    selectedMethod === "gateway"
+    authStatus.refreshing
+    || (selectedMethod === "gateway"
       ? editor.capabilitiesQuery.isFetching || editor.enrollmentQuery.isFetching
-      : selectedMethod === "api_key"
+      : selectedMethod === "api_key" || selectedMethod === "seat"
         ? editor.apiKeysQuery.isFetching || editor.selectionsQuery.isFetching
-        : cliRefreshing;
+        : cliRefreshing);
 
   function handleRefresh() {
     // The frontend never probes: it re-reads the document the runtime holds.
@@ -144,6 +155,10 @@ function HarnessAuthMethods({
         void editor.capabilitiesQuery.refetch();
         void editor.enrollmentQuery.refetch();
         break;
+      // The seat list and the key list are the same two reads (the vault's keys
+      // plus the selection rows); the serving/next-up tags and every badge word
+      // come from the status document re-read above.
+      case "seat":
       case "api_key":
         void editor.apiKeysQuery.refetch();
         void editor.selectionsQuery.refetch();
@@ -249,6 +264,7 @@ function HarnessAuthMethods({
           selected={selectedMethod === "cli"}
           disabled={editor.busy || nativeCardDisallowed}
           subtitle={nativeCardDisallowed ? POLICY_TOOLTIP : undefined}
+          note={nativeDetected ? HARNESS_PANE_COPY.methodCliDetected : undefined}
           routeOptionId={`${harnessKind}:cli`}
           onClick={() => handleSingleSourceSelect("cli", editor)}
         />
@@ -320,94 +336,4 @@ export function handleSingleSourceSelect(method: AuthMethod, editor: HarnessAuth
       editor.setPendingMethod("cli");
       break;
   }
-}
-
-interface MethodCardProps {
-  label: string;
-  description: string;
-  icon: ReactNode;
-  selected: boolean;
-  disabled?: boolean;
-  /** Rendered under the card when disabled (e.g. gateway enrollment failure). */
-  subtitle?: string;
-  /** Qualification testid value (`data-harness-route-option="<kind>:<method>"`). */
-  routeOptionId?: string;
-  onClick: () => void;
-}
-
-/**
- * One auth-method choice as a card (design-handoff v2): 32px
- * icon tile pinned top, label + one-line rationale bottom, check icon top-right
- * when selected. The cards are a radio by behavior, not by markup:
- * `handleSingleSourceSelect` drops the other sources on every pick
- * (selection_rules.py's SINGLE_SOURCE_HARNESSES), so the control writes exactly
- * one enabled source. `aria-pressed` is retained deliberately — the
- * qualification DOM (tests/release/.../chat-authroute.ts) and the pane's own
- * suite both read it as the selected-route signal.
- */
-function MethodCard({
-  label,
-  description,
-  icon,
-  selected,
-  disabled,
-  subtitle,
-  routeOptionId,
-  onClick,
-}: MethodCardProps) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <Button
-        variant="unstyled"
-        size="unstyled"
-        type="button"
-        aria-label={label}
-        aria-pressed={selected}
-        disabled={disabled}
-        data-harness-route-option={routeOptionId}
-        className={[
-          "relative flex min-h-28 w-full flex-col justify-end rounded-lg border px-4 py-3.5 text-left transition-colors",
-          selected
-            ? "border-foreground/20 bg-selected"
-            : "border-border bg-transparent",
-          disabled
-            ? "pointer-events-none opacity-45"
-            : selected
-              ? ""
-              : "hover:bg-hover",
-        ].join(" ")}
-        onClick={onClick}
-      >
-        <IconTile aria-hidden className="mb-auto">
-          {icon}
-        </IconTile>
-        {selected ? (
-          // MethodCard→RadioCardGroup is deferred (frozen spec §4.3: the
-          // shipped RadioCardOption has no data-attribute passthrough, which
-          // would drop data-harness-route-option below). 11px centers the
-          // check glyph in the card's px-4 py-3.5 corner inset; not on the
-          // 4px/2px space scale because it tracks the icon's own optical
-          // center, not a layout gap.
-          <Check
-            aria-hidden
-            className="icon-paired absolute right-[11px] top-[11px] text-foreground"
-          />
-        ) : null}
-        <span
-          className={[
-            "mt-2.5 block text-ui font-medium",
-            selected ? "text-foreground" : "text-muted-foreground",
-          ].join(" ")}
-        >
-          {label}
-        </span>
-        <span className="block whitespace-normal text-ui-sm font-normal text-muted-foreground">
-          {description}
-        </span>
-      </Button>
-      {disabled && subtitle ? (
-        <p className="text-ui-sm text-muted-foreground/65">{subtitle}</p>
-      ) : null}
-    </div>
-  );
 }

@@ -73,6 +73,7 @@ const state = vi.hoisted(() => ({
     isLoading: false,
   },
   harnessStatus: null as unknown, // the status document; the badge is it, verbatim
+  harnessMethods: [] as Array<Record<string, unknown>>, // door 2's rows
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
@@ -188,6 +189,7 @@ vi.mock("@anyharness/sdk-react", () => ({
 
 vi.mock("#product/hooks/access/anyharness/agent-auth/use-harness-status", () => ({
   useHarnessStatus: () => state.harnessStatus ?? harnessStatusFixture(),
+  useMethods: () => state.harnessMethods,
 }));
 vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (s: { show: typeof showToast }) => unknown) =>
@@ -414,6 +416,7 @@ afterEach(() => {
   state.modelSnapshotStatus.data = undefined;
   state.modelSnapshotStatus.isLoading = false;
   state.harnessStatus = null;
+  state.harnessMethods = [];
 });
 
 describe("HarnessPane authentication", () => {
@@ -1007,25 +1010,9 @@ describe("HarnessPane authentication", () => {
     expect(screen.queryByText("Enrollment pending")).not.toBeNull();
   });
 
-  it("offers Run login on native when local credentials are undetected", () => {
-    state.agentsByKind = new Map([[
-      "claude",
-      {
-        kind: "claude",
-        displayName: "Claude Code",
-        readiness: "login_required",
-        supportsLogin: true,
-      },
-    ]]);
-    renderPane("claude");
-
-    fireEvent.click(screen.getByRole("button", { name: "Authenticate" }));
-
-    expect(openAuthTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "claude" }),
-      { restart: false },
-    );
-  });
+  // The native/CLI affordance's own cases live in HarnessAuthCliDetails.test.tsx:
+  // it keys off the runtime's status document now, so it is testable without the
+  // whole pane — and this suite is at its size ratchet.
 
   // The Authentication section is gated on the auth plane (editor.authReady),
   // not on cloud compute (agent-auth.md, HarnessAuthSection): an anonymous
@@ -1050,26 +1037,34 @@ describe("HarnessPane authentication", () => {
     expect(screen.queryAllByText(/Sign in to Proliferate Cloud/).length).toBeGreaterThan(0);
   });
 
-  // P1-a regression: `localAgent?.supportsLogin ?? canRunLogin` let `??`
-  // (which binds tighter than the intended `&&`) short-circuit on
-  // `supportsLogin: true` alone, offering Authenticate even when the CLI
-  // itself says login can't run right now (canRunLogin false, e.g. already
-  // authenticated). The fix requires BOTH supportsLogin and canRunLogin.
-  it("does not offer Authenticate for a healthy authenticated agent even when supportsLogin is true", () => {
+  // The native row's own fact reaches the picker through `useMethods` (door 2),
+  // not through cliAuthState: a detected login is a statement about the METHOD.
+  it("says the CLI card's login was detected when the methods door reports it", () => {
+    state.harnessMethods = [
+      { kind: "native", applied: false, detected: true, offer: "mint_seat" },
+    ];
+    renderPane("claude");
+
+    expect(screen.getByText("Login detected on this machine")).toBeTruthy();
+  });
+
+  it("says nothing about detection when the methods door reports none", () => {
+    renderPane("claude");
+
+    expect(screen.queryByText("Login detected on this machine")).toBeNull();
+  });
+
+  // The header badge is the runtime's DATED observation, never a
+  // readiness-derived green (the P1-a case's other half — that a green document
+  // withholds the Authenticate button — is in HarnessAuthCliDetails.test.tsx).
+  it("reads the badge off a dated observation, and offers no Authenticate under it", () => {
     state.harnessStatus = verifiedHarnessStatus();
     state.agentsByKind = new Map([[
       "claude",
-      {
-        kind: "claude",
-        displayName: "Claude Code",
-        readiness: "ready",
-        supportsLogin: true,
-      },
+      { kind: "claude", displayName: "Claude Code", readiness: "ready", supportsLogin: true },
     ]]);
     renderPane("claude");
 
-    // Select the CLI card (the fallback already does, but be explicit) — the
-    // badge is the runtime's DATED observation, never a readiness-derived green.
     fireEvent.click(screen.getByRole("button", { name: "CLI login" }));
 
     expect(screen.getByText("Authenticated")).toBeTruthy();

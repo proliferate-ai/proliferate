@@ -186,6 +186,10 @@ export const HARNESS_PANE_COPY = {
   methodSeatDescription: "Run on a Claude subscription.",
   methodCli: "CLI login",
   methodCliDescription: "Use the harness's own session.",
+  // The `native` method row's own fact (agent_auth §2): the runtime detected a
+  // working login on this machine. A fact about the method, not a reason the
+  // card cannot be picked.
+  methodCliDetected: "Login detected on this machine",
   // Seats v1 (the Claude.ai logins section, single-seat subset).
   seatAddLogin: "Add a Claude.ai login",
   seatAddLoginStarting: "Opening…",
@@ -224,12 +228,8 @@ export const HARNESS_PANE_COPY = {
   seatRotateUpdateError: "Could not update login rotation.",
   // §1 — the exit to the vendor tool's own documentation.
   docsLink: "Docs",
-  // Gateway enrollment in flight (header badge, warning tone).
-  gatewayPending: "Not ready",
   probeModelCount: (count: number) =>
     count === 1 ? "1 model" : `${count} models`,
-  // CLI session expiry (header badge, warning tone).
-  cliExpired: "Credentials expired",
   signInDescription: (displayName: string) =>
     `Sign in to Proliferate Cloud to manage how ${displayName} authenticates to models.`,
   authenticationDescription: (displayName: string, surface: "cloud" | "local") =>
@@ -241,7 +241,6 @@ export const HARNESS_PANE_COPY = {
   authBadgeAuthenticated: "Authenticated",
   authBadgeNotConfigured: "Not configured",
   authBadgeNotAuthenticated: "Not authenticated",
-  authBadgeEnrollmentFailed: "Enrollment failed",
   // The status document's remaining badge words (agent_auth §2). No document at
   // all reads "Waiting for status" — neutral, and it gates nothing.
   authBadgeWaitingStatus: "Waiting for status",
