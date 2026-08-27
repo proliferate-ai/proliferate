@@ -77,6 +77,27 @@ AGENT_AUTH_SOURCE_KINDS = (
 # store→server boundary reason as the gateway-capable tuple above.
 AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS = ("claude",)
 
+# seat_usage_sample vocabularies (agent_auth spec §2, flow 5). `allowed` /
+# `limited` mirror the provider's unified rate-limit verdict for a successful
+# probe; `probe_failed` records that no trustworthy observation exists (absent
+# or unparseable headers, provider/transport errors) — every observation
+# column is NULL on such a row.
+SEAT_USAGE_STATUS_ALLOWED = "allowed"
+SEAT_USAGE_STATUS_LIMITED = "limited"
+SEAT_USAGE_STATUS_PROBE_FAILED = "probe_failed"
+SEAT_USAGE_STATUSES = (
+    SEAT_USAGE_STATUS_ALLOWED,
+    SEAT_USAGE_STATUS_LIMITED,
+    SEAT_USAGE_STATUS_PROBE_FAILED,
+)
+# The window nearer its cap — what the pane emphasizes. NULL when unknowable.
+SEAT_USAGE_BINDING_WINDOW_FIVE_HOUR = "five_hour"
+SEAT_USAGE_BINDING_WINDOW_SEVEN_DAY = "seven_day"
+SEAT_USAGE_BINDING_WINDOWS = (
+    SEAT_USAGE_BINDING_WINDOW_FIVE_HOUR,
+    SEAT_USAGE_BINDING_WINDOW_SEVEN_DAY,
+)
+
 # The state.json WIRE kind for a rendered typed-vault source (D3 python brief
 # Sec4.1/Sec2). This is NOT a DB `source_kind` -- a typed-vault selection is
 # still persisted as source_kind='api_key' (D1 deliberately did not add a

@@ -98,6 +98,9 @@ SCANNED_ROOTS: list[tuple[str, frozenset[str]]] = [
     ("server/proliferate/db/store/agent_gateway", frozenset({".py"})),
     ("server/proliferate/db/models/agent_gateway.py", frozenset({".py"})),
     ("server/proliferate/lib/infra/encryption", frozenset({".py"})),
+    # The seat usage probe's HTTP half: it holds the decrypted seat OAuth
+    # token for the one-token request (agent_auth spec flow 5).
+    ("server/proliferate/integrations/anthropic.py", frozenset({".py"})),
     (
         "anyharness/crates/anyharness-lib/src/domains/agents/route_auth",
         frozenset({".rs"}),
@@ -151,6 +154,10 @@ SECRET_IDENTIFIER = re.compile(
     r"|\bapi_key\b"
     r"|\bseat_values\b"
     r"|\bseat_source\b"
+    # The decrypted seat credential's bindings along the usage-probe path
+    # (seats.py `seat_token` → integrations/anthropic.py `oauth_token`).
+    r"|\bseat_token\b"
+    r"|\boauth_token\b"
     r"|\b\w+\.(?:key|token|api_key|env)\b"
     r")"
 )

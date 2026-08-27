@@ -968,6 +968,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-auth/seats/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Seat Usage Endpoint
+         * @description The meters read: latest usage sample per active seat, vault order.
+         */
+        get: operations["list_seat_usage_endpoint_v1_cloud_agent_auth_seats_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-auth/seats/usage/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Seat Usage Endpoint
+         * @description The pane-open poke (flow 5): force one fresh sample per seat, then read.
+         *
+         *     Rate-limited by the probe's freshness floor — a seat sampled within the
+         *     last minute keeps its sample, so pane flapping cannot amplify outbound
+         *     probes. Advisory only: nothing here touches launch behavior.
+         */
+        post: operations["refresh_seat_usage_endpoint_v1_cloud_agent_auth_seats_usage_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-auth/selections": {
         parameters: {
             query?: never;
@@ -4344,6 +4388,36 @@ export interface components {
             rerunSetupOnUnarchive?: boolean | null;
         };
         /**
+         * SeatUsageSampleResponse
+         * @description One seat's latest usage-probe observation — the meters read.
+         *
+         *     Shaped for the pane, no raw header passthrough (spec §4 cell 1's usage
+         *     read): 0..1 utilization fractions, ISO reset instants, the derived
+         *     binding window. A ``probe_failed`` row carries null observations — the
+         *     pane renders a dash and the sample age, never a stale bar.
+         */
+        SeatUsageSampleResponse: {
+            /** Apikeyid */
+            apiKeyId: string;
+            /** Sampledat */
+            sampledAt: string;
+            /** Util5H */
+            util5h?: number | null;
+            /** Util7D */
+            util7d?: number | null;
+            /** Reset5H */
+            reset5h?: string | null;
+            /** Reset7D */
+            reset7d?: string | null;
+            /** Bindingwindow */
+            bindingWindow?: ("five_hour" | "seven_day") | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "allowed" | "limited" | "probe_failed";
+        };
+        /**
          * ServerCapabilities
          * @description Versioned, conservative declaration of what this deployment offers.
          *
@@ -6983,6 +7057,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_seat_usage_endpoint_v1_cloud_agent_auth_seats_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeatUsageSampleResponse"][];
+                };
+            };
+        };
+    };
+    refresh_seat_usage_endpoint_v1_cloud_agent_auth_seats_usage_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeatUsageSampleResponse"][];
                 };
             };
         };

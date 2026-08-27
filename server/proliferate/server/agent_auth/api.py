@@ -38,6 +38,7 @@ from proliferate.server.agent_auth.models import (
     OrgAgentPolicyResponse,
     OrgAgentPolicyUpdateRequest,
     OrgAgentPolicyViolationListResponse,
+    SeatUsageSampleResponse,
     agent_auth_state_payload,
     api_key_payload,
     auth_selection_payload,
@@ -46,6 +47,7 @@ from proliferate.server.agent_auth.models import (
     enrollment_payload,
     org_agent_policy_payload,
     org_agent_policy_violation_payload,
+    seat_usage_sample_payload,
     verification_verdict_payload,
 )
 from proliferate.server.api_errors import CloudApiError
@@ -176,6 +178,36 @@ async def report_seat_limit_hit_endpoint(
         window=body.window,
         reset_at=body.reset_at,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Seat usage (spec §3 flow 5's soft signal — the meters; slice 4)
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/seats/usage", response_model=list[SeatUsageSampleResponse])
+async def list_seat_usage_endpoint(
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> list[SeatUsageSampleResponse]:
+    """The meters read: latest usage sample per active seat, vault order."""
+    records = await seats.latest_seat_usage(db, user_id=user.id)
+    return [seat_usage_sample_payload(record) for record in records]
+
+
+@router.post("/seats/usage/refresh", response_model=list[SeatUsageSampleResponse])
+async def refresh_seat_usage_endpoint(
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> list[SeatUsageSampleResponse]:
+    """The pane-open poke (flow 5): force one fresh sample per seat, then read.
+
+    Rate-limited by the probe's freshness floor — a seat sampled within the
+    last minute keeps its sample, so pane flapping cannot amplify outbound
+    probes. Advisory only: nothing here touches launch behavior.
+    """
+    records = await seats.force_seat_usage_samples(db, user_id=user.id)
+    return [seat_usage_sample_payload(record) for record in records]
 
 
 # --------------------------------------------------------------------------- #

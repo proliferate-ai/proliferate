@@ -12,6 +12,7 @@ from proliferate.db.models.agent_gateway import (
     AgentLlmUsageImportCursor,
     LlmCreditGrant,
     OrgAgentPolicy,
+    SeatUsageSample,
 )
 from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
@@ -23,6 +24,7 @@ from proliferate.db.store.agent_gateway.records import (
     AgentLlmUsageImportCursorRecord,
     LlmCreditGrantRecord,
     OrgAgentPolicyRecord,
+    SeatUsageSampleRecord,
 )
 
 
@@ -116,6 +118,20 @@ def enrollment_key_record(row: AgentGatewayEnrollmentKey) -> AgentGatewayEnrollm
         created_at=row.created_at,
         updated_at=row.updated_at,
         revoked_at=row.revoked_at,
+    )
+
+
+def seat_usage_sample_record(row: SeatUsageSample) -> SeatUsageSampleRecord:
+    return SeatUsageSampleRecord(
+        id=row.id,
+        api_key_id=row.api_key_id,
+        sampled_at=row.sampled_at,
+        util_5h=row.util_5h,
+        util_7d=row.util_7d,
+        reset_5h=row.reset_5h,
+        reset_7d=row.reset_7d,
+        binding_window=row.binding_window,
+        status=row.status,
     )
 
 

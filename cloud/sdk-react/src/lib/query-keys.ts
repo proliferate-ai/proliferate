@@ -26,6 +26,10 @@ export function agentApiKeysKey() {
   return [...agentGatewayRootKey(), "keys"] as const;
 }
 
+export function agentSeatUsageKey() {
+  return [...agentGatewayRootKey(), "seat-usage"] as const;
+}
+
 export function agentAuthSelectionsRootKey() {
   return [...agentGatewayRootKey(), "selections"] as const;
 }

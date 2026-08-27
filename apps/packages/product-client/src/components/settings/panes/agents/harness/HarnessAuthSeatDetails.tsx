@@ -1,6 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AgentApiKey, AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { useRevokeAgentApiKey } from "@proliferate/cloud-sdk-react";
+import {
+  useRefreshSeatUsage,
+  useRevokeAgentApiKey,
+  useSeatUsage,
+} from "@proliferate/cloud-sdk-react";
 import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
@@ -8,6 +12,7 @@ import { Label } from "#product/primitives/Label";
 import { Switch } from "#product/primitives/Switch";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { AgentLoginTerminalPanel } from "#product/components/agents/AgentLoginTerminalPanel";
+import { SeatUsageMeter } from "#product/components/settings/panes/agents/harness/HarnessSeatUsageMeter";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { formatSeatResetTime } from "#product/domain/chats/transcript/seat-usage-limit";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
@@ -17,12 +22,13 @@ import { useHarnessStatus } from "#product/hooks/access/anyharness/agent-auth/us
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
- * The Claude.ai logins section (seats v1 + slice 2, Auth Options v2 design):
- * the seat list with labels and serving-now/next-up tags, the all-cooling
- * line, the rotate switch, the "Add a Claude.ai login" affordance, the mint
- * sheet (email + optional plan tier, defaulting server-side to "Max seat N"),
- * and the inline waiting-for-sign-in row with the mint terminal. Meters are a
- * later slice.
+ * The Claude.ai logins section (seats v1 + slice 2 + slice 4, Auth Options v2
+ * design): the seat list with labels and serving-now/next-up tags, the
+ * all-cooling line, the rotate switch, the "Add a Claude.ai login"
+ * affordance, the mint sheet (email + optional plan tier, defaulting
+ * server-side to "Max seat N"), the inline waiting-for-sign-in row with the
+ * mint terminal, and the per-seat 5h/7d usage meters inside each seat row
+ * (opening the pane forces one fresh sample, flow 5's pane-open poke).
  *
  * The tags render the runtime's rotation status VERBATIM, straight off the
  * status document (agent_auth §2): `applied.seat_id` IS the serving seat,
@@ -59,6 +65,17 @@ export function SeatDetails({
   const coolingResetTime = authStatus.coolingUntil === null
     ? null
     : formatSeatResetTime(authStatus.coolingUntil);
+
+  const usageQuery = useSeatUsage(seats.length > 0);
+  const refreshUsage = useRefreshSeatUsage().mutate;
+  useEffect(() => {
+    // The pane-open poke (flow 5): a settings-pane open forces one fresh
+    // sample per seat; the server's freshness floor keeps re-mounts cheap.
+    refreshUsage();
+  }, [refreshUsage]);
+  const usageBySeat = new Map(
+    (usageQuery.data ?? []).map((sample) => [sample.apiKeyId, sample]),
+  );
 
   const handleSeatAdded = useCallback((seat: AgentApiKey) => {
     showToast(HARNESS_PANE_COPY.seatAddedToast(seat.title), "info");
@@ -133,6 +150,7 @@ export function SeatDetails({
               ) : null}
             </span>
           }
+          description={<SeatUsageMeter sample={usageBySeat.get(seat.id)} />}
         >
           <Button
             type="button"

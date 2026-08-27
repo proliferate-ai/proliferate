@@ -12,6 +12,12 @@ LiteLLM spend logs and enforces LLM-credit exhaustion every
 overage-enabled subjects that dropped below the credit threshold every
 ``agent_gateway_topup_interval_seconds`` (and only when the LLM top-up price
 is configured). All only run when the gateway is enabled.
+
+The seat usage-probe worker (slice 4, agent_auth spec §3 flow 5) is the one
+exception to the gateway gate: seats are Max-subscription credentials with no
+LiteLLM dependency, so it runs whenever background workers do. It ticks every
+minute and probes only the seats whose own cadence (active/idle intervals,
+failure backoff) says they are due.
 """
 
 from __future__ import annotations
@@ -25,6 +31,10 @@ from proliferate.db import session_ops as db_session
 from proliferate.integrations.sentry import report_critical
 from proliferate.server.agent_auth.enrollment import backfill_enrollments
 from proliferate.server.agent_auth.migration import migrate_legacy_enrollments
+from proliferate.server.agent_auth.seats import (
+    SeatUsageProbePassResult,
+    run_seat_usage_probe_pass,
+)
 from proliferate.server.agent_auth.topups import (
     LlmTopupRunResult,
     run_llm_topups,
@@ -175,6 +185,55 @@ async def start_agent_gateway_verification() -> asyncio.Task[None] | None:
 async def stop_agent_gateway_verification(
     task: asyncio.Task[None] | None,
 ) -> None:
+    if task is None:
+        return
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+
+_SEAT_USAGE_TICK_SECONDS = 60.0
+
+
+async def run_seat_usage_probe_once() -> SeatUsageProbePassResult:
+    async with db_session.open_async_transaction() as db:
+        return await run_seat_usage_probe_pass(db)
+
+
+async def _seat_usage_probe_loop() -> None:
+    while True:
+        try:
+            result = await run_seat_usage_probe_once()
+            if result.probed or result.failed:
+                logger.info(
+                    "Agent seat usage probe tick recorded samples",
+                    extra={
+                        "probed": result.probed,
+                        "failed": result.failed,
+                        "skipped": result.skipped,
+                    },
+                )
+        except Exception as exc:
+            report_critical(
+                exc,
+                tags={"domain": "agent_auth", "action": "seat_usage_probe"},
+            )
+        await asyncio.sleep(_SEAT_USAGE_TICK_SECONDS)
+
+
+async def start_agent_seat_usage_probe() -> asyncio.Task[None] | None:
+    # Deliberately NOT gated on agent_gateway_enabled: seats carry no LiteLLM
+    # dependency (module docstring). The per-seat cadence lives in the pass;
+    # this loop is just the metronome.
+    if not settings.run_background_workers:
+        return None
+    return asyncio.create_task(
+        _seat_usage_probe_loop(),
+        name="agent-seat-usage-probe",
+    )
+
+
+async def stop_agent_seat_usage_probe(task: asyncio.Task[None] | None) -> None:
     if task is None:
         return
     task.cancel()

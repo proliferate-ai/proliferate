@@ -84,7 +84,8 @@ def test_every_migrated_orm_wall_clock_default_remains_a_deferred_owner_referenc
         ("agent_auth_render_sequence", "updated_at", "onupdate"),
     }
     assert render_sequence_references.issubset(wall_clock_references)
-    assert len(wall_clock_references) == 175
+    # +1 (176): agent_auth slice 4 adds seat_usage_sample.sampled_at.
+    assert len(wall_clock_references) == 176
     assert other_references == [
         ("cloud_integration_revocation_job", "updated_at", "onupdate"),
     ]

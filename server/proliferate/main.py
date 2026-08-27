@@ -51,10 +51,12 @@ from proliferate.server.agent_auth.worker import (
     start_agent_gateway_llm_topups,
     start_agent_gateway_usage_import,
     start_agent_gateway_verification,
+    start_agent_seat_usage_probe,
     stop_agent_gateway_enrollment_backfill,
     stop_agent_gateway_llm_topups,
     stop_agent_gateway_usage_import,
     stop_agent_gateway_verification,
+    stop_agent_seat_usage_probe,
 )
 from proliferate.server.ai_magic.api import router as ai_magic_router
 from proliferate.server.analytics.api import router as analytics_router
@@ -282,9 +284,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     agent_gateway_usage_import_task = await start_agent_gateway_usage_import()
     agent_gateway_topup_task = await start_agent_gateway_llm_topups()
     agent_gateway_verification_task = await start_agent_gateway_verification()
+    agent_seat_usage_probe_task = await start_agent_seat_usage_probe()
     try:
         yield
     finally:
+        await stop_agent_seat_usage_probe(agent_seat_usage_probe_task)
         await stop_agent_gateway_verification(agent_gateway_verification_task)
         await stop_agent_gateway_llm_topups(agent_gateway_topup_task)
         await stop_agent_gateway_usage_import(agent_gateway_usage_import_task)
