@@ -7,8 +7,13 @@ use serde_json::Value;
 #[cfg(target_os = "macos")]
 use sha2::{Digest, Sha256};
 
+// Only the keychain path consults the process-home guard, and that path is
+// macOS-only — on other targets this import would be dead (clippy verdicts
+// differ by target OS; the Linux CI job is the authority).
+#[cfg(target_os = "macos")]
+use crate::util::home_matches_process_home;
 use crate::{
-    util::{home_matches_process_home, resolve_process_override_dir},
+    util::resolve_process_override_dir,
     DiscoveryError, LocalAuthSource, LocalAuthState, PortableAuthExport, PortableAuthFile,
     PortableRelativePath,
 };

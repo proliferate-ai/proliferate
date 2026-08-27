@@ -14,3 +14,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [lint.per-file-ignores]
 # Checker tests assert on long literal diagnostics.
 "test_*.py" = ["E501"]
+# The ownership atlas is a data table as code: one Region row per folder with
+# a prose description string. Wrapping those strings would trade greppability
+# for a line count; the file is owned by the atlas generator's authors.
+"ownership-atlas/generate.py" = ["E501"]

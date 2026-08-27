@@ -781,25 +781,32 @@ const ORBIT_DELAYS = [
             "Tailwind compiles these roots but the foundation guard never reads them",
         )
 
-    def test_the_pre_commit_hook_owns_the_same_roots_as_ci(self) -> None:
+    def test_the_local_gate_runs_the_same_guard_as_ci(self) -> None:
         """A root only CI sees is a root the local guard waves through.
 
-        The hook is the fast path developers actually feel; if its filter and
-        PRODUCTION_ROOTS disagree, a violation commits cleanly and only surfaces
-        in CI — the drift that let product-surfaces sit unenforced in both.
+        The local fast path is the pre-push gate (2026-08-26 ruling: the commit
+        hook formats, the gate checks). The gate's always-set runs this checker
+        over the whole repository — the same invocation as CI — so every
+        PRODUCTION_ROOT is covered by construction rather than by a hand-kept
+        path filter that could drift (the drift that once let product-surfaces
+        sit unenforced). Pin both halves: the engine is in the always-set, and
+        the pre-push hook actually runs the gate.
         """
-        hook = (check_module.REPO_ROOT / "scripts" / "git-hooks" / "pre-commit").read_text()
-        for root in check_module.PRODUCTION_ROOTS:
-            relative = relative_path(root)
-            package = relative.removeprefix("apps/packages/").removesuffix("/src")
-            with self.subTest(root=relative):
-                self.assertTrue(
-                    f"{package}/src" in hook
-                    or f"({package}|" in hook
-                    or f"|{package}|" in hook
-                    or f"|{package})" in hook,
-                    f"{relative} is scanned by CI but not matched by the pre-commit hook",
-                )
+        hooks_dir = check_module.REPO_ROOT / "scripts" / "git-hooks"
+        gate = (check_module.REPO_ROOT / "scripts" / "gate").read_text()
+        self.assertIn(
+            '("appearance scaling", "python3 scripts/check_appearance_scaling.py"),',
+            gate,
+            "the gate's always-set no longer runs the appearance-scaling checker",
+        )
+        pre_push = (hooks_dir / "pre-push").read_text()
+        self.assertIn("make --no-print-directory gate", pre_push)
+        pre_commit = (hooks_dir / "pre-commit").read_text()
+        self.assertNotIn(
+            "check_appearance_scaling",
+            pre_commit,
+            "the commit hook formats only; the guard belongs to the gate",
+        )
 
 
 class ArbitraryBracketGeometryTest(unittest.TestCase):
