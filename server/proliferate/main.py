@@ -42,9 +42,9 @@ from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.accounts.desktop.api import router as desktop_router
 from proliferate.server.accounts.identity.api import router as identity_auth_router
-from proliferate.server.agent_auth.api import gateway_account_router as agent_gateway_router
 from proliferate.server.agent_auth.api import organization_router as agent_auth_organization_router
 from proliferate.server.agent_auth.api import router as agent_auth_router
+from proliferate.server.ai_gateway.api import gateway_account_router as agent_gateway_router
 from proliferate.server.ai_gateway.worker import (
     start_agent_gateway_enrollment_backfill,
     start_agent_gateway_llm_topups,

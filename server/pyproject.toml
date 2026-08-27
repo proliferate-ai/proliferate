@@ -104,6 +104,7 @@ module = [
     "proliferate.server.github.repos.models",
     "proliferate.server.support.models",
     "proliferate.server.agent_auth.models",
+    "proliferate.server.ai_gateway.models",
     "proliferate.config",
 ]
 disallow_any_explicit = false

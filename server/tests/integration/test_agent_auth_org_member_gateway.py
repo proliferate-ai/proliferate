@@ -39,7 +39,7 @@ from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.agent_gateway import DesiredAuthSource
 from proliferate.db.store.agent_gateway.selections import put_auth_selections
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
-from proliferate.server.agent_auth import service as gateway_service
+from proliferate.server.ai_gateway import service as gateway_service
 from proliferate.server.ai_gateway.budget import (
     get_gateway_enrollment_for_user,
     is_gateway_budget_available,

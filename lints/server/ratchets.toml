@@ -34,11 +34,6 @@ max_lines = 630
 reason = "C-train composition re-attaches C-1 both-surface sync-completion pokes; D train: org-only ensure_signup_enrollment + per-(org,member) LiteLLM identity + fingerprint-driven per-key re-mint; shrank again when ensure_user_enrollment died (D-3), split pending"
 
 [[max_lines]]
-path = "server/proliferate/server/agent_auth/service.py"
-max_lines = 808
-reason = "delivery-ack hardening (server-bounded ack revision + trust-boundary docs) nudged the gateway service over the 800 server-layer cap; split pending with the service taxonomy pass; typed-config write gate threads the registry providerConfig vocabulary into the store put and pins R5's azure field set ; +21: FR-3 adds get_verification_verdicts reading the governing enrollment's per-harness gateway-enablement verdicts for the additive capabilities surface; PRO-129 splits put_harness_settings out to a dedicated harness_settings.py module (settings are not auth), pulling the file back down to 820"
-
-[[max_lines]]
 path = "server/tests/integration/test_agent_gateway_api.py"
 max_lines = 1242
 reason = "C-train composition; P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model; state coverage now seeds a per-harness child key (B3 renderer); C1 adds cursor gateway-rejected/api_key-accepted (local + cloud) selection cases, plus the disabled gateway-marker-row asserts restored on review fix; +provider-config kind coverage (D1); +per-kind required-field validation coverage (D1 fix cycle, review finding 6); +structural route-shape pin for the S1 /agent-auth vs /agent-gateway split (cycle-2 fix) D train rewrites the enrollment-shape cases org-only (D2) and drops the personal-subject fixtures; typed-config write gate adds typed-selection PUT coverage (open combos, pending/undeclared refusals, A6 shape pins, R5 azure field-set pin, A5 write-to-render state case); split pending with the suite taxonomy pass"
