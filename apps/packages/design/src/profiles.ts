@@ -55,7 +55,11 @@ export const themeProfiles: Readonly<Record<string, ThemeProfile>> = {
       // carry the structure instead, as in the reference UI.
       "--color-surface-under": "#ffffff",
       "--color-sidebar": "#ffffff",
-      "--color-sidebar-background": "#ffffff",
+      // The rail backdrop keeps a real tint: it paints the right panel
+      // (panes render on it), which should sit visibly below the white
+      // chat. The header seam involved --color-sidebar only, so this
+      // stays independent.
+      "--color-sidebar-background": "#f5f5f5",
       "--color-surface-editor": "#fafafa",
       "--color-composer-background": "#ffffff",
       "--color-border-light": codex(0.115),
