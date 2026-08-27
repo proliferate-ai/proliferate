@@ -199,7 +199,7 @@ pub async fn export_debug_bundle(
 ) -> Result<Option<ExportDebugBundleResult>, String> {
     let Some(output_path) = FileDialog::new()
         .add_filter("Zip archive", &["zip"])
-        .set_file_name(&suggested_bundle_file_name())
+        .set_file_name(suggested_bundle_file_name())
         .save_file()
     else {
         return Ok(None);
