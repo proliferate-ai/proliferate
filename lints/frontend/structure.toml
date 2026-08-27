@@ -125,6 +125,37 @@ why = """The matrix is what keeps the fold reversible: each package's consumers 
 bad = """`import { Panel } from "@/components/Panel";` inside apps/packages/design/src/**"""
 good = """`import { Panel } from "#product/primitives/panel";` from a package allowed to depend on primitives"""
 
+# Reserved family segment: PATHS (see lints/README.md "Rule ID allocation").
+# The twin of SRV-PATHS-1 in lints/server/structure.toml, and it lives here for
+# the same reason: a closed path migration is a structure fact, not a per-feature
+# one, so the next frontend migration extends BLOCKED_PATHS rather than minting a
+# new family.
+[[rule]]
+id = "FE-PATHS-1"
+title = "Completed frontend path migrations do not come back"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_frontend_old_paths.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/lib/domain/settings/agent-auth-evidence.ts"
+
+rule = """A completed frontend path migration must not regain a compatibility
+shim: no source may exist at any path in
+scripts/check_frontend_old_paths.py's BLOCKED_PATHS. The closed path is the
+agent-auth evidence derivation (agent_auth slice 3)."""
+alternative = """Render the runtime's per-harness status document through the one
+access-layer seam (`useHarnessStatus`), and keep presentation — words, tone, an
+age string — keyed off that document's own fields."""
+why = """agent_auth's worst live bug class was four sources of auth truth: a
+client-side projection of "what this state means" drifts from the machine's, and
+a pane then shows a state the runtime does not hold. The runtime's status
+document is the single source; a second derivation re-opens the bug the deletion
+closed, and the panes' fences cannot see a file nobody imports yet."""
+
+[rule.example]
+bad = "apps/packages/product-client/src/lib/domain/settings/agent-auth-evidence.ts"
+good = "apps/packages/product-client/src/hooks/access/anyharness/agent-auth/use-harness-status.ts"
+
 [[rule]]
 id = "FE-SIZE-1"
 title = "large frontend files are ratcheted, not accumulating"
