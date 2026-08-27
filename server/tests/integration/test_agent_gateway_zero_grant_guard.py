@@ -1186,6 +1186,130 @@ async def test_sweep_rejection_is_durable_across_a_real_commit_boundary(
 
 
 @pytest.mark.asyncio
+async def test_external_committed_racer_keeps_its_grant_and_the_reclaim_backs_out(
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The racer is a DIFFERENT transaction that COMMITS — the real shape.
+
+    Every other window test races on the reclaim's own session, so its insert
+    lives inside the savepoint and is undone with everything else. That cannot
+    distinguish "we rolled back OUR write" from "we rolled back the whole
+    window" — and it is the second property that matters: another transaction's
+    committed money must survive untouched while ours backs out.
+
+    Here ``racing_move`` opens a SEPARATE session, commits a
+    ``free_signup:<destination>`` grant, and only then delegates to the real
+    move. The P4 lock cannot prevent it (there were no destination rows to
+    lock), so the post-move invariant is the thing that must catch it.
+    """
+    from proliferate.db import engine as engine_module
+    from proliferate.server.ai_gateway import worker
+
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    monkeypatch.setattr(engine_module, "async_session_factory", factory)
+
+    github_subject = f"gh-extrace-{uuid.uuid4().hex[:8]}"
+    async with factory() as setup:
+        orphan_subject_id = await _fabricate_orphan_claim(
+            setup, github_subject=github_subject, consumed_usd=2.0
+        )
+        raced_user = await _create_user(setup)
+        await _link_github_identity(setup, user_id=raced_user, provider_subject=github_subject)
+        raced_org = await _place_in_org(setup, user_id=raced_user)
+        raced_subject = await ensure_organization_billing_subject(setup, raced_org)
+        raced_enrollment = await ensure_org_enrollment(setup, raced_org, raced_user)
+        await _backdate_enrollment(setup, raced_enrollment.id, hours=2)
+        await setup.commit()
+
+    paged = _capture_report_critical(monkeypatch)
+    real_move = store.move_llm_credit_ledger
+    racer_ref = f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{raced_subject.id}"
+
+    async def racing_move(
+        db: AsyncSession,
+        *,
+        from_billing_subject_id: uuid.UUID,
+        to_billing_subject_id: uuid.UUID,
+    ) -> tuple[int, int]:
+        # A genuinely concurrent transaction: its own session, its own COMMIT,
+        # landing the destination's free_signup grant inside the window.
+        async with factory() as racer:
+            await store.create_llm_credit_grant(
+                racer,
+                billing_subject_id=to_billing_subject_id,
+                user_id=None,
+                source=LLM_CREDIT_SOURCE_FREE_SIGNUP,
+                amount_usd=Decimal("5"),
+                source_ref=racer_ref,
+            )
+            await racer.commit()
+        return await real_move(
+            db,
+            from_billing_subject_id=from_billing_subject_id,
+            to_billing_subject_id=to_billing_subject_id,
+        )
+
+    monkeypatch.setattr(free_credits.agent_gateway_store, "move_llm_credit_ledger", racing_move)
+
+    result = await worker.run_zero_grant_check_once()
+
+    async with factory() as check:
+        # (i) The destination keeps EXACTLY the racer's row — our moved row was
+        # backed out, and the other transaction's committed money is untouched.
+        destination_signups = [
+            grant
+            for grant in await store.list_llm_credit_grants(check, raced_subject.id)
+            if grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP
+        ]
+        assert len(destination_signups) == 1
+        assert destination_signups[0].source_ref == racer_ref
+        assert destination_signups[0].amount_usd == Decimal("5")
+
+        # (ii) The orphan still holds its own signup grant under the canonical
+        # ref (the move's rewrite declined, and the row came back), plus its
+        # usage row.
+        orphan_grants = await store.list_llm_credit_grants(check, orphan_subject_id)
+        assert [grant.source for grant in orphan_grants] == [LLM_CREDIT_SOURCE_FREE_SIGNUP]
+        assert (
+            orphan_grants[0].source_ref == f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{orphan_subject_id}"
+        )
+        orphan_usage = await check.scalar(
+            select(func.count()).where(AgentLlmUsageEvent.billing_subject_id == orphan_subject_id)
+        )
+        assert orphan_usage == 1
+
+        # (iii) The claim never re-pointed.
+        allocation = (
+            await check.execute(
+                select(FreeCloudAllocation).where(
+                    FreeCloudAllocation.github_provider_user_id == github_subject
+                )
+            )
+        ).scalar_one()
+        assert allocation.billing_subject_id == orphan_subject_id
+
+    # (iv) The sweep recorded the race and did not abort.
+    assert result.raced == 1
+    # NOT the in-session artifact: the racer's committed $5 genuinely funds this
+    # org, so by the time the sweep re-queries it is legitimately no longer
+    # grantless and correctly reads as healed. The reclaim still backed out —
+    # that is what the ledger assertions above prove.
+    assert raced_org in result.healed_organization_ids
+    assert result.healed == 1
+
+    reclaim_pages = [
+        (error, kwargs)
+        for error, kwargs in paged
+        if isinstance(error, AgentGatewayReclaimLedgerRaced)
+    ]
+    assert len(reclaim_pages) == 1
+    assert reclaim_pages[0][1]["tags"]["action"] == "orphan_reclaim"
+
+
+@pytest.mark.asyncio
 async def test_backfill_loop_runs_zero_grant_check_on_its_own_cadence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
