@@ -89,6 +89,11 @@ pub enum RefreshCause {
     /// manual-refresh-only harness, and even for an auto-probeable one it is
     /// fire-and-forget, so the install response would serve `authStatus: null`.
     InstallCompleted,
+    /// A user pressed Refresh. The only cause with no auth event behind it: it
+    /// exists because probe writers no longer recompose, and pressing Refresh
+    /// must still be able to pick up a document that changed without passing
+    /// through this runtime's own apply door.
+    ManualRefresh,
 }
 
 impl RefreshCause {
@@ -99,6 +104,7 @@ impl RefreshCause {
             Self::LoginTerminal => "login_terminal",
             Self::SeatCooling => "seat_cooling",
             Self::InstallCompleted => "install_completed",
+            Self::ManualRefresh => "manual_refresh",
         }
     }
 }

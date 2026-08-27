@@ -63,6 +63,23 @@ pub async fn refresh_launch_options(
     Path(kind): Path<String>,
 ) -> Result<(StatusCode, Json<HarnessLaunchOptionsResponse>), ApiError> {
     validate_kind(&kind)?;
+    // Recompose the status document too. Probe writers deliberately no longer
+    // recompose (a verdict carrying an older state-file read used to revert the
+    // served auth world), so this door is what makes pressing Refresh pick up a
+    // document that changed without passing through this runtime's apply door.
+    // Blocking-pool work: two state.json reads, native detection over the real
+    // `$HOME`, a seat-cooling read and a status row read+write.
+    let status_service = state.agent_status_service.clone();
+    let refreshed = kind.clone();
+    super::blocking::run_blocking("agent-auth manual status refresh", move || {
+        status_service.refresh(
+            &refreshed,
+            crate::domains::agents::status::RefreshCause::ManualRefresh,
+        );
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await?
+    .ok();
     state
         .launch_probe_service
         .refresh_now(&kind)
