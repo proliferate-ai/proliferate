@@ -25,8 +25,8 @@ pub use handle::{
     ResolveInteractionCommandError, SetConfigOptionCommandError, SidedoorForkCommandError,
     SidedoorForkCommandResult,
 };
-pub use manager::LiveSessionManager;
 pub(crate) use manager::reaper::IdleReapPolicy;
+pub use manager::LiveSessionManager;
 pub(crate) use manager::RevealMcpElicitationUrlError;
 #[cfg(test)]
 pub(crate) use manager::{ScriptedSessionEvent, ScriptedSessionSpec};

@@ -171,7 +171,9 @@ impl AgentAuthState {
     ///   backward-compat path: it never regresses a single-server install.
     pub fn matches_server_origin(&self, current_server_origin: Option<&str>) -> bool {
         match (&self.issuing_server_origin, current_server_origin) {
-            (Some(stamped), Some(current)) => normalize_origin(stamped) == normalize_origin(current),
+            (Some(stamped), Some(current)) => {
+                normalize_origin(stamped) == normalize_origin(current)
+            }
             _ => true,
         }
     }
@@ -438,7 +440,9 @@ mod tests {
             Some("https://proliferate.corp.example".to_string())
         );
         let serialized = serde_json::to_string(&state).expect("serialize");
-        assert!(serialized.contains("\"issuing_server_origin\":\"https://proliferate.corp.example\""));
+        assert!(
+            serialized.contains("\"issuing_server_origin\":\"https://proliferate.corp.example\"")
+        );
     }
 
     fn stamped_state(origin: Option<&str>) -> AgentAuthState {

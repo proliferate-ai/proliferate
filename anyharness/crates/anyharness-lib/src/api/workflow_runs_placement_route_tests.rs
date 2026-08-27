@@ -85,8 +85,7 @@ async fn a_failed_materialization_compensates_the_worktree_and_the_retry_succeed
     // A regular FILE named `.proliferate` committed at the repo root makes
     // context materialization fail (the context dir cannot be created) AFTER
     // the worktree was cut — exactly the crash gap Ruling F compensates.
-    std::fs::write(fixture.repo_dir().join(".proliferate"), "not a dir\n")
-        .expect("poison file");
+    std::fs::write(fixture.repo_dir().join(".proliferate"), "not a dir\n").expect("poison file");
     git(&fixture.repo_dir(), &["add", "."]);
     git(&fixture.repo_dir(), &["commit", "-m", "poison"]);
 

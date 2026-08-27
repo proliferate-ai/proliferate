@@ -24,7 +24,7 @@ use std::borrow::Cow;
 use std::sync::OnceLock;
 
 use proliferate_diagnostics_protocol::v1::types::{
-    LifecycleFinalizerV1, LifecyclePhaseV1, SeverityV1, TerminalOutcomeV1,
+    ArgumentValueV1, LifecycleFinalizerV1, LifecyclePhaseV1, SeverityV1, TerminalOutcomeV1,
 };
 
 use crate::{
@@ -48,6 +48,15 @@ pub struct LifecycleOperationSpec {
     /// letting an unbounded string reach the wire.
     pub classifications: &'static [&'static str],
 }
+
+/// Elapsed milliseconds from `started` to the terminal record. Stamped by the
+/// guard for every operation whose safe-field list names it, so a call site
+/// cannot forget it and cannot fake it.
+pub const DURATION_FIELD: &str = "duration_ms";
+/// Elapsed milliseconds from `started` to the first assistant output of a
+/// turn. Learned by the sink via [`LifecycleOperation::append`]; only the
+/// first value survives because the sink records it once per turn.
+pub const FIRST_OUTPUT_FIELD: &str = "first_output_ms";
 
 /// The closed catalog of lifecycle operations AnyHarness emits.
 ///
@@ -79,7 +88,16 @@ pub const LIFECYCLE_OPERATIONS: &[LifecycleOperationSpec] = &[
     },
     LifecycleOperationSpec {
         name: "anyharness.turn.execute",
-        safe_fields: &["stop_reason", "engine_initiated"],
+        // `duration_ms` is stamped by the guard itself at terminal time;
+        // `first_output_ms` is learned by the sink when the first assistant
+        // item opens. Both are bounded integers, so time-to-first-output is
+        // computable from one terminal record without a join.
+        safe_fields: &[
+            "stop_reason",
+            "engine_initiated",
+            DURATION_FIELD,
+            FIRST_OUTPUT_FIELD,
+        ],
         classifications: &["turn_error", "internal_error"],
     },
     LifecycleOperationSpec {
@@ -163,6 +181,7 @@ pub struct LifecycleOperation {
     correlation: DiagnosticCorrelation,
     arguments: Vec<LifecycleArgument>,
     terminal: bool,
+    began: std::time::Instant,
 }
 
 impl LifecycleOperation {
@@ -184,6 +203,7 @@ impl LifecycleOperation {
             correlation,
             arguments,
             terminal: false,
+            began: std::time::Instant::now(),
         };
         operation.emit(LifecyclePhaseV1::Started, None, None, None);
         operation
@@ -198,6 +218,12 @@ impl LifecycleOperation {
 
     pub fn correlation(&self) -> &DiagnosticCorrelation {
         &self.correlation
+    }
+
+    /// Milliseconds since the `started` record was emitted, saturating at
+    /// `i64::MAX`. The value a sink stamps as `first_output_ms`.
+    pub fn elapsed_ms(&self) -> i64 {
+        i64::try_from(self.began.elapsed().as_millis()).unwrap_or(i64::MAX)
     }
 
     /// Attaches arguments learned after the operation began. They ride the
@@ -252,6 +278,9 @@ impl LifecycleOperation {
             return;
         }
         self.terminal = true;
+        if let Some(duration) = duration_argument(self.name, self.elapsed_ms(), &self.arguments) {
+            self.arguments.push(duration);
+        }
         self.emit(
             LifecyclePhaseV1::Terminal,
             Some(outcome),
@@ -297,6 +326,28 @@ impl LifecycleOperation {
             model,
         });
     }
+}
+
+/// The `duration_ms` argument a terminal record should carry, or `None` when
+/// the operation's safe-field list does not name it or a caller already
+/// supplied one. Pure so it is testable without a producer.
+pub(crate) fn duration_argument(
+    name: &str,
+    elapsed_ms: i64,
+    existing: &[LifecycleArgument],
+) -> Option<LifecycleArgument> {
+    let listed = safe_fields(name)?.contains(&DURATION_FIELD);
+    if !listed
+        || existing
+            .iter()
+            .any(|argument| argument.name == DURATION_FIELD)
+    {
+        return None;
+    }
+    Some(LifecycleArgument {
+        name: DURATION_FIELD,
+        value: ArgumentValueV1::Integer(elapsed_ms.max(0)),
+    })
 }
 
 impl Drop for LifecycleOperation {
@@ -347,6 +398,28 @@ mod tests {
     fn an_unknown_operation_has_no_safe_fields() {
         assert!(safe_fields("anyharness.tool.invoke").is_none());
         assert!(classifications("anyharness.tool.invoke").is_none());
+    }
+
+    #[test]
+    fn a_turn_terminal_is_stamped_with_its_duration_exactly_once() {
+        let stamped = duration_argument("anyharness.turn.execute", 1_234, &[])
+            .expect("turn.execute lists duration_ms");
+        assert_eq!(stamped.name, DURATION_FIELD);
+        assert_eq!(stamped.value, ArgumentValueV1::Integer(1_234));
+        assert!(
+            duration_argument("anyharness.turn.execute", 5, &[stamped]).is_none(),
+            "a caller-supplied duration is never overwritten"
+        );
+        assert!(
+            duration_argument("anyharness.agent.start", 1_234, &[]).is_none(),
+            "an operation whose safe list omits duration_ms is left alone"
+        );
+        assert!(duration_argument("anyharness.tool.invoke", 1, &[]).is_none());
+        assert_eq!(
+            duration_argument("anyharness.turn.execute", -3, &[]).map(|a| a.value),
+            Some(ArgumentValueV1::Integer(0)),
+            "a clock anomaly clamps to zero rather than shipping a negative"
+        );
     }
 
     #[test]

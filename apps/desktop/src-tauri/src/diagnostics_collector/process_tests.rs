@@ -283,6 +283,32 @@ async fn an_install_id_crosses_the_process_seam_to_the_real_collector() {
     std::fs::remove_dir_all(root).expect("cleanup");
 }
 
+/// The signed-in user's id crosses the same seam as the install id, read at
+/// launch time from the host's identity cell, and the real collector accepts
+/// it. The collector half (the resource attribute) is proven in `otlp_tests`.
+#[tokio::test]
+async fn a_user_id_crosses_the_process_seam_to_the_real_collector() {
+    let root = std::env::temp_dir().join(format!("collector-user-id-{}", uuid::Uuid::new_v4()));
+    let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
+        .expect("fallback");
+    crate::diagnostics_collector::identity::set_current_user_id(Some(
+        "user-desktop-test-77a1".to_owned(),
+    ));
+    let launcher = install_id_launcher(Some("install-desktop-test-4b71"), &fallback);
+
+    let mut process = launcher.launch().await.expect("launch with a user id");
+    let health = process.client().health().await.expect("authenticated health");
+    assert_eq!(health.status, HealthStatusV1::Ready);
+    assert_eq!(
+        process.orderly_shutdown().await.expect("shutdown"),
+        CollectorShutdownOutcome::Graceful
+    );
+    crate::diagnostics_collector::identity::set_current_user_id(None);
+
+    fallback.close().expect("close fallback");
+    std::fs::remove_dir_all(root).expect("cleanup");
+}
+
 #[test]
 fn install_id_filter_accepts_exactly_the_collectors_domain() {
     assert!(retain_valid_install_id(None).is_none());

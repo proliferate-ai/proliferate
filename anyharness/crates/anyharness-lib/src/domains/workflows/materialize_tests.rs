@@ -178,7 +178,13 @@ fn worktree_workspaces_write_the_entry_into_the_common_git_dir() {
     let worktree = tmp.path().join("wt");
     git(
         &root,
-        &["worktree", "add", worktree.to_str().expect("utf8 path"), "-b", "run-branch"],
+        &[
+            "worktree",
+            "add",
+            worktree.to_str().expect("utf8 path"),
+            "-b",
+            "run-branch",
+        ],
     );
 
     let docs = vec![doc("notes", "notes.md")];
@@ -189,7 +195,9 @@ fn worktree_workspaces_write_the_entry_into_the_common_git_dir() {
     // in the worktree's private gitdir.
     let exclude = read_exclude(&root);
     assert!(
-        exclude.lines().any(|line| line.trim() == PROLIFERATE_EXCLUDE_ENTRY),
+        exclude
+            .lines()
+            .any(|line| line.trim() == PROLIFERATE_EXCLUDE_ENTRY),
         "common-dir exclude must carry the entry:\n{exclude}"
     );
     let private = root.join(".git/worktrees/wt/info/exclude");
@@ -301,10 +309,16 @@ fn git_failures_are_errors_not_a_missing_repo() {
     assert_eq!(outcome, None);
 
     // Negative controls: every other git failure is an error.
-    classify_common_dir_probe(root, &failed("fatal: detected dubious ownership in repository\n"))
-        .expect_err("dubious ownership must not read as no-repo");
-    classify_common_dir_probe(root, &failed("error: unable to read .git/HEAD: Permission denied\n"))
-        .expect_err("permission failure must not read as no-repo");
+    classify_common_dir_probe(
+        root,
+        &failed("fatal: detected dubious ownership in repository\n"),
+    )
+    .expect_err("dubious ownership must not read as no-repo");
+    classify_common_dir_probe(
+        root,
+        &failed("error: unable to read .git/HEAD: Permission denied\n"),
+    )
+    .expect_err("permission failure must not read as no-repo");
     classify_common_dir_probe(root, &ok(""))
         .expect_err("a successful probe with no path is malformed, not a repo");
 }

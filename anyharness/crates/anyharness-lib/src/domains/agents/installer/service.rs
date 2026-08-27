@@ -450,10 +450,7 @@ mod install_error_kind_tests {
                 InstallErrorKind::Other,
             ),
             (
-                InstallError::Io(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "gone",
-                )),
+                InstallError::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "gone")),
                 InstallErrorKind::Other,
             ),
         ];

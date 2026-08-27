@@ -99,6 +99,7 @@ pub(super) struct Worker {
     target: ExportTarget,
     metrics: Arc<ExporterMetrics>,
     install_id: Option<String>,
+    user_id: Option<String>,
     consecutive_failures: u32,
     cooldown_until: Option<Instant>,
 }
@@ -109,22 +110,21 @@ impl Worker {
         target: ExportTarget,
         metrics: Arc<ExporterMetrics>,
         install_id: Option<String>,
+        user_id: Option<String>,
     ) -> Self {
         Self {
             receiver,
             target,
             metrics,
             install_id,
+            user_id,
             consecutive_failures: 0,
             cooldown_until: None,
         }
     }
 
     pub(super) async fn run(mut self, mut stop: watch::Receiver<bool>) {
-        let Ok(client) = reqwest::Client::builder()
-            .timeout(REQUEST_TIMEOUT)
-            .build()
-        else {
+        let Ok(client) = reqwest::Client::builder().timeout(REQUEST_TIMEOUT).build() else {
             // No HTTP client means no export path. Say so in health and keep
             // draining so the accepting ingest path never sees a full queue.
             self.metrics.mark_degraded(ExportFailure::Request);
@@ -148,7 +148,11 @@ impl Worker {
 
     /// Collects one bounded batch. Returns `true` when the collector is
     /// stopping or the producing side is gone.
-    async fn fill_batch(&mut self, batch: &mut Vec<Arc<[u8]>>, stop: &mut watch::Receiver<bool>) -> bool {
+    async fn fill_batch(
+        &mut self,
+        batch: &mut Vec<Arc<[u8]>>,
+        stop: &mut watch::Receiver<bool>,
+    ) -> bool {
         let first = tokio::select! {
             biased;
             _ = stop.changed() => None,
@@ -205,7 +209,11 @@ impl Worker {
         if records.is_empty() {
             return;
         }
-        let (payload, refused) = otlp::encode_batch(self.install_id.as_deref(), &records);
+        let (payload, refused) = otlp::encode_batch(
+            self.install_id.as_deref(),
+            self.user_id.as_deref(),
+            &records,
+        );
         if refused > 0 {
             self.metrics.note_dropped(refused);
         }
@@ -230,11 +238,7 @@ impl Worker {
         }
     }
 
-    async fn post(
-        &self,
-        client: &reqwest::Client,
-        payload: &Value,
-    ) -> Result<(), ExportFailure> {
+    async fn post(&self, client: &reqwest::Client, payload: &Value) -> Result<(), ExportFailure> {
         let body = serde_json::to_vec(payload).map_err(|_| ExportFailure::Encode)?;
         let mut retry = 0_usize;
         loop {
@@ -251,11 +255,7 @@ impl Worker {
         }
     }
 
-    async fn attempt(
-        &self,
-        client: &reqwest::Client,
-        body: &[u8],
-    ) -> Result<(), ExportFailure> {
+    async fn attempt(&self, client: &reqwest::Client, body: &[u8]) -> Result<(), ExportFailure> {
         let mut request = client
             .post(self.target.logs_url.clone())
             .header("content-type", "application/json")

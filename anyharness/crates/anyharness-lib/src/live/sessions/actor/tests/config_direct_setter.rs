@@ -34,10 +34,7 @@ impl acp::JsonRpcMessage for LegacySetModelRequest {
         acp::UntypedMessage::new(self.method(), self)
     }
 
-    fn parse_message(
-        method: &str,
-        params: &impl Serialize,
-    ) -> Result<Self, acp::Error> {
+    fn parse_message(method: &str, params: &impl Serialize) -> Result<Self, acp::Error> {
         if !Self::matches_method(method) {
             return Err(acp::Error::method_not_found());
         }
@@ -222,14 +219,10 @@ async fn direct_model_setter_applies_only_matching_response_readback() {
             .await;
             let mut state = empty_direct_model_state();
 
-            let outcome = apply_model_via_direct_setter(
-                &fake.conn,
-                "native-1",
-                &mut state,
-                "grok-4.5",
-            )
-            .await
-            .expect("matching model readback");
+            let outcome =
+                apply_model_via_direct_setter(&fake.conn, "native-1", &mut state, "grok-4.5")
+                    .await
+                    .expect("matching model readback");
 
             assert_eq!(outcome, ConfigApplyOutcome::AppliedAuthoritative);
             assert_eq!(state.current_model_id.as_deref(), Some("grok-4.5"));
@@ -250,14 +243,10 @@ async fn direct_model_setter_rejects_acknowledgement_and_mismatch_without_mutati
                 let fake = fake_connection(response).await;
                 let mut state = empty_direct_model_state();
 
-                let outcome = apply_model_via_direct_setter(
-                    &fake.conn,
-                    "native-1",
-                    &mut state,
-                    "grok-4.5",
-                )
-                .await
-                .expect("unconfirmed model response remains a handled refusal");
+                let outcome =
+                    apply_model_via_direct_setter(&fake.conn, "native-1", &mut state, "grok-4.5")
+                        .await
+                        .expect("unconfirmed model response remains a handled refusal");
 
                 assert_eq!(outcome, ConfigApplyOutcome::NotApplied);
                 assert_eq!(state.current_model_id, None);
@@ -277,14 +266,10 @@ async fn legacy_mode_setter_applies_only_matching_response_readback() {
             .await;
             let mut state = legacy_mode_state();
 
-            let outcome = apply_mode_via_direct_setter_legacy(
-                &fake.conn,
-                "native-1",
-                &mut state,
-                "code",
-            )
-            .await
-            .expect("matching mode readback");
+            let outcome =
+                apply_mode_via_direct_setter_legacy(&fake.conn, "native-1", &mut state, "code")
+                    .await
+                    .expect("matching mode readback");
 
             assert_eq!(outcome, ConfigApplyOutcome::AppliedAuthoritative);
             assert_eq!(state.current_mode_id.as_deref(), Some("code"));
@@ -312,14 +297,10 @@ async fn legacy_mode_setter_rejects_acknowledgement_and_mismatch_without_mutatio
                 let fake = fake_connection(response).await;
                 let mut state = legacy_mode_state();
 
-                let outcome = apply_mode_via_direct_setter_legacy(
-                    &fake.conn,
-                    "native-1",
-                    &mut state,
-                    "code",
-                )
-                .await
-                .expect("unconfirmed mode response remains a handled refusal");
+                let outcome =
+                    apply_mode_via_direct_setter_legacy(&fake.conn, "native-1", &mut state, "code")
+                        .await
+                        .expect("unconfirmed mode response remains a handled refusal");
 
                 assert_eq!(outcome, ConfigApplyOutcome::NotApplied);
                 assert_eq!(state.current_mode_id.as_deref(), Some("ask"));

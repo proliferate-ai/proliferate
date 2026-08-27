@@ -139,7 +139,15 @@ fn the_rebuild_drops_all_five_cleanup_columns() {
     let database = TempDatabase::new();
     let mut conn = Connection::open(database.path()).expect("open fixture");
     seed_pre_0068(&mut conn);
-    insert_pre_0068_workspace(&conn, "workspace-1", "active", Some("main"), None, None, None);
+    insert_pre_0068_workspace(
+        &conn,
+        "workspace-1",
+        "active",
+        Some("main"),
+        None,
+        None,
+        None,
+    );
 
     run_migrations(&mut conn).expect("run 0068");
 
@@ -172,7 +180,15 @@ fn every_other_column_and_its_data_survives_the_rebuild() {
         Some("feature/archived"),
         Some("2026-05-05T00:00:00Z"),
     );
-    insert_pre_0068_workspace(&conn, "workspace-active", "active", Some("main"), None, None, None);
+    insert_pre_0068_workspace(
+        &conn,
+        "workspace-active",
+        "active",
+        Some("main"),
+        None,
+        None,
+        None,
+    );
 
     run_migrations(&mut conn).expect("run 0068");
 
@@ -259,7 +275,15 @@ fn foreign_key_enforcement_is_restored_after_the_rebuild() {
     let database = TempDatabase::new();
     let mut conn = Connection::open(database.path()).expect("open fixture");
     seed_pre_0068(&mut conn);
-    insert_pre_0068_workspace(&conn, "workspace-active", "active", Some("main"), None, None, None);
+    insert_pre_0068_workspace(
+        &conn,
+        "workspace-active",
+        "active",
+        Some("main"),
+        None,
+        None,
+        None,
+    );
 
     run_migrations(&mut conn).expect("run 0068");
 
@@ -308,7 +332,15 @@ fn the_workspace_store_reads_rows_fine_with_the_cleanup_columns_gone() {
         Some("feature/archived"),
         Some("2026-05-05T00:00:00Z"),
     );
-    insert_pre_0068_workspace(&conn, "workspace-active", "active", Some("main"), None, None, None);
+    insert_pre_0068_workspace(
+        &conn,
+        "workspace-active",
+        "active",
+        Some("main"),
+        None,
+        None,
+        None,
+    );
 
     run_migrations(&mut conn).expect("run 0068");
     drop(conn);
@@ -341,7 +373,15 @@ fn an_unknown_lifecycle_value_does_not_brick_listings_after_the_cleanup_columns_
     let database = TempDatabase::new();
     let mut conn = Connection::open(database.path()).expect("open fixture");
     seed_pre_0068(&mut conn);
-    insert_pre_0068_workspace(&conn, "workspace-active", "active", Some("main"), None, None, None);
+    insert_pre_0068_workspace(
+        &conn,
+        "workspace-active",
+        "active",
+        Some("main"),
+        None,
+        None,
+        None,
+    );
     insert_pre_0068_workspace(
         &conn,
         "workspace-archived",
@@ -413,7 +453,15 @@ fn rerunning_the_migration_on_an_already_migrated_database_is_a_no_op() {
     let database = TempDatabase::new();
     let mut conn = Connection::open(database.path()).expect("open fixture");
     seed_pre_0068(&mut conn);
-    insert_pre_0068_workspace(&conn, "workspace-1", "active", Some("main"), None, None, None);
+    insert_pre_0068_workspace(
+        &conn,
+        "workspace-1",
+        "active",
+        Some("main"),
+        None,
+        None,
+        None,
+    );
 
     run_migrations(&mut conn).expect("run 0068");
     let columns_after_first = table_column_names(&conn, "workspaces");

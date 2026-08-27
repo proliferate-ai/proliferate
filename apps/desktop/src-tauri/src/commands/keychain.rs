@@ -305,7 +305,11 @@ pub async fn set_auth_session(session: AuthSessionRecord) -> Result<(), String> 
     let _guard = SECRET_FILE_LOCK
         .lock()
         .map_err(|_| "secret file lock poisoned".to_string())?;
-    write_secret_file(&auth_session_file_path()?, &session)
+    let written = write_secret_file(&auth_session_file_path()?, &session);
+    if written.is_ok() {
+        crate::diagnostics_collector::identity::set_current_user_id(Some(session.user_id.clone()));
+    }
+    written
 }
 
 #[tauri::command]
@@ -313,7 +317,20 @@ pub async fn clear_auth_session() -> Result<(), String> {
     let _guard = SECRET_FILE_LOCK
         .lock()
         .map_err(|_| "secret file lock poisoned".to_string())?;
+    crate::diagnostics_collector::identity::set_current_user_id(None);
     delete_file_if_exists(&auth_session_file_path()?)
+}
+
+/// The signed-in user's id from the persisted session, for the collector
+/// host's identity stamp. Id only — the record's email never leaves this
+/// function. `None` when no session is stored or the app dir is unavailable.
+pub(crate) fn read_auth_session_user_id() -> Option<String> {
+    let path = auth_session_file_path().ok()?;
+    read_json_file::<AuthSessionRecord>(&path)
+        .ok()
+        .flatten()
+        .map(|session| session.user_id)
+        .filter(|user_id| !user_id.trim().is_empty())
 }
 
 #[tauri::command]

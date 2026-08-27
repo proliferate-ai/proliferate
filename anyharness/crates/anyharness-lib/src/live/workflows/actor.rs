@@ -17,9 +17,7 @@ use crate::domains::sessions::runtime::{
 };
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workflows::definition::{ResolveMode, WorkflowDefinition};
-use crate::domains::workflows::model::{
-    RenderedEnvelope, WorkflowNodeKind, WorkflowRunNodeRecord,
-};
+use crate::domains::workflows::model::{RenderedEnvelope, WorkflowNodeKind, WorkflowRunNodeRecord};
 use crate::domains::workflows::projection::RunProjection;
 use crate::domains::workflows::render::{
     node_session_title, render_envelope, run_context_dir_relative, RenderInputs,
@@ -192,11 +190,11 @@ impl WorkflowActor {
                                 Decision::Transition(transition) => transition,
                                 Decision::Hold | Decision::Illegal(_) => break,
                             };
-                            match self
-                                .deps
-                                .store
-                                .apply_transition(&self.run_id, &transition, &event)
-                            {
+                            match self.deps.store.apply_transition(
+                                &self.run_id,
+                                &transition,
+                                &event,
+                            ) {
                                 Ok(applied) => {
                                     *state = applied.state.clone();
                                     effect = applied.side_effect;
@@ -275,7 +273,9 @@ impl WorkflowActor {
             Some(envelope) => envelope.clone(),
             None => {
                 let envelope = self.render_node_envelope(state, &node)?;
-                self.deps.store.store_rendered_envelope(&node.id, &envelope)?;
+                self.deps
+                    .store
+                    .store_rendered_envelope(&node.id, &envelope)?;
                 envelope
             }
         };
@@ -403,7 +403,11 @@ impl WorkflowActor {
     fn title_node_session(&self, node: &WorkflowRunNodeRecord, session_id: &str) {
         let title = node_session_title(node.chain_index, &node.title);
         let now = chrono::Utc::now().to_rfc3339();
-        if let Err(error) = self.deps.session_store.update_title(session_id, &title, &now) {
+        if let Err(error) = self
+            .deps
+            .session_store
+            .update_title(session_id, &title, &now)
+        {
             tracing::warn!(
                 run_id = %self.run_id,
                 node_row_id = %node.id,
@@ -510,7 +514,11 @@ impl WorkflowActor {
 pub(super) fn launch_model(
     node: &WorkflowRunNodeRecord,
     definition: &WorkflowDefinition,
-) -> (String, Option<String>, std::collections::BTreeMap<String, String>) {
+) -> (
+    String,
+    Option<String>,
+    std::collections::BTreeMap<String, String>,
+) {
     let model = node.model.clone().or_else(|| {
         node.definition_node_id
             .as_deref()
@@ -519,6 +527,10 @@ pub(super) fn launch_model(
     });
     match model {
         Some(model) => (model.agent_kind, model.model_id, model.control_values),
-        None => (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, Default::default()),
+        None => (
+            DEFAULT_WORKFLOW_AGENT_KIND.to_string(),
+            None,
+            Default::default(),
+        ),
     }
 }

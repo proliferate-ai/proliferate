@@ -9,6 +9,7 @@ use super::backoff::jittered_backoff_seconds;
 use super::live_state::LiveStateGuard;
 use super::probe::{ProbeError, ProbeRequest};
 use super::{HarnessRuntimeState, HarnessSlot, LaunchProbeService, PokeReason, RefreshError};
+use crate::observability::lifecycle;
 
 impl LaunchProbeService {
     pub(super) async fn run_attempt(
@@ -47,6 +48,9 @@ impl LaunchProbeService {
                 return Err(error.into());
             }
         };
+        // The probe's provider call is the one model request the runtime makes
+        // itself; every exit below closes this guard with a listed outcome.
+        let model_request = lifecycle::begin_model_request(harness_kind, material.route_label());
         let plan_producer = self.plan_producer.clone();
         let plan_harness = harness_kind.to_string();
         let plan_revision = material.state_revision;
@@ -83,6 +87,10 @@ impl LaunchProbeService {
                     Err(_) => {
                         let error = ProbeError::ModelControlsIncomplete;
                         let failure_code = error.code();
+                        model_request.terminal(
+                            lifecycle::model_request_outcome(failure_code),
+                            lifecycle::model_request_classification(failure_code),
+                        );
                         let committed = service
                             .record_failure(&started, &now.to_rfc3339(), failure_code)
                             .map_err(|write_error| {
@@ -105,6 +113,7 @@ impl LaunchProbeService {
                         return Err(RefreshError::Probe(error));
                     }
                 };
+                model_request.succeeded();
                 let committed = service
                     .record_success(&started, &options, &now.to_rfc3339())
                     .map_err(|error| RefreshError::Persistence(error.to_string()))?;
@@ -126,6 +135,10 @@ impl LaunchProbeService {
             }
             Err(error) => {
                 let failure_code = error.code();
+                model_request.terminal(
+                    lifecycle::model_request_outcome(failure_code),
+                    lifecycle::model_request_classification(failure_code),
+                );
                 let committed = service
                     .record_failure(&started, &now.to_rfc3339(), failure_code)
                     .map_err(|write_error| RefreshError::Persistence(write_error.to_string()))?;

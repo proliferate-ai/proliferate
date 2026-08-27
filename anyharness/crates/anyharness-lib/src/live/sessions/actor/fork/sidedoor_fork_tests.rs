@@ -49,7 +49,9 @@ fn spawn_fake_sidedoor(scenario: Scenario) -> (u16, Arc<Mutex<Vec<String>>>) {
                     break Some(pos);
                 }
             };
-            let Some(header_end) = header_end else { continue };
+            let Some(header_end) = header_end else {
+                continue;
+            };
             let headers = String::from_utf8_lossy(&buf[..header_end]).to_string();
             let request_line = headers.lines().next().unwrap_or_default().to_string();
             let mut parts = request_line.split_whitespace();
@@ -114,7 +116,11 @@ fn route(
             .listing
             .iter()
             .map(|id| {
-                let role = scenario.messages.get(id).cloned().unwrap_or_else(|| "user".to_string());
+                let role = scenario
+                    .messages
+                    .get(id)
+                    .cloned()
+                    .unwrap_or_else(|| "user".to_string());
                 format!("{{\"info\":{{\"id\":\"{id}\",\"role\":\"{role}\"}}}}")
             })
             .collect();
@@ -175,10 +181,9 @@ fn user_scenario(id: &str) -> Scenario {
 async fn happy_path_validates_and_dispatches() {
     let (port, bodies) = spawn_fake_sidedoor(user_scenario("msg_target"));
     let runtime = ready_runtime(port);
-    let result =
-        sidedoor_targeted_fork(Some(&runtime), "native_session", "msg_target", true)
-            .await
-            .expect("validated fork dispatches");
+    let result = sidedoor_targeted_fork(Some(&runtime), "native_session", "msg_target", true)
+        .await
+        .expect("validated fork dispatches");
     assert_eq!(result.native_session_id, "child_1");
     let recorded = bodies.lock().expect("bodies");
     assert_eq!(recorded.len(), 1);
@@ -232,7 +237,10 @@ async fn absent_from_listing_is_invalid_fork_target() {
         error,
         SidedoorForkCommandError::InvalidForkTarget(_)
     ));
-    assert!(bodies.lock().expect("bodies").is_empty(), "must not dispatch");
+    assert!(
+        bodies.lock().expect("bodies").is_empty(),
+        "must not dispatch"
+    );
 }
 
 #[tokio::test]
@@ -301,9 +309,10 @@ async fn unknown_id_sorting_after_all_real_ids_never_dispatches() {
     });
     let runtime = ready_runtime(port);
     // Sorts after every real id; upstream would full-copy on this id.
-    let error = sidedoor_targeted_fork(Some(&runtime), "native_session", "msg_zzzzzzzzzzzzzz", true)
-        .await
-        .expect_err("an id sorting after all real ids must hard-error, never full-copy");
+    let error =
+        sidedoor_targeted_fork(Some(&runtime), "native_session", "msg_zzzzzzzzzzzzzz", true)
+            .await
+            .expect_err("an id sorting after all real ids must hard-error, never full-copy");
     assert!(matches!(error, SidedoorForkCommandError::TargetNotFound));
     assert!(
         bodies.lock().expect("bodies").is_empty(),

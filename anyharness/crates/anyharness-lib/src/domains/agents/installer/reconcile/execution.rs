@@ -7,15 +7,15 @@ use uuid::Uuid;
 
 use super::{reconcile_agent_with_progress, AgentReconcileOutcome, AgentReconcileResult};
 use crate::domains::agents::catalog::service::{ActiveCatalog, AgentCatalogService};
-use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
-use crate::domains::agents::installer::progress::{
-    InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
-};
 use crate::domains::agents::installer::auto_install::{
     auto_install_decision_with_escape_hatch, AgentInstallFacts,
 };
+use crate::domains::agents::installer::progress::{
+    InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
+};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
+use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::agents::model::{AgentDescriptor, AgentKind, ArtifactRole, ResolvedArtifact};
 use crate::domains::agents::readiness::service::resolve_agent_unrouted;
 use crate::domains::agents::runtime::RuntimeSurface;

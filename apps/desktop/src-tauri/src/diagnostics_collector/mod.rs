@@ -4,7 +4,9 @@ pub(crate) mod child_bridge;
 pub(crate) mod child_status;
 pub(crate) mod client;
 pub(crate) mod export_admission;
+pub(crate) mod export_destination;
 pub(crate) mod fallback;
+pub(crate) mod identity;
 #[cfg(test)]
 mod packaging_contract;
 #[cfg(unix)]

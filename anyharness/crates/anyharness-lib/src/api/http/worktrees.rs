@@ -186,4 +186,3 @@ fn workspace_lifecycle_state_to_contract(
         WorkspaceLifecycleState::Archived => ContractWorkspaceLifecycleState::Archived,
     }
 }
-

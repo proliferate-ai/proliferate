@@ -151,6 +151,18 @@ impl CollectorCore {
                 ));
             }
         }
+        // Same domain as the install id, for the same reason: it is stamped
+        // on every exported record.
+        if let Some(user_id) = config.user_id.as_deref() {
+            if user_id.is_empty()
+                || user_id.len() > 128
+                || !user_id.bytes().all(|byte| byte.is_ascii_graphic())
+            {
+                return Err(CoreError::InvalidConfig(
+                    "user id must be 1-128 printable ASCII bytes",
+                ));
+            }
+        }
         let boot_id = format!("collector-{}", uuid::Uuid::new_v4());
         let boot_operation_id = format!("collector-boot-{}", uuid::Uuid::new_v4());
         let (tail_tx, _) = broadcast::channel(config.runtime_limits.tail_queue_frames);
@@ -179,7 +191,10 @@ impl CollectorCore {
             tail_tx,
             tail_slots: Arc::new(Semaphore::new(config.runtime_limits.tail_readers)),
             export_slots: Arc::new(Semaphore::new(config.runtime_limits.concurrent_exports)),
-            exporter: ExporterHandle::from_environment(config.install_id.clone()),
+            exporter: ExporterHandle::from_environment(
+                config.install_id.clone(),
+                config.user_id.clone(),
+            ),
         });
         {
             let mut inner = core.lock();

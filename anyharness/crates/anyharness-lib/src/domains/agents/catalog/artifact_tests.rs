@@ -7,10 +7,9 @@ use ring::rand::SystemRandom;
 use ring::signature::{Ed25519KeyPair, KeyPair};
 
 use super::*;
-use std::path::PathBuf;
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
 use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
-
+use std::path::PathBuf;
 
 fn scratch_dir() -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
@@ -188,12 +187,18 @@ fn valid_artifact_fetches_verifies_and_stages() {
     assert!(staged_path.join(CATALOG_FILE).exists());
     assert!(staged_path.join(REGISTRY_FILE).exists());
 
-    assert!(staged_path.join(CATALOG_SIG_FILE).exists(), "M1(b): the .minisig must be persisted alongside the staged doc");
+    assert!(
+        staged_path.join(CATALOG_SIG_FILE).exists(),
+        "M1(b): the .minisig must be persisted alongside the staged doc"
+    );
     assert!(staged_path.join(REGISTRY_SIG_FILE).exists());
 
     let reloaded = load_staged_from_disk(&staged_path, &[fixture.signer.public_key()])
         .expect("reload from disk, re-verified");
-    assert_eq!(reloaded.catalog.catalog_version, pair.catalog.catalog_version);
+    assert_eq!(
+        reloaded.catalog.catalog_version,
+        pair.catalog.catalog_version
+    );
 }
 
 #[test]
@@ -265,7 +270,10 @@ fn tampered_signature_is_rejected_and_floor_stays_active() {
     .expect_err("tampered signature must be rejected");
 
     assert_eq!(err.reason, CatalogArtifactRejectReason::Signature);
-    assert!(!staged_path.exists(), "a rejected artifact must not be staged");
+    assert!(
+        !staged_path.exists(),
+        "a rejected artifact must not be staged"
+    );
 }
 
 #[test]
@@ -303,7 +311,10 @@ fn wrong_version_identity_between_manifest_and_document_is_rejected() {
     let client = FakeFetchClient::default();
     let manifest_url = format!("{BASE_URL}/catalogs/agents/{CHANNEL}/manifest.json");
     client.insert(&manifest_url, manifest_bytes.clone());
-    client.insert(&format!("{manifest_url}.minisig"), signer.sign(&manifest_bytes));
+    client.insert(
+        &format!("{manifest_url}.minisig"),
+        signer.sign(&manifest_bytes),
+    );
     let base = versioned_base(&manifest.catalog_version);
     client.insert(&format!("{base}/{CATALOG_FILE}"), catalog_bytes.clone());
     client.insert(&format!("{base}/{REGISTRY_FILE}"), registry_bytes.clone());
@@ -318,8 +329,14 @@ fn wrong_version_identity_between_manifest_and_document_is_rejected() {
 
     let staged_dir = scratch_dir();
     let staged_path = staged_dir.join("staged");
-    let err = fetch_and_stage(BASE_URL, CHANNEL, &staged_path, &client, &[signer.public_key()])
-        .expect_err("version identity mismatch must be rejected");
+    let err = fetch_and_stage(
+        BASE_URL,
+        CHANNEL,
+        &staged_path,
+        &client,
+        &[signer.public_key()],
+    )
+    .expect_err("version identity mismatch must be rejected");
 
     assert_eq!(err.reason, CatalogArtifactRejectReason::VersionIdentity);
 }
@@ -374,8 +391,16 @@ fn load_staged_from_disk_returns_none_for_corrupt_json() {
     let registry_bytes = serde_json::to_vec(&bundled_agent_registry_document().clone()).unwrap();
     std::fs::write(staged_dir.join(CATALOG_FILE), &catalog_bytes).unwrap();
     std::fs::write(staged_dir.join(REGISTRY_FILE), &registry_bytes).unwrap();
-    std::fs::write(staged_dir.join(CATALOG_SIG_FILE), signer.sign(&catalog_bytes)).unwrap();
-    std::fs::write(staged_dir.join(REGISTRY_SIG_FILE), signer.sign(&registry_bytes)).unwrap();
+    std::fs::write(
+        staged_dir.join(CATALOG_SIG_FILE),
+        signer.sign(&catalog_bytes),
+    )
+    .unwrap();
+    std::fs::write(
+        staged_dir.join(REGISTRY_SIG_FILE),
+        signer.sign(&registry_bytes),
+    )
+    .unwrap();
 
     // Correctly signed, but not parseable JSON: the gate check runs AFTER
     // signature verification, and must still refuse.

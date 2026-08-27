@@ -92,7 +92,10 @@ fn insert_startable_session(state: &crate::app::AppState, record: &SessionRecord
         .store()
         .insert(record)
         .expect("insert session");
-    state.session_service.store().seed_empty_launch_intent(&record.id);
+    state
+        .session_service
+        .store()
+        .seed_empty_launch_intent(&record.id);
 }
 
 pub(super) fn link_record(

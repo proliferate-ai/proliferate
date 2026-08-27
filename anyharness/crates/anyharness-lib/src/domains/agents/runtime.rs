@@ -12,8 +12,8 @@ use super::installer::reconcile::execution::{
 };
 use super::installer::seed::AgentSeedStore;
 use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
-use super::model::*;
 use super::launch_probe::{LaunchProbeService, PokeReason};
+use super::model::*;
 use super::readiness::service::resolve_agent;
 use super::registry::built_in_registry;
 

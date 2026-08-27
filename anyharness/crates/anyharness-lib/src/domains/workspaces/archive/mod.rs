@@ -214,7 +214,10 @@ impl WorkspaceArchiveService {
     /// observe the enqueue would test the runner, not the enqueue.
     #[cfg(test)]
     pub(crate) fn deferred_gc_for_tests(&self) -> BTreeSet<PathBuf> {
-        self.deferred_gc.lock().expect("deferred gc set poisoned").clone()
+        self.deferred_gc
+            .lock()
+            .expect("deferred gc set poisoned")
+            .clone()
     }
 
     /// Ask for a repo root's gc to run once nothing is working in it. R5's purge

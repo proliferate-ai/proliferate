@@ -62,18 +62,15 @@ pub fn parse_interval_ms(expr: &str) -> Result<i64, ScheduleParseError> {
     if trimmed.is_empty() {
         return Err(ScheduleParseError::EmptyInterval);
     }
-    let (value_part, unit_ms): (&str, i64) = match trimmed
-        .chars()
-        .last()
-        .filter(|c| c.is_ascii_alphabetic())
-    {
-        Some('s') | Some('S') => (&trimmed[..trimmed.len() - 1], 1_000),
-        Some('m') | Some('M') => (&trimmed[..trimmed.len() - 1], 60_000),
-        Some('h') | Some('H') => (&trimmed[..trimmed.len() - 1], 3_600_000),
-        Some('d') | Some('D') => (&trimmed[..trimmed.len() - 1], 86_400_000),
-        Some(_) => return Err(ScheduleParseError::InvalidInterval(expr.to_string())),
-        None => (trimmed, 1_000),
-    };
+    let (value_part, unit_ms): (&str, i64) =
+        match trimmed.chars().last().filter(|c| c.is_ascii_alphabetic()) {
+            Some('s') | Some('S') => (&trimmed[..trimmed.len() - 1], 1_000),
+            Some('m') | Some('M') => (&trimmed[..trimmed.len() - 1], 60_000),
+            Some('h') | Some('H') => (&trimmed[..trimmed.len() - 1], 3_600_000),
+            Some('d') | Some('D') => (&trimmed[..trimmed.len() - 1], 86_400_000),
+            Some(_) => return Err(ScheduleParseError::InvalidInterval(expr.to_string())),
+            None => (trimmed, 1_000),
+        };
     let magnitude: i64 = value_part
         .trim()
         .parse()
@@ -95,7 +92,9 @@ pub fn ensure_emulated_cadence_floor(schedule: &LoopSchedule) -> Result<(), Sche
         LoopScheduleKind::Interval => {
             let interval_ms = parse_interval_ms(&schedule.expr)?;
             if interval_ms < MIN_EMULATED_INTERVAL_MS {
-                return Err(ScheduleParseError::IntervalBelowFloor(schedule.expr.clone()));
+                return Err(ScheduleParseError::IntervalBelowFloor(
+                    schedule.expr.clone(),
+                ));
             }
             Ok(())
         }
@@ -276,13 +275,19 @@ mod tests {
             ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Interval, "1")),
             Err(ScheduleParseError::IntervalBelowFloor("1".to_string()))
         );
-        assert!(ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Interval, "30s")).is_err());
+        assert!(
+            ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Interval, "30s")).is_err()
+        );
         // Exactly at / above the 1-minute floor is allowed.
         assert!(ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Interval, "60")).is_ok());
         assert!(ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Interval, "5m")).is_ok());
         // Cron is minute-floored by syntax; a valid cron passes, invalid errors.
-        assert!(ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Cron, "* * * * *")).is_ok());
-        assert!(ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Cron, "nonsense")).is_err());
+        assert!(
+            ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Cron, "* * * * *")).is_ok()
+        );
+        assert!(
+            ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Cron, "nonsense")).is_err()
+        );
     }
 
     #[test]
@@ -295,8 +300,11 @@ mod tests {
     fn cron_every_minute_advances_to_next_minute_boundary() {
         // 2026-01-01T00:00:30Z
         let base = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 30).unwrap();
-        let next = next_fire_at_ms(&schedule(LoopScheduleKind::Cron, "* * * * *"), base.timestamp_millis())
-            .unwrap();
+        let next = next_fire_at_ms(
+            &schedule(LoopScheduleKind::Cron, "* * * * *"),
+            base.timestamp_millis(),
+        )
+        .unwrap();
         let expected = Utc.with_ymd_and_hms(2026, 1, 1, 0, 1, 0).unwrap();
         assert_eq!(next, expected.timestamp_millis());
     }
@@ -305,8 +313,11 @@ mod tests {
     fn cron_step_minutes_finds_next_multiple() {
         // 2026-01-01T00:02:10Z, */5 -> next is 00:05:00
         let base = Utc.with_ymd_and_hms(2026, 1, 1, 0, 2, 10).unwrap();
-        let next = next_fire_at_ms(&schedule(LoopScheduleKind::Cron, "*/5 * * * *"), base.timestamp_millis())
-            .unwrap();
+        let next = next_fire_at_ms(
+            &schedule(LoopScheduleKind::Cron, "*/5 * * * *"),
+            base.timestamp_millis(),
+        )
+        .unwrap();
         let expected = Utc.with_ymd_and_hms(2026, 1, 1, 0, 5, 0).unwrap();
         assert_eq!(next, expected.timestamp_millis());
     }
@@ -315,8 +326,11 @@ mod tests {
     fn cron_on_boundary_advances_to_the_following_slot() {
         // Exactly on a matching minute -> strictly-after semantics move on.
         let base = Utc.with_ymd_and_hms(2026, 1, 1, 0, 5, 0).unwrap();
-        let next = next_fire_at_ms(&schedule(LoopScheduleKind::Cron, "*/5 * * * *"), base.timestamp_millis())
-            .unwrap();
+        let next = next_fire_at_ms(
+            &schedule(LoopScheduleKind::Cron, "*/5 * * * *"),
+            base.timestamp_millis(),
+        )
+        .unwrap();
         let expected = Utc.with_ymd_and_hms(2026, 1, 1, 0, 10, 0).unwrap();
         assert_eq!(next, expected.timestamp_millis());
     }
@@ -325,8 +339,11 @@ mod tests {
     fn cron_specific_hour_and_minute() {
         // "30 9 * * *" -> 09:30 daily. From 10:00 -> next day 09:30.
         let base = Utc.with_ymd_and_hms(2026, 1, 1, 10, 0, 0).unwrap();
-        let next = next_fire_at_ms(&schedule(LoopScheduleKind::Cron, "30 9 * * *"), base.timestamp_millis())
-            .unwrap();
+        let next = next_fire_at_ms(
+            &schedule(LoopScheduleKind::Cron, "30 9 * * *"),
+            base.timestamp_millis(),
+        )
+        .unwrap();
         let expected = Utc.with_ymd_and_hms(2026, 1, 2, 9, 30, 0).unwrap();
         assert_eq!(next, expected.timestamp_millis());
     }

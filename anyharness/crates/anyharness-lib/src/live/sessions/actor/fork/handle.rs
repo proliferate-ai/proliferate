@@ -158,11 +158,13 @@ pub(in crate::live::sessions::actor) async fn sidedoor_targeted_fork(
 ) -> Result<SidedoorForkCommandResult, SidedoorForkCommandError> {
     // A non-Ready side-door at dispatch time is a hard error, never a silent
     // tip fork.
-    let runtime = sidedoor.filter(|runtime| runtime.is_ready()).ok_or_else(|| {
-        SidedoorForkCommandError::NotReady(
-            "OpenCode side-door is not ready for targeted fork dispatch".to_string(),
-        )
-    })?;
+    let runtime = sidedoor
+        .filter(|runtime| runtime.is_ready())
+        .ok_or_else(|| {
+            SidedoorForkCommandError::NotReady(
+                "OpenCode side-door is not ready for targeted fork dispatch".to_string(),
+            )
+        })?;
     let client = OpencodeSidedoorClient::new(runtime.config.port, runtime.config.password.clone())
         .map_err(|error| SidedoorForkCommandError::Failed(error.to_string()))?;
 

@@ -75,8 +75,8 @@ use crate::domains::workflows::session_extension::WorkflowSessionExtension;
 use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::archive::WorkspaceArchiveService;
-use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::deletion::purge::WorkspacePurgeService;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::domains::workspaces::files_runtime::{

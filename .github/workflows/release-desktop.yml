@@ -92,6 +92,11 @@ env:
   ANYHARNESS_SENTRY_DSN: ${{ vars.ANYHARNESS_SENTRY_DSN || vars.E2B_RUNTIME_SENTRY_DSN }}
   ANYHARNESS_SENTRY_ENVIRONMENT: ${{ vars.ANYHARNESS_SENTRY_ENVIRONMENT || vars.E2B_RUNTIME_SENTRY_ENVIRONMENT || vars.VITE_PROLIFERATE_ENVIRONMENT || 'production' }}
   ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE || vars.E2B_RUNTIME_SENTRY_TRACES_SAMPLE_RATE }}
+  # The Honeycomb destination the desktop bakes into its collector spawn env
+  # (observability spec, Flow 3, Stage 2). Both are empty — and the release
+  # ships with a dark export leg — until HONEYCOMB_INGEST_KEY_PROD exists.
+  PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT: ${{ secrets.HONEYCOMB_INGEST_KEY_PROD != '' && 'https://api.honeycomb.io' || '' }}
+  PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS: ${{ secrets.HONEYCOMB_INGEST_KEY_PROD != '' && format('x-honeycomb-team={0}', secrets.HONEYCOMB_INGEST_KEY_PROD) || '' }}
   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
@@ -648,6 +653,13 @@ jobs:
           export VITE_PROLIFERATE_DISABLE_CLOUD_COMPUTE=1
           export PROLIFERATE_DESKTOP_SENTRY_RELEASE="${PROLIFERATE_DESKTOP_SENTRY_RELEASE:-proliferate-desktop-native@${desktop_version}+${short_sha}}"
           export ANYHARNESS_SENTRY_RELEASE="${ANYHARNESS_SENTRY_RELEASE:-anyharness@${anyharness_version}+${short_sha}}"
+          # Loud, never silent: a release without a Honeycomb destination is a
+          # release whose lifecycle export stays dark on every install.
+          if [[ -z "${PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS:-}" ]]; then
+            echo "::warning::HONEYCOMB_INGEST_KEY_PROD is not set; this release bakes no Honeycomb destination (lifecycle export dark)"
+          else
+            echo "Honeycomb destination baked: ${PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT} (header value redacted)"
+          fi
 
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
             export ANYHARNESS_BIN="$PWD/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"

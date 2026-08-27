@@ -73,7 +73,10 @@ impl std::fmt::Display for CatalogArtifactRejected {
     }
 }
 
-fn reject(reason: CatalogArtifactRejectReason, detail: impl Into<String>) -> CatalogArtifactRejected {
+fn reject(
+    reason: CatalogArtifactRejectReason,
+    detail: impl Into<String>,
+) -> CatalogArtifactRejected {
     let rejection = CatalogArtifactRejected {
         reason,
         detail: detail.into(),
@@ -210,7 +213,11 @@ pub fn fetch_and_stage(
     client: &dyn ArtifactFetchClient,
     pubkeys: &[minisign_verify::PublicKey],
 ) -> Result<StagedArtifactPair, CatalogArtifactRejected> {
-    let manifest_url = format!("{}/catalogs/agents/{}/manifest.json", base_url.trim_end_matches('/'), channel);
+    let manifest_url = format!(
+        "{}/catalogs/agents/{}/manifest.json",
+        base_url.trim_end_matches('/'),
+        channel
+    );
     let manifest_bytes = client
         .get_bytes(&manifest_url)
         .map_err(|e| reject(CatalogArtifactRejectReason::Fetch, e.to_string()))?;
@@ -223,8 +230,13 @@ pub fn fetch_and_stage(
         .get_bytes(&format!("{manifest_url}.minisig"))
         .map_err(|e| reject(CatalogArtifactRejectReason::Fetch, e.to_string()))?;
     verify_signature_any(pubkeys, &manifest_bytes, &manifest_sig)?;
-    let manifest: CatalogArtifactManifest = serde_json::from_slice(&manifest_bytes)
-        .map_err(|e| reject(CatalogArtifactRejectReason::Fetch, format!("manifest parse: {e}")))?;
+    let manifest: CatalogArtifactManifest =
+        serde_json::from_slice(&manifest_bytes).map_err(|e| {
+            reject(
+                CatalogArtifactRejectReason::Fetch,
+                format!("manifest parse: {e}"),
+            )
+        })?;
 
     let versioned_base = format!(
         "{}/catalogs/agents/{}",
@@ -244,8 +256,8 @@ pub fn fetch_and_stage(
     verify_signature_any(pubkeys, &catalog_bytes, &catalog_sig)?;
     verify_signature_any(pubkeys, &registry_bytes, &registry_sig)?;
 
-    let catalog_json =
-        std::str::from_utf8(&catalog_bytes).map_err(|e| reject(CatalogArtifactRejectReason::Gates, e.to_string()))?;
+    let catalog_json = std::str::from_utf8(&catalog_bytes)
+        .map_err(|e| reject(CatalogArtifactRejectReason::Gates, e.to_string()))?;
     let catalog = parse_agent_catalog_json(catalog_json)
         .map_err(|e| reject(CatalogArtifactRejectReason::Gates, e.to_string()))?;
 
@@ -275,8 +287,12 @@ pub fn fetch_and_stage(
         ));
     }
 
-    let generated_at = parse_generated_at(&catalog.generated_at)
-        .map_err(|e| reject(CatalogArtifactRejectReason::Gates, format!("generated_at: {e}")))?;
+    let generated_at = parse_generated_at(&catalog.generated_at).map_err(|e| {
+        reject(
+            CatalogArtifactRejectReason::Gates,
+            format!("generated_at: {e}"),
+        )
+    })?;
 
     write_staged_atomic(
         staged_dir,
@@ -287,7 +303,12 @@ pub fn fetch_and_stage(
         &registry_sig,
         &manifest_sig,
     )
-    .map_err(|e| reject(CatalogArtifactRejectReason::Fetch, format!("stage write: {e}")))?;
+    .map_err(|e| {
+        reject(
+            CatalogArtifactRejectReason::Fetch,
+            format!("stage write: {e}"),
+        )
+    })?;
 
     Ok(StagedArtifactPair {
         catalog,
@@ -302,10 +323,12 @@ fn fetch_verified_file(
     file: &str,
     manifest: &CatalogArtifactManifest,
 ) -> Result<Vec<u8>, CatalogArtifactRejected> {
-    let entry = manifest
-        .files
-        .get(file)
-        .ok_or_else(|| reject(CatalogArtifactRejectReason::Fetch, format!("manifest missing entry for {file}")))?;
+    let entry = manifest.files.get(file).ok_or_else(|| {
+        reject(
+            CatalogArtifactRejectReason::Fetch,
+            format!("manifest missing entry for {file}"),
+        )
+    })?;
     let bytes = client
         .get_bytes(&format!("{versioned_base}/{file}"))
         .map_err(|e| reject(CatalogArtifactRejectReason::Fetch, e.to_string()))?;
@@ -313,7 +336,10 @@ fn fetch_verified_file(
     if !actual.eq_ignore_ascii_case(&entry.sha256) {
         return Err(reject(
             CatalogArtifactRejectReason::Sha256Mismatch,
-            format!("{file}: manifest sha256 '{}' != computed '{actual}'", entry.sha256),
+            format!(
+                "{file}: manifest sha256 '{}' != computed '{actual}'",
+                entry.sha256
+            ),
         ));
     }
     Ok(bytes)
@@ -468,7 +494,8 @@ pub fn baked_pubkey() -> Option<minisign_verify::PublicKey> {
 
 /// The rotation-slot key, when provisioned and valid.
 pub fn baked_pubkey_next() -> Option<minisign_verify::PublicKey> {
-    CATALOG_SIGNING_PUBKEY_B64_NEXT.and_then(|b64| minisign_verify::PublicKey::from_base64(b64).ok())
+    CATALOG_SIGNING_PUBKEY_B64_NEXT
+        .and_then(|b64| minisign_verify::PublicKey::from_base64(b64).ok())
 }
 
 /// Load a previously staged artifact from disk (no network) — the "warm
@@ -499,11 +526,17 @@ pub fn load_staged_from_disk(
     let registry_sig = std::fs::read(staged_dir.join(REGISTRY_SIG_FILE)).ok()?;
 
     if let Err(e) = verify_signature_any(pubkeys, &catalog_bytes, &catalog_sig) {
-        tracing::warn!(reason = e.reason.as_str(), "staged catalog failed minisign re-verification on load");
+        tracing::warn!(
+            reason = e.reason.as_str(),
+            "staged catalog failed minisign re-verification on load"
+        );
         return None;
     }
     if let Err(e) = verify_signature_any(pubkeys, &registry_bytes, &registry_sig) {
-        tracing::warn!(reason = e.reason.as_str(), "staged registry failed minisign re-verification on load");
+        tracing::warn!(
+            reason = e.reason.as_str(),
+            "staged registry failed minisign re-verification on load"
+        );
         return None;
     }
 
@@ -511,29 +544,44 @@ pub fn load_staged_from_disk(
     let catalog = match parse_agent_catalog_json(catalog_json) {
         Ok(c) => c,
         Err(e) => {
-            reject(CatalogArtifactRejectReason::Gates, format!("staged catalog: {e}"));
+            reject(
+                CatalogArtifactRejectReason::Gates,
+                format!("staged catalog: {e}"),
+            );
             return None;
         }
     };
     let registry: AgentRegistryDocument = match serde_json::from_slice(&registry_bytes) {
         Ok(r) => r,
         Err(e) => {
-            reject(CatalogArtifactRejectReason::Gates, format!("staged registry parse: {e}"));
+            reject(
+                CatalogArtifactRejectReason::Gates,
+                format!("staged registry parse: {e}"),
+            );
             return None;
         }
     };
     if let Err(e) = validate_agent_registry_document(&registry) {
-        reject(CatalogArtifactRejectReason::Gates, format!("staged registry: {e}"));
+        reject(
+            CatalogArtifactRejectReason::Gates,
+            format!("staged registry: {e}"),
+        );
         return None;
     }
     if let Err(e) = validate_agent_catalog_registry_pairing(&catalog, &registry) {
-        reject(CatalogArtifactRejectReason::Gates, format!("staged pairing: {e}"));
+        reject(
+            CatalogArtifactRejectReason::Gates,
+            format!("staged pairing: {e}"),
+        );
         return None;
     }
     let generated_at = match parse_generated_at(&catalog.generated_at) {
         Ok(g) => g,
         Err(e) => {
-            reject(CatalogArtifactRejectReason::Gates, format!("staged generated_at: {e}"));
+            reject(
+                CatalogArtifactRejectReason::Gates,
+                format!("staged generated_at: {e}"),
+            );
             return None;
         }
     };

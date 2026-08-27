@@ -257,9 +257,7 @@ fn extract_tool_kind_from_item(item: &ToolItemState) -> Option<String> {
     })
 }
 
-fn infer_codex_workspace_native_tool_name(
-    raw_input: Option<&serde_json::Value>,
-) -> Option<String> {
+fn infer_codex_workspace_native_tool_name(raw_input: Option<&serde_json::Value>) -> Option<String> {
     let envelope = raw_input?.as_object()?;
     if envelope.get("server")?.as_str()? != "proliferate_workspace" {
         return None;

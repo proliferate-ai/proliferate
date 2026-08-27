@@ -75,7 +75,10 @@ pub enum RouteAuthError {
     #[error("no agent-auth route selection for harness '{harness_kind}' at revision {revision}")]
     SelectionMissing { harness_kind: String, revision: i64 },
     #[error("agent-auth source for '{harness_kind}' is incomplete: {detail}")]
-    SelectionIncomplete { harness_kind: String, detail: String },
+    SelectionIncomplete {
+        harness_kind: String,
+        detail: String,
+    },
     #[error("agent-auth route for '{harness_kind}' is unsupported: {detail}")]
     UnsupportedRoute {
         harness_kind: String,

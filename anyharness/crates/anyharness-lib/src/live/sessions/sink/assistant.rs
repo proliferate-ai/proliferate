@@ -69,6 +69,7 @@ impl SessionEventSink {
                 text,
                 is_transient: false,
             });
+            self.stamp_first_output();
             return None;
         }
 

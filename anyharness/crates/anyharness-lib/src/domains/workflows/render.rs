@@ -114,16 +114,15 @@ impl From<ResolveError> for RenderEnvelopeError {
 
 /// Render one node's envelope. Pure: no IO, no clock.
 pub fn render_envelope(inputs: &RenderInputs<'_>) -> Result<RenderedEnvelope, RenderEnvelopeError> {
-    let first_message = resolve_references(inputs.prompt, inputs.mode, |reference| {
-        match reference {
+    let first_message =
+        resolve_references(inputs.prompt, inputs.mode, |reference| match reference {
             PromptReference::Input(name) => inputs.arguments.get(name).map(argument_text),
             PromptReference::Doc(slug) => inputs
                 .docs
                 .iter()
                 .find(|doc| &doc.slug == slug)
                 .map(|doc| inputs.context_dir.join(&doc.filename).display().to_string()),
-        }
-    })?;
+        })?;
 
     let preamble = preamble(inputs.node_type, inputs.context_dir, inputs.docs);
     Ok(RenderedEnvelope {
@@ -150,7 +149,11 @@ fn argument_text(value: &serde_json::Value) -> String {
 /// markdown on purpose: the transcript renders it, so structure the agent
 /// parses is the same structure the human reads (single newlines would
 /// collapse into one run-on paragraph).
-fn preamble(node_type: WorkflowNodeType, context_dir: &Path, docs: &[WorkflowRunDocRecord]) -> String {
+fn preamble(
+    node_type: WorkflowNodeType,
+    context_dir: &Path,
+    docs: &[WorkflowRunDocRecord],
+) -> String {
     let mut text = format!(
         "You are one node in a multi-step workflow.\n\
          \n\
@@ -171,7 +174,10 @@ fn preamble(node_type: WorkflowNodeType, context_dir: &Path, docs: &[WorkflowRun
     if !docs.is_empty() {
         text.push_str("\nThis run's documents:\n\n");
         for doc in docs {
-            text.push_str(&format!("- {}\n", context_dir.join(&doc.filename).display()));
+            text.push_str(&format!(
+                "- {}\n",
+                context_dir.join(&doc.filename).display()
+            ));
         }
     }
     text.push_str("\n## Your step\n\n");
