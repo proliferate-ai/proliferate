@@ -13,9 +13,8 @@ use sha2::{Digest, Sha256};
 #[cfg(target_os = "macos")]
 use crate::util::home_matches_process_home;
 use crate::{
-    util::resolve_process_override_dir,
-    DiscoveryError, LocalAuthSource, LocalAuthState, PortableAuthExport, PortableAuthFile,
-    PortableRelativePath,
+    util::resolve_process_override_dir, DiscoveryError, LocalAuthSource, LocalAuthState,
+    PortableAuthExport, PortableAuthFile, PortableRelativePath,
 };
 
 const CODEX_AUTH_PATH: &str = ".codex/auth.json";

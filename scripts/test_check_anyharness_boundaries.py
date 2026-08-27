@@ -1278,11 +1278,13 @@ class ShippedLedgerTest(unittest.TestCase):
             # past — the checker still flags the line itself. Carried forward
             # 324 -> 332 as the archiving rungs grew the file above it (R1's
             # retired-arm absorption, R4's WorkspaceArchived rename and its
-            # archived-row admission tests); the offender and the rule that
-            # sees it are unchanged. The anchor differs per rung because later
-            # rungs edit the file, so each rung's branch pins its own value and
-            # the restack takes each rung's own number on the one-line conflict.
-            ("AH-STORE-3", "domains/workspaces/access_gate.rs", 332, "DROP TABLE line"),
+            # archived-row admission tests), then 332 -> 331 when the 2026-08-27
+            # rustfmt normalization compacted a wrap above it; the offender and
+            # the rule that sees it are unchanged. The anchor differs per rung
+            # because later rungs edit the file, so each rung's branch pins its
+            # own value and the restack takes each rung's own number on the
+            # one-line conflict.
+            ("AH-STORE-3", "domains/workspaces/access_gate.rs", 331, "DROP TABLE line"),
             # A `state.*_store` field access, which carries no store type on the
             # line for the import pass to see. This particular one is benign (an
             # in-memory health snapshot), but the shape is what the rule watches.
