@@ -1,9 +1,15 @@
-# Manual-only staging. Merging to main deploys nothing: the one automated
-# transition is `release.yml` (main to production). Staging is an optional
-# proving ground an operator dispatches on purpose.
+# Staging deploys automatically from green main: a `CI` run that completes
+# successfully on main fires this workflow at that run's exact head commit
+# (the plan job still waits for Server CI on that SHA, so both rollups gate).
+# Operators keep workflow_dispatch for reruns, forced surfaces, and dry runs.
+# Production is untouched by this path: release.yml stays its only entrypoint.
 name: Deploy Staging
 
 on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
@@ -39,6 +45,9 @@ env:
 
 jobs:
   plan:
+    # Auto runs deploy only what CI proved: a workflow_run event that is not a
+    # success plans nothing (every downstream job needs plan's success).
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       base_sha: ${{ steps.detect.outputs.base_sha }}
@@ -60,7 +69,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.ref || github.sha }}
+          # Dispatch: the operator's ref (or the dispatch SHA). Auto: the exact
+          # commit the triggering CI run proved green.
+          ref: ${{ github.event.inputs.ref || github.event.workflow_run.head_sha || github.sha }}
 
       - name: Resolve deploy metadata
         id: meta
@@ -145,14 +156,18 @@ jobs:
           --force "$FORCE_SURFACES"
           --only "$ONLY_SURFACES"
         env:
-          FORCE_SURFACES: ${{ github.event.inputs.force_surfaces || '' }}
+          # A staleness fallback (no resolvable prior deploy) must deploy the
+          # full surface set, not head^-diff to a near-no-op — unless the
+          # operator explicitly chose surfaces.
+          FORCE_SURFACES: ${{ github.event.inputs.force_surfaces || (steps.base.outputs.base_mode == 'fallback' && 'all') || '' }}
           ONLY_SURFACES: ${{ github.event.inputs.only_surfaces || '' }}
 
       - name: Summarize plan
         run: |
           {
             echo "### Staging deploy plan"
-            echo "- Base: \`${{ steps.detect.outputs.base_sha }}\`"
+            echo "- Trigger: \`${{ github.event_name }}\`"
+            echo "- Base: \`${{ steps.detect.outputs.base_sha }}\` (\`${{ steps.base.outputs.base_mode }}\`)"
             echo "- Head: \`${{ steps.detect.outputs.head_sha }}\`"
             echo "- Changed files: \`${{ steps.detect.outputs.changed_files_count }}\`"
             echo "- Dry run: \`${{ steps.meta.outputs.dry_run }}\`"
