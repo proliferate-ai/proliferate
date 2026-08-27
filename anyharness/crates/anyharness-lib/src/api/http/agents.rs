@@ -129,10 +129,28 @@ pub async fn install_agent(
         &kind,
         PokeReason::InstallCompleted,
     );
-    let auth_status = state
-        .agent_status_service
-        .read(&kind)
-        .map(super::agent_auth_contract::status_doc_to_contract);
+    // An install is the other event that can create a harness's FIRST status
+    // document, and nothing else composed one: the poke above is refused
+    // outright for a manual-refresh-only harness (cursor) and is
+    // fire-and-forget even for an auto-probeable one, so `/status`, `/methods`
+    // and `AgentSummary.authStatus` all answered empty until the sidecar
+    // restarted and ran its startup pass. Composed synchronously and BEFORE the
+    // read, so a first install's own response already carries the document.
+    let status_service = state.agent_status_service.clone();
+    let refreshed = kind.clone();
+    let auth_status = super::blocking::run_blocking("agent install status refresh", move || {
+        status_service.refresh(
+            &refreshed,
+            crate::domains::agents::status::RefreshCause::InstallCompleted,
+        );
+        Ok::<_, std::convert::Infallible>(
+            status_service
+                .read(&refreshed)
+                .map(super::agent_auth_contract::status_doc_to_contract),
+        )
+    })
+    .await?
+    .unwrap_or_default();
     Ok(Json(InstallAgentResponse {
         agent: to_summary(&outcome.agent, None, auth_status),
         already_installed: outcome.already_installed,

@@ -55,7 +55,17 @@ pub async fn put_agent_auth_state(
             "AGENT_AUTH_STATE_REJECTED",
         ));
     }
-    let outcome = apply_state_file(&state.runtime_home, &document).map_err(map_route_auth_error)?;
+    // Blocking-pool work (fs): the read-diff-write over state.json, under the
+    // state file's exclusive lock. The startup path already treats identical
+    // work this way (`app/agent_launch.rs`), and the door must match — an axum
+    // worker blocked on a file lock stalls every other request on that thread.
+    let runtime_home = state.runtime_home.clone();
+    let applied = document.clone();
+    let outcome = super::blocking::run_blocking("agent-auth state apply", move || {
+        apply_state_file(&runtime_home, &applied)
+    })
+    .await?
+    .map_err(map_route_auth_error)?;
     // Auth-applied poke, per-harness targeted (spec §4, "Probe targeting":
     // `AuthApplied{changed}`): an apply re-probes ONLY the harnesses whose
     // entry actually changed — appeared, disappeared, or differs — so a push
@@ -71,9 +81,10 @@ pub async fn put_agent_auth_state(
     );
     // The same changed set refreshes the status documents — and ONLY those:
     // an untouched harness's document stays byte-stable across the apply.
-    state
-        .agent_status_service
-        .refresh_harnesses(&outcome.changed_harnesses, RefreshCause::AuthApplied);
+    // Blocking-pool work too (two state.json reads, native detection over the
+    // real `$HOME`, a seat-cooling read and a status row read+write per
+    // harness).
+    refresh_status_off_thread(&state, outcome.changed_harnesses, RefreshCause::AuthApplied).await?;
     Ok(Json(ApplyAgentAuthStateResponse {
         applied: true,
         sequence: document.sequence,
@@ -92,7 +103,12 @@ pub async fn put_agent_auth_state(
 pub async fn delete_agent_auth_state(
     State(state): State<AppState>,
 ) -> Result<StatusCode, ApiError> {
-    let cleared = clear_state_file(&state.runtime_home).map_err(map_route_auth_error)?;
+    let runtime_home = state.runtime_home.clone();
+    let cleared = super::blocking::run_blocking("agent-auth state clear", move || {
+        clear_state_file(&runtime_home)
+    })
+    .await?
+    .map_err(map_route_auth_error)?;
     // Clearing removes the selections of every harness the previous document
     // named — that list IS the changed set, so exactly those harnesses are
     // poked. A previous file that was present but malformed carries no
@@ -105,21 +121,44 @@ pub async fn delete_agent_auth_state(
                 &previous,
                 PokeReason::AuthApplied,
             );
-            state
-                .agent_status_service
-                .refresh_harnesses(&previous, RefreshCause::AuthApplied);
+            refresh_status_off_thread(&state, previous, RefreshCause::AuthApplied).await?;
         }
         None => {
             LaunchProbeService::poke_all_optional(
                 &state.automatic_poke_engine,
                 PokeReason::AuthApplied,
             );
-            state
-                .agent_status_service
-                .refresh_all(RefreshCause::AuthApplied);
+            let service = state.agent_status_service.clone();
+            super::blocking::run_blocking("agent-auth status refresh", move || {
+                service.refresh_all(RefreshCause::AuthApplied);
+                Ok::<(), std::convert::Infallible>(())
+            })
+            .await?
+            .ok();
         }
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Recompose a set of status documents on the blocking pool.
+///
+/// Every one of those recompositions reads `state.json`, runs native detection
+/// over the real `$HOME`, reads the seat-cooling table and reads+writes a status
+/// row — all synchronous, all behind one `std::sync::Mutex<Connection>`. On the
+/// axum task that is a thread the runtime cannot use for anything else.
+async fn refresh_status_off_thread(
+    state: &AppState,
+    harness_kinds: Vec<String>,
+    cause: RefreshCause,
+) -> Result<(), ApiError> {
+    let service = state.agent_status_service.clone();
+    super::blocking::run_blocking("agent-auth status refresh", move || {
+        service.refresh_harnesses(&harness_kinds, cause);
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await?
+    .ok();
+    Ok(())
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -142,27 +181,28 @@ pub async fn get_agent_auth_status(
     State(state): State<AppState>,
     Query(query): Query<AgentAuthStatusQuery>,
 ) -> Result<Json<Vec<AgentAuthStatusDoc>>, ApiError> {
-    match query.harness {
-        Some(harness) => {
-            require_known_harness(&state, &harness)?;
-            Ok(Json(
-                state
-                    .agent_status_service
-                    .read(&harness)
-                    .into_iter()
-                    .map(status_doc_to_contract)
-                    .collect(),
-            ))
-        }
-        None => Ok(Json(
-            state
-                .agent_status_service
+    // The 404 gate is an in-memory scan of the known universe, so it stays on
+    // this task — nothing below it may reach sqlite without leaving.
+    if let Some(harness) = query.harness.as_deref() {
+        require_known_harness(&state, harness)?;
+    }
+    let service = state.agent_status_service.clone();
+    // Blocking-pool work (sqlite behind the shared connection mutex).
+    let docs = super::blocking::run_blocking("agent-auth status read", move || {
+        Ok::<Vec<AgentAuthStatusDoc>, std::convert::Infallible>(match query.harness {
+            Some(harness) => service
+                .read(&harness)
+                .into_iter()
+                .map(status_doc_to_contract)
+                .collect(),
+            None => service
                 .read_all()
                 .into_iter()
                 .map(status_doc_to_contract)
                 .collect(),
-        )),
-    }
+        })
+    });
+    Ok(Json(docs.await?.unwrap_or_default()))
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -187,18 +227,22 @@ pub async fn get_agent_auth_methods(
     require_known_harness(&state, &query.harness)?;
     // Served FROM the status document (never recomposed on read): the method
     // picker needs no document parsing, and cannot disagree with the pane.
-    Ok(Json(
-        state
-            .agent_status_service
-            .read(&query.harness)
-            .map(|doc| {
-                doc.methods
-                    .into_iter()
-                    .map(method_row_to_contract)
-                    .collect()
-            })
-            .unwrap_or_default(),
-    ))
+    // The row read itself is blocking-pool work.
+    let service = state.agent_status_service.clone();
+    let rows = super::blocking::run_blocking("agent-auth methods read", move || {
+        Ok::<Vec<AgentAuthMethodRow>, std::convert::Infallible>(
+            service
+                .read(&query.harness)
+                .map(|doc| {
+                    doc.methods
+                        .into_iter()
+                        .map(method_row_to_contract)
+                        .collect()
+                })
+                .unwrap_or_default(),
+        )
+    });
+    Ok(Json(rows.await?.unwrap_or_default()))
 }
 
 fn require_known_harness(state: &AppState, harness: &str) -> Result<(), ApiError> {
