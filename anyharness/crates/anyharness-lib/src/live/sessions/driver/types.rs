@@ -46,6 +46,30 @@ impl NativeSessionStartupState {
         Self::from_session_parts(response.modes.as_ref(), response.config_options.as_deref())
     }
 
+    /// Some harnesses (Grok) advertise their model menu only on the
+    /// initialize response's vendor `_meta.modelState`, never as a `model`
+    /// config option. When the session response carried no model control,
+    /// adopt that enumeration so the start path can admit the requested
+    /// model and the live-config snapshot can present the menu. A model
+    /// control the session response DID carry stays authoritative.
+    pub(in crate::live::sessions) fn absorb_init_meta_model_state(
+        &mut self,
+        init_meta: Option<&acp::schema::Meta>,
+    ) {
+        if self.current_model_id.is_some() || !self.available_models.is_empty() {
+            return;
+        }
+        let Some(model_state) = init_meta.and_then(|meta| meta.get("modelState")) else {
+            return;
+        };
+        let (current_model_id, available_models) = model_state_from_init_meta(model_state);
+        if available_models.is_empty() {
+            return;
+        }
+        self.current_model_id = current_model_id;
+        self.available_models = available_models;
+    }
+
     fn from_session_parts(
         modes: Option<&acp::schema::SessionModeState>,
         config_options: Option<&[acp::schema::SessionConfigOption]>,
@@ -103,6 +127,45 @@ fn model_state_from_config_options(
         _ => Vec::new(),
     };
     (Some(select.current_value.to_string()), available_models)
+}
+
+/// Parses a vendor `initialize._meta.modelState` block
+/// (`{ currentModelId, availableModels: [{ modelId, name, description }] }`)
+/// into (current model id, available models). Entries without a `modelId`
+/// are skipped; `name` falls back to the id. Shared by the live start path
+/// and the catalog probe so both read the same enumeration.
+pub(in crate::live::sessions) fn model_state_from_init_meta(
+    model_state: &serde_json::Value,
+) -> (Option<String>, Vec<SessionModelOption>) {
+    let current_model_id = model_state
+        .get("currentModelId")
+        .and_then(|value| value.as_str())
+        .map(str::to_string);
+    let available_models = model_state
+        .get("availableModels")
+        .and_then(|value| value.as_array())
+        .map(|models| {
+            models
+                .iter()
+                .filter_map(|model| {
+                    let id = model.get("modelId").and_then(|value| value.as_str())?;
+                    Some(SessionModelOption {
+                        id: id.to_string(),
+                        name: model
+                            .get("name")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or(id)
+                            .to_string(),
+                        description: model
+                            .get("description")
+                            .and_then(|value| value.as_str())
+                            .map(str::to_string),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    (current_model_id, available_models)
 }
 
 fn into_legacy_mode_state(modes: &acp::schema::SessionModeState) -> LegacyModeState {
@@ -186,5 +249,94 @@ mod tests {
         let (current, available) = model_state_from_config_options(&options);
         assert!(current.is_none());
         assert!(available.is_empty());
+    }
+
+    fn grok_init_meta() -> acp::schema::Meta {
+        serde_json::json!({
+            "modelState": {
+                "currentModelId": "grok-4.6",
+                "availableModels": [
+                    { "modelId": "grok-4.6", "name": "Grok 4.6", "description": "latest" },
+                    { "modelId": "grok-4.5" },
+                    { "name": "no id" }
+                ]
+            }
+        })
+        .as_object()
+        .expect("meta object")
+        .clone()
+    }
+
+    #[test]
+    fn init_meta_model_state_maps_id_name_and_description() {
+        let meta = grok_init_meta();
+        let (current, available) = model_state_from_init_meta(&meta["modelState"]);
+        assert_eq!(current.as_deref(), Some("grok-4.6"));
+        assert_eq!(
+            available,
+            vec![
+                SessionModelOption {
+                    id: "grok-4.6".to_string(),
+                    name: "Grok 4.6".to_string(),
+                    description: Some("latest".to_string()),
+                },
+                SessionModelOption {
+                    id: "grok-4.5".to_string(),
+                    name: "grok-4.5".to_string(),
+                    description: None,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn init_meta_model_state_without_usable_models_is_empty() {
+        for state in [
+            serde_json::json!({}),
+            serde_json::json!({ "availableModels": [] }),
+            serde_json::json!({ "availableModels": [{ "name": "x" }] }),
+        ] {
+            let (_, available) = model_state_from_init_meta(&state);
+            assert!(available.is_empty());
+        }
+    }
+
+    #[test]
+    fn startup_state_adopts_init_meta_models_only_without_session_model_control() {
+        // Grok: session/new carries no config options; the init meta menu is
+        // the only live model statement.
+        let mut grok = NativeSessionStartupState::from_session_parts(None, None);
+        grok.absorb_init_meta_model_state(Some(&grok_init_meta()));
+        assert_eq!(grok.current_model_id.as_deref(), Some("grok-4.6"));
+        assert_eq!(
+            grok.available_models
+                .iter()
+                .map(|model| model.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["grok-4.6", "grok-4.5"]
+        );
+
+        // A session-carried model control stays authoritative over init meta.
+        let options = vec![select_option(
+            "model",
+            Some(acp::schema::SessionConfigOptionCategory::Model),
+            vec![("opus", "Opus")],
+            "opus",
+        )];
+        let mut with_control = NativeSessionStartupState::from_session_parts(None, Some(&options));
+        with_control.absorb_init_meta_model_state(Some(&grok_init_meta()));
+        assert_eq!(with_control.current_model_id.as_deref(), Some("opus"));
+        assert_eq!(with_control.available_models.len(), 1);
+
+        // No meta, or meta without a usable menu, leaves the state untouched.
+        let mut none = NativeSessionStartupState::from_session_parts(None, None);
+        none.absorb_init_meta_model_state(None);
+        let empty_meta = serde_json::json!({ "modelState": { "currentModelId": "x" } })
+            .as_object()
+            .expect("meta object")
+            .clone();
+        none.absorb_init_meta_model_state(Some(&empty_meta));
+        assert!(none.current_model_id.is_none());
+        assert!(none.available_models.is_empty());
     }
 }
