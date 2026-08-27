@@ -38,10 +38,7 @@ from .scalars import (
 MAX_SEQUENCE = 100
 MAX_SPANS = 1000
 
-# The closed environment set (ruled 2026-08-26): local · staging · production
-# · dogfood. `trusted-beta` (production's former name) stays admitted only for
-# in-field 0.4.x builds whose baked default predates the rename; remove it once
-# the desktop fleet has rotated past those releases.
+# Closed set (ruled 2026-08-26); trusted-beta stays only until in-field 0.4.x builds rotate.
 ENVIRONMENTS = _set("local staging production dogfood trusted-beta")
 EVENT_LEVELS = _set("debug info warning error critical fatal")
 HTTP_METHODS = _set("GET HEAD POST PUT PATCH DELETE OPTIONS TRACE CONNECT")
