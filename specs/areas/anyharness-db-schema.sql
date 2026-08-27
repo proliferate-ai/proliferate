@@ -485,6 +485,22 @@ CREATE TABLE runtime_config_session_context (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- table: seat_cooling
+CREATE TABLE seat_cooling (
+    seat_id TEXT PRIMARY KEY,
+    harness_kind TEXT NOT NULL,
+    cooling_until_epoch_s INTEGER NOT NULL,
+    window TEXT,
+    observed_at_epoch_s INTEGER NOT NULL
+);
+
+-- table: seat_rotation
+CREATE TABLE seat_rotation (
+    harness_kind TEXT PRIMARY KEY,
+    last_served_seat_id TEXT NOT NULL,
+    updated_at_epoch_s INTEGER NOT NULL
+);
+
 -- table: session_adapter_markers
 CREATE TABLE session_adapter_markers (
     session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,

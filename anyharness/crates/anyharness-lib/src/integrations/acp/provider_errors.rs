@@ -3,6 +3,7 @@ use anyharness_contract::v1::ErrorEventDetails;
 
 const ANTHROPIC_PROVIDER: &str = "anthropic";
 pub const PROVIDER_RATE_LIMIT_CODE: &str = "provider_rate_limit";
+pub const SEAT_USAGE_LIMIT_CODE: &str = "seat_usage_limit";
 pub const NETWORK_CONNECTION_CODE: &str = "network_connection";
 pub const PROVIDER_MODEL_UNAVAILABLE_CODE: &str = "provider_model_unavailable";
 pub const PROVIDER_MODEL_CONFIGURATION_UNSUPPORTED_CODE: &str =
@@ -55,6 +56,62 @@ pub fn classify_provider_rate_limit_error(message: &str) -> Option<ErrorEventDet
         unit: "input_tokens_per_minute".to_string(),
         fallback_model_id: OPUS_4_6_FALLBACK_MODEL_ID.to_string(),
     })
+}
+
+/// What a classified seat usage-limit error carries: the provider's reset
+/// instant when the message embedded one, and which limit window bound.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeatUsageLimitObservation {
+    /// Epoch seconds of the provider-declared reset, when the message carried
+    /// one (the classic `usage limit reached|<epoch>` shape). `None` → the
+    /// caller applies the 5-hour-window rule.
+    pub reset_at_epoch_s: Option<i64>,
+    /// `"five_hour"` or `"seven_day"`.
+    pub window: &'static str,
+}
+
+/// Classify a Claude.ai (seat) usage-limit error. Matched case-insensitively:
+///
+/// 1. the classic pipe shape `... usage limit reached|1756220400` — the
+///    10-digit epoch after the pipe is the provider's reset instant;
+/// 2. any message containing "usage limit reached", or both "reached your"
+///    and "usage limit", or "5-hour limit reached", or "session limit
+///    reached" — a limit hit with no parseable reset.
+///
+/// The window is `"seven_day"` iff the message mentions "week"/"weekly" or
+/// "7-day"/"7 day", else `"five_hour"`. The CALLER gates this on the session
+/// actually running on a seat — the prose alone must never cool a seat a
+/// non-seat route merely mentioned.
+pub fn classify_seat_usage_limit_error(message: &str) -> Option<SeatUsageLimitObservation> {
+    let lower = message.to_ascii_lowercase();
+    let is_limit = lower.contains("usage limit reached")
+        || (lower.contains("reached your") && lower.contains("usage limit"))
+        || lower.contains("5-hour limit reached")
+        || lower.contains("session limit reached");
+    if !is_limit {
+        return None;
+    }
+    let window = if lower.contains("week") || lower.contains("7-day") || lower.contains("7 day") {
+        "seven_day"
+    } else {
+        "five_hour"
+    };
+    Some(SeatUsageLimitObservation {
+        reset_at_epoch_s: extract_piped_reset_epoch(&lower),
+        window,
+    })
+}
+
+/// The `usage limit reached|<10-digit epoch>` reset extraction. Anything but
+/// exactly ten digits right after the pipe reads as no reset.
+fn extract_piped_reset_epoch(lower: &str) -> Option<i64> {
+    let marker = "usage limit reached|";
+    let after = &lower[lower.find(marker)? + marker.len()..];
+    let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+    if digits.len() != 10 {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 /// Classifies an error message as a network/connectivity failure.
@@ -302,5 +359,56 @@ mod tests {
             "errorName": "APIError",
             "service": "session",
         }))
+    }
+
+    #[test]
+    fn seat_limit_classifier_extracts_the_piped_epoch() {
+        let observation = classify_seat_usage_limit_error("Claude AI usage limit reached|1756220400")
+            .expect("classic pipe shape");
+        assert_eq!(observation.reset_at_epoch_s, Some(1_756_220_400));
+        assert_eq!(observation.window, "five_hour");
+    }
+
+    #[test]
+    fn seat_limit_classifier_matches_the_prose_shapes_without_a_reset() {
+        for message in [
+            "Usage limit reached — try again later",
+            "You've reached your Claude usage limit.",
+            "5-hour limit reached ∙ resets 3pm",
+            "Session limit reached. Your limit will reset at 8pm.",
+        ] {
+            let observation =
+                classify_seat_usage_limit_error(message).unwrap_or_else(|| panic!("{message:?}"));
+            assert_eq!(observation.reset_at_epoch_s, None, "{message:?}");
+            assert_eq!(observation.window, "five_hour", "{message:?}");
+        }
+    }
+
+    #[test]
+    fn seat_limit_classifier_reads_the_weekly_window() {
+        for message in [
+            "Weekly usage limit reached",
+            "You've reached your 7-day usage limit",
+            "usage limit reached for this week",
+            "You have reached your 7 day usage limit",
+        ] {
+            let observation =
+                classify_seat_usage_limit_error(message).unwrap_or_else(|| panic!("{message:?}"));
+            assert_eq!(observation.window, "seven_day", "{message:?}");
+        }
+    }
+
+    #[test]
+    fn seat_limit_classifier_rejects_non_limit_and_malformed_epochs() {
+        assert!(classify_seat_usage_limit_error("connection closed").is_none());
+        assert!(classify_seat_usage_limit_error(
+            "This request would exceed your organization's rate limit of 30,000 input tokens per minute for claude-opus-4-7."
+        )
+        .is_none());
+        // A pipe with a non-10-digit tail still matches as a limit, but with
+        // no parseable reset.
+        let observation = classify_seat_usage_limit_error("usage limit reached|123")
+            .expect("still a limit hit");
+        assert_eq!(observation.reset_at_epoch_s, None);
     }
 }

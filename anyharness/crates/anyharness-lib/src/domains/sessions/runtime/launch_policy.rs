@@ -185,6 +185,9 @@ pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunc
         session: ctx.record,
         agent: ctx.agent,
         workspace_path: ctx.workspace_path,
+        // The seat this rendered route serves on (rotation's pick), carried to
+        // the actor so a successful spawn can confirm it served.
+        serving_seat_id: ctx.route_auth.serving_seat_id.clone(),
         env: LaunchEnv {
             workspace: ctx.workspace_env,
             session: ctx.session_env,

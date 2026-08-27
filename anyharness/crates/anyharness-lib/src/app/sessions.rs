@@ -119,6 +119,9 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
             .automatic_poke_engine
             .clone()
             .map(spawn_launch_observation_probe_queue),
+        seat_cooling: Some(Arc::new(
+            crate::domains::agents::seat_cooling::SeatCoolingStore::new(deps.db.clone()),
+        )),
     };
     let manager = LiveSessionManager::new(caps);
     // Runs on the application runtime, like the launch-observation probe

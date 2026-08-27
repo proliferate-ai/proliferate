@@ -232,6 +232,9 @@ impl LaunchProbeService {
             },
             trial: None,
             gateway: None,
+            // Seat rotation facts are the HTTP read path's to fold in
+            // (api/http/agents.rs) — this service holds no Db/state handle.
+            seat_rotation: Default::default(),
         }
     }
 

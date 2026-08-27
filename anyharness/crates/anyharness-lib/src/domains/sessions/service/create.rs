@@ -181,11 +181,20 @@ impl SessionService {
         // this launch, but as "agent is not ready" — which reads to a user as "go
         // install something" when the real answer is "your gateway budget is
         // exhausted". agent-auth.md: a selection never silently degrades to the
-        // user's personal credentials.
-        if let Some(error) = crate::domains::agents::route_auth::launch_route_selection_failure(
-            &self.runtime_home,
-            agent_kind,
-        ) {
+        // user's personal credentials. Rotated: the create-time preview runs
+        // the same seat-rotation decision as the launch (without advancing
+        // anything), so an all-cooling pool 409s here with the cooling
+        // sentence. The store rides the service's existing Db handle.
+        let seat_cooling_store = crate::domains::agents::seat_cooling::SeatCoolingStore::new(
+            self.session_store.db(),
+        );
+        if let Some(error) =
+            crate::domains::agents::route_auth::launch_route_selection_failure_rotated(
+                &self.runtime_home,
+                agent_kind,
+                &seat_cooling_store,
+            )
+        {
             tracing::warn!(
                 workspace_id = %workspace_id,
                 agent_kind = %agent_kind,

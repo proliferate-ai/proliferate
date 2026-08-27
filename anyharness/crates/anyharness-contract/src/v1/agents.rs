@@ -255,6 +255,19 @@ pub struct AgentAuthStateSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub evidence_age_seconds: Option<i64>,
     pub facts: AgentAuthFactsSummary,
+    /// Seat rotation (claude seats): the seat currently serving — last served
+    /// if still in the applied pool, else the pool's first. Absent when the
+    /// applied document carries no seats.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub serving_seat_id: Option<String>,
+    /// The seat rotation would pick for the NEXT launch (rotate=false: the
+    /// pinned candidate). Absent when the pool has fewer than two seats.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_seat_id: Option<String>,
+    /// RFC3339 UTC; present ONLY when no seat can serve right now (all pool
+    /// seats cooling, or the rotate-off pinned candidate cooling).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cooling_until: Option<String>,
 }
 
 // --- Install ---

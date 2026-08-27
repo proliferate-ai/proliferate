@@ -41,6 +41,11 @@ pub struct HarnessSources {
     /// names and GC stale ones.
     pub revision: i64,
     pub sources: Vec<ResolvedSource>,
+    /// The seat-rotation toggle, from the document's `settings["rotate"]`:
+    /// `true` when absent or not a bool (rotation is the default), `false`
+    /// only on an explicit `false`. Consumed by the launch seam's rotation
+    /// decision; meaningless (and ignored) for seatless profiles.
+    pub rotate: bool,
 }
 
 /// One resolved credential source (contract §3 `sources[]`).
@@ -122,23 +127,42 @@ pub fn resolve_profile(
         return Ok(AgentRuntimeAuthProfile::Native);
     };
     // Absent vs present-but-empty: `None` is native, `Some([])` fails closed.
-    let Some(raw_sources) = state.sources_for(harness_kind) else {
+    let Some(entry) = state
+        .harnesses
+        .iter()
+        .find(|entry| entry.harness_kind == harness_kind)
+    else {
         return Ok(AgentRuntimeAuthProfile::Native);
     };
-    if raw_sources.is_empty() {
+    if entry.sources.is_empty() {
         return Err(RouteAuthError::SelectionMissing {
             harness_kind: harness_kind.to_string(),
             revision: state.revision,
+            reason: entry
+                .unsatisfied_reason
+                .as_deref()
+                .map(str::trim)
+                .filter(|reason| !reason.is_empty())
+                .map(str::to_string),
         });
     }
-    let mut sources = Vec::with_capacity(raw_sources.len());
-    for source in raw_sources {
+    let mut sources = Vec::with_capacity(entry.sources.len());
+    for source in &entry.sources {
         sources.push(resolve_source(harness_kind, source)?);
     }
+    // `settings["rotate"]`: absent or non-bool → true (rotation is the
+    // default); only an explicit `false` pins the applied seat.
+    let rotate = entry
+        .settings
+        .as_ref()
+        .and_then(|settings| settings.get("rotate"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true);
     Ok(AgentRuntimeAuthProfile::Sources(HarnessSources {
         harness_kind: harness_kind.to_string(),
         revision: state.revision,
         sources,
+        rotate,
     }))
 }
 

@@ -7,7 +7,7 @@ use crate::domains::agents::launch_options::LaunchSelectionUnsupported;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
-use crate::domains::agents::route_auth::resolve_launch_route_auth;
+use crate::domains::agents::route_auth::resolve_launch_route_auth_rotated;
 use crate::domains::sessions::extensions::{
     SessionInteractionRequestedContext, SessionInteractionResolvedContext, SessionStartedContext,
     SessionTurnFinishedContext,
@@ -297,11 +297,19 @@ impl SessionRuntime {
         // the auth problem it is, not as "agent is not ready" — which reads
         // to a user as "go install something" when the real answer is "your
         // gateway budget is exhausted". agent-auth.md: a selection never
-        // silently degrades to the user's personal credentials.
-        if let Some(error) = crate::domains::agents::route_auth::launch_route_selection_failure(
-            &self.runtime_home,
-            &record.agent_kind,
-        ) {
+        // silently degrades to the user's personal credentials. The rotated
+        // variant folds in the seat-cooling preview so an all-cooling pool
+        // 409s here with the same sentence the launch itself would produce.
+        let seat_cooling_store = crate::domains::agents::seat_cooling::SeatCoolingStore::new(
+            self.session_service.store().db(),
+        );
+        if let Some(error) =
+            crate::domains::agents::route_auth::launch_route_selection_failure_rotated(
+                &self.runtime_home,
+                &record.agent_kind,
+                &seat_cooling_store,
+            )
+        {
             tracing::warn!(
                 session_id = %record.id,
                 workspace_id = %record.workspace_id,
@@ -356,11 +364,15 @@ impl SessionRuntime {
         // (legacy/native); a scoped file with no selection fails the launch
         // closed with a typed error (spec §3). The pre-check above already
         // ruled out the unsatisfiable-selection case; this still runs to
-        // materialize the actual route files for the spawn.
-        let route_auth = resolve_launch_route_auth(
+        // materialize the actual route files for the spawn. Rotated: the
+        // seat-rotation seam picks which pool seat serves THIS launch (the
+        // same Db handle as the pre-check; render/preview never advance
+        // rotation — only the actor's post-spawn confirm_served does).
+        let route_auth = resolve_launch_route_auth_rotated(
             &self.runtime_home,
             &record.agent_kind,
             self.gateway_model_resolver.as_ref(),
+            &seat_cooling_store,
         )
         .map_err(|error| {
             tracing::warn!(

@@ -105,12 +105,25 @@ fn applied_harness_kinds(document: &AgentAuthState) -> Vec<String> {
         .collect()
 }
 
+/// State-route mapping, EXHAUSTIVE (no catch-all): adding a refusal variant
+/// must break compile here. Only `StaleStateRevision` can actually arise from
+/// `apply_state_file`/`clear_state_file`, but the 409/500 split mirrors
+/// `sessions_errors::map_route_auth_error` for every variant so the two
+/// mappers can never disagree on a code's status.
 fn map_route_auth_error(error: RouteAuthError) -> ApiError {
     match error {
-        RouteAuthError::StaleStateRevision { .. } => {
+        RouteAuthError::StaleStateRevision { .. }
+        | RouteAuthError::SelectionMissing { .. }
+        | RouteAuthError::SeatCooling { .. }
+        | RouteAuthError::AllSeatsCooling { .. }
+        | RouteAuthError::SelectionIncomplete { .. }
+        | RouteAuthError::UnsupportedRoute { .. }
+        | RouteAuthError::UnknownHarness { .. } => {
             ApiError::conflict(error.to_string(), error.code())
         }
-        _ => ApiError::internal(error.to_string()),
+        RouteAuthError::MalformedStateFile { .. } | RouteAuthError::Materialize { .. } => {
+            ApiError::internal(error.to_string())
+        }
     }
 }
 

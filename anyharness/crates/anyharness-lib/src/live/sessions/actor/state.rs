@@ -44,6 +44,10 @@ pub(in crate::live::sessions::actor) struct SessionActor {
     pub(in crate::live::sessions::actor) workspace_path: PathBuf,
     pub(in crate::live::sessions::actor) mcp_servers: Vec<SessionMcpServer>,
     pub(in crate::live::sessions::actor) prompts: SystemPromptAppends,
+    /// The vault seat id this session is running on (`None` for non-seat
+    /// routes). Gates seat usage-limit classification in turn/finish.rs — a
+    /// limit error on a non-seat route must never produce seat events.
+    pub(in crate::live::sessions::actor) serving_seat_id: Option<String>,
 
     // ── conversation state (loop-owned) ──
     // KEEP Arc<Mutex<…>>: the inbound door (driver/inbound) shares this sink.

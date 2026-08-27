@@ -573,6 +573,7 @@ mod tests {
             RouteAuthError::SelectionMissing {
                 harness_kind: "claude".into(),
                 revision: 1,
+                reason: None,
             },
         ));
         let response = super::map_create_cowork_thread_error(error).into_response();

@@ -170,11 +170,15 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
 /// Typed agent-auth launch refusals, keyed by the stable `AGENT_ROUTE_*` code
 /// (see `RouteAuthError::code`). Fail-closed / route-shape problems are 409s
 /// (the session request was fine; the launch precondition is not satisfied
-/// until a selection changes); state-file corruption and materialization IO
-/// are 500s.
+/// until a selection changes — or, for the cooling pair, until a seat's
+/// usage-limit reset passes); state-file corruption and materialization IO
+/// are 500s. EXHAUSTIVE on purpose: a new refusal variant must break compile
+/// here rather than fall into a default arm.
 pub(super) fn map_route_auth_error(error: &RouteAuthError) -> ApiError {
     match error {
         RouteAuthError::SelectionMissing { .. }
+        | RouteAuthError::SeatCooling { .. }
+        | RouteAuthError::AllSeatsCooling { .. }
         | RouteAuthError::SelectionIncomplete { .. }
         | RouteAuthError::UnsupportedRoute { .. }
         | RouteAuthError::UnknownHarness { .. }
@@ -498,6 +502,7 @@ mod tests {
             RouteAuthError::SelectionMissing {
                 harness_kind: "claude".to_string(),
                 revision: 42,
+                reason: None,
             },
         ));
 

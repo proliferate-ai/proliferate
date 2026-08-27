@@ -13,6 +13,20 @@
             "CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oat01-Kx3mQ9rT5vW7yZ1aB2cD4eF6gH8jL0nP-seatAA"
           },
           "seat_id": "30000000-0000-4000-8000-000000000021"
+        },
+        {
+          "kind": "seat",
+          "env": {
+            "CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oat01-Mn5pR7tV9xZ2bD4fH6kM8qS0uW3yA5cE-seatBB"
+          },
+          "seat_id": "30000000-0000-4000-8000-000000000022"
+        },
+        {
+          "kind": "seat",
+          "env": {
+            "CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oat01-Qr8tU0wY3aC5eG7jL9nQ1sV4xZ6bD8fJ-seatCC"
+          },
+          "seat_id": "30000000-0000-4000-8000-000000000023"
         }
       ]
     },
@@ -38,7 +52,8 @@
     },
     {
       "harness_kind": "grok",
-      "sources": []
+      "sources": [],
+      "unsatisfied_reason": "managed model access isn't ready on this account yet"
     },
     {
       "harness_kind": "opencode",

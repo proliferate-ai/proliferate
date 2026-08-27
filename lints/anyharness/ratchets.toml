@@ -5,8 +5,8 @@
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-contract/src/v1/events.rs"
-max_lines = 1087
-reason = "existing AnyHarness contract oversized file"
+max_lines = 1097
+reason = "existing AnyHarness contract oversized file ; +10: slice-2 rotation adds the ErrorEventDetails::SeatUsageLimit variant (seatId/window/resetAt)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/openapi.rs"
@@ -35,8 +35,8 @@ reason = "Track D provider_config credential facts: a source's already-resolved 
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs"
-max_lines = 742
-reason = "Track D provider_config render arm (claude/opencode generic env-set, codex aws_bedrock via built-in amazon-bedrock provider, codex azure_openai UNVERIFIED config.toml injection kept behind the registry's pending flag, cursor/grok/unknown-kind UnsupportedRoute) landed alongside the existing native/gateway recipe table, +sanitize_claude_ambient fix so a provider_config route's own rerouting flag (e.g. CLAUDE_CODE_USE_BEDROCK) survives sanitization instead of being unconditionally stripped, scoped in review cycle 1 to the keys the provider_config arm itself recorded so an api_key row named like a rerouting flag is still stripped (D3-rust) ; +62: seats v1 claude seat recipe (per-seat CLAUDE_CONFIG_DIR home + the shared strip list; the first pool seat serves — rotation is a later slice; seatless harnesses refuse in type)"
+max_lines = 751
+reason = "Track D provider_config render arm (claude/opencode generic env-set, codex aws_bedrock via built-in amazon-bedrock provider, codex azure_openai UNVERIFIED config.toml injection kept behind the registry's pending flag, cursor/grok/unknown-kind UnsupportedRoute) landed alongside the existing native/gateway recipe table, +sanitize_claude_ambient fix so a provider_config route's own rerouting flag (e.g. CLAUDE_CODE_USE_BEDROCK) survives sanitization instead of being unconditionally stripped, scoped in review cycle 1 to the keys the provider_config arm itself recorded so an api_key row named like a rerouting flag is still stripped (D3-rust) ; +62: seats v1 claude seat recipe (per-seat CLAUDE_CONFIG_DIR home + the shared strip list; the first pool seat serves — rotation is a later slice; seatless harnesses refuse in type) ; +9: slice-2 rotation adds the RenderedRouteAuth.serving_seat_id channel set by the seat arm (the rotated seam in mod.rs picks the seat; render stays first-seat-wins for unrotated callers)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs"
@@ -70,8 +70,8 @@ reason = "existing AnyHarness oversized test file (launch-env tests moved to the
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/tests/workspace_stop.rs"
-max_lines = 840
-reason = "R3 real-process stop suite; every case owns a real agent process and a real ACP duplex, so the per-case setup is genuinely irreducible. +130: the dropped-stop re-entry regression (a stop future abandoned mid-escalation must leave the session answerable)"
+max_lines = 841
+reason = "R3 real-process stop suite; every case owns a real agent process and a real ACP duplex, so the per-case setup is genuinely irreducible. +130: the dropped-stop re-entry regression (a stop future abandoned mid-escalation must leave the session answerable) ; +1: slice-2 rotation adds serving_seat_id to the actor literal"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/probe.rs"

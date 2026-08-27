@@ -26,6 +26,7 @@ use crate::domains::agents::auth::login_terminal::{
 };
 use crate::domains::agents::auth_state::AuthRuntimeInputs;
 use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
+use crate::domains::agents::route_auth::seat_rotation_readout_via_db;
 
 #[utoipa::path(
     get,
@@ -40,13 +41,21 @@ pub async fn list_agents(State(state): State<AppState>) -> Json<Vec<AgentSummary
     let now = chrono::Utc::now();
     // The auth runtime inputs are read from the in-memory launch-probe service
     // before the blocking hop, so the closure below owns everything it needs.
+    // The seat-rotation readout folds in here too: applied document + the
+    // seat-cooling store (via the domain facade) → serving/next/cooling.
     let auth_runtimes: Vec<AuthRuntimeInputs> = snapshot
         .agents
         .iter()
         .map(|agent| {
-            state
-                .launch_probe_service
-                .auth_runtime_inputs(agent.descriptor.kind.as_str(), now)
+            let kind = agent.descriptor.kind.as_str();
+            let mut inputs = state.launch_probe_service.auth_runtime_inputs(kind, now);
+            inputs.seat_rotation = seat_rotation_readout_via_db(
+                &state.runtime_home,
+                state.db.clone(),
+                kind,
+                now.timestamp(),
+            );
+            inputs
         })
         .collect();
     // to_summary probes PATH per agent (userPathCopyDetected); keep that
@@ -81,9 +90,14 @@ pub async fn get_agent(
     Path(kind): Path<String>,
 ) -> Result<Json<AgentSummary>, ApiError> {
     let snapshot = state.agent_runtime.get_agent(&kind).await?;
-    let auth_runtime = state
-        .launch_probe_service
-        .auth_runtime_inputs(&kind, chrono::Utc::now());
+    let now = chrono::Utc::now();
+    let mut auth_runtime = state.launch_probe_service.auth_runtime_inputs(&kind, now);
+    auth_runtime.seat_rotation = seat_rotation_readout_via_db(
+        &state.runtime_home,
+        state.db.clone(),
+        &kind,
+        now.timestamp(),
+    );
     let summary = tokio::task::spawn_blocking(move || {
         to_summary(
             &snapshot.agent,
@@ -128,9 +142,14 @@ pub async fn install_agent(
         &kind,
         PokeReason::InstallCompleted,
     );
-    let auth_runtime = state
-        .launch_probe_service
-        .auth_runtime_inputs(&kind, chrono::Utc::now());
+    let now = chrono::Utc::now();
+    let mut auth_runtime = state.launch_probe_service.auth_runtime_inputs(&kind, now);
+    auth_runtime.seat_rotation = seat_rotation_readout_via_db(
+        &state.runtime_home,
+        state.db.clone(),
+        &kind,
+        now.timestamp(),
+    );
     Ok(Json(InstallAgentResponse {
         agent: to_summary(&outcome.agent, None, &auth_runtime),
         already_installed: outcome.already_installed,

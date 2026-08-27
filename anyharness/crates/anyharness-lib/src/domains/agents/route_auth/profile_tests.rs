@@ -81,6 +81,7 @@ fn harness(kind: &str, sources: Vec<AuthSource>) -> HarnessAuth {
         harness_kind: kind.into(),
         sources,
         settings: None,
+        unsatisfied_reason: None,
     }
 }
 
@@ -122,9 +123,88 @@ fn empty_sources_fails_closed_with_the_revision() {
         RouteAuthError::SelectionMissing {
             ref harness_kind,
             revision: 4,
+            reason: None,
         } if harness_kind == "claude"
     ));
     assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_MISSING");
+}
+
+/// The document's `unsatisfied_reason` rides into the refusal, and the
+/// Display speaks it verbatim (no "(state revision N)" suffix — the revision
+/// stays a struct field for logs only).
+#[test]
+fn unsatisfied_reason_reaches_the_refusal_and_its_display() {
+    let mut entry = harness("claude", vec![]);
+    entry.unsatisfied_reason = Some("the credits behind it ran out".to_string());
+    let with_reason = state(4, vec![entry]);
+
+    let error = resolve_profile(Some(&with_reason), "claude").expect_err("must fail closed");
+    assert!(matches!(
+        error,
+        RouteAuthError::SelectionMissing { ref reason, .. }
+            if reason.as_deref() == Some("the credits behind it ran out")
+    ));
+    assert_eq!(
+        error.to_string(),
+        "the auth method selected for 'claude' can't be used right now — \
+         the credits behind it ran out. Pick or fix a method in Settings → Agents."
+    );
+
+    // Without a carried reason the family sentence stands, still without the
+    // revision suffix.
+    let bare = resolve_profile(Some(&state(4, vec![harness("claude", vec![])])), "claude")
+        .expect_err("must fail closed");
+    assert_eq!(
+        bare.to_string(),
+        "the auth method selected for 'claude' can't be used right now — \
+         its seat or key may have been revoked, or the credits behind it ran out. \
+         Pick or fix a method in Settings → Agents."
+    );
+}
+
+// --- settings["rotate"] parse ------------------------------------------
+
+fn sources_of(state: &AgentAuthState, harness_kind: &str) -> HarnessSources {
+    match resolve_profile(Some(state), harness_kind).expect("resolve") {
+        AgentRuntimeAuthProfile::Sources(sources) => sources,
+        other => panic!("expected sources, got {other:?}"),
+    }
+}
+
+#[test]
+fn rotate_defaults_true_when_settings_or_key_absent() {
+    let state = state(
+        1,
+        vec![harness("claude", vec![seat_source("seat-a", "sk-tok")])],
+    );
+    assert!(sources_of(&state, "claude").rotate);
+}
+
+#[test]
+fn rotate_false_is_honored() {
+    let mut entry = harness("claude", vec![seat_source("seat-a", "sk-tok")]);
+    entry.settings = Some(
+        [("rotate".to_string(), serde_json::Value::Bool(false))]
+            .into_iter()
+            .collect(),
+    );
+    let state = state(1, vec![entry]);
+    assert!(!sources_of(&state, "claude").rotate);
+}
+
+#[test]
+fn a_non_bool_rotate_reads_as_true() {
+    let mut entry = harness("claude", vec![seat_source("seat-a", "sk-tok")]);
+    entry.settings = Some(
+        [(
+            "rotate".to_string(),
+            serde_json::Value::String("off".to_string()),
+        )]
+        .into_iter()
+        .collect(),
+    );
+    let state = state(1, vec![entry]);
+    assert!(sources_of(&state, "claude").rotate);
 }
 
 /// The distinction the whole change rests on, asserted as one comparison:
