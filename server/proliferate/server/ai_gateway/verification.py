@@ -49,9 +49,13 @@ from proliferate.lib.infra.time.wall_clock import utcnow
 
 logger = logging.getLogger(__name__)
 
-# ``server/litellm/config.yaml`` relative to this file
-# (proliferate/server/ai_gateway/verification.py -> server/).
-_CONFIG_PATH = Path(__file__).resolve().parents[4] / "litellm" / "config.yaml"
+# ``server/litellm/config.yaml`` relative to this file: parents[3] of
+# server/proliferate/server/ai_gateway/verification.py is server/ (and /app in
+# the deployed image, whose Dockerfile copies the config to /app/litellm/).
+# The index moved with the file (#2222 lifted it out of cloud/agent_gateway/,
+# one level shallower); pinned by test_expected_config_resolves_from_source_tree
+# so the next move cannot silently strand the loop on the degraded path again.
+_CONFIG_PATH = Path(__file__).resolve().parents[3] / "litellm" / "config.yaml"
 
 
 @dataclass(frozen=True)

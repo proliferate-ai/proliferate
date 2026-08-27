@@ -14,7 +14,7 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
+from proliferate.config import Settings, settings
 from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED,
     AGENT_GATEWAY_VERIFICATION_STATUS_OK,
@@ -257,6 +257,69 @@ async def test_reported_error_redacts_the_virtual_key_everywhere(
             rendered += "\n" + logging.Formatter().formatException(record.exc_info)
         assert "sk-litellm-claude" not in rendered, "the virtual key must never be logged"
         assert "[redacted]" in record.getMessage()
+
+
+def test_expected_config_resolves_from_source_tree() -> None:
+    """The expected-set source must resolve without monkeypatching.
+
+    Regression for the #2222 move: ``_CONFIG_PATH`` was born one directory
+    deeper and its ``parents[...]`` index silently pointed outside the tree
+    after the file moved, so ``load_expected_access_groups()`` degraded to
+    ``None`` forever and the misconfigured drift verdict could never fire
+    from real config. Pins the path (and a real parse) against the next move.
+    """
+    assert verification._CONFIG_PATH.exists(), (
+        f"verification expected-set config not found at {verification._CONFIG_PATH}"
+    )
+    expected = verification.load_expected_access_groups()
+    assert expected is not None
+    assert expected.get("claude"), "the claude access group must grant at least one model"
+
+
+def test_verification_enabled_by_default() -> None:
+    """Slice-5 pin: the verification loop is ON by default.
+
+    config.yaml is settled (#2249), so the drift detector runs unless a
+    deployment opts out. Pinned on the field DEFAULT (not a constructed
+    Settings(), which would absorb the ambient environment).
+    """
+    assert Settings.model_fields["agent_gateway_verification_enabled"].default is True
+
+
+@pytest.mark.asyncio
+async def test_corrected_config_clears_misconfigured(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The delivery spec's proof: corrected config → status clears.
+
+    One tick against a wrong observed set records ``misconfigured`` with its
+    delta; a second tick against the matching set flips the SAME key back to
+    ``ok`` with the delta cleared — the loop converges on the fix instead of
+    pinning the first bad verdict forever.
+    """
+    enrollment_id = await _create_enrollment(db_session)
+    key_id = await _mint_key(db_session, enrollment_id, "claude")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet", "claude-opus"}})
+
+    # Tick 1: the key observes a wrong model set (claude-opus missing).
+    _fake_list_models(monkeypatch, {"sk-litellm-claude": ["claude-sonnet"]})
+    first = await verification.run_verification(db_session)
+    assert first.misconfigured == 1
+    keys = await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
+    verdict = next(k for k in keys if k.id == key_id)
+    assert verdict.verification_status == AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED
+    assert verdict.verification_delta is not None
+    assert "claude-opus" in verdict.verification_delta
+
+    # Tick 2: config.yaml was fixed and redeployed — the observed set matches.
+    _fake_list_models(monkeypatch, {"sk-litellm-claude": ["claude-sonnet", "claude-opus"]})
+    second = await verification.run_verification(db_session)
+    assert second.ok == 1
+    assert second.misconfigured == 0
+    keys = await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
+    verdict = next(k for k in keys if k.id == key_id)
+    assert verdict.verification_status == AGENT_GATEWAY_VERIFICATION_STATUS_OK
+    assert verdict.verification_delta is None
 
 
 @pytest.mark.asyncio

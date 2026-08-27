@@ -303,9 +303,11 @@ class Settings(BaseSettings):
     agent_gateway_usage_import_overlap_seconds: float = 300.0
     # Control-plane gateway-enablement verification (agent-auth.md FR-3). The loop
     # asks LiteLLM which models each active enrollment key can see and records a
-    # per-key verdict. Behind a flag (default off) so a deployment opts in, and it
-    # only runs when the gateway is enabled and background workers are on.
-    agent_gateway_verification_enabled: bool = False
+    # per-key verdict. Default ON now that config.yaml is settled (the Claude-5
+    # fix, #2249): the loop is the drift detector that catches a stale model
+    # list before a user 403s. A deployment may still opt out via the flag, and
+    # it only runs when the gateway is enabled and background workers are on.
+    agent_gateway_verification_enabled: bool = True
     agent_gateway_verification_interval_seconds: float = 900.0
     agent_gateway_topup_interval_seconds: float = 300.0
     # Auto top-up fires when the shared LLM pool drops below this balance; each
