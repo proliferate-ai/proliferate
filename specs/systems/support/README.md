@@ -11,7 +11,7 @@ Organization Standard anatomy for the `support` system; the body below is the la
   support upload queue and staged snapshot artifacts
   ([`db/models/support.py`](../../../server/proliferate/db/models/support.py),
   [`db/store/support_reports.py`](../../../server/proliferate/db/store/support_reports.py),
-  `db/store/support_session_diagnostics.py`).
+  `db/store/support_reports.py` also owns the staged-snapshot rows).
 - **Public surface:** `POST /v1/support/reports`, `.../upload-targets`,
   `.../complete`, plus the `report-uploads` and `messages` compatibility
   routes; Python `proliferate.server.support.{api,service,models}`; the
@@ -28,12 +28,15 @@ Organization Standard anatomy for the `support` system; the body below is the la
   a prefilled file-an-issue link);
   `desktop.support_snapshot.prepare|submit` lifecycles; `tracker_summary`
   and `client_release_id` projections on the row;
-  `support.report.captured` — one structured server log marker at capture
-  completion carrying `support_report_id`, the bound `session_id`s, and
-  `release_id`, so a report is queryable from a session id and not only
-  readable in Slack (seam change requested by
-  [observability](../../engineering/observability/README.md) §Consumes,
-  2026-08-26; build rides the observability spec PR's delta row 17).
+  `support.report.captured` — the queryable capture marker: at capture
+  completion the server logs one JSON line per bound session, with the
+  marker as the `event` scalar extra, the tuple's `session_id` key bound
+  via `with_correlation_context`, and `support_report_id` +
+  `client_release_id` as scalar extras — so a report is reachable from a
+  session id (the link scheme's fifth link), not only readable in Slack
+  (seam change requested by
+  [observability](../../engineering/observability/README.md) §2 log
+  markers, 2026-08-26).
 - **Fences:** no issue triage, repair, release tracking or outreach (the
   issue-lifecycle loop was retired in the 2026-08 cull); support never
   publishes report content anywhere; secret scrubbing obeys
@@ -325,8 +328,12 @@ Capture stores reporter identity and notify intent; it does not send an email. O
 
 ## Current gaps
 
-These are the differences from the target state above that remain in the tree. The consented-capture pipeline is built and now has its consent surface: schema-3 snapshot assembly, the manifest, the second scrub, opaque staging, the checksummed v2 queue with its verified one-way migration, the shared native export permit with fixed support prepare/submit lifecycle operations, the SQL-bounded AnyHarness support windows with their generated SDK reads, and both modals' unchecked consent epoch, scope control, and **Save a copy…** action all exist. What remains is the legacy export that sits beside the pipeline.
+These are the differences from the target state above that remain in the tree. The consented-capture pipeline is built and now has its consent surface: schema-3 snapshot assembly, the manifest, the second scrub, opaque staging, the checksummed v2 queue with its verified one-way migration, the shared native export permit with fixed support prepare/submit lifecycle operations, the SQL-bounded AnyHarness support windows with their generated SDK reads, and both modals' unchecked consent epoch, scope control, and **Save a copy…** action all exist. What remains is the legacy export that sits beside the pipeline, and the capture marker.
 
+- [ ] The `support.report.captured` marker is not yet emitted: capture
+      completion writes no per-session log line, so nothing joins a report
+      to a session in Logs Insights (rides the observability build list,
+      delta row 17).
 - [ ] The legacy debug-bundle export is untouched by the snapshot work. It is
       no longer on the Desktop bridge and the upload path never calls it, but
       the Tauri command still assembles bounded log tails through the old

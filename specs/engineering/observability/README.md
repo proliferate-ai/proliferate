@@ -43,13 +43,13 @@ Rules of the road, governing every section below: **ids are bound, never threade
 
 Owns the correlation vocabulary (ContextVars), the closed Sentry catalog, the JSON log record shape, and the one bridge from application failure to a page-worthy marker.
 
-- **Doors** — `report_critical(message, *, tags, extras)`: fatal Sentry event plus the exact `CRITICAL_FAILURE` log marker, the only line the production-down alert rule selects. Every server domain raises through it or through `capture_server_sentry_exception`; nothing else reaches Sentry deliberately.
+- **Doors** — `report_critical(error, *, tags, extras, **context)`: fatal Sentry event plus the exact `CRITICAL_FAILURE` log marker, the only line the production-down alert rule selects. Every server domain raises through it or through `capture_server_sentry_exception`; nothing else reaches Sentry deliberately.
   - consumed by every server domain's failure paths; by [alerting](alerting.md), whose critical rule greps the marker.
 - **Door** — `with_correlation_context(**ids)` and `bind_background_correlation_context(**ids)`: bind the tuple for a request or a background job. The request path binds automatically (`session_id` parsed from a `/sessions/<uuid>` path segment); a job or proxy that loads a session binds explicitly at its entry.
   - consumed by the HTTP middleware (automatic), Celery task entries, and any code doing session work off-path.
 - **Door** — the structured log record: one JSON line via `JsonLogFormatter`, carrying the tuple; the alert-evaluation source.
   - consumed by CloudWatch → Grafana (the destinations cell); by anyone reading a session's server-side story.
-- **Door (target)** — `session_links(session_id)`: the link scheme, one helper returning the five story links (app session page, Sentry tag search, Honeycomb query, CloudWatch Logs Insights, support reports). Encoded once; consumed by the runs-triage surface and the alerting runbooks.
+- **Door (target)** — `session_links(session_id)` in `server/proliferate/observability/links.py`: the link scheme, one helper returning a typed dict of the five story links — the app session page (`{app_base_url}/sessions/{id}`), the Sentry tag search (`session_id:{id}` in the server project), the Honeycomb query (`proliferate.session_id = {id}` over the `anyharness` dataset in the deploy's environment), the CloudWatch Logs Insights filter (`session_id = '{id}'` over the server log group), and the support-reports Logs Insights query (`event = 'support.report.captured' and session_id = '{id}'`). Base identities (app base URL, Sentry org/project slugs, Honeycomb team + environment, log group + region) are module constants keyed by `environment`, not parameters. Encoded once; first consumed by a unit-rendered usage and the alerting runbooks; surfaces adopt it in their own specs.
 - **Consumes** — `release_id` from delivery; the session route shape from sessions.
 
 ### runtime emitter — machine truth and the local log store
@@ -58,9 +58,9 @@ Owns the named tracing targets, the closed lifecycle-operation table and its pro
 
 - **Door** — the lifecycle producers `begin_session_create(…)`, `begin_turn_execute(…)`, `begin_agent_start(…)`, `begin_model_request(…)`: session/harness code emits product lifecycle records through these and nothing else; the closed `LIFECYCLE_OPERATIONS` table is the contract.
   - consumed by the sessions domain (create, turns), the agents domain (start), and the launch probe (model request).
-- **Door** — the collector's local HTTP surface: `/v1/records` (bounded query), `/v1/tail` (live stream), `/v1/health` (exporter state, drop counts). Loopback-only, capability-token-authed.
-  - consumed by the `proliferate logs` tail verb; by desktop support snapshots; by the desktop debug view.
-- **Door** — the OTLP export leg: the **only** way a runtime record leaves the machine, collector-subset-by-label under a compile-time policy (customer builds physically export `lifecycle` class only). Destination is configuration (`PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT` / `_HEADERS`); absent destination means no queue, no task, no export.
+- **Door** — the collector's local HTTP surface: `/v1/records` (bounded query; `session_id`, `after_cursor`, `limit`, `schema_version` params exist today), `/v1/tail` (live stream), `/v1/export` (the support snapshot's bounded export permit — consumed by support, see its spec), `/v1/health` (exporter state, drop counts — the tail verb's degraded-source banner). Loopback-only, capability-token-authed; the collector hands its connection descriptor (endpoint + capability reference) to the host that spawned it, and the `logs` verb reads the descriptor file the host writes under the logs home (the file is O-3's, delta row 15).
+  - consumed by the `anyharness logs` verb (`proliferate logs` is its product spelling — the desktop bundles the binary); by desktop support snapshots; by the desktop debug view.
+- **Door** — the OTLP export leg: the **only** way a runtime record leaves the machine, collector-subset-by-label under a compile-time policy (customer builds physically export `lifecycle` class only). Destination is configuration (`PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT` / `_HEADERS`); absent destination means no queue, no task, no export. Delivery is at-most-once: bounded queue dropping newest on overflow, bounded retry on 5xx/transport errors only, 4xx dropped immediately (a revoked key stops the leg without stopping the collector), every drop counted at `/v1/health` — so the SLIs can undercount, never block.
   - consumed by Honeycomb ([honeycomb.md](honeycomb.md)); gated by the desktop release workflow's `lifecycle_only` assertion.
 - **Consumes** — `install_id` and `user_id` from the desktop host at collector spawn (collector-stamped resource attributes; producers cannot set, spoof, or omit them); the destination endpoint and key from the destinations cell.
 
@@ -68,8 +68,8 @@ Owns the named tracing targets, the closed lifecycle-operation table and its pro
 
 Own the per-surface Sentry adapters and scrubbers (desktop renderer, desktop native, web, mobile) and the typed product-event map. They adapt and scrub; they hold no session truth beyond the scope tag they set when a session gains focus and clear when it closes.
 
-- **Door** — `scrubTelemetryEvent` and the per-surface before-send scrubbers: every client event passes one before leaving.
-- **Door** — `host.telemetry.track(name, payload)` over the 40-event typed map: product analytics events, routed by [posthog](posthog.md)'s allowlist. Not a telemetry signal; a product measurement.
+- **Door** — `scrubTelemetryEvent` and the per-surface before-send scrubbers: every client event passes one before leaving. The client scrubber is a pattern denylist (sensitive key names, absolute paths, tokens, URLs), not an allowlist — the closed client catalogs are the typed event map and the PostHog allowlist; exception payloads are scrubbed, not enumerated.
+- **Door** — `host.telemetry.track(event)` over the 40-key typed `DesktopProductEventMap`: product analytics events, routed by [posthog](posthog.md)'s allowlist. Not a telemetry signal; a product measurement.
 - **Consumes** — the active session id from the session store; DSNs and environment from build config.
 
 ### destinations — config-as-intent
@@ -84,7 +84,7 @@ Owns the checked-in statements of what the live providers should look like — G
 
 ### The canonical metadata
 
-Every signal carries the tuple below. Each field has exactly one stamper; producer-supplied identity is refused (a compromised or buggy child cannot forge it). An id is admitted to a vendor only in canonical UUID form where UUID-shaped; custom ids stay local.
+Every signal carries the tuple below — the cross-surface subset; each leg admits further leg-local ids listed in its catalog file. Each field has exactly one stamper; producer-supplied identity is refused (a compromised or buggy child cannot forge it). An id is admitted to a vendor only in canonical UUID form where UUID-shaped; custom ids stay local. (The runtime's Sentry scope spells the organization tag `org_id` — a dated per-surface alias, not a second name.)
 
 | Field | Stamper | Server logs / Sentry | Runtime records (OTLP) | Client |
 | --- | --- | --- | --- | --- |
@@ -94,37 +94,37 @@ Every signal carries the tuple below. Each field has exactly one stamper; produc
 | `run_id` · `invocation_id` (target) | the CP transition writer, when runs land | log key + tag | — | — |
 | `request_id` | HTTP middleware, per request | log key + tag | — | — |
 | `operation_id` · `parent_operation_id` | the diagnostics producer, per lifecycle operation | — | wire fields, mandatory / optional | — |
-| `install_id` | the collector, from `--install-id` passed by the desktop host | never in server logs | resource attr `proliferate.install_id`, pseudonymous, absent when the host has none | optional Sentry tag |
+| `install_id` | the collector, from `--install-id` passed by the desktop host | never in server logs | resource attr `proliferate.install_id`, pseudonymous, absent when the host has none | — |
 | `component` | each process at init, closed enum | log key `component` (target) | `service.name` + attr `proliferate.component` | Sentry tag `component` (target) |
 | `surface` | the interaction's entry point | tag `surface` | — | tag `surface` |
-| `environment` | build/deploy config, closed set | Sentry environment + log key | `deployment.environment.name` | Sentry environment |
+| `environment` | build/deploy config, closed set | Sentry environment | `deployment.environment.name` | Sentry environment |
 | `release_id` | delivery: `component@version+sha12` | log key `release_id` + Sentry release | `service.version` | Sentry release |
 | `cloud_target_id` · `cloud_sandbox_id` | environments; kept distinct, both | log keys + tags | `proliferate.target_id` | — |
 
-The bind law, per leg: the runtime holds `session_id` as a span field and a wire correlation field — it is in scope wherever session work happens, and `learn_session_id` attaches an id minted mid-operation to the terminal record. The server binds it ambiently — automatically from a `/sessions/<uuid>` path, explicitly via `with_correlation_context` at any job or proxy entry that loads a session. The client sets a scope tag on session focus and clears it on close. The worker reads it off the message envelope it carries and interprets nothing. **Bind + admit, always**: `TAG_VALIDATORS` (server), the scrub allowlists (clients), and the wire schema (runtime) must each admit a key or the bind evaporates silently — `test_sentry_transport_privacy.py` pins the server half.
+The bind law, per leg: the runtime holds `session_id` as a span field and a wire correlation field — it is in scope wherever session work happens, and `learn_session_id` attaches an id minted mid-operation to the terminal record. The server binds it ambiently — automatically from a `/sessions/<uuid>` path, explicitly via `with_correlation_context` at any job or proxy entry that loads a session. The client sets a scope tag on session focus and clears it on close. The worker reads it off the message envelope it carries and interprets nothing. **Bind + admit, always**: `TAG_VALIDATORS` (server) and the wire schema (runtime) must each admit a key or the bind evaporates silently — `test_sentry_transport_privacy.py` pins the server half. (Clients scrub by denylist; their closed catalog is the typed event map, so a client tag needs no admission row.)
 
 ### Closed vocabularies
 
 - `environment` ∈ `local · staging · production · dogfood`. `trusted-beta` is retired; it was production's fossil name and survives only as a dated alias row in the Sentry catalog until the last pre-rename release ages out.
-- `component` ∈ `server · web · desktop_renderer · desktop_native · anyharness · worker · supervisor · mobile · diagnostics_collector`.
-- `surface` ∈ `web · desktop · mobile · api · slack`.
-- Terminal outcomes ∈ `succeeded · rejected · failed · cancelled · timed_out · abandoned` (six, enforced in `TerminalOutcomeV1`). `rejected` means user-fixable configuration; `failed` means we broke it — the split drives pager posture in the alerting spec.
+- `component` — the wire set is the frozen `ComponentV1` enum and is canonical for runtime records: `server · desktop_renderer · desktop_tauri · desktop_worker · anyharness · diagnostics_collector`. The Sentry/log legs additionally use `web · mobile · worker · supervisor` for processes that never touch the wire. One process, one value: the desktop native process is `desktop_tauri` everywhere, never "desktop_native"-the-component (its Sentry *surface* tag is `desktop_native`; the tag and the component are different fields).
+- `surface` — per-emitter today: the server tags every event `cloud_api` (the catalog admits exactly that value), the desktop native process tags `desktop_native`, and the sign-in marker carries `web · mobile · desktop`. The unified closed set (`web · desktop · mobile · api · slack`) is target state, delta row 23.
+- Terminal outcomes ∈ `succeeded · rejected · failed · cancelled · timed_out · abandoned · skipped` (seven, enforced in `TerminalOutcomeV1`). `rejected` means user-fixable configuration; `failed` means we broke it — the split drives pager posture in the alerting spec. `skipped` marks a phase deliberately bypassed (desktop collector supervision uses it); AnyHarness's four product operations never emit it.
 - Severity for alerts ∈ `critical · warning` (the alerting spec's; listed for completeness).
 - Machine signal names are dot-form `<system>.<object>.<verb>` from a closed catalog; product analytics names are snake_case past-tense from the typed event map. No third namespace exists.
 
 ### The closed catalogs
 
 - **Sentry tags and extras** — `TAG_VALIDATORS` / `EXTRA_VALIDATORS` in `server/proliferate/integrations/sentry/privacy.py`. Allowlist with per-key validators; unlisted keys structurally absent; UUID-shaped ids admitted via `canonical_uuid` only. Any tuple change edits this file and its pinning test in the same PR.
-- **Lifecycle operations** — `LIFECYCLE_OPERATIONS` in `proliferate-diagnostics-client/src/lifecycle.rs`: the operations AnyHarness may emit, each with closed `safe_fields` and closed `classifications`. Four product operations: `anyharness.session.create`, `anyharness.turn.execute` (carries `duration_ms` and `first_output_ms` on terminals), `anyharness.agent.start`, `anyharness.model.request`. An addition is a privacy decision, not a logging decision, because every entry is exported from every customer machine.
+- **Lifecycle operations** — two closed producer tables, same law each: `LIFECYCLE_OPERATIONS` in `proliferate-diagnostics-client/src/lifecycle.rs` (the four AnyHarness product operations: `anyharness.session.create`, `anyharness.turn.execute` — carries `duration_ms` and `first_output_ms` on terminals — `anyharness.agent.start`, `anyharness.model.request`) and the desktop-native table in `apps/desktop/src-tauri/src/diagnostics_collector/producer/support_lifecycle.rs` (`desktop.support_snapshot.prepare|submit`, plus the collector-supervision lifecycles the host emits). Each entry has closed `safe_fields` and closed `classifications`; an addition to either table is a privacy decision, not a logging decision, because every lifecycle entry is exported from every customer machine.
 - **The P0 operation catalog** — 91 dot-form names in `proliferate-diagnostics-protocol/src/v1/catalog.rs`, pinned by the golden fixture `fixtures/contracts/rust-observability-v1/` and enforced at collector ingest: a lifecycle record with an uncatalogued name is rejected. The catalog is part of the frozen v1 contract; launch-selection validity deliberately does **not** add a name — it is already encoded in `session.create` and `agent.start` rejection classifications (`launch_options_unavailable`, `launch_value_unsupported`, `agent_env_override_unsupported`, `route_auth_refused`).
-- **Log markers** — the stable server log names a rule may select: `CRITICAL_FAILURE`, `auth.sign_in.outcome`, and the fleet markers (`RUN_TERMINAL`, `BUDGET_ENVELOPE_EXHAUSTED`, `WORKER_DEGRADED`) as their systems land. A marker is a contract; renaming one is a seam change with the alerting spec.
-- **The wire record** — `ProducerRecordV1`: schema version, timestamps, sequence, boot id, component, release, environment, the correlation fields (`operation_id`, `parent_operation_id`, `trace_id`, `workspace_id`, `session_id`, `turn_id`, `item_id`, `request_id`, `target_id`, `prompt_id`, `workflow_id`), name, severity, typed arguments, error classification, record class, privacy, redaction, and exactly one of a `detailed` or `lifecycle` payload. `CanonicalLifecycleV1` (phase, outcome, finalizer, bounded model/plugin metadata) has no free-text field to leak.
-- **The log record** — one JSON line: `timestamp, level, logger, message, release_id, version, git_sha`, every bound correlation key, scalar extras, `exception`. Text format only when a human is the reader (local dev, `debug=true`); JSON whenever a machine is (production, cloud mode).
+- **Log markers** — the stable server log names a rule may select. A marker is physically the value of the `event` scalar extra on one JSON log line, dot-form like every machine name; `CRITICAL_FAILURE` is the dated exception, carried as a message prefix until a PR moves it onto the `event` key. Catalogued: `auth.sign_in.outcome`, `support.report.captured` (one line per bound session — the tuple's `session_id` key bound via `with_correlation_context`, plus `support_report_id` and `client_release_id` scalar extras), `CRITICAL_FAILURE`, and the fleet markers as their systems land (dot-form at landing; their alerting rows own the names). A marker is a contract; renaming one is a seam change with the alerting spec.
+- **The wire record** — `ProducerRecordV1`: schema version, source timestamp, sequence, boot id, component, source, release, environment, the correlation fields (`operation_id`, `parent_operation_id`, `trace_id`, `workspace_id`, `session_id`, `turn_id`, `item_id`, `request_id`, `target_id`, `prompt_id`, `workflow_id`), name, severity, typed arguments, error classification, record class, privacy, redaction, and exactly one of a `detailed` or `lifecycle` payload. `CanonicalLifecycleV1` (phase, outcome, finalizer, bounded model/plugin metadata) has no free-text field to leak.
+- **The log record** — one JSON line: `timestamp, level, logger, message, release_id, version, git_sha`, every bound correlation key, scalar extras (`event` is the marker-bearing one), `exception`. Text format only when a human is the reader (local dev, `debug=true`); JSON whenever a machine is (production, cloud mode).
 - **Destination intent** — `server/infra/observability/grafana/*.json` (rules, dashboard, checksummed), `server/infra/observability/honeycomb/triggers/*.json` (the five SLI triggers), CloudWatch group retention (30 days everywhere).
 
 ### Key custody
 
-Operational keys live in `~/.proliferate-local/observability-keys.env` (0600) for tools, with a 1Password entry as source of truth and a re-mint line per key in the runbook; CI reads repo secrets (`SENTRY_AUTH_TOKEN` live; `GRAFANA_ADMIN_TOKEN`, `HONEYCOMB_INGEST_KEY_PROD`, `HONEYCOMB_CONFIG_KEY` pending mint). A wiped dotfile must never again take the insight loop down: the file is a cache, never the only copy.
+Operational keys live in `~/.proliferate-local/observability-keys.env` (0600) for tools — `HONEYCOMB_INGEST_KEY_{PROD,DOGFOOD}`, `HONEYCOMB_CONFIG_KEY` (dogfood-scoped: triggers + columns, no query execution, no dataset creation), `GRAFANA_ADMIN_TOKEN`, `SENTRY_READ_TOKEN` — with a 1Password entry as source of truth and a re-mint line per key in the runbook; the legacy `~/.proliferate-local/dev/otlp-honeycomb.env` is superseded by it. CI reads repo secrets (`SENTRY_AUTH_TOKEN` live; `GRAFANA_ADMIN_TOKEN`, `HONEYCOMB_INGEST_KEY_PROD` pending `gh secret set` — a Pablo step). A wiped dotfile must never again take the insight loop down: the file is a cache, never the only copy. The `dev.user` resource attribute is dogfood-only (`internal-dogfood-export` builds, from `PROLIFERATE_DIAGNOSTICS_DEV_TAG`/`$USER`); the release gate greps customer binaries for its absence.
 
 ## 3 · Flows
 
@@ -168,7 +168,7 @@ sequenceDiagram
 
 ### Flow 3 — a lifecycle record leaves the machine
 
-Session work begins; the domain calls its `begin_*` producer; arguments outside the operation's closed `safe_fields` are dropped before the record exists; the collector admits it (uncatalogued names and secret-classified fields rejected at ingest — the single mechanical privacy gate), orders it, retains it locally. If and only if a destination is configured, the export worker encodes the **lifecycle-class subset** to OTLP and ships it to Honeycomb — `detailed` records, the only payload that can carry free text, never leave under a customer policy, and the compile-time `EXPORT_POLICY` plus the release workflow's `lifecycle_only` assertion make widening impossible without a build change. The destination arrives baked into the desktop release from a repo secret today and moves to the server-served capability document (Stage 3) so export becomes revocable org-wide without a client release; self-hosters keep the telemetry-mode off switch either way.
+Session work begins; the domain calls its `begin_*` producer; arguments outside the operation's closed `safe_fields` are dropped before the record exists; the collector admits it (uncatalogued names and secret-classified fields rejected at ingest — the single mechanical privacy gate), orders it, retains it locally. If and only if a destination is configured, the export worker encodes the **lifecycle-class subset** to OTLP and ships it to Honeycomb — `detailed` records, the only payload that can carry free text, never leave under a customer policy, and the compile-time `EXPORT_POLICY` plus the release workflow's `lifecycle_only` assertion make widening impossible without a build change. The destination arrives baked into the desktop release from a repo secret today and moves to the server-served capability document (Stage 3) so export becomes revocable org-wide without a client release. The per-machine off switch is the desktop telemetry mode: any mode but hosted-product spawns the collector with no destination env at all — no queue, no task, nothing leaves — which is what a self-hoster gets by construction.
 
 ```mermaid
 sequenceDiagram
@@ -187,7 +187,7 @@ sequenceDiagram
 
 ### Flow 4 — an SLI breaks durably
 
-Honeycomb holds the lifecycle stream; the five SLIs are defined over it as checked-in trigger intent, applied and verified by the destinations tooling, and evaluated by Honeycomb on its own cadence — the trigger fires into the alerting path and resolves when the condition clears. The five: **session-create success** (rejected vs failed split), **agent-start success**, **time-to-first-output** (`first_output_ms` on turn terminals), **launch-selection validity** (rejection-classification rate), and **orphan rate** — **one `started` and exactly one terminal per operation is the protocol's own invariant, so a `started` with no terminal within budget is a bug by definition**, no judgment required. Sign-in success stays in Grafana (log-sourced, no pipe needed).
+Honeycomb holds the lifecycle stream; the five SLIs are defined over it as checked-in trigger intent, applied and verified by the destinations tooling, and evaluated by Honeycomb on its own cadence — the trigger fires into the alerting path and resolves when the condition clears. The five: **session-create success** (rejected vs failed split), **agent-start success**, **time-to-first-output** (`first_output_ms` on turn terminals), **launch-selection validity** (rejection-classification rate), and **orphan rate**. Orphans need no cross-record join, because the collector is the finalizer of last resort: a producer that dies with an open operation gets an `abandoned` terminal written by the collector itself (`state/lifecycle.rs`, `finalizer: collector`), so **every `started` provably ends in exactly one terminal and orphan rate is a plain rate of `abandoned` outcomes** — a `started` a human never resolved is a bug by definition, and the record says so on its own. Sign-in success stays in Grafana (log-sourced, no pipe needed).
 
 ```mermaid
 sequenceDiagram
@@ -220,7 +220,7 @@ sequenceDiagram
 
 A PR that changes behavior states its observability delta or an explicit "none" ([standard.md](standard.md)). A new machine signal takes a dot-form name, a closed outcome, and a catalog admission in the same PR (safe-field list for a lifecycle op, validator row for a Sentry tag, marker registration for a log rule source); a new product event takes a typed map entry and, if it must reach PostHog, an allowlist decision in [posthog](posthog.md). When a surface dies, its signals die in the same PR — markers, rules, triggers, typed events, and display names, grep-gated (deletion-completeness). A rename is a seam change.
 
-Coverage check: flow 1 exercises the capture doors and the Sentry catalog; flow 2 the log record, markers, and the Grafana lane; flow 3 the lifecycle producers, the collector doors, and the export valve; flow 4 the trigger intent and the SLI vocabulary; flow 5 the link scheme and the tail verb; flow 6 the per-PR surface and both namespaces. Every catalog in §2 is written or read by at least one flow; the `/v1/records`–`/v1/tail` doors serve flows 3 and 5.
+Coverage check: flow 1 exercises the capture doors and the Sentry catalog; flow 2 the log record, markers, and the Grafana lane; flow 3 the lifecycle producers, the collector doors, and the export valve; flow 4 the trigger intent and the SLI vocabulary; flow 5 the link scheme and the tail verb; flow 6 the per-PR surface and both namespaces. Every catalog in §2 is written or read by at least one flow; the `/v1/records`–`/v1/tail` doors serve flow 5, `/v1/export` serves support's spec, and `/v1/health` serves the tail verb's banner and the desktop debug view.
 
 ## 4 · Structure
 
@@ -231,17 +231,17 @@ server/proliferate/
 ├── integrations/sentry/
 │   ├── __init__.py                 re-exports
 │   ├── client.py                   init_server_sentry (gated: enabled + hosted_product + DSN) · explicit integration list ·
-│   │                               capture_server_sentry_exception(error, *, level, tags, extras) · report_critical(message, *, tags, extras) ·
+│   │                               capture_server_sentry_exception(error, *, level, tags, extras, fingerprint) · report_critical(error, *, tags, extras, **context) ·
 │   │                               set_server_sentry_tag / set_server_sentry_correlation_context / clear_server_sentry_user
-│   └── privacy.py                  TAG_VALIDATORS · EXTRA_VALIDATORS · canonical_uuid · _UUID_TAGS (session_id, interaction_id, command_id, anyharness_workspace_id) · http_route
+│   └── privacy.py                  TAG_VALIDATORS · EXTRA_VALIDATORS · canonical_uuid · _UUID_TAGS (the eleven UUID-shaped ids: user_id, organization_id, cloud_workspace_id, cloud_target_id, sandbox_profile_id, cloud_sandbox_id, enrollment_key_id, session_id, interaction_id, command_id, anyharness_workspace_id) · http_route
 ├── middleware/
 │   ├── request_context.py          ContextVars for the tuple · with_correlation_context(**ids) · bind_background_correlation_context(**ids) · get_correlation_context()
 │   ├── request_telemetry.py        per-request binding: session_id_from_path (canonical UUID after /sessions/) · http_route + http_method tags ·
 │   │                               correlation → Sentry at teardown · clear user
 │   └── logging.py                  JsonLogFormatter (the log record) · CorrelationLogFilter · text only when debug
-├── auth/sign_in_observability.py   log_sign_in_outcome → event="auth.sign_in.outcome" + auth_sign_in_{outcome,surface,failure_code}
+├── auth/sign_in_observability.py   log_sign_in_success(surface) · log_sign_in_failure(surface, *, failure_code) → event="auth.sign_in.outcome" + auth_sign_in_{outcome,surface,failure_code}
 ├── background/task_metrics.py      message-only JSON loggers for the deploy-gate sensor family
-└── server/event_logging.py         correlation-carrying structured event helper (rename rides the Wave-2 server regroup)
+└── server/event_logging.py         correlation-carrying structured event helper
 ```
 
 Local invariants: the catalog is an allowlist and every change to it changes `test_sentry_transport_privacy.py` in the same PR; `send_default_pii=False`, `max_request_body_size="never"`, profiles off; the Sentry user is id-only and cleared at request teardown; `report_critical` is the only source of the `CRITICAL_FAILURE` marker; a request without a session binds nothing (pinned by `test_request_telemetry_session_binding.py`).
@@ -264,7 +264,7 @@ anyharness/crates/
 │   └── validation.rs               ingest gate: uncatalogued names rejected · privacy==Secret rejected record- and argument-level · detailed XOR lifecycle
 ├── proliferate-diagnostics-collector/src/
 │   ├── http.rs                     /v1/ingest · /v1/records · /v1/tail · /v1/export · /v1/health (loopback-only, capability token)
-│   ├── main.rs · config.rs         --install-id · --user-id (absent when signed out) → collector-stamped resource attrs
+│   ├── main.rs · config.rs         host-passed flags: --release · --environment · --install-id · --user-id (absent when signed out) → collector-stamped resource attrs; the desktop host sets the OTLP env pair on the collector process from constants compiled into the Tauri app at release
 │   └── export/{policy,target,otlp,worker}.rs
 │                                   EXPORT_POLICY compile-time (LifecycleOnly | All under internal-dogfood-export) ·
 │                                   PROLIFERATE_DIAGNOSTICS_OTLP_{ENDPOINT,HEADERS} (https-only unless loopback; /v1/logs appended) ·
@@ -273,7 +273,7 @@ anyharness/crates/
 ├── anyharness/src/telemetry.rs     Sentry init (ANYHARNESS_SENTRY_DSN) · scrubbers · SessionIdSpanLayer → session_id event tag · target→record mapping · file sink <runtime_home>/logs/anyharness.log
 ├── anyharness/src/cli.rs           the clap surface: Serve · InstallAgents · CatalogProbe · … · Logs (the tail verb)
 └── proliferate-worker/src/logging.rs · proliferate-supervisor/src/logging.rs
-                                    Sentry inits (PROLIFERATE_TARGET_SENTRY_*) · scrubbers · rotating file sinks worker.log / supervisor.log · JSON when a machine reads
+                                    Sentry inits (PROLIFERATE_TARGET_SENTRY_{DSN,ENVIRONMENT,TRACES_SAMPLE_RATE} + PROLIFERATE_{WORKER,SUPERVISOR}_SENTRY_RELEASE) · scrubbers · rotating file sinks worker.log / supervisor.log · JSON when a machine reads
 ```
 
 Local invariants: one `started` + exactly one terminal per operation (duplicate and conflicting terminals are counted and surfaced by the collector); an argument outside `safe_fields` is dropped before the record exists; an unlisted classification degrades `failed` to `abandoned` rather than shipping an unbounded string; the collector is the single mechanical privacy gate and the producer table is the second belt; a process with no installed producer emits nothing (every test, every non-desktop run); the export leg no-ops without a destination; `session_id` rides every phase where the id exists at emit time — `session.create` learns its minted id via `learn_session_id` and carries it on the terminal.
@@ -284,20 +284,21 @@ Local invariants: one `started` + exactly one terminal per operation (duplicate 
 apps/packages/product-client/src/
 ├── domain/telemetry/scrub.ts       scrubTelemetryEvent — the client allowlist (session_id admitted as a tag)
 ├── lib/domain/telemetry/events.ts  DesktopProductEventMap — the 40 snake_case typed product events
-└── lib/hooks (telemetry)           useTelemetrySessionSelection — tags session_id on focus, clears on close; setTag('', …) clears
-apps/desktop/src/lib/integrations/telemetry/   renderer Sentry + PostHog adapters (replay off; 7-event allowlist is posthog.md's)
-apps/desktop/src-tauri/src/telemetry.rs        native Sentry with the full before-send/breadcrumb/log scrubber, send_default_pii=false
+└── hooks/… (target)                useTelemetrySessionSelection — tags session_id on focus, clears on close; setTag('', …) clears
+apps/desktop/src/lib/integrations/telemetry/   renderer Sentry + PostHog adapters (replay per the invariant below; the 7-event allowlist in client.ts:43 is posthog.md's to rule)
+apps/desktop/src-tauri/src/telemetry.rs        native Sentry with the full before-send/breadcrumb/log scrubber; send_default_pii=false (SDK default today, pinned explicitly with row 3)
 apps/web/src/browser/telemetry/                web Sentry + PostHog (autocapture off, pageviews off, recording source-disabled)
 apps/mobile/src/lib/integrations/telemetry/    mobile Sentry adapter
 ```
 
-Local invariants: every emitter has a before-send scrubber — no exceptions, desktop-native included; clients derive no session truth (the scope tag mirrors the store, nothing else); replay stays source-disabled pending its parked ruling; typed events are product analytics, fenced to [posthog](posthog.md).
+Local invariants: every emitter has a before-send scrubber — no exceptions, desktop-native included; clients derive no session truth (the scope tag mirrors the store, nothing else); Sentry replay is 0-sampled on every surface; PostHog session replay is source-disabled on web and mobile and audience-gated on desktop (internal workspace members only, `startDesktopPostHogSessionReplay`); typed events are product analytics, fenced to [posthog](posthog.md).
 
 ### Cell 4 · destinations
 
 ```text
 server/infra/observability/
-├── grafana/production-alerts-rebuild.json     the canonical workspace's rules (g-48655e6419) — five production + sign-in SLI
+├── grafana/production-alerts-rebuild.json     the canonical workspace's rules (g-48655e6419) — five production rules
+├── grafana/sli-alerts.json                    the sign-in SLI rule (same workspace; applied by grafana-sli-alerts.mjs)
 ├── grafana/production-overview-dashboard.json the dashboard
 ├── grafana/production-alerts.json             OLD workspace (g-e532d030d8) — retirement rides the burn-in delta row
 ├── honeycomb/triggers/*.json                  the five SLI triggers as intent (session-create, agent-start, ttfo, launch-selection, orphan-rate)
@@ -309,7 +310,7 @@ scripts/ops/
 .github/workflows/release-desktop.yml          bakes the OTLP destination from HONEYCOMB_INGEST_KEY_PROD (loud skip when absent) · asserts lifecycle_only on packaged collectors
 ```
 
-Local invariants: intent is checksummed and `check` runs offline; apply happens only from main; every apply ends in verify and a receipt; drift is flagged nightly, never silently reconciled; CloudWatch retention is 30 days everywhere; the downloads CloudFront distribution logs to `proliferate-cloudfront-logs` (hand-made — its terraform absence is an infra-spec debt, not ours).
+Local invariants: intent is checksummed and `check` runs offline; apply happens only from main; every apply ends in verify and a receipt; verify lists every intent object, so a partial apply reds the job with a per-object diff in the receipt; drift is flagged nightly through the alerting spec's channel, never silently reconciled; before a key is minted the lanes skip with a `::warning`, after it exists a missing key fails the job; ingest-key rotation is release-coupled until Stage 3 (rotation kills export on every shipped install until the next release) and is only spent as a kill switch; CloudWatch retention is 30 days everywhere; the downloads CloudFront distribution logs to `proliferate-cloudfront-logs` (hand-made — its terraform absence is an infra-spec debt, not ours).
 
 ## Delta vs prod
 
@@ -319,14 +320,14 @@ Structural differences between this document and `main` as of 2026-08-26 evening
 | --- | --- | --- | --- |
 | 1 | `http_route` admitted | set but dropped by the catalog | PR #2255 |
 | 2 | runtime Sentry events carry `session_id` | org/user/sandbox/target only | PR #2256 |
-| 3 | client session scope tag + native scrubber | no client session tag; native unscubbed | PR #2257 |
+| 3 | client session scope tag + native scrubber | no client session tag; native unscrubbed | PR #2257 |
 | 4 | environment ∈ closed four-value set | `trusted-beta` defaults everywhere | PR #2258 |
 | 5 | sentry.md capability file | pre-ruling content | PR #2259 |
 | 6 | one evaluation engine + deploy-gate sensor | (landed: alarms deleted live) terraform + spec | PR #2262 |
 | 7 | monitor lane: check/apply/verify/drift in CI | hand-run scripts | PR #2263 (+ `GRAFANA_ADMIN_TOKEN` mint) |
 | 8 | worker/supervisor file sinks · JSON-when-machine-reads | console-only; text everywhere | PR #2264 |
 | 9 | grafana-logging.md capability file | absent | PR #2265 |
-| 10 | `begin_model_request` emitted at the probe | declared, never emitted | slice O-1 |
+| 10 | `begin_model_request` emitted at the probe | table row + catalog name exist; no producer function | slice O-1 |
 | 11 | `duration_ms` + `first_output_ms` on turn terminals | neither exists | slice O-1 |
 | 12 | `--user-id` collector stamp when signed in | install_id only | slice O-1 |
 | 13 | destination baked into desktop release from secret | no destination anywhere; leg dark | slice O-1 (+ `HONEYCOMB_INGEST_KEY_PROD` mint) |
@@ -337,7 +338,10 @@ Structural differences between this document and `main` as of 2026-08-26 evening
 | 18 | Stage 3 server-served destination (kill switch) | unbuilt | post-launch build item |
 | 19 | old Grafana workspace retired + JSON deleted | both live through burn-in | dated retirement PR |
 | 20 | cloud-sandbox log custody | lost with the sandbox | seam spec, post-launch |
-| 21 | session replay ruling | source-disabled, parked | Pablo, unparked when the xterm/canvas masking is provable |
+| 21 | session replay ruling | Sentry 0-sampled; PostHog desktop audience-gated | Pablo, unparked when the xterm/canvas masking is provable |
+| 22 | `component` as a log key and a client Sentry tag | absent on both legs | rides the fleet-marker landing (alerting) |
+| 23 | `surface` unified closed set | per-emitter values (cloud_api · desktop_native · sign-in's three) | dated rename PR, TAG_VALIDATORS row in the same PR |
+| 24 | `run_id` · `invocation_id` bound + admitted | no ContextVar, no validator row | lands with the fleet/runs system (fenced) |
 
 ## Build list
 
