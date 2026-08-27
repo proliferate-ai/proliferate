@@ -27,7 +27,7 @@ async fn checkpoint_linkage_stamps_the_boundary_checkpoint_id_onto_the_fork_oper
     use crate::domains::workspaces::checkpoints::{CheckpointOrigin, CheckpointRecord};
     use crate::persistence::Db;
 
-    let _env = test_support::lock_env();
+    let _env = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = std::env::temp_dir().join(format!(
@@ -201,7 +201,7 @@ async fn abort_capture_failure_cleans_up_the_persisted_prompt_attachment() {
     use crate::domains::workspaces::checkpoints::test_support::EnvGuard;
     use crate::persistence::Db;
 
-    let _capture = EnvGuard::on();
+    let _capture = EnvGuard::on().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
 

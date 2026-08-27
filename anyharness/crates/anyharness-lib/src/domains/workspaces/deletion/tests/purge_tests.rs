@@ -12,7 +12,7 @@ use crate::domains::workspaces::deletion::purge::{WorkspacePurgeError, Workspace
 
 #[tokio::test(flavor = "multi_thread")]
 async fn local_kind_purge_never_touches_the_directory_but_deletes_sessions_and_the_row() {
-    let _env = test_support::lock_env();
+    let _env = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let harness = Harness::new("local-kind");

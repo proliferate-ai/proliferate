@@ -649,18 +649,14 @@ note = "PABLO: provision agent secrets → nightly, or rule the lane out"
 #
 # KNOWN GAP: quarantine rows model workflow JOBS (continue-on-error) only —
 # per-TEST quarantine (a flaky test pinned by name, owner + expiry, instead of
-# a skip-comment) has no schema yet. Two candidates, both observed 2026-08-27
-# on non-Rust diffs, both intermittent session-actor concurrency in
-# anyharness-lib:
-#   1. live::sessions::actor::tests::workspace_stop::
-#        stop_and_await_kill_escalation_can_leave_the_agents_own_output_torn_mid_record
-#      (PR #2279; timing-sensitive kill-escalation assertion)
-#   2. domains::sessions::runtime::fork_dispatch_and_restart_tests::
-#        concurrent_double_fork_on_the_same_key_never_duplicates_the_child
-#      (PR #2286, docs-only diff, 3268 passed / 1 failed)
-# Both may be smoke from the await_holding_lock debt (123 allowed sites; the
-# careful lock-scope pass is queued — see lints/anyharness). Owned by the
-# ci-cd spec's Known gaps; do not grow this file's schema ad hoc.
+# a skip-comment) has no schema yet. The two original candidates (2026-08-27:
+# the workspace_stop kill-escalation flake and the fork_dispatch double-fork
+# teardown flake) were FIXED AT ROOT the same day — fixture trap-ordering and
+# a bounded-retry teardown, in the test-races-and-lock-debt slice — and the
+# lock map cleared the await_holding_lock hypothesis (all sites were test
+# support; the debt itself was retired and the lint is now deny). The schema
+# gap stays open with no live candidate. Owned by the ci-cd spec's Known
+# gaps; do not grow this file's schema ad hoc.
 
 [[quarantine]]
 workflow = "release-e2e-selfhost.yml"

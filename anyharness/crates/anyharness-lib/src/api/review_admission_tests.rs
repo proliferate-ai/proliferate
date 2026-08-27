@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
@@ -18,10 +16,7 @@ const SESSION_ID: &str = "30000000-0000-4000-8000-000000000003";
 
 #[tokio::test]
 async fn plan_lookup_error_fails_closed_before_review_side_effects() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state();
     test_support::seed_workspace_with_repo_root(

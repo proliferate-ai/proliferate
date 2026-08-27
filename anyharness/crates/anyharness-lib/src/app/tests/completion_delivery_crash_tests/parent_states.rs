@@ -11,7 +11,7 @@ use crate::persistence::Db;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn idle_live_parent_delivers_completion_once() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("completion-idle-parent");
@@ -44,7 +44,7 @@ async fn idle_live_parent_delivers_completion_once() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cold_reconstructed_parent_loads_without_creating_a_new_provider_session() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("completion-cold-parent");
@@ -102,7 +102,7 @@ async fn cold_reconstructed_parent_loads_without_creating_a_new_provider_session
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn running_parent_preserves_blocking_turn_then_completion_fifo() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("completion-running-parent");

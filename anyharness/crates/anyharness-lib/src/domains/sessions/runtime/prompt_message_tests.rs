@@ -30,7 +30,7 @@ impl Drop for AgentProgramGuard {
 
 #[tokio::test(flavor = "current_thread")]
 async fn send_message_returns_before_target_startup_readiness_resolves() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let (state, _program) = state_with_sessions(&[
@@ -79,7 +79,7 @@ async fn send_message_returns_before_target_startup_readiness_resolves() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn send_message_startup_failure_after_commit_still_returns_the_durable_receipt() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let (state, _program) = state_with_sessions(&[
@@ -124,7 +124,7 @@ async fn send_message_startup_failure_after_commit_still_returns_the_durable_rec
 
 #[tokio::test(flavor = "current_thread")]
 async fn send_message_keeps_the_same_receipt_when_the_actor_drops_its_wake_response() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let (state, _program) = state_with_sessions(&[
@@ -169,7 +169,7 @@ async fn send_message_keeps_the_same_receipt_when_the_actor_drops_its_wake_respo
 
 #[tokio::test(flavor = "current_thread")]
 async fn send_message_keeps_the_durable_receipt_when_the_wake_actor_is_unavailable() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let (state, _program) = state_with_sessions(&[
@@ -196,7 +196,7 @@ async fn send_message_keeps_the_durable_receipt_when_the_wake_actor_is_unavailab
 
 #[tokio::test(flavor = "current_thread")]
 async fn send_message_store_failure_returns_error_without_activating_the_actor() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let (state, _program) = state_with_sessions(&[

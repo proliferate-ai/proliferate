@@ -303,6 +303,68 @@ class EnginePythonTests(unittest.TestCase):
         self.assertEqual(gate.engine_argv("python3 scripts/check_docs.py", None)[0], "python3")
 
 
+class DarwinClippyCarveOutTests(unittest.TestCase):
+    """Linux CI is the desktop crate's clippy authority: a macOS gate run
+    excludes it LOUDLY (or skips loudly when there is nothing else to lint),
+    and a Linux gate run stays byte-identical to CI — no platform residue."""
+
+    def _base_kwargs(self, **overrides):
+        kwargs = dict(
+            repo=REPO,
+            postgres_up=True,
+            redis_up=True,
+            have_uv=True,
+            have_pnpm=True,
+            have_cargo=True,
+        )
+        kwargs.update(overrides)
+        return kwargs
+
+    def _clippy(self, checks):
+        matches = [c for c in checks if c.name.startswith("rust: clippy")]
+        self.assertEqual(len(matches), 1, "exactly one clippy check per run")
+        return matches[0]
+
+    def test_linux_workspace_command_is_platform_unmarked(self):
+        scope = gate.classify(["Cargo.toml"])
+        checks = gate.build_checks(scope, **self._base_kwargs(platform="linux"))
+        clippy = self._clippy(checks)
+        self.assertEqual(clippy.name, "rust: clippy")
+        self.assertIn("--workspace", clippy.cmd)
+        self.assertNotIn("--exclude", clippy.cmd)
+
+    def test_darwin_workspace_excludes_both_desktop_crates_with_the_note(self):
+        scope = gate.classify(["Cargo.toml"])
+        checks = gate.build_checks(scope, **self._base_kwargs(platform="darwin"))
+        clippy = self._clippy(checks)
+        self.assertIn("Linux CI is its clippy authority", clippy.name)
+        self.assertIn("--exclude proliferate-debug", clippy.cmd)
+        # The lib crate too, not just the debug shell (which would re-lint it
+        # as a path dependency).
+        self.assertIn("--exclude proliferate ", clippy.cmd + " ")
+
+    def test_darwin_mixed_diff_keeps_touched_crates_and_drops_desktop(self):
+        scope = gate.classify(
+            [
+                "anyharness/crates/anyharness-lib/src/lib.rs",
+                "apps/desktop/src-tauri/src/lib.rs",
+            ]
+        )
+        checks = gate.build_checks(scope, **self._base_kwargs(platform="darwin"))
+        clippy = self._clippy(checks)
+        self.assertIn("-p anyharness-lib", clippy.cmd)
+        self.assertNotIn("-p proliferate", clippy.cmd)
+        self.assertIn("Linux CI is its clippy authority", clippy.name)
+
+    def test_darwin_desktop_only_diff_skips_loudly_instead_of_linting_the_rest(self):
+        scope = gate.classify(["apps/desktop/src-tauri/src/lib.rs"])
+        checks = gate.build_checks(scope, **self._base_kwargs(platform="darwin"))
+        clippy = self._clippy(checks)
+        self.assertIsNone(clippy.cmd)
+        self.assertTrue(clippy.loud)
+        self.assertIn("Linux CI is its clippy authority", clippy.skip_reason)
+
+
 class MirrorRuleTests(unittest.TestCase):
     """Every gate command string appears in the CI workflow that runs it."""
 

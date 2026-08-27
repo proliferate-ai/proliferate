@@ -1,6 +1,6 @@
 use std::ffi::OsString;
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 use crate::domains::agents::launch_options::{
     HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions, HarnessLaunchOptionsService,
@@ -134,7 +134,7 @@ impl AgentProductContextResolver for TestAgentProductContextResolver {
     }
 }
 
-pub(crate) static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+pub(crate) static ENV_MUTEX: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
 /// Take the crate-wide process-environment lock for the length of a test body.
 ///
@@ -145,13 +145,29 @@ pub(crate) static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 /// that shells out, and an invalid `ANYHARNESS_DATA_KEY` breaks any test that
 /// builds an `AppState`. Module-local locks would not exclude those.
 ///
-/// `.expect` on poisoning matches the crate's existing 88 call sites: a poisoned
-/// lock means another test already panicked, and the run is failing either way.
-pub(crate) fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+/// The mutex is `tokio::sync` on purpose: test bodies hold it across real
+/// awaits (HTTP dispatches, child processes, kill escalations), which is the
+/// async mutex's *intended* semantics — and what lets `await_holding_lock`
+/// stay a deny-level law for the std guards it exists to catch. Under nextest
+/// (process-per-test, what CI runs) the lock is uncontended by construction;
+/// under `cargo test --workspace` it still serializes env-touching tests,
+/// with waiters yielding instead of blocking libtest threads. Tokio mutexes
+/// do not poison, so one panicking test no longer cascades bogus
+/// "poisoned mutex" failures through the rest of a shared-process run.
+pub(crate) async fn lock_env() -> tokio::sync::MutexGuard<'static, ()> {
     ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
+        .get_or_init(|| tokio::sync::Mutex::new(()))
         .lock()
-        .expect("expected env mutex")
+        .await
+}
+
+/// Sync-test companion to [`lock_env`]: the same crate-wide lock, taken from
+/// outside any runtime (a plain `#[test]`). Tokio's `blocking_lock` panics if
+/// called from async context by contract — async tests use `lock_env().await`.
+pub(crate) fn lock_env_blocking() -> tokio::sync::MutexGuard<'static, ()> {
+    ENV_MUTEX
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .blocking_lock()
 }
 
 pub(crate) struct BearerTokenEnvGuard {

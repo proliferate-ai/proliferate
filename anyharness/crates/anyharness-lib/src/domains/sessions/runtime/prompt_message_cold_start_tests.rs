@@ -9,7 +9,7 @@ use crate::persistence::Db;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn send_message_cold_target_loads_recorded_native_id_and_drains_exactly_once() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("cold-send");
@@ -73,7 +73,7 @@ async fn send_message_cold_target_loads_recorded_native_id_and_drains_exactly_on
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn startup_drain_persists_pending_prompt_added_before_executing_agent_message() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("cold-prequeued-identity");

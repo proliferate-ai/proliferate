@@ -13,18 +13,18 @@
 /// flag. `pub(crate)` (rather than `pub(super)`) so suites in other subdomains
 /// can share the crate-wide lock required for every process-global variable.
 pub(crate) struct EnvGuard {
-    _lock: std::sync::MutexGuard<'static, ()>,
+    _lock: tokio::sync::MutexGuard<'static, ()>,
 }
 
 impl EnvGuard {
-    pub(crate) fn on() -> Self {
-        let lock = crate::app::test_support::lock_env();
+    pub(crate) async fn on() -> Self {
+        let lock = crate::app::test_support::lock_env().await;
         std::env::set_var("ANYHARNESS_CHECKPOINT_CAPTURE", "on");
         EnvGuard { _lock: lock }
     }
 
-    pub(crate) fn off() -> Self {
-        let lock = crate::app::test_support::lock_env();
+    pub(crate) async fn off() -> Self {
+        let lock = crate::app::test_support::lock_env().await;
         std::env::remove_var("ANYHARNESS_CHECKPOINT_CAPTURE");
         EnvGuard { _lock: lock }
     }

@@ -28,6 +28,27 @@ use crate::domains::sessions::runtime::{EnsureLiveSessionError, ForkSessionError
 use crate::domains::workspaces::checkpoints::{CheckpointOrigin, CheckpointRecord};
 use crate::persistence::Db;
 
+/// Remove the runtime home with a bounded retry: `close_all` returns before
+/// every writer it releases has fully drained (the scripted agent process,
+/// session write-back tasks), so an immediate `remove_dir_all` can race a
+/// late write and die on `DirectoryNotEmpty` — the teardown flake observed on
+/// PR #2286's run (all fork assertions had passed; only this line failed).
+/// Bounded and loud: after the last attempt the error still panics — the race
+/// gets time to drain, it is never swallowed.
+async fn remove_runtime_home_with_retry(runtime_home: &std::path::Path) {
+    const ATTEMPTS: u32 = 10;
+    for attempt in 1..=ATTEMPTS {
+        match std::fs::remove_dir_all(runtime_home) {
+            Ok(()) => return,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+            Err(error) if attempt == ATTEMPTS => {
+                panic!("remove runtime home after {ATTEMPTS} attempts: {error}")
+            }
+            Err(_) => tokio::time::sleep(std::time::Duration::from_millis(50)).await,
+        }
+    }
+}
+
 // --- (a) Two-boundary dispatch proof ---------------------------------------
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -38,7 +59,7 @@ async fn targeted_fork_persists_provider_anchor_and_exact_checkpoint_after_child
     // operation's provider anchor. The first boundary also has an exact Lane H
     // checkpoint; both provenance dimensions must coexist on the completed
     // operation. The second boundary pins the explicit no-checkpoint case.
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-dispatch");
@@ -165,7 +186,7 @@ async fn targeted_fork_persists_provider_anchor_and_exact_checkpoint_after_child
     )
     .await;
     drop(state);
-    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+    remove_runtime_home_with_retry(&runtime_home).await;
 }
 
 fn assert_child_event_prefix(
@@ -219,7 +240,7 @@ fn assert_child_event_prefix(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn parent_permission_during_hydration_is_cancelled_without_native_fork_or_interaction() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-parent-permission");
@@ -299,7 +320,7 @@ async fn parent_permission_during_hydration_is_cancelled_without_native_fork_or_
 
     close_all(&state, &[parent_id.as_str()]).await;
     drop(state);
-    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+    remove_runtime_home_with_retry(&runtime_home).await;
 }
 
 // --- (b)(i) Restart-drift pin: pre-pin-bump surface ------------------------
@@ -309,7 +330,7 @@ async fn legacy_probe_shape_refuses_targeted_fork_end_to_end() {
     // Today's shipped reality through the REAL probe: the live start persists
     // the legacy Claude shape (fork true, targeted_fork false), so a targeted
     // fork fails closed with FORK_UNSUPPORTED and issues no native fork.
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-legacy");
@@ -360,7 +381,7 @@ async fn legacy_probe_shape_refuses_targeted_fork_end_to_end() {
 
     close_all(&state, &[parent_id.as_str()]).await;
     drop(state);
-    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+    remove_runtime_home_with_retry(&runtime_home).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -368,7 +389,7 @@ async fn live_targeted_readiness_wins_when_capability_persistence_fails() {
     // A pre-start durable `targetedFork=true` is only a cache. Even when the
     // live legacy handshake cannot persist false, actor-owned truth must reject
     // before inserting an operation/child or sending an anchored session/fork.
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-stale-capability");
@@ -432,7 +453,7 @@ async fn live_targeted_readiness_wins_when_capability_persistence_fails() {
 
     close_all(&state, &[parent_id.as_str()]).await;
     drop(state);
-    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+    remove_runtime_home_with_retry(&runtime_home).await;
 }
 
 // --- (b)(ii) Restart-drift pin: cold-restart refusal -----------------------
@@ -442,7 +463,7 @@ async fn cold_restart_refuses_process_local_fork_children_without_r1_proof() {
     // A zero-turn process-local fork child must refuse a cold launch and issue
     // no native session call, regardless of whether its recorded anchor is
     // intact. R1 owns the future exact-prefix recovery proof.
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-restart");
@@ -500,7 +521,7 @@ async fn cold_restart_refuses_process_local_fork_children_without_r1_proof() {
     assert!(error.to_string().contains("exact-prefix recovery proof"));
 
     drop(state_b);
-    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+    remove_runtime_home_with_retry(&runtime_home).await;
 }
 
 // --- (c) Double-fork fault injection ---------------------------------------
@@ -511,7 +532,7 @@ async fn concurrent_double_fork_on_the_same_key_never_duplicates_the_child() {
     // `session/fork`, a second fork on the SAME idempotency key + payload is
     // reconciled by the phase machine to the SAME child — exactly one operation
     // row, exactly one child, no second native fork.
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-double");
@@ -575,5 +596,5 @@ async fn concurrent_double_fork_on_the_same_key_never_duplicates_the_child() {
 
     close_all(&state, &["fork-parent", "shared-fork-child"]).await;
     drop(state);
-    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+    remove_runtime_home_with_retry(&runtime_home).await;
 }
