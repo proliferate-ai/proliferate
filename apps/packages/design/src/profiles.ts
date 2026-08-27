@@ -81,7 +81,10 @@ export const themeProfiles: Readonly<Record<string, ThemeProfile>> = {
       "--elevation-subtle": `0 1px 2px ${codex(0.04)}`,
       "--elevation-popover": `0 0 0 0.5px ${codex(0.05)}, 0 4px 16px ${codex(0.08)}`,
       "--elevation-modal": `0 24px 48px ${codex(0.16)}`,
-      "--elevation-composer": `0 0 0 1px ${codex(0.1)}, 0 2px 12px ${codex(0.06)}`,
+      // Reference composer: slightly squarer corner than ours, one faint
+      // hairline, barely-there lift — the frame recedes, the content leads.
+      "--radius-composer": "1.5rem",
+      "--elevation-composer": `0 0 0 1px ${codex(0.08)}, 0 4px 16px ${codex(0.05)}`,
     },
   },
 
