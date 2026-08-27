@@ -141,7 +141,7 @@ endif
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
         server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
-        check check-max-lines check-server-boundaries test test-server fmt clippy \
+        gate check check-max-lines check-server-boundaries test test-server fmt clippy \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build dev-build rebuild \
         desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
@@ -1419,9 +1419,16 @@ install: git-hooks
 
 # Point git at the checked-in hooks. Idempotent, safe to re-run, and local to
 # this clone/worktree (never committed state). See guides/local/README.md.
+# The pre-push gate: change-scoped local mirror of the merge gate
+# (delivery/testing-cicd/delivery-spec-make-gate.md). `make gate` by hand or
+# via the pre-push hook; `python3 scripts/gate --list` shows what a diff selects.
+gate:
+	@python3 scripts/gate
+
 git-hooks:
 	@git config core.hooksPath scripts/git-hooks
-	@echo "git hooks enabled (core.hooksPath=scripts/git-hooks); bypass a single commit with --no-verify."
+	@echo "git hooks enabled (core.hooksPath=scripts/git-hooks): pre-commit formats staged files, pre-push runs 'make gate'."
+	@echo "escape hatch: PROLIFERATE_SKIP_HOOKS=1"
 
 # --- Sidecar staging ---
 
