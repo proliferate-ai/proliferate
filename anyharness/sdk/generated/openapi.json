@@ -30,6 +30,50 @@
         }
       }
     },
+    "/v1/agent-auth/methods": {
+      "get": {
+        "tags": [
+          "agent-auth"
+        ],
+        "operationId": "get_agent_auth_methods",
+        "parameters": [
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Harness kind (required)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The harness's method rows, straight from its status document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentAuthMethodRow"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown harness",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agent-auth/state": {
       "put": {
         "tags": [
@@ -69,7 +113,7 @@
             }
           },
           "409": {
-            "description": "Stale revision; persisted state unchanged",
+            "description": "Stale sequence; persisted state unchanged",
             "content": {
               "application/json": {
                 "schema": {
@@ -91,6 +135,50 @@
           },
           "500": {
             "description": "State could not be cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent-auth/status": {
+      "get": {
+        "tags": [
+          "agent-auth"
+        ],
+        "operationId": "get_agent_auth_status",
+        "parameters": [
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Filter to one harness kind",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The persisted per-harness status documents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentAuthStatusDoc"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown harness",
             "content": {
               "application/json": {
                 "schema": {
@@ -7830,205 +7918,74 @@
           }
         }
       },
-      "AgentAuthCredentialEvidence": {
+      "AgentAuthAppliedMethod": {
         "type": "object",
+        "description": "The applied method tag on a status document.",
         "required": [
-          "source",
-          "strength"
+          "kind"
         ],
         "properties": {
-          "evidenceAgeSeconds": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
+          "kind": {
+            "type": "string",
+            "description": "`seat` | `gateway` | `api_key`."
           },
-          "source": {
-            "$ref": "#/components/schemas/AgentAuthCredentialSource"
-          },
-          "strength": {
-            "$ref": "#/components/schemas/AgentAuthEvidenceStrength"
-          }
-        }
-      },
-      "AgentAuthCredentialSource": {
-        "type": "string",
-        "enum": [
-          "gateway",
-          "api_key_byok",
-          "native_login"
-        ]
-      },
-      "AgentAuthDisplay": {
-        "type": "string",
-        "enum": [
-          "not_installed",
-          "unsupported",
-          "misconfigured",
-          "expired",
-          "unavailable",
-          "probing",
-          "usable",
-          "authenticated",
-          "selected",
-          "installed"
-        ]
-      },
-      "AgentAuthEvidenceRef": {
-        "type": "string",
-        "enum": [
-          "probe_observation",
-          "gateway_key_check",
-          "acknowledged_route"
-        ]
-      },
-      "AgentAuthEvidenceStrength": {
-        "type": "string",
-        "enum": [
-          "bare_presence",
-          "acknowledged_route",
-          "tier1_trial",
-          "probe_observation"
-        ]
-      },
-      "AgentAuthFactsSummary": {
-        "type": "object",
-        "description": "The orthogonal facts that fed the derivation, serialized alongside it so a\nclient can see WHY a display was chosen without re-deriving.",
-        "required": [
-          "installed",
-          "unsupportedRoute",
-          "misconfigured",
-          "expired",
-          "probe"
-        ],
-        "properties": {
-          "credential": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthCredentialEvidence"
-              }
-            ]
-          },
-          "expired": {
-            "type": "boolean"
-          },
-          "gateway": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthGatewayHealth"
-              }
-            ]
-          },
-          "handoff": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthLoginHandoff"
-              }
-            ]
-          },
-          "installed": {
-            "type": "boolean"
-          },
-          "misconfigured": {
-            "type": "boolean"
-          },
-          "probe": {
-            "$ref": "#/components/schemas/AgentAuthProbeLifecycle"
-          },
-          "selection": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthSelectionFact"
-              }
-            ]
-          },
-          "unsupportedRoute": {
-            "type": "boolean"
-          }
-        }
-      },
-      "AgentAuthGatewayHealth": {
-        "type": "string",
-        "enum": [
-          "reachable",
-          "unreachable",
-          "unauthorized",
-          "models_drifted",
-          "budget_exhausted"
-        ]
-      },
-      "AgentAuthLoginHandoff": {
-        "type": "string",
-        "enum": [
-          "initiated",
-          "awaiting_browser",
-          "completed",
-          "cancelled",
-          "timed_out"
-        ]
-      },
-      "AgentAuthNextAction": {
-        "type": "string",
-        "enum": [
-          "install",
-          "none",
-          "fix_config",
-          "log_in_or_paste_key",
-          "top_up_or_retry",
-          "wait",
-          "wait_for_probe",
-          "choose_source"
-        ]
-      },
-      "AgentAuthProbeLifecycle": {
-        "type": "object",
-        "required": [
-          "phase",
-          "observationNonempty"
-        ],
-        "properties": {
-          "lastFailureDetail": {
+          "seat_id": {
             "type": [
               "string",
               "null"
+            ],
+            "description": "Seat method only: the SERVING seat's vault id."
+          }
+        }
+      },
+      "AgentAuthMethodRow": {
+        "type": "object",
+        "description": "One method row in a status document. Launch-method rows (`seat`,\n`gateway`, `api_key`) carry `available`; the `native` row carries\n`detected` (+ `offer`) and never `available` — native is a detection with\na mint offer, never a launch method.",
+        "required": [
+          "kind",
+          "applied"
+        ],
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "description": "Is this row the applied method (for seat rows: the serving seat)?"
+          },
+          "available": {
+            "type": [
+              "boolean",
+              "null"
             ]
           },
-          "lastSuccessAgeSeconds": {
+          "detected": {
             "type": [
-              "integer",
+              "boolean",
               "null"
             ],
-            "format": "int64"
+            "description": "`native` row only: a working native login was detected on this machine."
           },
-          "nextAttemptAt": {
+          "kind": {
+            "type": "string",
+            "description": "`seat` | `gateway` | `api_key` | `native`."
+          },
+          "offer": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "`native` row only: `\"mint_seat\"` for seat-capable harnesses — the\ndetected login can be captured as a portable seat."
           },
-          "observationNonempty": {
-            "type": "boolean"
-          },
-          "phase": {
-            "$ref": "#/components/schemas/AgentAuthProbePhase"
+          "seat_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`seat` rows only: the vault seat id — never token material."
           }
         }
       },
       "AgentAuthProbePhase": {
         "type": "string",
+        "description": "The probe scheduler's live phase for one harness, refined against the\ndurable launch-options row. (The rest of the deleted `authState` evidence\nvocabulary went with `AgentAuthStateSummary`; this enum stays because the\nlaunch-options response carries it.)",
         "enum": [
           "idle",
           "queued",
@@ -8036,91 +7993,89 @@
           "backoff"
         ]
       },
-      "AgentAuthSelectionFact": {
+      "AgentAuthProbeStatus": {
         "type": "object",
+        "description": "The probe block of a status document — the serve-stale observation\n(spec §3 flow 4: a probe failure dims the light, it never turns it off).\n`stale: true` means a re-probe is pending or running while the last\nobservation stays visible; a restart serves every document stale until the\nstartup pass re-verifies.",
         "required": [
-          "acknowledged",
-          "satisfiable"
+          "verdict",
+          "stale"
         ],
         "properties": {
-          "acknowledged": {
-            "type": "boolean"
-          },
-          "acknowledgedAgeSeconds": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "revision": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "satisfiable": {
-            "type": "boolean"
-          }
-        }
-      },
-      "AgentAuthStateSummary": {
-        "type": "object",
-        "required": [
-          "display",
-          "nextAction",
-          "facts"
-        ],
-        "properties": {
-          "coolingUntil": {
+          "at": {
             "type": [
               "string",
               "null"
             ],
-            "description": "RFC3339 UTC; present ONLY when no seat can serve right now (all pool\nseats cooling, or the rotate-off pinned candidate cooling)."
+            "description": "RFC3339 timestamp of the evidence; `null` while unverified."
           },
-          "display": {
-            "$ref": "#/components/schemas/AgentAuthDisplay"
+          "stale": {
+            "type": "boolean"
           },
-          "evidenceAgeSeconds": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Age of that evidence in seconds. Present whenever the display is green."
-          },
-          "evidenceRef": {
+          "verdict": {
+            "$ref": "#/components/schemas/AgentAuthProbeVerdict"
+          }
+        }
+      },
+      "AgentAuthProbeVerdict": {
+        "type": "string",
+        "description": "The probe verdict vocabulary — a closed set.",
+        "enum": [
+          "verified",
+          "failed",
+          "unverified"
+        ]
+      },
+      "AgentAuthStatusDoc": {
+        "type": "object",
+        "description": "One harness's status document (agent_auth spec §2, \"Runtime persistent\nstate\") — the machine's single source of auth truth, event-refreshed and\nserved verbatim by `GET /v1/agent-auth/status` (+ its SSE stream) and on\nthe agents projection as `authStatus`. Snake_case on the wire: the spec's\nprinted shape is the contract.",
+        "required": [
+          "harness_kind",
+          "methods",
+          "rotate",
+          "probe"
+        ],
+        "properties": {
+          "applied": {
             "oneOf": [
               {
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/AgentAuthEvidenceRef",
-                "description": "Present exactly when the display is green (`usable`/`authenticated`) or an\nacknowledged `selected`."
+                "$ref": "#/components/schemas/AgentAuthAppliedMethod",
+                "description": "The applied method, from the applied document — never from detection.\nThe SERVING seat rides `applied.seat_id`. `null` when the document\ngives this harness no satisfiable sources."
               }
             ]
           },
-          "facts": {
-            "$ref": "#/components/schemas/AgentAuthFactsSummary"
-          },
-          "nextAction": {
-            "$ref": "#/components/schemas/AgentAuthNextAction"
-          },
-          "nextSeatId": {
+          "cooling_until": {
             "type": [
               "string",
               "null"
             ],
-            "description": "The seat rotation would pick for the NEXT launch (rotate=false: the\npinned candidate). Absent when the pool has fewer than two seats."
+            "description": "RFC3339 UTC; non-null ONLY when no seat can serve right now."
           },
-          "servingSeatId": {
+          "harness_kind": {
+            "type": "string"
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentAuthMethodRow"
+            },
+            "description": "One row per (method kind\\[, seat\\]): every launch method whose material\nthe applied document carries, plus the native detection row."
+          },
+          "next_seat_id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Seat rotation (claude seats): the seat currently serving — last served\nif still in the applied pool, else the pool's first. Absent when the\napplied document carries no seats."
+            "description": "The seat rotation would serve NEXT (`null` when the pool has fewer\nthan two seats, or no seat could serve)."
+          },
+          "probe": {
+            "$ref": "#/components/schemas/AgentAuthProbeStatus"
+          },
+          "rotate": {
+            "type": "boolean",
+            "description": "The seat-rotation toggle from the document's settings rider (`true`\nwhen absent — rotation is the default)."
           }
         }
       },
@@ -8713,14 +8668,14 @@
           "agentProcess": {
             "$ref": "#/components/schemas/ArtifactStatus"
           },
-          "authState": {
+          "authStatus": {
             "oneOf": [
               {
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/AgentAuthStateSummary",
-                "description": "The canonical agent-auth evidence model (ADR FR-1), computed ALONGSIDE the\nlegacy `credentialState`/`readiness` ladders and never replacing them. A\nclient still renders the legacy ladder until the UI rung; this field is\nthe additive canonical projection. Absent on runtimes predating it."
+                "$ref": "#/components/schemas/AgentAuthStatusDoc",
+                "description": "The harness's status document (agent_auth spec §2) — the machine's\nsingle source of auth truth, identical to what `GET\n/v1/agent-auth/status` serves. Replaces the deleted `authState`\nevidence projection; `credentialState`/`readiness`/\n`credentialsFromRoute` stay harnesses' fields, untouched. Absent on\nruntimes predating the status module or before its first refresh."
               }
             ]
           },
@@ -8921,17 +8876,17 @@
         "description": "Outcome of pushing an agent-auth state document into the runtime.",
         "required": [
           "applied",
-          "revision"
+          "sequence"
         ],
         "properties": {
           "applied": {
             "type": "boolean",
             "description": "True when the document was persisted to the runtime's state file."
           },
-          "revision": {
+          "sequence": {
             "type": "integer",
             "format": "int64",
-            "description": "The persisted document's revision."
+            "description": "The persisted document's sequence (monotonic per surface; the server\nbumps it on every content-changing render)."
           }
         }
       },

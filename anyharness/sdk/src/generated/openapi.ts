@@ -20,6 +20,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent-auth/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_agent_auth_methods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agent-auth/state": {
         parameters: {
             query?: never;
@@ -31,6 +47,22 @@ export interface paths {
         put: operations["put_agent_auth_state"];
         post?: never;
         delete: operations["delete_agent_auth_state"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent-auth/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_agent_auth_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2156,85 +2188,89 @@ export interface components {
         AdvanceReplaySessionResponse: {
             advanced: boolean;
         };
-        AgentAuthCredentialEvidence: {
-            /** Format: int64 */
-            evidenceAgeSeconds?: number | null;
-            source: components["schemas"]["AgentAuthCredentialSource"];
-            strength: components["schemas"]["AgentAuthEvidenceStrength"];
+        /** @description The applied method tag on a status document. */
+        AgentAuthAppliedMethod: {
+            /** @description `seat` | `gateway` | `api_key`. */
+            kind: string;
+            /** @description Seat method only: the SERVING seat's vault id. */
+            seat_id?: string | null;
         };
-        /** @enum {string} */
-        AgentAuthCredentialSource: "gateway" | "api_key_byok" | "native_login";
-        /** @enum {string} */
-        AgentAuthDisplay: "not_installed" | "unsupported" | "misconfigured" | "expired" | "unavailable" | "probing" | "usable" | "authenticated" | "selected" | "installed";
-        /** @enum {string} */
-        AgentAuthEvidenceRef: "probe_observation" | "gateway_key_check" | "acknowledged_route";
-        /** @enum {string} */
-        AgentAuthEvidenceStrength: "bare_presence" | "acknowledged_route" | "tier1_trial" | "probe_observation";
         /**
-         * @description The orthogonal facts that fed the derivation, serialized alongside it so a
-         *     client can see WHY a display was chosen without re-deriving.
+         * @description One method row in a status document. Launch-method rows (`seat`,
+         *     `gateway`, `api_key`) carry `available`; the `native` row carries
+         *     `detected` (+ `offer`) and never `available` — native is a detection with
+         *     a mint offer, never a launch method.
          */
-        AgentAuthFactsSummary: {
-            credential?: null | components["schemas"]["AgentAuthCredentialEvidence"];
-            expired: boolean;
-            gateway?: null | components["schemas"]["AgentAuthGatewayHealth"];
-            handoff?: null | components["schemas"]["AgentAuthLoginHandoff"];
-            installed: boolean;
-            misconfigured: boolean;
-            probe: components["schemas"]["AgentAuthProbeLifecycle"];
-            selection?: null | components["schemas"]["AgentAuthSelectionFact"];
-            unsupportedRoute: boolean;
+        AgentAuthMethodRow: {
+            /** @description Is this row the applied method (for seat rows: the serving seat)? */
+            applied: boolean;
+            available?: boolean | null;
+            /** @description `native` row only: a working native login was detected on this machine. */
+            detected?: boolean | null;
+            /** @description `seat` | `gateway` | `api_key` | `native`. */
+            kind: string;
+            /**
+             * @description `native` row only: `"mint_seat"` for seat-capable harnesses — the
+             *     detected login can be captured as a portable seat.
+             */
+            offer?: string | null;
+            /** @description `seat` rows only: the vault seat id — never token material. */
+            seat_id?: string | null;
         };
-        /** @enum {string} */
-        AgentAuthGatewayHealth: "reachable" | "unreachable" | "unauthorized" | "models_drifted" | "budget_exhausted";
-        /** @enum {string} */
-        AgentAuthLoginHandoff: "initiated" | "awaiting_browser" | "completed" | "cancelled" | "timed_out";
-        /** @enum {string} */
-        AgentAuthNextAction: "install" | "none" | "fix_config" | "log_in_or_paste_key" | "top_up_or_retry" | "wait" | "wait_for_probe" | "choose_source";
-        AgentAuthProbeLifecycle: {
-            lastFailureDetail?: string | null;
-            /** Format: int64 */
-            lastSuccessAgeSeconds?: number | null;
-            nextAttemptAt?: string | null;
-            observationNonempty: boolean;
-            phase: components["schemas"]["AgentAuthProbePhase"];
-        };
-        /** @enum {string} */
+        /**
+         * @description The probe scheduler's live phase for one harness, refined against the
+         *     durable launch-options row. (The rest of the deleted `authState` evidence
+         *     vocabulary went with `AgentAuthStateSummary`; this enum stays because the
+         *     launch-options response carries it.)
+         * @enum {string}
+         */
         AgentAuthProbePhase: "idle" | "queued" | "running" | "backoff";
-        AgentAuthSelectionFact: {
-            acknowledged: boolean;
-            /** Format: int64 */
-            acknowledgedAgeSeconds?: number | null;
-            /** Format: int64 */
-            revision?: number | null;
-            satisfiable: boolean;
+        /**
+         * @description The probe block of a status document — the serve-stale observation
+         *     (spec §3 flow 4: a probe failure dims the light, it never turns it off).
+         *     `stale: true` means a re-probe is pending or running while the last
+         *     observation stays visible; a restart serves every document stale until the
+         *     startup pass re-verifies.
+         */
+        AgentAuthProbeStatus: {
+            /** @description RFC3339 timestamp of the evidence; `null` while unverified. */
+            at?: string | null;
+            stale: boolean;
+            verdict: components["schemas"]["AgentAuthProbeVerdict"];
         };
-        AgentAuthStateSummary: {
+        /**
+         * @description The probe verdict vocabulary — a closed set.
+         * @enum {string}
+         */
+        AgentAuthProbeVerdict: "verified" | "failed" | "unverified";
+        /**
+         * @description One harness's status document (agent_auth spec §2, "Runtime persistent
+         *     state") — the machine's single source of auth truth, event-refreshed and
+         *     served verbatim by `GET /v1/agent-auth/status` (+ its SSE stream) and on
+         *     the agents projection as `authStatus`. Snake_case on the wire: the spec's
+         *     printed shape is the contract.
+         */
+        AgentAuthStatusDoc: {
+            applied?: null | components["schemas"]["AgentAuthAppliedMethod"];
+            /** @description RFC3339 UTC; non-null ONLY when no seat can serve right now. */
+            cooling_until?: string | null;
+            harness_kind: string;
             /**
-             * @description RFC3339 UTC; present ONLY when no seat can serve right now (all pool
-             *     seats cooling, or the rotate-off pinned candidate cooling).
+             * @description One row per (method kind\[, seat\]): every launch method whose material
+             *     the applied document carries, plus the native detection row.
              */
-            coolingUntil?: string | null;
-            display: components["schemas"]["AgentAuthDisplay"];
+            methods: components["schemas"]["AgentAuthMethodRow"][];
             /**
-             * Format: int64
-             * @description Age of that evidence in seconds. Present whenever the display is green.
+             * @description The seat rotation would serve NEXT (`null` when the pool has fewer
+             *     than two seats, or no seat could serve).
              */
-            evidenceAgeSeconds?: number | null;
-            evidenceRef?: null | components["schemas"]["AgentAuthEvidenceRef"];
-            facts: components["schemas"]["AgentAuthFactsSummary"];
-            nextAction: components["schemas"]["AgentAuthNextAction"];
+            next_seat_id?: string | null;
+            probe: components["schemas"]["AgentAuthProbeStatus"];
             /**
-             * @description The seat rotation would pick for the NEXT launch (rotate=false: the
-             *     pinned candidate). Absent when the pool has fewer than two seats.
+             * @description The seat-rotation toggle from the document's settings rider (`true`
+             *     when absent — rotation is the default).
              */
-            nextSeatId?: string | null;
-            /**
-             * @description Seat rotation (claude seats): the seat currently serving — last served
-             *     if still in the applied pool, else the pool's first. Absent when the
-             *     applied document carries no seats.
-             */
-            servingSeatId?: string | null;
+            rotate: boolean;
         };
         /**
          * @description The runtime's active agent catalog version and its provenance. Read-only:
@@ -2403,7 +2439,7 @@ export interface components {
         AgentSeedStatus: "not_configured_dev" | "missing_bundled_seed" | "hydrating" | "ready" | "partial" | "failed";
         AgentSummary: {
             agentProcess: components["schemas"]["ArtifactStatus"];
-            authState?: null | components["schemas"]["AgentAuthStateSummary"];
+            authStatus?: null | components["schemas"]["AgentAuthStatusDoc"];
             cliAuthState?: null | components["schemas"]["AgentCliAuthState"];
             credentialState: components["schemas"]["AgentCredentialState"];
             /**
@@ -2473,9 +2509,10 @@ export interface components {
             applied: boolean;
             /**
              * Format: int64
-             * @description The persisted document's revision.
+             * @description The persisted document's sequence (monotonic per surface; the server
+             *     bumps it on every content-changing render).
              */
-            revision: number;
+            sequence: number;
         };
         /**
          * @description `POST /v1/workspaces/{id}/archive` body. Both knobs are resolved by the
@@ -5692,6 +5729,38 @@ export interface operations {
             };
         };
     };
+    get_agent_auth_methods: {
+        parameters: {
+            query: {
+                /** @description Harness kind (required) */
+                harness: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The harness's method rows, straight from its status document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthMethodRow"][];
+                };
+            };
+            /** @description Unknown harness */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     put_agent_auth_state: {
         parameters: {
             query?: never;
@@ -5724,7 +5793,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Stale revision; persisted state unchanged */
+            /** @description Stale sequence; persisted state unchanged */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5753,6 +5822,38 @@ export interface operations {
             };
             /** @description State could not be cleared */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_agent_auth_status: {
+        parameters: {
+            query?: {
+                /** @description Filter to one harness kind */
+                harness?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The persisted per-harness status documents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthStatusDoc"][];
+                };
+            };
+            /** @description Unknown harness */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
