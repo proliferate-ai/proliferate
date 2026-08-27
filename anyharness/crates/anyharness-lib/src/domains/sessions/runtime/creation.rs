@@ -37,8 +37,10 @@ pub(crate) struct InternalSessionCreateInput {
 pub(crate) enum InternalSessionCreateError {
     /// The supplied workspace refused mutation: missing, retired, or
     /// mutation-blocked by its runtime access mode.
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     WorkspaceUnavailable(WorkspaceAccessError),
     /// Durable session creation itself failed.
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     Create(CreateAndStartSessionError),
 }
 

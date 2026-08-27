@@ -189,7 +189,7 @@ impl LoopStore {
             updated_at_ms: 1,
         };
         self.db
-            .with_conn(|conn| Self::upsert_loop(conn, &record).map_err(Into::into))
+            .with_conn(|conn| Self::upsert_loop(conn, &record))
     }
 }
 

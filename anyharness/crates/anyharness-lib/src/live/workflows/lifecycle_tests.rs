@@ -5,7 +5,7 @@
 //! turn reports arriving through the real session extension when the scripted
 //! agent ends its turns.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::app::{test_support, AppState};
@@ -139,7 +139,7 @@ fn snapshot_for(
 
 fn create_run_rows(
     store: &WorkflowStore,
-    workspace_root: &PathBuf,
+    workspace_root: &Path,
     run_id: &str,
     snapshot: InvocationSnapshot,
 ) -> CreatedRun {

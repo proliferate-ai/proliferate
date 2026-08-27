@@ -173,7 +173,6 @@ fn resolve_agent_in_scope(
     );
 
     let mut native = native;
-    let mut agent_process = agent_process;
     super::versions::apply_manifest_versions(
         crate::domains::agents::installer::manifest::read_manifest(
             runtime_home,

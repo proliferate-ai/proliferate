@@ -261,7 +261,13 @@ pub(in crate::domains::mobility) fn archive_estimated_size_bytes(
         .saturating_add(string_size(&archive.repo_root_path))
         .saturating_add(option_string_size(&archive.branch_name))
         .saturating_add(string_size(&archive.base_commit_sha))
-        .saturating_add(archive.deleted_paths.iter().map(string_size).sum::<u64>())
+        .saturating_add(
+            archive
+                .deleted_paths
+                .iter()
+                .map(|path| string_size(path))
+                .sum::<u64>(),
+        )
         .saturating_add(
             archive
                 .session_link_completion_deliveries
@@ -437,7 +443,7 @@ fn base64_size(byte_len: usize) -> u64 {
     byte_len.div_ceil(3) as u64 * 4
 }
 
-fn string_size(value: &String) -> u64 {
+fn string_size(value: &str) -> u64 {
     value.len() as u64
 }
 

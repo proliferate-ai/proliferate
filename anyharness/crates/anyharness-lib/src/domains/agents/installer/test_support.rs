@@ -1,10 +1,12 @@
 use std::path::Path;
 
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(super) struct PathEnvGuard {
     original: Option<std::ffi::OsString>,
 }
 
 impl PathEnvGuard {
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(super) fn prepend(path: &Path) -> Self {
         let original = std::env::var_os("PATH");
         let mut paths = vec![path.to_path_buf()];

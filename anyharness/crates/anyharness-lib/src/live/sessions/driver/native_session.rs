@@ -335,9 +335,7 @@ impl TargetedForkExtensionTarget {
 pub(in crate::live::sessions) fn parse_anyharness_targeted_fork_extension(
     meta: &acp::schema::Meta,
 ) -> Option<TargetedForkExtensionTarget> {
-    let Some(anyharness) = meta.get("anyharness").and_then(|value| value.as_object()) else {
-        return None;
-    };
+    let anyharness = meta.get("anyharness").and_then(|value| value.as_object())?;
     if anyharness
         .get("schemaVersion")
         .and_then(|value| value.as_u64())
@@ -345,12 +343,9 @@ pub(in crate::live::sessions) fn parse_anyharness_targeted_fork_extension(
     {
         return None;
     }
-    let Some(targeted_fork) = anyharness
+    let targeted_fork = anyharness
         .get("targetedFork")
-        .and_then(|value| value.as_object())
-    else {
-        return None;
-    };
+        .and_then(|value| value.as_object())?;
     if targeted_fork
         .get("fileEffects")
         .and_then(|value| value.as_str())
@@ -370,7 +365,7 @@ pub(in crate::live::sessions) async fn start_native_session(
     conn: &acp::ConnectionTo<acp::Agent>,
     inbound: Arc<InboundDoor>,
     fork_dispatch: Arc<dyn ForkDispatchDurable>,
-    workspace_path: &std::path::PathBuf,
+    workspace_path: &std::path::Path,
     mcp_servers: &[SessionMcpServer],
     system_prompt_append: Option<&str>,
     startup_strategy: &SessionStartupStrategy,
@@ -417,7 +412,10 @@ pub(in crate::live::sessions) async fn start_native_session(
             let load_started = std::time::Instant::now();
             match conn
                 .send_request(
-                    acp::schema::LoadSessionRequest::new(existing.clone(), workspace_path.clone())
+                    acp::schema::LoadSessionRequest::new(
+                        existing.clone(),
+                        workspace_path.to_path_buf(),
+                    )
                         .mcp_servers(to_acp_servers(mcp_servers))
                         .meta(build_system_prompt_meta(system_prompt_append)),
                 )

@@ -147,7 +147,7 @@ fn ingest_subagent_upserted_creates_the_roster_row_with_usage() {
         panic!("expected subagent_upserted event");
     };
     assert_eq!(payload.agent.status, SubagentStatus::Running);
-    let usage = payload.agent.usage.clone().expect("usage present");
+    let usage = payload.agent.usage.expect("usage present");
     assert_eq!(usage.tokens_used, Some(1200));
 
     let agents = service.current_agents("session-1").expect("load agents");

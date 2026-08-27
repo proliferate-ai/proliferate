@@ -310,7 +310,7 @@ async fn run_enumeration(
     conn: &acp::ConnectionTo<acp::Agent>,
     kind: &str,
     resolved: &crate::domains::agents::model::ResolvedAgent,
-    workspace: &PathBuf,
+    workspace: &Path,
     options: &ProbeOptions,
     notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
     ready_tx: &std::sync::mpsc::Sender<anyhow::Result<String>>,

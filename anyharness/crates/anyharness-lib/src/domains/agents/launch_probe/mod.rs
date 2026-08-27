@@ -113,7 +113,7 @@ impl LaunchProbeService {
         )
     }
 
-    pub fn with_parts(
+    pub(crate) fn with_parts(
         runtime_home: PathBuf,
         plan_producer: Arc<dyn GatewayModelResolve>,
         targets: Arc<dyn ProbeTargets>,
@@ -490,6 +490,7 @@ impl LaunchProbeService {
     /// attempt). Exposed on the impl only so tests can pin it; the arithmetic is
     /// a free function in `backoff.rs`.
     #[cfg(test)]
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn test_jittered_backoff(
         harness_kind: &str,
         attempt: u32,

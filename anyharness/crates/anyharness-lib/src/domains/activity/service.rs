@@ -36,10 +36,10 @@ pub enum ActivityIngestError {
     Store(#[from] anyhow::Error),
 }
 
-/// Mirror-keeping over the read-only activity rosters (background processes
-/// + harness-native subagents). Unlike goals/loops there is no external
-/// write path at all — every record transitions ONLY through the
-/// native-notification ingest paths here
+/// Mirror-keeping over the read-only activity rosters (background
+/// processes plus harness-native subagents). Unlike goals/loops there is
+/// no external write path at all — every record transitions ONLY through
+/// the native-notification ingest paths here
 /// ([`super::session_observer::ActivitySessionObserver`]).
 #[derive(Clone)]
 pub struct ActivityService {

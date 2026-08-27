@@ -113,6 +113,7 @@ pub fn validate_clone_url_matches_identity(
 ///   3. begin or end with `/`, or contain `//` (empty components);
 ///   4. end with `.`;
 ///   5. be the single character `@`;
+///
 /// and, for a *branch* name, may not be exactly `HEAD` or begin with `-`.
 pub fn validate_branch_name(branch_name: &str) -> Result<(), String> {
     let name = branch_name;

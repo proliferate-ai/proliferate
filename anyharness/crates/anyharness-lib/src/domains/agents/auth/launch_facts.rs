@@ -354,11 +354,8 @@ mod tests {
         );
         // Value must NOT appear anywhere — secrets are presence-only.
         for fact in &facts {
-            match fact {
-                CredentialFact::EnvFlag { var, .. } => {
-                    assert_ne!(var, "ANTHROPIC_API_KEY", "secret var must not produce EnvFlag");
-                }
-                _ => {}
+            if let CredentialFact::EnvFlag { var, .. } = fact {
+                assert_ne!(var, "ANTHROPIC_API_KEY", "secret var must not produce EnvFlag");
             }
         }
     }

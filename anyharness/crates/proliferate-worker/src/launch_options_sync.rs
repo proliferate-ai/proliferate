@@ -12,6 +12,9 @@ use crate::{
     error::WorkerError,
 };
 
+/// The tracing target the sync events are emitted under; tests locate them by
+/// target, so the only readers live behind `cfg(test)`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub const LAUNCH_OPTIONS_SYNC_TARGET: &str = module_path!();
 
 #[derive(Default)]
@@ -21,6 +24,8 @@ pub struct LaunchOptionsSyncState {
 
 impl LaunchOptionsSyncState {
     pub fn new() -> Self { Self::default() }
+    /// Test-only watermark accessor (runtime_tests asserts the push ledger).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn pushed_revisions(&self) -> HashMap<String, i64> {
         self.revisions.lock().expect("launch-option sync state poisoned").clone()
     }
@@ -40,6 +45,10 @@ struct RuntimeHarnessLaunchOptionsResponse {
     observed_at: Option<String>,
     probe_attempted_at: String,
     probe_failure_code: Option<String>,
+    // Accepted from the runtime and deliberately dropped on re-serialize
+    // (skip_serializing): readiness never reaches the control plane. The field
+    // exists to make that strip explicit; nothing reads it.
+    #[allow(dead_code)]
     #[serde(default, skip_serializing)]
     readiness: Option<serde_json::Value>,
 }

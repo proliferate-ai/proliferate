@@ -469,7 +469,7 @@ fn invariant_every_green_output_carries_dated_evidence() {
                                                                     unsupported_route,
                                                                     misconfigured,
                                                                     expired,
-                                                                    credential: has_cred.then(|| {
+                                                                    credential: has_cred.then_some({
                                                                         CredentialEvidence {
                                                                             source,
                                                                             strength,
@@ -477,7 +477,7 @@ fn invariant_every_green_output_carries_dated_evidence() {
                                                                                 cred_age,
                                                                         }
                                                                     }),
-                                                                    selection: has_sel.then(|| {
+                                                                    selection: has_sel.then_some({
                                                                         SelectionFact {
                                                                             acknowledged: ack,
                                                                             revision: Some(1),

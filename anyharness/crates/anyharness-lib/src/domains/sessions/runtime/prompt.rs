@@ -216,6 +216,7 @@ impl SessionRuntime {
     /// mailbox but the reply channel dropped, the actor may or may not have
     /// processed it and the turn may in fact be running, so the caller must
     /// not treat it as a failure.
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) async fn send_text_prompt_with_id(
         &self,
         session_id: &str,

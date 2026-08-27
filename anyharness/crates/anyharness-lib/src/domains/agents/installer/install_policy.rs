@@ -189,12 +189,11 @@ pub fn effective_source(
 pub fn agent_process_pinned_version(spec: &AgentProcessInstallSpec) -> Option<String> {
     match spec {
         AgentProcessInstallSpec::ManagedNpmPackage { package, .. } => npm_package_version(package),
-        AgentProcessInstallSpec::RegistryBacked { fallback, .. } => match fallback {
-            crate::domains::agents::model::AgentProcessFallback::NpmPackage { package, .. } => {
-                npm_package_version(package)
-            }
-            _ => None,
-        },
+        AgentProcessInstallSpec::RegistryBacked {
+            fallback: crate::domains::agents::model::AgentProcessFallback::NpmPackage { package, .. },
+            ..
+        } => npm_package_version(package),
+        AgentProcessInstallSpec::RegistryBacked { .. } => None,
         // Direct-archive adapters are sha256-attested by the catalog pin, not
         // version-pinned in the registry spec (like TarballRelease natives).
         AgentProcessInstallSpec::DirectArchive { .. } => None,

@@ -81,9 +81,7 @@ where
         let ProductMcpEndpointOperation::ToolsCall { tool_name } = operation else {
             return None;
         };
-        let Some(tool_name) = tool_name.as_deref() else {
-            return None;
-        };
+        let tool_name = tool_name.as_deref()?;
         if self.mutating_tools.contains(&tool_name) {
             self.write_operation_kind
         } else {

@@ -193,9 +193,7 @@ async fn response_dropped_after_capture_retains_an_unresolved_checkpoint() {
                 "SELECT id, expired_at, turn_id, prompt_id FROM workspace_checkpoints",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-            )
-            .map_err(Into::into)
-        })
+            )})
         .expect("read unresolved checkpoint");
     assert_eq!(expired_at, None, "ambiguous acknowledgement retains bytes");
     assert_eq!(turn_id, None, "an unresolved boundary is never fabricated");
@@ -414,7 +412,7 @@ async fn live_busy_sibling_keeps_writing_while_capture_records_one_complete_vers
         let mut iteration = 0usize;
         while !writer_stop.load(Ordering::Acquire) {
             let staged = writer_workspace.with_file_name("checkpoint-writer-staged");
-            let bytes = if iteration % 2 == 0 {
+            let bytes = if iteration.is_multiple_of(2) {
                 &writer_a
             } else {
                 &writer_b
@@ -524,9 +522,7 @@ fn only_checkpoint(state: &AppState) -> (String, Option<String>) {
                 "SELECT id, expired_at FROM workspace_checkpoints",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .map_err(Into::into)
-        })
+            )})
         .expect("read checkpoint")
 }
 

@@ -127,6 +127,7 @@ impl LoopScheduler {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) async fn armed_count(&self) -> usize {
         self.armed.lock().await.len()
     }

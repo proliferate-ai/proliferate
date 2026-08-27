@@ -29,7 +29,7 @@ pub use manager::LiveSessionManager;
 pub(crate) use manager::reaper::IdleReapPolicy;
 pub(crate) use manager::RevealMcpElicitationUrlError;
 #[cfg(test)]
-pub(crate) use manager::{ScriptedSessionEvent, ScriptedSessionSpec};
+pub(crate) use manager::ScriptedSessionSpec;
 pub use model::SessionStartupStrategy;
 pub use rendezvous::broker::PermissionDecision;
 #[cfg(test)]

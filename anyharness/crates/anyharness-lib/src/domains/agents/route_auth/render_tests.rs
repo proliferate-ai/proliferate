@@ -31,7 +31,6 @@ impl GatewayModelResolve for HarnessPlanResolver {
         match harness_kind {
             "opencode" => GatewayModelPlan {
                 models: OPENCODE_LIVE_MODELS.iter().map(|m| m.to_string()).collect(),
-                ..Default::default()
             },
             _ => GatewayModelPlan::default(),
         }

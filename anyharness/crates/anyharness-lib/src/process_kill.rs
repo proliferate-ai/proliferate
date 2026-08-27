@@ -119,7 +119,7 @@ mod unix_impl {
                 }
                 let count = (count as usize).min(buf.len());
                 buf.truncate(count);
-                let pids: Vec<i32> = buf.into_iter().map(|pid| pid).collect();
+                let pids: Vec<i32> = buf.into_iter().collect();
                 let filled_the_buffer = pid_list_may_be_truncated(count, capacity);
                 if pids.len() > best.len() {
                     best = pids;

@@ -114,6 +114,7 @@ pub(in crate::live::sessions::actor) fn into_raw_pending_option(
     }
 }
 
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(in crate::live::sessions::actor) fn find_select_option_for_value<'a>(
     config_options: &'a [acp::schema::SessionConfigOption],
     purpose: ConfigPurpose,

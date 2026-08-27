@@ -145,9 +145,7 @@ impl SessionEventSink {
         &mut self,
         message_id: Option<&str>,
     ) -> Option<CompletedAssistantMessage> {
-        let Some(message_id) = message_id else {
-            return None;
-        };
+        let message_id = message_id?;
         let is_current_message = self
             .open_assistant_item
             .as_ref()

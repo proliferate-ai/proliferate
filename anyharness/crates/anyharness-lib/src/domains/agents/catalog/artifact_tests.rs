@@ -94,7 +94,9 @@ struct Fixture {
     client: FakeFetchClient,
     signer: TestSigner,
     catalog_bytes: Vec<u8>,
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     registry_bytes: Vec<u8>,
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     manifest_bytes: Vec<u8>,
 }
 

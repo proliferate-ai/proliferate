@@ -284,6 +284,7 @@ fn detect_shared_local_auth(provider: ProviderId, home_dir: &Path) -> LocalAuthD
 /// Checks:
 /// - `~/.local/share/opencode/auth.json` for provider entries with `type: "api"` + `key`
 ///   or `type: "oauth"` + `access`, or `type: "wellknown"` + `token`.
+///
 /// OAuth entries with an `expires` field (seconds epoch) in the past are treated as expired.
 fn detect_opencode_local_auth(home_dir: &Path) -> LocalAuthDetection {
     let path = home_dir

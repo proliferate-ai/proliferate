@@ -278,24 +278,6 @@ fn round_to_contract(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::validate_review_submission;
-    use crate::domains::reviews::service::ReviewError;
-
-    #[test]
-    fn review_submission_rejects_empty_summary_or_critique() {
-        assert!(matches!(
-            validate_review_submission("   ", "Concrete critique"),
-            Err(ReviewError::ReviewSubmissionEmpty("summary"))
-        ));
-        assert!(matches!(
-            validate_review_submission("Summary", "\n\t"),
-            Err(ReviewError::ReviewSubmissionEmpty("critiqueMarkdown"))
-        ));
-    }
-}
-
 fn feedback_job_to_contract(job: ReviewFeedbackJobRecord) -> v1::ReviewFeedbackDeliveryDetail {
     v1::ReviewFeedbackDeliveryDetail {
         state: job.state.into(),
@@ -329,5 +311,23 @@ fn assignment_to_contract(assignment: ReviewAssignmentRecord) -> v1::ReviewAssig
         deadline_at: assignment.deadline_at,
         created_at: assignment.created_at,
         updated_at: assignment.updated_at,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_review_submission;
+    use crate::domains::reviews::service::ReviewError;
+
+    #[test]
+    fn review_submission_rejects_empty_summary_or_critique() {
+        assert!(matches!(
+            validate_review_submission("   ", "Concrete critique"),
+            Err(ReviewError::ReviewSubmissionEmpty("summary"))
+        ));
+        assert!(matches!(
+            validate_review_submission("Summary", "\n\t"),
+            Err(ReviewError::ReviewSubmissionEmpty("critiqueMarkdown"))
+        ));
     }
 }

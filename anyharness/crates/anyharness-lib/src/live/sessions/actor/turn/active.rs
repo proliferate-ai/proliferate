@@ -44,6 +44,13 @@ impl SessionActor {
     /// Runs one prompt turn: the busy window between `set_busy(true)` and
     /// `set_busy(false)`. Further durable prompts are selected by the idle
     /// loop, where mailbox commands have priority over automatic queue drain.
+    //
+    // `'drain: loop` below has no `continue` path — every arm breaks — so
+    // clippy's deny-level `never_loop` fires. Left as-is on purpose by the
+    // lint-wiring pass (behavior-preserving only) and flagged to the sessions
+    // owner: either the loop is a labeled block in disguise, or a queued-prompt
+    // `continue 'drain` is missing. Resolve in the steering/queue rebuild.
+    #[allow(clippy::never_loop)]
     pub(in crate::live::sessions::actor) async fn run_turn(
         &mut self,
         request: ActivePromptRequest,

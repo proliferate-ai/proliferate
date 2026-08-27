@@ -88,7 +88,6 @@ fn request(home: &TempRuntimeHome, timeout: Duration) -> ProbeRequest {
         material,
         plan: GatewayModelPlan {
             models: vec!["m-1".to_string()],
-            ..Default::default()
         },
         runtime_home: home.path().to_path_buf(),
         per_probe_timeout: timeout,

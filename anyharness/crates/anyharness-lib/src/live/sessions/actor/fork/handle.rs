@@ -93,7 +93,7 @@ impl SessionActor {
 pub(in crate::live::sessions::actor) async fn fork_native_session(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
-    workspace_path: &std::path::PathBuf,
+    workspace_path: &std::path::Path,
     mcp_servers: &[SessionMcpServer],
     handle: &Arc<LiveSessionHandle>,
     store: &dyn QueueDurable,
@@ -117,7 +117,7 @@ pub(in crate::live::sessions::actor) async fn fork_native_session(
     .await?;
 
     let mut request =
-        acp::schema::ForkSessionRequest::new(native_session_id.to_string(), workspace_path.clone());
+        acp::schema::ForkSessionRequest::new(native_session_id.to_string(), workspace_path.to_path_buf());
     if !mcp_servers.is_empty() {
         request = request.mcp_servers(to_acp_servers(mcp_servers));
     }

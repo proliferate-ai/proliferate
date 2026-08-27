@@ -38,6 +38,7 @@ impl SessionStore {
         Self { db }
     }
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn db(&self) -> Db {
         self.db.clone()
     }

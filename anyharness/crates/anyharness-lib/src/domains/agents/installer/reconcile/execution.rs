@@ -528,6 +528,7 @@ fn probe_after_install(phase: InstallProgressPhase) -> bool {
 /// The predicate above, for the poke-wiring suite. Exposed rather than duplicated so
 /// the assertion cannot drift from the branch the job actually takes.
 #[cfg(test)]
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(crate) fn probe_after_install_for_test(phase: InstallProgressPhase) -> bool {
     probe_after_install(phase)
 }

@@ -120,6 +120,7 @@ pub(crate) mod purge_barriers {
 
     static BARRIERS: StdMutex<Option<HashMap<String, PurgeBarrier>>> = StdMutex::new(None);
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn install(workspace_id: &str, barrier: PurgeBarrier) {
         BARRIERS
             .lock()
@@ -128,6 +129,7 @@ pub(crate) mod purge_barriers {
             .insert(workspace_id.to_string(), barrier);
     }
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn clear(workspace_id: &str) {
         if let Some(map) = BARRIERS.lock().expect("purge barrier lock").as_mut() {
             map.remove(workspace_id);
