@@ -10,12 +10,12 @@
 use serde_json::Value;
 
 use super::agent_launch_options_test_fixtures::*;
-use crate::domains::agents::launch_probe::ProbePhase;
 use crate::domains::agents::launch_probe::lock::ProbeEngineLock;
 use crate::domains::agents::launch_probe::targets::{ProbeTargets, RuntimeProbeTargets};
 use crate::domains::agents::launch_probe::test_support::{
     gateway_state, wait_until, TempRuntimeHome,
 };
+use crate::domains::agents::launch_probe::ProbePhase;
 use crate::domains::agents::launch_probe::{PokeReason, ProbeEngineMode};
 
 /// A probe that has cleared both concurrency waits and is inside the harness
