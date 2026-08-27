@@ -12,11 +12,20 @@ import { themeProfiles } from "../dist/profiles.js";
 
 const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 
-const blocks = Object.entries(themeProfiles).map(([name, profile]) => {
-  const lines = Object.entries(profile.tokens)
-    .map(([token, value]) => `  ${token}: ${value};`)
-    .join("\n");
-  return `/* ${name}: ${profile.intent} */\n:root[data-mode="light"][data-theme-profile="${name}"] {\n${lines}\n}`;
+const blocks = Object.entries(themeProfiles).flatMap(([name, profile]) => {
+  const render = (tokens) =>
+    Object.entries(tokens)
+      .map(([token, value]) => `  ${token}: ${value};`)
+      .join("\n");
+  const out = [
+    `/* ${name}: ${profile.intent} */\n:root[data-mode="light"][data-theme-profile="${name}"] {\n${render(profile.tokens)}\n}`,
+  ];
+  if (profile.darkTokens) {
+    out.push(
+      `/* ${name} (dark) */\n:root[data-theme-profile="${name}"]:not([data-mode="light"]) {\n${render(profile.darkTokens)}\n}`,
+    );
+  }
+  return out;
 });
 
 const css = `/* DEV-ONLY light-mode theme profiles — generated, never shipped.

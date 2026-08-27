@@ -21,6 +21,11 @@ export interface ThemeProfile {
   /** One-line intent, shown in the generated CSS comment. */
   readonly intent: string;
   readonly tokens: Readonly<Record<string, string>>;
+  /**
+   * Optional dark-mode overrides, emitted under
+   * `:root[data-theme-profile="<name>"]:not([data-mode="light"])`.
+   */
+  readonly darkTokens?: Readonly<Record<string, string>>;
 }
 
 /** Warm near-black ink for the `paper` profile. */
@@ -88,6 +93,24 @@ export const themeProfiles: Readonly<Record<string, ThemeProfile>> = {
       // hairline, barely-there lift — the frame recedes, the content leads.
       "--radius-composer": "1.5rem",
       "--elevation-composer": `0 0 0 1px ${codex(0.08)}, 0 4px 16px ${codex(0.05)}`,
+    },
+    /**
+     * The reference dark world is a step lighter than ours and inverts the
+     * sidebar relationship: charcoal content (#212121), sidebar BELOW it
+     * (#171717), composer at #303030. Steps stay gentle; nothing pops hard.
+     */
+    darkTokens: {
+      "--color-surface-under": "#141414",
+      "--color-background": "#212121",
+      "--color-surface": "#212121",
+      "--color-sidebar": "#171717",
+      "--color-sidebar-background": "#171717",
+      "--color-surface-elevated": "#2a2a2a",
+      "--color-card": "#2a2a2a",
+      "--color-popover": "#353535",
+      "--color-surface-editor": "#262626",
+      "--color-composer-background": "#303030",
+      "--color-user-message-surface": "#303030",
     },
   },
 
