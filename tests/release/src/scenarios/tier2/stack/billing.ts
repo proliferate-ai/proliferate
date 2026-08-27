@@ -3,7 +3,7 @@
 // environment/HTTP/DB plumbing in billing-env.ts; both are re-exported so
 // specs keep using a single `import * as b from "../../stack/billing.ts"`.
 //
-// The tier-2 rules (specs/engineering/testing/standard.md) hold here with one
+// The tier-2 rules (specs/engineering/testing/README.md) hold here with one
 // billing-specific reading:
 //   - Stripe is REAL (test keys + test clocks). We never mock the Stripe API.
 //     Subscriptions/invoices/customers are real test-mode objects created via
@@ -272,6 +272,6 @@ export function runTopupPass(): void {
   // run_llm_topups requires a db session; run_llm_topups_once is the worker's
   // own session-wrapping entrypoint (the loop calls exactly this).
   serverPass(
-    "import asyncio; from proliferate.server.agent_auth.worker import run_llm_topups_once; asyncio.run(run_llm_topups_once())",
+    "import asyncio; from proliferate.server.ai_gateway.worker import run_llm_topups_once; asyncio.run(run_llm_topups_once())",
   );
 }

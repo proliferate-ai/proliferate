@@ -424,6 +424,6 @@ Related authoritative docs:
 - CI/CD and release:
   [`../../../guides/deploying/README.md`](../../../guides/deploying/README.md)
 - Testing:
-  [`specs/engineering/testing/standard.md`](../../engineering/testing/standard.md)
+  [`specs/engineering/testing/README.md`](../../engineering/testing/README.md)
 
 Older planning notes are history. This spec wins when they disagree with the simplified migration above.

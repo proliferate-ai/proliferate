@@ -119,7 +119,8 @@ its record file carries `[[edge]]` tables (`from` / `to`) alongside the
 edges AND on a declared edge nothing crosses any more — the baseline always
 equals reality exactly, and may only shrink. The loader ignores non-`[[rule]]`
 tables in a rule file, so the baseline travels with the rule that owns it
-(`lints/anyharness/fences.toml`, `lints/frontend/fences.toml`). Removing a row
+(`lints/anyharness/fences.toml`, `lints/frontend/fences.toml`,
+`lints/server/fences.toml`). Removing a row
 when its last crossing dies is maintenance; adding a row is a net-new coupling
 and therefore an amendment.
 

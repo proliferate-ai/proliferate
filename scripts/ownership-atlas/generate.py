@@ -100,7 +100,8 @@ OWNERSHIP: list[Region] = [
     Region("server/proliferate/server/setup", "server/setup", "identity", "keepers", "owned", "", "Server — control plane (Python)"),
     Region("server/proliferate/server/billing", "server/billing", "billing", "keepers", "owned", "", "Server — control plane (Python)"),
     Region("server/proliferate/server/support", "server/support", "support", "keepers", "owned", "", "Server — control plane (Python)"),
-    Region("server/proliferate/server/agent_auth", "server/agent_auth", "agent_auth ∧ ai_gateway", "keys", "shared", "9 files ⇒ ai_gateway; code split on the build list", "Server — control plane (Python)"),
+    Region("server/proliferate/server/agent_auth", "server/agent_auth", "agent_auth", "keys", "owned", "", "Server — control plane (Python)"),
+    Region("server/proliferate/server/ai_gateway", "server/ai_gateway", "ai_gateway", "keys", "owned", "", "Server — control plane (Python)"),
     Region("server/proliferate/server/ai_magic", "server/ai_magic", "ai_gateway", "keys", "owned", "", "Server — control plane (Python)"),
     Region("server/proliferate/server/integration_gateway", "server/integration_gateway", "integration_gateway", "keys", "owned", "", "Server — control plane (Python)"),
     Region("server/proliferate/server/github", "server/github", "github", "keys", "owned", "", "Server — control plane (Python)"),
@@ -112,7 +113,7 @@ OWNERSHIP: list[Region] = [
     Region("server/proliferate/server/artifact_runtime", "server/artifact_runtime", "sessions", "atom", "owned", "", "Server — control plane (Python)"),
     Region("server/proliferate/server/analytics", "server/analytics", "engineering/observability", "engineering", "owned", "", "Server — control plane (Python)"),
     Region("server/proliferate/server/anonymous_telemetry", "server/anonymous_telemetry", "engineering/observability", "engineering", "owned", "", "Server — control plane (Python)"),
-    Region("server/proliferate/server/devtools", "server/devtools", "engineering/shipping", "engineering", "owned", "", "Server — control plane (Python)"),
+    Region("server/proliferate/server/devtools", "server/devtools", "engineering/ci-cd", "engineering", "owned", "", "Server — control plane (Python)"),
     # ---- Runtime — AnyHarness (Rust) ----
     Region("anyharness/crates/anyharness-lib/src/domains/sessions", "domains/sessions", "sessions", "atom", "owned", "", "Runtime — AnyHarness (Rust)"),
     Region("anyharness/crates/anyharness-lib/src/live", "live/", "sessions", "atom", "", "", "Runtime — AnyHarness (Rust)"),
@@ -160,8 +161,8 @@ OWNERSHIP: list[Region] = [
     Region("server/proliferate/middleware", "server/…/middleware", "convention (areas/server)", "areas", "owned", "", "Server plumbing · data · engineering"),
     Region("server/proliferate/constants", "server/…/constants", "convention (areas/server)", "areas", "owned", "", "Server plumbing · data · engineering"),
     Region("server/infra", "server/infra", "engineering/infra", "engineering", "owned", "", "Server plumbing · data · engineering"),
-    Region("scripts", "scripts/", "engineering/shipping", "engineering", "owned", "", "Server plumbing · data · engineering"),
-    Region("lints", "lints/", "engineering/shipping", "engineering", "owned", "", "Server plumbing · data · engineering"),
+    Region("scripts", "scripts/", "engineering/ci-cd", "engineering", "owned", "", "Server plumbing · data · engineering"),
+    Region("lints", "lints/", "engineering/ci-cd", "engineering", "owned", "", "Server plumbing · data · engineering"),
 ]
 
 

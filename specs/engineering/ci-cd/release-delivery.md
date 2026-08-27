@@ -1,6 +1,8 @@
 # Delivery System
 
-Delivery owns the repository's artifact identities and the topology that builds, deploys, promotes, and publishes them. It describes what the checked-in automation does. Operator steps live in [Developing: Deploying](../../../guides/deploying/README.md).
+Expands: [README.md#5--the-cd-line](README.md#5--the-cd-line)
+
+Delivery owns the repository's artifact identities and the topology that builds, deploys, promotes, and publishes them. It describes what the checked-in automation does **today**; the ruled direction it converges toward (continuous staging, one artifact base, deliberate prod promote) is [pipelines.md](pipelines.md). Operator steps live in [Developing: Deploying](../../../guides/deploying/README.md).
 
 ## Identities
 
@@ -24,9 +26,9 @@ The Proliferate LiteLLM wrapper has a separate upstream input coordinate. Both `
 
 ### Hosted spine
 
-Delivery has three states. Main is a commit that passed CI. Staging is a deployed environment that no automated end-to-end proof gates. Production is what customers run. The transitions are thin workflow files; the deploy logic itself lives in the reusable `_deploy-*.yml` lanes.
+Delivery has three states. Main is a commit that passed CI. Staging is the continuously-deployed environment the nightly battery qualifies. Production is what customers run. The transitions are thin workflow files; the deploy logic itself lives in the reusable `_deploy-*.yml` lanes.
 
-Merging to `main` deploys nothing. Continuous staging is retired: `deploy-staging.yml` keeps only its manual dispatch, so a staging deploy is an operator's deliberate act. Its internals are unchanged. It resolves the exact SHA, detects or explicitly selects surfaces, waits for matching Server CI when such a run exists, invokes the reusable staging lanes, and writes a summary artifact. The Desktop staging lane validates and builds only; it does not publish the updater.
+**Green main auto-deploys staging** (#2269, per the 2026-08-26 CD ruling — [pipelines.md](pipelines.md); supersedes #2140's manual-only doctrine): `deploy-staging.yml` fires on CI success at `main`, trusting only pushes to this repository's `main` (#2279), with manual dispatch retained for re-deploys. Its internals are unchanged: it resolves the exact SHA, detects or explicitly selects surfaces, waits for matching Server CI when such a run exists, invokes the reusable staging lanes, and writes a summary artifact. The Desktop staging lane validates and builds only; it does not publish the updater.
 
 `release.yml` is the single transition from `main` to production, and production deploys from its prepare job rather than from a staging result. A manual dispatch takes four inputs: `surfaces` (default `all`), `skip_build`, `ref` (default `main`), and `dry_run`. A hotfix is an exact `ref` plus an exact `surfaces` set. A promotion of an already-built ref is `skip_build`. Neither is a separate workflow file. An explicit `ref` must be an ancestor of `main`, so production only ever ships commits that reached `main`. A scheduled run supplies no inputs, so every default applies and `dry_run` is false.
 
@@ -140,7 +142,7 @@ Server CI's shrink-only mypy census compares a pull request with its base SHA an
   preparation and readiness policy.
 - [Environment Sources](../../../guides/local/dev-profiles.md#environment-sources)
   and its variable catalog own configuration locations and precedence.
-- [Testing](../testing/standard.md) owns release qualification,
+- [Testing](../testing/README.md) owns release qualification,
   test tiers, scenarios, and evidence requirements.
 - [Desktop Updates](desktop-updates.md) owns installed-product updater and
   release-notice behavior.

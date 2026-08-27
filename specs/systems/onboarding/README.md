@@ -155,7 +155,7 @@ apps/packages/product-client/src/
   [stripe-local-testing.md](../../../guides/local/stripe-local-testing.md)
   when billing checkout, portal, refill, or credit behavior is part of the
   change; the fuller matrix is in
-  [manual-release-qa.md](../../engineering/testing/manual-release-qa.md).
+  [manual-release-qa.md](../../../guides/deploying/manual-release-qa.md).
 
 ## Known gaps / follow-ups
 

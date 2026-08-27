@@ -16,7 +16,7 @@ import {
 /**
  * T3-BILL-4 — org billing lifecycle against the real deployment: the
  * out-of-credits enforcement contract, asserted live.
- * specs/engineering/testing/scenarios.md#T3-BILL-4
+ * tests/release/core-release-scenario-manifest.json#T3-BILL-4
  *
  * The billing ruling (Pablo 2026-07-10) is a hand-rolled durable org walking
  * the full lifecycle: sign up as an org → upgrade → credits granted → consume
@@ -63,7 +63,7 @@ import {
 export const t3Bill4: ScenarioDefinition = {
   id: "T3-BILL-4",
   title: "org billing lifecycle — out-of-credits enforcement, live",
-  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-BILL-4",
+  registryFlowRef: "tests/release/core-release-scenario-manifest.json#T3-BILL-4",
   lanes: ["sandbox"],
   requiredEnv: ["RELEASE_E2E_SERVER_URL"],
   plan: () => [

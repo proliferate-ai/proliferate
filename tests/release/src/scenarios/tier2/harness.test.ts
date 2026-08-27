@@ -178,7 +178,7 @@ function fakeCell(caseId: string): PlannedCellV1 {
   return {
     cell_id: `T2-BILL/local/${TIER2_CASE_DIMENSION}=${caseId}`,
     scenario_id: "T2-BILL",
-    registry_flow_ref: "specs/engineering/testing/flows.md#tier2-billing",
+    registry_flow_ref: "tests/release/core-release-scenario-manifest.json#tier2-billing",
     runtime_lane: "local",
     dimensions: { [TIER2_CASE_DIMENSION]: caseId },
     required_env: [],
@@ -189,7 +189,7 @@ function fakeConfig(cases: Record<string, Tier2CellHandler>): Tier2ScenarioConfi
   return {
     id: "T2-BILL",
     title: "Tier-2 billing mechanism test",
-    registryFlowRef: "specs/engineering/testing/flows.md#tier2-billing",
+    registryFlowRef: "tests/release/core-release-scenario-manifest.json#tier2-billing",
     requiredEnv: ["TIER2_BILLING_STRIPE_SECRET_KEY"],
     requireStripe: true,
     cases,

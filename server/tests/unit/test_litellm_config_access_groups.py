@@ -89,6 +89,46 @@ class TestLitellmConfigAccessGroups:
             f"gateway-capable in the registry {sorted(registry_capable)}"
         )
 
+    def test_codex_current_default_family_is_granted(self) -> None:
+        # The CLI-default drift class both 403 incidents shared: a harness's
+        # CURRENT default model missing from its access group 403s every
+        # gateway launch out of the box ("key can only access models=[...]").
+        # codex's default is gpt-5.6-sol (scripts/agent-catalog/generated/
+        # codex.openai-api.probe.json, baselineConfigOptions[id=model]
+        # .currentValue — the oauth probe agrees), so the whole 5.6-era
+        # option family must be granted to the codex group.
+        granted_to_codex = {
+            entry["model_name"]
+            for entry in _load_model_list()
+            if "codex" in entry["model_info"]["access_groups"]
+        }
+        for model_name in (
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-5.5",
+            "gpt-5.5-2026-04-23",  # the dated alias resolves to the same upstream
+        ):
+            assert model_name in granted_to_codex, (
+                f"{model_name} (codex's current default model family) must be "
+                "granted to the codex access group, or every codex gateway "
+                "launch 403s"
+            )
+
+    def test_claude_current_default_is_granted(self) -> None:
+        # The same drift class, pinned on the incident that defined it
+        # (PR #2249): claude-sonnet-5 is Claude Code's current default; its
+        # absence 403'd every funded gateway launch.
+        granted_to_claude = {
+            entry["model_name"]
+            for entry in _load_model_list()
+            if "claude" in entry["model_info"]["access_groups"]
+        }
+        assert "claude-sonnet-5" in granted_to_claude, (
+            "claude-sonnet-5 (Claude Code's current default) must be granted "
+            "to the claude access group, or every claude gateway launch 403s"
+        )
+
     def test_every_supported_harness_has_at_least_one_model(self) -> None:
         # Every gateway-capable harness_kind (AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
         # which excludes cursor — it has no gateway recipe) must be able to

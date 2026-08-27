@@ -6,28 +6,28 @@ Use this procedure for manual release QA: release intake, smoke matrices, surfac
 
 ## Read Order
 
-- [../../guides/README.md](../../../guides/README.md)
+- [../../guides/README.md](../../guides/README.md)
   - developer process contract, required tools, permissions, and final report
     shape for process docs
-- [../../guides/local/README.md](../../../guides/local/README.md)
+- [../../guides/local/README.md](../../guides/local/README.md)
   - profile-backed full-stack local testing, local Stripe, hosted web, desktop,
     mobile web, native mobile, and verification commands
-- [../../guides/deploying/hosted.md](../../../guides/deploying/hosted.md) and
-  [../../guides/deploying/releases.md](../../../guides/deploying/releases.md)
+- [../../guides/deploying/hosted.md](../../guides/deploying/hosted.md) and
+  [../../guides/deploying/releases.md](../../guides/deploying/releases.md)
   - CI gates, deploy verification, release lanes, updater publishing,
     TestFlight, E2B templates, and production/staging promotion
-- [../../guides/debugging/README.md](../../../guides/debugging/README.md)
+- [../../guides/debugging/README.md](../../guides/debugging/README.md)
   - support issue triage, tenant/session correlation, diagnostics, Sentry, and
     production/local investigation workflow
-- [../../guides/operating/analytics/README.md](../../../guides/operating/analytics/README.md)
+- [../../guides/operating/analytics/README.md](../../guides/operating/analytics/README.md)
   - Metabase, PostHog, Sentry, anonymous telemetry, and freshness
     expectations when QA changes analytics surfaces
 
 Read feature specs when the release touches their workflows:
 
-- [specs/systems/billing/deep-dive.md](../../systems/billing/deep-dive.md)
+- [specs/systems/billing/deep-dive.md](../../specs/systems/billing/deep-dive.md)
   for billing, credits, Stripe checkout, refill, and portal smoke coverage
-- [../codebase/systems/product/chat/composer.md](../../systems/chat/composer.md)
+- [../codebase/systems/product/chat/composer.md](../../specs/systems/chat/composer.md)
   for composer playground verification
 
 ## Operator Requirements
@@ -78,7 +78,7 @@ Secrets policy:
   keys, Sentry DSNs, Stripe keys, webhook secrets, GitHub App private keys,
   Apple credentials, or AWS credentials into chat, PRs, issues, docs, or logs.
 - Credential-bearing files must remain uncommitted.
-- Use [../developing/reference/env-vars.yaml](../../areas/env-vars.yaml) for canonical
+- Use [../developing/reference/env-vars.yaml](../../specs/areas/env-vars.yaml) for canonical
   deployment variable ownership and storage.
 
 ## Release QA Intake
@@ -123,7 +123,7 @@ pnpm --filter @proliferate/product-client typecheck
 cd server && uv run pytest -q
 ```
 
-Release and deployment changes must follow the workflow/helper checks in [../../guides/deploying/hosted.md](../../../guides/deploying/hosted.md) and [../../guides/deploying/releases.md](../../../guides/deploying/releases.md). Server changes must include the relevant `uv run pytest` slice. SDK contract changes must regenerate and build the SDK through the owning SDK workflow.
+Release and deployment changes must follow the workflow/helper checks in [../../guides/deploying/hosted.md](../../guides/deploying/hosted.md) and [../../guides/deploying/releases.md](../../guides/deploying/releases.md). Server changes must include the relevant `uv run pytest` slice. SDK contract changes must regenerate and build the SDK through the owning SDK workflow.
 
 ## Local Full-Stack QA
 
@@ -146,15 +146,15 @@ Select the rows that match the release. Do not require untouched surfaces unless
 
 | Surface | Minimum manual smoke | Supporting docs |
 | --- | --- | --- |
-| Desktop | Sign in, open a workspace, send a prompt, reload transcript, verify settings affected by the release, and inspect updater behavior only when packaging/updater changed. | [../../guides/local/README.md](../../../guides/local/README.md), [specs/systems/desktop-host/desktop-native.md](../../systems/desktop-host/desktop-native.md) |
-| Web | Sign in through the profile or staging URL, open/create the affected workspace, send a prompt when commandability is in scope, reload, and verify settings/modal/deep-link behavior. | [../codebase/systems/product/clients/web-desktop-unification/README.md](../../systems/desktop-host/web-desktop-unification.md) |
-| Mobile web | Source the profile launch env, run mobile web against the same profile, verify auth state, navigation, chat, sessions, and settings touched by the release. | [../../guides/local/mobile.md](../../../guides/local/mobile.md) |
-| Native mobile | Verify the same user workflow in simulator/device when native OAuth, SecureStore, deep links, keyboard, safe-area, or TestFlight behavior changed. | [../../guides/local/mobile.md](../../../guides/local/mobile.md) |
-| Server/API | Exercise changed API paths locally or in staging, verify auth/permission behavior, and confirm migrations/tests passed. | [specs/areas/server.md](../../areas/server.md) |
-| AnyHarness runtime | Start a real session, stream transcript events, execute the changed tool/session/workspace behavior, and verify contract compatibility with Desktop/Web/Mobile callers. | [specs/areas/anyharness.md](../../areas/anyharness.md) |
-| Billing | Use Stripe test mode, verify checkout/portal/refill/webhook behavior, budget/credit reconciliation, and UI state after webhook delivery. | [../../guides/local/stripe-local-testing.md](../../../guides/local/stripe-local-testing.md), [specs/systems/billing/deep-dive.md](../../systems/billing/deep-dive.md) |
-| Analytics/observability | Verify events, dashboards, replay gates, alerts, release health, and support-correlation ids without leaking sensitive content. | [../../guides/operating/analytics/README.md](../../../guides/operating/analytics/README.md) |
-| Deploy/release | Verify the exact lanes that ran, environment gates, URLs, updater manifests, TestFlight submission, E2B smoke, and release/docs ownership. | [../../guides/deploying/hosted.md](../../../guides/deploying/hosted.md), [../../guides/deploying/releases.md](../../../guides/deploying/releases.md) |
+| Desktop | Sign in, open a workspace, send a prompt, reload transcript, verify settings affected by the release, and inspect updater behavior only when packaging/updater changed. | [../../guides/local/README.md](../../guides/local/README.md), [specs/systems/desktop-host/desktop-native.md](../../specs/systems/desktop-host/desktop-native.md) |
+| Web | Sign in through the profile or staging URL, open/create the affected workspace, send a prompt when commandability is in scope, reload, and verify settings/modal/deep-link behavior. | [../codebase/systems/product/clients/web-desktop-unification/README.md](../../specs/systems/desktop-host/web-desktop-unification.md) |
+| Mobile web | Source the profile launch env, run mobile web against the same profile, verify auth state, navigation, chat, sessions, and settings touched by the release. | [../../guides/local/mobile.md](../../guides/local/mobile.md) |
+| Native mobile | Verify the same user workflow in simulator/device when native OAuth, SecureStore, deep links, keyboard, safe-area, or TestFlight behavior changed. | [../../guides/local/mobile.md](../../guides/local/mobile.md) |
+| Server/API | Exercise changed API paths locally or in staging, verify auth/permission behavior, and confirm migrations/tests passed. | [specs/areas/server.md](../../specs/areas/server.md) |
+| AnyHarness runtime | Start a real session, stream transcript events, execute the changed tool/session/workspace behavior, and verify contract compatibility with Desktop/Web/Mobile callers. | [specs/areas/anyharness.md](../../specs/areas/anyharness.md) |
+| Billing | Use Stripe test mode, verify checkout/portal/refill/webhook behavior, budget/credit reconciliation, and UI state after webhook delivery. | [../../guides/local/stripe-local-testing.md](../../guides/local/stripe-local-testing.md), [specs/systems/billing/deep-dive.md](../../specs/systems/billing/deep-dive.md) |
+| Analytics/observability | Verify events, dashboards, replay gates, alerts, release health, and support-correlation ids without leaking sensitive content. | [../../guides/operating/analytics/README.md](../../guides/operating/analytics/README.md) |
+| Deploy/release | Verify the exact lanes that ran, environment gates, URLs, updater manifests, TestFlight submission, E2B smoke, and release/docs ownership. | [../../guides/deploying/hosted.md](../../guides/deploying/hosted.md), [../../guides/deploying/releases.md](../../guides/deploying/releases.md) |
 
 ## Regression Rules
 
@@ -165,7 +165,7 @@ Select the rows that match the release. Do not require untouched surfaces unless
   not prove command delivery, auth, billing, or runtime behavior.
 - For composer-adjacent Desktop changes, load the dev playground and verify the
   affected scenario set from
-  [../codebase/systems/product/chat/composer.md](../../systems/chat/composer.md).
+  [../codebase/systems/product/chat/composer.md](../../specs/systems/chat/composer.md).
 - For shared ProductClient domain changes, run the focused `src/domain` tests
   and at least one consuming surface smoke.
 - For migrations, verify both forward application and the user-facing workflow

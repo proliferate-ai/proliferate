@@ -44,8 +44,8 @@ from proliferate.db.store.billing_subjects import get_billing_subject_by_id
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMSpendLogEntry
 from proliferate.lib.infra.time.wall_clock import utcnow
-from proliferate.server.agent_auth.budget import is_gateway_budget_available
-from proliferate.server.agent_auth.topups import (
+from proliferate.server.ai_gateway.budget import is_gateway_budget_available
+from proliferate.server.ai_gateway.topups import (
     reactivate_enrollment_if_credited,
     topups_enabled,
 )

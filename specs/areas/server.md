@@ -265,7 +265,7 @@ Everything above this section is the current operating model, with each rule's e
   `Billing reconciliation` (deleted, cull part 2),
   [anonymous telemetry](../../server/proliferate/server/anonymous_telemetry/worker.py),
   and three Agent Gateway loops in
-  [worker.py](../../server/proliferate/server/agent_auth/worker.py).
+  [worker.py](../../server/proliferate/server/ai_gateway/worker.py).
   The one-off
   [enqueue_health.py](../../server/proliferate/background/enqueue_health.py)
   command also remains a direct background-store client. These paths require a
@@ -1650,7 +1650,7 @@ Everything above this section is the current operating model, with each rule's e
       installations currently emit this heartbeat without a Celery worker or
       Beat process, so a Beat-only move would silently remove it.
 - [ ] **Agent Gateway enrollment backfill.**
-      [`_backfill_loop`](../../server/proliferate/server/agent_auth/worker.py)
+      [`_backfill_loop`](../../server/proliferate/server/ai_gateway/worker.py)
       is started by `start_agent_gateway_enrollment_backfill` from the
       [`main.py` lifespan](../../server/proliferate/main.py) when both
       Agent Gateway and `run_background_workers` are enabled. It runs
@@ -1661,7 +1661,7 @@ Everything above this section is the current operating model, with each rule's e
       the existing feature and worker gates, immediate-first-run cadence, and
       retry and replay behavior are characterized for a Beat-fired task.
 - [ ] **Agent Gateway usage import.**
-      [`_usage_import_loop`](../../server/proliferate/server/agent_auth/worker.py)
+      [`_usage_import_loop`](../../server/proliferate/server/ai_gateway/worker.py)
       is started by `start_agent_gateway_usage_import` from the
       [`main.py` lifespan](../../server/proliferate/main.py) under the
       same Agent Gateway and `run_background_workers` gates. It runs
@@ -1673,7 +1673,7 @@ Everything above this section is the current operating model, with each rule's e
       behavior are characterized for a Beat-fired task, including safe replay
       of LiteLLM spend-log paging and credit-exhaustion effects.
 - [ ] **Agent Gateway LLM top-up.**
-      [`_topup_loop`](../../server/proliferate/server/agent_auth/worker.py)
+      [`_topup_loop`](../../server/proliferate/server/ai_gateway/worker.py)
       is started by `start_agent_gateway_llm_topups` from the
       [`main.py` lifespan](../../server/proliferate/main.py) only when
       Agent Gateway, top-up configuration, and `run_background_workers` enable

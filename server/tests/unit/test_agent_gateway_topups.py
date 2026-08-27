@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 from proliferate.config import settings
-from proliferate.server.agent_auth.topups import (
+from proliferate.server.ai_gateway.topups import (
     run_llm_topups,
     topup_amount_usd,
     topup_threshold_usd,

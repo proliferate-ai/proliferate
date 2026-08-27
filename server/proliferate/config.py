@@ -294,6 +294,11 @@ class Settings(BaseSettings):
     agent_gateway_qualification_shard_id: str = ""
     agent_gateway_default_org_budget_usd: str = "0"
     agent_gateway_backfill_interval_seconds: float = 300.0
+    # The zero-grant guard's own cadence. It rides the backfill loop but runs
+    # at most once per this interval: sweeping (and paging) hourly rather than
+    # per 300s backfill tick keeps a legitimately unhealable org from turning
+    # the page channel into a storm.
+    agent_gateway_zero_grant_check_interval_seconds: float = 3600.0
     # One-time lifetime managed-LLM grant for a GitHub-backed free identity.
     agent_gateway_free_credit_usd: str = "2"
     # Margin on imported spend: ledger debits cost x (1 + margin_pct/100), so a
@@ -303,9 +308,11 @@ class Settings(BaseSettings):
     agent_gateway_usage_import_overlap_seconds: float = 300.0
     # Control-plane gateway-enablement verification (agent-auth.md FR-3). The loop
     # asks LiteLLM which models each active enrollment key can see and records a
-    # per-key verdict. Behind a flag (default off) so a deployment opts in, and it
-    # only runs when the gateway is enabled and background workers are on.
-    agent_gateway_verification_enabled: bool = False
+    # per-key verdict. Default ON now that config.yaml is settled (the Claude-5
+    # fix, #2249): the loop is the drift detector that catches a stale model
+    # list before a user 403s. A deployment may still opt out via the flag, and
+    # it only runs when the gateway is enabled and background workers are on.
+    agent_gateway_verification_enabled: bool = True
     agent_gateway_verification_interval_seconds: float = 900.0
     agent_gateway_topup_interval_seconds: float = 300.0
     # Auto top-up fires when the shared LLM pool drops below this balance; each

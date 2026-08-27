@@ -1,4 +1,4 @@
-"""Integration-gateway audit seam for T3-INT-1 (specs/engineering/testing/scenarios.md#T3-INT-1).
+"""Integration-gateway audit seam for T3-INT-1 (tests/release/core-release-scenario-manifest.json#T3-INT-1).
 
 Same in-process-against-the-real-DB seam as ``billing_probe.py`` /
 ``prov1_fallback.py``: T3-INT-1's assertion is that a real agent turn (and the

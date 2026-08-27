@@ -50,7 +50,10 @@ test("the CLI writes base_sha and base_mode to GITHUB_OUTPUT on the token-less p
       [scriptPath, "--workflow", "deploy-staging.yml", "--head", "head99", "--fallback", "fff000"],
       { env, stdio: ["ignore", "pipe", "pipe"] },
     );
-    assert.equal(readFileSync(outputPath, "utf8"), "base_sha=fff000\nbase_mode=fallback\n");
+    assert.equal(
+      readFileSync(outputPath, "utf8"),
+      "base_sha=fff000\nbase_mode=fallback\nalready_deployed=false\n",
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

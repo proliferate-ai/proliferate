@@ -6,7 +6,7 @@ import { ORG_COMPUTE_ATTRIBUTION_FIXED, runBillingProbe, type MeterRecords } fro
 
 /**
  * T3-BILL-1 — real consumption is metered: LLM and compute.
- * specs/engineering/testing/scenarios.md#T3-BILL-1
+ * tests/release/core-release-scenario-manifest.json#T3-BILL-1
  *
  * The contract: a real agent session (reuse a T3-CHAT-1 run) plus a sandbox
  * kept running for a known interval must produce (a) `agent_llm_usage_event`
@@ -47,7 +47,7 @@ import { ORG_COMPUTE_ATTRIBUTION_FIXED, runBillingProbe, type MeterRecords } fro
 export const t3Bill1: ScenarioDefinition = {
   id: "T3-BILL-1",
   title: "real consumption is metered — LLM and compute",
-  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-BILL-1",
+  registryFlowRef: "tests/release/core-release-scenario-manifest.json#T3-BILL-1",
   lanes: ["local", "sandbox"],
   requiredEnv: ["RELEASE_E2E_DURABLE_USER_EMAIL", "RELEASE_E2E_LOCAL_DATABASE_URL"],
   plan: ({ runtimeLane }) => [

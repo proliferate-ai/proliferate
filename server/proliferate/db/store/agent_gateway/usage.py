@@ -69,6 +69,25 @@ async def insert_usage_event_once(
     return result.scalar_one_or_none() is not None
 
 
+async def count_usage_events_for_subject(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+) -> int:
+    """How many imported usage (debit) rows a subject holds.
+
+    The orphan reclaim's usage-side invariant reads this before moving a
+    ledger and asserts the moved count matches: ``move_llm_credit_ledger``
+    moves the debit side too, so a row inserted into that window would ride
+    along unvetted. Deliberately NOT locked — a subject's usage history is
+    unbounded and locking it all to guard a bounded race would be a worse
+    trade than catching the race after the fact and rolling back.
+    """
+    total = await db.scalar(
+        select(func.count()).where(AgentLlmUsageEvent.billing_subject_id == billing_subject_id)
+    )
+    return int(total or 0)
+
+
 async def get_usage_import_cursor(
     db: AsyncSession,
 ) -> AgentLlmUsageImportCursorRecord | None:

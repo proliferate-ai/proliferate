@@ -52,7 +52,7 @@ from proliferate.integrations import litellm
 from proliferate.integrations import stripe as stripe_billing
 from proliferate.integrations.litellm import LiteLLMIntegrationError
 from proliferate.integrations.stripe import StripeIntegrationError
-from proliferate.server.agent_auth.enrollment import (
+from proliferate.server.ai_gateway.enrollment import (
     build_enrollment_key_fingerprint,
     enrollment_key_alias,
     enrollment_key_metadata,

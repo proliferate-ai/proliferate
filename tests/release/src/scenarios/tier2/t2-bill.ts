@@ -1,6 +1,6 @@
 /**
  * T2-BILL — the authoritative required billing group (PR 4, BRIEF §6;
- * `specs/engineering/testing/core-release-validation.md` lines 342-356).
+ * `delivery/testing-cicd/archive/core-release-validation.md` lines 342-356).
  *
  * One matrix scenario (lane `local`, no new lane) whose child cells are the
  * authoritative manifest ids T2-BILL-1..15, run against ONE booted
@@ -90,7 +90,7 @@ function runFreeCreditGrantPass(userId: string): Promise<boolean> {
       // line (SyntaxError), so the pyExpr must be genuinely multi-line.
       "import asyncio\n" +
         "from proliferate.db.engine import async_session_factory\n" +
-        "from proliferate.server.agent_auth.free_credits import ensure_user_free_credit_grant\n" +
+        "from proliferate.server.ai_gateway.free_credits import ensure_user_free_credit_grant\n" +
         "async def _m():\n" +
         "    async with async_session_factory() as db:\n" +
         `        granted = await ensure_user_free_credit_grant(db, "${userId}")\n` +
@@ -1082,7 +1082,7 @@ const cases: Record<string, Tier2CellHandler> = {
 export const t2Bill = makeTier2MatrixScenario({
   id: T2_BILL_ID,
   title: "Tier-2 required billing group: pricing, seats, ledgers, imports, holds, Stripe events, top-up, exhaustion, recovery",
-  registryFlowRef: "specs/engineering/testing/core-release-validation.md#t2-bill",
+  registryFlowRef: "delivery/testing-cicd/archive/core-release-validation.md#t2-bill",
   // Stripe is resolved at boot (env or `stripe config`); an unresolved key
   // returns every cell BLOCKED, so no env-manifest gate is required here.
   requiredEnv: [],

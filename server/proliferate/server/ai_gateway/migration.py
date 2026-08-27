@@ -44,7 +44,7 @@ from proliferate.db.store.billing_subjects import (
     move_agent_gateway_free_credit_allocation,
 )
 from proliferate.integrations import litellm
-from proliferate.server.agent_auth.enrollment import (
+from proliferate.server.ai_gateway.enrollment import (
     _parse_budget,
     _remaining_credit_budget_raw,
     ensure_org_enrollment,

@@ -7,7 +7,7 @@ import { ScenarioBlockedError } from "../types.js";
 
 /**
  * T4-DESKTOP-1 — desktop app auto-update (Tauri updater), N-1 -> N.
- * specs/engineering/testing/scenarios.md#T4-DESKTOP-1
+ * tests/release/core-release-scenario-manifest.json#T4-DESKTOP-1
  *
  * Builds a test-flavor N-1 desktop `.app` pointed at a local update feed, an N
  * `.app` signed with the same key, stages N + latest.json behind
@@ -50,7 +50,7 @@ function isCi(): boolean {
 export const t4Desktop1: ScenarioDefinition = {
   id: "T4-DESKTOP-1",
   title: "desktop app auto-update, N-1 -> N",
-  registryFlowRef: "specs/engineering/testing/scenarios.md#T4-DESKTOP-1",
+  registryFlowRef: "tests/release/core-release-scenario-manifest.json#T4-DESKTOP-1",
   lanes: ["local"],
   requiredEnv: [],
   plan: () => [
@@ -76,7 +76,7 @@ export const t4Desktop1: ScenarioDefinition = {
         "T4-DESKTOP-1/local: local-macOS-only. In CI (GitHub Actions) this scenario is blocked by " +
           "design — it needs two full macOS `tauri build`s and a real .app bundle swap on the host, " +
           "which the release gate does not provision. Run it locally on an Apple-silicon Mac with " +
-          "RELEASE_E2E_DESKTOP_T4=1 (see specs/engineering/testing/desktop-update-testing.md).",
+          "RELEASE_E2E_DESKTOP_T4=1 (see delivery/testing-cicd/archive/desktop-update-testing.md).",
       );
     }
 
@@ -92,7 +92,7 @@ export const t4Desktop1: ScenarioDefinition = {
         "T4-DESKTOP-1/local: opt-in required. This runs two full `tauri build`s (~10+ min each on a " +
           "cold cache) and is gated behind RELEASE_E2E_DESKTOP_T4=1 so `--scenarios all` runs stay fast. " +
           "Set RELEASE_E2E_DESKTOP_T4=1 to run it for real (bundles are cached across runs). See " +
-          "specs/engineering/testing/desktop-update-testing.md.",
+          "delivery/testing-cicd/archive/desktop-update-testing.md.",
       );
     }
 

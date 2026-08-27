@@ -17,7 +17,7 @@ import {
 
 /**
  * T3-PROV-1 — provision: new user (cold path) + GitHub-App trigger contract.
- * specs/engineering/testing/scenarios.md#T3-PROV-1
+ * tests/release/core-release-scenario-manifest.json#T3-PROV-1
  *
  * Trigger-under-test ruling (Pablo, 2026-07-09): the GitHub App authorization
  * callback (`complete_github_app_user_authorization_callback`,
@@ -57,7 +57,7 @@ import {
 export const t3Prov1: ScenarioDefinition = {
   id: "T3-PROV-1",
   title: "provision — new user (cold path) + GitHub-App trigger contract",
-  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-PROV-1",
+  registryFlowRef: "tests/release/core-release-scenario-manifest.json#T3-PROV-1",
   lanes: ["sandbox"],
   requiredEnv: [
     "RELEASE_E2E_SERVER_URL",

@@ -141,7 +141,7 @@ endif
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
         server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
-        check check-max-lines check-server-boundaries test test-server fmt clippy \
+        gate check check-max-lines check-server-boundaries test test-server fmt clippy \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build dev-build rebuild \
         desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
@@ -571,7 +571,7 @@ db-ah:
 # Build a TEST-FLAVOR desktop app whose auto-updater points at a local manifest
 # server (UPDATER_URL) and trusts a throwaway key. For the tier-4 upgrade test.
 # The shipped tauri.conf.json is untouched -- a gitignored overlay is merged via
-# `tauri build --config`. See specs/engineering/testing/desktop-update-testing.md.
+# `tauri build --config`. See delivery/testing-cicd/archive/desktop-update-testing.md.
 #   make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json
 desktop-test-build:
 	@test -n "$(UPDATER_URL)" || { echo "UPDATER_URL is required. Example: make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json"; exit 1; }
@@ -815,7 +815,7 @@ publish-cloud-template-env-local:
 		fi
 
 # Tier-3 live end-to-end / tier-4 upgrade-path runner
-# (specs/engineering/testing/release-worlds-and-fixtures.md "Local And GitHub Actions
+# (delivery/testing-cicd/archive/release-worlds-and-fixtures.md "Local And GitHub Actions
 # Execution"). One runner
 # CLI with lane flags; this target is a thin wrapper so CI and laptops call it
 # identically. LANE=local|staging DESKTOP=web|native AGENTS=<list|all>
@@ -833,7 +833,7 @@ release-e2e:
 		$(if $(CANDIDATE_BUILD_MAP),--candidate-build-map $(CANDIDATE_BUILD_MAP),)
 
 # Assembles a CandidateBuildMapV1 for an already-built binary
-# (specs/engineering/testing/core-release-validation.md). BINARY defaults to the
+# (delivery/testing-cicd/archive/core-release-validation.md). BINARY defaults to the
 # release AnyHarness build; OUTPUT to tests/release/.output/candidate-build.json.
 CANDIDATE_MAP_BINARY ?= target/release/anyharness
 CANDIDATE_MAP_OUTPUT ?= tests/release/.output/candidate-build.json
@@ -843,7 +843,7 @@ qualification-candidate-build-map:
 		--output $(CANDIDATE_MAP_OUTPUT)
 
 # The real build→map→validate→materialize→launch→health→evidence proof
-# (specs/engineering/testing/core-release-validation.md; historical section
+# (delivery/testing-cicd/archive/core-release-validation.md; historical section
 # name: "Real handoff smoke").
 # Builds a release-mode AnyHarness stamped with the repository VERSION and the
 # current HEAD SHA, assembles the map, launches the exact bytes against an
@@ -855,7 +855,7 @@ qualification-candidate-build-map:
 # at target/release/ while cargo wrote somewhere else.
 # Validate and materialize a committed retained-release receipt — the exact
 # immutable production N-1 artifact set Tier 4 update proofs start from
-# (specs/engineering/testing/tier-4-scenario-contract.md "Artifact Identity").
+# (delivery/testing-cicd/archive/tier-4-scenario-contract.md "Artifact Identity").
 # Shape + policy validation run before any download; every byte is verified
 # against the receipt on every use (a cache hit is re-hashed, never trusted).
 # Read-only toward providers: LIVE=1 adds an E2B metadata lookup proving the
@@ -993,7 +993,7 @@ qualification-local-workspace:
 # exact local-world candidates as `qualification-local-workspace`
 # (`build-local-qualification-candidates.mjs`, unmodified), handed to the same
 # qualification runner, but driving the full LOCAL-1..7 functional cell set
-# (specs/engineering/testing/tier-3-scenario-contract.md §"Local cases")
+# (delivery/testing-cicd/archive/tier-3-scenario-contract.md §"Local cases")
 # instead of the single LOCAL-WORLD-SMOKE-1 infrastructure proof. This is the
 # ONE entrypoint; the release-e2e.yml manual job invokes this same target —
 # same build step, same runner invocation.
@@ -1419,9 +1419,16 @@ install: git-hooks
 
 # Point git at the checked-in hooks. Idempotent, safe to re-run, and local to
 # this clone/worktree (never committed state). See guides/local/README.md.
+# The pre-push gate: change-scoped local mirror of the merge gate
+# (delivery/testing-cicd/delivery-spec-make-gate.md). `make gate` by hand or
+# via the pre-push hook; `python3 scripts/gate --list` shows what a diff selects.
+gate:
+	@python3 scripts/gate
+
 git-hooks:
 	@git config core.hooksPath scripts/git-hooks
-	@echo "git hooks enabled (core.hooksPath=scripts/git-hooks); bypass a single commit with --no-verify."
+	@echo "git hooks enabled (core.hooksPath=scripts/git-hooks): pre-commit formats staged files, pre-push runs 'make gate'."
+	@echo "escape hatch: PROLIFERATE_SKIP_HOOKS=1"
 
 # --- Sidecar staging ---
 

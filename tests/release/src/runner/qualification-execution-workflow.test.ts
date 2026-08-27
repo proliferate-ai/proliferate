@@ -38,12 +38,14 @@ test("release qualification has stable independent concurrency groups by world",
   assert.doesNotMatch(workflowHeader, /^concurrency:/m, "one global group would serialize unrelated worlds");
   assert.doesNotMatch(selfhostHeader, /^concurrency:/m, "one global group would serialize unrelated worlds");
 
-  assert.match(job(release, "release-e2e-local"), /group: release-e2e-local/);
   assert.match(job(release, "release-e2e-local-functional"), /group: release-e2e-local/);
   assert.match(job(release, "release-e2e-selfhost-install"), /group: release-e2e-self-host/);
   assert.match(job(selfhost, "artifact-chain"), /group: release-e2e-tier4/);
   assert.match(job(selfhost, "provisioning"), /group: release-e2e-self-host/);
-  assert.match(job(release, "release-e2e-local"), /if: github\.event_name == 'schedule'/);
+  // The provisional schedule-only local lane was deleted with the nightly
+  // restoration (delivery-spec-e2e-observable): the cron fires only the
+  // staging battery; the local world is dispatch-only via local-functional.
+  assert.doesNotMatch(release, /^  release-e2e-local:/m);
   assert.match(job(release, "release-e2e-local-functional"), /inputs\.manual_world == 'local'/);
 
   for (const source of [release, selfhost]) {

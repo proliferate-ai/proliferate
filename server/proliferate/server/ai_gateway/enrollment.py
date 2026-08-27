@@ -42,7 +42,7 @@ from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
-from proliferate.server.agent_auth.free_credits import ensure_signup_free_credit_grant
+from proliferate.server.ai_gateway.free_credits import ensure_signup_free_credit_grant
 
 logger = logging.getLogger(__name__)
 

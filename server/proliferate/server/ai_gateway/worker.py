@@ -18,25 +18,33 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import suppress
+from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.db import session_ops as db_session
 from proliferate.integrations.sentry import report_critical
-from proliferate.server.agent_auth.enrollment import backfill_enrollments
-from proliferate.server.agent_auth.migration import migrate_legacy_enrollments
-from proliferate.server.agent_auth.topups import (
+from proliferate.server.ai_gateway.enrollment import backfill_enrollments
+from proliferate.server.ai_gateway.free_credits import (
+    ZeroGrantCheckResult,
+    run_zero_grant_check,
+)
+from proliferate.server.ai_gateway.migration import migrate_legacy_enrollments
+from proliferate.server.ai_gateway.topups import (
     LlmTopupRunResult,
     run_llm_topups,
     topups_enabled,
 )
-from proliferate.server.agent_auth.usage_import import (
+from proliferate.server.ai_gateway.usage_import import (
     UsageImportResult,
     run_usage_import,
 )
-from proliferate.server.agent_auth.verification import (
+from proliferate.server.ai_gateway.verification import (
     VerificationResult,
-    run_verification,
+    collect_verification_targets,
+    probe_verification_targets,
+    record_verification_verdicts,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,7 +62,28 @@ async def run_enrollment_backfill_once(*, limit: int = _BACKFILL_BATCH_LIMIT) ->
         return migrated + await backfill_enrollments(db, limit=limit)
 
 
+async def run_zero_grant_check_once(
+    *,
+    limit: int = _BACKFILL_BATCH_LIMIT,
+    already_alerted_org_ids: set[UUID] | None = None,
+) -> ZeroGrantCheckResult:
+    # Deliberately its OWN transaction, never the backfill's: the backfill
+    # tick's enrollment work has already committed by the time this runs, so
+    # a throwing reclaim/heal can never roll it back.
+    async with db_session.open_async_transaction() as db:
+        return await run_zero_grant_check(
+            db,
+            limit=limit,
+            already_alerted_org_ids=already_alerted_org_ids,
+        )
+
+
 async def _backfill_loop() -> None:
+    # Zero-grant guard state, process-local: the cadence stamp and the set of
+    # orgs already paged. A restart re-pages each still-broken org once —
+    # accepted; paging state is not worth persisting.
+    next_zero_grant_check = 0.0
+    alerted_org_ids: set[UUID] = set()
     while True:
         try:
             processed = await run_enrollment_backfill_once()
@@ -63,6 +92,34 @@ async def _backfill_loop() -> None:
                     "Agent gateway enrollment backfill processed subjects",
                     extra={"processed": processed},
                 )
+            if time.monotonic() >= next_zero_grant_check:
+                # The guard rides the backfill loop (the spec-shaped home) but
+                # on its OWN cadence. Stamped BEFORE the run: a crashing check
+                # retries hourly, never on every 300s backfill tick.
+                next_zero_grant_check = (
+                    time.monotonic() + settings.agent_gateway_zero_grant_check_interval_seconds
+                )
+                # Its own except, so a crash here is triaged as the guard's and
+                # not mislabelled `enrollment_backfill` — and so it cannot skip
+                # the backfill's own sleep/retry rhythm.
+                try:
+                    zero_grant = await run_zero_grant_check_once(
+                        already_alerted_org_ids=alerted_org_ids
+                    )
+                    if zero_grant.checked:
+                        logger.info(
+                            "Agent gateway zero-grant check processed enrollments",
+                            extra={
+                                "checked": zero_grant.checked,
+                                "healed": zero_grant.healed,
+                                "alerted": zero_grant.alerted,
+                            },
+                        )
+                except Exception as exc:
+                    report_critical(
+                        exc,
+                        tags={"domain": "agent_gateway", "action": "zero_grant_check"},
+                    )
         except Exception as exc:
             report_critical(
                 exc,
@@ -134,15 +191,41 @@ async def stop_agent_gateway_usage_import(
         await task
 
 
-async def run_verification_once() -> VerificationResult:
+async def run_verification_once(*, outage_already_paged: bool = False) -> VerificationResult:
+    # Three phases, two SHORT transactions: the LiteLLM probes in the middle
+    # run with no transaction open, so an outage's worth of HTTP timeouts
+    # (potentially many keys x the client timeout) never holds row locks.
     async with db_session.open_async_transaction() as db:
-        return await run_verification(db)
+        targets = await collect_verification_targets(db)
+    observations = await probe_verification_targets(targets)
+    async with db_session.open_async_transaction() as db:
+        return await record_verification_verdicts(
+            db,
+            observations,
+            outage_already_paged=outage_already_paged,
+        )
 
 
 async def _verification_loop() -> None:
+    # Process-local "already paged this outage" flag: a persistent outage pages
+    # on its first tick only, and the flag is cleared when a tick comes back
+    # ERROR-FREE, so the NEXT outage pages again. A restart re-pages once —
+    # accepted, same as the zero-grant guard's suppression set.
+    #
+    # F7 (pre-existing, not what this flag covers): the `except` below has no
+    # once-per-incident suppression, so a tick that RAISES pages every
+    # interval. That shape is identical in all four worker loops here and is
+    # the codebase-wide convention for loop-level failures; changing it is a
+    # separate, cross-cutting decision.
+    outage_paged = False
     while True:
         try:
-            result = await run_verification_once()
+            result = await run_verification_once(outage_already_paged=outage_paged)
+            # Hold the flag while ANY errors persist, not merely while the tick
+            # still meets the outage bar: a provider flapping across that
+            # boundary (outage → partial → outage) is ONE incident and must not
+            # page twice. Release only on a fully error-free tick.
+            outage_paged = result.outage_detected or (result.errored > 0 and outage_paged)
             if result.misconfigured or result.errored:
                 logger.info(
                     "Agent gateway verification tick recorded verdicts",

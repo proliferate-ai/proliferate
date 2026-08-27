@@ -13,22 +13,50 @@ function read(name) {
 }
 
 function workflowNames() {
-  return readdirSync(workflowDir).filter((name) => name.endsWith(".yml"));
+  // GitHub honors both extensions; scanning only .yml would let an
+  // `evil.yaml` deployer past every doctrine test below.
+  return readdirSync(workflowDir).filter(
+    (name) => name.endsWith(".yml") || name.endsWith(".yaml"),
+  );
 }
 
 function triggerBlock(source, name) {
   const start = source.indexOf("\non:");
   assert.notEqual(start, -1, `${name}: could not locate the on: trigger block`);
-  const end = source.indexOf("\npermissions:", start);
-  const block = source.slice(start, end === -1 ? undefined : end);
+  // End at the NEXT top-level key, whatever it is — slicing to a hard-coded
+  // `permissions:` let a workflow without one leak job keys into the block.
+  const rest = source.slice(start + 1);
+  const next = rest.slice("on:".length).search(/\n[A-Za-z_-]+:/);
+  const block = next === -1 ? rest : rest.slice(0, next + "on:".length);
   assert.notEqual(block.trim(), "", `${name}: trigger block is empty`);
   return block;
 }
 
-// A workflow starts from main when it chains off another workflow's run or
-// filters on the main branch. `branches:` accepts a flow sequence
-// (`[main]`) and a block sequence (`\n  - main`); both forms must be caught.
-const MAIN_BRANCH_FILTER = /branches:\s*(?:\[[^\]]*\bmain\b[^\]]*\]|(?:\r?\n\s*-\s*["']?main["']?))/;
+// Every event name a workflow is triggered by, across all three YAML
+// spellings: `on: push` (scalar), `on: [push, workflow_dispatch]` (flow
+// sequence), and the block map. Filters (branches/tags/paths) are irrelevant
+// here on purpose: a bare `push:`, `push: tags:`, or `branches: ['**']` is
+// exactly the porous spelling the previous filter-matching scan waved through.
+function triggerEvents(source, name) {
+  const scalar = source.match(/^on:\s*([a-z_]+)\s*$/m);
+  if (scalar) return [scalar[1]];
+  const flow = source.match(/^on:\s*\[([^\]]*)\]/m);
+  if (flow) {
+    return flow[1]
+      .split(",")
+      .map((entry) => entry.trim().replace(/["']/g, ""))
+      .filter(Boolean);
+  }
+  const block = triggerBlock(source, name);
+  return [...block.matchAll(/^\s{2}([a-z_]+):/gm)].map((match) => match[1]);
+}
+
+// Inverted to an allowlist on purpose: only these events require a human (or
+// an explicit caller) — EVERYTHING else (push, pull_request, workflow_run,
+// release, issue_comment, check_suite, status, deployment, create, …) counts
+// as automatic, so a novel trigger cannot slip past by not being on a
+// blocklist. `schedule` is classified separately and pinned to release.yml.
+const MANUAL_EVENTS = new Set(["workflow_dispatch", "workflow_call"]);
 // `Production` and `production` are the same GitHub Environment reference as
 // far as a reviewer scanning for prod reach is concerned, and the two deleted
 // coordinators both used the lowercase spelling. The spellings are NOT
@@ -40,21 +68,39 @@ const PRODUCTION_ENVIRONMENT = /environment:\s*["']?[Pp]roduction["']?/;
 test("staging deploys from green main and from an operator", () => {
   const triggers = triggerBlock(workflow, "deploy-staging.yml");
 
-  // The one automated transition: a completed `CI` run on main.
+  // The one automated transition: either rollup's completion on main (the
+  // plan deploys only when both are green for the head; the earlier event
+  // exits neutrally, and a re-run-to-green re-fires the trigger).
   assert.match(
     triggers,
-    /workflow_run:\n    workflows: \["CI"\]\n    types: \[completed\]\n    branches: \[main\]/,
+    /workflow_run:\n(?:\s*#[^\n]*\n)*    workflows: \["CI", "Server CI"\]\n    types: \[completed\]\n    branches: \[main\]/,
+  );
+
+  // The run title names what is being deployed — every workflow_run row
+  // otherwise displays the default-branch head while deploying another SHA.
+  assert.match(
+    workflow,
+    /run-name: "Deploy Staging · \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.event\.inputs\.ref \|\| github\.sha \}\} · \$\{\{ github\.event_name \}\}"/,
   );
   // Operators keep dispatch for reruns, forced surfaces, and dry runs.
   assert.match(triggers, /workflow_dispatch:/);
   assert.doesNotMatch(triggers, /\bpush:/);
   assert.doesNotMatch(triggers, /\bschedule:/);
 
-  // Auto runs deploy only what CI proved: the plan job refuses non-success
-  // conclusions, and the checkout pins the triggering run's exact head SHA.
+  // Auto runs deploy only what CI proved ON THIS REPO'S MAIN: the plan job
+  // refuses non-success conclusions AND anything that is not a push to main
+  // from this repository (the workflow_run branch filter matches a fork PR's
+  // head branch named `main`, which would otherwise auto-deploy fork code with
+  // inherited secrets). The checkout pins the triggering run's exact head SHA.
   assert.match(
     workflow,
-    /github\.event_name != 'workflow_run' \|\| github\.event\.workflow_run\.conclusion == 'success'/,
+    /github\.event_name != 'workflow_run' \|\| \(github\.event\.workflow_run\.conclusion == 'success' && github\.event\.workflow_run\.event == 'push' && github\.event\.workflow_run\.head_branch == 'main' && github\.event\.workflow_run\.head_repository\.full_name == github\.repository\)/,
+  );
+  // Non-deployable events (red CI, non-push triggers) never share the deploy
+  // concurrency group, so they cannot cancel a pending real deploy.
+  assert.match(
+    workflow,
+    /group: deploy-staging-\$\{\{ github\.repository \}\}-\$\{\{ \(github\.event_name == 'workflow_run' && \(github\.event\.workflow_run\.conclusion != 'success' \|\| github\.event\.workflow_run\.event != 'push'\)\) && github\.run_id \|\| 'main' \}\}/,
   );
   assert.match(
     workflow,
@@ -68,26 +114,101 @@ test("staging deploys from green main and from an operator", () => {
   // A staleness fallback deploys everything unless the operator chose surfaces.
   assert.match(
     workflow,
-    /FORCE_SURFACES: \$\{\{ github\.event\.inputs\.force_surfaces \|\| \(steps\.base\.outputs\.base_mode == 'fallback' && 'all'\) \|\| '' \}\}/,
+    /FORCE_SURFACES: \$\{\{ github\.event\.inputs\.force_surfaces \|\| \(steps\.head\.outputs\.base_mode == 'fallback' && 'all'\) \|\| '' \}\}/,
   );
 });
 
-test("deploy-staging is the only workflow that auto-deploys from main", () => {
+test("deploy-staging is the only workflow that auto-reaches a reusable deploy lane, and only release.yml does so on a schedule", () => {
+  // Scope, honestly: this scan covers reach through `uses:` of local reusable
+  // workflows. A deploy performed by shelling out (`gh workflow run`, raw
+  // aws-cli, a composite action) is invisible to it — review owns that class.
+  // A workflow deploys if it reaches a `_deploy-` lane directly OR through any
+  // chain of local reusable workflows — a non-`_deploy-` wrapper with
+  // `workflow_call` must not launder its callers past this scan.
+  const sources = new Map(workflowNames().map((name) => [name, read(name)]));
+  const memo = new Map();
+  const deploysTransitively = (name) => {
+    if (memo.has(name)) return memo.get(name);
+    memo.set(name, false); // cycle guard
+    const source = sources.get(name);
+    if (!source) return false;
+    const uses = [...source.matchAll(/uses: \.\/\.github\/workflows\/([\w.-]+\.ya?ml)/g)].map(
+      (match) => match[1],
+    );
+    const result =
+      uses.some((used) => used.startsWith("_deploy-")) ||
+      uses.some((used) => deploysTransitively(used));
+    memo.set(name, result);
+    return result;
+  };
+
   const automatic = [];
+  const scheduled = [];
   for (const name of workflowNames()) {
-    const source = read(name);
-    const triggers = triggerBlock(source, name);
-    const startsOnMain =
-      /workflow_run:/.test(triggers) || MAIN_BRANCH_FILTER.test(triggers);
-    const deploys = /uses: \.\/\.github\/workflows\/_deploy-/.test(source);
-    if (startsOnMain && deploys) {
+    if (!deploysTransitively(name)) continue;
+    const events = triggerEvents(sources.get(name), name);
+    if (events.some((event) => event !== "schedule" && !MANUAL_EVENTS.has(event))) {
       automatic.push(name);
     }
+    if (events.includes("schedule")) scheduled.push(name);
   }
 
-  // Staging is the sanctioned automatic transition; production reaches a
-  // deploy lane only through release.yml's cron/dispatch (pinned below).
+  // Staging is the sanctioned automatic transition. Production reaches a
+  // deploy lane only through release.yml — its daily cron is the transitional
+  // delivery path, pinned here until the retirement PR that makes promotion
+  // deliberate (ruled 2026-08-26).
   assert.deepEqual(automatic, ["deploy-staging.yml"]);
+  assert.deepEqual(scheduled, ["release.yml"]);
+});
+
+test("the plan resolves the deploy head against both rollups and guards regressions", () => {
+  // Refuter findings on #2269: completion-order latest-wins could deploy
+  // commits out of order (or cancel a newer commit's deploy in favor of an
+  // older one's), and the 45-minute Server CI poll neither survived a
+  // re-run-to-green nor a backed-up queue. The plan now advances to the
+  // newest fully green first-parent main commit and refuses to move staging
+  // backwards; the poll is gone in favor of completion events from both
+  // rollups.
+  assert.match(workflow, /workflows: \["CI", "Server CI"\]/);
+  assert.doesNotMatch(workflow, /Wait for Server CI if present/);
+  assert.doesNotMatch(workflow, /sleep 30/);
+  assert.match(workflow, /rollup_status\(\)/);
+  assert.match(workflow, /--workflow "\$wf"/);
+  assert.match(workflow, /for wf in ci\.yml server-ci\.yml; do/);
+  assert.match(workflow, /git rev-list --first-parent --max-count=\d+ origin\/main/);
+  assert.match(workflow, /git merge-base --is-ancestor "\$event_head" "\$candidate"/);
+  assert.match(workflow, /git merge-base --is-ancestor "\$base_sha" "\$deploy_head"/);
+  assert.match(workflow, /proceed=false/);
+
+  // Server CI's push trigger is path-filtered, so `missing` is green for it
+  // on the auto path (a frontend/docs-only commit has no Server CI run and no
+  // healing event would ever arrive); CI must be a real success.
+  assert.match(workflow, /server-ci\.yml:success \| server-ci\.yml:missing\)/);
+  assert.match(workflow, /ci\.yml:success\)/);
+  // Any completed success for the SHA counts; a later cancelled duplicate
+  // must not mask it.
+  assert.match(workflow, /any\(\.status == "completed" and \.conclusion == "success"\)/);
+
+  // Duplicate rollup events must not re-deploy an identical delta: the auto
+  // path refuses when the newest deployed head already equals the deploy head.
+  assert.match(workflow, /"\$already_deployed" == "true"/);
+
+  // A force-push that removed the last-deployed commit is staleness, not a
+  // permanent wedge; dispatch regressions refuse loudly unless the operator
+  // explicitly allows a rollback.
+  assert.match(workflow, /git cat-file -e "\$\{base_sha\}\^\{commit\}"/);
+  assert.match(workflow, /allow_regression/);
+  assert.match(workflow, /::error::\$deploy_head is behind the last deployed \$base_sha/);
+
+  // The guard actually gates: detect and every deploy lane require proceed,
+  // and a guarded run must never upload the deploy-summary artifact that
+  // anchors base resolution.
+  assert.match(workflow, /if: \$\{\{ steps\.head\.outputs\.proceed == 'true' \}\}/);
+  const gatedJobs = workflow.match(/needs\.plan\.outputs\.proceed == 'true'/g) || [];
+  assert.ok(
+    gatedJobs.length >= 5,
+    `every deploy lane and the summary job must require plan.proceed (found ${gatedJobs.length})`,
+  );
 });
 
 test("release.yml is the only entrypoint into a production deploy lane", () => {

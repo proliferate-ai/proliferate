@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { promisify } from "node:util";
 
 /**
- * Run identity per specs/engineering/testing/core-release-validation.md
+ * Run identity per delivery/testing-cicd/archive/core-release-validation.md
  * (historical section name: "Run identity"). Resolved exactly once, before
  * selection executes; every
  * invocation — local or GitHub Actions — carries the same shape so local and

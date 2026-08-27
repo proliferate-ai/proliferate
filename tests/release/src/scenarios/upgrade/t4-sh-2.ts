@@ -8,7 +8,7 @@ import type { ScenarioDefinition } from "../types.js";
 
 /**
  * T4-SH-2 — desktop artifact chain (the 2026-07-09 incident test).
- * specs/engineering/testing/self-hosting.md#T4-SH-2 (§5)
+ * delivery/testing-cicd/archive/self-hosting.md#T4-SH-2 (§5)
  *
  * The incident: the server advanced to a new version while no shipped desktop
  * artifact contained the launch-flagship feature — every desktop-v* GitHub
@@ -50,7 +50,7 @@ interface UpdaterManifest {
 export const t4Sh2: ScenarioDefinition = {
   id: "T4-SH-2",
   title: "desktop artifact chain valid per release (the incident gate)",
-  registryFlowRef: "specs/engineering/testing/self-hosting.md#T4-SH-2",
+  registryFlowRef: "delivery/testing-cicd/archive/self-hosting.md#T4-SH-2",
   lanes: ["local"],
   requiredEnv: [],
   plan: () => [

@@ -110,6 +110,11 @@ jobs:
           python3 -m unittest scripts/test_check_frontend_fences.py
           python3 scripts/check_frontend_fences.py
 
+      - name: Check server domain fences
+        run: |
+          python3 -m unittest scripts/test_check_server_fences.py
+          python3 scripts/check_server_fences.py
+
       - name: Check system manifests
         run: |
           python3 -m unittest scripts/test_check_manifests.py
@@ -125,6 +130,11 @@ jobs:
         run: |
           python3 -m unittest scripts/test_check_docs.py
           python3 scripts/check_docs.py
+
+      # The pre-push gate's scoping logic + its mirror-rule pins (every gate
+      # command string must appear in the workflow that runs it in CI).
+      - name: Test the pre-push gate
+        run: python3 -m unittest scripts/test_gate.py
 
   terraform-validate:
     name: Terraform validate (server/infra)
@@ -566,7 +576,7 @@ jobs:
   #       third-party.
   #
   # Any change to the set of required checks belongs in this comment and in
-  # specs/engineering/shipping/release-delivery.md, in the same commit.
+  # specs/engineering/ci-cd/release-delivery.md, in the same commit.
   # ---------------------------------------------------------------------------
 
   # ---------------------------------------------------------------------------

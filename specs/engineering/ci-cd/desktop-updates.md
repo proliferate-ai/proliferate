@@ -1,6 +1,8 @@
 # Desktop Updates And Release Notices
 
-Read this spec with [`releases.md`](../../../guides/deploying/releases.md) and [`desktop-update-testing.md`](../testing/desktop-update-testing.md). The Releases procedure owns packaging, signing, publishing, and operator procedure; the testing spec owns the real N−1 to N updater mechanism; this feature spec owns user-visible update and release-notice behavior.
+Expands: [README.md#5--the-cd-line](README.md#5--the-cd-line)
+
+Read this spec with [`releases.md`](../../../guides/deploying/releases.md); the packaged-upgrade world ([testing/release.md](../testing/release.md)) owns qualifying the real N−1 to N updater mechanism (mechanism notes archived at [delivery/testing-cicd/archive/desktop-update-testing.md](../../../delivery/testing-cicd/archive/desktop-update-testing.md)). The Releases procedure owns packaging, signing, publishing, and operator procedure; this feature spec owns user-visible update and release-notice behavior.
 
 ## Product Contract
 

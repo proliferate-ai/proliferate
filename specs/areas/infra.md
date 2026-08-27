@@ -10,4 +10,4 @@ Terraform, deploy topology, and the managed/hand-built/dead inventory for `serve
 > (ALB, ECS). Do not `terraform apply` without a founder ruling. The
 > re-import-vs-rebuild decision belongs to this document when it is written.
 
-Until this area doc is written, deployment procedure lives in [guides/deploying/](../../guides/deploying/README.md) and the release topology in [engineering/shipping/release-delivery.md](../engineering/shipping/release-delivery.md).
+Until this area doc is written, deployment procedure lives in [guides/deploying/](../../guides/deploying/README.md) and the release topology in [engineering/ci-cd/release-delivery.md](../engineering/ci-cd/release-delivery.md).
