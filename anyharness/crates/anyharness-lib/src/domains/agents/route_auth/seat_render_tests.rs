@@ -49,7 +49,10 @@ fn claude_seat_sets_token_and_per_seat_dir_and_strips_the_ambient_list() {
     assert!(std::path::Path::new(config_dir).is_dir(), "seat home materialized");
 
     // The strip list: every Anthropic selector this route did not set, plus
-    // the rerouting flags.
+    // the rerouting flags — INCLUDING the model-selector family (live incident
+    // 2026-08-27: an ambient ANTHROPIC_DEFAULT_SONNET_MODEL=global.anthropic.…
+    // from a Bedrock-configured host resolved the seat session's model alias
+    // to a Bedrock-format id and every turn failed model-not-found).
     for key in [
         "ANTHROPIC_AUTH_TOKEN",
         "ANTHROPIC_API_KEY",
@@ -58,6 +61,12 @@ fn claude_seat_sets_token_and_per_seat_dir_and_strips_the_ambient_list() {
         "CLAUDE_CODE_USE_VERTEX",
         "CLAUDE_CODE_USE_FOUNDRY",
         "AWS_BEARER_TOKEN_BEDROCK",
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_BEDROCK_REGION_PREFIX",
     ] {
         assert!(
             rendered.remove.contains(&key.to_string()),

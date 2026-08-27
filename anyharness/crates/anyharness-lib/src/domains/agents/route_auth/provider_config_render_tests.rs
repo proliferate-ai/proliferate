@@ -463,3 +463,57 @@ fn provider_config_with_empty_env_refuses_the_launch() {
         .expect_err("empty env must refuse the launch");
     assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_INCOMPLETE");
 }
+
+/// The model-selector exemption mirrors the rerouting-flag one: a selector the
+/// `provider_config` arm ITSELF composed (a Bedrock route naming its model
+/// map) is the route, so sanitization must keep it — while the rest of the
+/// family is still stripped.
+#[test]
+fn a_provider_config_model_selector_survives_while_the_rest_are_stripped() {
+    let home = TempHome::new("claude-pc-model-selector");
+    home.write_state_json(&v2_state(
+        11,
+        vec![harness(
+            "claude",
+            vec![provider_config_source(
+                "aws_bedrock",
+                vec![
+                    ("CLAUDE_CODE_USE_BEDROCK", "1"),
+                    ("AWS_REGION", "us-east-1"),
+                    ("ANTHROPIC_DEFAULT_SONNET_MODEL", "global.anthropic.claude-sonnet-5"),
+                ],
+            )],
+        )],
+    ));
+
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+
+    assert_eq!(
+        rendered
+            .set
+            .get("ANTHROPIC_DEFAULT_SONNET_MODEL")
+            .map(String::as_str),
+        Some("global.anthropic.claude-sonnet-5"),
+        "the arm's own selector is the route"
+    );
+    assert!(
+        !rendered
+            .remove
+            .contains(&"ANTHROPIC_DEFAULT_SONNET_MODEL".to_string()),
+        "sanitization must not strip the selector the provider_config arm set"
+    );
+    // The rest of the family is still stripped.
+    for key in [
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_BEDROCK_REGION_PREFIX",
+    ] {
+        assert!(
+            rendered.remove.contains(&key.to_string()),
+            "missing removal of {key}"
+        );
+    }
+}

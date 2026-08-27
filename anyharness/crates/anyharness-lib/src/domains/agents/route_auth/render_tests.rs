@@ -97,12 +97,20 @@ fn claude_gateway_sets_base_url_token_and_sanitizes_ambient() {
         .expect("CLAUDE_CONFIG_DIR");
     assert!(config_dir.contains("claude-config"));
     assert!(std::path::Path::new(config_dir).is_dir());
-    // Ambient Bedrock/Vertex + stale api key removed.
+    // Ambient Bedrock/Vertex + stale api key removed — and the model-selector
+    // family with them (session model selection comes from the product's
+    // launch config, never the host machine).
     for key in [
         "CLAUDE_CODE_USE_BEDROCK",
         "CLAUDE_CODE_USE_VERTEX",
         "AWS_BEARER_TOKEN_BEDROCK",
         "ANTHROPIC_API_KEY",
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_BEDROCK_REGION_PREFIX",
     ] {
         assert!(
             rendered.remove.contains(&key.to_string()),

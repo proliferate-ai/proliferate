@@ -26,6 +26,7 @@ use super::profile::{
     AgentRuntimeAuthProfile, GatewayProfile, HarnessSources, ProviderConfigProfile, ResolvedSource,
     SeatProfile,
 };
+use super::sanitize::sanitize_claude_if_routed;
 use super::RouteAuthError;
 
 /// The rendered launch delta for a route-auth profile (two-phase, contract §4).
@@ -46,12 +47,12 @@ impl RenderedRouteAuth {
         self.set.insert(key.to_string(), value.into());
     }
 
-    fn remove(&mut self, key: &str) {
+    pub(super) fn remove(&mut self, key: &str) {
         self.remove.push(key.to_string());
     }
 
     /// Set a key AND record its name in `recorded`. Used only by the
-    /// `provider_config` arm, so [`sanitize_claude_ambient`] can tell a
+    /// `provider_config` arm, so `sanitize::sanitize_claude_ambient` can tell a
     /// rerouting flag THAT ARM composed (which it must keep — the flag IS the
     /// route) from an arbitrary, user-named `api_key` var that merely collides
     /// with one (which it must still strip). See that fn's doc for why the
@@ -87,39 +88,6 @@ pub fn render_profile(
             Ok(RenderedRouteAuth::default())
         }
         AgentRuntimeAuthProfile::Sources(sources) => render_sources(sources, plan, runtime_home),
-    }
-}
-
-/// Compose a harness's enabled sources into one additive launch delta. Each
-/// `api_key` source rides its free-form env var; each `gateway` source runs the
-/// per-harness recipe. OpenCode consumes a live-fetched [`GatewayModelPlan`]
-/// because its provider config must enumerate exact gateway models before spawn.
-/// The server validated source legality, so ordering/count are trusted here.
-/// Sanitize claude's ambient provider env on EVERY non-native route, after the
-/// sources have composed.
-///
-/// agent-auth.md requires sanitization on every non-native route, and it was only
-/// wired into the gateway recipe. The gap this closes is REVERSE contamination:
-/// an `api_key` selection set `ANTHROPIC_API_KEY` and stopped there, so on a
-/// Bedrock-configured host the ambient `CLAUDE_CODE_USE_BEDROCK=1` survived and
-/// the CLI routed the user's BYOK launch to Bedrock — billing an account they did
-/// not select, with the key they did select sitting unused in the env.
-///
-/// Applied here rather than inside each recipe because it must observe the FULLY
-/// composed delta: `sanitize_claude_ambient` keeps whatever this route actually
-/// set and removes the rest, so running it per-source would let an earlier
-/// source's var be removed on behalf of a later one.
-///
-/// `provider_config_keys` is the set of env var names the `provider_config` arm
-/// itself composed — the ONLY source whose keys may exempt a rerouting flag from
-/// removal (see [`sanitize_claude_ambient`]).
-fn sanitize_claude_if_routed(
-    harness_kind: &str,
-    rendered: &mut RenderedRouteAuth,
-    provider_config_keys: &BTreeSet<String>,
-) {
-    if harness_kind == AgentKind::Claude.as_str() {
-        sanitize_claude_ambient(rendered, provider_config_keys);
     }
 }
 
@@ -202,12 +170,22 @@ fn render_gateway(
     let kind = parse_harness(harness_kind)?;
     match kind {
         AgentKind::Claude => render_claude_gateway(profile, plan, revision, runtime_home, rendered),
-        AgentKind::Codex => {
-            render_codex_gateway(harness_kind, profile, plan, revision, runtime_home, rendered)
-        }
-        AgentKind::OpenCode => {
-            render_opencode_gateway(harness_kind, profile, plan, revision, runtime_home, rendered)
-        }
+        AgentKind::Codex => render_codex_gateway(
+            harness_kind,
+            profile,
+            plan,
+            revision,
+            runtime_home,
+            rendered,
+        ),
+        AgentKind::OpenCode => render_opencode_gateway(
+            harness_kind,
+            profile,
+            plan,
+            revision,
+            runtime_home,
+            rendered,
+        ),
         AgentKind::Grok => render_grok_gateway(profile, revision, runtime_home, rendered),
         AgentKind::Cursor => Err(RouteAuthError::UnsupportedRoute {
             harness_kind: harness_kind.to_string(),
@@ -245,68 +223,6 @@ fn render_claude_gateway(
     Ok(())
 }
 
-/// HARD REQUIREMENT (HARNESS-MATRIX.md §claude): ambient provider env silently
-/// reroutes the Claude CLI (observed: Bedrock). Remove the rerouting flags and
-/// any Anthropic base-url/token/key we did NOT just set, so the gateway
-/// credentials are authoritative. Removal wins over inherited values (applied
-/// last at spawn); we do not just set empties because the CLI treats a
-/// present-but-empty flag inconsistently.
-///
-/// The rules key off which vars THIS render set, not off providers: the gateway
-/// route sets base-url + auth-token → those are kept; ambient ANTHROPIC_API_KEY
-/// is removed so a raw key cannot shadow the gateway token.
-///
-/// The rerouting flags are the ONE exception, and their exemption is deliberately
-/// narrower. Track D makes a `provider_config` × `aws_bedrock`/`azure_openai`
-/// source legitimately SET `CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_FOUNDRY` —
-/// that flag IS the route, so stripping it would sanitize away the very thing the
-/// arm just composed. But the exemption keys off `provider_config_keys` (the keys
-/// the provider_config arm itself rendered), NOT off `rendered.set` at large,
-/// because the `api_key` arm sets an ARBITRARY, user-chosen env var name gated
-/// only by a shape regex server-side (`^[A-Z][A-Z0-9_]{0,127}$`, no denylist). An
-/// `api_key` row named `CLAUDE_CODE_USE_BEDROCK=1` would otherwise survive and
-/// reroute the launch to Bedrock with no Bedrock credential selected — exactly the
-/// hole described above, re-opened through the user's own naming. For those names
-/// the removal stays unconditional.
-fn sanitize_claude_ambient(
-    rendered: &mut RenderedRouteAuth,
-    provider_config_keys: &BTreeSet<String>,
-) {
-    for key in [
-        "CLAUDE_CODE_USE_BEDROCK",
-        "CLAUDE_CODE_USE_VERTEX",
-        // Azure AI Foundry, the third provider-rerouting flag. Included now
-        // rather than with Track D's Foundry support, because the flag reroutes
-        // an ambient host TODAY whether or not we can yet configure Foundry
-        // ourselves — leaving it out would be a hole with no upside.
-        "CLAUDE_CODE_USE_FOUNDRY",
-        "AWS_BEARER_TOKEN_BEDROCK",
-    ] {
-        if !provider_config_keys.contains(key) {
-            rendered.remove(key);
-        }
-    }
-    // DELIBERATELY NOT REMOVED: ambient `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/
-    // `AWS_SESSION_TOKEN`/`AWS_PROFILE`. `AWS_BEARER_TOKEN_BEDROCK` is used by the
-    // CLI as a direct auth header rather than through SigV4, so an ambient
-    // long-lived credential does not take precedence over the token we inject, and
-    // stripping the AWS credential chain would also break unrelated tooling the
-    // session legitimately inherits. Revisit if a precedence inversion is ever
-    // observed; the python arm makes the same call.
-    //
-    // Remove each Anthropic selector we didn't explicitly set on this route, so
-    // ambient values can't shadow the chosen credential path.
-    for key in [
-        "ANTHROPIC_API_KEY",
-        "ANTHROPIC_AUTH_TOKEN",
-        "ANTHROPIC_BASE_URL",
-    ] {
-        if !rendered.set.contains_key(key) {
-            rendered.remove(key);
-        }
-    }
-}
-
 fn render_codex_gateway(
     harness_kind: &str,
     profile: &GatewayProfile,
@@ -319,11 +235,8 @@ fn render_codex_gateway(
     // Isolated CODEX_HOME with a config.toml pointing at the proliferate
     // provider (wire_api=responses). The provider config references
     // PROLIFERATE_GATEWAY_KEY via env_key, so no `codex login` is needed.
-    let codex_home = materialize::revision_dir_path(
-        runtime_home,
-        materialize::CODEX_HOME_PREFIX,
-        revision,
-    );
+    let codex_home =
+        materialize::revision_dir_path(runtime_home, materialize::CODEX_HOME_PREFIX, revision);
     rendered.set("CODEX_HOME", path_string(&codex_home));
     rendered.set("PROLIFERATE_GATEWAY_KEY", &profile.key);
     // Ambient direct-provider keys would let the CLI bypass the provider
@@ -371,9 +284,7 @@ fn render_codex_gateway(
 enum CodexConfigRecipe<'a> {
     /// The managed gateway: a custom OpenAI-compatible provider whose key comes
     /// from `PROLIFERATE_GATEWAY_KEY` in the launch env.
-    Gateway {
-        base_url: &'a str,
-    },
+    Gateway { base_url: &'a str },
     /// Track D: the user's own AWS Bedrock account, via codex's built-in
     /// `amazon-bedrock` provider. The harness owns its no-override default.
     Bedrock,
@@ -446,19 +357,15 @@ fn render_opencode_gateway(
     if plan.models.is_empty() {
         return Err(RouteAuthError::SelectionIncomplete {
             harness_kind: harness_kind.to_string(),
-            detail: "opencode gateway requires a live target model observation"
-                .to_string(),
+            detail: "opencode gateway requires a live target model observation".to_string(),
         });
     }
     // opencode reads config from an explicit file path via OPENCODE_CONFIG. We
     // materialize opencode.json (provider proliferate, openai-compatible,
     // baseURL, apiKey {env:PROLIFERATE_GATEWAY_KEY}, explicit models map) into
     // an isolated dir and point OPENCODE_CONFIG at it.
-    let config_dir = materialize::revision_dir_path(
-        runtime_home,
-        materialize::OPENCODE_CONFIG_PREFIX,
-        revision,
-    );
+    let config_dir =
+        materialize::revision_dir_path(runtime_home, materialize::OPENCODE_CONFIG_PREFIX, revision);
     // Isolate XDG_CONFIG_HOME so opencode reads OUR injected provider config
     // (revision-keyed, deterministic) rather than the user's global
     // ~/.config/opencode. XDG_DATA_HOME is intentionally LEFT AMBIENT so that
@@ -660,9 +567,7 @@ fn render_provider_config(
             rendered.files.push(FileSpec {
                 path_family: PathFamily::CodexHome,
                 revision,
-                contents: Some(
-                    codex_config_toml(CodexConfigRecipe::Bedrock).into_bytes(),
-                ),
+                contents: Some(codex_config_toml(CodexConfigRecipe::Bedrock).into_bytes()),
             });
             Ok(())
         }

@@ -23,6 +23,7 @@
 pub(crate) mod gateway_plan;
 mod gateway_probe;
 mod materialize;
+mod sanitize;
 mod seat_trial;
 pub mod plan;
 pub mod probe_materialization;
