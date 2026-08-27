@@ -1,6 +1,6 @@
 # AI gateway
 
-Managed model access: a deployment pays for and controls inference on behalf of every organization member without any client, worker, or machine ever holding a provider credential. The harness remains the execution client; this system decides *whether* and *under whose budget* it may call a model. (Formerly `agent_auth/model-gateway.md` — split into its own system 2026-08-26; the code split out of `server/agent_auth/` rides the agent_auth build list.)
+Managed model access: a deployment pays for and controls inference on behalf of every organization member without any client, worker, or machine ever holding a provider credential. The harness remains the execution client; this system decides *whether* and *under whose budget* it may call a model. (Formerly `agent_auth/model-gateway.md` — split into its own system 2026-08-26.)
 
 The one-sentence contract: **every gateway request is made with a per-(org member, harness) virtual key whose access group limits the models it can see, whose team budget mirrors the org's remaining LLM credit, and whose spend is imported back into that org's ledger; unfunded means no key.**
 
@@ -8,7 +8,7 @@ This spec reads as ground truth; differences from `main` are collected in the tr
 
 ## 0 · Scope
 
-**The folder census:** the gateway files inside `server/agent_auth/` (enrollment, free_credits, budget, usage_import, topups, verification, migration, signup_hook, worker — marked `⇒ ai_gateway` in the agent_auth code map) · the gateway stores in `db/store/agent_gateway/` (enrollments, enrollment_keys, credits, usage) · the five gateway tables in `db/models/agent_gateway.py` · the data plane at `server/litellm/` (config.yaml + Dockerfile) · the vendor leaf `integrations/litellm/` · `server/ai_magic/` as the control plane's own inference consumer.
+**The folder census:** `server/ai_gateway/` with its own MANIFEST (signup_hook, enrollment, migration, free_credits, budget, usage_import, topups, verification, worker, api, service, models — the §4 tree) · the gateway stores in `db/store/agent_gateway/` (enrollments, enrollment_keys, credits, usage) · the five gateway tables in `db/models/agent_gateway.py` · the data plane at `server/litellm/` (config.yaml + Dockerfile) · the vendor leaf `integrations/litellm/` · `server/ai_magic/` as the control plane's own inference consumer.
 
 **Responsibilities:** enroll every (org, member) into the org's LiteLLM team · mint one scoped virtual key per (member, gateway-capable harness) · fund those keys from the org's LLM credit ledger (signup grants, top-ups) and fail closed when the ledger is empty · import spend idempotently and attribute it · verify observed model access against the declared config.
 
@@ -30,7 +30,7 @@ This spec reads as ground truth; differences from `main` are collected in the tr
 
 ## 1 · Cells
 
-### the control plane (`server/agent_auth/` gateway files, splitting out)
+### the control plane (`server/ai_gateway/`)
 
 - **Owns:** the five tables below, the enrollment/key lifecycle, the ledger, the importer, verification, and the four background loops.
 - **Doors:**
@@ -228,9 +228,9 @@ sequenceDiagram
 
 ### Flow 5 — Verification
 
-- On its interval (default-off today), diff each key's **observed** model list against its declared access group.
+- On its interval, diff each key's **observed** model list against its declared access group.
 - Mismatch → `verification_status=misconfigured` with the delta stored on the key row.
-- **The fix is config.yaml + redeploy** — never a client-side patch. (This loop is the drift detector that would have caught the stale Claude-5 list before a user did.)
+- **The fix is config.yaml + redeploy** — never a client-side patch. (This loop is the drift detector that would have caught the stale Claude-5 list before a user did.) The expected set is parsed from the reviewed config.yaml itself, which therefore rides the server image as well as the LiteLLM image (`/app/litellm/config.yaml`); absent, the loop degrades to presence-only checks.
 
 ## 4 · Structure
 
@@ -254,7 +254,7 @@ server/proliferate/
 │   ├── topups.py                               Stripe top-up, grant, reactivation
 │   ├── verification.py                         observed-vs-declared access-group diff
 │   ├── worker.py                               the four background loops (started in main.py)
-│   ├── api.py                                  gateway_account_router (co-hosted with agent_auth's)
+│   ├── api.py                                  gateway_account_router
 │   ├── service.py                              get_capabilities / get_enrollment
 │   └── models.py                               AgentGatewayCapabilitiesResponse, AgentGatewayEnrollmentResponse
 └── server/ai_magic/                            control-plane inference consumer
@@ -288,9 +288,9 @@ The four background loops (`worker.py`, started from `main.py` lifespan; each in
 
 | Loop | Does | Interval setting |
 | --- | --- | --- |
-| backfill | retries `failed` enrollments; runs `migration.py` residue convergence first | `agent_gateway_backfill_interval_seconds` |
+| backfill | retries `failed` enrollments; runs `migration.py` residue convergence first; zero-grant guard after (`free_credits.run_zero_grant_check`: aged active org enrollments whose subject holds zero grant rows get the grant re-attempted, the rest raise one ops alert per tick) | `agent_gateway_backfill_interval_seconds` |
 | usage import | flow 4 | `agent_gateway_usage_import_interval_seconds` (+ `_overlap_seconds`) |
-| verification | flow 5 | `agent_gateway_verification_interval_seconds` (gated by `agent_gateway_verification_enabled`, default false) |
+| verification | flow 5 | `agent_gateway_verification_interval_seconds` (gated by `agent_gateway_verification_enabled`, default true) |
 | top-ups | auto top-up when the threshold crosses and a price id is configured | `agent_gateway_topup_*` (interval, threshold, price id, amount) |
 
 Other settings (config.py `agent_gateway_*`): enabled flag · LiteLLM base URLs + master key + timeout · default org budget · free credit amount · margin percent · policy minimum plan · qualification run/shard ids.
@@ -307,17 +307,14 @@ Failure modes: LiteLLM unreachable at enrollment → `sync_status=failed`, backf
 
 | This spec says | Prod today | The change |
 | --- | --- | --- |
-| Its own folder `server/ai_gateway/` with its own MANIFEST | Gateway files co-resident in `server/agent_auth/`; one manifest claims both systems | The code split (on the agent_auth build list) |
-| A signup grant funds every new org | The grant can silently never run: the founder org had no allocation row at all from creation to 2026-08-26 (cause in the signup path, unfound; fixed with a $25 admin grant) | Find the signup-hook miss; alert on orgs with zero grants after signup |
-| Verification runs | `agent_gateway_verification_enabled=false` | Enable once config.yaml settles |
 | Per-run virtual keys with envelope budgets | Keys are per (member, harness); budgets are org team + member cap | Open ruling (PR #2247 discussion): mint per run at placement — the only shape where the proxy hard-stops a runaway fan-out mid-run |
 | `ai_magic` routes through the gateway | Three direct endpoints, spend unattributed | After per-run keys (open ruling) |
 
 ## Build list
 
 - [x] Claude 5 family added to the direct-Anthropic model list — PR #2249 (the first funded launch 403'd on `claude-sonnet-5`; lands on the next release run)
-- [ ] Refresh the codex model list the same way (gpt-5.2-era entries; codex's current default is newer — the same 403 is waiting)
-- [ ] Code split into `server/ai_gateway/` + manifest + recompose (with agent_auth's build list) — `lints/server/fences.toml` lands with it, pinning who may import this folder and `server/agent_auth/` (enforcement table in [agent_auth §0](../agent_auth/README.md))
-- [ ] Find the signup-hook miss that let an org reach day 8 with zero grants; alert on zero-grant orgs (delta row 2 — the founder org itself is already fixed)
-- [ ] Enable verification once config.yaml settles
+- [x] Refresh the codex model list the same way (slice 5): the GPT-5.6 family + gpt-5.5 join the codex group — gpt-5.6-sol is codex's current default, and the access-group pin now fails on either harness's CLI default going missing
+- [x] Code split into `server/ai_gateway/` + manifest + recompose (slice 5) — `lints/server/fences.toml` landed with it, pinning who may import this folder and `server/agent_auth/` (enforcement table in [agent_auth §0](../agent_auth/README.md))
+- [x] Find the signup-hook miss that let an org reach day 8 with zero grants; alert on zero-grant orgs (slice 5). Cause found: the founder deleted his first account, and the one-per-GitHub-identity `free_cloud_allocation` survived on the deleted account's orphaned org subject (org row alive, zero memberships) — the re-signup's reserve hit "claimed elsewhere", the grant silently skipped, and a synced enrollment is never revisited. Fixed: an allocation owned by an org-kind subject with zero active memberships is reclaimed (ledger + claim converge onto the new default org via the D-3 primitives; a live second account still gets nothing). Guarded: the backfill tick's zero-grant check self-heals aged grantless enrollments and raises one ops alert per tick for the rest
+- [x] Enable verification (slice 5): default true now that config.yaml is settled; the expected-set path is pinned against file moves and the reviewed config rides the server image
 - [ ] Per-run keys + envelopes (pending the ruling) · then ai_magic through the gateway
