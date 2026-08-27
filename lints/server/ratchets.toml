@@ -14,6 +14,11 @@ max_lines = 551
 reason = "C-train composition: C-2 agent_auth_delivery_ack model joins the B/D cut; agent_gateway_enrollment_key model added for per-(subject,harness) scoped virtual keys (B2), then the agent_model_snapshot re-key (B4) documented why its scope carries NO unique key and what that costs the reader (the active row is plural in principle, so reads tie-break on id); AgentApiKey gains a kind column (D1); a module split is deferred to the model-taxonomy pass rather than done mid-stack; typed-config write gate loosens ck_agent_auth_selection_api_key_shape with a why-not-tighter comment; SG12 keeps the base docstring intact while the direct wall-clock owner import adds one line ; +8: FR-3 adds the three nullable gateway-verification columns (status, delta, verified_at) on the enrollment_key model"
 
 [[max_lines]]
+path = "server/proliferate/db/store/billing_subjects.py"
+max_lines = 723
+reason = "slice 5 signup-grant fix adds get_agent_gateway_free_credit_allocation_owner — the orphan-reclaim read resolving which subject holds a GitHub identity's free-credit claim today — beside the allocation helpers it reads; a billing-subject store split waits for the billing store taxonomy pass"
+
+[[max_lines]]
 path = "server/proliferate/db/store/organizations.py"
 max_lines = 721
 reason = "D1 adds get_default_organization_for_user (earliest active membership = signup placement org, the v1 payer law); SG09 review restores the collision-ladder and race-backstop rationale; SSO cull removed JIT membership persistence and slug login resolution; split pending with the org-store taxonomy pass"
@@ -40,8 +45,8 @@ reason = "C-train composition; P1 auth rebuild rewrote keys/selections/state cov
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_enrollment.py"
-max_lines = 850
-reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D train rewrote the suite org-first (D1 proof, floor mirroring, signup shape); C-1 added the both-surfaces poke coverage"
+max_lines = 894
+reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D train rewrote the suite org-first (D1 proof, floor mirroring, signup shape); C-1 added the both-surfaces poke coverage; slice 5 adds the founder-org regression (one ensure_org_enrollment call leaves BOTH the enrollment row and the free_signup grant row — the grant is not a separable hook)"
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_migration.py"

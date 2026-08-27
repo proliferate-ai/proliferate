@@ -318,6 +318,38 @@ async def move_agent_gateway_free_credit_allocation(
     return result.rowcount or 0
 
 
+async def get_agent_gateway_free_credit_allocation_owner(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    period_key: str,
+) -> BillingSubject | None:
+    """The billing subject currently holding the user's identity's allocation.
+
+    Read-side companion of ``ensure_agent_gateway_free_credit_allocation``:
+    resolves the ``free_cloud_allocation`` row for (agent-gateway kind, the
+    user's linked GitHub identity, ``period_key``) to the subject that owns
+    the claim today. ``None`` when the user has no linked GitHub identity or
+    the identity holds no claim yet. Callers use this to tell whether a
+    "claimed elsewhere" refusal points at a live claimant (the anti-abuse
+    dedupe working as intended) or at an orphan a deleted account left behind.
+    """
+    github_provider_user_id = await _linked_github_provider_user_id(db, user_id)
+    if github_provider_user_id is None:
+        return None
+    owner_subject_id = await db.scalar(
+        select(FreeCloudAllocation.billing_subject_id).where(
+            FreeCloudAllocation.allocation_kind
+            == FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+            FreeCloudAllocation.github_provider_user_id == github_provider_user_id,
+            FreeCloudAllocation.period_key == period_key,
+        )
+    )
+    if owner_subject_id is None:
+        return None
+    return await db.get(BillingSubject, owner_subject_id)
+
+
 async def _linked_github_provider_user_id(db: AsyncSession, user_id: UUID) -> str | None:
     return await db.scalar(
         select(AuthIdentity.provider_subject)

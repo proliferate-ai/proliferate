@@ -24,6 +24,7 @@ from proliferate.config import settings
 from proliferate.db import session_ops as db_session
 from proliferate.integrations.sentry import report_critical
 from proliferate.server.ai_gateway.enrollment import backfill_enrollments
+from proliferate.server.ai_gateway.free_credits import run_zero_grant_check
 from proliferate.server.ai_gateway.migration import migrate_legacy_enrollments
 from proliferate.server.ai_gateway.topups import (
     LlmTopupRunResult,
@@ -51,7 +52,22 @@ async def run_enrollment_backfill_once(*, limit: int = _BACKFILL_BATCH_LIMIT) ->
         # sees org rows) and pre-D-2 shared-identity org rows re-mint. Both
         # are idempotent and settle into a no-op once the backlog is drained.
         migrated = await migrate_legacy_enrollments(db, limit=limit)
-        return migrated + await backfill_enrollments(db, limit=limit)
+        processed = migrated + await backfill_enrollments(db, limit=limit)
+        # The zero-grant guard rides the backfill tick (the spec-shaped home,
+        # "a worker-loop check"): aged active org enrollments whose subject
+        # holds zero grant rows get the grant re-attempted, and whatever stays
+        # grantless raises one ops alert inside run_zero_grant_check itself.
+        zero_grant = await run_zero_grant_check(db, limit=limit)
+        if zero_grant.checked:
+            logger.info(
+                "Agent gateway zero-grant check processed enrollments",
+                extra={
+                    "checked": zero_grant.checked,
+                    "healed": zero_grant.healed,
+                    "alerted": zero_grant.alerted,
+                },
+            )
+        return processed
 
 
 async def _backfill_loop() -> None:

@@ -279,7 +279,7 @@ TAG_VALIDATORS: dict[str, Any] = {
     "action": _catalog(
         "heartbeat_start heartbeat_loop authorization_read reconcile_loop "
         "stripe_webhook_drop verification enrollment_backfill usage_import "
-        "llm_topup",
+        "llm_topup zero_grant_check",
         19,
     ),
     "harness_kind": _catalog("claude codex opencode grok", 8),
@@ -318,6 +318,7 @@ EXTRA_VALIDATORS: dict[str, Any] = {
     "session_purpose": lambda _value: None,
     "event_type": lambda _value: None,
     "line_item_count": lambda value: _int_in(value, 0, 10000),
+    "zero_grant_organization_ids": lambda value: _project_sequence(value, 50, canonical_uuid),
 }
 _NULLABLE_EXTRAS = frozenset(EXTRA_VALIDATORS) - {"drop_reason", "line_item_count"}
 
