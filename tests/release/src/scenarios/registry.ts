@@ -32,6 +32,13 @@ import { selfhostInstall1 } from "./selfhost-install-1.js";
 import { selfhostIsolation1 } from "./selfhost-isolation-1.js";
 import { selfhostQual1 } from "./selfhost-qual-1.js";
 import { selfhostCfn1 } from "./selfhost-cfn-1.js";
+import { t3BattAuth1 } from "./battery/t3-batt-auth-1.js";
+import { t3BattWeb1 } from "./battery/t3-batt-web-1.js";
+import { t3BattGh1 } from "./battery/t3-batt-gh-1.js";
+import { t3BattBill1 } from "./battery/t3-batt-bill-1.js";
+import { t3BattWorker1 } from "./battery/t3-batt-worker-1.js";
+import { t3BattInt1 } from "./battery/t3-batt-int-1.js";
+import { t3BattRun1 } from "./battery/t3-batt-run-1.js";
 
 /**
  * The tier-3 first wave (specs/engineering/testing/scenarios.md#tier-3--first-wave),
@@ -93,6 +100,17 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   selfhostIsolation1,
   selfhostQual1,
   selfhostCfn1,
+  // The staging battery (delivery/testing-cicd/delivery-spec-e2e-observable.md):
+  // observe-mode journeys, `T3-` + sandbox lane so the staging planner gate
+  // admits them unchanged. Three are expected-fail today by ruling; they are
+  // attempted for real and declare expected-fail only on the known signature.
+  t3BattAuth1,
+  t3BattWeb1,
+  t3BattGh1,
+  t3BattBill1,
+  t3BattWorker1,
+  t3BattInt1,
+  t3BattRun1,
 ];
 
 interface QualificationWorldEntry {
