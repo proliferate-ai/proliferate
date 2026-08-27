@@ -33,7 +33,7 @@ Seven inits, one rule: hosted-product mode plus a nonempty DSN, or the SDK never
 Source owners:
 
 ```text
-server/proliferate/integrations/sentry/{__init__,client,privacy}.py
+server/proliferate/integrations/sentry/{__init__,client,privacy,scalars}.py   (scalars = text scrubbers + scalar validators; privacy = catalogs + projection)
 server/proliferate/middleware/{request_telemetry,logging}.py
 apps/desktop/src/lib/integrations/telemetry/{client,config,sentry,scrub}.ts
 apps/desktop/src-tauri/src/telemetry.rs (+ telemetry/scrub.rs)
@@ -41,7 +41,7 @@ apps/web/src/browser/telemetry/{install-web-telemetry,sentry-event-filter,web-te
 apps/mobile/src/lib/integrations/telemetry/{config,sentry}.ts
 apps/packages/product-client/src/domain/telemetry/scrub.ts
 apps/packages/product-client/src/hooks/telemetry/lifecycle/use-telemetry-session-selection.ts
-anyharness/crates/anyharness/src/telemetry.rs (+ telemetry/scrub.rs)
+anyharness/crates/anyharness/src/telemetry.rs (+ telemetry/scrub.rs, telemetry/session_tag.rs)
 anyharness/crates/proliferate-worker/src/logging.rs (+ logging/scrub.rs)
 anyharness/crates/proliferate-supervisor/src/logging.rs
 ```
