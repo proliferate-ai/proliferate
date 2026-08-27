@@ -301,24 +301,29 @@ pub async fn get_auth_session() -> Result<Option<AuthSessionRecord>, String> {
 }
 
 #[tauri::command]
-pub async fn set_auth_session(session: AuthSessionRecord) -> Result<(), String> {
-    let _guard = SECRET_FILE_LOCK
-        .lock()
-        .map_err(|_| "secret file lock poisoned".to_string())?;
-    let written = write_secret_file(&auth_session_file_path()?, &session);
+pub async fn set_auth_session(app: tauri::AppHandle, session: AuthSessionRecord) -> Result<(), String> {
+    let written = {
+        let _guard = SECRET_FILE_LOCK
+            .lock()
+            .map_err(|_| "secret file lock poisoned".to_string())?;
+        write_secret_file(&auth_session_file_path()?, &session)
+    };
     if written.is_ok() {
-        crate::diagnostics_collector::identity::set_current_user_id(Some(session.user_id.clone()));
+        crate::diagnostics_collector::identity::apply_auth_change(&app, Some(session.user_id.clone()));
     }
     written
 }
 
 #[tauri::command]
-pub async fn clear_auth_session() -> Result<(), String> {
-    let _guard = SECRET_FILE_LOCK
-        .lock()
-        .map_err(|_| "secret file lock poisoned".to_string())?;
-    crate::diagnostics_collector::identity::set_current_user_id(None);
-    delete_file_if_exists(&auth_session_file_path()?)
+pub async fn clear_auth_session(app: tauri::AppHandle) -> Result<(), String> {
+    let deleted = {
+        let _guard = SECRET_FILE_LOCK
+            .lock()
+            .map_err(|_| "secret file lock poisoned".to_string())?;
+        delete_file_if_exists(&auth_session_file_path()?)
+    };
+    crate::diagnostics_collector::identity::apply_auth_change(&app, None);
+    deleted
 }
 
 /// The signed-in user's id from the persisted session, for the collector

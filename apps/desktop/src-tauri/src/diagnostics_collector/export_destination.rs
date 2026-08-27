@@ -15,6 +15,14 @@ pub(crate) const ENDPOINT_ENV: &str = "PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT";
 pub(crate) const HEADERS_ENV: &str = "PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS";
 
 fn baked(key: &str) -> Option<&'static str> {
+    // The bake is opt-in: the release workflow sets the marker alongside the
+    // two values, so a developer shell that happens to export the OTLP pair
+    // cannot silently bake a destination into a local build. A local build
+    // still exports when the vars are in the collector's runtime env — that
+    // path is visible in the shell that set it.
+    if option_env!("PROLIFERATE_BAKE_OTLP_DESTINATION") != Some("1") {
+        return None;
+    }
     match key {
         ENDPOINT_ENV => option_env!("PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT"),
         HEADERS_ENV => option_env!("PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS"),

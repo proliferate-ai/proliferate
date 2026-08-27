@@ -187,7 +187,7 @@ pub const MODEL_REQUEST: &str = "anyharness.model.request";
 ///
 /// A probe runs per harness, outside any session, so the record correlates
 /// on the install and the operation only. `route` is the closed label of the
-/// auth route the probe exercised ([`model_request_route`]).
+/// auth route the probe exercised (`ProbeAuthMaterial::route_label`).
 pub fn begin_model_request(agent_kind: &str, route: &'static str) -> LifecycleOperation {
     LifecycleOperation::begin_with_arguments(
         MODEL_REQUEST,
@@ -315,12 +315,13 @@ mod tests {
         let classifications =
             proliferate_diagnostics_client::lifecycle::classifications(MODEL_REQUEST)
                 .expect("operation is owned");
+        // materialization_failed is deliberately absent: a probe that never
+        // assembled a request emits no model.request record (attempt.rs).
         for code in [
             "timeout",
             "model_controls_incomplete",
             "probe_failed",
             "runner_vanished",
-            "materialization_failed",
         ] {
             let classification = model_request_classification(code).expect("a failure classifies");
             assert!(

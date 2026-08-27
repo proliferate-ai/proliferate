@@ -50,6 +50,10 @@ impl LaunchProbeService {
         };
         // The probe's provider call is the one model request the runtime makes
         // itself; every exit below closes this guard with a listed outcome.
+        // Deliberately begun only after materialization: an exit above this
+        // line never attempted a provider request, so it emits no
+        // `model.request` record at all (the SLI counts requests, not
+        // attempts to assemble one).
         let model_request = lifecycle::begin_model_request(harness_kind, material.route_label());
         let plan_producer = self.plan_producer.clone();
         let plan_harness = harness_kind.to_string();

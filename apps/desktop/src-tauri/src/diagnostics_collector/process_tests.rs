@@ -288,6 +288,7 @@ async fn an_install_id_crosses_the_process_seam_to_the_real_collector() {
 /// it. The collector half (the resource attribute) is proven in `otlp_tests`.
 #[tokio::test]
 async fn a_user_id_crosses_the_process_seam_to_the_real_collector() {
+    let _identity_guard = crate::diagnostics_collector::identity::test_identity_lock();
     let root = std::env::temp_dir().join(format!("collector-user-id-{}", uuid::Uuid::new_v4()));
     let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
         .expect("fallback");

@@ -97,6 +97,9 @@ env:
   # ships with a dark export leg — until HONEYCOMB_INGEST_KEY_PROD exists.
   PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT: ${{ secrets.HONEYCOMB_INGEST_KEY_PROD != '' && 'https://api.honeycomb.io' || '' }}
   PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS: ${{ secrets.HONEYCOMB_INGEST_KEY_PROD != '' && format('x-honeycomb-team={0}', secrets.HONEYCOMB_INGEST_KEY_PROD) || '' }}
+  # The bake is opt-in (export_destination.rs refuses baked values without
+  # this marker), so a developer shell can never silently bake a key.
+  PROLIFERATE_BAKE_OTLP_DESTINATION: ${{ secrets.HONEYCOMB_INGEST_KEY_PROD != '' && '1' || '' }}
   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
@@ -654,9 +657,19 @@ jobs:
           export PROLIFERATE_DESKTOP_SENTRY_RELEASE="${PROLIFERATE_DESKTOP_SENTRY_RELEASE:-proliferate-desktop-native@${desktop_version}+${short_sha}}"
           export ANYHARNESS_SENTRY_RELEASE="${ANYHARNESS_SENTRY_RELEASE:-anyharness@${anyharness_version}+${short_sha}}"
           # Loud, never silent: a release without a Honeycomb destination is a
-          # release whose lifecycle export stays dark on every install.
-          if [[ -z "${PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS:-}" ]]; then
-            echo "::warning::HONEYCOMB_INGEST_KEY_PROD is not set; this release bakes no Honeycomb destination (lifecycle export dark)"
+          # release whose lifecycle export stays dark on every install. Before
+          # the secret exists this is a warning; a half-wired pair (one env of
+          # the trio set without the others) is always a plumbing error.
+          _otlp_set=0
+          [[ -n "${PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT:-}" ]] && _otlp_set=$((_otlp_set+1))
+          [[ -n "${PROLIFERATE_DIAGNOSTICS_OTLP_HEADERS:-}" ]] && _otlp_set=$((_otlp_set+1))
+          [[ "${PROLIFERATE_BAKE_OTLP_DESTINATION:-}" == "1" ]] && _otlp_set=$((_otlp_set+1))
+          if [[ "$_otlp_set" -ne 0 && "$_otlp_set" -ne 3 ]]; then
+            echo "::error::Honeycomb destination env is half-wired ($_otlp_set of 3 values set) — endpoint, headers, and the bake marker travel together"
+            exit 1
+          fi
+          if [[ "$_otlp_set" -eq 0 ]]; then
+            echo "::warning::HONEYCOMB_INGEST_KEY_PROD is not set; this release bakes no Honeycomb destination (lifecycle export dark). Pablo: gh secret set HONEYCOMB_INGEST_KEY_PROD"
           else
             echo "Honeycomb destination baked: ${PROLIFERATE_DIAGNOSTICS_OTLP_ENDPOINT} (header value redacted)"
           fi
@@ -793,6 +806,21 @@ jobs:
             fi
           else
             echo "Skipping the collector self-report: ${{ matrix.target }} does not run on $runner_arch."
+          fi
+          # The baked destination is compiled into the desktop shell binary
+          # exactly when the release wired the secret: assert both directions
+          # so a renamed env var cannot silently ship a dark (or a dogfood-
+          # pointed) release.
+          if [[ "${PROLIFERATE_BAKE_OTLP_DESTINATION:-}" == "1" ]]; then
+            if ! grep -a -q "api.honeycomb.io" "$bin_dir/proliferate"; then
+              echo "::error::Release wired HONEYCOMB_INGEST_KEY_PROD but the desktop binary carries no baked destination"
+              exit 1
+            fi
+          else
+            if grep -a -q "api.honeycomb.io" "$bin_dir/proliferate"; then
+              echo "::error::No ingest secret was wired, yet the desktop binary carries a baked Honeycomb destination"
+              exit 1
+            fi
           fi
           # The per-developer export tag is dogfood-only. Its variable name is
           # a string literal that exists only inside that path, so finding it
