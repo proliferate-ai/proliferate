@@ -84,12 +84,15 @@ export function resolutionOutputs(deployHeadSha, parsed) {
   return { baseSha: fallbackSha(parsed), baseMode: "fallback" };
 }
 
-function writeGithubOutput(baseSha, baseMode) {
+function writeGithubOutput(baseSha, baseMode, alreadyDeployed) {
   const outputPath = process.env.GITHUB_OUTPUT;
   if (!outputPath) {
     return;
   }
-  fs.appendFileSync(outputPath, `base_sha=${baseSha}\nbase_mode=${baseMode}\n`);
+  fs.appendFileSync(
+    outputPath,
+    `base_sha=${baseSha}\nbase_mode=${baseMode}\nalready_deployed=${alreadyDeployed}\n`
+  );
 }
 
 async function resolveCandidateDeployHeadSha(candidate, artifactName, token) {
@@ -125,7 +128,7 @@ async function main() {
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (!token) {
     const { baseSha, baseMode } = resolutionOutputs("", parsed);
-    writeGithubOutput(baseSha, baseMode);
+    writeGithubOutput(baseSha, baseMode, false);
     console.error(`base_mode=${baseMode} (no token)`);
     console.log(baseSha);
     return;
@@ -135,6 +138,11 @@ async function main() {
   const maxPages = readPositiveIntegerEnv("DEPLOY_RUN_SCAN_MAX_PAGES", 20);
   let run;
   let exhausted = false;
+  // Candidates arrive newest-first, so a head-matching artifact seen before
+  // the base is found means the NEWEST deployed head already equals --head:
+  // the caller's auto path uses this to refuse re-deploying an identical
+  // delta when both rollups' events resolve the same deploy head.
+  let alreadyDeployed = false;
   for (let page = 1; page <= maxPages && !run; page += 1) {
     const data = await listSuccessfulWorkflowRuns({
       workflow: parsed.workflow,
@@ -160,7 +168,11 @@ async function main() {
         parsed.requiredArtifact,
         token
       );
-      if (!deployHeadSha || deployHeadSha === parsed.head) {
+      if (deployHeadSha === parsed.head) {
+        alreadyDeployed = true;
+        continue;
+      }
+      if (!deployHeadSha) {
         continue;
       }
       run = { ...candidate, deployHeadSha };
@@ -175,8 +187,8 @@ async function main() {
   }
 
   const { baseSha, baseMode } = resolutionOutputs(run?.deployHeadSha || "", parsed);
-  writeGithubOutput(baseSha, baseMode);
-  console.error(`base_mode=${baseMode}`);
+  writeGithubOutput(baseSha, baseMode, alreadyDeployed);
+  console.error(`base_mode=${baseMode} already_deployed=${alreadyDeployed}`);
   console.log(baseSha);
 }
 

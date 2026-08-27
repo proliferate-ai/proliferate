@@ -13,7 +13,11 @@ function read(name) {
 }
 
 function workflowNames() {
-  return readdirSync(workflowDir).filter((name) => name.endsWith(".yml"));
+  // GitHub honors both extensions; scanning only .yml would let an
+  // `evil.yaml` deployer past every doctrine test below.
+  return readdirSync(workflowDir).filter(
+    (name) => name.endsWith(".yml") || name.endsWith(".yaml"),
+  );
 }
 
 function triggerBlock(source, name) {
@@ -47,15 +51,12 @@ function triggerEvents(source, name) {
   return [...block.matchAll(/^\s{2}([a-z_]+):/gm)].map((match) => match[1]);
 }
 
-// Events that fire without a human pressing anything on this repository.
-const AUTOMATIC_EVENTS = new Set([
-  "push",
-  "pull_request",
-  "pull_request_target",
-  "workflow_run",
-  "merge_group",
-  "repository_dispatch",
-]);
+// Inverted to an allowlist on purpose: only these events require a human (or
+// an explicit caller) — EVERYTHING else (push, pull_request, workflow_run,
+// release, issue_comment, check_suite, status, deployment, create, …) counts
+// as automatic, so a novel trigger cannot slip past by not being on a
+// blocklist. `schedule` is classified separately and pinned to release.yml.
+const MANUAL_EVENTS = new Set(["workflow_dispatch", "workflow_call"]);
 // `Production` and `production` are the same GitHub Environment reference as
 // far as a reviewer scanning for prod reach is concerned, and the two deleted
 // coordinators both used the lowercase spelling. The spellings are NOT
@@ -117,7 +118,10 @@ test("staging deploys from green main and from an operator", () => {
   );
 });
 
-test("deploy-staging is the only workflow that auto-deploys, and only release.yml deploys on a schedule", () => {
+test("deploy-staging is the only workflow that auto-reaches a reusable deploy lane, and only release.yml does so on a schedule", () => {
+  // Scope, honestly: this scan covers reach through `uses:` of local reusable
+  // workflows. A deploy performed by shelling out (`gh workflow run`, raw
+  // aws-cli, a composite action) is invisible to it — review owns that class.
   // A workflow deploys if it reaches a `_deploy-` lane directly OR through any
   // chain of local reusable workflows — a non-`_deploy-` wrapper with
   // `workflow_call` must not launder its callers past this scan.
@@ -143,7 +147,9 @@ test("deploy-staging is the only workflow that auto-deploys, and only release.ym
   for (const name of workflowNames()) {
     if (!deploysTransitively(name)) continue;
     const events = triggerEvents(sources.get(name), name);
-    if (events.some((event) => AUTOMATIC_EVENTS.has(event))) automatic.push(name);
+    if (events.some((event) => event !== "schedule" && !MANUAL_EVENTS.has(event))) {
+      automatic.push(name);
+    }
     if (events.includes("schedule")) scheduled.push(name);
   }
 
@@ -173,6 +179,26 @@ test("the plan resolves the deploy head against both rollups and guards regressi
   assert.match(workflow, /git merge-base --is-ancestor "\$event_head" "\$candidate"/);
   assert.match(workflow, /git merge-base --is-ancestor "\$base_sha" "\$deploy_head"/);
   assert.match(workflow, /proceed=false/);
+
+  // Server CI's push trigger is path-filtered, so `missing` is green for it
+  // on the auto path (a frontend/docs-only commit has no Server CI run and no
+  // healing event would ever arrive); CI must be a real success.
+  assert.match(workflow, /server-ci\.yml:success \| server-ci\.yml:missing\)/);
+  assert.match(workflow, /ci\.yml:success\)/);
+  // Any completed success for the SHA counts; a later cancelled duplicate
+  // must not mask it.
+  assert.match(workflow, /any\(\.status == "completed" and \.conclusion == "success"\)/);
+
+  // Duplicate rollup events must not re-deploy an identical delta: the auto
+  // path refuses when the newest deployed head already equals the deploy head.
+  assert.match(workflow, /"\$already_deployed" == "true"/);
+
+  // A force-push that removed the last-deployed commit is staleness, not a
+  // permanent wedge; dispatch regressions refuse loudly unless the operator
+  // explicitly allows a rollback.
+  assert.match(workflow, /git cat-file -e "\$\{base_sha\}\^\{commit\}"/);
+  assert.match(workflow, /allow_regression/);
+  assert.match(workflow, /::error::\$deploy_head is behind the last deployed \$base_sha/);
 
   // The guard actually gates: detect and every deploy lane require proceed,
   // and a guarded run must never upload the deploy-summary artifact that

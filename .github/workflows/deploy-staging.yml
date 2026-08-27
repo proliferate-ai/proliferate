@@ -37,6 +37,11 @@ on:
         default: false
         required: false
         type: boolean
+      allow_regression:
+        description: Deploy even if the ref is behind the last deployed commit (deliberate rollback).
+        default: false
+        required: false
+        type: boolean
 
 permissions:
   actions: read
@@ -123,15 +128,19 @@ jobs:
 
           rollup_status() {
             local sha="$1" wf="$2"
+            # Any completed success for the SHA counts (same commit = same
+            # code): a later cancelled duplicate run must not mask an earlier
+            # green one.
             gh run list \
               --workflow "$wf" \
               --commit "$sha" \
               --limit 10 \
               --json createdAt,status,conclusion \
-              --jq '[.[] | select(.conclusion != "skipped")] | sort_by(.createdAt) | last
-                    | if . == null then "missing"
-                      elif .status != "completed" then "pending"
-                      else .conclusion end'
+              --jq '[.[] | select(.conclusion != "skipped")] as $runs
+                    | if ($runs | length) == 0 then "missing"
+                      elif ($runs | any(.status == "completed" and .conclusion == "success")) then "success"
+                      elif ($runs | any(.status != "completed")) then "pending"
+                      else ($runs | sort_by(.createdAt) | last | .conclusion) end'
           }
 
           deploy_head=""
@@ -143,7 +152,18 @@ jobs:
               for wf in ci.yml server-ci.yml; do
                 status="$(rollup_status "$candidate" "$wf")"
                 echo "$wf @ ${candidate:0:9}: $status"
-                [[ "$status" == "success" ]] || { green=false; break; }
+                # Server CI's push trigger is PATH-FILTERED (server/**,
+                # catalogs/**, locks…), so most main commits have no Server CI
+                # run at all — `missing` is green for it. CI's push trigger is
+                # unfiltered: a missing CI run is genuinely not-proven.
+                case "$wf:$status" in
+                  ci.yml:success) ;;
+                  server-ci.yml:success | server-ci.yml:missing) ;;
+                  *)
+                    green=false
+                    break
+                    ;;
+                esac
               done
               if [[ "$green" == "true" ]]; then
                 deploy_head="$candidate"
@@ -181,11 +201,42 @@ jobs:
               --required-artifact deploy-summary-staging
           )"
           base_mode="$(grep '^base_mode=' "$GITHUB_OUTPUT" | tail -n1 | cut -d= -f2)"
+          already_deployed="$(grep '^already_deployed=' "$GITHUB_OUTPUT" | tail -n1 | cut -d= -f2)"
 
-          if [[ "$base_mode" == "resolved" ]] && ! git merge-base --is-ancestor "$base_sha" "$deploy_head"; then
-            echo "Regression guard: last deployed $base_sha is not an ancestor of $deploy_head; refusing to move staging backwards."
+          # Both rollups fire one event each per commit; when the earlier
+          # event's run executes after both are already green, it would resolve
+          # the SAME deploy head — and the base scan's self-exclusion would
+          # anchor it on the OLDER base, re-deploying an identical delta twice.
+          # Operator dispatch stays allowed to re-deploy on purpose.
+          if [[ "${{ github.event_name }}" == "workflow_run" && "$already_deployed" == "true" ]]; then
+            echo "$deploy_head is already the newest deployed head (duplicate rollup event); nothing to do."
             echo "proceed=false" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+
+          # A force-push can remove the last-deployed commit from history; an
+          # unresolvable base is staleness (deploy everything), never a wedge.
+          if [[ "$base_mode" == "resolved" ]] && ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+            echo "::warning::Last deployed commit $base_sha is absent from this history (force-push?); treating the base as stale and deploying the full surface set."
+            base_sha="$fallback"
+            base_mode="fallback"
+            {
+              echo "base_sha=$base_sha"
+              echo "base_mode=fallback"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ "$base_mode" == "resolved" ]] && ! git merge-base --is-ancestor "$base_sha" "$deploy_head"; then
+            if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+              echo "Regression guard: last deployed $base_sha is not an ancestor of $deploy_head; refusing to move staging backwards."
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            elif [[ "${{ github.event.inputs.allow_regression }}" == "true" ]]; then
+              echo "::warning::Deploying $deploy_head although it is behind the last deployed $base_sha (allow_regression)."
+            else
+              echo "::error::$deploy_head is behind the last deployed $base_sha. Re-dispatch with allow_regression: true to roll staging back deliberately." >&2
+              exit 1
+            fi
           fi
 
           {
