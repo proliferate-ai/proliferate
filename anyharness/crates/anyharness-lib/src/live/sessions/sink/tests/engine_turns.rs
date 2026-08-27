@@ -313,3 +313,45 @@ fn sweep_keeps_engine_turn_with_content_open() {
         "engine turn with content stays open for its quiescence close"
     );
 }
+
+/// Time-to-first-output is stamped once per turn, at the first assistant
+/// item, and re-armed by the next turn. The guard itself is inert here (no
+/// producer installed), so the flag is the observable.
+#[test]
+fn first_assistant_output_is_stamped_once_per_turn() {
+    let store = seeded_store();
+    let (tx, _rx) = broadcast::channel(32);
+    let mut sink = SessionEventSink::new(
+        "session-1".to_string(),
+        "claude".to_string(),
+        PathBuf::from("/tmp/workspace"),
+        tx,
+        Arc::new(store),
+    );
+
+    assert!(sink.begin_turn("hello".into(), None, vec![], None).is_ok());
+    assert!(
+        !sink.turn_first_output_stamped,
+        "nothing has been output yet"
+    );
+    sink.agent_message_chunk(AcpChunkPayload {
+        content: json!("Hel"),
+        ..Default::default()
+    });
+    assert!(
+        sink.turn_first_output_stamped,
+        "the first assistant item is the first output"
+    );
+    sink.agent_message_chunk(AcpChunkPayload {
+        content: json!("lo"),
+        ..Default::default()
+    });
+    assert!(sink.turn_first_output_stamped);
+    sink.turn_ended(StopReason::EndTurn);
+
+    assert!(sink.begin_turn("again".into(), None, vec![], None).is_ok());
+    assert!(
+        !sink.turn_first_output_stamped,
+        "a new turn re-arms the stamp"
+    );
+}
