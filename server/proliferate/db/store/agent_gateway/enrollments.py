@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
@@ -381,6 +382,42 @@ async def list_active_org_enrollments_with_zero_grants(
         .all()
     )
     return [enrollment_record(row) for row in rows]
+
+
+async def list_organization_ids_with_zero_grant_active_enrollments(
+    db: AsyncSession,
+    *,
+    organization_ids: Sequence[UUID],
+) -> list[UUID]:
+    """Which of the given orgs still hold a grantless active org enrollment.
+
+    Targeted companion of ``list_active_org_enrollments_with_zero_grants``,
+    for the zero-grant guard's paging-suppression bookkeeping: when the sweep
+    was TRUNCATED at its limit, an org's absence from the page proves nothing
+    (it may sit beyond the window), so the guard asks directly about the
+    specific orgs it is suppressing. Orgs that come back absent here have
+    been funded — in-pass or out of band — and may leave the suppression set.
+    """
+    if not organization_ids:
+        return []
+    has_any_grant = (
+        select(LlmCreditGrant.id)
+        .where(LlmCreditGrant.billing_subject_id == AgentGatewayEnrollment.billing_subject_id)
+        .exists()
+    )
+    rows = (
+        await db.execute(
+            select(AgentGatewayEnrollment.organization_id)
+            .where(
+                AgentGatewayEnrollment.subject_kind == AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
+                AgentGatewayEnrollment.revoked_at.is_(None),
+                AgentGatewayEnrollment.organization_id.in_(tuple(organization_ids)),
+                ~has_any_grant,
+            )
+            .distinct()
+        )
+    ).scalars()
+    return [organization_id for organization_id in rows.all() if organization_id is not None]
 
 
 async def get_enrollment_by_virtual_key_id(

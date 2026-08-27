@@ -279,7 +279,7 @@ TAG_VALIDATORS: dict[str, Any] = {
     "action": _catalog(
         "heartbeat_start heartbeat_loop authorization_read reconcile_loop "
         "stripe_webhook_drop verification enrollment_backfill usage_import "
-        "llm_topup zero_grant_check",
+        "llm_topup zero_grant_check orphan_reclaim",
         19,
     ),
     "harness_kind": _catalog("claude codex opencode grok", 8),

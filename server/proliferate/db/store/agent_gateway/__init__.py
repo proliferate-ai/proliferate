@@ -44,6 +44,7 @@ from proliferate.db.store.agent_gateway.enrollments import (
     list_billing_subject_ids_with_active_enrollments,
     list_enrollments_needing_sync,
     list_org_memberships_missing_enrollment,
+    list_organization_ids_with_zero_grant_active_enrollments,
     list_organizations_with_limit_reached_enrollments,
     list_stale_identity_org_enrollments,
     mark_enrollment_failed,
@@ -88,6 +89,7 @@ from proliferate.db.store.agent_gateway.selections import (
 )
 from proliferate.db.store.agent_gateway.usage import (
     advance_usage_import_cursor,
+    count_usage_events_for_subject,
     get_usage_import_cursor,
     insert_usage_event_once,
     llm_cost_usd_by_user,
@@ -113,6 +115,7 @@ __all__ = [
     "build_redacted_hint",
     "clear_auth_selections",
     "count_topup_grants",
+    "count_usage_events_for_subject",
     "create_agent_api_key",
     "create_agent_provider_config",
     "create_llm_credit_grant",
@@ -149,6 +152,7 @@ __all__ = [
     "list_enrollments_needing_sync",
     "list_org_member_route_selections",
     "list_org_memberships_missing_enrollment",
+    "list_organization_ids_with_zero_grant_active_enrollments",
     "list_organizations_with_limit_reached_enrollments",
     "list_stale_identity_org_enrollments",
     "llm_cost_usd_by_user",

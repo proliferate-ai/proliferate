@@ -144,6 +144,15 @@ async def _reclaim_orphaned_allocation(
         moved grant's ``source_ref`` rewrite is skipped when the destination
         ref is taken, and moving anyway would leave two free_signup rows.
 
+    P2 and P4 both read ``FOR UPDATE``: the move is an unfiltered subject-wide
+    UPDATE on the source AND lands rows on the destination, so both sides need
+    the rows they vetted held for the transaction. Row locks cannot cover an
+    INSERT that has not happened yet, so three post-move invariants back them
+    up — moved grants never exceed the observed source grants, moved usage
+    rows equal the observed source usage rows, and the destination ends with
+    at most one ``free_signup`` row. Any violation raises
+    :class:`AgentGatewayReclaimLedgerRaced` and rolls the reclaim back.
+
     A P1 failure is the normal dedupe path and stays silent. An orphan that
     fails P2–P4 is refused with ONE ``logger.error`` naming the ids and the
     reason — the manual-resolution path, deliberately non-paging.
@@ -180,25 +189,33 @@ async def _reclaim_orphaned_allocation(
         and orphan_grants[0].source == LLM_CREDIT_SOURCE_FREE_SIGNUP
         and orphan_grants[0].source_ref == own_signup_ref
     )
+    orphan_allocations = await count_agent_gateway_free_credit_allocations_for_subject(
+        db, billing_subject_id=owner.id
+    )
+    own_allocations = await count_agent_gateway_free_credit_allocations_for_subject(
+        db,
+        billing_subject_id=owner.id,
+        github_provider_user_id=github_provider_user_id,
+    )
+    orphan_usage_events = await agent_gateway_store.count_usage_events_for_subject(db, owner.id)
+    # P4's read LOCKS the destination's grants for the same reason P2 locks the
+    # source's: a free_signup grant committed on the DESTINATION between this
+    # check and the move slips through every other guard — the move's
+    # source_ref rewrite correctly declines (the ref is taken), the moved count
+    # still matches the source, and the moved row lands BESIDE the existing one.
+    destination_grants = await agent_gateway_store.list_llm_credit_grants(
+        db, default_org_subject.id, for_update=True
+    )
     if not ledger_is_pure:
         refusal_reason = "orphan_ledger_not_identity_pure"
-    elif (
-        await count_agent_gateway_free_credit_allocations_for_subject(
-            db, billing_subject_id=owner.id
-        )
-        != 1
-        or await count_agent_gateway_free_credit_allocations_for_subject(
-            db,
-            billing_subject_id=owner.id,
-            github_provider_user_id=github_provider_user_id,
-        )
-        != 1
-    ):
+    elif orphan_allocations == 0:
+        # Lost a concurrent race for the same claim (the winner already moved
+        # it) — distinct from holding SOMEONE ELSE's claim, which is what
+        # "foreign" means. Naming them the same misleads triage.
+        refusal_reason = "orphan_allocation_already_moved"
+    elif orphan_allocations != 1 or own_allocations != 1:
         refusal_reason = "orphan_holds_foreign_allocations"
-    elif any(
-        grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP
-        for grant in await agent_gateway_store.list_llm_credit_grants(db, default_org_subject.id)
-    ):
+    elif any(grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP for grant in destination_grants):
         refusal_reason = "destination_already_has_free_signup"
     if refusal_reason is not None:
         logger.error(
@@ -217,21 +234,47 @@ async def _reclaim_orphaned_allocation(
         from_billing_subject_id=owner.id,
         to_billing_subject_id=default_org_subject.id,
     )
+    # Can't-happen belts behind the FOR UPDATE reads above: a row that appeared
+    # after a vetting read (an INSERT no row lock can prevent) has just been
+    # moved, or moved onto, with money we never vetted. Each raises so the whole
+    # reclaim transaction rolls back — nothing moves — and pages, because a
+    # silent partial reclaim is exactly the class of bug the preconditions exist
+    # to prevent.
+    raced: str | None = None
     if moved_grants > len(orphan_grants):
-        # Can't-happen belt behind the FOR UPDATE above: a grant that appeared
-        # after the purity read (an INSERT no row lock can prevent) has just
-        # been moved with money we never vetted. Raise so the whole reclaim
-        # transaction rolls back — nothing moves — and page, because a silent
-        # partial reclaim is exactly the class of bug the preconditions exist
-        # to prevent.
-        error = AgentGatewayReclaimLedgerRaced(
-            f"orphan reclaim observed {len(orphan_grants)} grant(s) on billing "
-            f"subject {owner.id} but moved {moved_grants} to "
-            f"{default_org_subject.id}; rolled back"
+        raced = (
+            f"observed {len(orphan_grants)} grant(s) on source {owner.id} but moved {moved_grants}"
         )
+    elif moved_usage != orphan_usage_events:
+        # The debit side moves too, so an imported usage row landing in the
+        # window would ride along unvetted (it would silently reduce the
+        # destination's credit).
+        raced = (
+            f"observed {orphan_usage_events} usage row(s) on source {owner.id} "
+            f"but moved {moved_usage}"
+        )
+    else:
+        destination_signups = [
+            grant
+            for grant in await agent_gateway_store.list_llm_credit_grants(
+                db, default_org_subject.id
+            )
+            if grant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP
+        ]
+        if len(destination_signups) > 1:
+            # The F1 shape: a free_signup grant appeared on the DESTINATION in
+            # the window, so the move's source_ref rewrite declined and the
+            # moved row landed beside it — the one place in this path where
+            # money could increase without entitlement.
+            raced = (
+                f"destination {default_org_subject.id} holds "
+                f"{len(destination_signups)} free_signup grants after the move"
+            )
+    if raced is not None:
+        error = AgentGatewayReclaimLedgerRaced(f"orphan reclaim raced: {raced}; rolled back")
         report_critical(
             error,
-            tags={"domain": "agent_gateway", "action": "zero_grant_check"},
+            tags={"domain": "agent_gateway", "action": "orphan_reclaim"},
         )
         raise error
     moved_allocations = await move_agent_gateway_free_credit_allocation(
@@ -434,15 +477,23 @@ async def run_zero_grant_check(
     # An org that is no longer broken must leave the suppression set, so a later
     # RE-break pages once more instead of being silenced for the process's life.
     # Healing in this pass is one way; healing out of band (an admin grant, a
-    # top-up) is the other — such an org simply stops appearing as pageable. So
-    # when this pass saw the WHOLE backlog (the feed was not truncated at the
-    # limit), absence from `pageable_org_ids` proves funded and evicts. When the
-    # feed WAS truncated, absence proves nothing (the org may sit beyond the
-    # limit window), so only in-pass heals evict.
+    # top-up) is the other — such an org simply stops appearing as pageable.
     if len(listed) < limit:
+        # The pass saw the WHOLE backlog, so absence from `pageable_org_ids`
+        # proves funded.
         known.difference_update(known - set(pageable_org_ids))
-    else:
-        known.difference_update(healed_org_ids)
+    elif known:
+        # TRUNCATED feed: absence proves nothing (the org may sit beyond the
+        # limit window), so ask directly about the orgs being suppressed —
+        # otherwise an out-of-band-healed org would never leave the set and its
+        # re-break would be silenced forever.
+        still_broken = set(
+            await agent_gateway_store.list_organization_ids_with_zero_grant_active_enrollments(
+                db,
+                organization_ids=sorted(known, key=str),
+            )
+        )
+        known.intersection_update(still_broken)
     new_org_ids = tuple(org_id for org_id in pageable_org_ids if org_id not in known)
     repeat_org_ids = tuple(org_id for org_id in pageable_org_ids if org_id in known)
     if new_org_ids:

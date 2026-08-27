@@ -346,6 +346,56 @@ async def test_total_outage_pages_even_below_the_floor(
     assert kwargs["tags"] == {"domain": "agent_gateway", "action": "verification"}
 
 
+@pytest.mark.asyncio
+async def test_persistent_outage_pages_once_then_again_after_recovery(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit F4: page the OUTAGE, not every tick of it.
+
+    A persistent outage used to page on every interval (~96 pages/day at the
+    default), and N2 extended that population to small deployments where one
+    permanently broken key pages forever. The loop now carries an
+    already-paged flag: consecutive outage ticks page once, and the first
+    clean tick clears it so a LATER outage pages again.
+    """
+    enrollment_id = await _create_enrollment(db_session)
+    await _mint_key(db_session, enrollment_id, "claude")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}})
+    paged: list[Exception] = []
+    monkeypatch.setattr(
+        verification, "report_critical", lambda error, **kwargs: paged.append(error)
+    )
+    down = {"sk-litellm-claude": litellm.LiteLLMIntegrationError("down", "transient")}
+    healthy = {"sk-litellm-claude": ["claude-sonnet"]}
+
+    async def tick(mapping: dict[str, object], already_paged: bool) -> bool:
+        _fake_list_models(monkeypatch, mapping)
+        targets = await verification.collect_verification_targets(db_session)
+        observations = await verification.probe_verification_targets(targets)
+        result = await verification.record_verification_verdicts(
+            db_session, observations, outage_already_paged=already_paged
+        )
+        return result.outage_detected
+
+    # Two consecutive total-outage ticks: exactly one page.
+    outage_paged = await tick(down, False)
+    assert outage_paged is True
+    assert len(paged) == 1
+    outage_paged = await tick(down, outage_paged)
+    assert outage_paged is True
+    assert len(paged) == 1  # suppressed, not re-paged
+
+    # A clean tick clears the flag.
+    outage_paged = await tick(healthy, outage_paged)
+    assert outage_paged is False
+    assert len(paged) == 1
+
+    # A NEW outage pages again.
+    outage_paged = await tick(down, outage_paged)
+    assert outage_paged is True
+    assert len(paged) == 2
+
+
 def test_expected_config_resolves_from_source_tree() -> None:
     """The expected-set source must resolve without monkeypatching.
 

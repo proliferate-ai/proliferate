@@ -191,7 +191,7 @@ async def stop_agent_gateway_usage_import(
         await task
 
 
-async def run_verification_once() -> VerificationResult:
+async def run_verification_once(*, outage_already_paged: bool = False) -> VerificationResult:
     # Three phases, two SHORT transactions: the LiteLLM probes in the middle
     # run with no transaction open, so an outage's worth of HTTP timeouts
     # (potentially many keys x the client timeout) never holds row locks.
@@ -199,13 +199,23 @@ async def run_verification_once() -> VerificationResult:
         targets = await collect_verification_targets(db)
     observations = await probe_verification_targets(targets)
     async with db_session.open_async_transaction() as db:
-        return await record_verification_verdicts(db, observations)
+        return await record_verification_verdicts(
+            db,
+            observations,
+            outage_already_paged=outage_already_paged,
+        )
 
 
 async def _verification_loop() -> None:
+    # Process-local "already paged this outage" flag: a persistent outage pages
+    # on its first tick only, and the first clean tick clears the flag so the
+    # NEXT outage pages again. A restart re-pages once — accepted, same as the
+    # zero-grant guard's suppression set.
+    outage_paged = False
     while True:
         try:
-            result = await run_verification_once()
+            result = await run_verification_once(outage_already_paged=outage_paged)
+            outage_paged = result.outage_detected
             if result.misconfigured or result.errored:
                 logger.info(
                     "Agent gateway verification tick recorded verdicts",

@@ -69,12 +69,19 @@ _CONFIG_PATH = Path(__file__).resolve().parents[3] / "litellm" / "config.yaml"
 
 @dataclass(frozen=True)
 class VerificationResult:
-    """Summary of one verification tick, returned for logging/tests."""
+    """Summary of one verification tick, returned for logging/tests.
+
+    ``outage_detected`` says the tick met the outage bar (whether or not it
+    paged — a persistent outage pages only on its first tick). The worker
+    keeps it as its "already paged this outage" flag: a tick that comes back
+    False clears the flag, so the NEXT outage pages again.
+    """
 
     checked: int
     ok: int
     misconfigured: int
     errored: int
+    outage_detected: bool = False
 
 
 @dataclass(frozen=True)
@@ -246,6 +253,8 @@ async def probe_verification_targets(
 async def record_verification_verdicts(
     db: AsyncSession,
     observations: list[KeyObservation],
+    *,
+    outage_already_paged: bool = False,
 ) -> VerificationResult:
     """Phase 3 (short transaction): diff, write verdicts, report in aggregate.
 
@@ -256,6 +265,10 @@ async def record_verification_verdicts(
     checked key errored — a small fleet at 100% failure is a total outage and
     must page regardless of the floor — or ``errored`` reached
     ``max(_ERROR_ALERT_FLOOR, ceil(checked / 2))``.
+
+    ``outage_already_paged`` suppresses the page for an outage the caller has
+    already reported, so a persistent outage pages once rather than once per
+    tick; the returned ``outage_detected`` is what the caller stores.
     """
     expected_map = load_expected_access_groups()
     ok = 0
@@ -290,7 +303,11 @@ async def record_verification_verdicts(
     # A total outage pages whatever the fleet's size: with <= 9 active keys the
     # floor alone would stay silent at 100% failure.
     total_outage = checked > 0 and errored == checked
-    if total_outage or errored >= max(_ERROR_ALERT_FLOOR, math.ceil(checked / 2)):
+    outage_detected = total_outage or errored >= max(_ERROR_ALERT_FLOOR, math.ceil(checked / 2))
+    # Page the OUTAGE, not every tick of it: a persistent outage would
+    # otherwise page on its own interval forever (~96/day at the default). The
+    # caller carries the flag and clears it on the first clean tick.
+    if outage_detected and not outage_already_paged:
         report_critical(
             AgentGatewayVerificationErrors(
                 f"verification errored on {errored} of {checked} keys; sample: {sample_error}"
@@ -302,6 +319,7 @@ async def record_verification_verdicts(
         ok=ok,
         misconfigured=misconfigured,
         errored=errored,
+        outage_detected=outage_detected,
     )
 
 

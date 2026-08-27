@@ -505,7 +505,131 @@ async def test_reclaim_aborts_when_a_grant_lands_in_the_toctou_window(
     assert len(paged) == 1
     error, kwargs = paged[0]
     assert isinstance(error, AgentGatewayReclaimLedgerRaced)
-    assert kwargs["tags"] == {"domain": "agent_gateway", "action": "zero_grant_check"}
+    # Tagged as the reclaim's own action, not the guard's: the raise also fires
+    # on the signup path, where "zero_grant_check" would mislead triage.
+    assert kwargs["tags"] == {"domain": "agent_gateway", "action": "orphan_reclaim"}
+
+
+@pytest.mark.asyncio
+async def test_reclaim_aborts_when_destination_gains_free_signup_in_the_window(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit F1: the DESTINATION side of the window cannot add free money.
+
+    A free_signup grant committed on the destination between the P4 check and
+    the move slips past every other guard: the move's source_ref rewrite
+    correctly declines (the ref is taken), the moved count still matches the
+    source, and the moved row lands BESIDE the existing one — two free_signup
+    rows, credit increased without entitlement. The destination invariant
+    catches it and rolls the reclaim back.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    github_subject = f"gh-destrace-{uuid.uuid4().hex[:8]}"
+    await _fabricate_orphan_claim(db_session, github_subject=github_subject, consumed_usd=0.0)
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id, provider_subject=github_subject)
+    org_id = await _place_in_org(db_session, user_id=user_id)
+    dest_subject = await ensure_organization_billing_subject(db_session, org_id)
+    paged = _capture_report_critical(monkeypatch)
+
+    real_move = store.move_llm_credit_ledger
+
+    async def racing_move(
+        db: AsyncSession,
+        *,
+        from_billing_subject_id: uuid.UUID,
+        to_billing_subject_id: uuid.UUID,
+    ) -> tuple[int, int]:
+        # The window: a free_signup grant lands on the DESTINATION after P4
+        # read it as empty.
+        await store.create_llm_credit_grant(
+            db,
+            billing_subject_id=to_billing_subject_id,
+            user_id=None,
+            source=LLM_CREDIT_SOURCE_FREE_SIGNUP,
+            amount_usd=Decimal("5"),
+            source_ref=f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{to_billing_subject_id}",
+        )
+        return await real_move(
+            db,
+            from_billing_subject_id=from_billing_subject_id,
+            to_billing_subject_id=to_billing_subject_id,
+        )
+
+    monkeypatch.setattr(free_credits.agent_gateway_store, "move_llm_credit_ledger", racing_move)
+
+    with pytest.raises(AgentGatewayReclaimLedgerRaced) as raised:
+        await ensure_signup_free_credit_grant(db_session, user_id)
+
+    # The invariant OBSERVED the two-row state and refused to let the reclaim
+    # complete. The doubled row is still visible in this uncommitted session —
+    # discarding it is precisely what the raise buys, via the caller's
+    # transaction rollback (the worker's open_async_transaction in production);
+    # asserting a rolled-back count here would need a commit the fixture never
+    # makes, and would also discard the fabricated orphan.
+    assert "free_signup grants after the move" in str(raised.value)
+    assert str(dest_subject.id) in str(raised.value)
+    assert len(paged) == 1
+    error, kwargs = paged[0]
+    assert isinstance(error, AgentGatewayReclaimLedgerRaced)
+    assert kwargs["tags"] == {"domain": "agent_gateway", "action": "orphan_reclaim"}
+
+
+@pytest.mark.asyncio
+async def test_reclaim_aborts_when_a_usage_row_lands_in_the_window(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit F2: the debit side is vetted too, by count.
+
+    ``move_llm_credit_ledger`` moves usage rows as well, so a row imported
+    into the window would ride along unvetted and silently reduce the
+    destination's remaining credit. The usage-count invariant aborts instead.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    github_subject = f"gh-usagerace-{uuid.uuid4().hex[:8]}"
+    await _fabricate_orphan_claim(db_session, github_subject=github_subject, consumed_usd=0.0)
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id, provider_subject=github_subject)
+    org_id = await _place_in_org(db_session, user_id=user_id)
+    dest_subject = await ensure_organization_billing_subject(db_session, org_id)
+    paged = _capture_report_critical(monkeypatch)
+
+    real_move = store.move_llm_credit_ledger
+
+    async def racing_move(
+        db: AsyncSession,
+        *,
+        from_billing_subject_id: uuid.UUID,
+        to_billing_subject_id: uuid.UUID,
+    ) -> tuple[int, int]:
+        # The window: the importer attributes a big debit to the orphan.
+        await store.insert_usage_event_once(
+            db,
+            litellm_request_id=f"req-race-{uuid.uuid4().hex[:8]}",
+            occurred_at=datetime(2026, 8, 2, 12, 0, tzinfo=UTC),
+            billing_subject_id=from_billing_subject_id,
+            cost_usd=500.0,
+        )
+        return await real_move(
+            db,
+            from_billing_subject_id=from_billing_subject_id,
+            to_billing_subject_id=to_billing_subject_id,
+        )
+
+    monkeypatch.setattr(free_credits.agent_gateway_store, "move_llm_credit_ledger", racing_move)
+
+    with pytest.raises(AgentGatewayReclaimLedgerRaced):
+        await ensure_signup_free_credit_grant(db_session, user_id)
+
+    assert len(paged) == 1
+    error, kwargs = paged[0]
+    assert isinstance(error, AgentGatewayReclaimLedgerRaced)
+    assert "usage row" in str(error)
+    assert kwargs["tags"] == {"domain": "agent_gateway", "action": "orphan_reclaim"}
+    # The destination never inherited the raced debit as a completed reclaim.
+    assert dest_subject.id is not None
 
 
 def _capture_report_critical(
@@ -767,6 +891,69 @@ async def test_healed_org_is_evicted_so_a_re_break_pages_again(
     assert second.alerted_organization_ids == (org_id,)
     assert len(calls) == 2  # one page per break, not one per lifetime
     assert alerted == {org_id}
+
+
+@pytest.mark.asyncio
+async def test_healed_org_is_evicted_even_when_the_feed_is_truncated(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit F3: the truncated-feed branch must evict out-of-band heals too.
+
+    With the feed truncated at its limit, absence from a pass proves nothing,
+    so the earlier fix only evicted in-pass heals — leaving an org funded by
+    admin grant/top-up suppressed forever (the same bug the eviction fixed, in
+    the other branch). The truncated branch now re-queries the suppressed orgs
+    directly.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", False)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    calls = _capture_report_critical(monkeypatch)
+    _, org_id = await _pageable_grantless_enrollment(db_session)
+    subject = await ensure_organization_billing_subject(db_session, org_id)
+    alerted: set[uuid.UUID] = set()
+
+    # limit=1 makes every pass a truncated one (len(listed) == limit).
+    first = await run_zero_grant_check(db_session, limit=1, already_alerted_org_ids=alerted)
+    assert first.alerted == 1
+    assert alerted == {org_id}
+
+    # Funded out of band, and the feed stays truncated by another broken org so
+    # the whole-backlog branch cannot be the thing that evicts.
+    healing_ref = f"admin:{uuid.uuid4().hex[:8]}"
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=subject.id,
+        user_id=None,
+        source=LLM_CREDIT_SOURCE_ADMIN,
+        amount_usd=Decimal("10"),
+        source_ref=healing_ref,
+    )
+    other_user = await _create_user(db_session)
+    other_org = await _place_in_org(db_session, user_id=other_user)
+    other_enrollment = await ensure_org_enrollment(db_session, other_org, other_user)
+    await _backdate_enrollment(db_session, other_enrollment.id, hours=2)
+
+    second = await run_zero_grant_check(db_session, limit=1, already_alerted_org_ids=alerted)
+
+    assert second.checked == 1  # truncated: only the other org fit the window
+    assert org_id not in alerted  # evicted despite never appearing as healed
+    assert len(calls) >= 1
+
+    # Re-break the original org: it must page again rather than stay silenced.
+    grant_row = (
+        await db_session.execute(
+            select(LlmCreditGrant).where(LlmCreditGrant.source_ref == healing_ref)
+        )
+    ).scalar_one()
+    await db_session.delete(grant_row)
+    await db_session.flush()
+    pages_before = len(calls)
+
+    third = await run_zero_grant_check(db_session, limit=50, already_alerted_org_ids=alerted)
+
+    assert org_id in third.alerted_organization_ids
+    assert len(calls) == pages_before + 1
 
 
 @pytest.mark.asyncio
