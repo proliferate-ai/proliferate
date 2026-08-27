@@ -384,6 +384,7 @@ def build_checks(
     have_pnpm: bool,
     have_cargo: bool,
     have_nextest: bool = True,
+    platform: str = sys.platform,
 ) -> list[Check]:
     checks: list[Check] = []
 
@@ -474,36 +475,46 @@ def build_checks(
             # constitution assigns to Linux; a Linux gate run judges it fully.
             clippy_target = target
             clippy_note = ""
-            if sys.platform == "darwin":
+            clippy_skip: str | None = None
+            if platform == "darwin":
                 # `proliferate-debug` is excluded with it: the debug shell
                 # builds the desktop lib as a path dependency, which would
                 # re-lint the same files through the back door.
                 desktop_crates = ("proliferate", "proliferate-debug")
-                workspace_minus_desktop = "--workspace " + " ".join(
-                    f"--exclude {c}" for c in desktop_crates
-                )
                 excluded_note = (
                     " (desktop crate excluded on macOS — Linux CI is its clippy authority)"
                 )
                 if scope.rust_workspace:
-                    clippy_target = workspace_minus_desktop
+                    clippy_target = "--workspace " + " ".join(
+                        f"--exclude {c}" for c in desktop_crates
+                    )
                     clippy_note = excluded_note
                 else:
                     touched = sorted(crates_for_paths(scope.rust_paths, repo))
                     kept = [c for c in touched if c not in desktop_crates]
-                    if len(kept) != len(touched):
-                        clippy_note = excluded_note
-                    clippy_target = (
-                        " ".join(f"-p {c}" for c in kept)
-                        if kept
-                        else workspace_minus_desktop
-                    )
-            checks.append(
-                Check(
-                    "rust: clippy" + clippy_note,
-                    f"cargo clippy {clippy_target} --all-targets --keep-going -- -D warnings",
+                    if not kept:
+                        # A desktop-only diff on a Mac: linting everything
+                        # EXCEPT what was touched would be silent theater —
+                        # skip loudly instead; the Linux authority judges it.
+                        clippy_skip = (
+                            "desktop-crate-only diff — Linux CI is its clippy "
+                            "authority; nothing else to lint locally"
+                        )
+                    else:
+                        if len(kept) != len(touched):
+                            clippy_note = excluded_note
+                        clippy_target = " ".join(f"-p {c}" for c in kept)
+            if clippy_skip is not None:
+                checks.append(
+                    Check("rust: clippy", None, skip_reason=clippy_skip, loud=True)
                 )
-            )
+            else:
+                checks.append(
+                    Check(
+                        "rust: clippy" + clippy_note,
+                        f"cargo clippy {clippy_target} --all-targets --keep-going -- -D warnings",
+                    )
+                )
             if have_nextest:
                 checks.append(Check("rust: nextest", f"cargo nextest run {target}"))
             else:

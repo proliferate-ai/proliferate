@@ -2,14 +2,12 @@
 # so the suppression is visible constitution rather than a silent config line.
 # A record here is `status = "leaks"` with a tracking issue; closing it means
 # fixing the sites and flipping the lint back on in the root Cargo.toml.
-# A closed record flips to `status = "holds"` with the native gate as its
-# engine and stays as the citable law.
 
 [[rule]]
 id = "AH-CLIPPY-1"
 title = "No mutex guard held across an await"
 owner = "anyharness"
-status = "holds"
+status = "law"
 # The rust-lint job: cargo clippy --workspace --all-targets --keep-going -- -D warnings
 enforced_by = ".github/workflows/ci.yml"
 mode = "compiler"
