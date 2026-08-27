@@ -30,12 +30,12 @@ reason = "classifier tests incl. gateway route activation + bedrock flag-only de
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/launch_facts.rs"
-max_lines = 644
+max_lines = 636
 reason = "Track D provider_config credential facts: a source's already-resolved env map classifies per-key against the registry's declared flag vocabulary (registry_flag_vars), producing EnvFlag for mode-switch flags (e.g. CLAUDE_CODE_USE_BEDROCK) and presence-only Env for everything else, same secrets rule as api_key; the vocabulary unions auth.slots[] with providerConfig[] (D3-rust) ; +8: seats v1 Seat arm emits presence-only Env facts for the seat env map"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs"
-max_lines = 751
+max_lines = 750
 reason = "Track D provider_config render arm (claude/opencode generic env-set, codex aws_bedrock via built-in amazon-bedrock provider, codex azure_openai UNVERIFIED config.toml injection kept behind the registry's pending flag, cursor/grok/unknown-kind UnsupportedRoute) landed alongside the existing native/gateway recipe table, +sanitize_claude_ambient fix so a provider_config route's own rerouting flag (e.g. CLAUDE_CODE_USE_BEDROCK) survives sanitization instead of being unconditionally stripped, scoped in review cycle 1 to the keys the provider_config arm itself recorded so an api_key row named like a rerouting flag is still stripped (D3-rust) ; +62: seats v1 claude seat recipe (per-seat CLAUDE_CONFIG_DIR home + the shared strip list; the first pool seat serves — rotation is a later slice; seatless harnesses refuse in type) ; +9: slice-2 rotation adds the RenderedRouteAuth.serving_seat_id channel set by the seat arm (the rotated seam in mod.rs picks the seat; render stays first-seat-wins for unrotated callers)"
 
 [[max_lines]]
