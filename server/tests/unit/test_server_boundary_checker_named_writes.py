@@ -28,6 +28,53 @@ PROTECTED_STORE_SYMBOLS = {
         "create_or_rotate_organization_invitation",
         "mark_invitation_delivery",
     ),
+    # Agent-auth credential locks (SRV-STORE-8): the package __init__
+    # re-exports every protected symbol, so the union is locked under the
+    # package module as well as under each defining submodule.
+    "proliferate.db.store.agent_gateway": (
+        "clear_auth_selections",
+        "create_agent_api_key",
+        "create_agent_provider_config",
+        "get_agent_api_key_decrypted",
+        "get_agent_provider_config_decrypted",
+        "put_auth_selections",
+        "revoke_agent_api_key",
+        "touch_auth_selection_revisions",
+    ),
+    "proliferate.db.store.agent_gateway.api_keys": (
+        "create_agent_api_key",
+        "create_agent_provider_config",
+        "get_agent_api_key_decrypted",
+        "get_agent_provider_config_decrypted",
+        "revoke_agent_api_key",
+    ),
+    "proliferate.db.store.agent_gateway.selections": (
+        "clear_auth_selections",
+        "put_auth_selections",
+        "touch_auth_selection_revisions",
+    ),
+}
+
+STORE_RULE_IDS = {
+    "proliferate.db.store.organizations": "SRV-STORE-5",
+    "proliferate.db.store.organization_invitations": "SRV-STORE-5",
+    "proliferate.db.store.agent_gateway": "SRV-STORE-8",
+    "proliferate.db.store.agent_gateway.api_keys": "SRV-STORE-8",
+    "proliferate.db.store.agent_gateway.selections": "SRV-STORE-8",
+}
+
+STORE_OWNER_HINTS = {
+    "proliferate.db.store.organizations": "proliferate.server.organizations.service",
+    "proliferate.db.store.organization_invitations": (
+        "proliferate.server.organizations.service"
+    ),
+    "proliferate.db.store.agent_gateway": "proliferate.server.agent_auth.service",
+    "proliferate.db.store.agent_gateway.api_keys": (
+        "proliferate.server.agent_auth.service"
+    ),
+    "proliferate.db.store.agent_gateway.selections": (
+        "proliferate.server.agent_auth.service"
+    ),
 }
 
 
@@ -70,8 +117,11 @@ def test_named_write_registry_matches_frozen_contract() -> None:
     assert {store_module: len(symbols) for store_module, symbols in actual.items()} == {
         "proliferate.db.store.organizations": 13,
         "proliferate.db.store.organization_invitations": 3,
+        "proliferate.db.store.agent_gateway": 8,
+        "proliferate.db.store.agent_gateway.api_keys": 5,
+        "proliferate.db.store.agent_gateway.selections": 3,
     }
-    assert sum(len(symbols) for symbols in actual.values()) == 16
+    assert sum(len(symbols) for symbols in actual.values()) == 32
     organization_persistence = frozenset(
         {
             "server/proliferate/db/store/organization_invitations.py",
@@ -83,14 +133,39 @@ def test_named_write_registry_matches_frozen_contract() -> None:
         "proliferate.db.store.organization_invitations",
     ):
         boundary = module.NAMED_STORE_BOUNDARIES[store_module]
-        assert boundary.product_owner_prefix == (
-            "server",
-            "proliferate",
-            "server",
-            "organizations",
+        assert boundary.product_owner_prefixes == (
+            (
+                "server",
+                "proliferate",
+                "server",
+                "organizations",
+            ),
         )
         assert boundary.persistence_owner_paths == organization_persistence
         assert boundary.owner_service_hint == "proliferate.server.organizations.service"
+        assert boundary.rule_id == "SRV-STORE-5"
+        assert boundary.detail_noun == "store mutation"
+    agent_gateway_persistence = frozenset(
+        {
+            "server/proliferate/db/store/agent_gateway/__init__.py",
+            "server/proliferate/db/store/agent_gateway/api_keys.py",
+            "server/proliferate/db/store/agent_gateway/selections.py",
+        }
+    )
+    for store_module in (
+        "proliferate.db.store.agent_gateway",
+        "proliferate.db.store.agent_gateway.api_keys",
+        "proliferate.db.store.agent_gateway.selections",
+    ):
+        boundary = module.NAMED_STORE_BOUNDARIES[store_module]
+        assert boundary.product_owner_prefixes == (
+            ("server", "proliferate", "server", "agent_auth"),
+            ("server", "proliferate", "server", "ai_gateway"),
+        )
+        assert boundary.persistence_owner_paths == agent_gateway_persistence
+        assert boundary.owner_service_hint == "proliferate.server.agent_auth.service"
+        assert boundary.rule_id == "SRV-STORE-8"
+        assert boundary.detail_noun == "credential-bearing store symbol"
 
 
 @pytest.mark.parametrize(
@@ -117,11 +192,10 @@ def test_foreign_direct_import_rejects_every_protected_symbol(
 
     assert len(violations) == 1
     violation = violations[0]
-    assert violation.rule_id == "SRV-STORE-5"
+    assert violation.rule_id == STORE_RULE_IDS[store_module]
     assert violation.lineno == 1
     assert f"{store_module}.{symbol}" in violation.detail
-    expected_hint = "proliferate.server.organizations.service"
-    assert expected_hint in violation.detail
+    assert STORE_OWNER_HINTS[store_module] in violation.detail
     assert violation.relative_path(tmp_path) == ("server/proliferate/server/billing/foreign.py")
 
 
@@ -242,6 +316,102 @@ def test_exact_persistence_owner_may_access_protected_store(
     )
 
     assert violations == []
+
+
+def test_credential_lock_rejects_out_of_owner_import(tmp_path: Path) -> None:
+    _, violations = _check_named_source(
+        tmp_path,
+        "server/proliferate/server/billing/foo.py",
+        "from proliferate.db.store.agent_gateway.api_keys import get_agent_api_key_decrypted\n"
+        "get_agent_api_key_decrypted()\n",
+    )
+
+    assert len(violations) == 1
+    violation = violations[0]
+    assert violation.rule_id == "SRV-STORE-8"
+    assert (
+        "proliferate.db.store.agent_gateway.api_keys.get_agent_api_key_decrypted"
+        in violation.detail
+    )
+    assert "credential-bearing store symbol" in violation.detail
+    assert "proliferate.server.agent_auth.service" in violation.detail
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "store_module", "symbol"),
+    [
+        (
+            "server/proliferate/server/agent_auth/service.py",
+            "proliferate.db.store.agent_gateway.api_keys",
+            "get_agent_api_key_decrypted",
+        ),
+        (
+            "server/proliferate/server/agent_auth/service.py",
+            "proliferate.db.store.agent_gateway.selections",
+            "put_auth_selections",
+        ),
+        (
+            "server/proliferate/server/ai_gateway/enrollment.py",
+            "proliferate.db.store.agent_gateway.api_keys",
+            "get_agent_api_key_decrypted",
+        ),
+        (
+            "server/proliferate/server/ai_gateway/enrollment.py",
+            "proliferate.db.store.agent_gateway",
+            "create_agent_api_key",
+        ),
+    ],
+)
+def test_both_owning_systems_may_access_credential_stores(
+    tmp_path: Path,
+    relative_path: str,
+    store_module: str,
+    symbol: str,
+) -> None:
+    _, violations = _check_named_source(
+        tmp_path,
+        relative_path,
+        f"from {store_module} import {symbol}\n{symbol}()\n",
+    )
+
+    assert violations == []
+
+
+def test_store_package_init_reexport_is_legal(tmp_path: Path) -> None:
+    _, violations = _check_named_source(
+        tmp_path,
+        "server/proliferate/db/store/agent_gateway/__init__.py",
+        "from proliferate.db.store.agent_gateway.api_keys import (\n"
+        "    create_agent_api_key,\n"
+        "    get_agent_api_key_decrypted,\n"
+        ")\n"
+        "from proliferate.db.store.agent_gateway.selections import put_auth_selections\n",
+    )
+
+    assert violations == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from proliferate.db.store import agent_gateway\n"
+        'write = getattr(agent_gateway, "get_agent_api_key_decrypted")\n',
+        "import proliferate.db.store.agent_gateway.selections\n"
+        'getattr(proliferate.db.store.agent_gateway.selections, "put_auth_selections")\n',
+    ],
+)
+def test_credential_lock_rejects_getattr_string_access(
+    tmp_path: Path,
+    source: str,
+) -> None:
+    _, violations = _check_named_source(
+        tmp_path,
+        "server/proliferate/server/billing/foo.py",
+        source,
+    )
+
+    assert len(violations) == 1
+    assert violations[0].rule_id == "SRV-STORE-8"
 
 
 @pytest.mark.parametrize(

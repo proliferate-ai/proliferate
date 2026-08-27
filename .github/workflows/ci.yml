@@ -110,6 +110,11 @@ jobs:
           python3 -m unittest scripts/test_check_frontend_fences.py
           python3 scripts/check_frontend_fences.py
 
+      - name: Check server domain fences
+        run: |
+          python3 -m unittest scripts/test_check_server_fences.py
+          python3 scripts/check_server_fences.py
+
       - name: Check system manifests
         run: |
           python3 -m unittest scripts/test_check_manifests.py
