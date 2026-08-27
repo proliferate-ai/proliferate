@@ -142,6 +142,84 @@ fn sentry_event_filter(metadata: &tracing::Metadata<'_>) -> sentry_tracing::Even
     )
 }
 
+const SESSION_ID_SPAN_FIELD: &str = "session_id";
+
+/// Typed span extension: the validated `session_id` recorded at span creation
+/// by [`SessionIdSpanLayer`].
+struct SpanSessionId(String);
+
+struct SessionIdVisitor(Option<String>);
+
+impl tracing::field::Visit for SessionIdVisitor {
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if field.name() == SESSION_ID_SPAN_FIELD {
+            self.0 = Some(value.to_string());
+        }
+    }
+
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if field.name() == SESSION_ID_SPAN_FIELD {
+            self.0 = Some(format!("{value:?}").trim_matches('"').to_string());
+        }
+    }
+}
+
+/// Only a canonical lowercase UUID leaves the process as a `session_id` tag;
+/// a client-supplied custom session id stays local (bounded beats complete
+/// for a vendor-bound tag).
+fn canonical_session_id(candidate: &str) -> Option<&str> {
+    let bytes = candidate.as_bytes();
+    if bytes.len() != 36 {
+        return None;
+    }
+    let canonical = bytes.iter().enumerate().all(|(index, byte)| match index {
+        8 | 13 | 18 | 23 => *byte == b'-',
+        _ => byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase(),
+    });
+    canonical.then_some(candidate)
+}
+
+/// Records the `session_id` span field into span extensions so the Sentry
+/// mapper can tag events without enabling blanket span-attribute inheritance
+/// (which stays off for privacy — only this one validated field crosses).
+struct SessionIdSpanLayer;
+
+impl<S> Layer<S> for SessionIdSpanLayer
+where
+    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+{
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        id: &tracing::span::Id,
+        ctx: LayerContext<'_, S>,
+    ) {
+        let mut visitor = SessionIdVisitor(None);
+        attrs.record(&mut visitor);
+        let Some(candidate) = visitor.0 else { return };
+        let Some(valid) = canonical_session_id(&candidate) else {
+            return;
+        };
+        if let Some(span) = ctx.span(id) {
+            span.extensions_mut().insert(SpanSessionId(valid.to_string()));
+        }
+    }
+}
+
+/// The nearest enclosing span's validated `session_id`, if the event fired
+/// inside session work.
+fn session_id_for_event<S>(
+    event: &tracing::Event<'_>,
+    context: &LayerContext<'_, S>,
+) -> Option<String>
+where
+    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+{
+    let span = context.event_span(event)?;
+    span.scope()
+        .find_map(|span| span.extensions().get::<SpanSessionId>().map(|s| s.0.clone()))
+}
+
 fn sentry_event_mapper<S>(
     event: &tracing::Event<'_>,
     context: LayerContext<'_, S>,
@@ -172,6 +250,11 @@ where
         if is_runtime_incident {
             sentry_event.fingerprint =
                 Cow::Owned(vec![Cow::Borrowed(RUNTIME_INCIDENT_FINGERPRINT)]);
+        }
+        if let Some(session_id) = session_id_for_event(event, &context) {
+            sentry_event
+                .tags
+                .insert(SESSION_ID_SPAN_FIELD.to_string(), session_id);
         }
         mappings.push(sentry_tracing::EventMapping::Event(sentry_event));
     }
@@ -330,6 +413,7 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
 
     tracing_subscriber::registry()
         .with(console_layer)
+        .with(SessionIdSpanLayer)
         .with(sentry_tracing::layer().event_mapper(sentry_event_mapper))
         .with(diagnostics_layer)
         .with(file_sink.as_ref().map(|sink| {
