@@ -7,8 +7,8 @@ use std::sync::Arc;
 use chrono::{TimeZone, Utc};
 
 use super::{AgentStatusService, ProbeVerdict, RefreshCause};
-use crate::domains::agents::launch_probe::test_support::FixedTargets;
-use crate::domains::agents::route_auth::test_support::TempHome;
+use crate::domains::agent_auth::launch_probe::test_support::FixedTargets;
+use crate::domains::agent_auth::route_auth::test_support::TempHome;
 use crate::persistence::Db;
 
 /// A service over a FILE-backed db in the temp home, so a second service over
@@ -235,8 +235,8 @@ fn startup_pass_first_detects_rowless_installed_harnesses() {
 /// satisfy. resolvability gates, probes only inform.
 #[test]
 fn launch_gates_on_resolvability_not_probe() {
-    use crate::domains::agents::launch_probe::test_support::CountingPlanProducer;
-    use crate::domains::agents::route_auth::resolve_launch_route_auth_rotated;
+    use crate::domains::agent_auth::launch_probe::test_support::CountingPlanProducer;
+    use crate::domains::agent_auth::route_auth::resolve_launch_route_auth_rotated;
     use crate::domains::agents::seat_cooling::SeatCoolingStore;
 
     let home = TempHome::new("status-never-gates-launch");

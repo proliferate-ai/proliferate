@@ -18,11 +18,11 @@ use axum::{
 use super::agent_auth_contract::{method_row_to_contract, status_doc_to_contract};
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
-use crate::domains::agents::route_auth::{
+use crate::domains::agent_auth::launch_probe::{LaunchProbeService, PokeReason};
+use crate::domains::agent_auth::route_auth::{
     apply_state_file, clear_state_file, AgentAuthState, RouteAuthError,
 };
-use crate::domains::agents::status::RefreshCause;
+use crate::domains::agent_auth::status::RefreshCause;
 
 #[utoipa::path(
     put,
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn a_heal_of_a_malformed_file_counts_every_named_harness_as_changed() {
         let home = TempHome::new("heal-changed-set");
-        let path = crate::domains::agents::route_auth::state_file_path(home.path());
+        let path = crate::domains::agent_auth::route_auth::state_file_path(home.path());
         std::fs::create_dir_all(path.parent().expect("parent")).expect("create agent-auth");
         std::fs::write(&path, b"{ not json").expect("write malformed state");
 
@@ -342,7 +342,7 @@ mod tests {
             Some(vec!["claude".to_string(), "opencode".to_string()])
         );
 
-        let path = crate::domains::agents::route_auth::state_file_path(home.path());
+        let path = crate::domains::agent_auth::route_auth::state_file_path(home.path());
         std::fs::create_dir_all(path.parent().expect("parent")).expect("create agent-auth");
         std::fs::write(&path, b"{ not json").expect("write malformed state");
         assert_eq!(

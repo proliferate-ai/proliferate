@@ -7,8 +7,8 @@ use std::time::Instant;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use tokio::sync::{broadcast, Mutex, RwLock};
 
-use crate::domains::agents::auth::login_terminal::{MintCapture, MintCaptureStatus};
-pub use crate::domains::agents::auth::login_terminal::{MintClaimError, MintTerminalOptions};
+use crate::domains::agent_auth::auth::login_terminal::{MintCapture, MintCaptureStatus};
+pub use crate::domains::agent_auth::auth::login_terminal::{MintClaimError, MintTerminalOptions};
 use crate::domains::terminals::model::{ResizeTerminalOptions, TerminalOutputEvent};
 use crate::process_env::remove_runtime_private_pty_env;
 

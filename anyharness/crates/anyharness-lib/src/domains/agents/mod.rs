@@ -1,15 +1,11 @@
-pub mod auth;
 pub mod catalog;
 pub mod installer;
 pub mod launch_options;
 pub(crate) mod live_ports;
 pub mod model;
 pub mod model_catalog;
-pub mod launch_probe;
 pub mod portability;
 pub mod readiness;
 pub mod registry;
-pub mod route_auth;
 pub mod runtime;
 pub mod seat_cooling;
-pub mod status;

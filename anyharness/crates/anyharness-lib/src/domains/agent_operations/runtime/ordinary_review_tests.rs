@@ -3,7 +3,7 @@ use super::*;
 use std::time::Duration;
 
 use crate::domains::agents::model::ResolvedAgentStatus;
-use crate::domains::agents::route_auth::RouteAuthError;
+use crate::domains::agent_auth::route_auth::RouteAuthError;
 use crate::domains::sessions::admission::{SessionMutationKind, SessionMutationSource};
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, CreateOrdinaryAgentSessionError, EnsureLiveSessionError,

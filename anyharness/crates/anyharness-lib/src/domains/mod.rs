@@ -1,4 +1,5 @@
 pub mod activity;
+pub mod agent_auth;
 pub mod agent_operations;
 pub mod agents;
 pub mod artifacts;

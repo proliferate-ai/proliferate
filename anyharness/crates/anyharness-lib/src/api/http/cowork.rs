@@ -534,7 +534,7 @@ mod tests {
     use axum::response::IntoResponse;
 
     use super::CoworkCreateThreadError;
-    use crate::domains::agents::route_auth::RouteAuthError;
+    use crate::domains::agent_auth::route_auth::RouteAuthError;
     use crate::domains::sessions::runtime::CreateAndStartSessionError;
 
     /// Cowork creation shares the exact launch-value refusal.

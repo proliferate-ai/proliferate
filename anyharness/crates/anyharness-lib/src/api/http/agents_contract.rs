@@ -9,9 +9,9 @@ use anyharness_contract::v1::{
     ReconcileAgentResult, ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
 };
 
-use crate::domains::agents::launch_probe::ProbePhase;
+use crate::domains::agent_auth::launch_probe::ProbePhase;
 
-use crate::domains::agents::auth::login_terminal::{
+use crate::domains::agent_auth::auth::login_terminal::{
     AgentLoginTerminalRecord as InternalAgentLoginTerminalRecord,
     AgentLoginTerminalStatus as InternalAgentLoginTerminalStatus,
     MintCaptureStatus as InternalMintCaptureStatus,

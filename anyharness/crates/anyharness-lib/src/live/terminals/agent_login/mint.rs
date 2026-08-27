@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::{Mutex, RwLock};
 
-use crate::domains::agents::auth::login_terminal::{
+use crate::domains::agent_auth::auth::login_terminal::{
     MintCapture, MintCaptureStatus, MintClaimError,
 };
 

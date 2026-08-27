@@ -6,7 +6,7 @@ use crate::domains::agents::launch_options::{
     HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions, HarnessLaunchOptionsService,
     HarnessLaunchOptionsState,
 };
-use crate::domains::agents::route_auth::{apply_state_file, AgentAuthState};
+use crate::domains::agent_auth::route_auth::{apply_state_file, AgentAuthState};
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;

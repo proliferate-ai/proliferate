@@ -4,7 +4,7 @@
 
 use super::*;
 
-use crate::domains::agents::route_auth::state::{AuthSource, HarnessAuth, STATE_VERSION};
+use crate::domains::agent_auth::route_auth::state::{AuthSource, HarnessAuth, STATE_VERSION};
 
 fn state(sequence: i64, harnesses: Vec<HarnessAuth>) -> AgentAuthState {
     AgentAuthState {

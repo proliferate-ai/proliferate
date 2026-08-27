@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use super::probe::ProbeError;
-use crate::domains::agents::route_auth::RouteAuthError;
+use crate::domains::agent_auth::route_auth::RouteAuthError;
 
 /// Why a poke fired. **This is the closed event-driven trigger set**: the
 /// unconditional startup pass, auth apply, install completion, login-terminal

@@ -33,7 +33,7 @@ use crate::domains::agents::registry::schema::AgentRegistryDocument;
 
 /// (m3) Process-wide handle to the ACTIVE registry document, set exactly once
 /// at [`CatalogSyncService`] construction (mirroring the immutable-active-
-/// catalog invariant this whole module protects). `auth::launch_facts`
+/// catalog invariant this whole module protects). `agent_auth::auth::launch_facts`
 /// cannot reach the constructed `CatalogSyncService` without invasive
 /// plumbing through several call sites (`create_session`, `launch_options`,
 /// both several layers removed from `AppState`), so this documented global

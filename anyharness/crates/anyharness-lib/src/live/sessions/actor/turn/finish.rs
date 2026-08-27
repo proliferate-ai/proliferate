@@ -412,7 +412,7 @@ impl SessionActor {
             if let Some(agent_status) = self.caps.agent_status.as_ref() {
                 agent_status.refresh(
                     &self.agent_kind,
-                    crate::domains::agents::status::RefreshCause::SeatCooling,
+                    crate::domains::agent_auth::status::RefreshCause::SeatCooling,
                 );
             }
         } else {

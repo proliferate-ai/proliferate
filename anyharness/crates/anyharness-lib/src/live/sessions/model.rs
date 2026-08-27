@@ -103,7 +103,7 @@ impl SessionStartupStrategy {
 /// Layering at spawn: `workspace` → `session` → `route_auth` (later layers
 /// win), then `route_auth_remove` strips keys from BOTH the merged layers and
 /// the inherited ambient process env — removal always wins (the agent-auth
-/// sanitization contract; see `domains::agents::route_auth::render`).
+/// sanitization contract; see `domains::agent_auth::route_auth::render`).
 #[derive(Debug, Clone, Default)]
 pub struct LaunchEnv {
     pub workspace: BTreeMap<String, String>,
@@ -384,7 +384,7 @@ pub struct ActorCapabilities {
     /// marks a seat cooling (the cooling banner must move the moment the
     /// machine knows). `Some` in the real app wiring; `None` in suites that
     /// exercise no seat behavior. Refreshes degrade-with-warn, never gate.
-    pub agent_status: Option<Arc<crate::domains::agents::status::AgentStatusService>>,
+    pub agent_status: Option<Arc<crate::domains::agent_auth::status::AgentStatusService>>,
 }
 
 /// Per-call powers: hooks and context that vary per session start.

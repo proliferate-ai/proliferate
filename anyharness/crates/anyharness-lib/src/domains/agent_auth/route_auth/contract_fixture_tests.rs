@@ -13,8 +13,8 @@
 // The parent test module's helpers (`TempHome`, `HarnessPlanResolver`, …).
 use super::*;
 // The module under test, reached through its public re-exports.
-use crate::domains::agents::route_auth::state::{AgentAuthState, SOURCE_KIND_GATEWAY};
-use crate::domains::agents::route_auth::{
+use crate::domains::agent_auth::route_auth::state::{AgentAuthState, SOURCE_KIND_GATEWAY};
+use crate::domains::agent_auth::route_auth::{
     profile::ResolvedSource, resolve_launch_route_auth_rotated_for_server, AgentRuntimeAuthProfile,
 };
 use crate::domains::agents::seat_cooling::SeatCoolingStore;

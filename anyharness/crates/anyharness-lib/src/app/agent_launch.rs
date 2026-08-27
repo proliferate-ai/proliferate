@@ -10,11 +10,11 @@ use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
-use crate::domains::agents::launch_probe::targets::RuntimeProbeTargets;
-use crate::domains::agents::launch_probe::LaunchProbeService;
-use crate::domains::agents::route_auth::gateway_plan::GatewayModelPlanner;
+use crate::domains::agent_auth::launch_probe::targets::RuntimeProbeTargets;
+use crate::domains::agent_auth::launch_probe::LaunchProbeService;
+use crate::domains::agent_auth::route_auth::gateway_plan::GatewayModelPlanner;
 use crate::domains::agents::runtime::{AgentRuntime, RuntimeSurface};
-use crate::domains::agents::status::AgentStatusService;
+use crate::domains::agent_auth::status::AgentStatusService;
 use crate::persistence::Db;
 
 /// Everything the agents wiring produces for `AppState`.

@@ -17,7 +17,7 @@
 //! so its `TempHome`, state-builder, and resolver helpers are in scope.
 
 use super::*;
-use crate::domains::agents::route_auth::RouteAuthError;
+use crate::domains::agent_auth::route_auth::RouteAuthError;
 
 /// The `api_key` route is one line of generic code (`rendered.set(env_var_name,
 /// value)`), so cursor gets exactly its registry-declared var, nothing else, and

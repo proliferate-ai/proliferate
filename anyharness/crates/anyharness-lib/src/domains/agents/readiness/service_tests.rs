@@ -3,7 +3,7 @@
 //! source cap; `#[path]`-included from there.
 
 use super::*;
-use crate::domains::agents::auth::credentials::detect_credentials_with_env;
+use crate::domains::agent_auth::auth::credentials::detect_credentials_with_env;
 use crate::domains::agents::registry::built_in_registry;
 use crate::integrations::agent_cli::executable::make_executable;
 

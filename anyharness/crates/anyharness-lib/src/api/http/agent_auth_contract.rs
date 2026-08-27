@@ -9,7 +9,7 @@ use anyharness_contract::v1::{
     AgentAuthStatusDoc,
 };
 
-use crate::domains::agents::status::{
+use crate::domains::agent_auth::status::{
     AppliedMethod, MethodRow, ProbeStatus, ProbeVerdict, StatusDoc,
 };
 

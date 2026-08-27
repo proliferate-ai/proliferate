@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::domains::activity::service::ActivityService;
 use crate::domains::activity::session_observer::ActivitySessionObserver;
-use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
+use crate::domains::agent_auth::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::goals::service::GoalService;
 use crate::domains::goals::session_observer::GoalSessionObserver;
 use crate::domains::loops::service::LoopService;
@@ -43,7 +43,7 @@ pub(super) struct LiveSessionsWiringDeps {
     pub activity_service: Arc<ActivityService>,
     pub product_context: Arc<dyn AgentProductContextResolver>,
     pub automatic_poke_engine: Option<Arc<LaunchProbeService>>,
-    pub agent_status_service: Arc<crate::domains::agents::status::AgentStatusService>,
+    pub agent_status_service: Arc<crate::domains::agent_auth::status::AgentStatusService>,
 }
 
 struct LaunchObservationProbeQueue {

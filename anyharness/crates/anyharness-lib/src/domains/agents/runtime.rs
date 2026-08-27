@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::auth::login::{self, AgentLoginError};
-pub use super::auth::login::{AgentLoginCommand, ResolvedAgentLoginCommand};
+use crate::domains::agent_auth::auth::login::{self, AgentLoginError};
+pub use crate::domains::agent_auth::auth::login::{AgentLoginCommand, ResolvedAgentLoginCommand};
 use super::installer::reconcile::execution::{
     AgentReconcileAdmission, AgentReconcileJobSnapshot, AgentReconcileService,
     AgentReconcileStartError,
@@ -13,7 +13,7 @@ use super::installer::reconcile::execution::{
 use super::installer::seed::AgentSeedStore;
 use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
 use super::model::*;
-use super::launch_probe::{LaunchProbeService, PokeReason};
+use crate::domains::agent_auth::launch_probe::{LaunchProbeService, PokeReason};
 use super::readiness::service::resolve_agent;
 use super::registry::built_in_registry;
 

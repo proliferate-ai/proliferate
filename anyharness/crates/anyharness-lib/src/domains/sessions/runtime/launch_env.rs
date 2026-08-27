@@ -1,7 +1,7 @@
 //! Per-harness session launch env that is NOT auth.
 //!
 //! Everything credential- or provider-shaped belongs to the route-auth render
-//! plane (`domains/agents/route_auth/`). Native profiles render no auth delta;
+//! plane (`domains/agent_auth/route_auth/`). Native profiles render no auth delta;
 //! routed profiles materialize only the selected route. What remains here is the
 //! launch wiring that has nothing to do with which credential was selected:
 //! pointing claude's ACP adapter at the managed native CLI, and passing the

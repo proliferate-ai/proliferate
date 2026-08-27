@@ -17,10 +17,10 @@ use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::launch_options::{
     HarnessLaunchModel, HarnessLaunchOptions, HarnessLaunchOptionsService,
 };
-use crate::domains::agents::launch_probe::test_support::{
+use crate::domains::agent_auth::launch_probe::test_support::{
     gateway_state, CountingPlanProducer, FakeRunner, FixedTargets, TempRuntimeHome,
 };
-use crate::domains::agents::launch_probe::{
+use crate::domains::agent_auth::launch_probe::{
     LaunchProbeService, ProbeEngineConfig, ProbeEngineMode,
 };
 use crate::persistence::Db;

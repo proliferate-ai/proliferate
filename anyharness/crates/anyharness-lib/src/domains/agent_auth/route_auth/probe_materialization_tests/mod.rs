@@ -15,9 +15,9 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 
 use super::*;
-use crate::domains::agents::route_auth::plan::GatewayModelPlan;
-use crate::domains::agents::route_auth::profile::ResolvedSource;
-use crate::domains::agents::route_auth::test_support::TempHome;
+use crate::domains::agent_auth::route_auth::plan::GatewayModelPlan;
+use crate::domains::agent_auth::route_auth::profile::ResolvedSource;
+use crate::domains::agent_auth::route_auth::test_support::TempHome;
 
 const GATEWAY_BASE_URL: &str = "https://llm.proliferate.ai";
 const VK: &str = "sk-virtual-1234";

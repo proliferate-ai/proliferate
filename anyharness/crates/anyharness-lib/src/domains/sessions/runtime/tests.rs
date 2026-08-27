@@ -822,7 +822,7 @@ async fn ensure_live_session_reports_an_unsatisfiable_selection_as_route_auth_no
     use std::sync::Mutex;
 
     use crate::domains::agents::installer::seed::AgentSeedStore;
-    use crate::domains::agents::route_auth::RouteAuthError;
+    use crate::domains::agent_auth::route_auth::RouteAuthError;
     use crate::domains::sessions::runtime::EnsureLiveSessionError;
     use crate::integrations::agent_cli::executable::make_executable;
 

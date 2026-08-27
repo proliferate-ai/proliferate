@@ -19,7 +19,7 @@ use std::time::Duration;
 use super::probe::{AcpProbeRunner, ProbeError, ProbeRequest, ProbeRunner};
 use super::test_support::{gateway_state, TempRuntimeHome};
 use crate::app::test_support::lock_env;
-use crate::domains::agents::route_auth::{
+use crate::domains::agent_auth::route_auth::{
     probe_materialization::probe_auth_material_for_server, GatewayModelPlan,
 };
 

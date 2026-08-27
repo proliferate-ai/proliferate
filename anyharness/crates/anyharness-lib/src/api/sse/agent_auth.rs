@@ -15,7 +15,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::api::http::agent_auth_contract::status_doc_to_contract;
 use crate::app::AppState;
-use crate::domains::agents::status::StatusDoc;
+use crate::domains::agent_auth::status::StatusDoc;
 
 #[utoipa::path(
     get,

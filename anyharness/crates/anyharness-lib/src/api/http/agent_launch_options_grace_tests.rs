@@ -10,8 +10,8 @@
 use serde_json::Value;
 
 use super::agent_launch_options_test_fixtures::*;
-use crate::domains::agents::launch_probe::ProbeEngineMode;
-use crate::domains::agents::launch_probe::ProbePhase;
+use crate::domains::agent_auth::launch_probe::ProbeEngineMode;
+use crate::domains::agent_auth::launch_probe::ProbePhase;
 
 /// The orphan that matters most, on the harness no unattended poke may refresh: a
 /// spinning client here can never be converged by anything but a human.

@@ -19,12 +19,12 @@ use super::agents_contract::{
 };
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::agents::auth::login_terminal::{
+use crate::domains::agent_auth::auth::login_terminal::{
     close_agent_login_terminal as close_agent_login_terminal_session,
     get_agent_login_terminal as get_agent_login_terminal_session,
     start_agent_login_terminal_session, AgentLoginVariant as DomainLoginVariant, MintClaimError,
 };
-use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
+use crate::domains::agent_auth::launch_probe::{LaunchProbeService, PokeReason};
 
 #[utoipa::path(
     get,
@@ -307,7 +307,7 @@ pub async fn close_agent_login_terminal(
     // the status document's detection row re-reads it now.
     state.agent_status_service.refresh(
         &terminal.kind,
-        crate::domains::agents::status::RefreshCause::LoginTerminal,
+        crate::domains::agent_auth::status::RefreshCause::LoginTerminal,
     );
     Ok(StatusCode::NO_CONTENT)
 }

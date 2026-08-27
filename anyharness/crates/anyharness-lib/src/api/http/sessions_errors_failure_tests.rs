@@ -197,7 +197,7 @@ fn resume_startup_stderr_detail_reaches_caller_through_safe_typed_error() {
 /// user to the auth pane instead of to an install button.
 #[test]
 fn an_unsatisfiable_selection_maps_to_a_typed_conflict() {
-    use crate::domains::agents::route_auth::RouteAuthError;
+    use crate::domains::agent_auth::route_auth::RouteAuthError;
 
     let mapped = map_create_session_error(CreateAndStartSessionError::RouteAuth(
         RouteAuthError::SelectionMissing {
@@ -217,7 +217,7 @@ fn an_unsatisfiable_selection_maps_to_a_typed_conflict() {
 /// words a human sees are produced once, never re-derived per mapper.
 #[test]
 fn refusal_family_renders_the_launch_refusal_vocabulary() {
-    use crate::domains::agents::route_auth::{LaunchRefusal, RouteAuthError};
+    use crate::domains::agent_auth::route_auth::{LaunchRefusal, RouteAuthError};
 
     let reset = chrono::Utc::now().timestamp() + 3_600;
     let errors = [

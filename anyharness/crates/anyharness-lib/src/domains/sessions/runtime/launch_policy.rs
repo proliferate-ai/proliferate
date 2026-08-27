@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
-use crate::domains::agents::route_auth::RenderedRouteAuth;
+use crate::domains::agent_auth::route_auth::RenderedRouteAuth;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::runtime::fork_anchor::ProviderForkAnchor;
@@ -171,7 +171,7 @@ pub(super) struct SessionLaunchContext {
     pub workspace_env: BTreeMap<String, String>,
     pub session_env: BTreeMap<String, String>,
     /// Rendered agent-auth route layer for this launch (empty for
-    /// native/legacy). See `domains::agents::route_auth`.
+    /// native/legacy). See `domains::agent_auth::route_auth`.
     pub route_auth: RenderedRouteAuth,
     pub mcp_servers: Vec<SessionMcpServer>,
     pub startup: SessionStartupStrategy,
