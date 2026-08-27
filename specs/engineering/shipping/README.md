@@ -42,7 +42,7 @@ What a contributor (human or agent) interacts with:
 | `python3 scripts/check_docs.py` | documentation integrity gate: links resolve, required indexes exist, structured data validates |
 | `delivery/<program>/delivery-spec-<slug>.md` | founder-frozen intent for one PR; frozen before implementation, archived after merge (authority table in [specs/README.md](../../../README.md)) |
 | Four-bucket change declaration (bug / spec gap / system change / seam change) | the Organization Standard's taxonomy; today declared in the PR body, target: a label |
-| `workflow_dispatch` on demoted lanes | [ci-heavy-lanes.yml](../../../.github/workflows/ci-heavy-lanes.yml), [intent-tests.yml](../../../.github/workflows/intent-tests.yml), [release-e2e.yml](../../../.github/workflows/release-e2e.yml) — run by hand until re-gated |
+| `workflow_dispatch` on demoted lanes | [release-e2e.yml](../../../.github/workflows/release-e2e.yml) — run by hand until re-gated |
 
 ## 4. Consumes
 
