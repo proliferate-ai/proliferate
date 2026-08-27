@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   getHarnessAuthMethods: vi.fn(),
   openHarnessAuthStatusStream: vi.fn(),
   close: vi.fn(),
+  /** The host's transport override, as a cloud provider supplies it. */
+  runtimeFetch: { current: undefined as typeof globalThis.fetch | undefined },
 }));
 
 vi.mock("#product/lib/access/anyharness/agent-auth", () => ({
@@ -29,6 +31,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   useAnyHarnessRuntimeContext: () => ({
     runtimeUrl: RUNTIME_URL,
     authToken: "token",
+    fetch: mocks.runtimeFetch.current,
   }),
   resolveRuntimeCacheScopeKey: () => "account-1",
   resolveRuntimeConnection: () => ({
@@ -77,6 +80,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.runtimeFetch.current = undefined;
   mocks.getHarnessAuthStatus.mockResolvedValue(null);
   mocks.getHarnessAuthMethods.mockResolvedValue([]);
   mocks.openHarnessAuthStatusStream.mockImplementation(
@@ -96,22 +100,21 @@ describe("useHarnessStatus", () => {
     await waitFor(() => {
       expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(1);
     });
-    // Nothing read yet: an absent document is UNKNOWN, not an invented state.
-    await waitFor(() => expect(result.current.unknown).toBe(true));
+    // Nothing read yet: an absent document is a NULL probe, not an invented
+    // state — the one fact that says "the runtime holds no document".
+    await waitFor(() => expect(result.current.probe).toBeNull());
 
     handlers.onEvent(documentFor());
 
-    await waitFor(() => expect(result.current.unknown).toBe(false));
+    await waitFor(() => expect(result.current.probe).not.toBeNull());
     expect(result.current.applied).toEqual({ kind: "seat", seat_id: "seat-1" });
     expect(result.current.nextSeatId).toBe("seat-2");
-    expect(result.current.rotate).toBe(true);
     expect(result.current.probe).toEqual({
       verdict: "verified",
       at: "2026-08-27T00:00:00Z",
       stale: false,
     });
     expect(result.current.coolingUntil).toBeNull();
-    expect(result.current.methods).toHaveLength(1);
   });
 
   it("renders a stale push as stale, and never as loading", async () => {
@@ -127,10 +130,10 @@ describe("useHarnessStatus", () => {
     );
 
     await waitFor(() => expect(result.current.probe?.stale).toBe(true));
-    // The last observation survives the re-probe, and the read is not "loading".
+    // The last observation survives the re-probe, and no read is in flight —
+    // stale renders as stale, never as loading.
     expect(result.current.probe?.at).toBe("2026-08-27T00:00:00Z");
-    expect(result.current.loading).toBe(false);
-    expect(result.current.unknown).toBe(false);
+    expect(result.current.refreshing).toBe(false);
   });
 
   it("routes each pushed document to its OWN harness, never to a sibling", async () => {
@@ -143,7 +146,7 @@ describe("useHarnessStatus", () => {
     // grok's auth changing must not touch claude's entry (bug class (a)).
     handlers.onEvent(documentFor({ harness_kind: "grok" }));
 
-    await waitFor(() => expect(result.current.unknown).toBe(true));
+    await waitFor(() => expect(result.current.probe).toBeNull());
   });
 
   it("falls back to re-reading GET /status when the stream is unavailable", async () => {
@@ -161,8 +164,7 @@ describe("useHarnessStatus", () => {
     await waitFor(() => {
       expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(2);
     });
-    await waitFor(() => expect(result.current.unknown).toBe(false));
-    expect(result.current.probe?.verdict).toBe("verified");
+    await waitFor(() => expect(result.current.probe?.verdict).toBe("verified"));
   });
 
   it("re-reads once when the stream ends", async () => {
@@ -193,6 +195,61 @@ describe("useHarnessStatus", () => {
     });
   });
 
+  it("re-reads the METHODS door on refresh too, so the two cannot drift", async () => {
+    // Spec §4 cell 4: the pane-open and manual-refresh boundaries re-read status
+    // AND methods. They are one runtime pass; refreshing one and leaving the
+    // other on a stale row is how two views of the same harness disagree.
+    const { result } = renderHook(
+      () => ({ status: useHarnessStatus("claude"), methods: useMethods("claude") }),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(mocks.getHarnessAuthMethods).toHaveBeenCalledTimes(1);
+    });
+
+    result.current.status.refresh();
+
+    await waitFor(() => {
+      expect(mocks.getHarnessAuthMethods).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("opens the stream on the CONNECTION's fetch, not the global one", async () => {
+    // The cloud provider passes `fetch` and NO authToken: that override is the
+    // only thing attaching the sandbox gateway's authorization header. Dropping
+    // it 401s the stream, and this hook has no polling fallback — the badge
+    // would freeze at the first read until a mutation or a remount.
+    const hostFetch = vi.fn() as unknown as typeof globalThis.fetch;
+    mocks.runtimeFetch.current = hostFetch;
+
+    renderHook(() => useHarnessStatus("claude"), { wrapper });
+
+    await waitFor(() => {
+      expect(mocks.openHarnessAuthStatusStream).toHaveBeenCalledTimes(1);
+    });
+    const [connection] = mocks.openHarnessAuthStatusStream.mock.calls[0] as [
+      { runtimeUrl: string; fetch?: typeof globalThis.fetch },
+    ];
+    expect(connection.fetch).toBe(hostFetch);
+    expect(connection.runtimeUrl).toBe(RUNTIME_URL);
+  });
+
+  it("reads GET /status on that same connection's fetch", async () => {
+    const hostFetch = vi.fn() as unknown as typeof globalThis.fetch;
+    mocks.runtimeFetch.current = hostFetch;
+
+    renderHook(() => useHarnessStatus("claude"), { wrapper });
+
+    await waitFor(() => {
+      expect(mocks.getHarnessAuthStatus).toHaveBeenCalledTimes(1);
+    });
+    const [connection] = mocks.getHarnessAuthStatus.mock.calls[0] as [
+      { fetch?: typeof globalThis.fetch },
+    ];
+    expect(connection.fetch).toBe(hostFetch);
+  });
+
   it("closes the subscription on unmount", async () => {
     const { unmount } = renderHook(() => useHarnessStatus("claude"), { wrapper });
 
@@ -209,9 +266,10 @@ describe("useHarnessStatus", () => {
 
     expect(mocks.getHarnessAuthStatus).not.toHaveBeenCalled();
     expect(mocks.openHarnessAuthStatusStream).not.toHaveBeenCalled();
-    // A disabled read is not a pending one: nothing will ever resolve it.
-    expect(result.current.loading).toBe(false);
-    expect(result.current.unknown).toBe(true);
+    // A disabled read is not a running one: nothing will ever resolve it, so the
+    // refresh affordance must not spin forever.
+    expect(result.current.refreshing).toBe(false);
+    expect(result.current.probe).toBeNull();
   });
 });
 

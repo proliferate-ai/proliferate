@@ -37,14 +37,11 @@ vi.mock("#product/components/agents/AgentLoginTerminalPanel", () => ({
 
 vi.mock("#product/hooks/access/anyharness/agent-auth/use-harness-status", () => ({
   useHarnessStatus: () => ({
-    methods: [],
     applied: null,
     nextSeatId: null,
-    rotate: true,
     probe: null,
     coolingUntil: null,
-    unknown: true,
-    loading: false,
+    refreshing: false,
     refresh: vi.fn(),
     ...testState.status,
   }),

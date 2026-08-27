@@ -5,6 +5,7 @@ import {
   resolveRuntimeCacheScopeKey,
   resolveRuntimeConnection,
   useAnyHarnessRuntimeContext,
+  type AnyHarnessClientConnection,
 } from "@anyharness/sdk-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
@@ -21,31 +22,35 @@ export type HarnessProbeStatus = AgentAuthStatusDoc["probe"];
 
 /**
  * The ONE access-layer seam for a harness's auth truth (agent_auth spec §4
- * cell 4). The six named fields ARE the status document, camel-cased; nothing
- * here folds, defaults, or repairs a state the runtime does not hold.
+ * cell 4). Every field below IS the status document, camel-cased; nothing here
+ * folds, defaults, or repairs a state the runtime does not hold.
  *
- * `unknown` and `loading` are the two facts the document itself cannot carry,
- * and they are deliberately separate: an unknown harness renders NEUTRALLY and
- * gates nothing, while a stale document renders as stale — never as loading.
- * `loading` is true only before the first read of a harness we have never seen.
+ * Every field has a reader, and each fact is reachable through exactly ONE of
+ * them — a second copy of a fact is the multiple-sources bug this slice exists
+ * to close. So, deliberately absent:
+ *
+ * - `unknown` — "the runtime holds no document" IS `probe === null` (the
+ *   document always carries a probe block), which is what presentation reads.
+ * - `rotate` — the seat-rotation toggle's authority is the cloud
+ *   `agent_auth_harness_settings` rider (`useSeatRotateSetting`), the only side
+ *   that can be written; the document's copy is the DELIVERED echo of that
+ *   write, so rendering the switch from it would show delivery, not intent.
+ * - `methods` — method rows are `useMethods`'s job (door 2, the spec's named
+ *   seam for them); a second cache entry of the same rows is a second source.
+ * - `loading` — the spec's rule is that a stale document renders as stale,
+ *   never as loading. `refreshing` is the honest fact: a re-read is in flight.
  */
 export interface HarnessStatus {
-  /** One row per method the applied document carries, plus native detection. */
-  methods: AgentAuthMethodRow[];
   /** The applied launch method (seat rows carry the SERVING seat). */
   applied: HarnessAppliedMethod | null;
   /** The seat rotation would serve next; null under two serveable seats. */
   nextSeatId: string | null;
-  /** The seat-rotation toggle; the document defaults it to true. */
-  rotate: boolean;
   /** The last observation. Null ONLY when no document exists at all. */
   probe: HarnessProbeStatus | null;
   /** Non-null ONLY when no seat can serve right now. */
   coolingUntil: string | null;
-  /** The runtime holds no status document for this harness. */
-  unknown: boolean;
-  /** The first read is in flight and nothing has ever been observed. */
-  loading: boolean;
+  /** A re-read of the document is in flight (the refresh affordance's spinner). */
+  refreshing: boolean;
   /** Re-read the document (the manual-refresh and pane-open boundaries). */
   refresh: () => void;
 }
@@ -72,22 +77,27 @@ export function useHarnessStatus(
   const kind = harnessKind?.trim() ?? "";
   const enabled = runtimeUrl.length > 0 && kind.length > 0;
 
+  // ONE connection for the read AND the subscription, transport override
+  // included: on cloud that override is the only thing carrying the sandbox
+  // gateway's authorization header, and a stream opened without it 401s behind a
+  // hook that has no polling fallback. Memoised so the effect below keys off the
+  // connection's CONTENT, not the context object's per-render identity.
+  const connection = useMemo<AnyHarnessClientConnection>(
+    () => ({ runtimeUrl, authToken: authToken ?? undefined, fetch: runtimeFetch }),
+    [authToken, runtimeFetch, runtimeUrl],
+  );
+
   const query = useQuery({
     queryKey: anyHarnessAgentAuthStatusKey(runtimeUrl, kind, cacheScopeKey),
     enabled,
     queryFn: async ({ signal }) =>
-      getHarnessAuthStatus(resolveRuntimeConnection(runtime), kind, { signal }),
+      getHarnessAuthStatus(connection, kind, { signal }),
   });
 
   useEffect(() => {
     if (!enabled) {
       return;
     }
-    const connection = {
-      runtimeUrl,
-      authToken: authToken ?? undefined,
-      ...(runtimeFetch ? { fetch: runtimeFetch } : {}),
-    };
     // The stream is a per-harness multiplex: every document lands in its own
     // cache entry, so one subscription serves every mounted pane and a change
     // to grok's auth cannot touch codex's entry.
@@ -118,36 +128,39 @@ export function useHarnessStatus(
     return () => {
       handle.close();
     };
-  }, [authToken, cacheScopeKey, enabled, kind, queryClient, runtimeFetch, runtimeUrl]);
+  }, [cacheScopeKey, connection, enabled, kind, queryClient, runtimeUrl]);
 
   const refresh = useCallback(() => {
     if (!enabled) {
       return;
     }
+    // The pane-open and manual-refresh boundaries re-read status AND methods
+    // (spec §4 cell 4): the method rows are the same runtime pass, so refreshing
+    // one while the other keeps a stale row is how the two drift apart.
     void queryClient.invalidateQueries({
       queryKey: anyHarnessAgentAuthStatusKey(runtimeUrl, kind, cacheScopeKey),
+      exact: true,
+    });
+    void queryClient.invalidateQueries({
+      queryKey: anyHarnessAgentAuthMethodsKey(runtimeUrl, kind, cacheScopeKey),
       exact: true,
     });
   }, [cacheScopeKey, enabled, kind, queryClient, runtimeUrl]);
 
   const document = query.data ?? null;
-  // A DISABLED query is `status: "pending"` in react-query v5, so the raw flag
-  // reports "still loading" for a read that is not running and never will be.
-  const loading = query.isPending && query.fetchStatus !== "idle";
 
   return useMemo(
     () => ({
-      methods: document?.methods ?? [],
       applied: document?.applied ?? null,
       nextSeatId: document?.next_seat_id ?? null,
-      rotate: document?.rotate ?? true,
       probe: document?.probe ?? null,
       coolingUntil: document?.cooling_until ?? null,
-      unknown: document === null,
-      loading,
+      // A DISABLED query is `fetchStatus: "idle"` in react-query v5, so this is
+      // never true for a read that is not running and never will be.
+      refreshing: query.fetchStatus === "fetching",
       refresh,
     }),
-    [document, loading, refresh],
+    [document, query.fetchStatus, refresh],
   );
 }
 
@@ -155,6 +168,13 @@ export function useHarnessStatus(
  * The method picker's truth (`GET /methods`) — the rows straight from the
  * harness's status document, never a client-side assembly of what a method
  * "should" be available for.
+ *
+ * This is the ONE place method rows enter the client (the status hook
+ * deliberately does not re-expose the document's copy of them). Read by the
+ * picker: the native row's `detected` is the machine's answer to "does a working
+ * login already exist here", which is what the CLI card can honestly say. Its
+ * re-read boundaries are the pane-open and manual-refresh ones, which is why
+ * `useHarnessStatus().refresh()` invalidates this key too.
  */
 export function useMethods(
   harnessKind: string | null | undefined,

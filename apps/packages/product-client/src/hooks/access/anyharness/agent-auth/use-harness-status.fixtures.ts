@@ -11,16 +11,13 @@ export function harnessStatusFixture(
   overrides: Partial<HarnessStatus> = {},
 ): HarnessStatus {
   return {
-    methods: [],
     // Nothing applied and nothing observed: the honest default for a pane whose
     // harness has no auth wired yet.
     applied: null,
     nextSeatId: null,
-    rotate: true,
     probe: { verdict: "unverified", at: null, stale: false },
     coolingUntil: null,
-    unknown: false,
-    loading: false,
+    refreshing: false,
     refresh: () => {},
     ...overrides,
   };

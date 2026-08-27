@@ -1,28 +1,31 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HarnessAuthEvidenceBadge } from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
 import type { HarnessStatus } from "#product/hooks/access/anyharness/agent-auth/use-harness-status";
-
-afterEach(cleanup);
+import { harnessStatusFixture } from "#product/hooks/access/anyharness/agent-auth/use-harness-status.fixtures";
 
 const NOW = Date.parse("2026-08-27T00:02:00Z");
 const OBSERVED_AT = "2026-08-27T00:00:00Z";
 
+// The evidence age is read off the wall clock inside the component. Pinning
+// Date.now is the whole seam — the badge ships no `now` prop that only a test
+// ever passes.
+beforeEach(() => {
+  vi.spyOn(Date, "now").mockReturnValue(NOW);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
+});
+
 function statusFor(overrides: Partial<HarnessStatus> = {}): HarnessStatus {
-  return {
-    methods: [],
+  return harnessStatusFixture({
     applied: { kind: "seat", seat_id: "seat-1" },
-    nextSeatId: null,
-    rotate: true,
-    probe: { verdict: "unverified", at: null, stale: false },
-    coolingUntil: null,
-    unknown: false,
-    loading: false,
-    refresh: () => {},
     ...overrides,
-  };
+  });
 }
 
 function badgeElement() {
@@ -43,7 +46,6 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
         })}
         refreshing={false}
         onRefresh={() => {}}
-        now={NOW}
       />,
     );
 
@@ -60,7 +62,6 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
         })}
         refreshing={false}
         onRefresh={() => {}}
-        now={NOW}
       />,
     );
 
@@ -78,7 +79,6 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
         })}
         refreshing={false}
         onRefresh={() => {}}
-        now={NOW}
       />,
     );
 
@@ -100,7 +100,6 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
         })}
         refreshing={false}
         onRefresh={() => {}}
-        now={NOW}
       />,
     );
 
@@ -111,10 +110,9 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
   it("renders an unknown harness neutrally and gates nothing", () => {
     render(
       <HarnessAuthEvidenceBadge
-        status={statusFor({ probe: null, applied: null, unknown: true })}
+        status={statusFor({ probe: null, applied: null })}
         refreshing={false}
         onRefresh={() => {}}
-        now={NOW}
       />,
     );
 
@@ -134,7 +132,6 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
         status={statusFor({ applied: null })}
         refreshing={false}
         onRefresh={() => {}}
-        now={NOW}
       />,
     );
 
@@ -154,7 +151,6 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
         })}
         refreshing={false}
         onRefresh={() => {}}
-        now={NOW}
       />,
     );
 
@@ -172,7 +168,6 @@ describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
         status={statusFor()}
         refreshing={false}
         onRefresh={onRefresh}
-        now={NOW}
       />,
     );
 

@@ -23,16 +23,17 @@ export function HarnessAuthEvidenceBadge({
   status,
   refreshing,
   onRefresh,
-  now,
   "data-harness-status": dataHarnessStatus,
 }: {
   status: HarnessStatus;
   refreshing: boolean;
   onRefresh: () => void;
-  now?: number;
   "data-harness-status"?: string;
 }) {
-  const evidenceLine = statusEvidenceLine(status, now);
+  // The wall clock, not an injected one: the evidence age is read at render, and
+  // a `now` prop that only a test ever passed was shipped surface with no
+  // production caller (its suite pins `Date.now` instead).
+  const evidenceLine = statusEvidenceLine(status);
   const rechecking = statusRecheckingMarker(status);
   return (
     <>
