@@ -1045,7 +1045,7 @@ export interface paths {
          * @description Record a surface runtime's delivery acknowledgement (the desktop seam).
          *
          *     The desktop calls this after its local runtime's state PUT/DELETE
-         *     succeeded, echoing the pushed document's ``revision`` and the served
+         *     succeeded, echoing the pushed document's ``sequence`` and the served
          *     ``fingerprint`` from ``GET /state``. This stamp is what flips the
          *     selections read from pending to applied (agent-auth.md "Applied means
          *     acknowledged"). The cloud surface's twin is stamped server-side by the
@@ -2347,8 +2347,8 @@ export interface components {
              * @enum {string}
              */
             surface: "local" | "cloud";
-            /** Ackedrevision */
-            ackedRevision: number;
+            /** Ackedsequence */
+            ackedSequence: number;
             /** Ackedat */
             ackedAt: string;
         };
@@ -2420,13 +2420,13 @@ export interface components {
          * AgentAuthStateAckRequest
          * @description Desktop delivery ack: the pushed document's identity, echoed back.
          *
-         *     ``revision`` is the revision the local runtime's state PUT/DELETE
+         *     ``sequence`` is the sequence the local runtime's state PUT/DELETE
          *     confirmed; ``fingerprint`` is the served document's fingerprint from
          *     ``GET /state`` (never client-computed).
          */
         AgentAuthStateAckRequest: {
-            /** Revision */
-            revision: number;
+            /** Sequence */
+            sequence: number;
             /** Fingerprint */
             fingerprint: string;
         };
@@ -2464,8 +2464,8 @@ export interface components {
         AgentAuthStateResponse: {
             /** Version */
             version: number;
-            /** Revision */
-            revision: number;
+            /** Sequence */
+            sequence: number;
             /** User Id */
             user_id?: string | null;
             /** Harnesses */
