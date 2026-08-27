@@ -254,7 +254,8 @@ anyharness/crates/
 │   ├── mod.rs                      the named tracing targets (anyharness.*), underscore-spelled targets → dot-spelled record names
 │   └── lifecycle.rs                begin_session_create(workspace_id, agent_kind, preselected_session_id, reuse_existing, selected_model, selected_control_count, origin)
 │                                   begin_turn_execute(session_id, turn_id, engine_initiated) · begin_agent_start(workspace_id, session_id, agent_kind, startup_strategy, has_system_prompt_append)
-│                                   begin_model_request(session_id, agent_kind, route)          ← the probe's request
+│                                   begin_model_request(agent_kind, route)          ← the probe's request; a probe runs per harness,
+│                                   outside any session, so the record correlates on install + operation only
 ├── proliferate-diagnostics-client/src/lifecycle.rs
 │                                   LIFECYCLE_OPERATIONS (closed safe_fields + classifications per op) · LifecycleOperation::{begin, begin_with_arguments,
 │                                   append, learn_session_id, succeeded, terminal(outcome, classification), terminal_with_model} · install_global_producer
