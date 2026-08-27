@@ -108,7 +108,15 @@ export const themeProfiles: Readonly<Record<string, ThemeProfile>> = {
       "--color-background": "#212121",
       "--color-surface": "#212121",
       "--color-sidebar": "#171717",
-      "--color-sidebar-background": "#212121",
+      // One step below content: enough for the right panel to read as its
+      // own plane, close enough that the shell wrapper showing through at
+      // the chat's edges doesn't band. Verify the dock area on reload.
+      "--color-sidebar-background": "#1b1b1b",
+      // Dark hairlines step up like light's did: with gentle plane steps,
+      // the dividers must actually read.
+      "--color-border-light": "rgba(255, 255, 255, 0.06)",
+      "--color-border": "rgba(255, 255, 255, 0.1)",
+      "--color-border-heavy": "rgba(255, 255, 255, 0.14)",
       "--color-surface-elevated": "#2a2a2a",
       "--color-card": "#2a2a2a",
       "--color-popover": "#353535",
