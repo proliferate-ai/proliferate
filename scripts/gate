@@ -391,7 +391,12 @@ def changed_files(repo: Path) -> tuple[list[str], str | None]:
         paths.update(line for line in diff.stdout.splitlines() if line)
     else:
         warning = "origin/main unresolvable — running the always-set only; fetch and re-run for full scoping"
-    for args in (("diff", "--name-only", "--cached"), ("diff", "--name-only")):
+    for args in (
+        ("diff", "--name-only", "--cached"),
+        ("diff", "--name-only"),
+        # New files not yet staged still scope a by-hand run (ignored files excluded).
+        ("ls-files", "--others", "--exclude-standard"),
+    ):
         out = git(*args)
         paths.update(line for line in out.stdout.splitlines() if line)
     return sorted(paths), warning
