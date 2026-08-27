@@ -55,29 +55,168 @@ Three direct endpoints today; routes through the gateway once per-run keys exist
 
 ## 2 · Data
 
-The five tables, one row meaning each (full DDL rides the code split; column detail in [db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py)):
+### Tables ([db/models/agent_gateway.py](../../../server/proliferate/db/models/agent_gateway.py))
 
-| Table | One row is | Load-bearing invariants |
-| --- | --- | --- |
-| `agent_gateway_enrollment` | one (org, member) in the org's LiteLLM team: `subject_kind`, `billing_subject_id`, `litellm_team_id`, `litellm_user_id`, `sync_status ∈ {pending, synced, failed}`, `budget_status ∈ {ok, exhausted, limit_reached}` | the team is the only budget layer; the row never carries `max_budget`. `subject_kind` still admits `user`: legacy user-kind rows persist soft-revoked so pre-migration spend attribution resolves — org-only is enforced for new enrollments by code, not schema |
-| `agent_gateway_enrollment_key` | one access-group-scoped virtual key per (enrollment, gateway-capable harness): alias, token hash, `verification_status` | alias is deterministic per (enrollment, harness), so re-minting is idempotent |
-| `agent_llm_usage_event` | one imported LiteLLM spend-log row, keyed by unique `litellm_request_id`, attributed to enrollment / billing subject / harness / model | idempotent insert |
-| `llm_credit_grant` | one credit-side ledger entry (`amount_usd`): signup free credit or a purchased top-up | remaining credit = active grants − imported usage cost |
-| `agent_llm_usage_import_cursor` | the single-row importer cursor | advances only after the batch commits |
+```sql
+-- One (org, member) enrolled into the org's LiteLLM team. The team is the only
+-- budget layer; the row never carries max_budget. subject_kind still admits
+-- 'user': legacy rows persist soft-revoked (revoked_at) so pre-migration spend
+-- attribution resolves — org-only is enforced for new enrollments by code.
+CREATE TABLE agent_gateway_enrollment (
+    id                             uuid PRIMARY KEY,
+    subject_kind                   varchar(16) NOT NULL,     -- 'organization' | 'user' (legacy)
+    user_id                        uuid,                     -- the member (org kind) or the legacy subject
+    organization_id                uuid,
+    billing_subject_id             uuid NOT NULL,
+    litellm_team_id                varchar(255),             -- org-<uuid>
+    litellm_user_id                varchar(255),             -- org-<org>-user-<uuid>
+    virtual_key_id                 varchar(255),             -- legacy single-key era; per-harness keys below
+    virtual_key_ciphertext         text,
+    virtual_key_ciphertext_key_id  varchar(255),
+    sync_status                    varchar(16) NOT NULL,     -- pending | synced | failed
+    budget_status                  varchar(16) NOT NULL,     -- ok | exhausted | limit_reached
+    sync_fingerprint               varchar(128),             -- idempotent re-sync detection
+    last_error_code                varchar(128),
+    last_error_message             text,
+    created_at                     timestamptz NOT NULL,
+    updated_at                     timestamptz NOT NULL,
+    revoked_at                     timestamptz               -- soft revocation; unique-per-active-subject partial indexes
+);
 
-Also owned: [config.yaml](../../../server/litellm/config.yaml) — the reviewed source of truth for model names, providers, and access groups; unknown model names fail, cross-provider aliases are forbidden (they silently change semantics), and every model carries the harness access group allowed to invoke it.
+-- One access-group-scoped virtual key per (enrollment, gateway-capable harness).
+-- The alias is deterministic per (enrollment, harness), so re-minting is idempotent;
+-- the sync fingerprint detects drift and reopens sync.
+CREATE TABLE agent_gateway_enrollment_key (
+    id                             uuid PRIMARY KEY,
+    enrollment_id                  uuid NOT NULL REFERENCES agent_gateway_enrollment(id),
+    harness_kind                   varchar(64) NOT NULL,
+    virtual_key_id                 varchar(255),
+    virtual_key_ciphertext         text,
+    virtual_key_ciphertext_key_id  varchar(255),
+    sync_fingerprint               varchar(128),
+    verification_status            varchar(32),              -- NULL until the verification loop records one; 'misconfigured' carries a delta
+    verification_delta             text,
+    verified_at                    timestamptz,
+    created_at                     timestamptz NOT NULL,
+    updated_at                     timestamptz NOT NULL,
+    revoked_at                     timestamptz
+);
+
+-- One imported LiteLLM spend-log row. litellm_request_id is UNIQUE — the
+-- importer's idempotency across restarts and the overlap window.
+CREATE TABLE agent_llm_usage_event (
+    id                  uuid PRIMARY KEY,
+    litellm_request_id  varchar(255) NOT NULL UNIQUE,
+    virtual_key_id      varchar(255),
+    litellm_team_id     varchar(255),
+    user_id             uuid,
+    organization_id     uuid,
+    billing_subject_id  uuid,
+    provider            varchar(64),
+    model               varchar(255),
+    prompt_tokens       bigint NOT NULL DEFAULT 0,
+    completion_tokens   bigint NOT NULL DEFAULT 0,
+    total_tokens        bigint NOT NULL DEFAULT 0,
+    cost_usd            numeric,                             -- margin already applied at import
+    status              varchar(32) NOT NULL,                -- 'imported'
+    workspace_id        varchar(255),                        -- attribution riders when LiteLLM metadata carries them
+    session_id          varchar(255),
+    occurred_at         timestamptz NOT NULL,
+    imported_at         timestamptz NOT NULL,
+    raw_metadata_json   text
+);
+
+-- One credit-side ledger entry. Remaining credit = active grants − imported cost.
+CREATE TABLE llm_credit_grant (
+    id                  uuid PRIMARY KEY,
+    billing_subject_id  uuid NOT NULL,
+    user_id             uuid,
+    source              varchar(32) NOT NULL,                -- signup | topup | admin
+    amount_usd          numeric(12,4) NOT NULL,
+    created_at          timestamptz NOT NULL,
+    expires_at          timestamptz,
+    source_ref          varchar(255)                         -- e.g. the Stripe invoice, or an admin grant tag
+);
+
+-- The single-row importer cursor. Advances only after the batch commits.
+CREATE TABLE agent_llm_usage_import_cursor (
+    id                    varchar(16) PRIMARY KEY,           -- 'default'
+    last_seen_occurred_at timestamptz,
+    last_polled_at        timestamptz,
+    status                varchar(32) NOT NULL,              -- idle | polling | failed
+    last_error_code       varchar(128),
+    last_error_message    text,
+    metadata_json         text
+);
+```
+
+### The data plane's config ([config.yaml](../../../server/litellm/config.yaml))
+
+Every entry has one shape — and this file is the harness-to-model map; no client-side filtering exists anywhere:
+
+```yaml
+- model_name: claude-sonnet-5              # what harnesses request; unknown names fail at the proxy
+  litellm_params:
+    model: anthropic/claude-sonnet-5       # the REAL upstream id — never a cross-provider alias
+    api_key: os.environ/ANTHROPIC_API_KEY  # provider keys from the container env only
+  model_info:
+    access_groups: [claude, opencode]      # exactly the harness_kind identifiers allowed to invoke it
+```
+
+- **Cross-provider aliases are forbidden** — an alias may re-point only within the same provider (they silently change semantics otherwise).
+- **cursor appears in no access group** — it has no gateway recipe, so no key can ever be scoped to it.
+- Bedrock entries use real cross-region inference-profile ids and the task role's credential chain instead of an api_key.
 
 ## 3 · Flows
 
-**Flow 1 — Enrollment.** Signup or org-membership change → `signup_hook` schedules after commit → durable enrollment row (`pending`) → LiteLLM team/user/keys provisioned → `synced`; any LiteLLM failure marks `failed` and the backfill loop retries on its interval. `migration.py` converges pre-org residue first on every tick. Account creation never waits on LiteLLM — enrollment is fire-and-forget, and agent_auth re-renders when sync completes.
+### Flow 1 — Enrollment
 
-**Flow 2 — Key mint.** One virtual key per (member, gateway-capable harness), alias-deterministic, access-group-scoped (`_sync_one_harness_key`). The key reaches a machine only inside agent_auth's rendered document; this system never delivers.
+Triggered by signup or an org-membership change. **Account creation never waits on LiteLLM.**
 
-**Flow 3 — Funding and exhaustion.** Remaining credit = grants − imported cost, mirrored onto the LiteLLM team budget. Zero remaining: the team-budget mirror hits zero (the proxy blocks at its layer), `budget_status=exhausted`, `is_gateway_budget_available` turns false, and agent_auth withholds gateway sources at render, refusing launches with the reason — there is no per-key disable verb; the mirror and the withhold are the mechanism. A top-up (Stripe, through billing) records a grant and reactivates. Org caps produce `limit_reached` the same way; the next import tick after a raise reactivates.
+- `signup_hook` schedules after commit → a durable enrollment row lands first (`pending`).
+- The LiteLLM shape follows: team `org-<uuid>`, user `org-<org>-user-<uuid>`, per-harness keys.
+- Success → `synced`; any LiteLLM failure → `failed`, retried by the backfill loop on its interval.
+- `migration.py` converges pre-org residue first on every tick — never inline in alembic.
+- agent_auth re-renders when sync completes, so a selection made before sync heals itself.
 
-**Flow 4 — Usage import.** The importer reads spend logs from `last_seen − overlap`, inserts by unique request id (idempotent across restarts), applies margin, attributes to (subject, harness, model), and enforces exhaustion + org caps as it goes.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant ORG as accounts / organizations
+    participant GW as ai_gateway control plane
+    participant LL as LiteLLM
+    participant AA as server agent_auth
+    ORG->>GW: ensure enrollment (after commit)
+    GW->>GW: durable row first (pending)
+    GW->>LL: provision team + user + per-harness keys
+    LL-->>GW: synced (failure → failed, backfill retries)
+    GW-->>AA: sync complete — re-render delivers the keys
+```
 
-**Flow 5 — Verification.** On its interval (default-off today), diff each key's *observed* model list against the declared access group; a mismatch marks `verification_status=misconfigured` with the delta — the fix is config.yaml + redeploy, never a client-side patch.
+### Flow 2 — Key mint
+
+- One virtual key per (member, gateway-capable harness), alias-deterministic, access-group-scoped (`_sync_one_harness_key`).
+- Drift (fingerprint mismatch) reopens sync; re-minting is idempotent by alias.
+- **This system never delivers**: a key reaches a machine only inside agent_auth's rendered document.
+
+### Flow 3 — Funding and exhaustion
+
+- Remaining credit = active grants − imported cost, mirrored onto the LiteLLM team budget (`_remaining_credit_budget_raw`).
+- Zero remaining: the mirror hits zero (the proxy blocks at its layer), `budget_status=exhausted`, `is_gateway_budget_available` turns false, and agent_auth withholds gateway sources at render — the refusal names the reason. There is no per-key disable verb; the mirror and the withhold are the mechanism.
+- A top-up (Stripe, through billing) records a grant and `reactivate_subject_if_credited` re-budgets; the import tick reactivates too (org caps: `limit_reached` → raise → next tick).
+
+### Flow 4 — Usage import
+
+- Each tick reads LiteLLM spend logs from `last_seen − overlap` (`agent_gateway_usage_import_overlap_seconds`).
+- Inserts by unique `litellm_request_id` — idempotent across restarts and the overlap.
+- Applies the margin percent, attributes to (subject, harness, model), enforces exhaustion + org caps as it goes.
+- The cursor advances only after the batch commits.
+
+### Flow 5 — Verification
+
+- On its interval (default-off today), diff each key's **observed** model list against its declared access group.
+- Mismatch → `verification_status=misconfigured` with the delta stored on the key row.
+- **The fix is config.yaml + redeploy** — never a client-side patch. (This loop is the drift detector that would have caught the stale Claude-5 list before a user did.)
 
 ## 4 · Structure
 
@@ -110,7 +249,37 @@ server/litellm/config.yaml · Dockerfile         the data plane: models, provide
 cloud/sdk/src/client/agent-gateway.ts           SDK client
 ```
 
-Settings (config.py `agent_gateway_*`): enabled flag, LiteLLM base URLs + master key + timeout, default org budget, free credit amount, margin percent, importer/verification/top-up intervals and thresholds, usage-import overlap window, top-up price id + amount, policy minimum plan, qualification run/shard ids.
+The HTTP surface, with bodies (`/v1/cloud/agent-gateway/…`, product-user bearer auth):
+
+```text
+GET /capabilities
+  → { gatewayEnabled, publicBaseUrl, enrollmentStatus,
+      creditsExhausted,          # true exactly when the renderer is withholding keys — the AA-3 plain-words surface
+      verifications: [ { harnessKind, status, delta? } ] }
+GET /enrollment
+  → { id, subjectKind, litellmTeamId, syncStatus, lastErrorCode, createdAt, updatedAt }
+```
+
+Importable functions (nothing else is):
+
+```python
+ensure_signup_enrollment(user) / ensure_org_enrollment(org, member)   # after-commit via signup_hook; never raises into an auth flow
+is_gateway_budget_available(billing_subject) -> bool                  # the launch-gating predicate agent_auth consults at render
+create_llm_topup_grant(subject, amount, source_ref)                   # billing calls on invoice-paid; records + reactivates
+get_remaining_credit_usd(subject) -> Decimal                          # ledger projections for the billing usage API
+llm_cost_usd_timeseries(subject, …) -> series
+```
+
+The four background loops (`worker.py`, started from `main.py` lifespan; each interval is a `agent_gateway_*` setting):
+
+| Loop | Does | Interval setting |
+| --- | --- | --- |
+| backfill | retries `failed` enrollments; runs `migration.py` residue convergence first | `agent_gateway_backfill_interval_seconds` |
+| usage import | flow 4 | `agent_gateway_usage_import_interval_seconds` (+ `_overlap_seconds`) |
+| verification | flow 5 | `agent_gateway_verification_interval_seconds` (gated by `agent_gateway_verification_enabled`, default false) |
+| top-ups | auto top-up when the threshold crosses and a price id is configured | `agent_gateway_topup_*` (interval, threshold, price id, amount) |
+
+Other settings (config.py `agent_gateway_*`): enabled flag · LiteLLM base URLs + master key + timeout · default org budget · free credit amount · margin percent · policy minimum plan · qualification run/shard ids.
 
 Proof: the unit and integration suites named per concern — enrollment, usage import, top-ups, litellm integration, config access groups (the reviewed config.yaml is pinned by `test_litellm_config_access_groups.py`), key lifecycle, migration, verification, org-member gateway, LLM limit enforcement — under `server/tests/{unit,integration}/test_agent_gateway_*` and siblings.
 
