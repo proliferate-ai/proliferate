@@ -104,6 +104,7 @@ agents::reconcile_agents workspace-scoped agent installer
 agents::start_agent_login workspace-scoped agent auth flow
 agents::start_agent_login_terminal workspace-scoped agent auth flow
 agents::close_agent_login_terminal workspace-scoped agent auth flow
+agents::claim_agent_login_terminal_mint_token workspace-scoped agent auth flow; one-time mint-token handoff, wipes the capture and purges the replay buffer
 agent_auth::put_agent_auth_state workspace-scoped agent auth state
 agent_auth::delete_agent_auth_state workspace-scoped agent auth state removal
 agent_launch_options::refresh_launch_options workspace-scoped target launch-options re-probe; spawns an override-free throwaway harness in isolated scratch and writes derived target state, never touching a session

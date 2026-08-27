@@ -200,8 +200,9 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
         if selection.source_kind == AGENT_AUTH_SOURCE_SEAT:
             seen = seen_seat_ids.setdefault(selection.harness_kind, set())
             for seat_source in _render_seat_sources(inputs, selection):
-                if seat_source["seat_id"] not in seen:
-                    seen.add(seat_source["seat_id"])
+                seat_id = str(seat_source["seat_id"])
+                if seat_id not in seen:
+                    seen.add(seat_id)
                     by_harness[selection.harness_kind].append(
                         ((str(seat_source["kind"]), ""), seat_source)
                     )
