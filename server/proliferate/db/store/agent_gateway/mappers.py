@@ -74,6 +74,7 @@ def render_sequence_record(row: AgentAuthRenderSequence) -> AgentAuthRenderSeque
         user_id=row.user_id,
         surface=row.surface,
         sequence=row.sequence,
+        lineage=row.lineage,
         fingerprint=row.fingerprint,
         rendered_at=row.rendered_at,
         created_at=row.created_at,

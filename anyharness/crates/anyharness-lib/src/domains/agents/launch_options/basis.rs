@@ -371,8 +371,17 @@ mod tests {
     }
 
     fn state_doc(sequence: i64, harnesses: serde_json::Value) -> serde_json::Value {
+        state_doc_with_lineage(sequence, "test-lineage", harnesses)
+    }
+
+    fn state_doc_with_lineage(
+        sequence: i64,
+        lineage: &str,
+        harnesses: serde_json::Value,
+    ) -> serde_json::Value {
         serde_json::json!({
             "version": 2,
+            "lineage": lineage,
             "sequence": sequence,
             "harnesses": harnesses,
         })
@@ -438,6 +447,25 @@ mod tests {
             compute_harness_basis_revision(home.path(), "codex"),
             baseline,
             "another harness's auth change must not invalidate this harness's basis"
+        );
+
+        // A lineage adoption (server DB rebuilt, machine reset, counter
+        // restarted) that leaves codex's entry byte-identical → basis still
+        // unchanged. The lineage rides the ENVELOPE, like the sequence: the
+        // basis folds only the harness's own entry, so adopting a new counter
+        // lineage must not dim a harness whose auth content did not move.
+        write_state_json(
+            home.path(),
+            &state_doc_with_lineage(
+                1,
+                "a-different-lineage",
+                serde_json::json!([codex_entry("sk-vk-1"), grok_entry("xai-1")]),
+            ),
+        );
+        assert_eq!(
+            compute_harness_basis_revision(home.path(), "codex"),
+            baseline,
+            "a lineage adoption with identical content must not invalidate the basis"
         );
 
         // Codex's own entry changed → the basis moves.

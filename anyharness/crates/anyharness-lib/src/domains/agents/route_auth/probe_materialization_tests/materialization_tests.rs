@@ -390,6 +390,7 @@ fn a_state_file_from_another_server_yields_no_gateway_material() {
     let home = TempHome::new("origin-guard");
     home.write_state_json(&json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": 9,
         "issuing_server_origin": "https://other.example",
         "harnesses": [{ "harness_kind": "claude", "sources": [gateway_source(VK)] }],

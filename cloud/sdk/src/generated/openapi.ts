@@ -2448,9 +2448,10 @@ export interface components {
          * @description The whole ``state.json`` v2 document (``route_auth/state.rs``).
          *
          *     ``fingerprint`` is a response-only rider (the renderer's sha256 of the
-         *     canonical document), NOT part of the state.json wire contract: the desktop
-         *     echoes it through ``POST /state/ack`` after a successful runtime push and
-         *     must strip it before pushing the document to the local runtime.
+         *     canonical ``harnesses`` array, spec §2), NOT part of the state.json wire
+         *     contract: the desktop echoes it through ``POST /state/ack`` after a
+         *     successful runtime push and must strip it before pushing the document to
+         *     the local runtime.
          *
          *     ``harness_settings`` is a second response-only rider: the surface's full
          *     persisted harness-settings map (``agent_auth_harness_settings``), keyed by
@@ -2466,6 +2467,8 @@ export interface components {
             version: number;
             /** Sequence */
             sequence: number;
+            /** Lineage */
+            lineage: string;
             /** User Id */
             user_id?: string | null;
             /** Harnesses */

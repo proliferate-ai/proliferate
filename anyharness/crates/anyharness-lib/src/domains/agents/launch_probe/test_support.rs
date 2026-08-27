@@ -85,6 +85,7 @@ impl Drop for TempRuntimeHome {
 pub(crate) fn gateway_state(sequence: i64, harnesses: &[(&str, &str)]) -> serde_json::Value {
     serde_json::json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": sequence,
         "harnesses": harnesses
             .iter()

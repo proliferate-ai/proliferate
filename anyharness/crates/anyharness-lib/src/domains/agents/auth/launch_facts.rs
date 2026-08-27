@@ -383,7 +383,7 @@ mod tests {
         let home = temp_home();
         write_state(
             &home,
-            r#"{"version":2,"sequence":1,"harnesses":[
+            r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[
                 {"harness_kind":"claude","sources":[
                     {"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
         );
@@ -417,7 +417,7 @@ mod tests {
         let home = temp_home();
         write_state(
             &home,
-            r#"{"version":2,"sequence":1,"harnesses":[
+            r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[
                 {"harness_kind":"claude","sources":[
                     {"kind":"api_key","env_var_name":"ANTHROPIC_API_KEY","value":"sk"}]}]}"#,
         );
@@ -444,7 +444,7 @@ mod tests {
         let home = temp_home();
         write_state(
             &home,
-            r#"{"version":2,"sequence":1,"harnesses":[
+            r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[
                 {"harness_kind":"claude","sources":[
                     {"kind":"api_key","env_var_name":"ANTHROPIC_API_KEY","value":"sk-ant-raw"}]}]}"#,
         );
@@ -485,7 +485,7 @@ mod tests {
         let home = temp_home();
         write_state(
             &home,
-            r#"{"version":2,"sequence":1,"harnesses":[
+            r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[
                 {"harness_kind":"codex","sources":[
                     {"kind":"api_key","env_var_name":"OPENAI_API_KEY","value":"sk-raw"}]},
                 {"harness_kind":"claude","sources":[

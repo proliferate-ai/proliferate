@@ -25,6 +25,7 @@ fn service(home: &TempHome, targets: FixedTargets) -> AgentStatusService {
 fn codex_gateway_state(sequence: i64) -> serde_json::Value {
     serde_json::json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": sequence,
         "harnesses": [
             { "harness_kind": "codex", "sources": [
@@ -227,7 +228,7 @@ fn adversarial_concurrent_refresh_and_verify_can_lose_the_auth_change() {
                         { "kind": "api_key", "env_var_name": "OPENAI_API_KEY", "value": "k" }])
                 };
                 let doc = serde_json::json!({
-                    "version": 2, "sequence": 10 + i,
+                    "version": 2, "lineage": "test-lineage", "sequence": 10 + i,
                     "harnesses": [{ "harness_kind": "codex", "sources": sources }],
                 });
                 let path = crate::domains::agents::route_auth::state_file_path(&home_path);

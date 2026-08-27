@@ -191,7 +191,12 @@ pub(super) fn map_route_auth_error(error: &RouteAuthError) -> ApiError {
         RouteAuthError::SelectionIncomplete { .. }
         | RouteAuthError::UnsupportedRoute { .. }
         | RouteAuthError::UnknownHarness { .. }
-        | RouteAuthError::StaleStateSequence { .. } => {
+        | RouteAuthError::StaleStateSequence { .. }
+        // A foreign counter lineage (server DB rebuilt/switched): 409 like the
+        // stale push — the runtime persisted nothing, and the Display already
+        // speaks the plain words naming the one recovery (reset this machine's
+        // agent auth), which the pane surfaces verbatim on this code.
+        | RouteAuthError::ForeignStateLineage { .. } => {
             ApiError::conflict(error.to_string(), error.code())
         }
         RouteAuthError::MalformedStateFile { .. } | RouteAuthError::Materialize { .. } => {

@@ -54,6 +54,13 @@ class AgentAuthRenderSequence(Base):
         index=True,
     )
     surface: Mapped[str] = mapped_column(Text)
+    # The identity of the counter itself, minted once when the row is created
+    # and NEVER updated for the row's lifetime — the row IS the lineage, so a
+    # rebuilt database (or a different server) mints a new row and therefore a
+    # new lineage. Rides the document beside ``sequence`` so the runtime can
+    # tell "this counter restarted" (foreign lineage → typed refusal) from
+    # "this push is stale" (same lineage, lower sequence).
+    lineage: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid4)
     # BigInteger for symmetry with agent_auth_delivery_ack.acked_sequence: the
     # ack column predates content-hash sequencing and held ms-epoch values, so
     # the pair must share a type for the applied comparison.

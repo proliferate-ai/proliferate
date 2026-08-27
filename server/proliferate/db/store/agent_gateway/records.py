@@ -67,12 +67,17 @@ class AgentAuthRenderSequenceRecord:
     ``sequence`` moves exactly when a render's ``harnesses`` content hash
     (``fingerprint``) changed — the persisted counter behind the wire
     document's ``sequence`` field (spec §2 "How delivery is governed").
+    ``lineage`` is the counter's birth identity: minted when the row was
+    created and never updated, so a recreated row (a rebuilt database) is a
+    new lineage and the runtime can refuse a foreign-lineage push in plain
+    words instead of comparing sequences across unrelated counters.
     """
 
     id: UUID
     user_id: UUID
     surface: str
     sequence: int
+    lineage: UUID
     fingerprint: str
     rendered_at: datetime
     created_at: datetime

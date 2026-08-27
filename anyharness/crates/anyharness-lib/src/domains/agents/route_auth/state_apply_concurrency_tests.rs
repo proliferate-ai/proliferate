@@ -27,6 +27,7 @@ fn document(sequence: i64) -> AgentAuthState {
     };
     serde_json::from_value(serde_json::json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": sequence,
         "harnesses": [
             { "harness_kind": "codex", "sources": [codex_source] },
@@ -115,5 +116,36 @@ fn concurrent_pushes_each_diff_against_their_own_immediate_predecessor() {
         persisted.sequence,
         applied.last().expect("a success").0,
         "the last write in sequence order is the one on disk"
+    );
+}
+
+/// A changed set exists exactly ONCE — on the apply that moved the file. The
+/// retry of an identical document (equal sequence, same content) diffs against
+/// the first write and reports NOTHING, by design. This is why the HTTP
+/// handler dispatches the pokes and status refreshes INSIDE the same
+/// uncancellable blocking task as the apply (`api/http/agent_auth.rs`): a
+/// handler future dropped between a committed write and an after-the-await
+/// dispatch would lose the only changed set there will ever be, and the
+/// courier's retry — pinned here — cannot rediscover it.
+#[test]
+fn a_retry_of_an_identical_push_reports_an_empty_changed_set() {
+    let home = TempHome::new("retry-empty-diff");
+
+    // Baseline world at sequence 2 (codex = gateway).
+    apply_state_file(home.path(), &document(2)).expect("baseline");
+
+    // The interrupted PUT: sequence 3 flips codex to api_key. The apply
+    // COMMITS (spawn_blocking always runs to completion) — its outcome is the
+    // one and only carrier of the changed set.
+    let first = apply_state_file(home.path(), &document(3)).expect("interrupted apply");
+    assert_eq!(first.changed_harnesses, vec!["codex".to_string()]);
+
+    // The retry of the SAME push: equal sequence, identical content.
+    let retried = apply_state_file(home.path(), &document(3)).expect("retry");
+    assert!(
+        retried.changed_harnesses.is_empty(),
+        "the retry diffs against the first (already-committed) write of the \
+         same document, so the changed set is unrecoverable after the fact: {:?}",
+        retried.changed_harnesses
     );
 }

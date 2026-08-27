@@ -111,6 +111,7 @@ pub(crate) fn install_scripted_claude_auth(runtime_home: &Path) {
         .expect("make native claude stub executable");
     let state: AgentAuthState = serde_json::from_value(serde_json::json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": 1,
         "harnesses": [{
             "harness_kind": "claude",

@@ -51,6 +51,7 @@ impl GatewayModelResolve for FixedResolver {
 fn v2_state(sequence: i64, harnesses: Vec<Value>) -> Value {
     json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": sequence,
         "user_id": "user-1",
         "harnesses": harnesses,

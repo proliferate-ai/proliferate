@@ -17,7 +17,7 @@ FIXTURE_PATH = REPO_ROOT / "fixtures/contracts/agent-auth-state/v2.json"
 
 USER_ID = uuid.uuid4()
 NOW = datetime(2026, 7, 1, tzinfo=UTC)
-SEQUENCE = 4211
+SEQUENCE, LINEAGE = 4211, "40000000-0000-4000-8000-000000000031"  # fixed counter-birth uuid
 _NOT_READY = agent_auth.UNSATISFIED_GATEWAY_NOT_READY
 _KEY_REVOKED = agent_auth.UNSATISFIED_KEY_REVOKED
 _SEATS_GONE = agent_auth.UNSATISFIED_SEATS_GONE
@@ -87,7 +87,7 @@ def _inputs(
         )
     return agent_auth.AgentAuthStateInputs(
         user_id=USER_ID,
-        sequence=sequence,
+        sequence=sequence, lineage=LINEAGE,
         selections=selections,
         api_key_values=api_key_values or {},
         provider_config_values=provider_config_values or {},
@@ -118,7 +118,7 @@ class TestRenderAgentAuthState:
         )
         assert state == {
             "version": 2,
-            "sequence": SEQUENCE,
+            "sequence": SEQUENCE, "lineage": LINEAGE,
             "user_id": str(USER_ID),
             "harnesses": [
                 {

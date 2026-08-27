@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentAuthState } from "@proliferate/cloud-sdk";
+import { AnyHarnessError } from "@anyharness/sdk";
 import { useLocalAuthStateSync } from "#product/hooks/agents/lifecycle/use-local-auth-state-sync";
+import { useLocalAuthDeliveryStore } from "#product/stores/agents/local-auth-delivery-store";
 import {
   resetRendererDiagnosticsSinkForTest,
   setRendererDiagnosticsSink,
@@ -198,6 +200,58 @@ describe("useLocalAuthStateSync", () => {
       name: "renderer.agent_auth.state_push_failed",
       errorClassification: "state_push_failed",
     }));
+    warn.mockRestore();
+  });
+
+  it("records a typed runtime refusal for the pane and clears it on the next success", async () => {
+    // The foreign-lineage 409 (AGENT_ROUTE_STATE_LINEAGE): the runtime's
+    // plain words must reach the settings pane through the delivery store —
+    // a courier retry alone can never resolve this refusal, so the pane
+    // needs the code (to key the reset affordance) and the detail (the words
+    // the user reads).
+    useLocalAuthDeliveryStore.getState().clearLastPushFailure();
+    let state = gatewayState();
+    mocks.useAgentGatewayEnrollment.mockReturnValue({
+      data: { syncStatus: "synced" },
+      isError: false,
+    });
+    mocks.useAgentAuthState.mockImplementation(() => ({ data: state }));
+    const refusal =
+      "this machine holds agent-auth state from a different server database. "
+      + "If the server was rebuilt or switched on purpose, reset this machine's "
+      + "agent auth (Settings → Agents) and it will adopt the new one.";
+    mocks.applyAgentAuthState
+      .mockRejectedValueOnce(
+        new AnyHarnessError({
+          title: "Conflict",
+          status: 409,
+          detail: refusal,
+          code: "AGENT_ROUTE_STATE_LINEAGE",
+        }),
+      )
+      .mockResolvedValue({ applied: true, sequence: 5 });
+    mocks.ackAgentAuthState.mockResolvedValue({ surface: "local" });
+    mocks.invalidateAgentLaunchReadinessResources.mockResolvedValue(undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const { rerender } = renderSyncHook(makeQueryClient());
+
+    await waitFor(() => expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(useLocalAuthDeliveryStore.getState().lastPushFailure).toEqual({
+        code: "AGENT_ROUTE_STATE_LINEAGE",
+        detail: refusal,
+      });
+    });
+
+    // After the reset flow (state cleared, query invalidated), the re-pushed
+    // document is accepted — the recorded refusal resolves with it.
+    state = gatewayState();
+    rerender();
+    await waitFor(() => expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(useLocalAuthDeliveryStore.getState().lastPushFailure).toBeNull();
+    });
     warn.mockRestore();
   });
 

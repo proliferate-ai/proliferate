@@ -44,7 +44,7 @@ fn claude_state(sources: Vec<Value>, settings: Option<Value>) -> Value {
     if let Some(settings) = settings {
         entry["settings"] = settings;
     }
-    json!({ "version": 2, "sequence": 7, "harnesses": [entry] })
+    json!({ "version": 2, "lineage": "test-lineage", "sequence": 7, "harnesses": [entry] })
 }
 
 fn store() -> SeatCoolingStore {

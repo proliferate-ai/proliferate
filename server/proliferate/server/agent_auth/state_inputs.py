@@ -42,9 +42,11 @@ class AgentAuthStateInputs:
     per (user, surface), bumped only by content-changing renders); the load
     pass leaves it 0 and ``build_agent_auth_state`` stamps the real value
     after hashing the rendered content — the sequence is an output of the
-    render, never an input to it. ``api_key_values`` maps an ``api_key_id``
-    to its decrypted secret; a revoked or vanished key is simply absent (its
-    source is then dropped).
+    render, never an input to it. ``lineage`` is stamped the same way (the
+    persisted counter row's birth uuid, stable across renders for the row's
+    life); the load pass leaves it "". ``api_key_values`` maps an
+    ``api_key_id`` to its decrypted secret; a revoked or vanished key is
+    simply absent (its source is then dropped).
 
     ``gateway_virtual_keys`` is a per-harness map (model-gateway.md §Account
     model, R2): each gateway-capable harness gets its own access-group-scoped
@@ -77,6 +79,7 @@ class AgentAuthStateInputs:
 
     user_id: UUID
     sequence: int
+    lineage: str
     selections: tuple[AgentAuthSelectionRecord, ...]
     api_key_values: Mapping[UUID, str]
     provider_config_values: Mapping[UUID, tuple[str, dict[str, str]]]
@@ -202,6 +205,7 @@ async def load_state_inputs(
     return AgentAuthStateInputs(
         user_id=user_id,
         sequence=0,
+        lineage="",
         selections=enabled,
         api_key_values=api_key_values,
         provider_config_values=provider_config_values,

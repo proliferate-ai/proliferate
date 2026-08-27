@@ -133,6 +133,18 @@ pub struct AgentAuthState {
     /// identity is the `fingerprint`, a `GET /state` rider that never reaches
     /// this document.
     pub sequence: i64,
+    /// The identity of the counter `sequence` counts in: minted once when the
+    /// server's render-sequence row is created, and never changed for the
+    /// row's lifetime — so a rebuilt or switched server database IS a new
+    /// lineage. `sequence` is only ordered WITHIN one lineage; comparing
+    /// sequences across lineages is meaningless, which is why
+    /// [`apply_state_file`] refuses a push whose lineage differs from the
+    /// persisted one instead of comparing counters (founder-ruled: no epochs,
+    /// no automatic adoption — recovery is the explicit reset,
+    /// [`clear_state_file`]). REQUIRED, no serde default: a document without
+    /// it is malformed, and malformed heals on the next valid push — the
+    /// established precedent.
+    pub lineage: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
     /// The origin (`scheme://host[:port]`) of the control-plane server that
@@ -230,13 +242,22 @@ pub struct AppliedStateOutcome {
 /// sandboxes). The write is atomic and 0600 via the shared route-auth private
 /// file helper.
 ///
-/// Stale-write protection: a payload whose sequence is BELOW the persisted
-/// file's sequence is rejected (a delayed push must never roll live
-/// selections back). An equal sequence is an idempotent re-push of the same
-/// document — by governance the server bumps the sequence on ANY content
-/// change, virtual-key rotation included, so equal sequence means identical
-/// content. A malformed on-disk file carries no trustworthy sequence and is
-/// healed by any valid push.
+/// Lineage guard (founder-ruled, the sequence-lineage wedge): the sequence is
+/// only ordered WITHIN one lineage, so a push whose `lineage` differs from
+/// the persisted document's is refused with the typed
+/// [`RouteAuthError::ForeignStateLineage`] — never compared, never adopted.
+/// A bare "different lineage ⇒ accept" is forbidden: a DELAYED push from the
+/// retired lineage would resurrect retired state. The one recovery is the
+/// explicit reset ([`clear_state_file`]); with no persisted document, the
+/// next push adopts whatever lineage it carries.
+///
+/// Stale-write protection, same lineage only: a payload whose sequence is
+/// BELOW the persisted file's sequence is rejected (a delayed push must never
+/// roll live selections back). An equal sequence is an idempotent re-push of
+/// the same document — by governance the server bumps the sequence on ANY
+/// content change, virtual-key rotation included, so equal sequence means
+/// identical content. A malformed on-disk file carries no trustworthy
+/// sequence (or lineage) and is healed by any valid push.
 pub fn apply_state_file(
     runtime_home: &Path,
     state: &AgentAuthState,
@@ -257,19 +278,26 @@ pub fn apply_state_file(
         Err(RouteAuthError::MalformedStateFile { .. }) => None,
         Err(error) => return Err(error),
     };
-    // Known open wedge (delivery slice-3 review, open question): this guard
-    // compares sequences that may come from DIFFERENT counter lineages. A
-    // server switch pushes a document from another origin's counter; a
-    // same-origin DB rebuild restarts the counter lower. Either can wedge the
-    // runtime behind a stale-but-higher persisted sequence until manual state
-    // clear. A sound fix needs an ordering authority over lineages on the
-    // wire (not a heuristic here) and is founder-gated — do not "fix" this
-    // guard locally.
-    if let Some(current) = previous.as_ref().map(|existing| existing.sequence) {
-        if state.sequence < current {
+    // The formerly "known open wedge" (delivery slice-3 review) is CLOSED by
+    // the lineage guard below, per the founder ruling: the ordering authority
+    // over lineages on the wire is the `lineage` field itself — equal means
+    // same counter (compare sequences), different means no order exists
+    // (refuse; the explicit reset is the only adoption path).
+    if let Some(existing) = previous.as_ref() {
+        // Lineage first: across lineages the sequence comparison below is
+        // meaningless (two independent counters), so a foreign push never
+        // reaches it. Nothing is applied and nothing is poked — the caller
+        // sees the typed refusal, not an outcome.
+        if state.lineage != existing.lineage {
+            return Err(RouteAuthError::ForeignStateLineage {
+                persisted: existing.lineage.clone(),
+                incoming: state.lineage.clone(),
+            });
+        }
+        if state.sequence < existing.sequence {
             return Err(RouteAuthError::StaleStateSequence {
                 incoming: state.sequence,
-                current,
+                current: existing.sequence,
             });
         }
     }

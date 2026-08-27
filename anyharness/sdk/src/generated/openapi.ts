@@ -5793,7 +5793,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Stale sequence; persisted state unchanged */
+            /** @description Stale sequence or foreign counter lineage; persisted state unchanged */
             409: {
                 headers: {
                     [name: string]: unknown;

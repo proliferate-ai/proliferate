@@ -14,6 +14,7 @@ fn doc(sequence: i64, origin: Option<&str>, settings: serde_json::Value) -> serd
     }
     let mut state = serde_json::json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": sequence,
         "harnesses": [entry],
     });
@@ -114,7 +115,7 @@ fn adversarial_server_origin_flip_reports_no_changed_harness() {
 fn adversarial_dropped_duplicate_entry_reports_no_change() {
     let home = TempHome::new("adv-dup-entry");
     let two = serde_json::json!({
-        "version": 2, "sequence": 1,
+        "version": 2, "lineage": "test-lineage", "sequence": 1,
         "harnesses": [
             { "harness_kind": "codex", "sources": [
                 { "kind": "gateway", "base_url": "https://gw.example", "key": "k" }] },
@@ -124,7 +125,7 @@ fn adversarial_dropped_duplicate_entry_reports_no_change() {
     });
     apply(&home, &two);
     let one = serde_json::json!({
-        "version": 2, "sequence": 2,
+        "version": 2, "lineage": "test-lineage", "sequence": 2,
         "harnesses": [
             { "harness_kind": "codex", "sources": [
                 { "kind": "gateway", "base_url": "https://gw.example", "key": "k" }] },

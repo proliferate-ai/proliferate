@@ -122,6 +122,11 @@ impl LaunchRefusal {
             }),
             RouteAuthError::MalformedStateFile { .. }
             | RouteAuthError::StaleStateSequence { .. }
+            // Foreign lineage is a delivery refusal, not a launch refusal: it
+            // only ever arises at the state PUT door, whose mapper renders
+            // the error's own plain-words Display. No launch surface can
+            // observe it (the persisted document always self-agrees).
+            | RouteAuthError::ForeignStateLineage { .. }
             | RouteAuthError::SelectionIncomplete { .. }
             | RouteAuthError::UnsupportedRoute { .. }
             | RouteAuthError::UnknownHarness { .. }

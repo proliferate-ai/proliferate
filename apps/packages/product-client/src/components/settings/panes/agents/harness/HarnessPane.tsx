@@ -24,6 +24,7 @@ import {
 } from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
 import { HarnessProvidersSection } from "#product/components/settings/panes/agents/harness/HarnessProvidersSection";
 import { HarnessConfigIssueBanner } from "#product/components/settings/panes/agents/harness/HarnessConfigIssueBanner";
+import { LocalAuthLineageResetBanner } from "#product/components/settings/panes/agents/harness/LocalAuthLineageResetBanner";
 import { HarnessManagedNotice } from "#product/components/settings/panes/agents/harness/HarnessManagedNotice";
 import { useHarnessAuthEditor } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-harness-install-action";
@@ -170,6 +171,12 @@ function HarnessRuntimeSurface({
 
   return (
     <>
+      {/* Machine-level, local-surface only: the courier's foreign-lineage
+          refusal (server DB rebuilt/switched) applies to the whole local
+          runtime, not one harness, so it sits above the per-harness
+          sections with its one recovery action. Renders nothing unless the
+          last local push failed with that exact code. */}
+      {surface === "local" ? <LocalAuthLineageResetBanner /> : null}
       {showRuntimeStatus ? (
         <SettingsSection
           title={HARNESS_PANE_COPY.runtimeTitle}

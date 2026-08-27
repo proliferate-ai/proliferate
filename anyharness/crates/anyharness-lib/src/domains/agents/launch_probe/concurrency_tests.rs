@@ -261,6 +261,7 @@ async fn adversarial_materialization_failure_neither_coalesces_nor_backs_off() {
     // `SelectionMissing`, so `probe_auth_material` errors out.
     home.write_state_json(&serde_json::json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": 1,
         "harnesses": [{
             "harness_kind": "opencode",

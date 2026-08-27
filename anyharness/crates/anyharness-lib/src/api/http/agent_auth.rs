@@ -35,7 +35,7 @@ use crate::domains::agents::status::RefreshCause;
     responses(
         (status = 200, description = "State persisted", body = ApplyAgentAuthStateResponse),
         (status = 400, description = "Payload rejected; persisted state unchanged", body = anyharness_contract::v1::ProblemDetails),
-        (status = 409, description = "Stale sequence; persisted state unchanged", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Stale sequence or foreign counter lineage; persisted state unchanged", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "agent-auth"
 )]
@@ -59,32 +59,49 @@ pub async fn put_agent_auth_state(
     // state file's exclusive lock. The startup path already treats identical
     // work this way (`app/agent_launch.rs`), and the door must match — an axum
     // worker blocked on a file lock stalls every other request on that thread.
+    //
+    // The dispatch lives INSIDE the same uncancellable task as the apply, on
+    // purpose. `spawn_blocking` always runs to completion, but the handler
+    // future can be dropped (client disconnect) between its `.await` and any
+    // code after it — so a dispatch placed after the await could be severed
+    // from a write that already committed. That loss is unrecoverable by
+    // design: the courier's retry re-pushes the SAME document, whose diff
+    // against the half-applied write is EMPTY (pinned by
+    // `a_retry_of_an_identical_push_reports_an_empty_changed_set`), so the
+    // changed set the pokes needed exists exactly once, here. Keeping
+    // apply + poke + status refresh in one closure makes "the write happened
+    // but nothing was told" structurally impossible — and a refused push
+    // (stale sequence, foreign lineage) returns before the dispatch point, so
+    // a rejection pokes nothing and refreshes nothing.
+    //
+    // The pokes are fire-and-forget `tokio::spawn`s (the runtime context
+    // propagates into blocking threads); the status refresh is synchronous
+    // sqlite work that already belonged on this pool. The response still
+    // awaits the whole task, exactly as it awaited the refresh before.
     let runtime_home = state.runtime_home.clone();
     let applied = document.clone();
-    let outcome = super::blocking::run_blocking("agent-auth state apply", move || {
-        apply_state_file(&runtime_home, &applied)
+    let poke_engine = state.automatic_poke_engine.clone();
+    let status_service = state.agent_status_service.clone();
+    super::blocking::run_blocking("agent-auth state apply", move || {
+        let outcome = apply_state_file(&runtime_home, &applied)?;
+        // Auth-applied poke, per-harness targeted (spec §4, "Probe targeting":
+        // `AuthApplied{changed}`): an apply re-probes ONLY the harnesses whose
+        // entry actually changed — appeared, disappeared, or differs — so a
+        // push that touched only grok cannot spawn a probe against codex, and
+        // an identical re-push pokes nothing at all.
+        LaunchProbeService::poke_harnesses_optional(
+            &poke_engine,
+            &outcome.changed_harnesses,
+            PokeReason::AuthApplied,
+        );
+        // The same changed set refreshes the status documents — and ONLY
+        // those: an untouched harness's document stays byte-stable across the
+        // apply.
+        status_service.refresh_harnesses(&outcome.changed_harnesses, RefreshCause::AuthApplied);
+        Ok(outcome)
     })
     .await?
     .map_err(map_route_auth_error)?;
-    // Auth-applied poke, per-harness targeted (spec §4, "Probe targeting":
-    // `AuthApplied{changed}`): an apply re-probes ONLY the harnesses whose
-    // entry actually changed — appeared, disappeared, or differs — so a push
-    // that touched only grok cannot spawn a probe against codex, and an
-    // identical re-push pokes nothing at all.
-    //
-    // Fire-and-forget: the apply response never waits for a probe; the picker
-    // shows a refreshing state rather than stale data presented as current.
-    LaunchProbeService::poke_harnesses_optional(
-        &state.automatic_poke_engine,
-        &outcome.changed_harnesses,
-        PokeReason::AuthApplied,
-    );
-    // The same changed set refreshes the status documents — and ONLY those:
-    // an untouched harness's document stays byte-stable across the apply.
-    // Blocking-pool work too (two state.json reads, native detection over the
-    // real `$HOME`, a seat-cooling read and a status row read+write per
-    // harness).
-    refresh_status_off_thread(&state, outcome.changed_harnesses, RefreshCause::AuthApplied).await?;
     Ok(Json(ApplyAgentAuthStateResponse {
         applied: true,
         sequence: document.sequence,
@@ -103,62 +120,41 @@ pub async fn put_agent_auth_state(
 pub async fn delete_agent_auth_state(
     State(state): State<AppState>,
 ) -> Result<StatusCode, ApiError> {
+    // Same one-closure shape as the PUT above, and for the same reason: the
+    // remove commits on the blocking pool regardless of the handler future's
+    // fate, so the pokes and refreshes it owes must commit with it. A clear is
+    // even less recoverable than a push — there is no courier retry carrying
+    // the previous document's names.
     let runtime_home = state.runtime_home.clone();
-    let cleared = super::blocking::run_blocking("agent-auth state clear", move || {
-        clear_state_file(&runtime_home)
+    let poke_engine = state.automatic_poke_engine.clone();
+    let status_service = state.agent_status_service.clone();
+    super::blocking::run_blocking("agent-auth state clear", move || {
+        let cleared = clear_state_file(&runtime_home)?;
+        // Clearing removes the selections of every harness the previous
+        // document named — that list IS the changed set, so exactly those
+        // harnesses are poked. A previous file that was present but malformed
+        // carries no readable names; the widest targeting (every eligible
+        // harness) is the honest fallback there. An absent file cleared
+        // nothing and pokes nothing.
+        match &cleared.previous_harnesses {
+            Some(previous) => {
+                LaunchProbeService::poke_harnesses_optional(
+                    &poke_engine,
+                    previous,
+                    PokeReason::AuthApplied,
+                );
+                status_service.refresh_harnesses(previous, RefreshCause::AuthApplied);
+            }
+            None => {
+                LaunchProbeService::poke_all_optional(&poke_engine, PokeReason::AuthApplied);
+                status_service.refresh_all(RefreshCause::AuthApplied);
+            }
+        }
+        Ok(cleared)
     })
     .await?
     .map_err(map_route_auth_error)?;
-    // Clearing removes the selections of every harness the previous document
-    // named — that list IS the changed set, so exactly those harnesses are
-    // poked. A previous file that was present but malformed carries no
-    // readable names; the widest targeting (every eligible harness) is the
-    // honest fallback there. An absent file cleared nothing and pokes nothing.
-    match cleared.previous_harnesses {
-        Some(previous) => {
-            LaunchProbeService::poke_harnesses_optional(
-                &state.automatic_poke_engine,
-                &previous,
-                PokeReason::AuthApplied,
-            );
-            refresh_status_off_thread(&state, previous, RefreshCause::AuthApplied).await?;
-        }
-        None => {
-            LaunchProbeService::poke_all_optional(
-                &state.automatic_poke_engine,
-                PokeReason::AuthApplied,
-            );
-            let service = state.agent_status_service.clone();
-            super::blocking::run_blocking("agent-auth status refresh", move || {
-                service.refresh_all(RefreshCause::AuthApplied);
-                Ok::<(), std::convert::Infallible>(())
-            })
-            .await?
-            .ok();
-        }
-    }
     Ok(StatusCode::NO_CONTENT)
-}
-
-/// Recompose a set of status documents on the blocking pool.
-///
-/// Every one of those recompositions reads `state.json`, runs native detection
-/// over the real `$HOME`, reads the seat-cooling table and reads+writes a status
-/// row — all synchronous, all behind one `std::sync::Mutex<Connection>`. On the
-/// axum task that is a thread the runtime cannot use for anything else.
-async fn refresh_status_off_thread(
-    state: &AppState,
-    harness_kinds: Vec<String>,
-    cause: RefreshCause,
-) -> Result<(), ApiError> {
-    let service = state.agent_status_service.clone();
-    super::blocking::run_blocking("agent-auth status refresh", move || {
-        service.refresh_harnesses(&harness_kinds, cause);
-        Ok::<(), std::convert::Infallible>(())
-    })
-    .await?
-    .ok();
-    Ok(())
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -297,6 +293,7 @@ mod tests {
     fn document(sequence: i64, harnesses: &[(&str, &[&str])]) -> AgentAuthState {
         let json = serde_json::json!({
             "version": 2,
+            "lineage": "test-lineage",
             "sequence": sequence,
             "harnesses": harnesses
                 .iter()

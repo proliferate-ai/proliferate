@@ -26,6 +26,7 @@ impl GatewayModelResolve for HarnessPlanResolver {
 fn stamped_gateway_state(kind: &str, issuing_server_origin: Option<&str>) -> serde_json::Value {
     let mut state = json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": 42,
         "user_id": "user-1",
         "harnesses": [
@@ -144,6 +145,7 @@ fn absent_current_origin_signal_still_injects_no_regression() {
 fn api_key_state(kind: &str, env_var_name: &str) -> serde_json::Value {
     json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": 7,
         "harnesses": [
             {

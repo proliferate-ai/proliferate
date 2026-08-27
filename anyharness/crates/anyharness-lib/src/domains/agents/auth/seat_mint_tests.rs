@@ -152,6 +152,7 @@ async fn seat_mint_store_render_launch_roundtrip() {
     let seat_id = "40000000-0000-4000-8000-000000000031";
     let state: AgentAuthState = serde_json::from_value(serde_json::json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": 7,
         "user_id": "20000000-0000-4000-8000-000000000001",
         "harnesses": [{

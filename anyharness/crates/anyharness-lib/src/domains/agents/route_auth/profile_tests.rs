@@ -10,6 +10,7 @@ fn state(sequence: i64, harnesses: Vec<HarnessAuth>) -> AgentAuthState {
     AgentAuthState {
         version: STATE_VERSION,
         sequence,
+        lineage: "profile-tests-lineage".into(),
         user_id: None,
         issuing_server_origin: None,
         harnesses,

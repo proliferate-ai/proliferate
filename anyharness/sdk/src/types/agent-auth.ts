@@ -46,6 +46,16 @@ export interface AgentAuthStateDocument {
    * `GET /state` rider and never appears in this document.
    */
   sequence: number;
+  /**
+   * The identity of the counter `sequence` counts in: the server's
+   * render-sequence row uuid, minted when the row was created and never
+   * updated — a rebuilt or switched server database is a new lineage. The
+   * runtime refuses a push whose lineage differs from its persisted one
+   * (409, code `AGENT_ROUTE_STATE_LINEAGE`); only an explicit reset (the
+   * state DELETE) adopts a new lineage. The courier carries it verbatim and
+   * never interprets it.
+   */
+  lineage: string;
   user_id?: string | null;
   /**
    * The origin (`scheme://host[:port]`) of the control-plane server that

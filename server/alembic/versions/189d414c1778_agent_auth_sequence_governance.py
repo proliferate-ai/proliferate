@@ -44,6 +44,14 @@ canonical ``harnesses`` array only.
   rendered content hash changed (no counter existed before — ``revision``
   was derived from ``max(updated_at)`` over selection rows, which a vault
   revoke or key rotation never moved: the bug this slice fixes).
+  ``lineage`` (uuid, non-null) is the counter's birth identity: minted
+  app-side when the row is inserted and never updated, so the row IS the
+  lineage — a rebuilt database mints a new row and therefore a new lineage,
+  and the runtime refuses a foreign-lineage push in plain words instead of
+  wedging on a cross-lineage sequence comparison (the founder-ruled close of
+  the sequence-lineage wedge). Added by amending this unmerged revision
+  rather than minting a child: the table is created HERE, no other revision
+  parents on this one, and the branch has never shipped.
 
 Downgrade renames the column back and drops the table (data preservation is
 not a constraint). It cannot resurrect the deleted ms-epoch stamps — that
@@ -86,6 +94,11 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.Column("surface", sa.Text(), nullable=False),
         sa.Column("sequence", sa.BigInteger(), nullable=False),
+        # Minted app-side (uuid.uuid4 model default / the upsert's INSERT arm,
+        # matching every other uuid column in this schema) and never updated:
+        # the row is the lineage. The table is created in this same revision,
+        # so non-null needs no server default and no backfill.
+        sa.Column("lineage", sa.Uuid(), nullable=False),
         sa.Column("fingerprint", sa.Text(), nullable=False),
         sa.Column("rendered_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

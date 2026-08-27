@@ -297,9 +297,10 @@ class TestBumpIsOneStatement:
         uid = uuid.UUID(user_id)
 
         async def bump(fingerprint: str) -> int:
-            return await agent_gateway_store.bump_render_sequence_if_changed(
+            sequence, _lineage = await agent_gateway_store.bump_render_sequence_if_changed(
                 db_session, user_id=uid, surface="local", fingerprint=fingerprint
             )
+            return sequence
 
         # Insert arm, then the held arm twice, then a real change, then a
         # revert: reverting is still a change, so it advances (the sequence is
@@ -315,6 +316,84 @@ class TestBumpIsOneStatement:
         )
         assert row is not None
         assert (row.sequence, row.fingerprint) == (3, "fp-a")
+
+    @pytest.mark.asyncio
+    async def test_lineage_is_stable_across_renders_and_reborn_with_the_row(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        # The lineage law, both halves (the founder-ruled wedge close):
+        # 1) same row → same uuid, no matter how many renders bump or hold the
+        #    sequence — content changes move the SEQUENCE, never the lineage;
+        # 2) a recreated row mints a NEW lineage and its counter honestly
+        #    restarts at 1 — the DB-rebuild simulation, which is exactly the
+        #    signal the runtime's foreign-lineage refusal keys on.
+        user_id, _ = await _authed_user(client)
+        uid = uuid.UUID(user_id)
+
+        async def bump(fingerprint: str) -> tuple[int, uuid.UUID]:
+            return await agent_gateway_store.bump_render_sequence_if_changed(
+                db_session, user_id=uid, surface="local", fingerprint=fingerprint
+            )
+
+        first_sequence, first_lineage = await bump("fp-a")
+        held_sequence, held_lineage = await bump("fp-a")
+        moved_sequence, moved_lineage = await bump("fp-b")
+        assert (first_sequence, held_sequence, moved_sequence) == (1, 1, 2)
+        assert first_lineage == held_lineage == moved_lineage
+
+        # The rebuild: the row is deleted (a dropped/recreated database in
+        # miniature) and the next render mints a fresh row.
+        await db_session.execute(
+            text(
+                "DELETE FROM agent_auth_render_sequence "
+                "WHERE user_id = :user_id AND surface = 'local'"
+            ),
+            {"user_id": uid},
+        )
+        reborn_sequence, reborn_lineage = await bump("fp-b")
+        assert reborn_sequence == 1, "a new lineage's counter restarts honestly"
+        assert reborn_lineage != first_lineage, "a recreated row is a new lineage"
+
+        row = await agent_gateway_store.get_render_sequence(
+            db_session, user_id=uid, surface="local"
+        )
+        assert row is not None
+        assert (row.sequence, row.lineage) == (1, reborn_lineage)
+
+    @pytest.mark.asyncio
+    async def test_get_state_serves_a_stable_lineage_beside_the_sequence(
+        self, client: AsyncClient
+    ) -> None:
+        # End to end through the render door: the served document carries the
+        # row's lineage, stable across a content change (which bumps only the
+        # sequence) — so the runtime's foreign-lineage guard can never fire on
+        # an ordinary edit.
+        _, headers = await _authed_user(client)
+        key = await _create_key(client, headers)
+        await _put_api_key_selection(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            api_key_id=key["id"],
+            env_var_name="ANTHROPIC_API_KEY",
+        )
+        first = (await _get_state(client, headers, "local")).json()
+        assert uuid.UUID(first["lineage"]), "the document names its lineage"
+
+        await _put_api_key_selection(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            api_key_id=key["id"],
+            env_var_name="ANTHROPIC_AUTH_TOKEN",
+        )
+        after = (await _get_state(client, headers, "local")).json()
+        assert after["sequence"] == first["sequence"] + 1
+        assert after["lineage"] == first["lineage"], (
+            "a content change bumps the sequence, never the lineage"
+        )
 
     @pytest.mark.asyncio
     async def test_held_arm_leaves_rendered_at_untouched(
@@ -371,7 +450,7 @@ class TestBumpIsOneStatement:
 
         async def render(fingerprint: str) -> int:
             async with session_factory() as session:
-                sequence = await agent_gateway_store.bump_render_sequence_if_changed(
+                sequence, _lineage = await agent_gateway_store.bump_render_sequence_if_changed(
                     session, user_id=uid, surface="local", fingerprint=fingerprint
                 )
                 await session.commit()

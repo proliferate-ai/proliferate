@@ -72,6 +72,23 @@ pub enum RouteAuthError {
          the persisted sequence {current}"
     )]
     StaleStateSequence { incoming: i64, current: i64 },
+    /// The pushed document counts in a DIFFERENT lineage than the persisted
+    /// one — the server's database was rebuilt or the desktop switched
+    /// servers, so the two sequences share no order and neither "stale" nor
+    /// "newer" means anything across them. Refused rather than adopted
+    /// (founder-ruled): a bare "different lineage ⇒ accept" would let a
+    /// DELAYED push from the retired lineage resurrect retired state. The one
+    /// recovery is the explicit reset ([`clear_state_file`]); the next push
+    /// then adopts cleanly. The Display speaks plain words naming that
+    /// action; the lineage ids ride the variant for logs and tests, never the
+    /// copy (they mean nothing to a human).
+    #[error(
+        "this machine holds agent-auth state from a different server database. \
+         If the server was rebuilt or switched on purpose, reset this \
+         machine's agent auth (Settings → Agents) and it will adopt the new \
+         one."
+    )]
+    ForeignStateLineage { persisted: String, incoming: String },
     /// The harness has an entry in the document whose sources could not be
     /// satisfied — a selection the machine cannot honor. Constructed by
     /// [`resolve_profile`] and refused at both create and launch, per
@@ -143,6 +160,7 @@ impl RouteAuthError {
         match self {
             Self::MalformedStateFile { .. } => "AGENT_ROUTE_STATE_MALFORMED",
             Self::StaleStateSequence { .. } => "AGENT_ROUTE_STATE_STALE",
+            Self::ForeignStateLineage { .. } => "AGENT_ROUTE_STATE_LINEAGE",
             Self::SelectionMissing { .. } => "AGENT_ROUTE_SELECTION_MISSING",
             Self::SeatCooling { .. } => "AGENT_ROUTE_SEAT_COOLING",
             Self::AllSeatsCooling { .. } => "AGENT_ROUTE_ALL_SEATS_COOLING",

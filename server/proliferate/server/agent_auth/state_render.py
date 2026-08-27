@@ -9,6 +9,7 @@ runtime persists it at ``<anyharness home>/agent-auth/state.json`` (mode 0600):
     {
       "version": 2,
       "sequence": 41,
+      "lineage": "8a6f...-uuid",
       "user_id": "...",
       "harnesses": [
         {
@@ -216,6 +217,13 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
     state: dict[str, object] = {
         "version": AGENT_AUTH_STATE_VERSION,
         "sequence": inputs.sequence,
+        # The counter's birth identity, beside the value it counts: stable
+        # across renders for the persisted row's life, reborn only when the
+        # row is (a rebuilt database). NEVER part of the fingerprint below —
+        # the fingerprint hashes the harnesses array only, so a lineage
+        # adoption that leaves content identical cannot read as a content
+        # change.
+        "lineage": inputs.lineage,
         "user_id": str(inputs.user_id),
         "harnesses": harnesses,
     }
@@ -435,12 +443,16 @@ async def build_agent_auth_state(
     inputs = await load_state_inputs(db, user_id=user_id, surface=surface)
     _, fingerprint = render_agent_auth_state(inputs)
     # The write. See the WRITES paragraph above before moving this behind a
-    # read-only session, a replica, or a cache.
-    sequence = await agent_gateway_store.bump_render_sequence_if_changed(
+    # read-only session, a replica, or a cache. The lineage comes back from
+    # the same statement: the row's birth uuid, stable across renders — a
+    # recreated row (rebuilt database) is the only thing that changes it.
+    sequence, lineage = await agent_gateway_store.bump_render_sequence_if_changed(
         db,
         user_id=user_id,
         surface=surface,
         fingerprint=fingerprint,
     )
-    state, fingerprint = render_agent_auth_state(dataclasses.replace(inputs, sequence=sequence))
+    state, fingerprint = render_agent_auth_state(
+        dataclasses.replace(inputs, sequence=sequence, lineage=str(lineage))
+    )
     return state, fingerprint

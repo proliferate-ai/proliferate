@@ -1652,7 +1652,7 @@ async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engi
     let app = build_router(test_state(false));
 
     let document = json!({
-        "version": 2,
+        "version": 2, "lineage": "test-lineage",
         "sequence": 4,
         "harnesses": [
             { "harness_kind": "opencode", "sources": [
@@ -1698,7 +1698,7 @@ async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engi
                 .uri("/v1/agent-auth/state")
                 .header(header::AUTHORIZATION, "Bearer secret-token")
                 .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(json!({ "version": 2, "sequence": 1, "harnesses": [] }).to_string()))
+                .body(Body::from(json!({ "version": 2, "lineage": "test-lineage", "sequence": 1, "harnesses": [] }).to_string()))
                 .expect("expected request"),
         )
         .await
@@ -1796,7 +1796,7 @@ async fn agent_auth_state_routes_never_probe_while_the_automatic_engine_is_suppr
     // context active — exactly the shape an unsuppressed `AuthApplied` poke would
     // spawn a real probe against.
     let document = json!({
-        "version": 2,
+        "version": 2, "lineage": "test-lineage",
         "sequence": 1,
         "harnesses": [
             { "harness_kind": "opencode", "sources": [

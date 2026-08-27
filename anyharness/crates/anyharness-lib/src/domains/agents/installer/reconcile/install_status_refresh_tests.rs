@@ -35,7 +35,7 @@ async fn a_reconcile_driven_install_composes_a_first_status_document() {
     // carries a method to assert on rather than an empty shell.
     home.write_state_json(&serde_json::json!({
         "version": 2,
-        "sequence": 1,
+        "sequence": 1, "lineage": "test-lineage",
         "harnesses": [
             { "harness_kind": "cursor", "sources": [
                 { "kind": "api_key", "env_var_name": "CURSOR_API_KEY", "value": "cur-raw" }] },

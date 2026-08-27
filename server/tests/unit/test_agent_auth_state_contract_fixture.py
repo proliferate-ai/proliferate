@@ -32,6 +32,13 @@ class TestAgentAuthStateContractFixture:
 
         assert fixture["version"] == agent_auth.AGENT_AUTH_STATE_VERSION
         assert isinstance(fixture["sequence"], int)
+        # `lineage` rides beside `sequence` (spec §2 + README item 5): the
+        # counter's birth uuid — the consumer refuses a push whose lineage
+        # differs from its persisted one, and only an explicit reset adopts a
+        # new lineage. A well-formed uuid literal, pinned so both siblings
+        # carry the identical value (the Rust sibling-drift test compares the
+        # whole documents).
+        assert uuid.UUID(fixture["lineage"])
         # snake_case on the wire, and no UI-only fields leak into it.
         serialized = json.dumps(fixture)
         for forbidden in ("provider_hint", "harnessKind", "envVarName", "model_catalog"):

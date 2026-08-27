@@ -1005,10 +1005,10 @@ class TestAgentAuthState:
         empty = await _get_state(client, headers, "local")
         assert empty.status_code == 200, empty.text
         payload = empty.json()
-        # `fingerprint` is a response-only delivery-ack rider, never part of
-        # the state.json wire contract the desktop pushes to the runtime.
-        fingerprint = payload.pop("fingerprint")
-        assert isinstance(fingerprint, str) and len(fingerprint) == 64
+        # `fingerprint` is a response-only delivery-ack rider (never wire);
+        # `lineage` IS wire — the counter row's birth uuid (row-random value).
+        assert isinstance((f := payload.pop("fingerprint")), str) and len(f) == 64
+        assert uuid.UUID(payload.pop("lineage"))
         assert payload == {
             "version": 2,
             "sequence": 1,

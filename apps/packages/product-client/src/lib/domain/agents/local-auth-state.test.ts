@@ -11,6 +11,7 @@ function state(overrides: Partial<AgentAuthState> = {}): AgentAuthState {
   return {
     version: 2,
     sequence: 3,
+    lineage: "40000000-0000-4000-8000-000000000031",
     user_id: "user-1",
     harnesses: [
       {
@@ -82,6 +83,7 @@ describe("localAuthStateFingerprint", () => {
       JSON.stringify({
         harnesses: state().harnesses,
         user_id: state().user_id,
+        lineage: state().lineage,
         sequence: state().sequence,
         version: state().version,
       }),

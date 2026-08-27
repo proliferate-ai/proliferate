@@ -199,6 +199,12 @@ class AgentAuthStateResponse(BaseModel):
 
     version: int
     sequence: int
+    # The counter's birth identity (the persisted render-sequence row's
+    # uuid): PART of the state.json wire contract, pushed to the runtime
+    # verbatim beside ``sequence``. The runtime refuses a push whose lineage
+    # differs from its persisted one — the typed cure for the sequence-
+    # lineage wedge (a rebuilt/switched server DB restarting the counter).
+    lineage: str
     user_id: str | None = None
     harnesses: list[AgentAuthStateHarness]
     fingerprint: str | None = None

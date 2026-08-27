@@ -20,7 +20,9 @@ import {
   shouldSyncLocalAuthState,
   stampIssuingServerOrigin,
 } from "#product/lib/domain/agents/local-auth-state";
+import { AnyHarnessError } from "@anyharness/sdk";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useLocalAuthDeliveryStore } from "#product/stores/agents/local-auth-delivery-store";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
 import {
   diagnosticField,
@@ -209,6 +211,16 @@ export function useLocalAuthStateSync() {
           lastScheduledRef.current = lastPushedRef.current;
         }
         // No ack on failure (Proof C1): the selection stays visibly pending.
+        // The typed refusal additionally reaches the settings pane through
+        // the delivery store: a foreign-lineage 409's only recovery is an
+        // explicit user reset, so the pane must be able to show the
+        // runtime's words and offer that action — a silent retry loop never
+        // resolves it.
+        useLocalAuthDeliveryStore.getState().setLastPushFailure(
+          error instanceof AnyHarnessError
+            ? { code: error.problem.code ?? null, detail: error.problem.detail ?? null }
+            : { code: null, detail: null },
+        );
         recordAgentAuthFailure(
           "state_push_failed",
           error,
@@ -219,6 +231,10 @@ export function useLocalAuthStateSync() {
         return;
       }
 
+      // The runtime accepted this document: any previously recorded refusal
+      // is resolved (the reset flow ends exactly here, when the re-triggered
+      // push adopts).
+      useLocalAuthDeliveryStore.getState().clearLastPushFailure();
       lastPushedRef.current = plan.fingerprint;
 
       await reportDeliveryAck();

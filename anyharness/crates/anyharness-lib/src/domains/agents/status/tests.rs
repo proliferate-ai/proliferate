@@ -32,6 +32,7 @@ fn service(home: &TempHome, targets: FixedTargets) -> AgentStatusService {
 fn codex_grok_state(sequence: i64, codex_key: &str, grok_key: &str) -> serde_json::Value {
     serde_json::json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": sequence,
         "harnesses": [
             { "harness_kind": "codex", "sources": [
@@ -113,6 +114,7 @@ fn byte_identical_refresh_neither_publishes_nor_rewrites() {
     // codex moves from gateway to a raw provider key.
     home.write_state_json(&serde_json::json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": 3,
         "harnesses": [
             { "harness_kind": "codex", "sources": [
@@ -313,6 +315,7 @@ fn seat_documents_carry_pool_serving_and_next() {
     let home = TempHome::new("status-seats");
     home.write_state_json(&serde_json::json!({
         "version": 2,
+        "lineage": "test-lineage",
         "sequence": 1,
         "harnesses": [{
             "harness_kind": "claude",

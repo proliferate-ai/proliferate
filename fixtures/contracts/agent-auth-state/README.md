@@ -98,6 +98,10 @@ the same content re-pushed. `fingerprint` — sha256 of the canonical `harnesses
 array — is a `GET /state` rider only and never appears in this document; the
 courier strips it before the push and echoes it in the ack. `revision` is gone
 from the wire: a reader that still looks for it is reading a pre-slice-3 shape.
+`lineage` identifies the counter's birth (the render-sequence row's uuid,
+minted once and never updated, so a rebuilt server database is a new lineage);
+the consumer refuses a push whose lineage differs from the persisted one, and
+only an explicit reset (the state DELETE) adopts a new lineage.
 
 Also pinned incidentally, because they are easy to get wrong: the document is
 **snake_case** on the wire (`harness_kind`, `env_var_name`, `base_url`,

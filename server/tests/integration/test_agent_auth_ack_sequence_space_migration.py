@@ -35,6 +35,7 @@ from tests.postgres import temporary_database
 _REVISION = "189d414c1778"
 _DOWN_REVISION = "d9e4b7a2c6f1"
 _ACK_TABLE = "agent_auth_delivery_ack"
+_SEQUENCE_TABLE = "agent_auth_render_sequence"
 
 # A realistic pre-slice-3 stamp: ms-epoch max(updated_at) over the surface's
 # selection rows, i.e. 2026-08-26T15:00:00Z.
@@ -147,6 +148,24 @@ async def test_a_pre_slice_3_ms_epoch_ack_does_not_wedge_the_new_sequence_space(
         after = await _columns(database_url, _ACK_TABLE)
         assert "acked_sequence" in after
         assert "acked_revision" not in after
+
+        # 3b · the render-sequence table exists with its full column set —
+        # `lineage` included (non-null, minted app-side on insert): the
+        # counter's birth identity that the runtime's foreign-lineage refusal
+        # keys on. The table is created in this revision, so the column needs
+        # no backfill and no server default.
+        sequence_columns = await _columns(database_url, _SEQUENCE_TABLE)
+        assert {
+            "id",
+            "user_id",
+            "surface",
+            "sequence",
+            "lineage",
+            "fingerprint",
+            "rendered_at",
+            "created_at",
+            "updated_at",
+        } <= sequence_columns
 
         # 4 · neutralized. The receipt is deleted, not rewritten: its sequence
         # AND its fingerprint address a document space that no longer exists,
