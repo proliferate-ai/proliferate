@@ -46,18 +46,19 @@ pub async fn put_agent_auth_state(
             "AGENT_AUTH_STATE_REJECTED",
         ));
     }
-    apply_state_file(&state.runtime_home, &document).map_err(map_route_auth_error)?;
-    // Auth-applied poke — the primary trigger (model-catalog.md, "Freshness is
-    // event-driven"): an applied `state.json` re-probes every harness the applied
-    // document names, unconditionally. There is no fingerprint gate deciding
-    // which "actually" changed; the event IS the invalidation, and the engine's
-    // single-flight coalescing bounds the cost.
+    let outcome =
+        apply_state_file(&state.runtime_home, &document).map_err(map_route_auth_error)?;
+    // Auth-applied poke, per-harness targeted (spec §4, "Probe targeting":
+    // `AuthApplied{changed}`): an apply re-probes ONLY the harnesses whose
+    // entry actually changed — appeared, disappeared, or differs — so a push
+    // that touched only grok cannot spawn a probe against codex, and an
+    // identical re-push pokes nothing at all.
     //
     // Fire-and-forget: the apply response never waits for a probe; the picker
     // shows a refreshing state rather than stale data presented as current.
     LaunchProbeService::poke_harnesses_optional(
         &state.automatic_poke_engine,
-        &applied_harness_kinds(&document),
+        &outcome.changed_harnesses,
         PokeReason::AuthApplied,
     );
     Ok(Json(ApplyAgentAuthStateResponse {
@@ -78,31 +79,24 @@ pub async fn put_agent_auth_state(
 pub async fn delete_agent_auth_state(
     State(state): State<AppState>,
 ) -> Result<StatusCode, ApiError> {
-    clear_state_file(&state.runtime_home).map_err(map_route_auth_error)?;
-    // Clearing the state file removes EVERY harness's selection — the widest
-    // possible auth application. Without a poke here every harness's observation
-    // stays pinned to an auth world that no longer exists, and the picker keeps
-    // serving models the machine can no longer reach.
-    LaunchProbeService::poke_all_optional(&state.automatic_poke_engine, PokeReason::AuthApplied);
+    let cleared = clear_state_file(&state.runtime_home).map_err(map_route_auth_error)?;
+    // Clearing removes the selections of every harness the previous document
+    // named — that list IS the changed set, so exactly those harnesses are
+    // poked. A previous file that was present but malformed carries no
+    // readable names; the widest targeting (every eligible harness) is the
+    // honest fallback there. An absent file cleared nothing and pokes nothing.
+    match cleared.previous_harnesses {
+        Some(previous) => LaunchProbeService::poke_harnesses_optional(
+            &state.automatic_poke_engine,
+            &previous,
+            PokeReason::AuthApplied,
+        ),
+        None => LaunchProbeService::poke_all_optional(
+            &state.automatic_poke_engine,
+            PokeReason::AuthApplied,
+        ),
+    }
     Ok(StatusCode::NO_CONTENT)
-}
-
-/// Every harness the applied document mentions — NOT only those with a gateway
-/// source.
-///
-/// This is the behavioral difference from the gateway-only scheduler it replaces,
-/// and it is the point of the change: an apply that switches a harness from a
-/// gateway route to a raw provider key, or that drops its sources entirely, changes
-/// that harness's credential material just as much as landing a gateway key does. The
-/// old code skipped every such harness, so its snapshot stayed pinned to credentials
-/// the machine no longer uses. Naming them all is exactly the spec's trigger: "the
-/// ack fires a probe for every harness whose entry the applied document changed".
-fn applied_harness_kinds(document: &AgentAuthState) -> Vec<String> {
-    document
-        .harnesses
-        .iter()
-        .map(|harness| harness.harness_kind.clone())
-        .collect()
 }
 
 /// State-route mapping: ONE mapper with the sessions API
@@ -118,11 +112,35 @@ fn map_route_auth_error(error: RouteAuthError) -> ApiError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::{Path, PathBuf};
 
-    fn document(harnesses: &[(&str, &[&str])]) -> AgentAuthState {
+    struct TempHome(PathBuf);
+
+    impl TempHome {
+        fn new(label: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "anyharness-agent-auth-handler-{label}-{}",
+                uuid::Uuid::new_v4()
+            ));
+            std::fs::create_dir_all(&path).expect("create temp home");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempHome {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn document(sequence: i64, harnesses: &[(&str, &[&str])]) -> AgentAuthState {
         let json = serde_json::json!({
             "version": 2,
-            "sequence": 9,
+            "sequence": sequence,
             "harnesses": harnesses
                 .iter()
                 .map(|(kind, source_kinds)| serde_json::json!({
@@ -142,37 +160,87 @@ mod tests {
         serde_json::from_value(json).expect("state document")
     }
 
-    /// The poke names EVERY harness the document mentions, not only the
-    /// gateway-routed ones.
-    ///
-    /// This is the behavioral delta from `schedule_gateway_probes`, and the reason the
-    /// wider list is correct: an apply that moves a harness from a gateway route to a
-    /// raw provider key, or that empties its sources entirely, changes that harness's
-    /// credential material exactly as much as landing a gateway key does. The old code
-    /// skipped all three of those cases, leaving the snapshot pinned to credentials the
-    /// machine no longer uses. Naming them all is the spec's trigger — every harness
-    /// the applied document mentions re-probes.
+    /// The changed-set semantics the AuthApplied poke targets (spec §4, "Probe
+    /// targeting"): an apply that changed only grok pokes only grok, and an
+    /// identical re-push pokes nothing.
     #[test]
-    fn every_harness_in_the_applied_document_is_named() {
-        let applied = document(&[
-            ("claude", &["gateway"]),
-            // api_key only: the gateway-only scheduler skipped this harness.
-            ("codex", &["api_key"]),
-            // Sources emptied: the widest change of all, and also skipped before.
-            ("opencode", &[]),
-        ]);
-
-        assert_eq!(
-            applied_harness_kinds(&applied),
-            vec!["claude", "codex", "opencode"]
+    fn auth_applied_targets_changed_harnesses_only() {
+        let home = TempHome::new("changed-set");
+        let first = document(
+            1,
+            &[("claude", &["gateway"]), ("grok", &["api_key"])],
         );
+        let outcome = apply_state_file(home.path(), &first).expect("first apply");
+        // The first apply against an absent file: everything appeared.
+        assert_eq!(outcome.changed_harnesses, vec!["claude", "grok"]);
+
+        // Only grok's entry changed (sources emptied) → only grok is named.
+        let second = document(2, &[("claude", &["gateway"]), ("grok", &[])]);
+        let outcome = apply_state_file(home.path(), &second).expect("second apply");
+        assert_eq!(outcome.changed_harnesses, vec!["grok"]);
+
+        // An identical re-push (same sequence, same content) changes nothing.
+        let outcome = apply_state_file(home.path(), &second).expect("re-push");
+        assert!(
+            outcome.changed_harnesses.is_empty(),
+            "an identical re-push must poke nothing"
+        );
+
+        // A disappeared entry is a change too — dropping claude names claude.
+        let third = document(3, &[("grok", &[])]);
+        let outcome = apply_state_file(home.path(), &third).expect("third apply");
+        assert_eq!(outcome.changed_harnesses, vec!["claude"]);
     }
 
-    /// An empty document names nothing, so an apply that mentions no harness pokes no
-    /// harness. (Clearing every harness's auth goes through `DELETE`, which pokes all
-    /// of them — a different site with a different reason.)
+    /// A previously malformed file carries no trustworthy baseline: every
+    /// harness the incoming document names counts as changed.
     #[test]
-    fn an_empty_document_names_no_harness() {
-        assert!(applied_harness_kinds(&document(&[])).is_empty());
+    fn a_heal_of_a_malformed_file_counts_every_named_harness_as_changed() {
+        let home = TempHome::new("heal-changed-set");
+        let path = crate::domains::agents::route_auth::state_file_path(home.path());
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("create agent-auth");
+        std::fs::write(&path, b"{ not json").expect("write malformed state");
+
+        let healed = document(1, &[("codex", &["gateway"])]);
+        let outcome = apply_state_file(home.path(), &healed).expect("heal");
+        assert_eq!(outcome.changed_harnesses, vec!["codex"]);
+    }
+
+    /// DELETE's changed set is every harness the previous document named; a
+    /// malformed previous file has unknowable names (`None` → the handler
+    /// falls back to the widest poke), and an absent file names nothing.
+    #[test]
+    fn clearing_names_every_harness_the_previous_document_carried() {
+        let home = TempHome::new("clear-changed-set");
+        assert_eq!(
+            clear_state_file(home.path())
+                .expect("clear absent")
+                .previous_harnesses,
+            Some(vec![]),
+            "an absent file clears nothing"
+        );
+
+        apply_state_file(
+            home.path(),
+            &document(1, &[("claude", &["gateway"]), ("opencode", &["api_key"])]),
+        )
+        .expect("apply");
+        assert_eq!(
+            clear_state_file(home.path())
+                .expect("clear")
+                .previous_harnesses,
+            Some(vec!["claude".to_string(), "opencode".to_string()])
+        );
+
+        let path = crate::domains::agents::route_auth::state_file_path(home.path());
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("create agent-auth");
+        std::fs::write(&path, b"{ not json").expect("write malformed state");
+        assert_eq!(
+            clear_state_file(home.path())
+                .expect("clear malformed")
+                .previous_harnesses,
+            None,
+            "a malformed previous file has unknowable names"
+        );
     }
 }

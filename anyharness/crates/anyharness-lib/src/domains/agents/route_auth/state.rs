@@ -208,6 +208,21 @@ pub fn load_state_file(runtime_home: &Path) -> Result<Option<AgentAuthState>, Ro
     load_state_from_path(&path)
 }
 
+/// The outcome of applying a state document: the per-harness diff against the
+/// previously persisted document, so the apply site can target its pokes and
+/// status refreshes at exactly the harnesses whose auth actually moved
+/// (spec §4, "Probe targeting": `AuthApplied{changed}`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppliedStateOutcome {
+    /// Harnesses whose entry's canonical serialization differs, appears, or
+    /// disappears relative to the previous document — incoming-document order
+    /// first, then disappeared entries in previous-document order. Empty for
+    /// an identical re-push. A previously malformed file carries no
+    /// trustworthy baseline, so every harness the incoming document names
+    /// counts as changed.
+    pub changed_harnesses: Vec<String>,
+}
+
 /// Persist a state document pushed by a delivery surface (the desktop local
 /// writer, mirroring what the cloud materialization worker writes into
 /// sandboxes). The write is atomic and 0600 via the shared route-auth private
@@ -220,14 +235,19 @@ pub fn load_state_file(runtime_home: &Path) -> Result<Option<AgentAuthState>, Ro
 /// change, virtual-key rotation included, so equal sequence means identical
 /// content. A malformed on-disk file carries no trustworthy sequence and is
 /// healed by any valid push.
-pub fn apply_state_file(runtime_home: &Path, state: &AgentAuthState) -> Result<(), RouteAuthError> {
+pub fn apply_state_file(
+    runtime_home: &Path,
+    state: &AgentAuthState,
+) -> Result<AppliedStateOutcome, RouteAuthError> {
     let path = state_file_path(runtime_home);
-    let persisted_sequence = match load_state_from_path(&path) {
-        Ok(existing) => existing.map(|existing| existing.sequence),
+    let previous = match load_state_from_path(&path) {
+        Ok(existing) => existing,
+        // Malformed: no trustworthy baseline (and no trustworthy sequence) —
+        // healed by any valid push, with every incoming harness changed.
         Err(RouteAuthError::MalformedStateFile { .. }) => None,
         Err(error) => return Err(error),
     };
-    if let Some(current) = persisted_sequence {
+    if let Some(current) = previous.as_ref().map(|existing| existing.sequence) {
         if state.sequence < current {
             return Err(RouteAuthError::StaleStateSequence {
                 incoming: state.sequence,
@@ -244,20 +264,92 @@ pub fn apply_state_file(runtime_home: &Path, state: &AgentAuthState) -> Result<(
             detail: format!("failed to serialize agent-auth state: {error}"),
         })?;
     serialized.push(b'\n');
-    super::materialize::write_private_file(&path, &serialized)
+    super::materialize::write_private_file(&path, &serialized)?;
+    Ok(AppliedStateOutcome {
+        changed_harnesses: changed_harnesses(previous.as_ref(), state),
+    })
+}
+
+/// The per-harness diff between two documents. A harness is CHANGED when its
+/// entry's canonical serialization differs, appears, or disappears. The
+/// comparison runs over the parsed [`HarnessAuth`] values via
+/// `serde_json::to_value`, which is deterministic here: this crate does not
+/// enable serde_json's `preserve_order`, so `settings` maps are key-sorted.
+fn changed_harnesses(previous: Option<&AgentAuthState>, incoming: &AgentAuthState) -> Vec<String> {
+    let entry_values = |state: &AgentAuthState| -> Vec<(String, serde_json::Value)> {
+        state
+            .harnesses
+            .iter()
+            .map(|entry| {
+                (
+                    entry.harness_kind.clone(),
+                    serde_json::to_value(entry).unwrap_or(serde_json::Value::Null),
+                )
+            })
+            .collect()
+    };
+    let previous_entries = previous.map(entry_values).unwrap_or_default();
+    let incoming_entries = entry_values(incoming);
+    let mut changed = Vec::new();
+    for (kind, value) in &incoming_entries {
+        let previous_value = previous_entries
+            .iter()
+            .find(|(previous_kind, _)| previous_kind == kind)
+            .map(|(_, previous_value)| previous_value);
+        if previous_value != Some(value) {
+            changed.push(kind.clone());
+        }
+    }
+    for (kind, _) in &previous_entries {
+        if !incoming_entries
+            .iter()
+            .any(|(incoming_kind, _)| incoming_kind == kind)
+        {
+            changed.push(kind.clone());
+        }
+    }
+    changed
+}
+
+/// The outcome of clearing the state file: what the previous document named,
+/// so the clear site can target its pokes and status refreshes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClearedStateOutcome {
+    /// Every harness the previous document named (the DELETE changed set), in
+    /// document order. `None` when a file was present but malformed — its
+    /// names are unknowable, and the caller should fall back to the widest
+    /// targeting. An absent file clears nothing: `Some(vec![])`.
+    pub previous_harnesses: Option<Vec<String>>,
 }
 
 /// Clear the delivered route state and return the runtime to native auth.
 ///
-/// Clearing is a separate operation from sequenceed replacement because native
-/// auth is represented by the absence of route state at the runtime. Making
-/// the reset explicit avoids weakening stale-write protection for ordinary
-/// state documents.
-pub fn clear_state_file(runtime_home: &Path) -> Result<(), RouteAuthError> {
+/// Clearing is a separate operation from sequence-guarded replacement because
+/// native auth is represented by the absence of route state at the runtime.
+/// Making the reset explicit avoids weakening stale-write protection for
+/// ordinary state documents.
+pub fn clear_state_file(runtime_home: &Path) -> Result<ClearedStateOutcome, RouteAuthError> {
     let path = state_file_path(runtime_home);
+    let previous_harnesses = match load_state_from_path(&path) {
+        Ok(previous) => Some(
+            previous
+                .map(|state| {
+                    state
+                        .harnesses
+                        .iter()
+                        .map(|entry| entry.harness_kind.clone())
+                        .collect()
+                })
+                .unwrap_or_default(),
+        ),
+        Err(RouteAuthError::MalformedStateFile { .. }) => None,
+        Err(error) => return Err(error),
+    };
     match fs::remove_file(&path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Ok(()) => Ok(ClearedStateOutcome { previous_harnesses }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(ClearedStateOutcome { previous_harnesses })
+        }
         Err(error) => Err(RouteAuthError::Materialize {
             detail: format!("failed to remove {}: {error}", path.display()),
         }),

@@ -29,6 +29,9 @@ pub(super) fn build_services(db: &Db, runtime_home: &PathBuf) -> (
         )
         .with_launch_options(launch_options_service.clone()),
     );
+    // Failure-armed backoff-expiry timers poke back into the engine through
+    // this weak handle — the probe event set's self-recovery.
+    launch_probe_service.bind_self();
     (
         launch_options_service,
         launch_probe_service,

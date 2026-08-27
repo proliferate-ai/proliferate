@@ -59,6 +59,7 @@ pub use rotation::{
 };
 pub use state::{
     apply_state_file, clear_state_file, load_state_file, state_file_path, AgentAuthState,
+    AppliedStateOutcome, ClearedStateOutcome,
 };
 
 /// Errors from the route-auth render plane.

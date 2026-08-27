@@ -44,6 +44,8 @@ pub mod targets;
 #[cfg(test)]
 mod contradiction_tests;
 #[cfg(test)]
+mod recovery_tests;
+#[cfg(test)]
 mod runner_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -96,6 +98,13 @@ pub struct LaunchProbeService {
     /// exclusively through this service.
     launch_options:
         Option<Arc<crate::domains::agents::launch_options::HarnessLaunchOptionsService>>,
+    /// Weak self-handle, bound once after `Arc` construction ([`Self::bind_self`]),
+    /// so `record_failure`'s one-shot backoff-expiry timer can re-enter the poke
+    /// path (`poke_harness` needs `Arc<Self>`, and the failure site only has
+    /// `&self`). Unbound — an engine a test constructed without calling
+    /// `bind_self` — means no timer is armed and a lapsed backoff waits for the
+    /// next external poke, the pre-recovery behavior.
+    self_handle: std::sync::OnceLock<std::sync::Weak<LaunchProbeService>>,
 }
 
 impl LaunchProbeService {
@@ -137,6 +146,7 @@ impl LaunchProbeService {
             startup_pass_dispatched: AtomicBool::new(false),
             started_at: Utc::now(),
             launch_options: None,
+            self_handle: std::sync::OnceLock::new(),
         };
         // The orphan sweep, live from the moment ownership is decided.
         //
@@ -163,6 +173,60 @@ impl LaunchProbeService {
     ) -> Self {
         self.launch_options = Some(launch_options);
         self
+    }
+
+    /// Bind the engine's own `Arc` so failure-armed backoff-expiry timers can
+    /// poke back into it. Called once at wiring (and by tests that exercise
+    /// the self-recovery); a second call is a no-op.
+    pub fn bind_self(self: &Arc<Self>) {
+        let _ = self.self_handle.set(Arc::downgrade(self));
+    }
+
+    /// Arm the self-recovery for a failed attempt (spec §3 flow 4: the event
+    /// set contains its own recovery). One-shot: sleeps until the armed
+    /// `next_attempt_at`, then pokes `BackoffExpired` — but only if the slot
+    /// still carries EXACTLY the captured instant. A newer failure re-armed a
+    /// later timer (which took its own copy), and a success cleared the window
+    /// entirely; in both cases this timer is stale and dies silently. The
+    /// ordinary coalescing and backoff admission downstream do the rest.
+    pub(super) fn arm_backoff_expiry(
+        &self,
+        harness_kind: &str,
+        slot: Arc<HarnessSlot>,
+        next_attempt_at: DateTime<Utc>,
+    ) {
+        let Some(weak) = self.self_handle.get().cloned() else {
+            return;
+        };
+        let harness = harness_kind.to_string();
+        tokio::spawn(async move {
+            // Sleep in a loop: chrono→std truncation can wake a hair early,
+            // and an early poke would be REFUSED by `backoff_admits` — killing
+            // the one recovery this timer exists to deliver.
+            loop {
+                let now = Utc::now();
+                if now >= next_attempt_at {
+                    break;
+                }
+                let wait = (next_attempt_at - now)
+                    .to_std()
+                    .unwrap_or(std::time::Duration::from_millis(1));
+                tokio::time::sleep(wait.max(std::time::Duration::from_millis(1))).await;
+            }
+            let still_armed = slot
+                .state
+                .lock()
+                .expect("launch probe slot poisoned")
+                .next_attempt_at
+                == Some(next_attempt_at);
+            if !still_armed {
+                return;
+            }
+            let Some(engine) = weak.upgrade() else {
+                return;
+            };
+            engine.poke_harness(&harness, PokeReason::BackoffExpired);
+        });
     }
 
     pub fn runtime_home(&self) -> &Path {
