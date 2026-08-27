@@ -242,10 +242,11 @@ Client folder-fence note: the `workflows_v2` gate defaults ON and `VITE_WORKFLOW
 - Client: vitest beside each surface (builder authoring/json/validation,
   trigger identity/failure, run view model, auto-advance toast, resume
   popover, node layout).
-- Tier 2 intent: [workflow-definitions.spec.ts](../../../tests/intent/specs/workflow-definitions.spec.ts)
+- Tier 2 intent: workflow-definitions.spec.ts
   (definition lifecycle through the real UI/server) and
-  [workflow-trigger-seam.spec.ts](../../../tests/intent/specs/workflow-trigger-seam.spec.ts)
-  (T2-WF-1: exactly one invocation PUT; the UI survives the runtime PUT failing).
+  workflow-trigger-seam.spec.ts
+  (T2-WF-1: exactly one invocation PUT; the UI survives the runtime PUT failing)
+  rode the deleted `tests/intent` suite (2026-08 cull).
 
 ## Failure modes
 

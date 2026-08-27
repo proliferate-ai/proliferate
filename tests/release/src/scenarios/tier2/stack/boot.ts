@@ -59,7 +59,7 @@ export interface BootOptions {
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-export const REPO_ROOT = path.resolve(here, "..", "..", "..");
+export const REPO_ROOT = path.resolve(here, "..", "..", "..", "..", "..", "..");
 
 function serverVenvExecutable(name: string): string {
   const binDir = process.env.TIER2_INTENT_SERVER_VENV_BIN

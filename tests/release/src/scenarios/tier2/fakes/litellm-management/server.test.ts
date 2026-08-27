@@ -1,6 +1,6 @@
 // Offline unit test for the management-plane LiteLLM fake (PR 4, BRIEF §5).
 // Deterministic, no server/DB/network — just the fake's own HTTP surface.
-// Run: `pnpm --filter @proliferate/tests-intent exec tsx --test "fakes/**/*.test.ts"`.
+// Run: `pnpm -C tests/release test` (picked up by the src/**/*.test.ts glob).
 
 import assert from "node:assert/strict";
 import { test } from "node:test";

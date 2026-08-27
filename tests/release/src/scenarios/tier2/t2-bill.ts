@@ -29,9 +29,9 @@ import path from "node:path";
 import { makeTier2MatrixScenario } from "./harness.js";
 import type { Tier2CaseResult, Tier2CellContext, Tier2CellHandler } from "./types.js";
 import { adminContext, userIdFor } from "./fixtures.js";
-import * as b from "../../../../intent/stack/billing.ts";
-import * as seed from "../../../../intent/stack/seed.ts";
-import { REPO_ROOT } from "../../../../intent/stack/boot.ts";
+import * as b from "./stack/billing.ts";
+import * as seed from "./stack/seed.ts";
+import { REPO_ROOT } from "./stack/boot.ts";
 import {
   countUsageEvents,
   fetchFakeBlockedKeys,
@@ -42,7 +42,7 @@ import {
   runUsageImportPass,
   seedFakeSpendRows,
   seedLlmCreditGrant,
-} from "../../../../intent/stack/billing-usage-import.ts";
+} from "./stack/billing-usage-import.ts";
 
 export const T2_BILL_ID = "T2-BILL";
 

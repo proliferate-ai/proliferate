@@ -21,8 +21,7 @@ name: Release E2E (tier 3)
 #   - The local lane needs a way to drive real agents. In CI there is no native
 #     agent CLI login, so it routes through the LLM gateway with
 #     RELEASE_E2E_GATEWAY_TEST_KEY. With no key the job skips itself cleanly
-#     (::notice::), the same pattern the tier-2 billing suite uses for
-#     STRIPE_TEST_SECRET_KEY.
+#     (::notice::).
 #   - The sandbox lane additionally needs an E2B team (E2B_API_KEY repo secret,
 #     mapped to RELEASE_E2E_E2B_API_KEY) AND a publicly reachable server URL for
 #     E2B to deliver webhooks to — a locally booted server on 127.0.0.1 needs a
@@ -46,8 +45,6 @@ on:
         options:
           - all
           - local
-          - managed-cloud
-          - tier2
           - staging
       lane:
         description: Runtime target lane the runner points at.
@@ -416,110 +413,6 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # ── PR 4: Tier-2 strict billing/auth qualification ──────────────────────────
-  # `workflow_dispatch` only while stability is established. NOT
-  # `continue-on-error` — a red command stays red with its real exit code. Runs
-  # `make qualification-tier2` (same entrypoint a laptop uses). Fail-closed on a
-  # missing Stripe test key in trusted CI (the boot returns every financial cell
-  # BLOCKED, which a strict verdict fails on — never skip-as-success). Runtime
-  # shape (Postgres/Redis services, server venv, Stripe CLI) mirrors
-  # `intent-tests.yml`'s `intent-billing` job, which boots the same shared
-  # `BootedStack` machinery.
-  qualification-tier2:
-    name: tier-2 billing/auth (manual, strict)
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      !inputs.selfhost &&
-      (inputs.manual_world == 'all' || inputs.manual_world == 'tier2')
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    concurrency:
-      group: release-e2e-tier2
-      cancel-in-progress: false
-    environment: Qualification
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: proliferate
-          POSTGRES_PASSWORD: localdev
-          POSTGRES_DB: proliferate
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U proliferate -d proliferate"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10
-      - uses: astral-sh/setup-uv@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Install server (venv, matches local layout)
-        run: cd server && uv venv .venv --python 3.12 && uv pip install -e ".[dev]"
-      - name: Install Playwright chromium
-        run: |
-          sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"
-          pnpm -C tests/intent exec playwright install --with-deps chromium
-
-      - name: Install Stripe CLI
-        run: |
-          curl -fsSL https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public \
-            | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg >/dev/null
-          echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" \
-            | sudo tee /etc/apt/sources.list.d/stripe.list
-          sudo apt-get update && sudo apt-get install -y stripe
-
-      - name: Run T2-BILL (strict)
-        env:
-          # The boot fixture allocates the t2billing profile itself; on the
-          # runner the Docker services above stand in for the local stack
-          # (same wiring as intent-tests.yml's intent-billing job).
-          USE_EXISTING_POSTGRES: "1"
-          USE_EXISTING_REDIS: "1"
-          LOCAL_PGHOST: 127.0.0.1
-          CI: "true"
-          # Stripe TEST key from the protected Qualification environment
-          # (secret name STRIPE_TEST_SECRET_KEY). The harness generates its own
-          # webhook secret and idempotently provisions test-mode price IDs, so
-          # the key is the only external input. Missing in trusted CI = fail
-          # (boot blocks every financial cell). Never live.
-          TIER2_BILLING_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
-          TIER2_INTENT_SKIP_RUNTIME: "1"
-        run: |
-          set -euo pipefail
-          make qualification-tier2 \
-            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            BEHAVIOR=strict
-
-      - name: Upload V4 report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: tier2-billing-evidence
-          path: |
-            tests/release/.output/tier2/*/*/evidence/
-
   # ---------------------------------------------------------------------------
   # Local functional — "Complete Local Workspace Qualification (Functional)"
   # (~/Vault/Vault/Workspace/Testing/Complete Local Workspace Qualification
@@ -536,7 +429,7 @@ jobs:
   # below never see arbitrary pull-request code). Before dispatching this
   # manually, check the Actions tab for an in-progress/pending release-e2e.yml
   # run first — this world has its own non-cancelling concurrency group, so an
-  # unrelated managed-cloud, self-host, Tier-2, or Tier-4 run cannot replace it.
+  # unrelated self-host or Tier-4 run cannot replace it.
   release-e2e-local-functional:
     name: local smoke + functional (manual, build once)
     if: >-
@@ -586,7 +479,7 @@ jobs:
       # T3-INT-1's audit-readback probe (tests/release/scripts/integration_audit_probe.py)
       # runs via `uv run python …` to read the cloud_integration_tool_call_event
       # row back from the run's own Postgres — the same `spawn("uv", …)` idiom the
-      # tier-2/tier-3/self-host jobs use. Without uv on PATH the probe dies
+      # tier-3/self-host jobs use. Without uv on PATH the probe dies
       # `spawn uv ENOENT` after a fully successful MCP tool call. Match the sibling
       # jobs (uv + python 3.12, the script's requires-python).
       - uses: astral-sh/setup-uv@v7
@@ -941,7 +834,7 @@ jobs:
           RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG: ${{ vars.RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG }}
           # SH-CLOUD-ADDON (SELFHOST-QUAL-1): the instance's own E2B account +
           # self-built template + cloud add-on GitHub App (distinct from the
-          # managed-cloud RELEASE_E2E_CLOUD_GITHUB_APP_* set).
+          # Qualification environment's RELEASE_E2E_CLOUD_GITHUB_APP_* set).
           RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY: ${{ secrets.RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY }}
           RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME: ${{ vars.RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME }}
           RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID: ${{ vars.RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID }}
@@ -1002,294 +895,5 @@ jobs:
             tests/release/.output/selfhost-world/**/cleanup-ledger.json
             tests/release/.output/selfhost-world/**/*-cancellation-finalization.json
             tests/release/.output/preflight/self-host/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  # ---------------------------------------------------------------------------
-  # Managed-cloud smoke — "Prove One Real Managed-Cloud Workspace": builds the
-  # six exact managed-cloud candidates (Server linux/amd64, the three musl
-  # runtime binaries, the git-credential-helper, the Desktop renderer targeted
-  # at the run's public candidate-API origin), provisions the run-scoped
-  # EC2+Route53 ingress and the immutable E2B template, and drives one real
-  # cheap managed-gateway turn inside a genuine E2B sandbox through the actual
-  # product UI (the CLOUD-PROVISION-1 cell). One new job per world (extension
-  # contract) — the local-world-smoke job above is untouched.
-  #
-  # `workflow_dispatch` only, same posture as local-world-smoke-1: NOT
-  # `continue-on-error` (a red command stays red with its real exit code), the
-  # `Qualification` environment supplies every secret/var (never routed to
-  # arbitrary pull-request code), and the evidence/log upload runs `if:
-  # always()`. Until the D2 bot-login seed exists, the GitHub OAuth serial
-  # step inside the scenario reports blocked honestly (never skip-as-success)
-  # — this job is still expected to run and upload evidence for every other
-  # step.
-  release-e2e-managed-cloud:
-    name: cloud-provision-1 (manual, strict)
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      !inputs.selfhost &&
-      (inputs.manual_world == 'all' || inputs.manual_world == 'managed-cloud')
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    concurrency:
-      group: release-e2e-managed-cloud
-      cancel-in-progress: false
-    environment: Qualification
-    # Shared across BOTH runner invocations below (fixture smoke + CP-1). Mapped
-    # directly from the protected `Qualification` environment; arbitrary PR code
-    # never runs this job or sees these.
-    env:
-      AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
-      AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
-      AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
-      RELEASE_E2E_E2B_API_KEY: ${{ secrets.RELEASE_E2E_E2B_API_KEY }}
-      RELEASE_E2E_E2B_TEAM_ID: ${{ vars.RELEASE_E2E_E2B_TEAM_ID }}
-      RELEASE_E2E_CLOUD_AWS_REGION: ${{ vars.RELEASE_E2E_CLOUD_AWS_REGION }}
-      RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: ${{ vars.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID }}
-      RELEASE_E2E_CLOUD_GITHUB_APP_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_ID }}
-      RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID }}
-      RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID }}
-      RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY }}
-      RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET }}
-      # MANAGED-CLOUD-FIXTURE-SMOKE-1: the Stripe TEST-mode key the fixture smoke
-      # runs one bounded real test-mode op against (same secret the Tier-2 billing
-      # job maps). A live key fails the smoke closed. (Unused by the CP-1 step.)
-      STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
-      # MCW-004: optional override of the SSM parameter NAME holding the durable D2
-      # bot refresh-token seed (not a credential; value read/written via ambient
-      # AWS creds). Empty is fine — resolver falls back to the default parameter.
-      RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER }}
-      # AWS credentials stay ambient (the `aws` CLI reads them directly), never a
-      # manifest var — matching the self-host precedent. The same credentials this
-      # job uses for EC2/Route53 are what the SSM bot-seed fallback shells out with.
-      AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
-      # Reused public wildcard certificate capacity: browsers still verify
-      # a publicly trusted chain, while disposable boxes never call ACME.
-      RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64 }}
-      RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64 }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Fetch the trusted default-branch cleanup authorization
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          path: .qualification-trusted-default
-          fetch-depth: 1
-          sparse-checkout: tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json
-          sparse-checkout-cone-mode: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-      - name: Preflight managed cloud before installs, builds, or provider mutation
-        env:
-          AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
-          AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
-          AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
-          RELEASE_E2E_E2B_API_KEY: ${{ secrets.RELEASE_E2E_E2B_API_KEY }}
-          RELEASE_E2E_E2B_TEAM_ID: ${{ vars.RELEASE_E2E_E2B_TEAM_ID }}
-          RELEASE_E2E_CLOUD_AWS_REGION: ${{ vars.RELEASE_E2E_CLOUD_AWS_REGION }}
-          RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: ${{ vars.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID }}
-          RELEASE_E2E_CLOUD_GITHUB_APP_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_ID }}
-          RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID }}
-          RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID }}
-          RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY }}
-          RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
-          RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_CERTIFICATE_B64 }}
-          RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64: ${{ secrets.RELEASE_E2E_QUALIFICATION_TLS_PRIVATE_KEY_B64 }}
-        run: |
-          node scripts/ci-cd/qualification-preflight.mjs \
-            --world managed-cloud \
-            --source-sha "${GITHUB_SHA}" \
-            --run-id "qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --shard-id 1 \
-            --attempt "${GITHUB_RUN_ATTEMPT}" \
-            --scenarios CLOUD-PROVISION-1 \
-            --artifact-mode build \
-            --cleanup-attestation-repository "${GITHUB_WORKSPACE}/.qualification-trusted-default" \
-            --cleanup-attestation-default-branch "${{ github.event.repository.default_branch }}" \
-            --cleanup-attestations "${GITHUB_WORKSPACE}/.qualification-trusted-default/tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json" \
-            --output "tests/release/.output/preflight/managed-cloud/qualification-preflight.json"
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10
-      # The scenario's E2B provider probe and cleanup kill-registration shell
-      # out to `uv run python scripts/e2b_sandbox_probe.py` (e2b-verify.ts) —
-      # without uv the probe dies `spawn uv ENOENT`, which ALSO strands the
-      # provider-sandbox kill (the releaser registers kills from probe
-      # results), leaving the run-scoped template undeletable. Same setup the
-      # tier-3 lanes use.
-      - uses: astral-sh/setup-uv@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "."
-
-      - name: Install MUSL target
-        run: rustup target add x86_64-unknown-linux-musl
-      - name: Setup Zig
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.13.0
-      - name: Install cargo-zigbuild
-        run: cargo install cargo-zigbuild --locked
-      - name: Install E2B CLI
-        # Only used by the world's `e2b_template` cleanup releaser
-        # (`template.ts`'s `E2bTemplateBuilder.deleteTemplate`); the build
-        # itself goes through the `e2b` SDK dependency already in the
-        # workspace lockfile.
-        run: npm install -g @e2b/cli
-
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Prove the base managed-cloud journey FIRST, then reuse its exact candidate
-      # map/bytes for the fixture smoke. Each scenario constructs its world under
-      # a distinct subtree of the shared run directory, so world cleanup cannot
-      # delete the candidate handoff or the sibling's evidence. The second step
-      # has no `always()` escape: a red base proof blocks the derivative smoke.
-      - name: Build candidates and run CLOUD-PROVISION-1 (strict)
-        env:
-          MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs/cp1
-        run: |
-          set -euo pipefail
-          make qualification-managed-cloud \
-            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            BEHAVIOR=strict \
-            SHARED_TEMPLATE_CUSTODY_MODE=producer \
-            CLOUD_SCENARIOS="CLOUD-PROVISION-1" \
-            CLOUD_EVIDENCE_SUBDIR="evidence/cp1" \
-            QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY="${GITHUB_WORKSPACE}/.qualification-trusted-default" \
-            QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
-
-      # CP1 takes long enough for main to advance after the job's initial
-      # trusted checkout. Refresh immediately before the derivative world so
-      # its fail-closed preflight proves cleanup authority against the current
-      # remote default-branch tip, not the tip observed before the build.
-      - name: Refresh trusted default-branch cleanup authorization before fixture smoke
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          path: .qualification-trusted-default
-          fetch-depth: 1
-          sparse-checkout: tests/release/fixtures/managed-cloud-litellm-attribution-attestations.v1.json
-          sparse-checkout-cone-mode: false
-
-      - name: Reuse candidates and run MANAGED-CLOUD-FIXTURE-SMOKE-1 (strict)
-        env:
-          MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs/fixture-smoke
-        run: |
-          set -euo pipefail
-          make qualification-managed-cloud \
-            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            BEHAVIOR=strict \
-            REUSE_CANDIDATES=1 \
-            SHARED_TEMPLATE_CUSTODY_MODE=consumer \
-            CLOUD_SCENARIOS="MANAGED-CLOUD-FIXTURE-SMOKE-1" \
-            CLOUD_EVIDENCE_SUBDIR="evidence/fixture-smoke" \
-            QUALIFICATION_TRUSTED_CLEANUP_REPOSITORY="${GITHUB_WORKSPACE}/.qualification-trusted-default" \
-            QUALIFICATION_TRUSTED_CLEANUP_DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
-
-      # Acceptance is the composition, not two independently green commands:
-      # prove both V4 reports used one run/source/candidate set and the literal
-      # immutable template id/build/input hash transferred through a 0600
-      # acquired→released custody journal.
-      - name: Verify exact CP1 → fixture-smoke handoff
-        run: |
-          set -euo pipefail
-          run_id="qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          run_dir="${GITHUB_WORKSPACE}/tests/release/.output/managed-cloud-world/${run_id}/1"
-          attempt_dir="attempt-${GITHUB_RUN_ATTEMPT}"
-          mkdir -p "${run_dir}/evidence"
-          cd tests/release
-          pnpm exec tsx src/cli/verify-managed-cloud-handoff.ts \
-            --cp1-report "${run_dir}/evidence/cp1/${run_id}/1/${attempt_dir}/qualification-evidence.json" \
-            --smoke-report "${run_dir}/evidence/fixture-smoke/${run_id}/1/${attempt_dir}/qualification-evidence.json" \
-            --custody "${run_dir}/cleanup-custody/shared-e2b-template-custody.json" \
-            | tee "${run_dir}/evidence/managed-cloud-handoff-verification.json"
-
-      # Crash fallback for fixture entries that were durably acquired before a
-      # scenario process exited. Run it for BOTH scoped worlds: CP1 owns its E2B
-      # sandbox in the same fixture-kind registry, while the derivative smoke
-      # also owns Stripe/relay/billing entries. Keep attempting the second world
-      # after a first-world failure so one broken provider cannot strand another.
-      - name: Replay fixture cleanup ledger after interruption
-        if: always()
-        run: |
-          set -euo pipefail
-          run_id="qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          parent_dir="${GITHUB_WORKSPACE}/tests/release/.output/managed-cloud-world/${run_id}/1"
-          status=0
-          cd tests/release
-          for world_dir in cloud-provision-1 fixture-smoke; do
-            scoped_dir="${parent_dir}/${world_dir}"
-            if [ -f "${scoped_dir}/cleanup-ledger.json" ]; then
-              pnpm exec tsx src/cli/replay-managed-cloud-fixtures.ts \
-                --run-dir "${scoped_dir}" --run-id "${run_id}" --shard-id "1" || status=2
-            else
-              echo "{\"kind\":\"managed_cloud_fixture_cleanup_replay\",\"world_dir\":\"${world_dir}\",\"status\":\"not_needed\"}"
-            fi
-          done
-          exit "${status}"
-
-      # The webhook is created before world construction, so its cleanup
-      # custody deliberately lives outside the world's removable runDir. Run a
-      # fresh executor after either scenario outcome: this proves the persisted
-      # journal alone is sufficient after the test process exits. A remaining
-      # accepted Stripe resource makes the job red; cleanup is never best-effort.
-      - name: Replay pre-world provider cleanup custody
-        if: always()
-        run: |
-          set -euo pipefail
-          cd tests/release
-          pnpm exec tsx src/cli/replay-managed-cloud-custody.ts \
-            --run-dir "${GITHUB_WORKSPACE}/tests/release/.output/managed-cloud-world/qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/1" \
-            --run-id "qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --shard-id "1"
-
-      # Final fresh-process fallback for each world's BASE resources. It reads
-      # only the persisted run/shard ledger and exact provider ownership:
-      # AWS tags/ids, LiteLLM subject ids/key alias, PID+starttime process
-      # custody, and scoped local paths. Domains continue independently; any
-      # ambiguous/failed identity stays unreconciled and makes this step red.
-      - name: Replay base-world cleanup ledger after interruption
-        if: always()
-        run: |
-          set -euo pipefail
-          run_id="qlc-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          parent_dir="${GITHUB_WORKSPACE}/tests/release/.output/managed-cloud-world/${run_id}/1"
-          receipt_dir="${parent_dir}/evidence/cleanup-replay"
-          mkdir -p "${receipt_dir}"
-          status=0
-          cd tests/release
-          for world_dir in cloud-provision-1 fixture-smoke; do
-            pnpm exec tsx src/cli/replay-managed-cloud-base.ts \
-              --run-dir "${parent_dir}/${world_dir}" \
-              --run-id "${run_id}" \
-              --shard-id "1" \
-              | tee "${receipt_dir}/${world_dir}.json" || status=2
-          done
-          exit "${status}"
-
-      - name: Upload V4 report and bounded diagnostic logs
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: cloud-provision-1-evidence
-          path: |
-            tests/release/.output/managed-cloud-world/*/*/evidence/
-            tests/release/.output/managed-cloud-world/*/*/logs/
-            tests/release/.output/managed-cloud-world/*/*/*/logs/
-            tests/release/.output/managed-cloud-world/*/debug/logs/
-            tests/release/.output/managed-cloud-world/*/*/cleanup-custody/
-            tests/release/.output/managed-cloud-world/*/*/cleanup-replay/
-            tests/release/.output/managed-cloud-world/*/*/*/cleanup-ledger.json
-            tests/release/.output/managed-cloud-world/**/*-cancellation-finalization.json
-            tests/release/.output/preflight/managed-cloud/
           retention-days: 7
           if-no-files-found: ignore

@@ -239,27 +239,9 @@ test("rejects unknown two-stanza shapes without modifying the file", async (cont
 
 test("guards every hosted Playwright dependency install in its own run block", async () => {
   const expectedCommandsByWorkflow = new Map([
-    [
-      // The three browser-installing lanes moved from ci.yml to the
-      // dispatch-only ci-heavy-lanes.yml in the 2026-08 engineering cull.
-      ".github/workflows/ci-heavy-lanes.yml",
-      [
-        "pnpm exec playwright install --with-deps chromium",
-        "pnpm --filter @proliferate/product-client exec playwright install --with-deps chromium webkit",
-        "pnpm -C tests/intent exec playwright install --with-deps chromium",
-      ],
-    ],
-    [
-      ".github/workflows/intent-tests.yml",
-      [
-        "pnpm -C tests/intent exec playwright install --with-deps chromium",
-        "pnpm -C tests/intent exec playwright install --with-deps chromium",
-      ],
-    ],
-    [
-      ".github/workflows/release-e2e.yml",
-      ["pnpm -C tests/intent exec playwright install --with-deps chromium"],
-    ],
+    // The 2026-08 CI cull deleted the other hosted browser-installing lanes
+    // (the intent suite, the dispatch-only heavy lanes, and release-e2e.yml's
+    // tier-2 job); this smoke lane is the one hosted --with-deps call-site left.
     [
       ".github/workflows/self-host-smoke.yml",
       ["npx playwright install --with-deps chromium"],
@@ -281,11 +263,11 @@ test("guards every hosted Playwright dependency install in its own run block", a
     }
   }
 
-  assert.equal(installs.length, 7, "hosted --with-deps call-site census changed");
+  assert.equal(installs.length, 1, "hosted --with-deps call-site census changed");
   assert.equal(
     helpers.length,
-    8,
-    "seven hosted --with-deps calls and Cargo need one helper each",
+    2,
+    "one hosted --with-deps call and Cargo need one helper each",
   );
   assert.deepEqual(
     new Map(

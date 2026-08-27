@@ -30,7 +30,6 @@ COPY apps/packages/design/package.json apps/packages/design/
 COPY apps/packages/product-client/package.json apps/packages/product-client/
 COPY server/artifact-runtime/package.json server/artifact-runtime/
 COPY apps/web/package.json apps/web/
-COPY tests/intent/package.json tests/intent/
 COPY tests/release/package.json tests/release/
 
 # product-client runs a `prepare` lifecycle script during install; copy just

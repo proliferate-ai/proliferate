@@ -10,7 +10,6 @@ packages:
   - "apps/packages/product-client"
   - "server/artifact-runtime"
   - "apps/web"
-  - "tests/intent"
   - "tests/release"
 
 allowBuilds:

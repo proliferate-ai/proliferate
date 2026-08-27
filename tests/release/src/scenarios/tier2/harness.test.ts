@@ -19,9 +19,9 @@ import type {
 import type { Tier2BillingEvidenceV1 } from "../../evidence/schema.js";
 import type { ScenarioPlanContext, ScenarioRunContext } from "../types.js";
 import type { PlannedCellV1 } from "../../runner/result.js";
-import type { BillingBootResult } from "../../../../intent/stack/billing-boot.ts";
-import type { BootWithFakeResult, LitellmManagementFake } from "../../../../intent/stack/billing-usage-import.ts";
-import type { BootedStack, StripeBillingEnv } from "../../../../intent/stack/boot.ts";
+import type { BillingBootResult } from "./stack/billing-boot.ts";
+import type { BootWithFakeResult, LitellmManagementFake } from "./stack/billing-usage-import.ts";
+import type { BootedStack, StripeBillingEnv } from "./stack/boot.ts";
 
 // The harness ignores the scenario run/plan context (its work is against the
 // booted stack), so a bare cast is sufficient for these mechanism tests.

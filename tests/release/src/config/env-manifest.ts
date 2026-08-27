@@ -449,7 +449,7 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "The webhook signing secret (whsec_…) the Tier-2 billing harness self-signs deliveries with and the " +
       "booted server verifies against. Generated per boot by bootBillingStack and exported to process.env; " +
       "declared here so it is redacted from the persisted report. Not a scenario requiredEnv.",
-    whereItLives: "Generated per run by tests/intent/stack/billing-boot.ts; never committed.",
+    whereItLives: "Generated per run by src/scenarios/tier2/stack/billing-boot.ts; never committed.",
     secret: true,
   },
   {
