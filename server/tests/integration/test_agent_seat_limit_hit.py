@@ -23,6 +23,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.store import agent_gateway as agent_gateway_store
 from tests.integration.test_agent_gateway_api import (
     SEAT_TOKEN,
     _authed_user,
@@ -92,8 +93,9 @@ class TestSeatLimitHit:
         await db_session.commit()
         hit_seat = await _mint_seat(client, headers, token=SEAT_TOKEN)
         # A second ACTIVE seat is what makes rotation follow — the event
-        # carries the seat rotated AWAY FROM; the server never picks the next.
-        await _mint_seat(client, headers, token=SEAT_TOKEN + "B")
+        # carries the seat rotated AWAY FROM plus the server's expectation
+        # from the pool it supplies; the runtime owns the actual pick.
+        next_seat = await _mint_seat(client, headers, token=SEAT_TOKEN + "B")
 
         response = await _report_limit_hit(client, headers, hit_seat)
         assert response.status_code == 204, response.text
@@ -112,10 +114,61 @@ class TestSeatLimitHit:
         assert rotated.api_key_id == hit_seat  # type: ignore[attr-defined]
         assert rotated.organization_id == str(org_id)  # type: ignore[attr-defined]
         assert rotated.harness_kind == "claude"  # type: ignore[attr-defined]
+        # The prediction: the vault-next active seat, marked as such.
+        assert rotated.expected_next_seat_id == next_seat  # type: ignore[attr-defined]
+        assert rotated.basis == "expected_from_pool"  # type: ignore[attr-defined]
 
         # Events carry ids only — never token material.
         for record in cloud_event_records:
             assert SEAT_TOKEN not in record.getMessage()
+
+    @pytest.mark.asyncio
+    async def test_expected_next_seat_wraps_the_vault_order(
+        self,
+        client: AsyncClient,
+        cloud_event_records: list[logging.LogRecord],
+    ) -> None:
+        _, headers = await _authed_user(client)
+        first_seat = await _mint_seat(client, headers, token=SEAT_TOKEN)
+        last_seat = await _mint_seat(client, headers, token=SEAT_TOKEN + "B")
+
+        # Hitting the LAST seat in vault order wraps: the expectation is the
+        # pool's first seat, matching the runtime's cyclic round-robin.
+        response = await _report_limit_hit(client, headers, last_seat)
+        assert response.status_code == 204, response.text
+
+        (rotated,) = _events(cloud_event_records, "agent_seat_rotated")
+        assert rotated.api_key_id == last_seat  # type: ignore[attr-defined]
+        assert rotated.expected_next_seat_id == first_seat  # type: ignore[attr-defined]
+        assert rotated.basis == "expected_from_pool"  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_rotate_off_logs_no_rotation_event(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        cloud_event_records: list[logging.LogRecord],
+    ) -> None:
+        user_id, headers = await _authed_user(client)
+        hit_seat = await _mint_seat(client, headers, token=SEAT_TOKEN)
+        await _mint_seat(client, headers, token=SEAT_TOKEN + "B")
+        # Rotate off pins the applied seat: the runtime will wait for the
+        # reset, so the server must not predict a rotation that cannot happen.
+        await agent_gateway_store.put_harness_settings(
+            db_session,
+            user_id=uuid.UUID(user_id),
+            harness_kind="claude",
+            surface="local",
+            settings={"rotate": False},
+        )
+        await db_session.commit()
+
+        response = await _report_limit_hit(client, headers, hit_seat)
+        assert response.status_code == 204, response.text
+
+        (hit,) = _events(cloud_event_records, "agent_seat_limit_hit")
+        assert hit.api_key_id == hit_seat  # type: ignore[attr-defined]
+        assert _events(cloud_event_records, "agent_seat_rotated") == []
 
     @pytest.mark.asyncio
     async def test_seat_limit_hit_without_another_seat_logs_no_rotation_event(

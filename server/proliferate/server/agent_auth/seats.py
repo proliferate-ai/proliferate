@@ -28,6 +28,7 @@ from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_STATUS_ACTIVE,
     AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS,
     AGENT_AUTH_SOURCE_SEAT,
+    AGENT_AUTH_SURFACE_LOCAL,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import AgentApiKeyRecord
@@ -171,10 +172,19 @@ async def report_seat_limit_hit(
     """Record a runtime-observed seat limit hit (spec §3 flow 5, hard signal).
 
     The courier relays the hit fire-and-forget; cooling is runtime-local and
-    never waits on this. The server never picks the next seat — when another
-    active seat exists the runtime will rotate, so ``agent_seat_rotated`` is
-    logged beside the hit, carrying the seat rotated AWAY FROM. Events carry
-    ids only, never token material.
+    never waits on this. The server never picks the next seat — rotation is
+    the RUNTIME's decision (spec §4 cell 2, "Rotation ownership"). What the
+    server can state is its own *expectation from the pool it supplies*:
+    when the harness's ``rotate`` setting is on (``agent_auth_harness_settings``,
+    surface local; absent → on) and another active seat exists, the runtime
+    will rotate, so ``agent_seat_rotated`` is logged beside the hit — the
+    seat rotated AWAY FROM plus ``expected_next_seat_id`` (the next active
+    seat after the hit one in vault order, wrapping) under
+    ``basis="expected_from_pool"``. That is a prediction, never a
+    serving-change observation; the true serving-change signal rides the
+    slice-3 status document. Rotate off skips the event entirely (the pin
+    means the runtime will NOT rotate). Events carry ids only, never token
+    material.
     """
     keys = await agent_gateway_store.list_agent_api_keys(db, user_id=user_id, include_revoked=True)
     hit = next((record for record in keys if record.id == api_key_id), None)
@@ -206,17 +216,66 @@ async def report_seat_limit_hit(
         window=window,
         reset_at=reset_at.isoformat(),
     )
-    has_other_active_seat = any(
-        record.id != api_key_id
-        and record.kind == AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION
-        and record.status == AGENT_API_KEY_STATUS_ACTIVE
-        for record in keys
+    expected_next_seat_id = _expected_next_seat_id(keys, hit=hit)
+    if expected_next_seat_id is None:
+        # No other active seat: the runtime has nowhere to go, so there is
+        # no rotation to expect.
+        return
+    if not await _rotate_enabled(db, user_id=user_id, harness_kind=harness_kind):
+        # Rotate off pins the applied seat — the runtime will wait for this
+        # login's reset, not rotate, so predicting a rotation would be false.
+        return
+    log_cloud_event(
+        "agent_seat_rotated",
+        user_id=str(user_id),
+        organization_id=organization_id,
+        api_key_id=str(api_key_id),
+        harness_kind=harness_kind,
+        expected_next_seat_id=str(expected_next_seat_id),
+        basis="expected_from_pool",
     )
-    if has_other_active_seat:
-        log_cloud_event(
-            "agent_seat_rotated",
-            user_id=str(user_id),
-            organization_id=organization_id,
-            api_key_id=str(api_key_id),
-            harness_kind=harness_kind,
-        )
+
+
+async def _rotate_enabled(db: AsyncSession, *, user_id: UUID, harness_kind: str) -> bool:
+    """The harness's ``rotate`` toggle on the local surface; absent → on."""
+    settings = await agent_gateway_store.get_harness_settings(
+        db,
+        user_id=user_id,
+        harness_kind=harness_kind,
+        surface=AGENT_AUTH_SURFACE_LOCAL,
+    )
+    if settings is None:
+        return True
+    return settings.get("rotate") is not False
+
+
+def _expected_next_seat_id(
+    keys: list[AgentApiKeyRecord],
+    *,
+    hit: AgentApiKeyRecord,
+) -> UUID | None:
+    """The server's expectation of the next serving seat, from the pool.
+
+    The next ACTIVE ``anthropic_subscription`` seat AFTER the hit seat in
+    vault order — ``(created_at, id)``, the order the renderer expands the
+    pool in — wrapping around; ``None`` when no other active seat exists.
+    This is only what the pool the server supplies implies: the runtime owns
+    the actual pick (its cooling records may skip further ahead).
+    """
+    pool = sorted(
+        (
+            record
+            for record in keys
+            if record.kind == AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION
+            and record.status == AGENT_API_KEY_STATUS_ACTIVE
+            and record.id != hit.id
+        ),
+        key=lambda record: (record.created_at, str(record.id)),
+    )
+    if not pool:
+        return None
+    hit_key = (hit.created_at, str(hit.id))
+    for record in pool:
+        if (record.created_at, str(record.id)) > hit_key:
+            return record.id
+    return pool[0].id
