@@ -101,6 +101,15 @@ SERVER_MYPY = (
     "python scripts/check_mypy_baseline.py --compare-ref origin/main"
 )
 SERVER_PYTEST_PREFIX = "uv run --python 3.12 --frozen --extra dev pytest -q -n 2"
+# Mirrors server-ci.yml's test-job `env:` block verbatim — the same values the
+# local compose stack uses, so tests boot identically here and in CI. Applied
+# as defaults only: an already-exported variable (e.g. a second worktree's
+# alternate port) wins.
+SERVER_TEST_ENV = {
+    "DATABASE_URL": "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate",
+    "JWT_SECRET": "test-jwt-secret",
+    "CLOUD_SECRET_KEY": "test-cloud-secret",
+}
 
 CARGO_FMT = "cargo fmt --check"
 
@@ -267,6 +276,7 @@ class Check:
     cwd: str | None = None  # repo-relative; None = repo root
     skip_reason: str | None = None
     loud: bool = False  # print the skip in bold with a banner
+    env_defaults: dict[str, str] | None = None  # applied only where unset
 
 
 def build_checks(
@@ -319,6 +329,7 @@ def build_checks(
                         f"server: tests ({len(files)} files)",
                         f"{SERVER_PYTEST_PREFIX} {' '.join(files)}",
                         cwd="server",
+                        env_defaults=SERVER_TEST_ENV,
                     )
                 )
 
@@ -406,8 +417,11 @@ def run_check(check: Check, repo: Path) -> tuple[str, float]:
     if check.cmd is None:
         return "skipped", 0.0
     cwd = repo / check.cwd if check.cwd else repo
+    env = None
+    if check.env_defaults:
+        env = {**check.env_defaults, **os.environ}  # exported values win
     start = time.monotonic()
-    proc = subprocess.run(shlex.split(check.cmd), cwd=cwd, check=False)
+    proc = subprocess.run(shlex.split(check.cmd), cwd=cwd, env=env, check=False)
     return ("ok" if proc.returncode == 0 else "FAIL"), time.monotonic() - start
 
 
@@ -416,6 +430,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--all", action="store_true", help="force every plane regardless of the diff")
     parser.add_argument("--list", action="store_true", help="print the checks the diff selects, run nothing")
     args = parser.parse_args(argv)
+
+    # Agents read the gate through pipes: keep per-check lines arriving in
+    # order with the subprocess output, not block-buffered until exit.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(line_buffering=True)
 
     paths, warning = changed_files(REPO)
     if warning:

@@ -188,13 +188,14 @@ class BuildChecksTests(unittest.TestCase):
         self.assertIn("server: mypy ratchet", names)
         self.assertFalse(any("pytest" in (c.cmd or "") for c in checks))
 
-    def test_services_up_runs_domain_tests_at_n2(self):
+    def test_services_up_runs_domain_tests_at_n2_with_ci_env(self):
         scope = gate.classify(["server/proliferate/server/billing/service.py"])
         checks = gate.build_checks(scope, **self._base_kwargs())
         pytest_checks = [c for c in checks if c.cmd and " pytest " in f" {c.cmd} "]
-        if pytest_checks:  # the real repo has billing tests
-            self.assertIn("-n 2", pytest_checks[0].cmd)
-            self.assertEqual(pytest_checks[0].cwd, "server")
+        self.assertTrue(pytest_checks, "the real repo has billing tests")
+        self.assertIn("-n 2", pytest_checks[0].cmd)
+        self.assertEqual(pytest_checks[0].cwd, "server")
+        self.assertEqual(pytest_checks[0].env_defaults, gate.SERVER_TEST_ENV)
 
     def test_missing_uv_is_one_loud_skip(self):
         scope = gate.classify(["server/proliferate/server/billing/service.py"])
@@ -245,6 +246,11 @@ class MirrorRuleTests(unittest.TestCase):
     def test_server_ruff_commands_mirror_server_ci(self):
         self.assertIn(_normalized(gate.SERVER_RUFF_CHECK), self.server_ci)
         self.assertIn(_normalized(gate.SERVER_RUFF_FORMAT), self.server_ci)
+
+    def test_server_test_env_mirrors_server_ci(self):
+        for key, value in gate.SERVER_TEST_ENV.items():
+            with self.subTest(var=key):
+                self.assertIn(f"{key}: {value}", self.server_ci)
 
     def test_mypy_is_same_checker_documented_divergence(self):
         shared_prefix = (
