@@ -169,6 +169,20 @@ impl AgentStatusStore {
         None
     }
 
+    /// Corrupt a row's stored document in place, for the malformed-row healing
+    /// test. SQL lives here because the store is the domain's only query site.
+    #[cfg(test)]
+    pub(super) fn corrupt_doc_json_for_test(&self, harness_kind: &str, garbage: &str) {
+        self.db
+            .with_conn(|conn| {
+                conn.execute(
+                    "UPDATE agent_auth_status SET doc_json = ?2 WHERE harness_kind = ?1",
+                    params![harness_kind, garbage],
+                )
+            })
+            .expect("corrupt status row");
+    }
+
     /// The row's `updated_at_epoch_s`, for tests asserting that byte-stable
     /// refreshes do not rewrite.
     #[cfg(test)]

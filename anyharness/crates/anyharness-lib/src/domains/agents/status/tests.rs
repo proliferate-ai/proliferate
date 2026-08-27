@@ -204,6 +204,48 @@ fn restart_serves_stale_until_reverified() {
     );
 }
 
+/// A probe verdict against a row whose stored `doc_json` no longer parses must
+/// HEAL the row, not vanish (review m4): the old `?`-propagation inside the
+/// write door made `decide` return `None` on a malformed row, so neither the
+/// document nor the OBSERVATION COLUMNS were written and a completed probe's
+/// verdict was silently dropped. The verdict now lands with an honestly
+/// recomposed document, through the same transactional write door.
+#[test]
+fn a_verdict_against_a_malformed_row_heals_it_instead_of_vanishing() {
+    let home = TempHome::new("status-malformed-heal");
+    home.write_state_json(&codex_grok_state(1, "sk-vk-codex", "xai-raw"));
+    let status = service(&home, FixedTargets::single("codex"));
+    status.refresh("codex", RefreshCause::AuthApplied);
+    status
+        .store
+        .corrupt_doc_json_for_test("codex", "{definitely-not-json");
+    assert!(
+        status.read("codex").is_none(),
+        "the corrupt row serves nothing — the shape under test"
+    );
+
+    let t_ok = Utc.with_ymd_and_hms(2026, 8, 27, 12, 0, 0).unwrap();
+    status.probe_verified("codex", t_ok);
+
+    let doc = status.read("codex").expect("the verdict healed the row");
+    assert_eq!(doc.probe.verdict, ProbeVerdict::Verified);
+    assert_eq!(doc.probe.at, Some(t_ok.to_rfc3339()));
+    assert!(!doc.probe.stale);
+    assert!(
+        doc.methods.iter().any(|row| row.kind == "gateway"),
+        "the healed body is a real recomposition, not an empty shell"
+    );
+
+    // The observation columns landed too: a restart re-serves the verdict
+    // (stale-marked, as every restart does) rather than rediscovering nothing.
+    drop(status);
+    let second = service(&home, FixedTargets::single("codex"));
+    second.startup_pass(&None);
+    let doc = second.read("codex").expect("healed row survives a restart");
+    assert_eq!(doc.probe.verdict, ProbeVerdict::Verified);
+    assert_eq!(doc.probe.at, Some(t_ok.to_rfc3339()));
+}
+
 /// The startup pass raises FirstDetected for an installed, auto-probeable
 /// harness with NO persisted row — and never for a manual-refresh-only one.
 #[test]

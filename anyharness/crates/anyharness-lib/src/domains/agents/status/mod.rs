@@ -383,9 +383,16 @@ impl AgentStatusService {
             .clone()
     }
 
-    /// A probe-block-only write. Probe evidence never recomposes — EXCEPT for a
-    /// harness with no row at all, where there is no body to patch and an
-    /// honest composition is the only way to hold the evidence.
+    /// A probe-block-only write. Probe evidence never recomposes — EXCEPT when
+    /// there is no persisted body to patch: a harness with no row at all, or a
+    /// row whose stored `doc_json` no longer parses. Both get an honest
+    /// composition — for the malformed row that is a HEAL, because dropping the
+    /// write whole would lose the OBSERVATION COLUMNS with it: a completed
+    /// probe's verdict (and the restore state its release puts back) would
+    /// silently vanish against a corrupt row. The healing body is composed
+    /// out here, never inside the transaction (the store's law), and this runs
+    /// under the harness's write cell, so no interleaving writer can slip
+    /// between this read and the transactional write.
     fn probe_write(
         &self,
         harness_kind: &str,
@@ -396,6 +403,7 @@ impl AgentStatusService {
         let body = self
             .store
             .read(harness_kind)
+            .and_then(|row| parse_doc(harness_kind, &row.doc_json))
             .is_none()
             .then(|| self.compose_body(harness_kind));
         self.probe_write_with_body(harness_kind, body, intent, why, mark);
@@ -437,7 +445,9 @@ impl AgentStatusService {
                 let doc = match body.as_ref() {
                     Some(body) => body.into_doc(harness_kind, probe),
                     // A probe write patches the persisted document's own body.
-                    // No row means nothing to patch and nothing to say.
+                    // No row means nothing to patch and nothing to say. (A
+                    // malformed row never reaches this `?`: `probe_write`
+                    // pre-composes a healing body for it.)
                     None => {
                         let mut doc = parse_doc(harness_kind, &row?.doc_json)?;
                         doc.probe = probe;
