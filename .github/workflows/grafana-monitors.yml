@@ -1,0 +1,139 @@
+name: Grafana Monitors
+
+# The agent-native monitor lane (specs/engineering/observability/grafana-logging.md):
+# rules + dashboards live as checked-in JSON; a PR edits them; `check` validates
+# offline on every PR; merge to main applies + verifies against the canonical
+# rebuild workspace (g-48655e6419) and writes a receipt into the job summary;
+# a nightly job diffs live against intent and goes red on drift (the fix is
+# commit-back or revert, never silent divergence).
+#
+# Live jobs are gated on the GRAFANA_ADMIN_TOKEN secret (workspace service
+# account, scoped to proliferate-ops-rebuild). When the secret is absent they
+# SKIP LOUDLY instead of failing — re-mint per the runbook in
+# guides/operating/production-alerts.md and add it as a repo secret.
+
+on:
+  pull_request:
+    paths:
+      - "server/infra/observability/grafana/**"
+      - "scripts/ops/grafana-*.mjs"
+      - ".github/workflows/grafana-monitors.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/infra/observability/grafana/**"
+      - "scripts/ops/grafana-*.mjs"
+      - ".github/workflows/grafana-monitors.yml"
+  schedule:
+    # Nightly drift check, 09:17 UTC (~02:17 PT), off the busy top of the hour.
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  check:
+    name: Offline intent check
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Check rebuild overlay + dashboard
+        run: node scripts/ops/grafana-rebuild-bootstrap.mjs check
+      - name: Check SLI overlay
+        run: node scripts/ops/grafana-sli-alerts.mjs check
+      - name: Check old-workspace overlay (until retirement)
+        run: node scripts/ops/grafana-alerting.mjs check
+      - name: Run operator-tool tests
+        run: |
+          node --test scripts/ops/grafana-alerting.test.mjs \
+            scripts/ops/grafana-rebuild-bootstrap.test.mjs \
+            scripts/ops/grafana-sli-alerts.test.mjs
+
+  apply:
+    name: Apply intent to the canonical workspace
+    if: github.event_name == 'push'
+    needs: check
+    runs-on: ubuntu-latest
+    concurrency:
+      group: grafana-apply
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Apply + verify + receipt
+        env:
+          GRAFANA_ADMIN_TOKEN: ${{ secrets.GRAFANA_ADMIN_TOKEN }}
+        run: |
+          if [ -z "$GRAFANA_ADMIN_TOKEN" ]; then
+            echo "::warning title=Grafana apply SKIPPED::GRAFANA_ADMIN_TOKEN secret is not configured. Intent merged but NOT applied — re-mint the workspace service-account token (guides/operating/production-alerts.md) and add it as a repo secret, then re-run this workflow."
+            echo "## Grafana apply: SKIPPED (no token)" >> "$GITHUB_STEP_SUMMARY"
+            echo "Intent merged but not applied. Re-mint GRAFANA_ADMIN_TOKEN and re-run." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          mkdir -p "$HOME/.proliferate-local/ops"
+          umask 177
+          printf '%s' "$GRAFANA_ADMIN_TOKEN" > "$HOME/.proliferate-local/ops/grafana-admin-rebuild.token"
+          export GRAFANA_ALERTING_LIVE=1
+          node scripts/ops/grafana-rebuild-bootstrap.mjs apply
+          node scripts/ops/grafana-sli-alerts.mjs apply
+          {
+            echo "## Grafana apply receipt ($(date -u +%Y-%m-%dT%H:%M:%SZ), commit ${GITHUB_SHA})"
+            echo '```'
+            node scripts/ops/grafana-rebuild-bootstrap.mjs verify
+            node scripts/ops/grafana-sli-alerts.mjs verify
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY" > verify-output.txt
+          if grep -qE "MISMATCH|MISSING|topic wired: false|dashboard present: false" verify-output.txt; then
+            echo "::error title=Grafana verify failed::Live workspace does not match intent after apply. Read the receipt above."
+            exit 1
+          fi
+
+  drift:
+    name: Nightly drift check (live vs intent)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Verify live matches intent
+        env:
+          GRAFANA_ADMIN_TOKEN: ${{ secrets.GRAFANA_ADMIN_TOKEN }}
+        run: |
+          if [ -z "$GRAFANA_ADMIN_TOKEN" ]; then
+            echo "::warning title=Grafana drift check SKIPPED::GRAFANA_ADMIN_TOKEN secret is not configured — the drift lane is not actually running. Re-mint the token to arm it."
+            echo "## Grafana drift check: SKIPPED (no token)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          mkdir -p "$HOME/.proliferate-local/ops"
+          umask 177
+          printf '%s' "$GRAFANA_ADMIN_TOKEN" > "$HOME/.proliferate-local/ops/grafana-admin-rebuild.token"
+          export GRAFANA_ALERTING_LIVE=1
+          {
+            echo "## Grafana drift check ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+            echo '```'
+            node scripts/ops/grafana-rebuild-bootstrap.mjs verify
+            node scripts/ops/grafana-sli-alerts.mjs verify
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY" > verify-output.txt
+          if grep -qE "MISMATCH|MISSING|topic wired: false|dashboard present: false" verify-output.txt; then
+            echo "::error title=Grafana drift detected::Live workspace has drifted from checked-in intent. Fix by committing the live change back into server/infra/observability/grafana/** (export tooling) or re-running the apply lane to revert it. Never leave the divergence standing."
+            exit 1
+          fi
