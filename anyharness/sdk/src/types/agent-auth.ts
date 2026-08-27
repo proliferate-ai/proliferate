@@ -38,7 +38,14 @@ export interface AgentAuthStateHarness {
 /** The whole state.json v2 document (`route_auth/state.rs::AgentAuthState`). */
 export interface AgentAuthStateDocument {
   version: number;
-  revision: number;
+  /**
+   * Monotonic per (user, surface), bumped only by a render whose `harnesses`
+   * content changed (agent_auth spec §2, "How delivery is governed"). This is
+   * the ORDERING field: the runtime rejects a push whose sequence is below the
+   * one it persisted. The change-detection value is `fingerprint`, which is a
+   * `GET /state` rider and never appears in this document.
+   */
+  sequence: number;
   user_id?: string | null;
   /**
    * The origin (`scheme://host[:port]`) of the control-plane server that

@@ -92,7 +92,7 @@ export function useAuthSetupOnboardingStep(): AuthSetupStepState {
     refetchInterval: watching ? AUTH_SETUP_POLL_MS : false,
   });
   // Enrollment sync (keys minted) is part of the same pending truth: a state
-  // acked before sync lacks the key, and sync bumps the revision back to
+  // acked before sync lacks the key, and sync bumps the sequence back to
   // pending — so resolution requires synced AND applied.
   const enrollmentQuery = useAgentGatewayEnrollment(authReady && watching, {
     refetchInterval: watching ? AUTH_SETUP_POLL_MS : false,

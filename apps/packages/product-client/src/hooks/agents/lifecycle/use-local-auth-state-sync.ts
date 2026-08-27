@@ -54,12 +54,12 @@ const ENROLLMENT_SYNCED = "synced";
  * re-runs whenever route selections or API keys mutate — those mutations
  * invalidate the agent-auth state query, so fresh data re-triggers the push.
  * An enrollment reaching `synced` is the same kind of poke (Proof C5): the
- * server re-renders with keys at a newer revision, and this hook invalidates
+ * server re-renders with keys at a newer sequence, and this hook invalidates
  * the state query so the re-pull happens now rather than at the next
  * unrelated mutation.
  *
  * Applied means acknowledged (Proof C1): after the runtime confirms a
- * push/clear, the hook reports the delivered document's (revision,
+ * push/clear, the hook reports the delivered document's (sequence,
  * fingerprint) through `POST /v1/cloud/agent-auth/state/ack` — that stamp is
  * what flips the settings panes from "Applying…" to applied. A failed push
  * records no ack, so the selection stays visibly pending and is retried on
@@ -96,7 +96,7 @@ export function useLocalAuthStateSync() {
   const runtimeHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
 
   // Enrollment-sync poke, client half (Proof C5): C-1's server half bumps the
-  // local-surface revision when an enrollment reaches `synced`, so the next
+  // local-surface sequence when an enrollment reaches `synced`, so the next
   // pull renders WITH keys — this half makes that pull happen promptly by
   // invalidating the state query on the observed →synced transition. Polling
   // exists only to observe that transition and stops once synced.
@@ -150,9 +150,10 @@ export function useLocalAuthStateSync() {
     // The runtime confirmed the applied document — report the delivery ack
     // so the server's applied-vs-pending truth (and the settings panes)
     // flips to applied. Echo the SERVED document identity: the runtime's
-    // accepted revision is `state.revision` (a stale lower-revision push
+    // accepted sequence is `state.sequence` (a stale lower-sequence push
     // errors out at the runtime), and `state.fingerprint` is the
-    // server-computed hash riding the GET /state response.
+    // server-computed hash riding the GET /state response — never the local
+    // `localAuthStateFingerprint` dedupe key.
     const reportDeliveryAck = async () => {
       if (!(typeof state.fingerprint === "string" && state.fingerprint.length > 0)) {
         return;
@@ -160,7 +161,7 @@ export function useLocalAuthStateSync() {
       try {
         await ackAgentAuthState(
           "local",
-          { revision: state.revision, fingerprint: state.fingerprint },
+          { sequence: state.sequence, fingerprint: state.fingerprint },
           cloudClient,
         );
         lastAckedRef.current = plan.fingerprint;
@@ -168,7 +169,7 @@ export function useLocalAuthStateSync() {
       } catch (error: unknown) {
         // The runtime HAS the state; only the report failed. pushed !== acked
         // now, so the next sync pass retries the ack without re-pushing.
-        recordAgentAuthFailure("delivery_ack_failed", error, state.revision);
+        recordAgentAuthFailure("delivery_ack_failed", error, state.sequence);
         console.warn("[agent-auth] local state delivery ack failed", error);
       }
     };
@@ -208,7 +209,7 @@ export function useLocalAuthStateSync() {
         recordAgentAuthFailure(
           "state_push_failed",
           error,
-          state.revision,
+          state.sequence,
           plan.action ?? undefined,
         );
         console.warn("[agent-auth] local state sync push failed", error);
@@ -222,7 +223,7 @@ export function useLocalAuthStateSync() {
       try {
         await invalidateAgentLaunchReadinessResources(runtimeUrl);
       } catch (error: unknown) {
-        recordAgentAuthFailure("launch_resource_refresh_failed", error, state.revision);
+        recordAgentAuthFailure("launch_resource_refresh_failed", error, state.sequence);
         console.warn("[agent-auth] local launch resource refresh failed", error);
       }
     });
@@ -245,7 +246,7 @@ function recordAgentAuthFailure(
     | "state_push_failed"
     | "launch_resource_refresh_failed",
   error: unknown,
-  revision: number,
+  sequence: number,
   action?: string,
 ): void {
   recordRendererDiagnostic({
@@ -254,7 +255,7 @@ function recordAgentAuthFailure(
     kind: "message",
     privacy: "operational",
     fields: {
-      revision: diagnosticField(revision, "operational"),
+      sequence: diagnosticField(sequence, "operational"),
       error_name: diagnosticField(safeRendererErrorName(error), "operational"),
       ...(action === undefined
         ? {}

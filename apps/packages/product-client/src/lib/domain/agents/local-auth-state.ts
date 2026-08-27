@@ -9,8 +9,8 @@ import type { AgentAuthStateDocument } from "@anyharness/sdk";
  *
  * A synchronization happens only when the rendered document differs from the
  * last successful operation. A document with no harnesses explicitly clears
- * the runtime state: native auth is an absence of route state, not a lower
- * revisioned replacement document.
+ * the runtime state: native auth is an absence of route state, not a
+ * lower-sequenced replacement document.
  */
 
 export interface LocalAuthStatePushPlan {
@@ -18,6 +18,12 @@ export interface LocalAuthStatePushPlan {
   fingerprint: string;
 }
 
+/**
+ * A LOCAL dedupe key over the whole fetched document — deliberately NOT the
+ * wire `fingerprint` rider (the server's sha256 of the canonical harnesses
+ * array, which is what the ack echoes). This one exists only so an unchanged
+ * refetch does not re-push, and it is never sent anywhere.
+ */
 export function localAuthStateFingerprint(state: AgentAuthState): string {
   return JSON.stringify(state, (_key, value: unknown) => {
     if (value !== null && typeof value === "object" && !Array.isArray(value)) {
@@ -70,7 +76,7 @@ export function planLocalAuthStatePush(input: {
   if (input.state.harnesses.length === 0) {
     return { action: "clear", fingerprint };
   }
-  if (input.state.revision <= 0) {
+  if (input.state.sequence <= 0) {
     return { action: null, fingerprint };
   }
   return { action: "apply", fingerprint };

@@ -102,7 +102,7 @@ describe("useLocalAuthStateSync", () => {
     // queue — no intermediate document is observable after a later one has
     // been scheduled behind it, and every completed push acks in order.
     let state = gatewayState();
-    const gatewayApplied = deferred<{ applied: boolean; revision: number }>();
+    const gatewayApplied = deferred<{ applied: boolean; sequence: number }>();
     const nativeCleared = deferred<void>();
     mocks.useAgentGatewayEnrollment.mockReturnValue({
       data: { syncStatus: "synced" },
@@ -111,7 +111,7 @@ describe("useLocalAuthStateSync", () => {
     mocks.useAgentAuthState.mockImplementation(() => ({ data: state }));
     mocks.applyAgentAuthState
       .mockImplementationOnce(() => gatewayApplied.promise)
-      .mockResolvedValueOnce({ applied: true, revision: 6 });
+      .mockResolvedValueOnce({ applied: true, sequence: 6 });
     mocks.clearAgentAuthState.mockImplementationOnce(() => nativeCleared.promise);
     mocks.ackAgentAuthState.mockResolvedValue({ surface: "local" });
     mocks.invalidateAgentLaunchReadinessResources.mockResolvedValue(undefined);
@@ -139,7 +139,7 @@ describe("useLocalAuthStateSync", () => {
     // No ack before the runtime confirms anything (Proof C1).
     expect(mocks.ackAgentAuthState).not.toHaveBeenCalled();
 
-    gatewayApplied.resolve({ applied: true, revision: 5 });
+    gatewayApplied.resolve({ applied: true, sequence: 5 });
     await waitFor(() => expect(mocks.clearAgentAuthState).toHaveBeenCalledTimes(1));
     expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(1);
     // The gateway push acked with the served document's identity.
@@ -147,7 +147,7 @@ describe("useLocalAuthStateSync", () => {
     expect(mocks.ackAgentAuthState).toHaveBeenNthCalledWith(
       1,
       "local",
-      { revision: 5, fingerprint: "fp-gateway-5" },
+      { sequence: 5, fingerprint: "fp-gateway-5" },
       expect.anything(),
     );
 
@@ -167,13 +167,13 @@ describe("useLocalAuthStateSync", () => {
     expect(mocks.ackAgentAuthState).toHaveBeenNthCalledWith(
       2,
       "local",
-      { revision: 0, fingerprint: "fp-native-0" },
+      { sequence: 0, fingerprint: "fp-native-0" },
       expect.anything(),
     );
     expect(mocks.ackAgentAuthState).toHaveBeenNthCalledWith(
       3,
       "local",
-      { revision: 6, fingerprint: "fp-api-6" },
+      { sequence: 6, fingerprint: "fp-api-6" },
       expect.anything(),
     );
   });
@@ -213,7 +213,7 @@ describe("useLocalAuthStateSync", () => {
       isError: false,
     });
     mocks.useAgentAuthState.mockImplementation(() => ({ data: state }));
-    mocks.applyAgentAuthState.mockResolvedValue({ applied: true, revision: 5 });
+    mocks.applyAgentAuthState.mockResolvedValue({ applied: true, sequence: 5 });
     mocks.ackAgentAuthState
       .mockRejectedValueOnce(new Error("ack endpoint blipped"))
       .mockResolvedValue({ surface: "local" });
@@ -238,7 +238,7 @@ describe("useLocalAuthStateSync", () => {
     expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(1);
     expect(mocks.ackAgentAuthState).toHaveBeenLastCalledWith(
       "local",
-      { revision: 5, fingerprint: "fp-gateway-5" },
+      { sequence: 5, fingerprint: "fp-gateway-5" },
       expect.anything(),
     );
 
@@ -257,7 +257,7 @@ describe("useLocalAuthStateSync", () => {
       isError: false,
     });
     mocks.useAgentAuthState.mockReturnValue({ data: gatewayState() });
-    mocks.applyAgentAuthState.mockResolvedValue({ applied: true, revision: 5 });
+    mocks.applyAgentAuthState.mockResolvedValue({ applied: true, sequence: 5 });
     mocks.ackAgentAuthState.mockResolvedValue({ surface: "local" });
     mocks.invalidateAgentLaunchReadinessResources.mockRejectedValue(
       new Error("resource refresh failed"),
@@ -276,7 +276,7 @@ describe("useLocalAuthStateSync", () => {
 
   it("invalidates the auth-state query when the enrollment reaches synced (Proof C5 hook half)", async () => {
     // A state pulled before enrollment sync lacks the key; the server bumps
-    // the surface revision on sync (C-1's server half) and this hook makes
+    // the surface sequence on sync (C-1's server half) and this hook makes
     // the re-pull happen NOW by invalidating the state query on the observed
     // pending→synced transition — no unrelated mutation needed.
     let enrollment: { data?: { syncStatus: string }; isError: boolean } = {
@@ -333,7 +333,7 @@ function stripFingerprint(state: AgentAuthState): Omit<AgentAuthState, "fingerpr
 function gatewayState(): AgentAuthState {
   return {
     version: 2,
-    revision: 5,
+    sequence: 5,
     user_id: "user-1",
     fingerprint: "fp-gateway-5",
     harnesses: [{
@@ -346,7 +346,7 @@ function gatewayState(): AgentAuthState {
 function nativeState(): AgentAuthState {
   return {
     version: 2,
-    revision: 0,
+    sequence: 0,
     user_id: "user-1",
     fingerprint: "fp-native-0",
     harnesses: [],
@@ -356,7 +356,7 @@ function nativeState(): AgentAuthState {
 function apiKeyState(): AgentAuthState {
   return {
     version: 2,
-    revision: 6,
+    sequence: 6,
     user_id: "user-1",
     fingerprint: "fp-api-6",
     harnesses: [{
