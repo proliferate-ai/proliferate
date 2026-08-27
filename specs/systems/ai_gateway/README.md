@@ -91,7 +91,7 @@ server/proliferate/
 │   ├── usage.py                                idempotent usage insert, cursor, cost projections
 │   └── records.py · mappers.py                 record types
 ├── integrations/litellm/                       vendor leaf: admin + spend-log client
-├── server/agent_auth/                          ⇒ server/ai_gateway/ (the code split)
+├── server/ai_gateway/
 │   ├── signup_hook.py                          after-commit enrollment scheduling
 │   ├── enrollment.py                           team/user/key provisioning, drift reopen, backfill
 │   ├── migration.py                            pre-org-only residue converger (first each tick)

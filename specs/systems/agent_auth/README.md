@@ -12,8 +12,8 @@ This spec reads as ground truth for the final system. Every difference from what
 
 | Leg | Code |
 | --- | --- |
-| server | `server/agent_auth/` (minus the ai_gateway files marked in §4) · the agent_auth tables in `db/models/agent_gateway.py` · `db/store/agent_gateway/` (minus gateway stores) · `constants/agent_gateway.py` |
-| runtime | `domains/agents/route_auth/` · `domains/agents/auth/` · `auth_state.rs` · `domains/agents/launch_probe/` · `status/` · `api/http/agent_auth.rs` — the four modules consolidate into `domains/agent_auth/` in Wave 3 |
+| server | `server/agent_auth/` · the agent_auth tables in `db/models/agent_gateway.py` · the agent_auth stores in `db/store/agent_gateway/` · `constants/agent_gateway.py` |
+| runtime | `domains/agent_auth/` — `route_auth/` · `auth/` · `launch_probe/` · `status/` — plus `api/http/agent_auth.rs` |
 | client | the courier files (`use-local-auth-state-sync.ts`, `local-auth-state.ts`, the sidecar origin line) · the settings auth panes and onboarding auth surfaces (consumers) |
 | data | `fixtures/contracts/agent-auth-state/` (the wire pin) · the generated SDK clients |
 
@@ -411,26 +411,22 @@ Full file tree (today's disk; `⇒` = ruled move, rides the build list):
 server/proliferate/
 ├── constants/agent_gateway.py            closed vocabularies, registry mirrors, STATE_VERSION
 ├── db/models/agent_gateway.py            the tables (per-table ownership; enrollment/usage/credit tables ⇒ ai_gateway)
-├── db/store/agent_gateway/
+├── db/store/agent_gateway/               the agent_auth stores (the gateway stores are ai_gateway's)
 │   ├── records.py · mappers.py           typed records; DesiredAuthSource
 │   ├── api_keys.py                       vault CRUD, encryption at rest, decrypt for render
 │   ├── selections.py                     full-desired-state put, the cross-table write gate, scope revision
 │   ├── delivery_acks.py                  only-forward ack stamp
 │   ├── harness_settings.py               settings rows
-│   ├── policy.py                         org policy + member route listing
-│   └── enrollments.py · enrollment_keys.py · credits.py · usage.py   ⇒ ai_gateway
+│   └── policy.py                         org policy + member route listing
 └── server/agent_auth/
     ├── MANIFEST.toml                     → this spec
-    ├── api.py                            /agent-auth + org policy routers (hosts /agent-gateway capabilities+enrollment ⇒ ai_gateway)
+    ├── api.py                            /agent-auth + org policy routers
     ├── models.py                         wire models incl. the state document + riders
     ├── selection_rules.py                THE legality validator
     ├── state_render.py                   THE renderer (full desired state + fingerprint)
     ├── service.py                        vault + selections + state + ack + org policy orchestration
     ├── harness_settings.py               toggle validation + upsert (not auth)
-    ├── seats.py                          seat lifecycle, usage probe, rotation state   (arrives with seats v1)
-    ├── budget.py                         launch-gating exhaustion predicate ⇒ ai_gateway (consumed at render)
-    └── enrollment.py · free_credits.py · migration.py · signup_hook.py
-        · topups.py · usage_import.py · verification.py · worker.py     ⇒ ai_gateway
+    └── seats.py                          seat lifecycle, usage probe, mint intake
 
 fixtures/contracts/agent-auth-state/      the Python↔Rust wire pin
 cloud/sdk/src/client/agent-gateway.ts     generated CP client (+ sdk-react hooks)
@@ -494,7 +490,7 @@ Full file tree (today inside `domains/agents/`; `⇒ domains/agent_auth/` is the
 ```text
 anyharness/crates/anyharness-lib/src/
 ├── api/http/agent_auth.rs                PUT/DELETE /v1/agent-auth/state; both poke AuthApplied
-├── domains/agents/                       ⇒ domains/agent_auth/ (Wave 3)
+├── domains/agent_auth/
 │   ├── route_auth/
 │   │   ├── state.rs                      wire contract, tolerant read, sequence guard
 │   │   ├── profile.rs                    sources[] → typed profile (pure)
@@ -513,7 +509,6 @@ anyharness/crates/anyharness-lib/src/
 │   │   ├── launch_facts.rs               what the launcher is told
 │   │   ├── context.rs                    auth context assembly
 │   │   └── credential_ladder_tests.rs · credentials_tests.rs · launch_facts_provider_config_tests.rs
-│   ├── auth_state.rs                     evidence-based display derivation → absorbed by status/
 │   ├── launch_probe/
 │   │   ├── mod.rs                        reconciler: single-flight, pokes, the brakes
 │   │   ├── attempt.rs · probe.rs         one admitted attempt; the probe itself
@@ -522,11 +517,11 @@ anyharness/crates/anyharness-lib/src/
 │   │   ├── live_state.rs · lock.rs       slot + one-engine-per-home lock
 │   │   ├── config.rs
 │   │   └── contradiction_tests.rs · runner_tests.rs · test_support.rs
-│   └── status/                           the status document store   (arrives with the status module)
+│   └── status/                           the status document store (absorbs the evidence-based display derivation)
 └── consumers (not owned — the launch path and the readiness seam):
     domains/sessions/service/create.rs · domains/sessions/runtime/startup.rs
     · live/sessions/driver/process.rs (applies facts LAST)
-    · domains/agents/readiness/service.rs (apply_launch_route_upgrade, the one seam)
+    · the harnesses readiness seam (apply_launch_route_upgrade, the one seam)
 
 anyharness/sdk/src/client/agent-auth.ts   runtime state-push client
 ```
@@ -650,7 +645,6 @@ apps/packages/product-client/src/
 ├── components/home/screen/HomeOnboardingCards.tsx · HomeOnboardingEvidenceCard.tsx
 ├── lib/access/anyharness/agent-auth.ts           client edge of the runtime's local API
 ├── lib/domain/settings/harness-auth-sources.ts · provider-config-fields.ts
-├── lib/domain/settings/agent-auth-evidence.ts    ⇒ deleted (the client derives nothing)
 └── copy/settings/agent-auth-copy.ts              all the words (the plain-words surface)
 ```
 
@@ -694,7 +688,8 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 | `status/` is the single machine truth; the frontend derives nothing | `agent-auth-evidence.ts` re-derives state client-side; `auth_state.rs` ships beside the legacy ladder | The status module absorbs the derivation; the evidence file is deleted |
 | `seat_usage_sample` + the usage probe + meters | — | New |
 | ai_gateway is its own folder and spec | Gateway code co-resident in `server/agent_auth/` and `db/store/agent_gateway/`; its spec was `model-gateway.md` in this folder | Spec moved to [ai_gateway](../ai_gateway/README.md) (this PR); the code split rides the build list |
-| The runtime cell lives in `domains/agent_auth/` | Its four modules sit inside `domains/agents/` | Wave-3 move |
+| The runtime cell lives in `domains/agent_auth/` | `route_auth/`, `auth/`, `auth_state.rs`, `launch_probe/` sit inside `domains/agents/`; no `status/` module exists (`auth_state.rs` carries the derivation) | Wave-3 move + the status module |
+| `server/agent_auth/` holds only agent_auth files; `seats.py` exists | Nine ai_gateway files co-resident (api.py also hosts the /agent-gateway routes; budget.py consumed at render); no seats.py | The ai_gateway code split + seats v1 |
 | Seat minting works end to end | `claude setup-token` proven by hand (2026-08-26): headless and interactive launch on a fresh dir; usage headers confirmed on a plain 1-token request | Build the capture + upload path |
 | Grok authenticates, or doesn't offer login | The registry declares `grok login` AND a managed install — but the managed artifact is the ACP sidecar (`grok-launcher`), grok has no native artifact, and login resolution searches native → managed `grok` → PATH, so every rung misses | Ship the vendor `grok` CLI in the managed install (or teach login resolution the launcher name), or drop the login declaration |
 | The headless ladder exists | Selections are per-user only; org policy only restricts | Creator-credentials at v1; org default when the first team org lands (ruled 2026-08-26) |
