@@ -418,9 +418,24 @@ async def build_agent_auth_state(
     Both passes render identical content (the sequence rides the envelope,
     outside the fingerprint), so a no-op render returns the same (sequence,
     fingerprint) pair it returned last time.
+
+    WRITES. Rendering is not a read: the bump below is an upsert, so every
+    caller of this function — including ``GET /state`` and ``GET /selections``,
+    which look like plain reads — must run on a session that COMMITS and on a
+    writable primary. ``get_async_session`` commits on every happy path
+    (``db/engine.py``), which is the only reason those two GETs are correct
+    today. If a caller ever stops committing (a read replica, a
+    "GETs don't commit" refactor), the served sequence and the persisted
+    counter desynchronise and ``ack_auth_state_delivery`` starts rejecting
+    every legitimate ack as "from the future" (``service.py``). The coupling is
+    pinned by
+    ``tests/integration/test_agent_auth_sequence_governance.py::
+    test_get_state_commits_the_bumped_sequence_for_an_independent_session``.
     """
     inputs = await load_state_inputs(db, user_id=user_id, surface=surface)
     _, fingerprint = render_agent_auth_state(inputs)
+    # The write. See the WRITES paragraph above before moving this behind a
+    # read-only session, a replica, or a cache.
     sequence = await agent_gateway_store.bump_render_sequence_if_changed(
         db,
         user_id=user_id,

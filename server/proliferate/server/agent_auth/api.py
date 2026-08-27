@@ -189,6 +189,10 @@ async def list_agent_auth_selections_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> list[AgentAuthSelectionResponse]:
+    # A WRITE endpoint despite the GET: annotating `applied` re-renders each
+    # surface and a render bumps the persisted sequence. Correct only because
+    # `get_async_session` commits — read `build_agent_auth_state`'s "WRITES"
+    # paragraph before putting this route on a replica or a read-only session.
     records = await service.list_auth_selections(db, user_id=user.id, surface=surface)
     titles = await service.key_titles(db, user_id=user.id)
     applied = await service.annotate_selection_delivery(db, user_id=user.id, records=records)
@@ -270,6 +274,9 @@ async def get_agent_auth_state_endpoint(
     materializer writes into the user's own sandbox. Nothing crosses a user
     boundary.
     """
+    # A WRITE endpoint despite the GET: the `sequence` served below IS the
+    # persisted counter's new value, and only `get_async_session`'s commit makes
+    # that true. Read `build_agent_auth_state`'s "WRITES" paragraph first.
     state, fingerprint, settings_by_harness = await service.get_auth_state(
         db, user_id=user.id, surface=surface
     )
