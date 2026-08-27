@@ -36,8 +36,10 @@ permissions:
   id-token: write
 
 concurrency:
-  # One staging deploy at a time, and never cancel one mid-roll.
-  group: deploy-staging-${{ github.repository }}
+  # One staging deploy at a time, and never cancel one mid-roll. Events that
+  # cannot deploy (a red CI, or a non-push trigger) get their own group so they
+  # never contend for — or cancel — a pending real deploy.
+  group: deploy-staging-${{ github.repository }}-${{ (github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion != 'success' || github.event.workflow_run.event != 'push')) && github.run_id || 'main' }}
   cancel-in-progress: false
 
 env:
@@ -45,9 +47,12 @@ env:
 
 jobs:
   plan:
-    # Auto runs deploy only what CI proved: a workflow_run event that is not a
-    # success plans nothing (every downstream job needs plan's success).
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    # Auto runs deploy only what CI proved ON MAIN IN THIS REPOSITORY: the
+    # workflow_run `branches:` filter matches the triggering run's head branch,
+    # which a fork PR can name `main`, so a success from any event other than a
+    # push to this repo's main plans nothing (every downstream job needs plan's
+    # success). This is the trust boundary; never relax it.
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) }}
     runs-on: ubuntu-latest
     outputs:
       base_sha: ${{ steps.detect.outputs.base_sha }}
