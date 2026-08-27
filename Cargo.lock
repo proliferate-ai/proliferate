@@ -4243,7 +4243,7 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.4.26"
+version = "0.4.27"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4370,6 +4370,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "file-rotate",
  "proliferate-runtime-update-protocol",
  "reqwest 0.12.28",
  "sentry",
@@ -4382,6 +4383,7 @@ dependencies = [
  "tokio",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
+ "tracing-appender",
  "tracing-subscriber",
 ]
 
@@ -4392,6 +4394,7 @@ dependencies = [
  "anyhow",
  "clap",
  "dirs",
+ "file-rotate",
  "fs2",
  "proliferate-diagnostics-client",
  "proliferate-diagnostics-protocol",
@@ -4408,6 +4411,7 @@ dependencies = [
  "tokio",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
+ "tracing-appender",
  "tracing-subscriber",
 ]
 
@@ -6881,6 +6885,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-serde"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "704b1aeb7be0d0a84fc9828cae51dab5970fee5088f83d1dd7ee6f6246fc6ff1"
+dependencies = [
+ "serde",
+ "tracing-core",
+]
+
+[[package]]
 name = "tracing-subscriber"
 version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6890,12 +6904,15 @@ dependencies = [
  "nu-ansi-term",
  "once_cell",
  "regex-automata",
+ "serde",
+ "serde_json",
  "sharded-slab",
  "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
  "tracing-log",
+ "tracing-serde",
 ]
 
 [[package]]

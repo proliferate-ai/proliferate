@@ -4,9 +4,8 @@ use anyharness_lib::{
     app::default_runtime_home,
     observability::{
         AGENT_STDERR_TRACING_TARGET, PRODUCT_MCP_AUTH_REJECTED_TRACING_TARGET,
-        RUNTIME_INCIDENT_TRACING_TARGET,
-        WORKFLOW_BOOT_FENCE_TRACING_TARGET, WORKFLOW_INTERJECTION_HELD_TRACING_TARGET,
-        WORKFLOW_INVARIANT_VIOLATION_TRACING_TARGET,
+        RUNTIME_INCIDENT_TRACING_TARGET, WORKFLOW_BOOT_FENCE_TRACING_TARGET,
+        WORKFLOW_INTERJECTION_HELD_TRACING_TARGET, WORKFLOW_INVARIANT_VIOLATION_TRACING_TARGET,
         WORKFLOW_NODE_INTERACTION_REQUESTED_TRACING_TARGET,
         WORKFLOW_NODE_INTERACTION_RESOLVED_TRACING_TARGET, WORKFLOW_NODE_LAUNCHED_TRACING_TARGET,
         WORKFLOW_NODE_LAUNCH_FAILED_TRACING_TARGET, WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET,
@@ -34,7 +33,10 @@ use crate::{
     file_logging::create_file_log_sink,
 };
 
+mod log_format;
 mod scrub;
+
+use log_format::{log_format_from_env, LogFormat};
 
 const ANYHARNESS_TELEMETRY_MODE: &str = "hosted_product";
 const ANYHARNESS_RECORD_NAME_PREFIX: &str = "anyharness.";
@@ -308,7 +310,19 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
             }
         });
 
-    let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
+    // One format decision per process, applied to every fmt sink: JSON when a
+    // machine is the reader (cloud runtime env), human text locally.
+    let log_format = log_format_from_env();
+    let console_layer: Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync> = match log_format
+    {
+        LogFormat::Json => tracing_subscriber::fmt::layer()
+            .json()
+            .with_filter(env_filter_from_env())
+            .boxed(),
+        LogFormat::Text => tracing_subscriber::fmt::layer()
+            .with_filter(env_filter_from_env())
+            .boxed(),
+    };
 
     let (diagnostics_layer, diagnostics) = match installation {
         Some(installation) => {
@@ -333,10 +347,20 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
         .with(sentry_tracing::layer().event_mapper(sentry_event_mapper))
         .with(diagnostics_layer)
         .with(file_sink.as_ref().map(|sink| {
-            tracing_subscriber::fmt::layer()
-                .with_ansi(false)
-                .with_writer(sink.writer.clone())
-                .with_filter(env_filter_from_env())
+            let layer: Box<dyn Layer<_> + Send + Sync> = match log_format {
+                LogFormat::Json => tracing_subscriber::fmt::layer()
+                    .json()
+                    .with_ansi(false)
+                    .with_writer(sink.writer.clone())
+                    .with_filter(env_filter_from_env())
+                    .boxed(),
+                LogFormat::Text => tracing_subscriber::fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(sink.writer.clone())
+                    .with_filter(env_filter_from_env())
+                    .boxed(),
+            };
+            layer
         }))
         .init();
 

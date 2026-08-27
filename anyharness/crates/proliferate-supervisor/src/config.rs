@@ -91,10 +91,8 @@ fn default_update_poll_interval_seconds() -> u64 {
     15
 }
 
-fn supervisor_state_dir() -> PathBuf {
-    dirs_fallback_home()
-        .join(".proliferate")
-        .join("supervisor")
+pub(crate) fn supervisor_state_dir() -> PathBuf {
+    dirs_fallback_home().join(".proliferate").join("supervisor")
 }
 
 impl SupervisorConfig {
