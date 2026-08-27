@@ -11,7 +11,7 @@ use super::test_support::{
     gateway_state, wait_until, CountingPlanProducer, FakeBehavior, FakeRunner, FixedTargets,
     TempRuntimeHome,
 };
-use super::{LaunchProbeService, PokeReason, ProbeEngineConfig};
+use super::{LaunchProbeService, PokeReason, ProbeEngineConfig, ProbePhase};
 use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
 use crate::domains::agents::status::{AgentStatusService, ProbeVerdict};
 use crate::persistence::Db;
@@ -119,11 +119,30 @@ async fn adversarial_concurrent_pokes_can_wedge_the_document_stale() {
     poker.await.expect("poker");
 
     // Settle: nothing is left in flight, and every attempt that ran succeeded.
+    //
+    // A quiet RUNNER is not a quiescent engine, and the difference is the whole
+    // point of this test: 3_000 pokes produce a few hundred attempts, and every
+    // coalescing poke is ADMITTED — holding the document's stale mark, exactly as
+    // the spec requires — without ever reaching the runner. Under load that
+    // backlog can take longer than one polling window to drain the single-flight
+    // gate, so waiting on the count alone asserts "quiescent" while attempts are
+    // genuinely still admitted. (Diagnosed, not guessed: with every probe
+    // succeeding, `restore` is false, so any release that HAS run writes
+    // `stale = false`; a settled `stale = true` therefore means an admitted
+    // attempt had not let go yet.) The slot's live phase is the engine's own
+    // answer to "is anything admitted", and it is the very counter the document's
+    // mark mirrors — so quiescence is `Idle` there, and the document must agree.
     let mut settled = runner.count();
     loop {
         tokio::time::sleep(Duration::from_millis(300)).await;
         let now = runner.count();
-        if now == settled {
+        let idle = matches!(
+            engine
+                .live_probe_phase("opencode", chrono::Utc::now())
+                .phase(),
+            Some(ProbePhase::Idle)
+        );
+        if now == settled && idle {
             break;
         }
         settled = now;
