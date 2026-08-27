@@ -322,11 +322,23 @@ pub async fn close_agent_login_terminal(
         PokeReason::LoginTerminal,
     );
     // A closed login terminal may have changed the harness's native world —
-    // the status document's detection row re-reads it now.
-    state.agent_status_service.refresh(
-        &terminal.kind,
-        crate::domains::agents::status::RefreshCause::LoginTerminal,
-    );
+    // the status document's detection row re-reads it now. The recomposition
+    // reads state.json, runs native detection over the real $HOME and touches
+    // sqlite behind the shared connection mutex, so it runs on the blocking
+    // pool (same as the install handler and the status doors). Awaited before
+    // the response: the 204 keeps meaning "the document already reflects this
+    // close", exactly as the previous inline call did.
+    let status_service = state.agent_status_service.clone();
+    let refreshed = terminal.kind.clone();
+    super::blocking::run_blocking("agent login-terminal status refresh", move || {
+        status_service.refresh(
+            &refreshed,
+            crate::domains::agents::status::RefreshCause::LoginTerminal,
+        );
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await?
+    .ok();
     Ok(StatusCode::NO_CONTENT)
 }
 
