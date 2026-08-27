@@ -74,7 +74,7 @@ export function ApiKeysPane() {
 
   function handleCreate(input: ApiKeyCreatorSubmit) {
     createKey.mutate(
-      { title: input.title, value: input.value },
+      { title: input.title, value: input.value, kind: "api_key" },
       {
         onSuccess: (created) => {
           setAddOpen(false);

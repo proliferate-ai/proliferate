@@ -17,7 +17,7 @@ export type NativeBridgeResponse = components["schemas"]["NativeBridgeResponse"]
  * rather than in the generated OpenAPI surface.
  */
 export interface AgentAuthStateSource {
-  kind: "gateway" | "api_key" | "provider_config";
+  kind: "gateway" | "api_key" | "provider_config" | "seat";
   base_url?: string | null;
   key?: string | null;
   env_var_name?: string | null;
@@ -30,7 +30,10 @@ export interface AgentAuthStateSource {
    * `kind`) to mirror the server's wire vocabulary.
    */
   config_kind?: "aws_bedrock" | "azure_openai" | null;
+  /** `provider_config` and `seat`: the harness's already-resolved env map. */
   env?: Record<string, string> | null;
+  /** `seat` sources only (seats v1): the vault entry id, never key material. */
+  seat_id?: string | null;
 }
 
 /** One harness's enabled sources in the state.json v2 document. */

@@ -388,3 +388,171 @@ class TestTypedProviderConfigWriteGate:
                 sources=[_typed(bedrock_id), _typed(bedrock_id)],
                 supported_provider_config_kinds=("aws_bedrock", "azure_openai"),
             )
+
+
+def _seat(
+    *,
+    api_key_id: uuid.UUID | None = None,
+    env_var_name: str | None = None,
+    enabled: bool = True,
+) -> DesiredAuthSource:
+    return DesiredAuthSource(
+        source_kind="seat",
+        api_key_id=api_key_id,
+        env_var_name=env_var_name,
+        enabled=enabled,
+    )
+
+
+class TestSeatSelectionWriteGate:
+    """Seats v1: the cross-table shape law for `seat` rows (spec §2).
+
+    A seat row references an `anthropic_subscription` vault entry or NULL
+    (NULL = "use my seat pool"); env_var_name is forbidden — the seat recipe
+    owns its env mapping. The referenced-entry kind check spans tables, so it
+    lives here in the store write gate, not in SQL.
+    """
+
+    @pytest.mark.asyncio
+    async def test_put_accepts_the_pool_seat_row(self, db_session: AsyncSession) -> None:
+        user_id = await _create_user(db_session)
+        rows = await store.put_auth_selections(
+            db_session,
+            user_id=user_id,
+            harness_kind="claude",
+            surface="local",
+            sources=[_seat()],
+        )
+        seat_rows = [r for r in rows if r.source_kind == "seat"]
+        assert len(seat_rows) == 1
+        assert seat_rows[0].api_key_id is None
+        assert seat_rows[0].env_var_name is None
+        assert seat_rows[0].enabled is True
+
+    @pytest.mark.asyncio
+    async def test_put_accepts_a_pin_of_an_active_seat_entry(
+        self, db_session: AsyncSession
+    ) -> None:
+        user_id = await _create_user(db_session)
+        seat = await store.create_agent_seat(
+            db_session,
+            user_id=user_id,
+            title="Max seat · ops@acme.com",
+            value="sk-ant-oat01-tokentokentokentokentokentokentokenAA",
+        )
+        rows = await store.put_auth_selections(
+            db_session,
+            user_id=user_id,
+            harness_kind="claude",
+            surface="local",
+            sources=[_seat(api_key_id=seat.id)],
+        )
+        seat_rows = [r for r in rows if r.source_kind == "seat"]
+        assert [r.api_key_id for r in seat_rows] == [seat.id]
+
+    @pytest.mark.asyncio
+    async def test_put_rejects_a_seat_pinning_a_bare_key_entry(
+        self, db_session: AsyncSession
+    ) -> None:
+        user_id = await _create_user(db_session)
+        bare = await store.create_agent_api_key(
+            db_session, user_id=user_id, title="Bare", value="sk-ant-bare1234"
+        )
+        with pytest.raises(ValueError, match="must pin an anthropic_subscription"):
+            await store.put_auth_selections(
+                db_session,
+                user_id=user_id,
+                harness_kind="claude",
+                surface="local",
+                sources=[_seat(api_key_id=bare.id)],
+            )
+
+    @pytest.mark.asyncio
+    async def test_put_rejects_a_seat_pinning_a_revoked_seat(
+        self, db_session: AsyncSession
+    ) -> None:
+        user_id = await _create_user(db_session)
+        seat = await store.create_agent_seat(
+            db_session,
+            user_id=user_id,
+            title="Max seat 1",
+            value="sk-ant-oat01-tokentokentokentokentokentokentokenBB",
+        )
+        await store.revoke_agent_api_key(db_session, user_id=user_id, api_key_id=seat.id)
+        with pytest.raises(selections_store.AgentApiKeyNotUsableError):
+            await store.put_auth_selections(
+                db_session,
+                user_id=user_id,
+                harness_kind="claude",
+                surface="local",
+                sources=[_seat(api_key_id=seat.id)],
+            )
+
+    @pytest.mark.asyncio
+    async def test_put_rejects_an_api_key_row_referencing_a_seat_entry(
+        self, db_session: AsyncSession
+    ) -> None:
+        # The reverse hole: a seat token must never ride a free-form env var.
+        user_id = await _create_user(db_session)
+        seat = await store.create_agent_seat(
+            db_session,
+            user_id=user_id,
+            title="Max seat 1",
+            value="sk-ant-oat01-tokentokentokentokentokentokentokenCC",
+        )
+        with pytest.raises(ValueError, match="wire a seat row instead"):
+            await store.put_auth_selections(
+                db_session,
+                user_id=user_id,
+                harness_kind="claude",
+                surface="local",
+                sources=[_api_key(seat.id, env_var_name="CLAUDE_CODE_OAUTH_TOKEN")],
+            )
+
+    @pytest.mark.asyncio
+    async def test_put_rejects_a_seat_row_naming_an_env_var(
+        self, db_session: AsyncSession
+    ) -> None:
+        user_id = await _create_user(db_session)
+        with pytest.raises(ValueError, match="must not carry an env_var_name"):
+            await store.put_auth_selections(
+                db_session,
+                user_id=user_id,
+                harness_kind="claude",
+                surface="local",
+                sources=[_seat(env_var_name="CLAUDE_CODE_OAUTH_TOKEN")],
+            )
+
+    @pytest.mark.asyncio
+    async def test_pool_and_pin_are_distinct_rows_and_replace_cleanly(
+        self, db_session: AsyncSession
+    ) -> None:
+        # Seat identity within a scope is the referenced entry: the pool row
+        # is (seat, None, None) and a pin is (seat, None, <entry id>), so a
+        # full-desired-state swap between them deletes one and inserts the
+        # other rather than colliding.
+        user_id = await _create_user(db_session)
+        seat = await store.create_agent_seat(
+            db_session,
+            user_id=user_id,
+            title="Max seat 1",
+            value="sk-ant-oat01-tokentokentokentokentokentokentokenDD",
+        )
+        first = await store.put_auth_selections(
+            db_session,
+            user_id=user_id,
+            harness_kind="claude",
+            surface="local",
+            sources=[_seat()],
+        )
+        pool_id = next(r.id for r in first if r.source_kind == "seat")
+        second = await store.put_auth_selections(
+            db_session,
+            user_id=user_id,
+            harness_kind="claude",
+            surface="local",
+            sources=[_seat(api_key_id=seat.id)],
+        )
+        seat_rows = [r for r in second if r.source_kind == "seat"]
+        assert [r.api_key_id for r in seat_rows] == [seat.id]
+        assert seat_rows[0].id != pool_id

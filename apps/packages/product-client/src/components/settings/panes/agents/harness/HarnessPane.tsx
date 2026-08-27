@@ -17,6 +17,7 @@ import { isMultiSourceHarness } from "#product/lib/domain/settings/harness-auth-
 import { HarnessAllModelsSection } from "#product/components/settings/panes/agents/harness/HarnessAllModelsSection";
 import { ApiKeyDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthApiKeyDetails";
 import { CliDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthCliDetails";
+import { SeatDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthSeatDetails";
 import {
   HarnessAuthSection,
   deriveSelectedMethod,
@@ -313,6 +314,8 @@ function HarnessAuthSurface({
               failure shows on the disabled card + header badge. */}
           {selectedMethod === "api_key" ? (
             <ApiKeyDetails harnessKind={harnessKind} editor={editor} />
+          ) : selectedMethod === "seat" ? (
+            <SeatDetails editor={editor} />
           ) : selectedMethod === "cli" ? (
             <CliDetails editor={editor} />
           ) : null}

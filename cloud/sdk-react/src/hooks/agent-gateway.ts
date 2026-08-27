@@ -77,6 +77,30 @@ export function useCreateAgentApiKey() {
   });
 }
 
+/**
+ * The mint flow's vault upload (seats v1, `uploadSeatToken`'s POST): one
+ * `POST /keys` with `kind: "anthropic_subscription"` carrying the captured
+ * token — held in memory only, never retried silently (react-query mutations
+ * do not retry by default; a failure surfaces to the mint flow, which tells
+ * the user to re-run the mint). Unlike the bare-key create, a seat mint
+ * changes the rendered auth state (the pool grows), so the state and
+ * selections roots invalidate too — that re-pull is what hands the new seat
+ * to the courier's delivery loop.
+ */
+export function useMintAgentSeat() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<AgentApiKey, Error, CreateAgentApiKeyRequest>({
+    mutationFn: (input) =>
+      createAgentApiKey({ ...input, kind: "anthropic_subscription" }, client),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: agentApiKeysKey() });
+      void queryClient.invalidateQueries({ queryKey: agentAuthSelectionsRootKey() });
+      void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
+    },
+  });
+}
+
 export function useRevokeAgentApiKey() {
   const client = useCloudClient();
   const queryClient = useQueryClient();

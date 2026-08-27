@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type {
+  AgentLoginVariant,
   HarnessLaunchOptionsResponse,
   InstallAgentRequest,
   ReconcileAgentsResponse,
@@ -284,9 +285,29 @@ export function useStartAgentLoginTerminalMutation() {
   const runtime = useAnyHarnessRuntimeContext();
 
   return useMutation({
-    mutationFn: async (kind: string) => {
+    mutationFn: async (
+      input: string | { kind: string; variant?: AgentLoginVariant },
+    ) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.agents.startLoginTerminal(kind);
+      const { kind, variant } =
+        typeof input === "string" ? { kind: input, variant: undefined } : input;
+      return client.agents.startLoginTerminal(kind, variant);
+    },
+  });
+}
+
+/**
+ * The one-time seat-token handoff (seats v1): the runtime serves the captured
+ * mint token exactly once and wipes its buffer. Callers keep the token in
+ * memory only and POST it straight to the vault — never persisted client-side.
+ */
+export function useClaimAgentMintTokenMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+
+  return useMutation({
+    mutationFn: async (terminalId: string) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.agents.claimMintToken(terminalId);
     },
   });
 }

@@ -44,6 +44,10 @@ pub fn build_router(state: AppState) -> Router {
             get(agents::get_agent_login_terminal).delete(agents::close_agent_login_terminal),
         )
         .route(
+            "/agents/login-terminals/{terminal_id}/mint-token",
+            post(agents::claim_agent_login_terminal_mint_token),
+        )
+        .route(
             "/agents/login-terminals/{terminal_id}/ws",
             get(ws_agent_login_terminals::agent_login_terminal_ws),
         )

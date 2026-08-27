@@ -2,9 +2,10 @@
 //! ride `?` through agents_errors.rs, wire mapping lives in agents_contract.rs.
 
 use anyharness_contract::v1::{
-    AgentLoginTerminalRecord, AgentSummary, InstallAgentRequest, InstallAgentResponse,
-    LoginCommand, ProblemDetails, ReconcileAgentsRequest, ReconcileAgentsResponse,
-    StartAgentLoginRequest, StartAgentLoginResponse, StartAgentLoginTerminalResponse,
+    AgentLoginTerminalRecord, AgentLoginVariant, AgentSummary, ClaimAgentMintTokenResponse,
+    InstallAgentRequest, InstallAgentResponse, LoginCommand, ProblemDetails,
+    ReconcileAgentsRequest, ReconcileAgentsResponse, StartAgentLoginRequest,
+    StartAgentLoginResponse, StartAgentLoginTerminalResponse,
 };
 use axum::{
     extract::{Path, State},
@@ -21,7 +22,7 @@ use crate::app::AppState;
 use crate::domains::agents::auth::login_terminal::{
     close_agent_login_terminal as close_agent_login_terminal_session,
     get_agent_login_terminal as get_agent_login_terminal_session,
-    start_agent_login_terminal_session,
+    start_agent_login_terminal_session, AgentLoginVariant as DomainLoginVariant, MintClaimError,
 };
 use crate::domains::agents::auth_state::AuthRuntimeInputs;
 use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
@@ -188,11 +189,20 @@ pub async fn start_agent_login(
 pub async fn start_agent_login_terminal(
     State(state): State<AppState>,
     Path(kind): Path<String>,
-    Json(_req): Json<StartAgentLoginRequest>,
+    Json(req): Json<StartAgentLoginRequest>,
 ) -> Result<Json<StartAgentLoginTerminalResponse>, ApiError> {
+    // The variant parameter (seats v1): `mint_seat` runs the seat-minting flow
+    // — `claude setup-token` in an isolated dir with the in-memory capture
+    // attached, single-flight per harness (a second mint returns — i.e.
+    // focuses — the open terminal). Absent means the native login, unchanged.
+    let variant = match req.variant.unwrap_or_default() {
+        AgentLoginVariant::Native => DomainLoginVariant::Native,
+        AgentLoginVariant::MintSeat => DomainLoginVariant::MintSeat,
+    };
     let login = start_agent_login_terminal_session(
         &state.agent_runtime,
         &kind,
+        variant,
         &state.agent_login_terminal_service,
     )
     .await?;
@@ -202,6 +212,68 @@ pub async fn start_agent_login_terminal(
         message: login.message,
         agent_login_terminal: agent_login_terminal_to_contract(login.terminal),
     }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/agents/login-terminals/{terminal_id}/mint-token",
+    params(("terminal_id" = String, Path, description = "Agent login terminal ID")),
+    responses(
+        (status = 200, description = "The captured seat token, exactly once", body = ClaimAgentMintTokenResponse),
+        (status = 404, description = "Not a mint terminal, or not found", body = ProblemDetails),
+        (status = 409, description = "Capture not complete (or already consumed)", body = ProblemDetails),
+    ),
+    tag = "agents"
+)]
+pub async fn claim_agent_login_terminal_mint_token(
+    State(state): State<AppState>,
+    Path(terminal_id): Path<String>,
+) -> Result<Json<ClaimAgentMintTokenResponse>, ApiError> {
+    // The mint handoff (agent_auth spec §3 flow 2): the courier collects the
+    // captured token in one read; serving it wipes the runtime's buffer, so
+    // this response body is the only copy in flight. Never logged.
+    match state
+        .agent_login_terminal_service
+        .claim_mint_token(&terminal_id)
+        .await
+    {
+        Ok(token) => {
+            // Mint completion is the seat trial's ONE trigger (founder ruling
+            // 2026-08-27): fire-and-forget a credential-scoped one-token
+            // `/v1/messages` call so the seat's evidence is real. Gated on the
+            // automatic-engine handle — the same "may this site fire on its
+            // own?" answer that suppresses automatic pokes under `cfg(test)` —
+            // because this is an outbound call nobody asked this request for.
+            // The response never waits on it, and the trial owns (and scrubs)
+            // its own copy of the token.
+            if let Some(engine) = &state.automatic_poke_engine {
+                if let Some(record) = state
+                    .agent_login_terminal_service
+                    .get_terminal(&terminal_id)
+                    .await
+                {
+                    let ledger = engine.seat_trials();
+                    let trial_token = token.clone();
+                    tokio::spawn(async move {
+                        ledger.run_trial(&record.kind, trial_token).await;
+                    });
+                }
+            }
+            Ok(Json(ClaimAgentMintTokenResponse { token }))
+        }
+        Err(MintClaimError::NotFound) => Err(ApiError::not_found(
+            "Agent mint terminal not found",
+            "AGENT_MINT_TERMINAL_NOT_FOUND",
+        )),
+        Err(MintClaimError::NotReady(status)) => Err(ApiError::new(
+            axum::http::StatusCode::CONFLICT,
+            "Mint capture not claimable",
+            Some(format!(
+                "The seat capture is not claimable right now (state: {status:?})."
+            )),
+            Some("AGENT_MINT_TOKEN_NOT_READY"),
+        )),
+    }
 }
 
 #[utoipa::path(

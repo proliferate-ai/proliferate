@@ -75,11 +75,16 @@ export interface HarnessAuthEditorApi {
   harnessDisallowed: boolean;
   gatewayDisallowed: boolean;
   apiKeyDisallowed: boolean;
+  seatDisallowed: boolean;
   nativeDisallowed: boolean;
   multiSource: boolean;
   busy: boolean;
   editorState: HarnessAuthEditorState;
   native: boolean;
+  // Seats v1: the vault holds at least one active seat (anthropic_subscription
+  // entry). Gates the seat card's ability to COMMIT the pool selection — with
+  // zero seats an enabled pool row would fail every launch closed.
+  hasSeats: boolean;
   // Single-source radio: the method the user last clicked that has no wired
   // source yet (e.g. "api_key" before a key is chosen, or "cli"). Cleared once a
   // real source becomes enabled and reset per (harness, surface) scope.
@@ -99,6 +104,7 @@ export interface HarnessAuthEditorApi {
   // Handlers
   commit: (next: HarnessAuthEditorState, callbacks?: CommitCallbacks) => void;
   handleGatewayToggle: (next: boolean) => void;
+  handleSeatToggle: (next: boolean, callbacks?: CommitCallbacks) => void;
   handleRowEnabledToggle: (uid: string, next: boolean) => void;
   handleRowKeySelect: (uid: string, keyId: string) => void;
   handleRowEnvVarChange: (uid: string, envVarName: string) => void;
@@ -155,6 +161,7 @@ export function useHarnessAuthEditor(
   // every edit PUTs the full desired source list (contract §5). We never reseed
   // from a later refetch of the same scope, so a PUT never clobbers the draft.
   const [gatewayEnabled, setGatewayEnabled] = useState(false);
+  const [seatEnabled, setSeatEnabled] = useState(false);
   const [rows, setRows] = useState<EditableApiKeyRow[]>([]);
   const [pendingMethod, setPendingMethod] = useState<AuthMethod | null>(null);
   const [addKeyModalOpen, setAddKeyModalOpen] = useState(false);
@@ -172,6 +179,7 @@ export function useHarnessAuthEditor(
     seededScopeRef.current = scopeKey;
     const derived = deriveEditorState(selections, harnessKind, surface);
     setGatewayEnabled(derived.gatewayEnabled);
+    setSeatEnabled(derived.seatEnabled);
     setRows(derived.rows);
     // A fresh scope starts with no pending selection — the derived state alone
     // drives the radio until the user clicks a method.
@@ -223,8 +231,11 @@ export function useHarnessAuthEditor(
     || (enrollment !== undefined && enrollment.syncStatus !== "synced");
   const multiSource = isMultiSourceHarness(harnessKind);
   const busy = putSelections.isPending;
-  const editorState: HarnessAuthEditorState = { gatewayEnabled, rows };
+  const editorState: HarnessAuthEditorState = { gatewayEnabled, seatEnabled, rows };
   const native = isNativeState(editorState);
+  const hasSeats = (apiKeysQuery.data ?? []).some(
+    (key) => key.kind === "anthropic_subscription" && key.status === "active",
+  );
 
   // Policy-driven disabling. null lists == no restriction; a route/harness
   // absent from a non-null list is disallowed by the org. Native is checked
@@ -239,14 +250,17 @@ export function useHarnessAuthEditor(
     harnessDisallowed || (allowedRoutes !== null && !allowedRoutes.includes("gateway"));
   const apiKeyDisallowed =
     harnessDisallowed || (allowedRoutes !== null && !allowedRoutes.includes("api_key"));
+  const seatDisallowed =
+    harnessDisallowed || (allowedRoutes !== null && !allowedRoutes.includes("seat"));
   const nativeDisallowed = allowedRoutes !== null && !allowedRoutes.includes("native");
 
   function commit(next: HarnessAuthEditorState, callbacks: CommitCallbacks = {}) {
     // Snapshot for rollback: the optimistic setState below would otherwise keep
     // rendering a rejected row as wired until a reload.
-    const previous: HarnessAuthEditorState = { gatewayEnabled, rows };
+    const previous: HarnessAuthEditorState = { gatewayEnabled, seatEnabled, rows };
     const previousSig = lastPutSigRef.current;
     setGatewayEnabled(next.gatewayEnabled);
+    setSeatEnabled(next.seatEnabled);
     setRows(next.rows);
     const sources = buildDesiredSources(harnessKind, next);
     const signature = JSON.stringify(sources);
@@ -268,6 +282,7 @@ export function useHarnessAuthEditor(
           // Roll the optimistic state back so the UI never claims a rejected
           // selection is wired.
           setGatewayEnabled(previous.gatewayEnabled);
+          setSeatEnabled(previous.seatEnabled);
           setRows(previous.rows);
           lastPutSigRef.current = previousSig;
           const message =
@@ -286,10 +301,23 @@ export function useHarnessAuthEditor(
 
   function handleGatewayToggle(next: boolean) {
     // Single-source harnesses hold at most one enabled source: turning the
-    // gateway on turns every api-key row off (radio semantics via switches).
+    // gateway on turns every api-key row (and the seat pool) off (radio
+    // semantics via switches).
     const nextRows =
       next && !multiSource ? rows.map((row) => ({ ...row, enabled: false })) : rows;
-    commit({ gatewayEnabled: next, rows: nextRows });
+    const nextSeat = next && !multiSource ? false : seatEnabled;
+    commit({ gatewayEnabled: next, seatEnabled: nextSeat, rows: nextRows });
+  }
+
+  function handleSeatToggle(next: boolean, callbacks: CommitCallbacks = {}) {
+    // Seats are radio-only (claude): enabling the pool turns everything else
+    // off. The radio counts kinds, so the one pool row is the one method.
+    const nextRows = next ? rows.map((row) => ({ ...row, enabled: false })) : rows;
+    const nextGateway = next ? false : gatewayEnabled;
+    commit(
+      { gatewayEnabled: nextGateway, seatEnabled: next, rows: nextRows },
+      callbacks,
+    );
   }
 
   function handleRowEnabledToggle(uid: string, next: boolean) {
@@ -300,12 +328,14 @@ export function useHarnessAuthEditor(
       return next && !multiSource ? { ...row, enabled: false } : row;
     });
     const nextGateway = next && !multiSource ? false : gatewayEnabled;
-    commit({ gatewayEnabled: nextGateway, rows: nextRows });
+    const nextSeat = next && !multiSource ? false : seatEnabled;
+    commit({ gatewayEnabled: nextGateway, seatEnabled: nextSeat, rows: nextRows });
   }
 
   function handleRowKeySelect(uid: string, keyId: string) {
     commit({
       gatewayEnabled,
+      seatEnabled,
       rows: rows.map((row) => (row.uid === uid ? { ...row, apiKeyId: keyId } : row)),
     });
   }
@@ -322,7 +352,7 @@ export function useHarnessAuthEditor(
   }
 
   function handleRemoveRow(uid: string) {
-    commit({ gatewayEnabled, rows: rows.filter((row) => row.uid !== uid) });
+    commit({ gatewayEnabled, seatEnabled, rows: rows.filter((row) => row.uid !== uid) });
   }
 
   function addRow(envVarName: string, providerHint: string | null) {
@@ -362,7 +392,8 @@ export function useHarnessAuthEditor(
       ? [...kept, newRow]
       : [...kept.map((row) => ({ ...row, enabled: false })), newRow];
     const nextGateway = multiSource ? gatewayEnabled : false;
-    commit({ gatewayEnabled: nextGateway, rows: nextRows }, callbacks);
+    const nextSeat = multiSource ? seatEnabled : false;
+    commit({ gatewayEnabled: nextGateway, seatEnabled: nextSeat, rows: nextRows }, callbacks);
   }
 
   function handleAddVariable() {
@@ -384,11 +415,13 @@ export function useHarnessAuthEditor(
     harnessDisallowed,
     gatewayDisallowed,
     apiKeyDisallowed,
+    seatDisallowed,
     nativeDisallowed,
     multiSource,
     busy,
     editorState,
     native,
+    hasSeats,
     pendingMethod,
     setPendingMethod,
     localAgent,
@@ -398,6 +431,7 @@ export function useHarnessAuthEditor(
     setAddKeyModalOpen,
     commit,
     handleGatewayToggle,
+    handleSeatToggle,
     handleRowEnabledToggle,
     handleRowKeySelect,
     handleRowEnvVarChange,

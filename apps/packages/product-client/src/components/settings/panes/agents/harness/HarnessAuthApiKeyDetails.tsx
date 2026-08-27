@@ -77,7 +77,7 @@ export function ApiKeyDetails({
     const envVarName = envVarSuggestion?.envVarName;
     if (!envVarName || value.length === 0) return;
     createKey.mutate(
-      { title: keyLabel ?? "API key", value },
+      { title: keyLabel ?? "API key", value, kind: "api_key" },
       {
         onSuccess: (created) => {
           setPastedKey("");

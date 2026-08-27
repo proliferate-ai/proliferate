@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Check, KeyRound } from "#product/primitives/icons/core";
-import { CloudIcon } from "#product/primitives/icons/platform";
+import { CircleUser, CloudIcon } from "#product/primitives/icons/platform";
 import { SquareTerminal } from "#product/primitives/icons/workspace";
 import { Button } from "#product/primitives/Button";
 import { IconTile } from "#product/primitives/IconTile";
@@ -11,6 +11,7 @@ import { gatewaySubtitle } from "#product/copy/settings/agent-auth-copy";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
 import {
   isGatewayCapableHarness,
+  isSeatCapableHarness,
   type AuthMethod,
 } from "#product/lib/domain/settings/harness-auth-sources";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
@@ -45,6 +46,7 @@ interface HarnessAuthSectionProps {
  */
 export function deriveSelectedMethod(editor: HarnessAuthEditorApi): AuthMethod {
   if (editor.editorState.gatewayEnabled) return "gateway";
+  if (editor.editorState.seatEnabled) return "seat";
   if (editor.editorState.rows.some((row) => row.enabled)) return "api_key";
   if (editor.pendingMethod) return editor.pendingMethod;
   return "cli";
@@ -123,6 +125,7 @@ function HarnessAuthMethods({
   // selection the org has since disallowed (there is no DELETE endpoint).
   const gatewayCardDisallowed = editor.gatewayDisallowed && selectedMethod !== "gateway";
   const apiKeyCardDisallowed = editor.apiKeyDisallowed && selectedMethod !== "api_key";
+  const seatCardDisallowed = editor.seatDisallowed && selectedMethod !== "seat";
   const nativeCardDisallowed = editor.nativeDisallowed && selectedMethod !== "cli";
 
   // The merged header state (design-handoff v2): status is said exactly once,
@@ -166,7 +169,8 @@ function HarnessAuthMethods({
     editor.gatewayLocked || capabilities?.creditsExhausted
       ? gatewaySubtitle(capabilities, enrollment)
       : null;
-  const cardCount = gatewayCapable ? 3 : 2;
+  const seatCapable = isSeatCapableHarness(harnessKind);
+  const cardCount = (gatewayCapable ? 3 : 2) + (seatCapable ? 1 : 0);
 
   // Flag-ON path (ADR agent-auth rung 6): render the runtime's DERIVED
   // authState verbatim — evidence-backed badge + next-action/probe/handoff
@@ -232,6 +236,18 @@ function HarnessAuthMethods({
             onClick={() => handleSingleSourceSelect("gateway", editor)}
           />
         ) : null}
+        {seatCapable ? (
+          <MethodCard
+            label={HARNESS_PANE_COPY.methodSeat}
+            description={HARNESS_PANE_COPY.methodSeatDescription}
+            icon={<CircleUser className="icon-control" />}
+            selected={selectedMethod === "seat"}
+            disabled={editor.busy || seatCardDisallowed}
+            subtitle={seatCardDisallowed ? POLICY_TOOLTIP : undefined}
+            routeOptionId={`${harnessKind}:seat`}
+            onClick={() => handleSingleSourceSelect("seat", editor)}
+          />
+        ) : null}
         <MethodCard
           label={HARNESS_PANE_COPY.methodApiKey}
           description={HARNESS_PANE_COPY.methodApiKeyDescription}
@@ -276,10 +292,12 @@ export function handleSingleSourceSelect(method: AuthMethod, editor: HarnessAuth
         (row) => row.apiKeyId !== null,
       );
       const needsGatewayOff = editor.editorState.gatewayEnabled;
+      const needsSeatOff = editor.editorState.seatEnabled;
       const needsRowOn = firstComplete !== undefined && !firstComplete.enabled;
-      if (needsGatewayOff || needsRowOn) {
+      if (needsGatewayOff || needsSeatOff || needsRowOn) {
         editor.commit({
           gatewayEnabled: false,
+          seatEnabled: false,
           rows: needsRowOn
             ? editor.editorState.rows.map((row) =>
                 row.uid === firstComplete.uid
@@ -292,12 +310,25 @@ export function handleSingleSourceSelect(method: AuthMethod, editor: HarnessAuth
       editor.setPendingMethod("api_key");
       break;
     }
+    case "seat":
+      // Seats v1: switching to the Claude.ai-login method enables the seat
+      // pool ONLY when the vault already holds a seat — with zero seats an
+      // enabled pool row would render present-but-empty and refuse every
+      // launch (fail-closed). With none yet, the card goes pending and the
+      // detail area's mint flow commits the selection once the first seat
+      // lands (the card click WAS the explicit method pick).
+      if (editor.hasSeats) {
+        editor.handleSeatToggle(true);
+      }
+      editor.setPendingMethod("seat");
+      break;
     case "cli":
       // Native state: drop gateway and any incomplete draft rows (so nothing
       // keeps api_key "active"), and disable the rest. Marking cli pending makes
       // the card stick even though complete rows may linger disabled.
       editor.commit({
         gatewayEnabled: false,
+        seatEnabled: false,
         rows: editor.editorState.rows
           .filter((row) => row.apiKeyId !== null)
           .map((row) => ({ ...row, enabled: false })),

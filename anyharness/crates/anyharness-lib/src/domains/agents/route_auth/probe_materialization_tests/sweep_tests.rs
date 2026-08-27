@@ -29,14 +29,16 @@ fn the_sweep_removes_only_abandoned_and_old_scratch_roots() {
     let max_age = std::time::Duration::from_secs(720);
     let old_nanos = now_nanos - (max_age.as_nanos() * 2);
 
-    // A real live foreign process, so (b) is not a fiction.
-    let mut live_child = std::process::Command::new("sleep")
+    // A real live foreign process, so (b) is not a fiction. Absolute paths:
+    // sibling test modules mutate the process-wide PATH under their env
+    // guards, and a PATH lookup here would race them.
+    let mut live_child = std::process::Command::new("/bin/sleep")
         .arg("30")
         .spawn()
         .expect("spawn a live foreign process");
     let live_pid = live_child.id();
     // A pid that is definitely dead: spawn and reap.
-    let mut dead_child = std::process::Command::new("true")
+    let mut dead_child = std::process::Command::new("/usr/bin/true")
         .spawn()
         .expect("spawn a short-lived process");
     let dead_pid = dead_child.id();
@@ -113,8 +115,13 @@ fn set_dir_mtime_back(path: &Path, by: std::time::Duration) -> bool {
     matches!(output, Ok(output) if output.status.success())
 }
 
-/// `touch -t` wants `[[CC]YY]MMDDhhmm[.ss]`.
+/// `touch -t` wants `[[CC]YY]MMDDhhmm[.ss]` — interpreted in LOCAL time, so the
+/// stamp must be formatted in local time too. Formatting the UTC wall clock here
+/// used to push the mtime hours into the FUTURE in any west-of-UTC timezone,
+/// making `elapsed()` fail and the "aged" leg silently un-age the directory.
 fn format_touch_stamp(unix_seconds: i64) -> String {
     let time = chrono::DateTime::from_timestamp(unix_seconds, 0).unwrap_or_default();
-    time.format("%Y%m%d%H%M.%S").to_string()
+    time.with_timezone(&chrono::Local)
+        .format("%Y%m%d%H%M.%S")
+        .to_string()
 }

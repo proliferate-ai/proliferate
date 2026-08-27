@@ -403,12 +403,17 @@ class TestAgentApiKeys:
     async def test_create_validation_error_never_echoes_value(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
 
+        # `title` went schema-optional with seats v1 (the seat kind composes
+        # its own), so a bare-key create without one is now the TYPED 400
+        # rather than a Pydantic 422 — and its body still never echoes the
+        # secret, which is what this test actually guards.
         missing_field = await client.post(
             "/v1/cloud/agent-auth/keys",
             headers=headers,
             json={"value": SECRET},
         )
-        assert missing_field.status_code == 422, missing_field.text
+        assert missing_field.status_code == 400, missing_field.text
+        assert missing_field.json()["detail"]["code"] == "invalid_agent_api_key_title"
         assert SECRET not in missing_field.text
 
         wrong_type = await client.post(
@@ -1240,3 +1245,125 @@ class TestOldAgentGatewayRoutesAreGone:
             ("GET", "/v1/cloud/agent-gateway/capabilities"),
             ("GET", "/v1/cloud/agent-gateway/enrollment"),
         ]
+
+
+SEAT_TOKEN = "sk-ant-oat01-MintedSeatTokenMintedSeatTokenMintedSeatAA"
+
+
+class TestSeatMintIntakeAndRender:
+    """Seats v1 (slice 1): the server half of mint → store → render.
+
+    The runtime half (capture → apply → launch env) is proven in
+    anyharness-lib's `seat_mint_store_render_launch_roundtrip`; the contract
+    fixture pins the wire shape both halves meet on.
+    """
+
+    @pytest.mark.asyncio
+    async def test_seat_mint_store_render_roundtrip(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        _, headers = await _authed_user(client)
+
+        # Mint intake: the courier's one POST of the captured token.
+        minted = await client.post(
+            "/v1/cloud/agent-auth/keys",
+            headers=headers,
+            json={
+                "value": SEAT_TOKEN,
+                "kind": "anthropic_subscription",
+                "email": "ops@acme.com",
+                "planTier": "Max 20x",
+            },
+        )
+        assert minted.status_code == 200, minted.text
+        seat = minted.json()
+        assert seat["kind"] == "anthropic_subscription"
+        assert seat["title"] == "Max seat · ops@acme.com · Max 20x"
+        assert SEAT_TOKEN not in minted.text
+
+        # The token never lands in the DB in the clear.
+        row = (
+            await db_session.execute(
+                select(AgentApiKey).where(AgentApiKey.id == uuid.UUID(str(seat["id"])))
+            )
+        ).scalar_one()
+        assert SEAT_TOKEN not in row.value_ciphertext
+
+        # Wire the pool seat selection and render the surface.
+        put = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[{"sourceKind": "seat"}],
+        )
+        assert put.status_code == 200, put.text
+        state = await _get_state(client, headers, "local")
+        assert state.status_code == 200
+        claude = next(
+            entry for entry in state.json()["harnesses"] if entry["harness_kind"] == "claude"
+        )
+        assert claude["sources"] == [
+            {
+                "kind": "seat",
+                "env": {"CLAUDE_CODE_OAUTH_TOKEN": SEAT_TOKEN},
+                "seat_id": seat["id"],
+            }
+        ]
+
+        # Revoking the seat removes it from the next render; the entry stays
+        # present-but-empty so the harness refuses at launch (the acceptance
+        # gate's secondary check).
+        revoked = await client.delete(
+            f"/v1/cloud/agent-auth/keys/{seat['id']}",
+            headers=headers,
+        )
+        assert revoked.status_code == 200, revoked.text
+        state_after = await _get_state(client, headers, "local")
+        claude_after = next(
+            entry for entry in state_after.json()["harnesses"] if entry["harness_kind"] == "claude"
+        )
+        assert claude_after["sources"] == []
+
+    @pytest.mark.asyncio
+    async def test_seat_mint_defaults_title_to_max_seat_n(self, client: AsyncClient) -> None:
+        _, headers = await _authed_user(client)
+        first = await client.post(
+            "/v1/cloud/agent-auth/keys",
+            headers=headers,
+            json={"value": SEAT_TOKEN, "kind": "anthropic_subscription"},
+        )
+        assert first.status_code == 200, first.text
+        assert first.json()["title"] == "Max seat 1"
+        second = await client.post(
+            "/v1/cloud/agent-auth/keys",
+            headers=headers,
+            json={"value": SEAT_TOKEN + "B", "kind": "anthropic_subscription"},
+        )
+        assert second.json()["title"] == "Max seat 2"
+
+    @pytest.mark.asyncio
+    async def test_bare_key_create_still_requires_a_title(self, client: AsyncClient) -> None:
+        _, headers = await _authed_user(client)
+        response = await client.post(
+            "/v1/cloud/agent-auth/keys",
+            headers=headers,
+            json={"value": "sk-ant-plain-key-abcd"},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_agent_api_key_title"
+
+    @pytest.mark.asyncio
+    async def test_seat_selection_rejected_for_seatless_harness(self, client: AsyncClient) -> None:
+        _, headers = await _authed_user(client)
+        response = await _put_selections(
+            client,
+            headers,
+            harness="codex",
+            surface="local",
+            sources=[{"sourceKind": "seat"}],
+        )
+        assert response.status_code == 400
+        assert "no seat recipe" in response.json()["detail"]["message"]

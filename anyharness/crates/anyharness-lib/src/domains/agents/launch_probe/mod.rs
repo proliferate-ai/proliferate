@@ -96,6 +96,12 @@ pub struct LaunchProbeService {
     /// exclusively through this service.
     launch_options:
         Option<Arc<crate::domains::agents::launch_options::HarnessLaunchOptionsService>>,
+    /// The seat tier-1 trial ledger (founder ruling 2026-08-27): one verdict
+    /// per harness, produced at mint completion by the claim route, folded
+    /// into [`Self::auth_runtime_inputs`] only while the applied route selects
+    /// a seat. Lives on this service because this service already owns the
+    /// runtime home and produces the `AuthRuntimeInputs` the verdict rides.
+    seat_trials: Arc<route_auth::SeatTrialLedger>,
 }
 
 impl LaunchProbeService {
@@ -125,6 +131,7 @@ impl LaunchProbeService {
         let service = Self {
             runtime_home,
             engine_lock,
+            seat_trials: Arc::new(route_auth::SeatTrialLedger::new()),
             slots: Mutex::new(HashMap::new()),
             probe_semaphore: Arc::new(tokio::sync::Semaphore::new(
                 config.max_concurrent_probes.max(1),
@@ -162,6 +169,17 @@ impl LaunchProbeService {
         launch_options: Arc<crate::domains::agents::launch_options::HarnessLaunchOptionsService>,
     ) -> Self {
         self.launch_options = Some(launch_options);
+        self
+    }
+
+    /// Test seam: replace the seat-trial ledger, so a test can point the
+    /// trial at a local server instead of the real API.
+    #[cfg(test)]
+    pub(crate) fn with_seat_trials(
+        mut self,
+        seat_trials: Arc<route_auth::SeatTrialLedger>,
+    ) -> Self {
+        self.seat_trials = seat_trials;
         self
     }
 
@@ -230,9 +248,34 @@ impl LaunchProbeService {
                 next_attempt_at,
                 observation_nonempty,
             },
-            trial: None,
+            trial: self.seat_trial_fact(harness_kind, now),
             gateway: None,
         }
+    }
+
+    /// The seat tier-1 trial verdict mapped onto the shared fact vocabulary
+    /// (auth_state owns the shape; producers map onto it). `None` whenever no
+    /// verdict exists or the applied route does not select a seat, so a seat
+    /// verdict can never color a gateway, BYOK, or native state.
+    fn seat_trial_fact(
+        &self,
+        harness_kind: &str,
+        now: DateTime<Utc>,
+    ) -> Option<crate::domains::agents::auth_state::Tier1TrialFact> {
+        use crate::domains::agents::auth_state::Tier1TrialFact;
+        use route_auth::SeatTrialVerdict;
+        let (verdict, age_seconds) =
+            self.seat_trials
+                .verdict_for_applied_seat(&self.runtime_home, harness_kind, now)?;
+        Some(match verdict {
+            SeatTrialVerdict::Verified => Tier1TrialFact::Green { age_seconds },
+            SeatTrialVerdict::Rejected => Tier1TrialFact::Expired,
+        })
+    }
+
+    /// The ledger handle for the mint-claim trigger (the ONE producer site).
+    pub fn seat_trials(&self) -> Arc<route_auth::SeatTrialLedger> {
+        self.seat_trials.clone()
     }
 
     pub fn mode(&self) -> ProbeEngineMode {

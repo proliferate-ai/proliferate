@@ -105,6 +105,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/login-terminals/{terminal_id}/mint-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["claim_agent_login_terminal_mint_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/reconcile": {
         parameters: {
             query?: never;
@@ -2302,12 +2318,28 @@ export interface components {
             exitCode?: number | null;
             id: string;
             kind: string;
+            mintStatus?: null | components["schemas"]["AgentMintCaptureStatus"];
             status: components["schemas"]["AgentLoginTerminalStatus"];
             title: string;
             updatedAt: string;
         };
         /** @enum {string} */
         AgentLoginTerminalStatus: "starting" | "running" | "exited" | "failed";
+        /**
+         * @description Which login flow a terminal runs. `Native` (the default when absent) is the
+         *     harness's own interactive login; `MintSeat` runs the seat-minting flow
+         *     (seats v1: `claude setup-token` in an isolated dir, token captured in
+         *     memory by the runtime — never disk, never logs).
+         * @enum {string}
+         */
+        AgentLoginVariant: "native" | "mint_seat";
+        /**
+         * @description The seat-mint capture's lifecycle on a `mint_seat` login terminal. Absent
+         *     on a native login terminal. The token itself never appears here — it is
+         *     claimable exactly once through the mint-token route while `Ready`.
+         * @enum {string}
+         */
+        AgentMintCaptureStatus: "waiting" | "captured" | "ready" | "consumed" | "failed";
         AgentOperationsAgent: {
             capabilities: components["schemas"]["AgentOperationsCapability"][];
             configuration: components["schemas"]["AgentOperationsConfiguration"];
@@ -2517,6 +2549,14 @@ export interface components {
             state: components["schemas"]["PullRequestState"];
             title: string;
             url: string;
+        };
+        /**
+         * @description The one-time handoff of a captured seat token to the courier (seats v1).
+         *     Serving this response wipes the runtime's capture buffer; a second claim
+         *     finds nothing.
+         */
+        ClaimAgentMintTokenResponse: {
+            token: string;
         };
         ClearSessionGoalResponse: {
             cleared: boolean;
@@ -4988,7 +5028,9 @@ export interface components {
         StagePathsRequest: {
             paths: string[];
         };
-        StartAgentLoginRequest: Record<string, never>;
+        StartAgentLoginRequest: {
+            variant?: null | components["schemas"]["AgentLoginVariant"];
+        };
         StartAgentLoginResponse: {
             command: components["schemas"]["LoginCommand"];
             kind: string;
@@ -5892,6 +5934,47 @@ export interface operations {
             };
             /** @description Agent login terminal not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    claim_agent_login_terminal_mint_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent login terminal ID */
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The captured seat token, exactly once */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimAgentMintTokenResponse"];
+                };
+            };
+            /** @description Not a mint terminal, or not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Capture not complete (or already consumed) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

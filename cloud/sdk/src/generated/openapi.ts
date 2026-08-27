@@ -884,7 +884,15 @@ export interface paths {
         /** List Agent Api Keys Endpoint */
         get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_auth_keys_get"];
         put?: never;
-        /** Create Agent Api Key Endpoint */
+        /**
+         * Create Agent Api Key Endpoint
+         * @description Create a bare vault key — or a seat, the mint flow's courier upload.
+         *
+         *     ``kind='anthropic_subscription'`` is the one upward secret path of the
+         *     seat mint (agent_auth spec §3 flow 2): the runtime captured the token in
+         *     memory, the courier POSTs it here exactly once, and the label fields
+         *     carry the user-entered seat identity.
+         */
         post: operations["create_agent_api_key_endpoint_v1_cloud_agent_auth_keys_post"];
         delete?: never;
         options?: never;
@@ -2261,12 +2269,32 @@ export interface components {
             /** Authdetection */
             authDetection?: ("detected" | "none" | "unreachable" | "forced") | null;
         };
-        /** AgentApiKeyCreateRequest */
+        /**
+         * AgentApiKeyCreateRequest
+         * @description Create a bare key — or, with ``kind='anthropic_subscription'``, a seat.
+         *
+         *     The seat path is the mint flow's one upward secret write (agent_auth spec
+         *     §3 flow 2): ``value`` is the captured ``claude setup-token`` credential,
+         *     and the mint label fields carry the user-entered seat identity — the
+         *     system can learn neither email nor plan from the token, so the mint sheet
+         *     asks. ``title`` is optional for a seat: the server composes it from
+         *     ``email`` + ``planTier``, defaulting to "Max seat N".
+         */
         AgentApiKeyCreateRequest: {
             /** Title */
-            title: string;
+            title?: string | null;
             /** Value */
             value: string;
+            /**
+             * Kind
+             * @default api_key
+             * @enum {string}
+             */
+            kind: "api_key" | "anthropic_subscription";
+            /** Email */
+            email?: string | null;
+            /** Plantier */
+            planTier?: string | null;
         };
         /** AgentApiKeyResponse */
         AgentApiKeyResponse: {
@@ -2278,7 +2306,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "api_key" | "aws_bedrock" | "azure_openai";
+            kind: "api_key" | "aws_bedrock" | "azure_openai" | "anthropic_subscription";
             /** Redactedhint */
             redactedHint: string;
             /** Status */
@@ -2313,7 +2341,7 @@ export interface components {
              * Sourcekind
              * @enum {string}
              */
-            sourceKind: "gateway" | "api_key";
+            sourceKind: "gateway" | "api_key" | "seat";
             /** Apikeyid */
             apiKeyId: string | null;
             /** Keytitle */
@@ -2349,7 +2377,7 @@ export interface components {
              * Sourcekind
              * @enum {string}
              */
-            sourceKind: "gateway" | "api_key";
+            sourceKind: "gateway" | "api_key" | "seat";
             /** Apikeyid */
             apiKeyId?: string | null;
             /** Envvarname */
@@ -2437,7 +2465,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "gateway" | "api_key" | "provider_config";
+            kind: "gateway" | "api_key" | "provider_config" | "seat";
             /** Base Url */
             base_url?: string | null;
             /** Key */
@@ -2452,6 +2480,8 @@ export interface components {
             env?: {
                 [key: string]: string;
             } | null;
+            /** Seat Id */
+            seat_id?: string | null;
         };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
@@ -3816,7 +3846,7 @@ export interface components {
              * Sourcekind
              * @enum {string}
              */
-            sourceKind: "gateway" | "api_key";
+            sourceKind: "gateway" | "api_key" | "seat";
         };
         /** OrgAgentPolicyViolationListResponse */
         OrgAgentPolicyViolationListResponse: {

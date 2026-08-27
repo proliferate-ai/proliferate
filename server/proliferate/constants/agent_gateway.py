@@ -13,13 +13,22 @@ AGENT_API_KEY_STATUS_REVOKED = "revoked"
 AGENT_API_KEY_KIND_API_KEY = "api_key"
 AGENT_API_KEY_KIND_AWS_BEDROCK = "aws_bedrock"
 AGENT_API_KEY_KIND_AZURE_OPENAI = "azure_openai"
+# A seat: a portable Claude Max subscription credential (agent_auth spec §2,
+# "The vault"). Decrypts to one opaque secret string — a long-lived
+# `claude setup-token` OAuth token captured by the runtime's mint flow and
+# uploaded by the courier. Referenced by `seat` selection rows, never by an
+# env_var_name (the seat recipe owns its env mapping).
+AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION = "anthropic_subscription"
 AGENT_API_KEY_KINDS = (
     AGENT_API_KEY_KIND_API_KEY,
     AGENT_API_KEY_KIND_AWS_BEDROCK,
     AGENT_API_KEY_KIND_AZURE_OPENAI,
+    AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION,
 )
 # Typed kinds only — excludes the bare-secret default, which a selection wires
-# through `env_var_name` rather than by referencing the kind directly.
+# through `env_var_name` rather than by referencing the kind directly. A seat
+# (anthropic_subscription) is NOT a typed provider-config kind: its payload is
+# one opaque secret string, and only `seat` selection rows may reference it.
 AGENT_API_KEY_TYPED_KINDS = (
     AGENT_API_KEY_KIND_AWS_BEDROCK,
     AGENT_API_KEY_KIND_AZURE_OPENAI,
@@ -47,12 +56,26 @@ AGENT_AUTH_HARNESS_KINDS = ("claude", "codex", "opencode", "grok", "cursor")
 # refusal, no gateway route exists for cursor").
 AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS = ("claude", "codex", "opencode", "grok")
 
-# A selection row is either the gateway (virtual key) or a single direct
-# api_key (a raw provider key bound to an env var). There is no native
-# source_kind: "use the CLI's own login" is the empty state (zero enabled rows).
+# A selection row is the gateway (virtual key), a single direct api_key (a raw
+# provider key bound to an env var), or a seat row ("run on this Max
+# subscription"). There is no native source_kind: "use the CLI's own login" is
+# the empty state (zero enabled rows). A seat row with api_key_id NULL means
+# "use my seat pool" (the renderer expands it to every active seat, vault
+# order); a non-null api_key_id pins one specific anthropic_subscription entry.
 AGENT_AUTH_SOURCE_GATEWAY = "gateway"
 AGENT_AUTH_SOURCE_API_KEY = "api_key"
-AGENT_AUTH_SOURCE_KINDS = (AGENT_AUTH_SOURCE_GATEWAY, AGENT_AUTH_SOURCE_API_KEY)
+AGENT_AUTH_SOURCE_SEAT = "seat"
+AGENT_AUTH_SOURCE_KINDS = (
+    AGENT_AUTH_SOURCE_GATEWAY,
+    AGENT_AUTH_SOURCE_API_KEY,
+    AGENT_AUTH_SOURCE_SEAT,
+)
+
+# Harnesses with a seat (Max subscription) launch recipe. Slice 1 of the seat
+# plan (agent_auth spec §4 cell 2's recipe table): claude only — codex's seat
+# route is the phase-2 refreshing-file shape. Lives here for the same
+# store→server boundary reason as the gateway-capable tuple above.
+AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS = ("claude",)
 
 # The state.json WIRE kind for a rendered typed-vault source (D3 python brief
 # Sec4.1/Sec2). This is NOT a DB `source_kind` -- a typed-vault selection is

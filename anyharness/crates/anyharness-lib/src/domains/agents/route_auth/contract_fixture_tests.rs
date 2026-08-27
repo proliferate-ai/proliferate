@@ -50,13 +50,14 @@ fn the_contract_fixture_parses_as_a_v2_document() {
 /// The keys are scoped per (subject, harness) by the gateway's access groups, so
 /// a producer that resolves one subject-wide key and fans it out is wrong. This
 /// asserts distinctness rather than exact values, so rotating the fixture's
-/// placeholder keys does not churn the test.
+/// placeholder keys does not churn the test. (claude left this list with
+/// seats v1: its fixture entry is now the seat variant — contract point 1b.)
 #[test]
 fn every_gateway_source_carries_its_own_per_harness_key() {
     let state = fixture_state();
 
     let mut keys = Vec::new();
-    for harness in ["claude", "codex", "opencode"] {
+    for harness in ["codex", "opencode"] {
         let sources = state
             .sources_for(harness)
             .unwrap_or_else(|| panic!("{harness} entry present"));
@@ -73,6 +74,31 @@ fn every_gateway_source_carries_its_own_per_harness_key() {
         keys.len(),
         "gateway keys must be per-harness, not one shared subject key: {keys:?}"
     );
+}
+
+/// Contract point 1b (seats v1): claude's entry is one `seat` source — the
+/// wire shape `{kind, env: {CLAUDE_CODE_OAUTH_TOKEN}, seat_id}` the producer
+/// emits when a pool seat selection meets one active vault seat. The env map's
+/// key is ALREADY the harness's real env-var name (the provider_config
+/// ruling), and `seat_id` is the vault entry id, never token material.
+#[test]
+fn the_fixtures_seat_source_resolves_to_a_seat_profile() {
+    let state = fixture_state();
+
+    match resolve_profile(Some(&state), "claude").expect("resolve") {
+        AgentRuntimeAuthProfile::Sources(sources) => match &sources.sources[..] {
+            [ResolvedSource::Seat(seat)] => {
+                assert_eq!(seat.seat_id, "30000000-0000-4000-8000-000000000021");
+                assert_eq!(
+                    seat.env.keys().collect::<Vec<_>>(),
+                    ["CLAUDE_CODE_OAUTH_TOKEN"],
+                    "exactly the one harness-real env var"
+                );
+            }
+            other => panic!("claude should carry exactly one seat source, got {other:?}"),
+        },
+        other => panic!("claude should be routed, got {other:?}"),
+    }
 }
 
 /// Contract point 2: the three-way empty-sources semantics, resolved end to end.
@@ -108,15 +134,22 @@ fn the_fixtures_empty_entry_fails_closed_while_an_absent_one_is_native() {
 fn the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles() {
     let state = fixture_state();
 
-    for harness in ["claude", "codex"] {
-        match resolve_profile(Some(&state), harness).expect("resolve") {
-            AgentRuntimeAuthProfile::Sources(sources) => {
-                assert_eq!(sources.revision, 42);
-                assert_eq!(sources.sources.len(), 1);
-                assert!(matches!(sources.sources[0], ResolvedSource::Gateway(_)));
-            }
-            other => panic!("{harness} should be routed, got {other:?}"),
+    match resolve_profile(Some(&state), "codex").expect("resolve") {
+        AgentRuntimeAuthProfile::Sources(sources) => {
+            assert_eq!(sources.revision, 42);
+            assert_eq!(sources.sources.len(), 1);
+            assert!(matches!(sources.sources[0], ResolvedSource::Gateway(_)));
         }
+        other => panic!("codex should be routed, got {other:?}"),
+    }
+
+    match resolve_profile(Some(&state), "claude").expect("resolve") {
+        AgentRuntimeAuthProfile::Sources(sources) => {
+            assert_eq!(sources.revision, 42);
+            assert_eq!(sources.sources.len(), 1);
+            assert!(matches!(sources.sources[0], ResolvedSource::Seat(_)));
+        }
+        other => panic!("claude should be routed, got {other:?}"),
     }
 
     match resolve_profile(Some(&state), "cursor").expect("resolve") {
@@ -167,7 +200,7 @@ fn the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles() {
 
 /// The consumer reads the fixture through the REAL file path, not just serde:
 /// written to a runtime home, `resolve_launch_route_auth` renders claude's
-/// gateway recipe from it. A fixture that parses but cannot drive a launch would
+/// seat recipe from it. A fixture that parses but cannot drive a launch would
 /// otherwise pass the tests above.
 #[test]
 fn the_contract_fixture_drives_a_real_launch_render() {
@@ -185,12 +218,30 @@ fn the_contract_fixture_drives_a_real_launch_render() {
     .expect("the fixture must render a claude launch");
 
     assert_eq!(
-        rendered.set.get("ANTHROPIC_AUTH_TOKEN").map(String::as_str),
-        Some("sk-vk-claude-0001"),
-        "claude's own per-harness key, not another harness's"
+        rendered
+            .set
+            .get("CLAUDE_CODE_OAUTH_TOKEN")
+            .map(String::as_str),
+        Some("sk-ant-oat01-Kx3mQ9rT5vW7yZ1aB2cD4eF6gH8jL0nP-seatAA"),
+        "the seat's token, verbatim from the env map"
     );
-    assert_eq!(
-        rendered.set.get("ANTHROPIC_BASE_URL").map(String::as_str),
-        Some("https://llm.proliferate.example")
+    let config_dir = rendered
+        .set
+        .get("CLAUDE_CONFIG_DIR")
+        .expect("per-seat CLAUDE_CONFIG_DIR");
+    assert!(
+        config_dir.contains("claude-config-30000000-0000-4000-8000-000000000021"),
+        "the seat's OWN config dir: {config_dir}"
     );
+    // The seat strip list applies (spec §4 cell 2's claude · seat row).
+    for key in [
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_BASE_URL",
+    ] {
+        assert!(
+            rendered.remove.contains(&key.to_string()),
+            "missing removal of {key}"
+        );
+    }
 }

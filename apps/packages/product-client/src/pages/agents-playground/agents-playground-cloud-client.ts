@@ -99,7 +99,7 @@ export function createAgentsPlaygroundCloudTransport(
         keySequence += 1;
         const key: AgentApiKey = {
           id: `playground-key-${keySequence}`,
-          title: body.title,
+          title: body.title ?? "API key",
           kind: "api_key",
           redactedHint: redactSecret(body.value),
           status: "active",

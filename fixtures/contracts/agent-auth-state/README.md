@@ -19,11 +19,21 @@ breaks the other side until it is updated.
 Four things the two sides could otherwise drift on silently:
 
 **1. Per-harness gateway keys, not one shared key.** Every gateway source
-carries its OWN virtual key (`sk-vk-claude-0001`, `sk-vk-codex-0002`,
-`sk-vk-opencode-0003` — all distinct). The keys are scoped per
-(subject, harness) by the gateway's access groups, so a renderer that resolves
-one subject-wide key and fans it out to every harness is wrong and this fixture
-makes that wrong-ness a test failure rather than a runtime surprise.
+carries its OWN virtual key (`sk-vk-codex-0002`, `sk-vk-opencode-0003` — all
+distinct). The keys are scoped per (subject, harness) by the gateway's access
+groups, so a renderer that resolves one subject-wide key and fans it out to
+every harness is wrong and this fixture makes that wrong-ness a test failure
+rather than a runtime surprise.
+
+**1b. The `seat` source (seats v1).** claude's entry carries a seat — a Max
+subscription credential from the vault, rendered as
+`{ kind: "seat", env: {CLAUDE_CODE_OAUTH_TOKEN: <token>}, seat_id }`
+(agent_auth spec §2's wire table). The `env` map's key is ALREADY the
+harness's real env-var name (same ruling as `provider_config`: Rust `.set()`s
+exact keys, never renames), and `seat_id` is the vault entry id so the runtime
+can name the serving seat without echoing the token. The renderer expands a
+pool seat selection into one such source per active seat, in vault order —
+this fixture pins the single-seat shape (slice 1's tested path).
 
 **2. Empty-sources semantics.** `grok` is present with `"sources": []`. That is
 NOT the same as being absent, and the difference is a launch-refusal:
