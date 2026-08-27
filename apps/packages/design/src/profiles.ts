@@ -49,9 +49,13 @@ export const themeProfiles: Readonly<Record<string, ThemeProfile>> = {
     tokens: {
       "--color-foreground": "#0d0d0d",
       "--color-primary": "#0d0d0d",
-      "--color-surface-under": "#f9f9f9",
-      "--color-sidebar": "#f9f9f9",
-      "--color-sidebar-background": "#f9f9f9",
+      // One white plane for shell, sidebar, header and content: the header
+      // band shows the rail through it, so any rail tint reads as a
+      // header-vs-chat seam (found live 2026-08-26). Hairlines + washes
+      // carry the structure instead, as in the reference UI.
+      "--color-surface-under": "#ffffff",
+      "--color-sidebar": "#ffffff",
+      "--color-sidebar-background": "#ffffff",
       "--color-surface-editor": "#fafafa",
       "--color-composer-background": "#ffffff",
       "--color-border-light": codex(0.115),
