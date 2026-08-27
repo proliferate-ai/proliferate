@@ -106,6 +106,13 @@ SCANNED_ROOTS: list[tuple[str, frozenset[str]]] = [
         "anyharness/crates/anyharness-lib/src/domains/agents/seat_cooling",
         frozenset({".rs"}),
     ),
+    # The status module composes the seat-rotation readout (`applied.seat_id`,
+    # `next_seat_id`) and probe verdicts, and it logs on every persist/read
+    # failure path — the same seat plane this guard was extended to cover.
+    (
+        "anyharness/crates/anyharness-lib/src/domains/agents/status",
+        frozenset({".rs"}),
+    ),
     ("anyharness/crates/anyharness-lib/src/live/sessions", frozenset({".rs"})),
 ]
 
