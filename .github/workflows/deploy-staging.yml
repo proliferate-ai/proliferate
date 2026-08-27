@@ -1,9 +1,13 @@
-# Manual-only staging. Merging to main deploys nothing: the one automated
-# transition is `release.yml` (main to production). Staging is an optional
-# proving ground an operator dispatches on purpose.
+# Staging rides main: every green CI run on main auto-deploys staging — the
+# standing e2e world is continuously current. An operator can still dispatch
+# any ref by hand. Production remains release.yml-only (cron + dispatch).
 name: Deploy Staging
 
 on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
