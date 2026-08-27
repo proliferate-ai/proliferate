@@ -39,10 +39,8 @@ impl ProbeScratch {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
-        let root = probe_root(runtime_home).join(format!(
-            "{harness_kind}-{}-{nanos}",
-            std::process::id()
-        ));
+        let root =
+            probe_root(runtime_home).join(format!("{harness_kind}-{}-{nanos}", std::process::id()));
         create_private_dir(&root)?;
         let scratch = Self { root };
         create_private_dir(&scratch.workspace_root())?;
@@ -111,7 +109,10 @@ fn set_private_dir_permissions(_dir: &Path) -> Result<(), RouteAuthError> {
 /// parse fall back to (b) on directory mtime.
 ///
 /// Returns the roots it removed, so the caller can log and tests can assert.
-pub fn sweep_probe_scratch(runtime_home: &Path, max_probe_age: std::time::Duration) -> Vec<PathBuf> {
+pub fn sweep_probe_scratch(
+    runtime_home: &Path,
+    max_probe_age: std::time::Duration,
+) -> Vec<PathBuf> {
     let root = probe_root(runtime_home);
     let Ok(entries) = std::fs::read_dir(&root) else {
         return Vec::new();

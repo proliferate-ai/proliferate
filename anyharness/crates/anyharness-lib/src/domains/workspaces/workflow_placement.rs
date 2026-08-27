@@ -65,8 +65,9 @@ impl ResolvedWorkflowPlacement {
 
     pub fn target_path(&self) -> &str {
         match self {
-            Self::Scratch { target_path, .. }
-            | Self::RepositoryWorktree { target_path, .. } => target_path,
+            Self::Scratch { target_path, .. } | Self::RepositoryWorktree { target_path, .. } => {
+                target_path
+            }
         }
     }
 

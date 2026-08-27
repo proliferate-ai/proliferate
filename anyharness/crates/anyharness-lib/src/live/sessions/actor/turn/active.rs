@@ -193,8 +193,7 @@ impl SessionActor {
 
             while prompt_result.is_none() && !abandoned_for_stop {
                 let stop_bound_armed = stop_bound_at.is_some();
-                let stop_bound_deadline =
-                    stop_bound_at.unwrap_or_else(tokio::time::Instant::now);
+                let stop_bound_deadline = stop_bound_at.unwrap_or_else(tokio::time::Instant::now);
                 tokio::select! {
                     _ = tokio::time::sleep_until(stop_bound_deadline), if stop_bound_armed => {
                         tracing::warn!(

@@ -116,8 +116,10 @@ pub(in crate::live::sessions::actor) async fn fork_native_session(
     )
     .await?;
 
-    let mut request =
-        acp::schema::ForkSessionRequest::new(native_session_id.to_string(), workspace_path.to_path_buf());
+    let mut request = acp::schema::ForkSessionRequest::new(
+        native_session_id.to_string(),
+        workspace_path.to_path_buf(),
+    );
     if !mcp_servers.is_empty() {
         request = request.mcp_servers(to_acp_servers(mcp_servers));
     }
@@ -158,11 +160,13 @@ pub(in crate::live::sessions::actor) async fn sidedoor_targeted_fork(
 ) -> Result<SidedoorForkCommandResult, SidedoorForkCommandError> {
     // A non-Ready side-door at dispatch time is a hard error, never a silent
     // tip fork.
-    let runtime = sidedoor.filter(|runtime| runtime.is_ready()).ok_or_else(|| {
-        SidedoorForkCommandError::NotReady(
-            "OpenCode side-door is not ready for targeted fork dispatch".to_string(),
-        )
-    })?;
+    let runtime = sidedoor
+        .filter(|runtime| runtime.is_ready())
+        .ok_or_else(|| {
+            SidedoorForkCommandError::NotReady(
+                "OpenCode side-door is not ready for targeted fork dispatch".to_string(),
+            )
+        })?;
     let client = OpencodeSidedoorClient::new(runtime.config.port, runtime.config.password.clone())
         .map_err(|error| SidedoorForkCommandError::Failed(error.to_string()))?;
 

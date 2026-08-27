@@ -128,8 +128,7 @@ mod tests {
         let file = dir.join("archive.zip");
         std::fs::write(&file, b"zip-bytes").expect("write temp file");
 
-        let file_entry =
-            entry_for_path(file.to_string_lossy().into_owned()).expect("file entry");
+        let file_entry = entry_for_path(file.to_string_lossy().into_owned()).expect("file entry");
         assert_eq!(file_entry.name, "archive.zip");
         assert!(!file_entry.is_directory);
         assert_eq!(file_entry.size, Some(9));

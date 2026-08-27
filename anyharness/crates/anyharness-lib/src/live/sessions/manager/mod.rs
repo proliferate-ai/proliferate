@@ -186,24 +186,29 @@ impl Clone for LiveSessionManager {
 #[derive(Debug)]
 pub(crate) enum ScriptedSessionEvent {
     /// A `SetConfigOption` arrived (real effort application).
-    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     Config { config_id: String, value: String },
     /// A `Prompt` arrived (real dispatch), with its deterministic prompt id.
-    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     Prompt { prompt_id: Option<String> },
     /// A `CancelTurnIfActive` arrived, with its exact expected turn id.
-    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     CancelIfActive { expected_turn_id: String },
 }
 
 #[cfg(test)]
 pub(crate) struct ScriptedSession {
     /// One entry per received command, in arrival order.
-    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) events: tokio::sync::mpsc::UnboundedReceiver<ScriptedSessionEvent>,
     /// With `hold_config_replies` / `hold_cancel_replies`, the matching reply
     /// waits for one `notify_one` permit per command.
-    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) release: Arc<tokio::sync::Notify>,
 }
 

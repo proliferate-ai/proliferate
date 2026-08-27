@@ -272,7 +272,11 @@ async fn an_install_id_crosses_the_process_seam_to_the_real_collector() {
     let launcher = install_id_launcher(Some("install-desktop-test-4b71"), &fallback);
 
     let mut process = launcher.launch().await.expect("launch with an install id");
-    let health = process.client().health().await.expect("authenticated health");
+    let health = process
+        .client()
+        .health()
+        .await
+        .expect("authenticated health");
     assert_eq!(health.status, HealthStatusV1::Ready);
     assert_eq!(
         process.orderly_shutdown().await.expect("shutdown"),

@@ -12,9 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::domains::agents::installer::manifest::{record_entries, ManifestArtifact};
-use crate::domains::agents::live_ports::{
-    ProbeAttestation, ProbeModelEntry, ProbeSnapshot,
-};
+use crate::domains::agents::live_ports::{ProbeAttestation, ProbeModelEntry, ProbeSnapshot};
 use crate::domains::agents::route_auth::{GatewayModelPlan, GatewayModelResolve};
 
 use super::probe::{ProbeError, ProbeRequest, ProbeRunner, COMPOSED_AUTH_CONTEXT_LABEL};
@@ -213,14 +211,17 @@ impl GatewayModelResolve for CountingPlanProducer {
 #[derive(Debug, Clone)]
 pub(crate) enum FakeBehavior {
     Ok,
-    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     Fail(String),
     /// Fast-fail as a spawn failure — the harness binary could not be started.
-    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     Spawn(String),
     /// Sleep this long before answering — used with a paused clock to exercise the
     /// timeout path deterministically.
-    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     Sleep(Duration),
 }
 

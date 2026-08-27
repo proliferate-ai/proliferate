@@ -193,7 +193,8 @@ async fn response_dropped_after_capture_retains_an_unresolved_checkpoint() {
                 "SELECT id, expired_at, turn_id, prompt_id FROM workspace_checkpoints",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-            )})
+            )
+        })
         .expect("read unresolved checkpoint");
     assert_eq!(expired_at, None, "ambiguous acknowledgement retains bytes");
     assert_eq!(turn_id, None, "an unresolved boundary is never fabricated");
@@ -522,7 +523,8 @@ fn only_checkpoint(state: &AppState) -> (String, Option<String>) {
                 "SELECT id, expired_at FROM workspace_checkpoints",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?)),
-            )})
+            )
+        })
         .expect("read checkpoint")
 }
 

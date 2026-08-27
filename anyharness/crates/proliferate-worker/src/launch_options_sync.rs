@@ -23,16 +23,23 @@ pub struct LaunchOptionsSyncState {
 }
 
 impl LaunchOptionsSyncState {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
     /// Test-only watermark accessor (runtime_tests asserts the push ledger).
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn pushed_revisions(&self) -> HashMap<String, i64> {
-        self.revisions.lock().expect("launch-option sync state poisoned").clone()
+        self.revisions
+            .lock()
+            .expect("launch-option sync state poisoned")
+            .clone()
     }
 }
 
 #[derive(Debug, Deserialize)]
-struct RuntimeAgentSummary { kind: String }
+struct RuntimeAgentSummary {
+    kind: String,
+}
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,30 +67,63 @@ pub async fn maybe_sync(
     worker_token: &str,
     state: &LaunchOptionsSyncState,
 ) {
-    if !upload_allowed { return; }
+    if !upload_allowed {
+        return;
+    }
     let bearer = config.runtime_bearer_token.clone().or_else(|| {
-        std::env::var("ANYHARNESS_BEARER_TOKEN").ok().filter(|value| !value.is_empty())
+        std::env::var("ANYHARNESS_BEARER_TOKEN")
+            .ok()
+            .filter(|value| !value.is_empty())
     });
     let base = config.runtime_base_url.trim_end_matches('/');
     let kinds = match list_harnesses(base, bearer.as_deref()).await {
         Ok(value) => value,
-        Err(error) => { warn!(?error, "launch-option sync failed to list runtime harnesses"); return; }
+        Err(error) => {
+            warn!(
+                ?error,
+                "launch-option sync failed to list runtime harnesses"
+            );
+            return;
+        }
     };
     for kind in kinds {
         let payload = match read_state(base, bearer.as_deref(), &kind).await {
             Ok(value) => value,
-            Err(error) => { warn!(?error, harness = %kind, "launch-option sync failed to read runtime state"); continue; }
+            Err(error) => {
+                warn!(?error, harness = %kind, "launch-option sync failed to read runtime state");
+                continue;
+            }
         };
-        let already = state.revisions.lock().expect("launch-option sync state poisoned").get(&kind).copied();
-        if already.is_some_and(|revision| revision >= payload.revision) { continue; }
+        let already = state
+            .revisions
+            .lock()
+            .expect("launch-option sync state poisoned")
+            .get(&kind)
+            .copied();
+        if already.is_some_and(|revision| revision >= payload.revision) {
+            continue;
+        }
         let payload_json = match serde_json::to_string(&payload) {
             Ok(value) => value,
-            Err(error) => { warn!(?error, harness = %kind, "launch-option sync failed to encode payload"); continue; }
+            Err(error) => {
+                warn!(?error, harness = %kind, "launch-option sync failed to encode payload");
+                continue;
+            }
         };
-        let request = IngestHarnessLaunchOptionsRequest { source_revision: payload.revision, payload_json };
-        match cloud.ingest_harness_launch_options(worker_token, &kind, &request).await {
+        let request = IngestHarnessLaunchOptionsRequest {
+            source_revision: payload.revision,
+            payload_json,
+        };
+        match cloud
+            .ingest_harness_launch_options(worker_token, &kind, &request)
+            .await
+        {
             Ok(()) => {
-                state.revisions.lock().expect("launch-option sync state poisoned").insert(kind.clone(), payload.revision);
+                state
+                    .revisions
+                    .lock()
+                    .expect("launch-option sync state poisoned")
+                    .insert(kind.clone(), payload.revision);
                 info!(harness = %kind, source_revision = payload.revision, "copied launch-option state");
             }
             Err(error) => warn!(?error, harness = %kind, "launch-option sync upload failed"),
@@ -94,19 +134,42 @@ pub async fn maybe_sync(
 async fn list_harnesses(base: &str, bearer: Option<&str>) -> Result<Vec<String>, WorkerError> {
     let client = reqwest::Client::new();
     let mut request = client.get(format!("{base}/v1/agents"));
-    if let Some(token) = bearer { request = request.bearer_auth(token); }
+    if let Some(token) = bearer {
+        request = request.bearer_auth(token);
+    }
     let response = request.send().await?;
     let status = response.status();
-    if !status.is_success() { return Err(WorkerError::Cloud { status, body: response.text().await.unwrap_or_default() }); }
-    Ok(response.json::<Vec<RuntimeAgentSummary>>().await?.into_iter().map(|agent| agent.kind).collect())
+    if !status.is_success() {
+        return Err(WorkerError::Cloud {
+            status,
+            body: response.text().await.unwrap_or_default(),
+        });
+    }
+    Ok(response
+        .json::<Vec<RuntimeAgentSummary>>()
+        .await?
+        .into_iter()
+        .map(|agent| agent.kind)
+        .collect())
 }
 
-async fn read_state(base: &str, bearer: Option<&str>, kind: &str) -> Result<RuntimeHarnessLaunchOptionsResponse, WorkerError> {
+async fn read_state(
+    base: &str,
+    bearer: Option<&str>,
+    kind: &str,
+) -> Result<RuntimeHarnessLaunchOptionsResponse, WorkerError> {
     let client = reqwest::Client::new();
     let mut request = client.get(format!("{base}/v1/agents/{kind}/launch-options"));
-    if let Some(token) = bearer { request = request.bearer_auth(token); }
+    if let Some(token) = bearer {
+        request = request.bearer_auth(token);
+    }
     let response = request.send().await?;
     let status = response.status();
-    if !status.is_success() { return Err(WorkerError::Cloud { status, body: response.text().await.unwrap_or_default() }); }
+    if !status.is_success() {
+        return Err(WorkerError::Cloud {
+            status,
+            body: response.text().await.unwrap_or_default(),
+        });
+    }
     Ok(response.json().await?)
 }

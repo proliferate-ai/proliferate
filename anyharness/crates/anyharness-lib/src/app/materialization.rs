@@ -30,9 +30,7 @@ pub(super) struct MaterializationWiringDeps {
 /// Both share one ledger store and one in-process lock map, so repo-root and
 /// workspace operation ids converge/conflict against the same state whichever
 /// layer they enter through.
-pub(super) fn wire_materialization(
-    deps: MaterializationWiringDeps,
-) -> Arc<MaterializationRuntime> {
+pub(super) fn wire_materialization(deps: MaterializationWiringDeps) -> Arc<MaterializationRuntime> {
     let store = MaterializationOperationStore::new(deps.db);
     let operation_locks = MaterializationOperationLocks::new();
     let service = Arc::new(MaterializationService::new(

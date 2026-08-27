@@ -7,7 +7,10 @@ use crate::domains::agents::launch_probe::LaunchProbeService;
 use crate::domains::agents::route_auth::gateway_plan::GatewayModelPlanner;
 use crate::persistence::Db;
 
-pub(super) fn build_services(db: &Db, runtime_home: &Path) -> (
+pub(super) fn build_services(
+    db: &Db,
+    runtime_home: &Path,
+) -> (
     Arc<HarnessLaunchOptionsService>,
     Arc<LaunchProbeService>,
     Arc<GatewayModelPlanner>,

@@ -188,8 +188,7 @@ impl LoopStore {
             created_at: "2026-08-19T00:00:00Z".to_string(),
             updated_at_ms: 1,
         };
-        self.db
-            .with_conn(|conn| Self::upsert_loop(conn, &record))
+        self.db.with_conn(|conn| Self::upsert_loop(conn, &record))
     }
 }
 

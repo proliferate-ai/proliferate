@@ -283,8 +283,7 @@ pub(in crate::live::sessions) enum SessionCommand {
     /// is process-local actor state.
     SidedoorTargetedFork {
         vendor_message_id: String,
-        respond_to:
-            oneshot::Sender<Result<SidedoorForkCommandResult, SidedoorForkCommandError>>,
+        respond_to: oneshot::Sender<Result<SidedoorForkCommandResult, SidedoorForkCommandError>>,
     },
     CloseNativeSession {
         native_session_id: String,
@@ -299,7 +298,8 @@ pub(in crate::live::sessions) enum SessionCommand {
     /// actor's current active turn, compared serially on the actor loop. A
     /// stale or foreign turn id never cancels newer work. Leaves the public
     /// `Cancel` behavior untouched.
-    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     CancelTurnIfActive {
         expected_turn_id: String,
         respond_to: oneshot::Sender<ConditionalCancelOutcome>,

@@ -74,7 +74,6 @@ impl CapturedEvent {
             .find(|(key, _)| key == name)
             .map(|(_, value)| value)
     }
-
 }
 
 /// One ordered timeline shared by the trace collector and the fake listeners.
@@ -111,10 +110,7 @@ pub(crate) fn events(timeline: &Timeline) -> Vec<CapturedEvent> {
 }
 
 /// The index in the shared timeline of the first step matching a predicate.
-pub(crate) fn position(
-    timeline: &Timeline,
-    matches: impl FnMut(&Step) -> bool,
-) -> Option<usize> {
+pub(crate) fn position(timeline: &Timeline, matches: impl FnMut(&Step) -> bool) -> Option<usize> {
     steps(timeline).iter().position(matches)
 }
 
@@ -307,4 +303,3 @@ pub(crate) fn request_line(raw: &str) -> (String, String) {
         parts.next().unwrap_or_default().to_string(),
     )
 }
-

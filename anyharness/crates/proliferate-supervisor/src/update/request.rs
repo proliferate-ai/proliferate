@@ -128,10 +128,7 @@ fn is_newer(a: &UpdateRequestV1, b: &UpdateRequestV1) -> bool {
 /// Write the terminal result for a request (Activated | RolledBack | Invalid).
 /// Atomic + validated by the protocol crate; once written the request is
 /// terminal and `next_pending` skips it.
-pub fn record_result(
-    request_dir: &Path,
-    result: &UpdateResultV1,
-) -> Result<(), SupervisorError> {
+pub fn record_result(request_dir: &Path, result: &UpdateResultV1) -> Result<(), SupervisorError> {
     write_result(request_dir, result)?;
     Ok(())
 }
@@ -199,7 +196,10 @@ fn is_path_safe(value: &str) -> bool {
 mod tests {
     use super::*;
 
-    use std::{path::PathBuf, sync::atomic::{AtomicU64, Ordering}};
+    use std::{
+        path::PathBuf,
+        sync::atomic::{AtomicU64, Ordering},
+    };
 
     use proliferate_runtime_update_protocol::{
         read_result, result_file_name, write_request, UpdateComponent,

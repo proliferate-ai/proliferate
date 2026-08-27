@@ -12,7 +12,8 @@ fn opencode_gateway_writes_config_with_live_models() {
     let home = TempHome::new("opencode-gw");
     home.write_state_json(&gateway_state("opencode"));
 
-    let rendered = resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
     let config_path = rendered
         .set
         .get("OPENCODE_CONFIG")
@@ -69,7 +70,8 @@ fn opencode_api_key_sets_exactly_its_var() {
             vec![api_key_source("ANTHROPIC_API_KEY", "sk-a")],
         )],
     ));
-    let rendered = resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
     assert_eq!(rendered.set.get("ANTHROPIC_API_KEY").unwrap(), "sk-a");
     assert_eq!(rendered.set.len(), 1);
     assert!(!rendered.set.contains_key("OPENCODE_CONFIG"));
@@ -94,7 +96,8 @@ fn opencode_gateway_plus_api_keys_merge_into_one_additive_delta() {
         )],
     ));
 
-    let rendered = resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
 
     // Gateway source: injected config + virtual key env.
     let config_path = rendered
@@ -126,7 +129,8 @@ fn opencode_api_keys_without_gateway_render_env_only() {
             vec![api_key_source("OPENAI_API_KEY", "sk-openai-direct")],
         )],
     ));
-    let rendered = resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
     assert_eq!(
         rendered.set.get("OPENAI_API_KEY").unwrap(),
         "sk-openai-direct"
@@ -144,8 +148,7 @@ fn opencode_gateway_uses_plan_models_not_state() {
     let resolver = FixedResolver(GatewayModelPlan {
         models: vec!["claude-haiku-4-5-20251001".to_string()],
     });
-    let rendered =
-        resolve_launch_route_auth(home.path(), "opencode", &resolver).expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "opencode", &resolver).expect("render");
     let config_path = rendered
         .set
         .get("OPENCODE_CONFIG")

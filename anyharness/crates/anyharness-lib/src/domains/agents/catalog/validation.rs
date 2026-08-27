@@ -206,17 +206,16 @@ fn validate_signal(
             }
         }
         AgentCatalogAuthSignal::EnvFlag(value) => {
-            let valid = value.split_once('=').is_some_and(|(key, value)| {
-                !key.trim().is_empty() && !value.trim().is_empty()
-            });
+            let valid = value
+                .split_once('=')
+                .is_some_and(|(key, value)| !key.trim().is_empty() && !value.trim().is_empty());
             if !valid {
                 anyhow::bail!(
                     "agent catalog agent '{agent_kind}' auth context '{context_id}' envFlag signal '{value}' is not 'VAR=value'"
                 );
             }
         }
-        AgentCatalogAuthSignal::AnyOf(children)
-        | AgentCatalogAuthSignal::AllOf(children) => {
+        AgentCatalogAuthSignal::AnyOf(children) | AgentCatalogAuthSignal::AllOf(children) => {
             if children.is_empty() {
                 anyhow::bail!(
                     "agent catalog agent '{agent_kind}' auth context '{context_id}' has empty signal combinator"
@@ -241,14 +240,18 @@ mod tests {
 
     #[test]
     fn canonical_catalog_validates() {
-        validate_agent_catalog_document(&canonical_catalog()).expect("canonical catalog must validate");
+        validate_agent_catalog_document(&canonical_catalog())
+            .expect("canonical catalog must validate");
     }
 
     #[test]
     fn rejects_duplicate_presentation_model_ids() {
         let mut catalog = canonical_catalog();
         let duplicate = catalog.agents[0].session.presentation_models[0].clone();
-        catalog.agents[0].session.presentation_models.push(duplicate);
+        catalog.agents[0]
+            .session
+            .presentation_models
+            .push(duplicate);
         let error = validate_agent_catalog_document(&catalog).expect_err("duplicate must fail");
         assert!(error.to_string().contains("presentation model"));
     }

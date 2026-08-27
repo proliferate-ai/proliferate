@@ -153,10 +153,7 @@ fn heartbeat_response_parses_the_shared_v1_fixture_as_allowed() {
     );
     // The rest of the golden body still decodes, so this fixture really is
     // the whole contract rather than a capability-only stub.
-    assert_eq!(
-        response.worker_id,
-        "2f5b3c14-8d1e-4a7b-9c60-1f2e3d4a5b6c"
-    );
+    assert_eq!(response.worker_id, "2f5b3c14-8d1e-4a7b-9c60-1f2e3d4a5b6c");
     let desired = response.desired_versions.expect("desiredVersions present");
     assert_eq!(desired.worker.as_deref(), Some("0.4.13"));
     assert_eq!(desired.anyharness.as_deref(), Some("0.66.0"));
@@ -189,8 +186,7 @@ fn the_legacy_fixture_really_omits_the_capability_member() {
         value.get("launchOptionsUploadAllowed").is_none(),
         "the legacy fixture must OMIT the member, not send false"
     );
-    let v1: serde_json::Value =
-        serde_json::from_str(V1_FIXTURE).expect("v1 fixture is json");
+    let v1: serde_json::Value = serde_json::from_str(V1_FIXTURE).expect("v1 fixture is json");
     assert_eq!(v1["launchOptionsUploadAllowed"], serde_json::json!(true));
 }
 

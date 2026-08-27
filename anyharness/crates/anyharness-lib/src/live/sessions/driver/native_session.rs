@@ -416,8 +416,8 @@ pub(in crate::live::sessions) async fn start_native_session(
                         existing.clone(),
                         workspace_path.to_path_buf(),
                     )
-                        .mcp_servers(to_acp_servers(mcp_servers))
-                        .meta(build_system_prompt_meta(system_prompt_append)),
+                    .mcp_servers(to_acp_servers(mcp_servers))
+                    .meta(build_system_prompt_meta(system_prompt_append)),
                 )
                 .block_task()
                 .await

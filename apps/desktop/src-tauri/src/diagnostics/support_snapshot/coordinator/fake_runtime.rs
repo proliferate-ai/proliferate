@@ -230,7 +230,6 @@ impl CoordinatorRuntime for FakeRuntime {
         })
     }
 
-
     fn before_finish_publication(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         let gate = Arc::clone(&self.finish_publication);
         Box::pin(async move {

@@ -190,7 +190,8 @@ pub fn agent_process_pinned_version(spec: &AgentProcessInstallSpec) -> Option<St
     match spec {
         AgentProcessInstallSpec::ManagedNpmPackage { package, .. } => npm_package_version(package),
         AgentProcessInstallSpec::RegistryBacked {
-            fallback: crate::domains::agents::model::AgentProcessFallback::NpmPackage { package, .. },
+            fallback:
+                crate::domains::agents::model::AgentProcessFallback::NpmPackage { package, .. },
             ..
         } => npm_package_version(package),
         AgentProcessInstallSpec::RegistryBacked { .. } => None,

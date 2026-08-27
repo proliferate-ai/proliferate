@@ -243,12 +243,11 @@ impl PlanService {
         self.store
             .with_tx_anyhow(|tx| {
                 (|| -> Result<(PlanRecord, Vec<SessionEventEnvelope>), PlanDecisionTxError> {
-                    let plan = PlanStore::find_by_id_in_tx(tx, plan_id).map_err(|error| {
-                        match error {
+                    let plan =
+                        PlanStore::find_by_id_in_tx(tx, plan_id).map_err(|error| match error {
                             rusqlite::Error::QueryReturnedNoRows => PlanDecisionTxError::NotFound,
                             other => PlanDecisionTxError::Sqlite(other),
-                        }
-                    })?;
+                        })?;
                     if plan.decision_version != expected_version {
                         return Err(PlanDecisionTxError::StaleVersion);
                     }
@@ -297,12 +296,11 @@ impl PlanService {
         self.store
             .with_tx_anyhow(|tx| {
                 (|| -> Result<(PlanRecord, Vec<SessionEventEnvelope>), PlanDecisionTxError> {
-                    let plan = PlanStore::find_by_id_in_tx(tx, plan_id).map_err(|error| {
-                        match error {
+                    let plan =
+                        PlanStore::find_by_id_in_tx(tx, plan_id).map_err(|error| match error {
                             rusqlite::Error::QueryReturnedNoRows => PlanDecisionTxError::NotFound,
                             other => PlanDecisionTxError::Sqlite(other),
-                        }
-                    })?;
+                        })?;
                     if plan.decision_version != expected_version {
                         return Err(PlanDecisionTxError::StaleVersion);
                     }
@@ -352,12 +350,11 @@ impl PlanService {
         self.store
             .with_tx_anyhow(|tx| {
                 (|| -> Result<(PlanRecord, Vec<SessionEventEnvelope>), PlanDecisionTxError> {
-                    let plan = PlanStore::find_by_id_in_tx(tx, plan_id).map_err(|error| {
-                        match error {
+                    let plan =
+                        PlanStore::find_by_id_in_tx(tx, plan_id).map_err(|error| match error {
                             rusqlite::Error::QueryReturnedNoRows => PlanDecisionTxError::NotFound,
                             other => PlanDecisionTxError::Sqlite(other),
-                        }
-                    })?;
+                        })?;
                     if plan.native_resolution_state == native_state {
                         return Ok((plan, Vec::new()));
                     }

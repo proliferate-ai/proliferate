@@ -401,7 +401,8 @@ fn verify_present_worktree(
         });
     }
     let registration = target_registrations[0];
-    if registration.prunable || registration.locked || registration.branch.as_deref() != branch_name {
+    if registration.prunable || registration.locked || registration.branch.as_deref() != branch_name
+    {
         return Err(GitWorktreeRestoreError::RegistrationConflict {
             path: target_path.display().to_string(),
             detail: "the existing checkout does not match the recorded branch registration"
@@ -430,8 +431,9 @@ fn verify_present_worktree(
             if current_branch.is_some() {
                 return Err(GitWorktreeRestoreError::RegistrationConflict {
                     path: target_path.display().to_string(),
-                    detail: "the existing checkout is attached to a branch, not detached as recorded"
-                        .to_string(),
+                    detail:
+                        "the existing checkout is attached to a branch, not detached as recorded"
+                            .to_string(),
                 });
             }
         }
