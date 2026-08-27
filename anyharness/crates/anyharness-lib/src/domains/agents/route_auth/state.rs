@@ -242,6 +242,14 @@ pub fn apply_state_file(
     state: &AgentAuthState,
 ) -> Result<AppliedStateOutcome, RouteAuthError> {
     let path = state_file_path(runtime_home);
+    // Read, diff and write under the state file's own exclusive lock. Without
+    // it two concurrent PUTs both diff against the SAME baseline, so the
+    // second's changed set can omit a harness the first already moved — and a
+    // missed harness is a harness that launches differently while its status
+    // document and its probe are never refreshed for it. An advisory flock (not
+    // an in-process mutex) because the desktop courier and a cloud
+    // materialization worker are separate processes over one home.
+    let _lock = StateFileLock::acquire(&path)?;
     let previous = match load_state_from_path(&path) {
         Ok(existing) => existing,
         // Malformed: no trustworthy baseline (and no trustworthy sequence) —
@@ -273,21 +281,31 @@ pub fn apply_state_file(
 }
 
 /// The per-harness diff between two documents. A harness is CHANGED when its
-/// entry's canonical serialization differs, appears, or disappears. The
-/// comparison runs over the parsed [`HarnessAuth`] values via
-/// `serde_json::to_value`, which is deterministic here: this crate does not
+/// entry's canonical serialization differs, appears, or disappears — or when the
+/// document-level `issuing_server_origin` moved, because that flips every
+/// harness at once. The comparison runs over the parsed [`HarnessAuth`] values
+/// via `serde_json::to_value`, which is deterministic here: this crate does not
 /// enable serde_json's `preserve_order`, so `settings` maps are key-sorted.
 fn changed_harnesses(previous: Option<&AgentAuthState>, incoming: &AgentAuthState) -> Vec<String> {
-    let entry_values = |state: &AgentAuthState| -> Vec<(String, serde_json::Value)> {
+    // Every consumer of this document reads it through `load_effective_state`,
+    // which DISCARDS a document stamped for a different server — so flipping the
+    // stamp flips every harness between "gateway routed" and "native" for
+    // composition, the launch render, and the launch-options basis alike, even
+    // when every harness entry is byte-identical. A missed change is strictly
+    // worse than a spurious poke: it means launches route differently while no
+    // status document is ever recomposed for it.
+    // Compared as normalized `Option`s, not through `matches_server_origin`:
+    // that predicate deliberately treats an ABSENT stamp as a match (the
+    // backward-compat path), but adding or removing a stamp still changes which
+    // documents the origin guard honors, so it is a real move here.
+    let stamp =
+        |state: &AgentAuthState| state.issuing_server_origin.as_deref().map(normalize_origin);
+    let origin_moved = previous.is_some_and(|previous| stamp(previous) != stamp(incoming));
+    let entry_values = |state: &AgentAuthState| -> Vec<(String, Option<serde_json::Value>)> {
         state
             .harnesses
             .iter()
-            .map(|entry| {
-                (
-                    entry.harness_kind.clone(),
-                    serde_json::to_value(entry).unwrap_or(serde_json::Value::Null),
-                )
-            })
+            .map(|entry| (entry.harness_kind.clone(), serde_json::to_value(entry).ok()))
             .collect()
     };
     let previous_entries = previous.map(entry_values).unwrap_or_default();
@@ -298,7 +316,15 @@ fn changed_harnesses(previous: Option<&AgentAuthState>, incoming: &AgentAuthStat
             .iter()
             .find(|(previous_kind, _)| previous_kind == kind)
             .map(|(_, previous_value)| previous_value);
-        if previous_value != Some(value) {
+        // An entry that would not serialize cannot be compared. A diff whose
+        // failure mode must be "assume changed" therefore reports it changed —
+        // two unserializable entries used to compare EQUAL (both `Null`), which
+        // is the wrong direction.
+        let entry_moved = match (previous_value, value) {
+            (Some(Some(previous)), Some(value)) => previous != value,
+            _ => true,
+        };
+        if entry_moved || origin_moved {
             changed.push(kind.clone());
         }
     }
@@ -310,6 +336,16 @@ fn changed_harnesses(previous: Option<&AgentAuthState>, incoming: &AgentAuthStat
             changed.push(kind.clone());
         }
     }
+    // A document that repeats a `harness_kind` must not poke it twice: the poke
+    // and the status refresh are both keyed on the kind alone.
+    let mut seen: Vec<String> = Vec::new();
+    changed.retain(|kind| {
+        if seen.iter().any(|previous| previous == kind) {
+            return false;
+        }
+        seen.push(kind.clone());
+        true
+    });
     changed
 }
 
@@ -332,6 +368,9 @@ pub struct ClearedStateOutcome {
 /// ordinary state documents.
 pub fn clear_state_file(runtime_home: &Path) -> Result<ClearedStateOutcome, RouteAuthError> {
     let path = state_file_path(runtime_home);
+    // Same lock as [`apply_state_file`]: a clear racing an apply must not report
+    // a previous document that the apply already replaced.
+    let _lock = StateFileLock::acquire(&path)?;
     let previous_harnesses = match load_state_from_path(&path) {
         Ok(previous) => Some(
             previous
@@ -355,6 +394,66 @@ pub fn clear_state_file(runtime_home: &Path) -> Result<ClearedStateOutcome, Rout
         Err(error) => Err(RouteAuthError::Materialize {
             detail: format!("failed to remove {}: {error}", path.display()),
         }),
+    }
+}
+
+/// Well-known name of the state file's mutation lock, beside the file itself.
+const STATE_LOCK_FILE_NAME: &str = ".state.lock";
+
+/// An exclusive advisory lock over the state file's read-diff-write window.
+///
+/// BLOCKING, unlike `launch_probe::lock::ProbeEngineLock`, and for the opposite
+/// reason: probing is convergence, so waiting for that lock would be a bug,
+/// whereas an apply is a mutation whose diff is only correct if it is the sole
+/// writer. Waiting is bounded by one small file write.
+///
+/// A crash releases it via the OS, which is why this is an flock and not a
+/// pid file. An unopenable lock path degrades to "no lock" rather than failing
+/// the apply: a read-only or exotic home is a real deployment, and applying
+/// without the lock is exactly the pre-existing behavior.
+struct StateFileLock(Option<fs::File>);
+
+impl StateFileLock {
+    fn acquire(state_path: &Path) -> Result<Self, RouteAuthError> {
+        let parent = state_path.parent().expect("state file path has a parent");
+        fs::create_dir_all(parent).map_err(|error| RouteAuthError::Materialize {
+            detail: format!("failed to create {}: {error}", parent.display()),
+        })?;
+        let path = parent.join(STATE_LOCK_FILE_NAME);
+        let file = match fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(error) => {
+                tracing::warn!(
+                    path = %path.display(),
+                    %error,
+                    "could not open the agent-auth state lock; applying unlocked"
+                );
+                return Ok(Self(None));
+            }
+        };
+        if let Err(error) = fs2::FileExt::lock_exclusive(&file) {
+            tracing::warn!(
+                path = %path.display(),
+                %error,
+                "could not lock the agent-auth state file; applying unlocked"
+            );
+            return Ok(Self(None));
+        }
+        Ok(Self(Some(file)))
+    }
+}
+
+impl Drop for StateFileLock {
+    fn drop(&mut self) {
+        if let Some(file) = self.0.as_ref() {
+            let _ = fs2::FileExt::unlock(file);
+        }
     }
 }
 
@@ -386,6 +485,9 @@ pub(super) fn load_state_from_path(path: &Path) -> Result<Option<AgentAuthState>
     Ok(Some(state))
 }
 
+#[cfg(test)]
+#[path = "state_apply_concurrency_tests.rs"]
+mod state_apply_concurrency_tests;
 #[cfg(test)]
 #[path = "state_tests.rs"]
 mod tests;

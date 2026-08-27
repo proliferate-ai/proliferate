@@ -89,10 +89,16 @@ fn adversarial_settings_key_order_is_not_a_change() {
 fn adversarial_server_origin_flip_reports_no_changed_harness() {
     let home = TempHome::new("adv-origin-flip");
     assert_eq!(
-        apply(&home, &doc(1, Some("https://a.example"), serde_json::Value::Null)),
+        apply(
+            &home,
+            &doc(1, Some("https://a.example"), serde_json::Value::Null)
+        ),
         vec!["codex".to_string()]
     );
-    let changed = apply(&home, &doc(2, Some("https://b.example"), serde_json::Value::Null));
+    let changed = apply(
+        &home,
+        &doc(2, Some("https://b.example"), serde_json::Value::Null),
+    );
     assert_eq!(
         changed,
         vec!["codex".to_string()],
