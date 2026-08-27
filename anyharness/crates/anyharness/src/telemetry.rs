@@ -250,7 +250,7 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
             dsn,
             sentry::ClientOptions {
                 environment: Some(
-                    env_or_default("ANYHARNESS_SENTRY_ENVIRONMENT", "trusted-beta").into(),
+                    env_or_default("ANYHARNESS_SENTRY_ENVIRONMENT", "production").into(),
                 ),
                 release: Some(
                     env_or_default("ANYHARNESS_SENTRY_RELEASE", &default_release()).into(),

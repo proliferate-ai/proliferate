@@ -374,7 +374,7 @@ def test_init_installs_only_the_eight_named_integrations(
         assert asgi.transaction_style == "endpoint"
         assert asgi.middleware_spans is False
 
-@pytest.mark.parametrize("environment", ["trusted-beta", "staging", "production", "Production"])
+@pytest.mark.parametrize("environment", ["trusted-beta", "staging", "production", "local", "dogfood"])
 def test_init_passes_valid_identity_byte_for_byte(
     monkeypatch: pytest.MonkeyPatch, environment: str
 ) -> None:
@@ -384,7 +384,7 @@ def test_init_passes_valid_identity_byte_for_byte(
     assert recorder.kwargs["environment"] == environment
 
 @pytest.mark.parametrize("release", ["", "0.3.27", "proliferate-server@bad", "Bearer token"])
-@pytest.mark.parametrize("environment", ["", "STAGING", "Production ", "development"])
+@pytest.mark.parametrize("environment", ["", "STAGING", "Production", "Production ", "development"])
 def test_init_maps_invalid_identity_to_the_empty_no_discovery_sentinel(
     monkeypatch: pytest.MonkeyPatch, release: str, environment: str
 ) -> None:
@@ -539,7 +539,7 @@ def test_real_client_transaction_drops_its_eligible_attachment(
     assert "release" not in payload and "environment" not in payload
     assert "TXN_ATTACHMENT_SENTINEL_do_not_ship" not in json.dumps(payload, sort_keys=True)
 
-@pytest.mark.parametrize("environment", ["trusted-beta", "staging", "production", "Production"])
+@pytest.mark.parametrize("environment", ["trusted-beta", "staging", "production", "local", "dogfood"])
 def test_real_client_preserves_valid_identity_over_hostile_ambient_values(
     monkeypatch: pytest.MonkeyPatch, environment: str
 ) -> None:

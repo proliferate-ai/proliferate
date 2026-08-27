@@ -150,7 +150,8 @@ def test_a_present_non_transaction_type_drops_the_event(value: Any) -> None:
 
 @pytest.mark.parametrize(
     ("environment", "survives"),
-    [("trusted-beta", True), ("staging", True), ("production", True), ("Production", True),
+    [("trusted-beta", True), ("staging", True), ("production", True), ("local", True),
+     ("dogfood", True), ("Production", False),
      ("STAGING", False), ("Production ", False), ("development", False), ("", False),
      (None, False), (7, False), ("prod\nuction", False), ("Bearer token", False),
      ("/Users/private/x", False)],
