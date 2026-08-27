@@ -3,6 +3,7 @@ pub mod broker;
 pub(crate) mod child_bridge;
 pub(crate) mod child_status;
 pub(crate) mod client;
+pub(crate) mod descriptor_file;
 pub(crate) mod export_admission;
 pub(crate) mod fallback;
 #[cfg(test)]

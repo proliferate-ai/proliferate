@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import logging.handlers
 import sys
 from collections.abc import Iterator
 
@@ -69,7 +70,8 @@ def _reset_logger(logger_name: str) -> logging.Logger:
     return logger
 
 
-def test_configure_server_logging_reuses_uvicorn_error_handlers() -> None:
+def test_configure_server_logging_reuses_uvicorn_error_handlers(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("PROLIFERATE_LOGS_HOME", str(tmp_path))
     app_logger = _reset_logger("proliferate")
     uvicorn_logger = _reset_logger("uvicorn.error")
     handler = logging.StreamHandler()
@@ -78,20 +80,60 @@ def test_configure_server_logging_reuses_uvicorn_error_handlers() -> None:
     configure_server_logging()
 
     assert app_logger.level == logging.INFO
-    assert app_logger.handlers == [handler]
+    stream_handlers = [
+        item
+        for item in app_logger.handlers
+        if not isinstance(item, logging.handlers.RotatingFileHandler)
+    ]
+    assert stream_handlers == [handler]
     assert app_logger.propagate is False
 
 
-def test_configure_server_logging_falls_back_to_stream_handler_without_uvicorn() -> None:
+def test_configure_server_logging_falls_back_to_stream_handler_without_uvicorn(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("PROLIFERATE_LOGS_HOME", str(tmp_path))
     app_logger = _reset_logger("proliferate")
     _reset_logger("uvicorn.error")
 
     configure_server_logging()
 
     assert app_logger.level == logging.INFO
-    assert len(app_logger.handlers) == 1
-    assert isinstance(app_logger.handlers[0], logging.StreamHandler)
+    stream_handlers = [
+        handler
+        for handler in app_logger.handlers
+        if not isinstance(handler, logging.handlers.RotatingFileHandler)
+    ]
+    assert len(stream_handlers) == 1
+    assert isinstance(stream_handlers[0], logging.StreamHandler)
     assert app_logger.propagate is False
+
+
+def test_local_dev_gains_a_json_file_sink_beside_the_console(monkeypatch, tmp_path) -> None:
+    """The local tail's server source: debug mode writes server.log as JSON
+    records whatever the console shows (observability README §2: JSON when a
+    machine reads)."""
+    monkeypatch.setenv("PROLIFERATE_LOGS_HOME", str(tmp_path))
+    app_logger = _reset_logger("proliferate")
+    _reset_logger("uvicorn.error")
+
+    configure_server_logging()
+
+    file_handlers = [
+        handler
+        for handler in app_logger.handlers
+        if isinstance(handler, logging.handlers.RotatingFileHandler)
+    ]
+    if not file_handlers:  # debug=False runs keep prod stdout-only behavior
+        from proliferate.config import settings
+
+        assert settings.debug is False
+        return
+    assert len(file_handlers) == 1
+    assert file_handlers[0].baseFilename == str(tmp_path / "server" / "logs" / "server.log")
+    from proliferate.middleware.logging import JsonLogFormatter
+
+    assert isinstance(file_handlers[0].formatter, JsonLogFormatter)
 
 
 def test_correlation_filter_adds_missing_context_without_overwriting_record() -> None:

@@ -494,6 +494,13 @@ async fn failed_launch(
     result
 }
 
+impl OwnedCollectorProcess {
+    /// Endpoint + capability for the local tail's descriptor file.
+    pub(crate) fn tail_descriptor(&self) -> (&str, &SecretCapability) {
+        (&self.descriptor.endpoint, &self.capability)
+    }
+}
+
 pub(crate) struct OwnedCollectorProcess {
     child: Option<Child>,
     control: Option<tokio::net::UnixStream>,

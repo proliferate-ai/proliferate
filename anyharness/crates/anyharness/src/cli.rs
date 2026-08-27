@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 
 use crate::commands::catalog_probe::CatalogProbeArgs;
 use crate::commands::install_agents::InstallAgentsArgs;
+use crate::commands::logs::LogsArgs;
 use crate::commands::serve::ServeArgs;
 
 #[derive(Parser)]
@@ -22,4 +23,7 @@ pub enum Commands {
     PrintOpenapi,
     /// Probe an installed agent harness over ACP and snapshot its model/mode catalog
     CatalogProbe(CatalogProbeArgs),
+    /// One time-ordered stream of everything that happened on this machine:
+    /// the collector's records interleaved with every process's file sink
+    Logs(LogsArgs),
 }

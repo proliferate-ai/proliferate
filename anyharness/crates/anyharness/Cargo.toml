@@ -21,6 +21,10 @@ tracing-subscriber.workspace = true
 tracing-appender.workspace = true
 file-rotate.workspace = true
 anyhow.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+serde = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "json"] }
 tower.workspace = true
 tower-http.workspace = true
 sentry.workspace = true

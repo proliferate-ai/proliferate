@@ -29,6 +29,13 @@ async fn main() -> Result<()> {
         }
         cli::Commands::PrintOpenapi => commands::print_openapi::run(),
         cli::Commands::CatalogProbe(probe_args) => commands::catalog_probe::run(probe_args).await,
+        // Blocking by design: the tail owns the terminal until interrupted,
+        // and spawn_blocking keeps the runtime's workers out of it.
+        cli::Commands::Logs(logs_args) => {
+            tokio::task::spawn_blocking(move || commands::logs::run(logs_args))
+                .await
+                .unwrap_or_else(|join_error| Err(anyhow::anyhow!(join_error)))
+        }
     };
 
     if let Err(error) = &result {
