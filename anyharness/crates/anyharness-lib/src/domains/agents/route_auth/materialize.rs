@@ -25,6 +25,10 @@ use std::path::{Path, PathBuf};
 
 use super::RouteAuthError;
 
+#[cfg(test)]
+#[path = "materialize_gc_tests.rs"]
+mod materialize_gc_tests;
+
 const ROUTE_AUTH_DIR: &str = "agent-auth";
 
 /// Directory family prefixes; the applied sequence is appended (`-<rev>`).
@@ -194,16 +198,25 @@ fn prepare_sequence_dir(
     Ok(dir)
 }
 
-/// Garbage-collect `<prefix>-<rev>` sibling dirs, KEEPING the current sequence's
-/// dir and the immediately-previous sequence's dir. Only dirs strictly older
-/// than the immediately-previous sequence are removed.
+/// Garbage-collect `<prefix>-<rev>` sibling dirs, KEEPING exactly two: the
+/// current sequence's dir and the immediately-previous sequence's. Every other
+/// sibling is reclaimed.
 ///
 /// Why keep the immediately-previous dir: a session launched under sequence N-1
 /// may still be running when sequence N is materialized. Its isolated home
 /// (`codex-home-<N-1>`, `grok-home-<N-1>`, ...) must remain intact so the
 /// in-flight process finishes on the old state. Dirs we cannot parse a sequence
-/// from, and any sequence >= current (shouldn't normally occur), are left
-/// untouched as well.
+/// from at all are left untouched — they are not ours to name.
+///
+/// Dirs numbered ABOVE the current sequence are reclaimed too, and that is not a
+/// cosmetic detail. `revision` used to be ms-since-epoch, so a pre-cutover
+/// install has `codex-home-1785…` dirs on disk while `sequence` now counts from
+/// 1; leaving anything `>= current` alone meant those were `>= current` forever
+/// and never swept again. What they hold is not an empty directory: the
+/// `config.toml` inside is written 0600 and carries the gateway virtual key that
+/// was live at that revision. Reclaiming them can in principle delete the home
+/// of a process launched from an out-of-space dir before this sweep ran; a
+/// stranded plaintext credential is the worse of the two.
 fn gc_old_sequence_dirs(
     root: &Path,
     prefix: &str,
@@ -232,18 +245,16 @@ fn gc_old_sequence_dirs(
         sequences.push((rev, entry.path()));
     }
     // Immediately-previous sequence = greatest sequence strictly below current.
-    let Some(previous_sequence) = sequences
+    let previous_sequence = sequences
         .iter()
         .map(|(rev, _)| *rev)
         .filter(|rev| *rev < current_sequence)
-        .max()
-    else {
-        return Ok(());
-    };
+        .max();
     for (rev, path) in sequences {
-        if rev < previous_sequence {
-            let _ = fs::remove_dir_all(path);
+        if rev == current_sequence || Some(rev) == previous_sequence {
+            continue;
         }
+        let _ = fs::remove_dir_all(path);
     }
     Ok(())
 }
