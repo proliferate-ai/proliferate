@@ -76,6 +76,19 @@ pub enum ArtifactRole {
 // Native install strategy
 // ---------------------------------------------------------------------------
 
+/// A sidecar binary released alongside a `TarballRelease` native CLI. It is
+/// pinned, downloaded and sha-verified exactly like the CLI, and lands in the
+/// same managed directory under `name` so the CLI finds it on `PATH`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeCompanionSpec {
+    /// Installed file name (extension added per platform), e.g. `codex-code-mode-host`.
+    pub name: String,
+    /// URL template with `{version}` and `{target}` placeholders.
+    pub versioned_url_template: String,
+    /// Expected member name inside the archive, with `{target}` placeholder.
+    pub expected_binary_template: String,
+}
+
 /// How a native CLI artifact can be installed or discovered.
 #[derive(Debug, Clone)]
 pub enum NativeInstallSpec {
@@ -101,6 +114,9 @@ pub enum NativeInstallSpec {
         expected_binary_template: String,
         /// Maps the current platform to a target triple or segment string.
         platform_map: Vec<(Platform, String)>,
+        /// Sidecar executables the vendor ships as separate release assets but
+        /// the CLI expects beside itself on `PATH` (codex's `codex-code-mode-host`).
+        companions: Vec<NativeCompanionSpec>,
     },
     /// Resolve exclusively from PATH; no managed install is supported.
     PathOnly {
