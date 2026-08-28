@@ -11,8 +11,8 @@ use crate::domains::agents::model::{
     AgentDescriptor, AgentKind, AgentProcessArtifactSpec, AgentProcessFallback,
     AgentProcessInstallSpec, AuthMaterializationSpec, AuthReadinessPolicy, AuthSlotSpec, AuthSpec,
     CommandSpec, CredentialDiscoveryKind, DirectArchiveTarget, GatewayEnvMaterializationSpec,
-    LaunchSpecTemplate, LoginSpec, NativeArtifactSpec, NativeInstallSpec, Platform,
-    SelfUpdateMechanism, SelfUpdateNeutralization, SyncedFilesMaterializationSpec,
+    LaunchSpecTemplate, LoginSpec, NativeArtifactSpec, NativeCompanionSpec, NativeInstallSpec,
+    Platform, SelfUpdateMechanism, SelfUpdateNeutralization, SyncedFilesMaterializationSpec,
 };
 
 /// Returns trusted process/auth descriptors from the bundled registry only.
@@ -132,11 +132,20 @@ fn agent_registry_native_to_spec(
             versioned_url_template,
             expected_binary_template,
             platform_map,
+            companions,
         } => NativeInstallSpec::TarballRelease {
             latest_url_template: latest_url_template.clone(),
             versioned_url_template: versioned_url_template.clone(),
             expected_binary_template: expected_binary_template.clone(),
             platform_map: parse_platform_map(platform_map)?,
+            companions: companions
+                .iter()
+                .map(|companion| NativeCompanionSpec {
+                    name: companion.name.clone(),
+                    versioned_url_template: companion.versioned_url_template.clone(),
+                    expected_binary_template: companion.expected_binary_template.clone(),
+                })
+                .collect(),
         },
         AgentRegistryNativeInstall::PathOnly {
             candidate_binaries,

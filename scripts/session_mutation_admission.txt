@@ -120,3 +120,4 @@ workflow_run_commands::undo_workflow_advance workflow-plane the one command that
 workflow_run_commands::resume_workflow_run workflow-plane resumes an interrupted run through the actor's transition table
 workflow_run_commands::add_workflow_adhoc_node workflow-plane appends an adhoc node row beside the chain; session starts only via the engine's StartNode effect
 workflow_run_commands::cancel_workflow_run workflow-plane dispatches Cancel through the actor's transition table; disposes every running row's session via the engine's own side-effect seam (mirrors fail_redo_workflow_node's Ruling L disposal)
+agent_native_integrations::set_native_integration_selection workspace-scoped harness-global native-integration selection toggle; writes the native_integration_selections table only and never touches a session or workspace row

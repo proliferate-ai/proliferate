@@ -177,10 +177,33 @@ pub(super) struct SessionLaunchContext {
     pub startup: SessionStartupStrategy,
     pub every_prompt_append: Option<String>,
     pub first_prompt_append: Option<String>,
+    /// Extension-contributed harness launch arguments (Agent SDK `extraArgs`
+    /// shape). See [`harness_args_for`] for the one harness that renders them.
+    pub harness_args: BTreeMap<String, String>,
+}
+
+/// Harness launch arguments reach exactly one driver path: Claude's, where
+/// they ride the ACP `session/new` meta as `claudeCode.options.extraArgs`
+/// (native-integrations.md, "Delivery"). Every other harness drops them here,
+/// with a warning, rather than leaking a Claude flag into a codex launch.
+fn harness_args_for(
+    agent_kind: &str,
+    harness_args: BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    if harness_args.is_empty() || agent_kind == AgentKind::Claude.as_str() {
+        return harness_args;
+    }
+    tracing::warn!(
+        agent_kind,
+        keys = ?harness_args.keys().collect::<Vec<_>>(),
+        "dropping harness launch arguments: only the Claude driver renders them"
+    );
+    BTreeMap::new()
 }
 
 /// Pure assembly of the launch bundle from already-resolved facts.
 pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunch {
+    let harness_args = harness_args_for(&ctx.record.agent_kind, ctx.harness_args);
     SessionLaunch {
         session: ctx.record,
         agent: ctx.agent,
@@ -201,6 +224,7 @@ pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunc
             every_prompt: ctx.every_prompt_append,
             first_prompt: ctx.first_prompt_append,
         },
+        harness_args,
         // Overwritten by the manager under the start/inject critical section.
         last_seq: 0,
     }
@@ -209,6 +233,19 @@ pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunc
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn harness_args_reach_only_the_claude_launch() {
+        let args = BTreeMap::from([("chrome".to_string(), String::new())]);
+        assert_eq!(harness_args_for("claude", args.clone()), args);
+        for other in ["codex", "cursor", "opencode", "grok"] {
+            assert!(
+                harness_args_for(other, args.clone()).is_empty(),
+                "{other} must not receive a Claude launch flag"
+            );
+        }
+        assert!(harness_args_for("codex", BTreeMap::new()).is_empty());
+    }
 
     fn facts() -> SessionStartupFacts {
         SessionStartupFacts {

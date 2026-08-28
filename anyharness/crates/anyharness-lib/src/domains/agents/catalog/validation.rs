@@ -105,18 +105,21 @@ fn validate_artifact_pin(
         return Ok(());
     };
     match source {
-        AgentCatalogArtifactSource::Binary { targets }
-        | AgentCatalogArtifactSource::Archive { targets, .. } => {
-            if targets.is_empty() {
-                anyhow::bail!("agent '{kind}' {role} source has no platform targets");
-            }
-            for (platform, target) in targets {
-                if target.url.trim().is_empty() {
-                    anyhow::bail!("agent '{kind}' {role} target '{platform}' has empty url");
+        AgentCatalogArtifactSource::Binary { targets } => {
+            validate_pin_targets(kind, role, targets)?;
+        }
+        AgentCatalogArtifactSource::Archive {
+            targets,
+            companions,
+            ..
+        } => {
+            validate_pin_targets(kind, role, targets)?;
+            for companion in companions {
+                if companion.name.trim().is_empty() {
+                    anyhow::bail!("agent '{kind}' {role} archive companion has empty name");
                 }
-                if target.sha256.trim().is_empty() {
-                    anyhow::bail!("agent '{kind}' {role} target '{platform}' has empty sha256");
-                }
+                let companion_role = format!("{role} companion '{}'", companion.name);
+                validate_pin_targets(kind, &companion_role, &companion.targets)?;
             }
         }
         AgentCatalogArtifactSource::Npm { package, .. } => {
@@ -136,6 +139,25 @@ fn validate_artifact_pin(
             {
                 anyhow::bail!("agent '{kind}' {role} git source is incomplete");
             }
+        }
+    }
+    Ok(())
+}
+
+fn validate_pin_targets(
+    kind: &str,
+    role: &str,
+    targets: &std::collections::BTreeMap<String, super::schema::AgentCatalogPinTarget>,
+) -> anyhow::Result<()> {
+    if targets.is_empty() {
+        anyhow::bail!("agent '{kind}' {role} source has no platform targets");
+    }
+    for (platform, target) in targets {
+        if target.url.trim().is_empty() {
+            anyhow::bail!("agent '{kind}' {role} target '{platform}' has empty url");
+        }
+        if target.sha256.trim().is_empty() {
+            anyhow::bail!("agent '{kind}' {role} target '{platform}' has empty sha256");
         }
     }
     Ok(())

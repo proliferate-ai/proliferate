@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod http;
+mod native_integrations_openapi;
 pub mod openapi;
 pub mod router;
 pub mod sse;

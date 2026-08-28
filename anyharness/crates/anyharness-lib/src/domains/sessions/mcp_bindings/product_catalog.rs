@@ -407,6 +407,7 @@ mod tests {
                     first_prompt_system_prompt_append: Vec::new(),
                     mcp_servers: Vec::new(),
                     mcp_binding_summaries: Vec::new(),
+                    harness_args: std::collections::BTreeMap::new(),
                 },
             ),
             registration(
@@ -416,6 +417,7 @@ mod tests {
                     first_prompt_system_prompt_append: vec!["first-b".to_string()],
                     mcp_servers: Vec::new(),
                     mcp_binding_summaries: Vec::new(),
+                    harness_args: std::collections::BTreeMap::new(),
                 },
             ),
         ];

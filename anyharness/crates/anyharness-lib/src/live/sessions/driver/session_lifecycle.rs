@@ -1,5 +1,7 @@
+use std::collections::BTreeMap;
+
 use super::*;
-use crate::live::sessions::driver::native_session::build_system_prompt_meta;
+use crate::live::sessions::driver::native_session::build_launch_meta;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use std::time::Instant;
 pub(in crate::live::sessions) fn build_client_capabilities(
@@ -262,6 +264,7 @@ pub(in crate::live::sessions) async fn start_new_session(
     workspace_path: &std::path::Path,
     mcp_servers: &[SessionMcpServer],
     system_prompt_append: Option<&str>,
+    harness_args: &BTreeMap<String, String>,
     session_id: &str,
     workspace_id: &str,
     startup_strategy: &str,
@@ -272,13 +275,14 @@ pub(in crate::live::sessions) async fn start_new_session(
     if !mcp_servers.is_empty() {
         request = request.mcp_servers(to_acp_servers(mcp_servers));
     }
-    if let Some(meta) = build_system_prompt_meta(system_prompt_append) {
+    if let Some(meta) = build_launch_meta(system_prompt_append, harness_args) {
         tracing::debug!(
             session_id = %session_id,
             startup_strategy,
             system_prompt_append = system_prompt_append.unwrap_or_default(),
             system_prompt_append_len = system_prompt_append.map(|value| value.len()).unwrap_or(0),
-            "attaching ACP startup system prompt append to new_session"
+            harness_arg_keys = ?harness_args.keys().collect::<Vec<_>>(),
+            "attaching ACP startup meta (system prompt append, harness args) to new_session"
         );
         request = request.meta(meta);
     }

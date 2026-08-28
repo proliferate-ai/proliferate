@@ -54,6 +54,7 @@ export type {
   NativeBridgeResponse,
 } from "./types/agent-auth.js";
 
+export type { NativeIntegrationKind, NativeIntegrationRisk, NativeIntegration, NativeIntegrationsResponse, NativeIntegrationSelectionRequest } from "./types/native-integrations.js";
 export type {
   AgentInstallState,
   AgentCredentialState,

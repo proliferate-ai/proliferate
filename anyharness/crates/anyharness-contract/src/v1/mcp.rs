@@ -135,6 +135,15 @@ pub enum SessionMcpBindingNotAppliedReason {
     WorkspacePathUnresolved,
     PolicyDisabled,
     ResolverError,
+    /// A selected native integration whose on-disk artifacts are missing.
+    NativeUnavailable,
+    /// A selected native integration that discovery no longer finds.
+    NativeStale,
+    /// A selected native integration whose server name collides with a
+    /// reserved Proliferate/bundle name or with another selection in the same
+    /// launch — refused because the harness session config is name-keyed and
+    /// a collision silently clobbers one side.
+    NativeNameCollision,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

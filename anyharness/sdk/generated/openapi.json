@@ -738,6 +738,107 @@
         }
       }
     },
+    "/v1/agents/{kind}/native-integrations": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "list_native_integrations",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Harness kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Discovered native integrations with selections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeIntegrationsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown harness kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/native-integrations/{id}": {
+      "put": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "set_native_integration_selection",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Harness kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Integration id (`bundle:<name>` or `mcp:<server-name>`)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NativeIntegrationSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Selection applied; the refreshed listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeIntegrationsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown harness kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/revoked-jtis": {
       "put": {
         "tags": [
@@ -14340,6 +14441,121 @@
           }
         }
       },
+      "NativeIntegration": {
+        "type": "object",
+        "description": "One discovered integration, merged with whether the user has enabled it.",
+        "required": [
+          "id",
+          "agentKind",
+          "kind",
+          "displayName",
+          "available",
+          "risk",
+          "enabled"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Whether the artifacts the integration needs are present on disk. A\npure file check — discovery never spawns or probes."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether a selection row exists for this integration."
+          },
+          "id": {
+            "type": "string",
+            "description": "`bundle:<name>` for a curated bundle, `mcp:<server-name>` for a raw\nconfig entry. Stable across reads so selections can reference it."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NativeIntegrationKind"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/NativeIntegrationRisk"
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable origin of the entry, e.g.\n`~/.codex/config.toml · mcp_servers.linear`. Never an env value."
+          },
+          "unavailableReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "NativeIntegrationKind": {
+        "type": "string",
+        "description": "How a native integration reaches the session once selected.",
+        "enum": [
+          "mcp_stdio",
+          "mcp_http",
+          "bundle"
+        ]
+      },
+      "NativeIntegrationRisk": {
+        "type": "string",
+        "description": "What a native integration can reach once it is running. Drives the consent\ndialog a settings surface shows before enabling it.",
+        "enum": [
+          "none",
+          "desktop_control",
+          "browser_control"
+        ]
+      },
+      "NativeIntegrationSelectionRequest": {
+        "type": "object",
+        "description": "Body of `PUT /v1/agents/{kind}/native-integrations/{id}`.",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "NativeIntegrationsResponse": {
+        "type": "object",
+        "description": "Everything a settings surface needs to render one harness's section.",
+        "required": [
+          "agentKind",
+          "integrations",
+          "staleSelections"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "integrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NativeIntegration"
+            }
+          },
+          "staleSelections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Enabled integration ids that discovery no longer finds — a config entry\nthe user removed natively. Surfaced so the user sees what to fix."
+          }
+        }
+      },
       "NodeModel": {
         "type": "object",
         "required": [
@@ -18727,7 +18943,10 @@
           "unsupported_target",
           "workspace_path_unresolved",
           "policy_disabled",
-          "resolver_error"
+          "resolver_error",
+          "native_unavailable",
+          "native_stale",
+          "native_name_collision"
         ]
       },
       "SessionMcpBindingOutcome": {

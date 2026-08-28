@@ -679,6 +679,7 @@ pub fn openapi_json() -> String {
     support_windows::merge(
         ApiDoc::openapi()
             .merge_from(super::subagents_openapi::SubagentApiDoc::openapi())
+            .merge_from(super::native_integrations_openapi::NativeIntegrationsApiDoc::openapi())
             .merge_from(super::workflow_runs_openapi::WorkflowRunsApiDoc::openapi()),
     )
     .to_pretty_json()

@@ -11,6 +11,9 @@ import type {
   StartAgentLoginResponse,
   StartAgentLoginTerminalResponse,
 } from "../types/agents.js";
+import type {
+  NativeIntegrationsResponse,
+} from "../types/native-integrations.js";
 import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 
 export class AgentsClient {
@@ -96,6 +99,34 @@ export class AgentsClient {
   async closeLoginTerminal(terminalId: string): Promise<void> {
     return this.transport.delete(
       `/v1/agents/login-terminals/${encodeURIComponent(terminalId)}`,
+    );
+  }
+
+  /**
+   * One harness's discovered native integrations (its own MCP servers plus
+   * the curated vendor bundles), merged with the user's selections.
+   * Discovery is re-read from disk on every call — nothing here is cached
+   * runtime-side.
+   */
+  async listNativeIntegrations(
+    kind: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<NativeIntegrationsResponse> {
+    return this.transport.get<NativeIntegrationsResponse>(
+      `/v1/agents/${encodeURIComponent(kind)}/native-integrations`,
+      options,
+    );
+  }
+
+  /** Flip one native-integration selection; answers with the refreshed listing. */
+  async setNativeIntegrationSelection(
+    kind: string,
+    integrationId: string,
+    enabled: boolean,
+  ): Promise<NativeIntegrationsResponse> {
+    return this.transport.put<NativeIntegrationsResponse>(
+      `/v1/agents/${encodeURIComponent(kind)}/native-integrations/${encodeURIComponent(integrationId)}`,
+      { enabled },
     );
   }
 

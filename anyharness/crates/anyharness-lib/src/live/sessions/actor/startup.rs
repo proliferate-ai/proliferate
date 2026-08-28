@@ -193,6 +193,7 @@ impl SessionActor {
                 &config.launch.workspace_path,
                 &config.launch.mcp_servers,
                 config.launch.prompts.every_prompt.as_deref(),
+                &config.launch.harness_args,
                 &startup_strategy,
                 action_capabilities,
                 &session_id,

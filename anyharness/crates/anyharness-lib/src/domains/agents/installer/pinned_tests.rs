@@ -3,6 +3,7 @@
 //! there.
 
 use super::*;
+use crate::domains::agents::installer::install_policy::ResolvedPinCompanion;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
@@ -177,6 +178,7 @@ fn pinned_archive_install_renames_inner_binary_to_the_platform_name() {
         &ResolvedPinSource::Archive {
             targets,
             args: vec![],
+            companions: vec![],
         },
         "0.147.0",
         &AgentKind::Codex,
@@ -197,6 +199,97 @@ fn pinned_archive_install_renames_inner_binary_to_the_platform_name() {
         "the inner member's own name must not leak into the destination"
     );
     assert!(result.path.exists(), "extracted binary should exist");
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn pinned_archive_install_places_companions_beside_the_main_binary() {
+    // codex ships `codex-code-mode-host` as its own release asset and expects
+    // it on PATH next to `codex`; the launcher prepends the managed native
+    // dir, so the companion must land there under its own platform name.
+    let scratch = temp_dir("pinned-archive-companion");
+    let payload = scratch.join("payload");
+    std::fs::create_dir_all(&payload).expect("payload dir");
+
+    let tar_member = |member: &str, archive_name: &str| {
+        std::fs::write(payload.join(member), format!("#!/bin/sh\necho {member}\n"))
+            .expect("member");
+        let archive = scratch.join(archive_name);
+        let status = std::process::Command::new("tar")
+            .arg("czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(&payload)
+            .arg(member)
+            .status()
+            .expect("tar");
+        assert!(status.success(), "tar must succeed");
+        let sha = sha256_hex(&std::fs::read(&archive).expect("read archive"));
+        ResolvedPinTarget {
+            url: format!("file://{}", archive.display()),
+            sha256: sha,
+            download_size_bytes: None,
+            expected_binary: Some(member.to_string()),
+        }
+    };
+    let platform_key = Platform::detect()
+        .expect("platform")
+        .registry_key()
+        .to_string();
+    let mut targets = BTreeMap::new();
+    targets.insert(
+        platform_key.clone(),
+        tar_member("codex-target", "codex.tar.gz"),
+    );
+    let mut companion_targets = BTreeMap::new();
+    companion_targets.insert(
+        platform_key,
+        tar_member("codex-code-mode-host-target", "host.tar.gz"),
+    );
+
+    let home = scratch.join("home");
+    let result = install_binary_or_archive_from_pin(
+        &ResolvedPinSource::Archive {
+            targets,
+            args: vec![],
+            companions: vec![ResolvedPinCompanion {
+                name: "codex-code-mode-host".to_string(),
+                targets: companion_targets,
+            }],
+        },
+        "0.147.0",
+        &AgentKind::Codex,
+        &ArtifactRole::NativeCli,
+        &home,
+        None,
+    )
+    .expect("pinned archive install");
+
+    let companion = companion_path(
+        &home,
+        &AgentKind::Codex,
+        &ArtifactRole::NativeCli,
+        "codex-code-mode-host",
+    );
+    assert_eq!(
+        companion.parent(),
+        result.path.parent(),
+        "the companion must share the main binary's directory (the launcher PATH prefix)"
+    );
+    assert_eq!(
+        companion.file_name().and_then(|name| name.to_str()),
+        Some(if cfg!(windows) {
+            "codex-code-mode-host.exe"
+        } else {
+            "codex-code-mode-host"
+        }),
+        "the companion is named for the host, not for the archive member"
+    );
+    assert!(
+        crate::integrations::agent_cli::executable::is_valid_executable(&companion),
+        "companion must be executable"
+    );
+    assert!(result.path.exists(), "main binary must still be installed");
     let _ = std::fs::remove_dir_all(&scratch);
 }
 
@@ -285,6 +378,7 @@ fn archive_adapter_pin_preserves_sibling_files() {
     let source = ResolvedPinSource::Archive {
         targets,
         args: vec!["acp".to_string()],
+        companions: vec![],
     };
 
     let home = scratch.join("home");
@@ -431,6 +525,7 @@ fn unusable_archive_adapter_restores_previous_tree() {
     let source = ResolvedPinSource::Archive {
         targets,
         args: vec!["acp".to_string()],
+        companions: vec![],
     };
 
     let home = scratch.join("home");

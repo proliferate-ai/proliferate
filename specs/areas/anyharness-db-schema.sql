@@ -231,6 +231,15 @@ CREATE TABLE mobility_archive_installs (
     PRIMARY KEY (workspace_id, operation_id)
 );
 
+-- table: native_integration_selections
+CREATE TABLE native_integration_selections (
+    id             TEXT PRIMARY KEY,
+    agent_kind     TEXT NOT NULL,          -- 'codex' | 'claude' | ...
+    integration_id TEXT NOT NULL,          -- 'bundle:computer-use' | 'mcp:<server-name>'
+    enabled_at     TEXT NOT NULL,
+    UNIQUE (agent_kind, integration_id)
+);
+
 -- table: opencode_message_ids
 CREATE TABLE opencode_message_ids (
     session_id TEXT NOT NULL,

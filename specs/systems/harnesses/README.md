@@ -2,7 +2,7 @@
 
 Status: current (grade B). System spec in the Organization Standard anatomy. The runtime system that owns *which coding agents exist and whether they can launch*: the supported-kind registry, the distribution catalog compiled into the binary, install/seed/reconcile of agent artifacts, credential detection and readiness, target-observed launch options and the probe that observes them, and the per-provider adapters (ACP extensions, live controls, transcript quirks). It hands the session engine a **resolved launch surface**; it never runs a session.
 
-Today the code lives in `domains/agents/` and the docs call it "agents". The Organization Standard names the system **harnesses** (a harness is the thing you run; an agent is the thing a user talks to), and the target tree renames the folder. Depth references: [agents.md](agents-domain.md), [agent-distribution.md](distribution.md), [harnesses.md](harness-integrations.md) and the per-provider docs under [harnesses/](claude.md), [acp.md](../../areas/anyharness.md), [agent-mode-matrix.md](agent-mode-matrix.md), [MODELS.md](launch-options.md).
+Today the code lives in `domains/agents/` and the docs call it "agents". The Organization Standard names the system **harnesses** (a harness is the thing you run; an agent is the thing a user talks to), and the target tree renames the folder. Depth references: [agents.md](agents-domain.md), [agent-distribution.md](distribution.md), [harnesses.md](harness-integrations.md) and the per-provider docs under [harnesses/](claude.md), [acp.md](../../areas/anyharness.md), [agent-mode-matrix.md](agent-mode-matrix.md), [MODELS.md](launch-options.md). Target sections: [skills.md](skills.md), [native-integrations.md](native-integrations.md).
 
 ## 1. Purpose
 
@@ -17,13 +17,14 @@ Make "is Claude ready on this machine, and with which exact model and controls m
 | `agent_model_registry_snapshots` | **vestigial**: table exists ([0044](../../../anyharness/crates/anyharness-lib/src/persistence/sql/0044_agent_model_registry_snapshots.sql)) but no domain code reads or writes it on `main`; drop with the next migration | nobody |
 | Install manifests, downloads, seed archives, quarantine | [installer/](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/mod.rs) under `<runtime-home>` | this system, under [installer/lock.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/lock.rs) |
 | `harness_launch_option_states` — target-observed model ids and control values per kind | [launch_options/store.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/launch_options/store.rs) | the launch probe only |
+| `native_integration_selections` — which native integrations are enabled, per agent kind | [native_integrations/store.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/store.rs) ([0077](../../../anyharness/crates/anyharness-lib/src/persistence/sql/0077_native_integration_selections.sql)) | the selection API only ([native-integrations.md](native-integrations.md)) |
 | Readiness overrides, path resolution, version facts | [readiness/](../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/service.rs) | derived, not stored |
 
 Not owned though co-located (see Fences): `auth/`, `auth_state.rs`, `route_auth/` — the runtime half of **agent_auth**.
 
 ## 3. Public surface
 
-HTTP ([agents.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agents.rs), [agent_launch_options.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agent_launch_options.rs), [catalogs.rs](../../../anyharness/crates/anyharness-lib/src/api/http/catalogs.rs)):
+HTTP ([agents.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agents.rs), [agent_launch_options.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agent_launch_options.rs), [agent_native_integrations.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agent_native_integrations.rs), [catalogs.rs](../../../anyharness/crates/anyharness-lib/src/api/http/catalogs.rs)):
 
 | Route | Meaning |
 | --- | --- |
@@ -32,6 +33,7 @@ HTTP ([agents.rs](../../../anyharness/crates/anyharness-lib/src/api/http/agents.
 | `POST /v1/agents/{kind}/login/start`, `/login/terminal`, `GET|DELETE /v1/agents/login-terminals/{id}` | provider login flows (terminal-backed) |
 | `POST /v1/agents/reconcile`, `GET /v1/agents/reconcile` | start/inspect the catalog-pin reconcile job |
 | `GET /v1/agents/{kind}/launch-options`, `POST …/launch-options/refresh` | target-observed launch options; refresh pokes the probe |
+| `GET /v1/agents/{kind}/native-integrations`, `PUT …/native-integrations/{id}` | discovered native integrations with selection state; toggle one ([native-integrations.md](native-integrations.md)) |
 | `GET /v1/catalogs/agents/version` | the compiled catalog version — binary convergence *is* catalog convergence |
 
 Wire shapes: [agents.rs](../../../anyharness/crates/anyharness-contract/src/v1/agents.rs), [launch_options.rs](../../../anyharness/crates/anyharness-contract/src/v1/launch_options.rs), [catalogs.rs](../../../anyharness/crates/anyharness-contract/src/v1/catalogs.rs).
@@ -125,6 +127,8 @@ anyharness/crates/anyharness-lib/src/domains/agents/    → target: systems/harn
 ├── readiness/                              resolve_agent, compatibility, overrides, paths, versions
 ├── launch_options/                         target-observed options: store, service, validation
 ├── launch_probe/                           override-free probe engine, phases, backoff, lock
+├── native_integrations/                    native config discovery, selections, curated bundles,
+│                                           delivery SessionExtension (native-integrations.md)
 ├── portability/                            provider auth-file portability (codex)
 ├── live_ports.rs                           trait impls for live-defined ports
 ├── runtime.rs                              AgentRuntime facade
@@ -132,8 +136,8 @@ anyharness/crates/anyharness-lib/src/domains/agents/    → target: systems/harn
 anyharness/crates/anyharness-lib/src/integrations/agent_cli/   provider CLI mechanics (consumed)
 anyharness/crates/anyharness-lib/src/integrations/acp/         shared ACP helpers (consumed)
 anyharness/crates/anyharness-lib/src/api/http/{agents,agents_contract,agents_errors,
-    agent_launch_options,catalogs}.rs                           transport
-anyharness/crates/anyharness-contract/src/v1/{agents,launch_options,catalogs}.rs
+    agent_launch_options,agent_native_integrations,catalogs}.rs transport
+anyharness/crates/anyharness-contract/src/v1/{agents,launch_options,native_integrations,catalogs}.rs
 specs/areas/harnesses/{claude,codex,grok}.md               per-provider adapter docs
 catalogs/agents/**                                              registry + catalog data (build input)
 ```
