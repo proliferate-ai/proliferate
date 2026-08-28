@@ -28,6 +28,7 @@ use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
 use crate::domains::agents::launch_probe::LaunchProbeService;
 use crate::domains::agents::runtime::AgentRuntime;
+use crate::domains::agents::status::AgentStatusService;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
@@ -137,6 +138,9 @@ pub struct AppState {
     /// Reads and the manual refresh keep the real engine above, because nothing there
     /// fires on its own.
     pub automatic_poke_engine: Option<Arc<LaunchProbeService>>,
+    /// The per-harness status documents (agent_auth spec §2): read, stream,
+    /// and event-refresh — the machine's single source of auth truth.
+    pub agent_status_service: Arc<AgentStatusService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
@@ -223,33 +227,22 @@ impl AppState {
         let catalog_sync_service = Arc::new(CatalogSyncService::from_bundled_and_staged_via_env(
             &runtime_home,
         ));
-        let agent_runtime_without_probes = AgentRuntime::new(
-            runtime_home.clone(),
-            agent_reconcile_service.clone(),
-            agent_seed_store.clone(),
-            AgentCatalogService::new(catalog_sync_service.clone()),
-            // Read once, here: the auto-install pass needs the surface for the
-            // cursor-in-cloud carve-out, and reading it at the decision point
-            // would put a process-global read inside the reconcile loop.
-            crate::domains::agents::runtime::RuntimeSurface::from_env(),
+        // Agents wiring (services, poke suppression, runtime attachment) lives
+        // in agent_launch.rs — its own seam.
+        let agent_launch::AgentStack {
+            launch_options_service,
+            launch_probe_service,
+            gateway_model_planner,
+            agent_status_service,
+            automatic_poke_engine,
+            agent_runtime,
+        } = agent_launch::build_agent_stack(
+            &db,
+            &runtime_home,
+            &agent_reconcile_service,
+            &agent_seed_store,
+            &catalog_sync_service,
         );
-        let (launch_options_service, launch_probe_service, gateway_model_planner) =
-            agent_launch::build_services(&db, &runtime_home);
-        // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
-        // why it is separate; the suppression is a property of the wiring rather
-        // than of which event sites happened to be threaded.
-        #[cfg(not(test))]
-        let automatic_poke_engine = Some(launch_probe_service.clone());
-        #[cfg(test)]
-        let automatic_poke_engine: Option<Arc<LaunchProbeService>> = None;
-        // The agent runtime carries the engine for its startup and install-completed
-        // pokes. Attached rather than constructor-injected because the engine needs the
-        // catalog service the runtime also takes; building the runtime first and
-        // attaching second keeps both constructors acyclic.
-        let agent_runtime = Arc::new(match automatic_poke_engine.clone() {
-            Some(engine) => agent_runtime_without_probes.with_launch_probe(engine),
-            None => agent_runtime_without_probes,
-        });
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
@@ -338,6 +331,7 @@ impl AppState {
             activity_service: activity_service.clone(),
             product_context: agent_product_context,
             automatic_poke_engine: automatic_poke_engine.clone(),
+            agent_status_service: agent_status_service.clone(),
         });
         let cowork_delegation_service = CoworkDelegationService::new(
             (*cowork_service).clone(),
@@ -570,11 +564,14 @@ impl AppState {
         // Drive the emulated-loop scheduler (fires only live+idle sessions).
         #[cfg(not(test))]
         loop_scheduler.clone().spawn();
-        // Hydrate the bundled agent seed (if pending) and run an installed-only
-        // reconcile against the catalog pins — desktop sidecar AND cloud workers,
-        // non-blocking + best-effort. See AgentRuntime::spawn_startup_pass.
+        // Agents startup, ONE sequenced task: the status stale-mark pass, THEN
+        // the runtime pass whose pokes can verify rows (see agent_launch.rs).
         #[cfg(not(test))]
-        agent_runtime.clone().spawn_startup_pass();
+        agent_launch::spawn_agent_startup_passes(
+            &agent_runtime,
+            &agent_status_service,
+            &automatic_poke_engine,
+        );
         Ok(Self {
             runtime_home,
             runtime_base_url,
@@ -587,6 +584,7 @@ impl AppState {
             launch_options_service,
             launch_probe_service,
             automatic_poke_engine,
+            agent_status_service,
             agent_reconcile_service,
             repo_root_service,
             workspace_runtime,

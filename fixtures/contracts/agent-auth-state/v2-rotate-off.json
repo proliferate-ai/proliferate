@@ -1,6 +1,7 @@
 {
   "version": 2,
-  "revision": 42,
+  "sequence": 42,
+  "lineage": "40000000-0000-4000-8000-000000000031",
   "user_id": "20000000-0000-4000-8000-000000000001",
   "issuing_server_origin": "https://api.proliferate.example",
   "harnesses": [

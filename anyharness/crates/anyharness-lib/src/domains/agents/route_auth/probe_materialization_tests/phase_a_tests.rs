@@ -46,11 +46,11 @@ fn a_material_read_over_every_harness_writes_nothing() {
     );
 }
 
-/// Phase B uses the revision phase A carried, and it uses the profile phase A
+/// Phase B uses the sequence phase A carried, and it uses the profile phase A
 /// captured: mutating `state.json` between the two phases must not change what
-/// gets materialized. One state read, one revision, all consumers.
+/// gets materialized. One state read, one sequence, all consumers.
 #[test]
-fn phase_b_uses_the_revision_and_profile_phase_a_captured() {
+fn phase_b_uses_the_sequence_and_profile_phase_a_captured() {
     let home = TempHome::new("phase-agreement");
     home.write_state_json(&state(
         7,
@@ -58,9 +58,9 @@ fn phase_b_uses_the_revision_and_profile_phase_a_captured() {
     ));
 
     let material = material_for(&home, "codex").expect("material");
-    assert_eq!(material.state_revision, 7);
+    assert_eq!(material.state_sequence, 7);
 
-    // The document moves on — a different revision AND a different key — after
+    // The document moves on — a different sequence AND a different key — after
     // phase A read it.
     home.write_state_json(&state(
         99,
@@ -76,7 +76,7 @@ fn phase_b_uses_the_revision_and_profile_phase_a_captured() {
             .root()
             .join("agent-auth/codex-home-7")
             .is_dir(),
-        "the scratch dir must be keyed on the revision phase A read, not the current one"
+        "the scratch dir must be keyed on the sequence phase A read, not the current one"
     );
     assert!(
         !materialized

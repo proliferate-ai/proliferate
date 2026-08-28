@@ -1,172 +1,202 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  HarnessAuthEvidenceBadge,
-  HarnessAuthEvidenceSummary,
-} from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
-import type {
-  AgentAuthDisplay,
-  AgentAuthState,
-} from "#product/lib/domain/settings/agent-auth-evidence";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HarnessAuthEvidenceBadge } from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
+import type { HarnessStatus } from "#product/hooks/access/anyharness/agent-auth/use-harness-status";
+import { harnessStatusFixture } from "#product/hooks/access/anyharness/agent-auth/use-harness-status.fixtures";
 
-afterEach(cleanup);
+const NOW = Date.parse("2026-08-27T00:02:00Z");
+const OBSERVED_AT = "2026-08-27T00:00:00Z";
 
-function stateFor(
-  display: AgentAuthDisplay,
-  extra: Partial<AgentAuthState> = {},
-): AgentAuthState {
-  return {
-    display,
-    nextAction: "none",
-    facts: {
-      installed: true,
-      expired: false,
-      misconfigured: false,
-      unsupportedRoute: false,
-      probe: { phase: "idle", observationNonempty: false },
-    },
-    ...extra,
-  } as AgentAuthState;
-}
-
-const ALL_DISPLAYS: AgentAuthDisplay[] = [
-  "not_installed",
-  "unsupported",
-  "misconfigured",
-  "expired",
-  "unavailable",
-  "probing",
-  "usable",
-  "authenticated",
-  "selected",
-  "installed",
-];
-
-describe("HarnessAuthEvidenceBadge", () => {
-  it("renders each display's state name and marks green ONLY for usable/authenticated", () => {
-    for (const display of ALL_DISPLAYS) {
-      const { unmount } = render(
-        <HarnessAuthEvidenceBadge
-          authState={stateFor(display)}
-          refreshing={false}
-          onRefresh={() => {}}
-        />,
-      );
-      const badge = document.querySelector("[data-harness-display]");
-      expect(badge?.getAttribute("data-harness-display")).toBe(display);
-      // The success tone is the only green; assert via the Badge's own class.
-      const isGreen = display === "usable" || display === "authenticated";
-      // Badge success tone renders text-success; other tones do not.
-      const html = badge?.className ?? "";
-      expect(html.includes("success")).toBe(isGreen);
-      unmount();
-    }
-  });
-
-  it("renders an unknown future display non-green without crashing", () => {
-    const future = "some_future_state" as AgentAuthDisplay;
-    render(
-      <HarnessAuthEvidenceBadge
-        authState={stateFor(future, { evidenceAgeSeconds: 60 })}
-        refreshing={false}
-        onRefresh={() => {}}
-      />,
-    );
-    const badge = document.querySelector("[data-harness-display]");
-    expect(badge?.getAttribute("data-harness-display")).toBe(future);
-    // Neutral tone, never the success (green) treatment; no faked evidence age.
-    expect((badge?.className ?? "").includes("success")).toBe(false);
-    expect(screen.queryByText(/verified/)).toBeNull();
-  });
-
-  it("shows the evidence age on a green badge", () => {
-    render(
-      <HarnessAuthEvidenceBadge
-        authState={stateFor("usable", { evidenceAgeSeconds: 120 })}
-        refreshing={false}
-        onRefresh={() => {}}
-      />,
-    );
-    expect(screen.getByText("verified 2m ago")).toBeTruthy();
-  });
-
-  it("never shows an evidence age on a non-green badge", () => {
-    render(
-      <HarnessAuthEvidenceBadge
-        authState={stateFor("installed", { evidenceAgeSeconds: 30 })}
-        refreshing={false}
-        onRefresh={() => {}}
-      />,
-    );
-    expect(screen.queryByText(/verified/)).toBeNull();
-  });
+// The evidence age is read off the wall clock inside the component. Pinning
+// Date.now is the whole seam — the badge ships no `now` prop that only a test
+// ever passes.
+beforeEach(() => {
+  vi.spyOn(Date, "now").mockReturnValue(NOW);
 });
 
-describe("HarnessAuthEvidenceSummary", () => {
-  it("renders the next-action affordance", () => {
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
+});
+
+function statusFor(overrides: Partial<HarnessStatus> = {}): HarnessStatus {
+  return harnessStatusFixture({
+    applied: { kind: "seat", seat_id: "seat-1" },
+    ...overrides,
+  });
+}
+
+function badgeElement() {
+  return document.querySelector("[data-harness-probe-verdict]");
+}
+
+/** The Badge's success tone is the only green; assert via its own class. */
+function isGreen() {
+  return (badgeElement()?.className ?? "").includes("success");
+}
+
+describe("HarnessAuthEvidenceBadge — the document, verbatim", () => {
+  it("is green with its evidence age on a dated verified observation", () => {
     render(
-      <HarnessAuthEvidenceSummary
-        authState={stateFor("installed", { nextAction: "log_in_or_paste_key" })}
+      <HarnessAuthEvidenceBadge
+        status={statusFor({
+          probe: { verdict: "verified", at: OBSERVED_AT, stale: false },
+        })}
+        refreshing={false}
+        onRefresh={() => {}}
       />,
     );
-    expect(screen.getByText("Log in or paste a key")).toBeTruthy();
+
+    expect(screen.getByText("Authenticated")).toBeTruthy();
+    expect(screen.getByText("verified 2m ago")).toBeTruthy();
+    expect(isGreen()).toBe(true);
   });
 
-  it("renders the probe backoff with its next-attempt countdown", () => {
-    const now = Date.parse("2026-08-15T00:00:00Z");
+  it("refuses green for a verified verdict with no evidence age", () => {
     render(
-      <HarnessAuthEvidenceSummary
-        now={now}
-        authState={stateFor("probing", {
-          facts: {
-            installed: true,
-            expired: false,
-            misconfigured: false,
-            unsupportedRoute: false,
-            probe: {
-              phase: "backoff",
-              observationNonempty: false,
-              nextAttemptAt: "2026-08-15T00:02:00Z",
-              lastFailureDetail: "429 rate limited",
-            },
-          },
-        } as Partial<AgentAuthState>)}
+      <HarnessAuthEvidenceBadge
+        status={statusFor({
+          probe: { verdict: "verified", at: null, stale: false },
+        })}
+        refreshing={false}
+        onRefresh={() => {}}
       />,
     );
-    expect(screen.getByText(/Next attempt in 2m/)).toBeTruthy();
-    expect(screen.getByText(/429 rate limited/)).toBeTruthy();
+
+    expect(isGreen()).toBe(false);
+    expect(document.querySelector("[data-harness-evidence-age]")).toBeNull();
   });
 
-  it("renders a retry affordance for a cancelled handoff", () => {
-    const onRetry = vi.fn();
+  it("renders a STALE document as stale-with-last-observation, not as loading", () => {
     render(
-      <HarnessAuthEvidenceSummary
-        onRetryHandoff={onRetry}
-        authState={stateFor("installed", {
-          facts: {
-            installed: true,
-            expired: false,
-            misconfigured: false,
-            unsupportedRoute: false,
-            probe: { phase: "idle", observationNonempty: false },
-            handoff: "cancelled",
-          },
-        } as Partial<AgentAuthState>)}
+      <HarnessAuthEvidenceBadge
+        status={statusFor({
+          probe: { verdict: "verified", at: OBSERVED_AT, stale: true },
+          // A stale document is never a loading state, even mid-read.
+          loading: true,
+        })}
+        refreshing={false}
+        onRefresh={() => {}}
       />,
     );
-    expect(screen.getByText("Sign-in cancelled")).toBeTruthy();
-    screen.getByText("Retry").click();
-    expect(onRetry).toHaveBeenCalledOnce();
+
+    // The last observation stays on screen, its age carried by the ruled stale
+    // marker (founder-ruled 2026-08-27: "last checked <age> ago — retrying").
+    // The light dims; it never goes out.
+    expect(screen.getByText("Authenticated")).toBeTruthy();
+    expect(document.querySelector("[data-harness-rechecking]")?.textContent)
+      .toBe("last checked 2m ago — retrying");
+    // The age is said once, in the marker — the evidence line yields to it.
+    expect(document.querySelector("[data-harness-evidence-age]")).toBeNull();
+    expect(badgeElement()?.getAttribute("data-harness-probe-stale")).toBe("true");
+    expect(isGreen()).toBe(true);
   });
 
-  it("renders nothing extra when the runtime filled no probe/handoff slots", () => {
-    const { container } = render(
-      <HarnessAuthEvidenceSummary authState={stateFor("usable")} />,
+  it("keeps a stale FAILED observation's words rather than going dark", () => {
+    render(
+      <HarnessAuthEvidenceBadge
+        status={statusFor({
+          probe: { verdict: "failed", at: OBSERVED_AT, stale: true },
+        })}
+        refreshing={false}
+        onRefresh={() => {}}
+      />,
     );
-    // nextAction none + idle probe + null handoff => empty summary wrapper.
-    expect(container.querySelector("[data-harness-probe-phase]")).toBeNull();
-    expect(container.querySelector("[data-harness-handoff]")).toBeNull();
+
+    expect(screen.getByText("Not authenticated")).toBeTruthy();
+    expect(document.querySelector("[data-harness-rechecking]")?.textContent)
+      .toBe("last checked 2m ago — retrying");
+  });
+
+  it("renders an unknown harness neutrally and gates nothing", () => {
+    render(
+      <HarnessAuthEvidenceBadge
+        status={statusFor({ probe: null, applied: null })}
+        refreshing={false}
+        onRefresh={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Waiting for status")).toBeTruthy();
+    expect(badgeElement()?.getAttribute("data-harness-probe-verdict")).toBe(
+      "unknown",
+    );
+    expect(isGreen()).toBe(false);
+    // The refresh affordance stays clickable: a badge never gates an action.
+    expect(screen.getByLabelText("Refresh status").hasAttribute("disabled"))
+      .toBe(false);
+  });
+
+  it("names nothing configured as such, in neutral", () => {
+    render(
+      <HarnessAuthEvidenceBadge
+        status={statusFor({ applied: null })}
+        refreshing={false}
+        onRefresh={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Not configured")).toBeTruthy();
+    expect(isGreen()).toBe(false);
+  });
+
+  it("words a green native login with nothing applied as the user's own (ruled 2026-08-27)", () => {
+    // Native is a PERMANENT supported method: detected login + green probe +
+    // nothing routed applied is a healthy terminal — success tone, the native
+    // wording, its evidence age, and nothing that reads like a deficiency.
+    render(
+      <HarnessAuthEvidenceBadge
+        status={statusFor({
+          applied: null,
+          probe: { verdict: "verified", at: OBSERVED_AT, stale: false },
+        })}
+        nativeDetected
+        refreshing={false}
+        onRefresh={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Using your own login")).toBeTruthy();
+    expect(screen.getByText("verified 2m ago")).toBeTruthy();
+    expect(isGreen()).toBe(true);
+    expect(screen.queryByText("Not configured")).toBeNull();
+  });
+
+  it("never greens an unknown future verdict, and fakes no evidence age", () => {
+    render(
+      <HarnessAuthEvidenceBadge
+        status={statusFor({
+          probe: {
+            verdict: "some_future_verdict",
+            at: OBSERVED_AT,
+            stale: false,
+          } as unknown as NonNullable<HarnessStatus["probe"]>,
+        })}
+        refreshing={false}
+        onRefresh={() => {}}
+      />,
+    );
+
+    expect(badgeElement()?.getAttribute("data-harness-probe-verdict")).toBe(
+      "some_future_verdict",
+    );
+    expect(isGreen()).toBe(false);
+    expect(document.querySelector("[data-harness-evidence-age]")).toBeNull();
+  });
+
+  it("re-reads on refresh — the frontend never probes on its own", () => {
+    const onRefresh = vi.fn();
+    render(
+      <HarnessAuthEvidenceBadge
+        status={statusFor()}
+        refreshing={false}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    screen.getByLabelText("Refresh status").click();
+    expect(onRefresh).toHaveBeenCalledOnce();
   });
 });

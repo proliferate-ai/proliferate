@@ -408,6 +408,25 @@ impl SessionActor {
                 Some(observation.window),
                 now_epoch_s,
             );
+            // The status document's cooling banner must move the moment the
+            // machine knows (agent_auth spec §2: event-refreshed, never
+            // computed on read). Degrade-with-warn inside; never gates.
+            //
+            // Threading: this refresh does synchronous I/O (state.json reads,
+            // native detection, sqlite behind the shared connection mutex) —
+            // the same work the HTTP doors push to the blocking pool. It is
+            // deliberately inline HERE because the actor already runs on its
+            // own dedicated OS thread with a per-session current-thread
+            // runtime (actor/spawn.rs), not on the shared axum executor: the
+            // cost lands on this one session's turn-error bookkeeping, never
+            // on other requests. If the actor ever moves onto the shared
+            // multi-thread runtime, this call must move to spawn_blocking.
+            if let Some(agent_status) = self.caps.agent_status.as_ref() {
+                agent_status.refresh(
+                    &self.agent_kind,
+                    crate::domains::agents::status::RefreshCause::SeatCooling,
+                );
+            }
         } else {
             tracing::warn!(
                 session_id = %self.session_id,

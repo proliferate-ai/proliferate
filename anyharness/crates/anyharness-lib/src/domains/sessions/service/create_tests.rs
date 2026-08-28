@@ -78,7 +78,7 @@ async fn idempotent_create_requires_exact_intent_and_current_observation() {
     std::fs::create_dir_all(&agent_auth_dir).expect("create agent-auth directory");
     std::fs::write(
         agent_auth_dir.join("state.json"),
-        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"grok","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[{"harness_kind":"grok","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
     )
     .expect("write gateway route state");
     let test_executable = std::env::current_exe().expect("current test executable");
@@ -373,7 +373,7 @@ async fn unsupported_model_refusal_leaves_no_session_row_or_live_process() {
     std::fs::create_dir_all(&agent_auth_dir).expect("create agent-auth directory");
     std::fs::write(
         agent_auth_dir.join("state.json"),
-        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"grok","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[{"harness_kind":"grok","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
     )
     .expect("write gateway route state");
 

@@ -29,10 +29,6 @@ vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   }),
 }));
 
-vi.mock("#product/hooks/agents/lifecycle/use-auth-setup-onboarding-step", () => ({
-  useAuthSetupOnboardingStep: () => "hidden",
-}));
-
 vi.mock("#product/hooks/agents/lifecycle/use-auth-setup-onboarding-evidence", () => ({
   useAuthSetupOnboardingEvidence: () => null,
 }));

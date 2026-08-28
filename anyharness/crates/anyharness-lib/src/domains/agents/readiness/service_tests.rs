@@ -479,7 +479,7 @@ fn opencode_provider_managed_readiness_follows_its_selection_set_not_already_rea
     std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
     std::fs::write(
         state_dir.join("state.json"),
-        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"opencode","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[{"harness_kind":"opencode","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
     )
     .expect("write state");
 
@@ -542,7 +542,7 @@ fn resolve_launch_agent_clears_a_gateway_routed_credential_gap() {
     std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
     std::fs::write(
         state_dir.join("state.json"),
-        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"grok","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[{"harness_kind":"grok","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
     )
     .expect("write state");
 
@@ -575,7 +575,7 @@ fn resolve_launch_agent_never_masks_a_missing_binary() {
     std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
     std::fs::write(
         state_dir.join("state.json"),
-        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"claude","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[{"harness_kind":"claude","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
     )
     .expect("write state");
 

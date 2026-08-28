@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { makeTestProductHost, type TestProductHostOptions } from "#product/test/product-host-test-utils";
+import { harnessStatusFixture, verifiedHarnessStatus } from "#product/hooks/access/anyharness/agent-auth/use-harness-status.fixtures";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
 
 // Anonymous host keeps the organizations query disabled, as before. Its
@@ -71,6 +72,8 @@ const state = vi.hoisted(() => ({
     data: undefined as Record<string, unknown> | undefined,
     isLoading: false,
   },
+  harnessStatus: null as unknown, // the status document; the badge is it, verbatim
+  harnessMethods: [] as Array<Record<string, unknown>>, // door 2's rows
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
@@ -186,6 +189,10 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
 }));
 
+vi.mock("#product/hooks/access/anyharness/agent-auth/use-harness-status", () => ({
+  useHarnessStatus: () => state.harnessStatus ?? harnessStatusFixture(),
+  useMethods: () => state.harnessMethods,
+}));
 vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (s: { show: typeof showToast }) => unknown) =>
     selector({ show: showToast }),
@@ -410,6 +417,8 @@ afterEach(() => {
   state.loginSessions = {};
   state.modelSnapshotStatus.data = undefined;
   state.modelSnapshotStatus.isLoading = false;
+  state.harnessStatus = null;
+  state.harnessMethods = [];
 });
 
 describe("HarnessPane authentication", () => {
@@ -675,13 +684,9 @@ describe("HarnessPane authentication", () => {
 
   it("shows the minimal native status row when nothing is enabled", () => {
     const { container } = renderPane("claude");
-    // Minimal status ruling (2026-07-27): one row, badge + refresh, no
-    // savedState/description noise.
+    // Minimal status ruling (2026-07-27): one row, badge + refresh, no noise.
     expect(container.querySelector('[data-harness-status="native"]')).not.toBeNull();
-    expect(
-      screen.queryByText(/No auth configured — the CLI's own login is used/),
-    ).toBeNull();
-    expect(screen.getByText("Not authenticated")).toBeTruthy();
+    expect(screen.getByText("Not configured")).toBeTruthy(); // the document, verbatim
     expect(screen.getByRole("button", { name: "Refresh status" })).toBeTruthy();
   });
 
@@ -974,11 +979,9 @@ describe("HarnessPane authentication", () => {
     expect(putMutate).not.toHaveBeenCalled();
   });
 
-  // P1-b regression: while the capabilities query is still in flight (first
-  // load, no data yet), the gateway status row must show a neutral/loading
-  // tone instead of falsely reporting "Not ready" before the observation
-  // exists.
-  it("shows a loading status, not a false Not ready warning, while gateway capabilities are pending", () => {
+  // P1-b, restated against the document: an in-flight capabilities read must not
+  // move the badge — the derivation folding enrollment into a word is gone.
+  it("never derives the auth badge from a pending gateway capabilities read", () => {
     state.capabilities.data = undefined;
     state.capabilities.isPending = true;
     state.capabilities.isFetching = true;
@@ -998,7 +1001,7 @@ describe("HarnessPane authentication", () => {
     renderPane("claude");
 
     expect(screen.queryByText("Not ready")).toBeNull();
-    expect(screen.getAllByText("Checking").length).toBeGreaterThan(0);
+    expect(screen.getByText("Not configured")).toBeTruthy(); // the document said so
   });
 
   it("disables the gateway toggle while enrollment is unsynced", () => {
@@ -1009,25 +1012,9 @@ describe("HarnessPane authentication", () => {
     expect(screen.queryByText("Enrollment pending")).not.toBeNull();
   });
 
-  it("offers Run login on native when local credentials are undetected", () => {
-    state.agentsByKind = new Map([[
-      "claude",
-      {
-        kind: "claude",
-        displayName: "Claude Code",
-        readiness: "login_required",
-        supportsLogin: true,
-      },
-    ]]);
-    renderPane("claude");
-
-    fireEvent.click(screen.getByRole("button", { name: "Authenticate" }));
-
-    expect(openAuthTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "claude" }),
-      { restart: false },
-    );
-  });
+  // The native/CLI affordance's own cases live in HarnessAuthCliDetails.test.tsx:
+  // it keys off the runtime's status document now, so it is testable without the
+  // whole pane — and this suite is at its size ratchet.
 
   // The Authentication section is gated on the auth plane (editor.authReady),
   // not on cloud compute (agent-auth.md, HarnessAuthSection): an anonymous
@@ -1052,26 +1039,34 @@ describe("HarnessPane authentication", () => {
     expect(screen.queryAllByText(/Sign in to Proliferate Cloud/).length).toBeGreaterThan(0);
   });
 
-  // P1-a regression: `localAgent?.supportsLogin ?? canRunLogin` let `??`
-  // (which binds tighter than the intended `&&`) short-circuit on
-  // `supportsLogin: true` alone, offering Authenticate even when the CLI
-  // itself says login can't run right now (canRunLogin false, e.g. already
-  // authenticated). The fix requires BOTH supportsLogin and canRunLogin.
-  it("does not offer Authenticate for a healthy authenticated agent even when supportsLogin is true", () => {
+  // The native row's own fact reaches the picker through `useMethods` (door 2),
+  // not through cliAuthState: a detected login is a statement about the METHOD.
+  it("says the CLI card's login was detected when the methods door reports it", () => {
+    state.harnessMethods = [
+      { kind: "native", applied: false, detected: true, offer: "mint_seat" },
+    ];
+    renderPane("claude");
+
+    expect(screen.getByText("Login detected on this machine")).toBeTruthy();
+  });
+
+  it("says nothing about detection when the methods door reports none", () => {
+    renderPane("claude");
+
+    expect(screen.queryByText("Login detected on this machine")).toBeNull();
+  });
+
+  // The header badge is the runtime's DATED observation, never a
+  // readiness-derived green (the P1-a case's other half — that a green document
+  // withholds the Authenticate button — is in HarnessAuthCliDetails.test.tsx).
+  it("reads the badge off a dated observation, and offers no Authenticate under it", () => {
+    state.harnessStatus = verifiedHarnessStatus();
     state.agentsByKind = new Map([[
       "claude",
-      {
-        kind: "claude",
-        displayName: "Claude Code",
-        readiness: "ready",
-        supportsLogin: true,
-      },
+      { kind: "claude", displayName: "Claude Code", readiness: "ready", supportsLogin: true },
     ]]);
     renderPane("claude");
 
-    // Select the CLI card (the default fallback already selects it, but be
-    // explicit) — its detail area renders nothing but the badge when
-    // authenticated (design-handoff v2: "the state must be said exactly once").
     fireEvent.click(screen.getByRole("button", { name: "CLI login" }));
 
     expect(screen.getByText("Authenticated")).toBeTruthy();

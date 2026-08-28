@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
+import { harnessStatusFixture } from "#product/hooks/access/anyharness/agent-auth/use-harness-status.fixtures";
 import { HarnessProvidersSection } from "./HarnessProvidersSection";
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
@@ -12,6 +13,12 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 
 vi.mock("#product/config/provider-logos.generated", () => ({
   PROVIDER_LOGO_URLS: {},
+}));
+
+// OpenCode's badge is the runtime's status document now, not the old
+// unconditional green: `deriveProvidersStatus` is deleted.
+vi.mock("#product/hooks/access/anyharness/agent-auth/use-harness-status", () => ({
+  useHarnessStatus: () => harnessStatusFixture(),
 }));
 
 // The provider-picker chunk carries a 170+-mark asset map: stub a deliberate
@@ -60,8 +67,23 @@ function makeEditor(overrides: Partial<HarnessAuthEditorApi> = {}): HarnessAuthE
 }
 
 describe("HarnessProvidersSection", () => {
+  it("takes its harness kind from the caller, never a hardcoded opencode", () => {
+    // The section mounts on isMultiSourceHarness(kind), derived from
+    // registry.json's authCardinality — so a DATA-ONLY registry change adds a
+    // harness here, and a literal would have shown it opencode's document,
+    // badge, and route readback.
+    const { container } = render(
+      <HarnessProvidersSection harnessKind="future-multi" editor={makeEditor()} />,
+    );
+
+    const section = container.querySelector("[data-harness-auth-section]");
+    expect(section?.getAttribute("data-harness-auth-section")).toBe("future-multi");
+    expect(section?.getAttribute("data-harness-selected-route"))
+      .toBe("future-multi:cli");
+  });
+
   it("shows a pending trigger instead of letting the modal pop in blank late", async () => {
-    render(<HarnessProvidersSection editor={makeEditor()} />);
+    render(<HarnessProvidersSection harnessKind="opencode" editor={makeEditor()} />);
 
     const trigger = screen.getByRole("button", { name: /configure/i }) as HTMLButtonElement;
     expect(trigger.disabled).toBe(false);
@@ -93,7 +115,7 @@ describe("HarnessProvidersSection", () => {
       "./HarnessProvidersSection"
     );
 
-    render(<SectionWithRejectingImport editor={makeEditor()} />);
+    render(<SectionWithRejectingImport harnessKind="opencode" editor={makeEditor()} />);
 
     const trigger = screen.getByRole("button", { name: /configure/i }) as HTMLButtonElement;
     fireEvent.click(trigger);

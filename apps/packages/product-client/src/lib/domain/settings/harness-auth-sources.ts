@@ -109,7 +109,7 @@ export function deriveEditorState(
 /**
  * The full desired-state PUT body (contract §5). The gateway row is retained
  * disabled when native/API-key auth is selected so its `updated_at` remains a
- * monotonic surface revision marker across gateway -> native transitions.
+ * monotonic surface sequence marker across gateway -> native transitions.
  * Only complete api_key rows are wired.
  */
 export function buildDesiredSources(
@@ -123,8 +123,8 @@ export function buildDesiredSources(
     }]
     : [];
   // The seat pool row rides only when ON (seats v1): unlike the gateway row
-  // (the scope's durable revision marker, always sent), a disabled seat row
-  // carries no revision duty, and never sending one keeps every non-seat
+  // (the scope's durable sequence marker, always sent), a disabled seat row
+  // carries no sequence duty, and never sending one keeps every non-seat
   // scope byte-identical to before seats existed.
   if (isSeatCapableHarness(harnessKind) && state.seatEnabled) {
     sources.push({ sourceKind: "seat", enabled: true });

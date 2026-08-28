@@ -63,6 +63,8 @@ async fn full_scope_pass_admits_every_absent_agent_instead_of_skipping_it() {
             None,
             // Local: cursor is NOT carved out here, so it must be admitted too.
             None,
+            // No status service: this asserts the surface predicate only.
+            None,
             RuntimeSurface::Local,
             AgentReconcileAdmission::ReuseCompatible,
         )
@@ -142,6 +144,7 @@ async fn the_cloud_surface_reaches_the_predicate_and_carves_out_only_cursor() {
             false,
             false,
             Vec::new(),
+            None,
             None,
             None,
             None,

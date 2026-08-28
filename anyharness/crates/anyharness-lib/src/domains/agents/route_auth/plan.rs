@@ -27,11 +27,11 @@ pub struct GatewayModelPlan {
 /// Materialization only. The trait used to carry a
 /// `schedule_launch_probe_if_stale` trigger too, which is gone: launch-time
 /// re-observation is now a poke of the general launch-options probe, whose
-/// staleness gate is per (harness, auth context) rather than per gateway revision.
+/// staleness gate is per (harness, auth context) rather than per gateway sequence.
 /// A seam that both supplies render input AND scheduled its own background work
 /// meant every stub implementor silently inherited a no-op trigger.
 pub trait GatewayModelResolve: Send + Sync {
-    fn resolve_gateway_models(&self, harness_kind: &str, revision: i64) -> GatewayModelPlan;
+    fn resolve_gateway_models(&self, harness_kind: &str, sequence: i64) -> GatewayModelPlan;
 
     /// Drop any memoized gateway model list for `harness_kind`, so the next
     /// resolve genuinely re-asks the gateway.
@@ -61,9 +61,9 @@ pub trait GatewayModelResolve: Send + Sync {
     fn resolve_gateway_models_blocking(
         &self,
         harness_kind: &str,
-        revision: i64,
+        sequence: i64,
     ) -> GatewayModelPlan {
-        self.resolve_gateway_models(harness_kind, revision)
+        self.resolve_gateway_models(harness_kind, sequence)
     }
 }
 
@@ -84,7 +84,7 @@ mod tests {
     struct MinimalResolver;
 
     impl GatewayModelResolve for MinimalResolver {
-        fn resolve_gateway_models(&self, _harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+        fn resolve_gateway_models(&self, _harness_kind: &str, _sequence: i64) -> GatewayModelPlan {
             GatewayModelPlan {
                 models: vec!["only-what-render-needs".to_string()],
             }

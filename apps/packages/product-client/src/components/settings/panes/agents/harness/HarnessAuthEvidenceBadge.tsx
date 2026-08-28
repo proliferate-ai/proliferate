@@ -1,52 +1,75 @@
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { Badge } from "#product/primitives/Badge";
-import { Button } from "#product/primitives/Button";
 import { IconButton } from "#product/primitives/IconButton";
+import type { HarnessStatus } from "#product/hooks/access/anyharness/agent-auth/use-harness-status";
 import {
-  evidenceAgeLine,
-  labelForDisplay,
-  labelForNextAction,
-  presentHandoff,
-  toneForDisplay,
-  type AgentAuthState,
-} from "#product/lib/domain/settings/agent-auth-evidence";
+  statusEvidenceLine,
+  statusLabel,
+  statusRecheckingMarker,
+  statusTone,
+} from "#product/lib/domain/settings/agent-auth-status-presentation";
 
 /**
- * The evidence-backed status badge (ADR agent-auth rung 6). Renders EXCLUSIVELY
- * from the runtime's derived `authState`: the display name sets the label and
- * tone, green (success) is reachable ONLY for `usable`/`authenticated` because
- * `toneForDisplay` says so and those are the runtime's evidence-backed
- * terminals, and a green badge carries its evidence age ("verified 2m ago").
- * There is no local derivation and no readiness fallback — the two behaviors
- * that produced PRO-252's false greens.
+ * The pane's ONE auth badge, rendering the runtime's status document VERBATIM
+ * (agent_auth spec §4 cell 4).
+ *
+ * There is no local fallback and no readiness-based green: the label and tone
+ * come from the document's `probe`/`applied`, green carries its evidence age
+ * ("verified 2m ago"), a stale document keeps its LAST OBSERVATION on screen
+ * with the ruled stale marker ("last checked 2m ago — retrying", founder-ruled
+ * 2026-08-27 — never a spinner, never "loading", never a countdown), and a
+ * harness the runtime holds no document for reads neutrally and gates nothing.
  */
 export function HarnessAuthEvidenceBadge({
-  authState,
+  status,
+  nativeDetected,
   refreshing,
   onRefresh,
   "data-harness-status": dataHarnessStatus,
 }: {
-  authState: AgentAuthState;
+  status: HarnessStatus;
+  /**
+   * The `native` method row's `detected` (door 2, `useMethods`) — the document's
+   * own fact, passed in because the status hook deliberately does not re-expose
+   * the method rows. Founder-ruled 2026-08-27: native is a PERMANENT supported
+   * method, and this is what words a green, nothing-applied harness as
+   * "Using your own login" instead of a deficiency.
+   */
+  nativeDetected?: boolean;
   refreshing: boolean;
   onRefresh: () => void;
   "data-harness-status"?: string;
 }) {
-  const tone = toneForDisplay(authState.display);
-  const ageLine = evidenceAgeLine(authState);
+  const facts = { ...status, nativeDetected: nativeDetected ?? false };
+  // The wall clock, not an injected one: the evidence age is read at render, and
+  // a `now` prop that only a test ever passed was shipped surface with no
+  // production caller (its suite pins `Date.now` instead).
+  const evidenceLine = statusEvidenceLine(facts);
+  const rechecking = statusRecheckingMarker(facts);
   return (
     <>
       <Badge
-        tone={tone}
+        tone={statusTone(facts)}
         data-harness-status={dataHarnessStatus}
-        data-harness-display={authState.display}
+        data-harness-probe-verdict={status.probe?.verdict ?? "unknown"}
+        data-harness-probe-stale={status.probe?.stale ? "true" : "false"}
       >
         <span
           aria-hidden
           className="icon-status mr-1.5 inline-block shrink-0 rounded-full bg-current"
         />
-        {labelForDisplay(authState.display)}
-        {ageLine ? (
-          <span className="ml-1.5 font-normal opacity-70">{ageLine}</span>
+        {statusLabel(facts)}
+        {evidenceLine ? (
+          <span className="ml-1.5 font-normal opacity-70" data-harness-evidence-age>
+            {evidenceLine}
+          </span>
+        ) : null}
+        {rechecking ? (
+          // The dimmed light: the observation above is the last one held, and a
+          // re-probe is running. Rendered beside it, never instead of it.
+          <span className="ml-1.5 font-normal opacity-60" data-harness-rechecking>
+            {rechecking}
+          </span>
         ) : null}
       </Badge>
       <IconButton
@@ -58,98 +81,5 @@ export function HarnessAuthEvidenceBadge({
         <RefreshCw className={`icon-paired ${refreshing ? "animate-spin" : ""}`} />
       </IconButton>
     </>
-  );
-}
-
-/** Coarse remaining-time label until an ISO `nextAttemptAt`, or null if past. */
-function formatCountdown(nextAttemptAt: string, now: number): string | null {
-  const target = Date.parse(nextAttemptAt);
-  if (Number.isNaN(target)) return null;
-  const remaining = Math.round((target - now) / 1000);
-  if (remaining <= 0) return null;
-  if (remaining < 60) return `${remaining}s`;
-  return `${Math.round(remaining / 60)}m`;
-}
-
-/**
- * The lead the flag-ON pane opens with (ADR agent-auth rung 6): the derived
- * state said in a sentence plus the single next action, then the probe
- * lifecycle (probing spinner, backoff with its `next_attempt_at` countdown and
- * last-failure detail) and the login handoff when present. All read straight
- * off `authState`; nothing here is re-derived. Shows nothing extra when the
- * runtime has not filled those slots.
- */
-export function HarnessAuthEvidenceSummary({
-  authState,
-  now = Date.now(),
-  onRetryHandoff,
-}: {
-  authState: AgentAuthState;
-  now?: number;
-  onRetryHandoff?: () => void;
-}) {
-  const nextAction = labelForNextAction(authState.nextAction);
-  const probe = authState.facts.probe;
-  const handoff = authState.facts.handoff
-    ? presentHandoff(authState.facts.handoff)
-    : null;
-  const countdown =
-    probe.phase === "backoff" && probe.nextAttemptAt
-      ? formatCountdown(probe.nextAttemptAt, now)
-      : null;
-
-  return (
-    <div className="space-y-2 pb-1" data-harness-evidence-summary>
-      {nextAction ? (
-        <p className="text-ui-sm text-muted-foreground">
-          <span className="text-foreground">Next:</span> {nextAction}
-        </p>
-      ) : null}
-
-      {probe.phase === "running" || probe.phase === "queued" ? (
-        <p
-          className="flex items-center gap-2 text-ui-sm text-muted-foreground"
-          data-harness-probe-phase={probe.phase}
-        >
-          <RefreshCw className="icon-paired animate-spin" />
-          {probe.phase === "running" ? "Probing models…" : "Probe queued…"}
-        </p>
-      ) : null}
-
-      {probe.phase === "backoff" ? (
-        <p
-          className="text-ui-sm text-muted-foreground"
-          data-harness-probe-phase="backoff"
-        >
-          {countdown
-            ? `Probe failed. Next attempt in ${countdown}.`
-            : "Probe failed. Retrying shortly."}
-          {probe.lastFailureDetail ? ` ${probe.lastFailureDetail}` : ""}
-        </p>
-      ) : null}
-
-      {handoff ? (
-        <p
-          className="flex items-center gap-2 text-ui-sm text-muted-foreground"
-          data-harness-handoff={authState.facts.handoff ?? undefined}
-        >
-          {handoff.inFlight ? (
-            <RefreshCw className="icon-paired animate-spin" />
-          ) : null}
-          {handoff.label}
-          {handoff.retryable && onRetryHandoff ? (
-            <Button
-              type="button"
-              variant="unstyled"
-              size="unstyled"
-              className="text-foreground underline underline-offset-2"
-              onClick={onRetryHandoff}
-            >
-              Retry
-            </Button>
-          ) : null}
-        </p>
-      ) : null}
-    </div>
   );
 }

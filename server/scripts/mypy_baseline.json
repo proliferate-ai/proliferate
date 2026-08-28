@@ -240,7 +240,7 @@
       "path": "proliferate/db/store/agent_gateway/selections.py",
       "code": "attr-defined",
       "message": "\"Result[Any]\" has no attribute \"rowcount\"",
-      "count": 2
+      "count": 1
     },
     {
       "path": "proliferate/db/store/billing.py",

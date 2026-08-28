@@ -202,7 +202,7 @@ fn an_unsatisfiable_selection_maps_to_a_typed_conflict() {
     let mapped = map_create_session_error(CreateAndStartSessionError::RouteAuth(
         RouteAuthError::SelectionMissing {
             harness_kind: "claude".to_string(),
-            revision: 42,
+            sequence: 42,
             reason: None,
         },
     ));
@@ -223,7 +223,7 @@ fn refusal_family_renders_the_launch_refusal_vocabulary() {
     let errors = [
         RouteAuthError::SelectionMissing {
             harness_kind: "claude".to_string(),
-            revision: 42,
+            sequence: 42,
             reason: Some("the credits behind it ran out".to_string()),
         },
         RouteAuthError::SeatCooling {

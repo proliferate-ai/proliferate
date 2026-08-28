@@ -20,7 +20,6 @@ interface ImportMetaEnv {
   readonly VITE_PLAYGROUND_REPLAY_WORKSPACE_PATH?: string;
   readonly VITE_ANYHARNESS_DEV_URL?: string;
   readonly VITE_WORKFLOWS_V2?: string;
-  readonly VITE_AGENT_AUTH_EVIDENCE_PANES?: string;
 }
 
 interface ImportMeta {

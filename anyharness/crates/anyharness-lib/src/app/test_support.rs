@@ -42,6 +42,7 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
         seat_cooling: Some(Arc::new(
             crate::domains::agents::seat_cooling::SeatCoolingStore::new(store.db()),
         )),
+        agent_status: None,
     }
 }
 
@@ -110,7 +111,8 @@ pub(crate) fn install_scripted_claude_auth(runtime_home: &Path) {
         .expect("make native claude stub executable");
     let state: AgentAuthState = serde_json::from_value(serde_json::json!({
         "version": 2,
-        "revision": 1,
+        "lineage": "test-lineage",
+        "sequence": 1,
         "harnesses": [{
             "harness_kind": "claude",
             "sources": [{

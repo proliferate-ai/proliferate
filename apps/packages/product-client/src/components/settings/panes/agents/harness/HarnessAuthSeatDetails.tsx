@@ -13,7 +13,7 @@ import { formatSeatResetTime } from "#product/domain/chats/transcript/seat-usage
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { useSeatMintWorkflow } from "#product/hooks/agents/workflows/use-seat-mint-workflow";
 import { useSeatRotateSetting } from "#product/hooks/agents/workflows/use-seat-rotate-setting";
-import { readAuthRotation } from "#product/lib/domain/settings/agent-auth-rotation";
+import { useHarnessStatus } from "#product/hooks/access/anyharness/agent-auth/use-harness-status";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
@@ -24,9 +24,10 @@ import { useToastStore } from "#product/stores/toast/toast-store";
  * and the inline waiting-for-sign-in row with the mint terminal. Meters are a
  * later slice.
  *
- * The tags render the runtime's rotation status VERBATIM (agent_auth §4
- * "Rotation ownership": servingSeatId / nextSeatId / coolingUntil on the
- * agent summary's authState) — the frontend derives nothing.
+ * The tags render the runtime's rotation status VERBATIM, straight off the
+ * status document (agent_auth §2): `applied.seat_id` IS the serving seat,
+ * `next_seat_id` the next in line, `cooling_until` non-null only when no seat
+ * can serve right now. The frontend derives nothing.
  *
  * Seat identity is user-entered by design: a setup-token carries no profile
  * scope, so the system can learn neither email nor plan on its own.
@@ -48,10 +49,16 @@ export function SeatDetails({
   const seats = (editor.apiKeysQuery.data ?? []).filter(
     (key) => key.kind === "anthropic_subscription" && key.status === "active",
   );
-  const rotation = readAuthRotation(editor.localAgent?.authState);
-  const coolingResetTime = rotation.coolingUntil === null
+  const authStatus = useHarnessStatus("claude");
+  // The serving seat is the applied SEAT method's own id; any other applied
+  // method means no seat is serving, and no tag is shown.
+  const servingSeatId =
+    authStatus.applied?.kind === "seat"
+      ? authStatus.applied.seat_id ?? null
+      : null;
+  const coolingResetTime = authStatus.coolingUntil === null
     ? null
-    : formatSeatResetTime(rotation.coolingUntil);
+    : formatSeatResetTime(authStatus.coolingUntil);
 
   const handleSeatAdded = useCallback((seat: AgentApiKey) => {
     showToast(HARNESS_PANE_COPY.seatAddedToast(seat.title), "info");
@@ -115,11 +122,11 @@ export function SeatDetails({
               <span className="font-mono text-ui-sm font-normal text-muted-foreground">
                 {seat.redactedHint}
               </span>
-              {seat.id === rotation.servingSeatId ? (
+              {seat.id === servingSeatId ? (
                 <Badge size="micro" tone="success" data-seat-serving-now={seat.id}>
                   {HARNESS_PANE_COPY.seatServingNowTag}
                 </Badge>
-              ) : seat.id === rotation.nextSeatId ? (
+              ) : seat.id === authStatus.nextSeatId ? (
                 <Badge size="micro" data-seat-next-up={seat.id}>
                   {HARNESS_PANE_COPY.seatNextUpTag}
                 </Badge>

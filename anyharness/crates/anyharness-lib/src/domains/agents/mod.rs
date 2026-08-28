@@ -1,5 +1,4 @@
 pub mod auth;
-pub mod auth_state;
 pub mod catalog;
 pub mod installer;
 pub mod launch_options;
@@ -13,3 +12,4 @@ pub mod registry;
 pub mod route_auth;
 pub mod runtime;
 pub mod seat_cooling;
+pub mod status;

@@ -179,9 +179,10 @@ class AgentAuthStateResponse(BaseModel):
     """The whole ``state.json`` v2 document (``route_auth/state.rs``).
 
     ``fingerprint`` is a response-only rider (the renderer's sha256 of the
-    canonical document), NOT part of the state.json wire contract: the desktop
-    echoes it through ``POST /state/ack`` after a successful runtime push and
-    must strip it before pushing the document to the local runtime.
+    canonical ``harnesses`` array, spec §2), NOT part of the state.json wire
+    contract: the desktop echoes it through ``POST /state/ack`` after a
+    successful runtime push and must strip it before pushing the document to
+    the local runtime.
 
     ``harness_settings`` is a second response-only rider: the surface's full
     persisted harness-settings map (``agent_auth_harness_settings``), keyed by
@@ -194,7 +195,13 @@ class AgentAuthStateResponse(BaseModel):
     """
 
     version: int
-    revision: int
+    sequence: int
+    # The counter's birth identity (the persisted render-sequence row's
+    # uuid): PART of the state.json wire contract, pushed to the runtime
+    # verbatim beside ``sequence``. The runtime refuses a push whose lineage
+    # differs from its persisted one — the typed cure for the sequence-
+    # lineage wedge (a rebuilt/switched server DB restarting the counter).
+    lineage: str
     user_id: str | None = None
     harnesses: list[AgentAuthStateHarness]
     fingerprint: str | None = None
@@ -204,18 +211,18 @@ class AgentAuthStateResponse(BaseModel):
 class AgentAuthStateAckRequest(BaseModel):
     """Desktop delivery ack: the pushed document's identity, echoed back.
 
-    ``revision`` is the revision the local runtime's state PUT/DELETE
+    ``sequence`` is the sequence the local runtime's state PUT/DELETE
     confirmed; ``fingerprint`` is the served document's fingerprint from
     ``GET /state`` (never client-computed).
     """
 
-    revision: int
+    sequence: int
     fingerprint: str
 
 
 class AgentAuthDeliveryAckResponse(AgentGatewayBaseModel):
     surface: AgentAuthSurface
-    acked_revision: int = Field(alias="ackedRevision")
+    acked_sequence: int = Field(alias="ackedSequence")
     acked_at: str = Field(alias="ackedAt")
 
 
@@ -345,7 +352,7 @@ def delivery_ack_payload(
 ) -> AgentAuthDeliveryAckResponse:
     return AgentAuthDeliveryAckResponse(
         surface=record.surface,  # type: ignore[arg-type]
-        acked_revision=record.acked_revision,
+        acked_sequence=record.acked_sequence,
         acked_at=record.acked_at.isoformat(),
     )
 

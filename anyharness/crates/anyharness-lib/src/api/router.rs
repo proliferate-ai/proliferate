@@ -1,18 +1,17 @@
 use axum::{
     extract::DefaultBodyLimit,
     extract::State,
-    http::{header, HeaderMap, Request},
+    http::Request,
     middleware::{self, Next},
     response::Response,
     routing::{delete, get, patch, post, put},
     Router,
 };
-use subtle::ConstantTimeEq;
-use url::form_urlencoded;
 
 use super::http::{
     agent_auth::{
-        delete_agent_auth_state, dismiss_native_bridge, get_native_bridge, put_agent_auth_state,
+        delete_agent_auth_state, dismiss_native_bridge, get_agent_auth_methods,
+        get_agent_auth_status, get_native_bridge, put_agent_auth_state,
     },
     agent_launch_options, agents, auth as http_auth, catalogs, cowork, files, git, goals, health,
     hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
@@ -21,16 +20,21 @@ use super::http::{
     workspaces_lifecycle, workspaces_purge, workspaces_restore, workspaces_setup,
     workspaces_worktrees, worktrees,
 };
+use super::sse::agent_auth as sse_agent_auth;
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
 use super::ws::agent_login_terminals as ws_agent_login_terminals;
 use super::ws::feeds as ws_feeds;
 use super::ws::terminals as ws_terminals;
-use crate::api::auth::{user_route_allowed, AuthContext, AuthError};
+use crate::api::auth::{user_route_allowed, AuthContext};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
+use bearer::{auth_error_to_api, bearer_tokens_match, extract_bearer_token, token_is_jwt};
+
+mod bearer;
 mod pending_prompt_routes;
 mod support_window_routes;
+
 pub fn build_router(state: AppState) -> Router {
     let v1 = Router::new()
         // Agents
@@ -72,6 +76,12 @@ pub fn build_router(state: AppState) -> Router {
         .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
         .route("/agent-auth/state", put(put_agent_auth_state))
         .route("/agent-auth/state", delete(delete_agent_auth_state))
+        .route("/agent-auth/status", get(get_agent_auth_status))
+        .route(
+            "/agent-auth/status/stream",
+            get(sse_agent_auth::stream_agent_auth_status),
+        )
+        .route("/agent-auth/methods", get(get_agent_auth_methods))
         .route("/agent-auth/native-bridge", get(get_native_bridge))
         .route(
             "/agent-auth/native-bridge/{kind}",
@@ -537,61 +547,4 @@ async fn require_bearer_auth(
         "A valid bearer token is required for this AnyHarness runtime.",
         "UNAUTHORIZED",
     ))
-}
-
-fn auth_error_to_api(error: AuthError) -> ApiError {
-    match error {
-        AuthError::InvalidToken | AuthError::Revoked | AuthError::NotConfigured => {
-            ApiError::unauthorized(
-                "A valid direct-attach token is required for this AnyHarness runtime.",
-                "UNAUTHORIZED",
-            )
-        }
-        AuthError::UnsupportedRoute => ApiError::forbidden(
-            "Direct-attach tokens cannot access this AnyHarness route.",
-            "DIRECT_ATTACH_ROUTE_FORBIDDEN",
-        ),
-        AuthError::InsufficientPermission => ApiError::forbidden(
-            "Direct-attach token does not grant the required permission.",
-            "DIRECT_ATTACH_PERMISSION_DENIED",
-        ),
-        AuthError::ScopeMismatch => ApiError::forbidden(
-            "Direct-attach token is not scoped to this resource.",
-            "DIRECT_ATTACH_SCOPE_MISMATCH",
-        ),
-    }
-}
-
-fn token_is_jwt(token: &str) -> bool {
-    token.split('.').count() == 3
-}
-
-fn bearer_tokens_match(provided: Option<&str>, expected: &str) -> bool {
-    let provided_bytes = provided.unwrap_or("").as_bytes();
-    let expected_bytes = expected.as_bytes();
-    bool::from(provided_bytes.ct_eq(expected_bytes))
-}
-
-fn extract_bearer_token(headers: &HeaderMap, query: Option<&str>) -> Option<String> {
-    if let Some(value) = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-    {
-        if let Some(token) = value.strip_prefix("Bearer ") {
-            let trimmed = token.trim();
-            if !trimmed.is_empty() {
-                return Some(trimmed.to_owned());
-            }
-        }
-    }
-
-    query.and_then(|query| {
-        form_urlencoded::parse(query.as_bytes()).find_map(|(key, value)| {
-            if key == "access_token" && !value.is_empty() {
-                Some(value.into_owned())
-            } else {
-                None
-            }
-        })
-    })
 }

@@ -186,6 +186,10 @@ export const HARNESS_PANE_COPY = {
   methodSeatDescription: "Run on a Claude subscription.",
   methodCli: "CLI login",
   methodCliDescription: "Use the harness's own session.",
+  // The `native` method row's own fact (agent_auth §2): the runtime detected a
+  // working login on this machine. A fact about the method, not a reason the
+  // card cannot be picked.
+  methodCliDetected: "Login detected on this machine",
   // Seats v1 (the Claude.ai logins section, single-seat subset).
   seatAddLogin: "Add a Claude.ai login",
   seatAddLoginStarting: "Opening…",
@@ -226,12 +230,8 @@ export const HARNESS_PANE_COPY = {
   seatRotateUpdateError: "Could not update login rotation.",
   // §1 — the exit to the vendor tool's own documentation.
   docsLink: "Docs",
-  // Gateway enrollment in flight (header badge, warning tone).
-  gatewayPending: "Not ready",
   probeModelCount: (count: number) =>
     count === 1 ? "1 model" : `${count} models`,
-  // CLI session expiry (header badge, warning tone).
-  cliExpired: "Credentials expired",
   signInDescription: (displayName: string) =>
     `Sign in to Proliferate Cloud to manage how ${displayName} authenticates to models.`,
   authenticationDescription: (displayName: string, surface: "cloud" | "local") =>
@@ -241,11 +241,33 @@ export const HARNESS_PANE_COPY = {
   // The merged header status badge (design-handoff v2): the state is said
   // exactly once, in the Authentication/Providers section header.
   authBadgeAuthenticated: "Authenticated",
-  authBadgeUnverified: "Unverified",
-  authBadgeExpired: "Expired",
+  // Founder-ruled 2026-08-27: native auth is a PERMANENT supported method — the
+  // refusal cutover is cancelled. A detected native login with nothing routed
+  // applied and a green probe is a healthy terminal state in its own words,
+  // never "Not configured", never a warning, never a nag toward a managed
+  // method (the mint offer stays an optional upgrade).
+  authBadgeUsingOwnLogin: "Using your own login",
+  // `authBadgeUnverified` / `authBadgeExpired` were the seat badge's own words
+  // in `HarnessAuthStatusBadge.tsx`. That derivation is deleted and fenced
+  // (FE-PATHS-1); the same two states are now the status document's, worded by
+  // `agent-auth-status-presentation.ts` as `authBadgeNotVerified` and
+  // `authBadgeNotAuthenticated`. One vocabulary, not two.
   authBadgeNotConfigured: "Not configured",
   authBadgeNotAuthenticated: "Not authenticated",
-  authBadgeEnrollmentFailed: "Enrollment failed",
+  // The status document's remaining badge words (agent_auth §2). No document at
+  // all reads "Waiting for status" — neutral, and it gates nothing.
+  authBadgeWaitingStatus: "Waiting for status",
+  authBadgeNotVerified: "Not verified",
+  // The dims-never-extinguishes marker for a stale document with NOTHING
+  // observed: there is no age to state, only that a re-probe is running.
+  // Never a spinner.
+  authBadgeRechecking: "re-checking",
+  // Founder-ruled 2026-08-27 (backoff display): a stale document WITH an
+  // observation states the observation's age and that the runtime is retrying.
+  // This wording class WINS over the §4-cell-4 countdown — no countdown, no
+  // next-attempt field, no timer.
+  authStaleLastChecked: (age: string) => `last checked ${age} ago — retrying`,
+  authEvidenceVerifiedAgo: (age: string) => `verified ${age} ago`,
   // API key detail — the three configuration paths.
   segmentPasteKey: "Paste key",
   segmentSavedKeys: "Saved keys",

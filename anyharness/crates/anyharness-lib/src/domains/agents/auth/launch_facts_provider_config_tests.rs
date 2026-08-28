@@ -40,7 +40,7 @@ fn claude_provider_config_foundry_flag_classifies_as_an_env_flag_with_its_value(
     let home = temp_home();
     write_state(
         &home,
-        r#"{"version":2,"revision":1,"harnesses":[
+        r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[
             {"harness_kind":"claude","sources":[
                 {"kind":"provider_config","config_kind":"azure_openai","env":{
                     "CLAUDE_CODE_USE_FOUNDRY":"1",
@@ -93,7 +93,7 @@ fn claude_provider_config_bedrock_flag_classifies_as_an_env_flag_with_its_value(
     let home = temp_home();
     write_state(
         &home,
-        r#"{"version":2,"revision":1,"harnesses":[
+        r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[
             {"harness_kind":"claude","sources":[
                 {"kind":"provider_config","config_kind":"aws_bedrock","env":{
                     "CLAUDE_CODE_USE_BEDROCK":"1",

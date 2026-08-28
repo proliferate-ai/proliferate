@@ -17,7 +17,7 @@ FIXTURE_PATH = REPO_ROOT / "fixtures/contracts/agent-auth-state/v2.json"
 
 USER_ID = uuid.uuid4()
 NOW = datetime(2026, 7, 1, tzinfo=UTC)
-REVISION = 4211
+SEQUENCE, LINEAGE = 4211, "40000000-0000-4000-8000-000000000031"  # fixed counter-birth uuid
 _NOT_READY = agent_auth.UNSATISFIED_GATEWAY_NOT_READY
 _KEY_REVOKED = agent_auth.UNSATISFIED_KEY_REVOKED
 _SEATS_GONE = agent_auth.UNSATISFIED_SEATS_GONE
@@ -56,7 +56,7 @@ def _selection(
 def _inputs(
     selections: tuple[AgentAuthSelectionRecord, ...],
     *,
-    revision: int = REVISION,
+    sequence: int = SEQUENCE,
     api_key_values: dict[uuid.UUID, str] | None = None,
     provider_config_values: dict[uuid.UUID, tuple[str, dict[str, str]]] | None = None,
     enrollment_sync_status: str | None = "synced",
@@ -87,7 +87,8 @@ def _inputs(
         )
     return agent_auth.AgentAuthStateInputs(
         user_id=USER_ID,
-        revision=revision,
+        sequence=sequence,
+        lineage=LINEAGE,
         selections=selections,
         api_key_values=api_key_values or {},
         provider_config_values=provider_config_values or {},
@@ -118,7 +119,8 @@ class TestRenderAgentAuthState:
         )
         assert state == {
             "version": 2,
-            "revision": REVISION,
+            "sequence": SEQUENCE,
+            "lineage": LINEAGE,
             "user_id": str(USER_ID),
             "harnesses": [
                 {
@@ -143,7 +145,7 @@ class TestRenderAgentAuthState:
                 },
             ],
         }
-        assert fingerprint == agent_auth.agent_auth_state_fingerprint(state)
+        assert fingerprint == agent_auth.agent_auth_harnesses_fingerprint(state["harnesses"])
 
     def test_opencode_composes_gateway_plus_many_api_keys(self) -> None:
         anthropic_id = uuid.uuid4()
@@ -266,7 +268,7 @@ class TestRenderAgentAuthState:
         )
         assert state["harnesses"] == [_unsatisfied("claude", _NOT_READY)]
         assert state["version"] == 2
-        assert state["revision"] == REVISION
+        assert state["sequence"] == SEQUENCE
 
     def test_no_selections_at_all_renders_an_empty_document(self) -> None:
         # The one case that legitimately yields no harnesses — and therefore the
@@ -338,10 +340,7 @@ class TestRenderAgentAuthState:
             ]
             for harness in state["harnesses"]
         }
-        assert rendered == {
-            "claude": ["sk-litellm-claude"],
-            "codex": ["sk-litellm-codex"],
-        }
+        assert rendered == {"claude": ["sk-litellm-claude"], "codex": ["sk-litellm-codex"]}
 
     def test_harness_missing_from_the_key_map_never_borrows_a_sibling_key(self) -> None:
         """Fails closed (``sources: []``, not dropped) and never borrows claude's key."""

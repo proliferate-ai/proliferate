@@ -73,7 +73,18 @@ def test_every_migrated_orm_wall_clock_default_remains_a_deferred_owner_referenc
         ("cloud_integration_revocation_job", "updated_at", "default"),
     }
     assert lifecycle_references.issubset(wall_clock_references)
-    assert len(wall_clock_references) == 171
+    # agent_auth delivery governance (spec §2 "How delivery is governed"): the
+    # render-sequence row's three timestamps plus its updated_at onupdate. All
+    # four are deferred owner references (`default=utcnow`, never `utcnow()`),
+    # so the rendered_at the audit trail reads is the wall clock at write time.
+    render_sequence_references = {
+        ("agent_auth_render_sequence", "rendered_at", "default"),
+        ("agent_auth_render_sequence", "created_at", "default"),
+        ("agent_auth_render_sequence", "updated_at", "default"),
+        ("agent_auth_render_sequence", "updated_at", "onupdate"),
+    }
+    assert render_sequence_references.issubset(wall_clock_references)
+    assert len(wall_clock_references) == 175
     assert other_references == [
         ("cloud_integration_revocation_job", "updated_at", "onupdate"),
     ]

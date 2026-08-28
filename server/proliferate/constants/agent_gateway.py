@@ -50,7 +50,7 @@ AGENT_AUTH_HARNESS_KINDS = ("claude", "codex", "opencode", "grok", "cursor")
 # (not in server/agent_auth/selection_rules.py) so the db/store layer
 # can consult it too without violating the store→server import boundary
 # (check_server_boundaries.py) — the store uses it to skip the disabled
-# gateway revision-marker row for a harness that can never carry one; the
+# gateway marker row for a harness that can never carry one; the
 # validator uses it to reject a gateway source outright. cursor is absent: it
 # has no gateway recipe (agent-auth.md's per-harness recipe table — "typed
 # refusal, no gateway route exists for cursor").

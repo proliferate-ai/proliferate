@@ -53,6 +53,7 @@ export type {
   ApplyAgentAuthStateResponse,
   NativeBridgeResponse,
 } from "./types/agent-auth.js";
+export type { AgentAuthStatusDoc, AgentAuthMethodRow } from "./client/agent-auth.js";
 
 export type {
   AgentInstallState,
@@ -581,12 +582,12 @@ export type {
   TerminalWebSocketAuthTransport,
 } from "./streams/terminals.js";
 
-export { WorkflowRunsV2Client } from "./client/workflow-runs-v2.js";
-export type { WorkflowRunsListResponseV2 } from "./client/workflow-runs-v2.js";
+export { WorkflowRunsV2Client, type WorkflowRunsListResponseV2 } from "./client/workflow-runs-v2.js";
 export * from "./types/workflow-runs-v2.js";
 
 export { streamSession } from "./streams/sessions.js";
 export type { SessionStreamOptions, SessionStreamHandle } from "./streams/sessions.js";
+export { streamAgentAuthStatus } from "./streams/agent-auth-status.js";
 
 export { connectFeed } from "./streams/feeds.js";
 export type {

@@ -7,6 +7,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+import proliferate.db.models.agent_auth_delivery  # noqa: F401
 import proliferate.db.models.agent_gateway  # noqa: F401
 import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401

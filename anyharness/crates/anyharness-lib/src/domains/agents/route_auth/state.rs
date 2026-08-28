@@ -147,10 +147,25 @@ pub struct AgentAuthState {
     /// Wire schema version. Must equal [`STATE_VERSION`]; any other value (or a
     /// version-less v1 file) is rejected as malformed on load.
     pub version: i64,
-    /// Monotonic revision. Any selection/key mutation bumps it; used for
-    /// stale-push protection ([`apply_state_file`]) and revision-keyed
-    /// materialization dirs.
-    pub revision: i64,
+    /// Monotonic sequence, per surface. The server bumps it on ANY render whose
+    /// content changed (selection/key mutations, virtual-key rotation — all of
+    /// it); a no-op render changes nothing. Used for stale-push protection
+    /// ([`apply_state_file`]) and sequence-keyed materialization dirs. Content
+    /// identity is the `fingerprint`, a `GET /state` rider that never reaches
+    /// this document.
+    pub sequence: i64,
+    /// The identity of the counter `sequence` counts in: minted once when the
+    /// server's render-sequence row is created, and never changed for the
+    /// row's lifetime — so a rebuilt or switched server database IS a new
+    /// lineage. `sequence` is only ordered WITHIN one lineage; comparing
+    /// sequences across lineages is meaningless, which is why
+    /// [`apply_state_file`] refuses a push whose lineage differs from the
+    /// persisted one instead of comparing counters (founder-ruled: no epochs,
+    /// no automatic adoption — recovery is the explicit reset,
+    /// [`clear_state_file`]). REQUIRED, no serde default: a document without
+    /// it is malformed, and malformed heals on the next valid push — the
+    /// established precedent.
+    pub lineage: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
     /// The origin (`scheme://host[:port]`) of the control-plane server that
@@ -228,29 +243,82 @@ pub fn load_state_file(runtime_home: &Path) -> Result<Option<AgentAuthState>, Ro
     load_state_from_path(&path)
 }
 
+/// The outcome of applying a state document: the per-harness diff against the
+/// previously persisted document, so the apply site can target its pokes and
+/// status refreshes at exactly the harnesses whose auth actually moved
+/// (spec §4, "Probe targeting": `AuthApplied{changed}`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppliedStateOutcome {
+    /// Harnesses whose entry's canonical serialization differs, appears, or
+    /// disappears relative to the previous document — incoming-document order
+    /// first, then disappeared entries in previous-document order. Empty for
+    /// an identical re-push. A previously malformed file carries no
+    /// trustworthy baseline, so every harness the incoming document names
+    /// counts as changed.
+    pub changed_harnesses: Vec<String>,
+}
+
 /// Persist a state document pushed by a delivery surface (the desktop local
 /// writer, mirroring what the cloud materialization worker writes into
 /// sandboxes). The write is atomic and 0600 via the shared route-auth private
 /// file helper.
 ///
-/// Stale-write protection: a payload whose revision is BELOW the persisted
-/// file's revision is rejected (a delayed push must never roll live
-/// selections back). Equal revisions are accepted — content is authoritative
-/// (e.g. a virtual-key rotation changes the file without a revision bump). A
-/// malformed on-disk file carries no trustworthy revision and is healed by
-/// any valid push.
-pub fn apply_state_file(runtime_home: &Path, state: &AgentAuthState) -> Result<(), RouteAuthError> {
+/// Lineage guard (founder-ruled, the sequence-lineage wedge): the sequence is
+/// only ordered WITHIN one lineage, so a push whose `lineage` differs from
+/// the persisted document's is refused with the typed
+/// [`RouteAuthError::ForeignStateLineage`] — never compared, never adopted.
+/// A bare "different lineage ⇒ accept" is forbidden: a DELAYED push from the
+/// retired lineage would resurrect retired state. The one recovery is the
+/// explicit reset ([`clear_state_file`]); with no persisted document, the
+/// next push adopts whatever lineage it carries.
+///
+/// Stale-write protection, same lineage only: a payload whose sequence is
+/// BELOW the persisted file's sequence is rejected (a delayed push must never
+/// roll live selections back). An equal sequence is an idempotent re-push of
+/// the same document — by governance the server bumps the sequence on ANY
+/// content change, virtual-key rotation included, so equal sequence means
+/// identical content. A malformed on-disk file carries no trustworthy
+/// sequence (or lineage) and is healed by any valid push.
+pub fn apply_state_file(
+    runtime_home: &Path,
+    state: &AgentAuthState,
+) -> Result<AppliedStateOutcome, RouteAuthError> {
     let path = state_file_path(runtime_home);
-    let persisted_revision = match load_state_from_path(&path) {
-        Ok(existing) => existing.map(|existing| existing.revision),
+    // Read, diff and write under the state file's own exclusive lock. Without
+    // it two concurrent PUTs both diff against the SAME baseline, so the
+    // second's changed set can omit a harness the first already moved — and a
+    // missed harness is a harness that launches differently while its status
+    // document and its probe are never refreshed for it. An advisory flock (not
+    // an in-process mutex) because the desktop courier and a cloud
+    // materialization worker are separate processes over one home.
+    let _lock = StateFileLock::acquire(&path)?;
+    let previous = match load_state_from_path(&path) {
+        Ok(existing) => existing,
+        // Malformed: no trustworthy baseline (and no trustworthy sequence) —
+        // healed by any valid push, with every incoming harness changed.
         Err(RouteAuthError::MalformedStateFile { .. }) => None,
         Err(error) => return Err(error),
     };
-    if let Some(current) = persisted_revision {
-        if state.revision < current {
-            return Err(RouteAuthError::StaleStateRevision {
-                incoming: state.revision,
-                current,
+    // The formerly "known open wedge" (delivery slice-3 review) is CLOSED by
+    // the lineage guard below, per the founder ruling: the ordering authority
+    // over lineages on the wire is the `lineage` field itself — equal means
+    // same counter (compare sequences), different means no order exists
+    // (refuse; the explicit reset is the only adoption path).
+    if let Some(existing) = previous.as_ref() {
+        // Lineage first: across lineages the sequence comparison below is
+        // meaningless (two independent counters), so a foreign push never
+        // reaches it. Nothing is applied and nothing is poked — the caller
+        // sees the typed refusal, not an outcome.
+        if state.lineage != existing.lineage {
+            return Err(RouteAuthError::ForeignStateLineage {
+                persisted: existing.lineage.clone(),
+                incoming: state.lineage.clone(),
+            });
+        }
+        if state.sequence < existing.sequence {
+            return Err(RouteAuthError::StaleStateSequence {
+                incoming: state.sequence,
+                current: existing.sequence,
             });
         }
     }
@@ -263,23 +331,186 @@ pub fn apply_state_file(runtime_home: &Path, state: &AgentAuthState) -> Result<(
             detail: format!("failed to serialize agent-auth state: {error}"),
         })?;
     serialized.push(b'\n');
-    super::materialize::write_private_file(&path, &serialized)
+    super::materialize::write_private_file(&path, &serialized)?;
+    Ok(AppliedStateOutcome {
+        changed_harnesses: changed_harnesses(previous.as_ref(), state),
+    })
+}
+
+/// The per-harness diff between two documents. A harness is CHANGED when its
+/// entry's canonical serialization differs, appears, or disappears — or when the
+/// document-level `issuing_server_origin` moved, because that flips every
+/// harness at once. The comparison runs over the parsed [`HarnessAuth`] values
+/// via `serde_json::to_value`, which is deterministic here: this crate does not
+/// enable serde_json's `preserve_order`, so `settings` maps are key-sorted.
+fn changed_harnesses(previous: Option<&AgentAuthState>, incoming: &AgentAuthState) -> Vec<String> {
+    // Every consumer of this document reads it through `load_effective_state`,
+    // which DISCARDS a document stamped for a different server — so flipping the
+    // stamp flips every harness between "gateway routed" and "native" for
+    // composition, the launch render, and the launch-options basis alike, even
+    // when every harness entry is byte-identical. A missed change is strictly
+    // worse than a spurious poke: it means launches route differently while no
+    // status document is ever recomposed for it.
+    // Compared as normalized `Option`s, not through `matches_server_origin`:
+    // that predicate deliberately treats an ABSENT stamp as a match (the
+    // backward-compat path), but adding or removing a stamp still changes which
+    // documents the origin guard honors, so it is a real move here.
+    let stamp =
+        |state: &AgentAuthState| state.issuing_server_origin.as_deref().map(normalize_origin);
+    let origin_moved = previous.is_some_and(|previous| stamp(previous) != stamp(incoming));
+    let entry_values = |state: &AgentAuthState| -> Vec<(String, Option<serde_json::Value>)> {
+        state
+            .harnesses
+            .iter()
+            .map(|entry| (entry.harness_kind.clone(), serde_json::to_value(entry).ok()))
+            .collect()
+    };
+    let previous_entries = previous.map(entry_values).unwrap_or_default();
+    let incoming_entries = entry_values(incoming);
+    let mut changed = Vec::new();
+    for (kind, value) in &incoming_entries {
+        let previous_value = previous_entries
+            .iter()
+            .find(|(previous_kind, _)| previous_kind == kind)
+            .map(|(_, previous_value)| previous_value);
+        // An entry that would not serialize cannot be compared. A diff whose
+        // failure mode must be "assume changed" therefore reports it changed —
+        // two unserializable entries used to compare EQUAL (both `Null`), which
+        // is the wrong direction.
+        let entry_moved = match (previous_value, value) {
+            (Some(Some(previous)), Some(value)) => previous != value,
+            _ => true,
+        };
+        if entry_moved || origin_moved {
+            changed.push(kind.clone());
+        }
+    }
+    for (kind, _) in &previous_entries {
+        if !incoming_entries
+            .iter()
+            .any(|(incoming_kind, _)| incoming_kind == kind)
+        {
+            changed.push(kind.clone());
+        }
+    }
+    // A document that repeats a `harness_kind` must not poke it twice: the poke
+    // and the status refresh are both keyed on the kind alone.
+    let mut seen: Vec<String> = Vec::new();
+    changed.retain(|kind| {
+        if seen.iter().any(|previous| previous == kind) {
+            return false;
+        }
+        seen.push(kind.clone());
+        true
+    });
+    changed
+}
+
+/// The outcome of clearing the state file: what the previous document named,
+/// so the clear site can target its pokes and status refreshes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClearedStateOutcome {
+    /// Every harness the previous document named (the DELETE changed set), in
+    /// document order. `None` when a file was present but malformed — its
+    /// names are unknowable, and the caller should fall back to the widest
+    /// targeting. An absent file clears nothing: `Some(vec![])`.
+    pub previous_harnesses: Option<Vec<String>>,
 }
 
 /// Clear the delivered route state and return the runtime to native auth.
 ///
-/// Clearing is a separate operation from revisioned replacement because native
-/// auth is represented by the absence of route state at the runtime. Making
-/// the reset explicit avoids weakening stale-write protection for ordinary
-/// state documents.
-pub fn clear_state_file(runtime_home: &Path) -> Result<(), RouteAuthError> {
+/// Clearing is a separate operation from sequence-guarded replacement because
+/// native auth is represented by the absence of route state at the runtime.
+/// Making the reset explicit avoids weakening stale-write protection for
+/// ordinary state documents.
+pub fn clear_state_file(runtime_home: &Path) -> Result<ClearedStateOutcome, RouteAuthError> {
     let path = state_file_path(runtime_home);
+    // Same lock as [`apply_state_file`]: a clear racing an apply must not report
+    // a previous document that the apply already replaced.
+    let _lock = StateFileLock::acquire(&path)?;
+    let previous_harnesses = match load_state_from_path(&path) {
+        Ok(previous) => Some(
+            previous
+                .map(|state| {
+                    state
+                        .harnesses
+                        .iter()
+                        .map(|entry| entry.harness_kind.clone())
+                        .collect()
+                })
+                .unwrap_or_default(),
+        ),
+        Err(RouteAuthError::MalformedStateFile { .. }) => None,
+        Err(error) => return Err(error),
+    };
     match fs::remove_file(&path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Ok(()) => Ok(ClearedStateOutcome { previous_harnesses }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(ClearedStateOutcome { previous_harnesses })
+        }
         Err(error) => Err(RouteAuthError::Materialize {
             detail: format!("failed to remove {}: {error}", path.display()),
         }),
+    }
+}
+
+/// Well-known name of the state file's mutation lock, beside the file itself.
+const STATE_LOCK_FILE_NAME: &str = ".state.lock";
+
+/// An exclusive advisory lock over the state file's read-diff-write window.
+///
+/// BLOCKING, unlike `launch_probe::lock::ProbeEngineLock`, and for the opposite
+/// reason: probing is convergence, so waiting for that lock would be a bug,
+/// whereas an apply is a mutation whose diff is only correct if it is the sole
+/// writer. Waiting is bounded by one small file write.
+///
+/// A crash releases it via the OS, which is why this is an flock and not a
+/// pid file. An unopenable lock path degrades to "no lock" rather than failing
+/// the apply: a read-only or exotic home is a real deployment, and applying
+/// without the lock is exactly the pre-existing behavior.
+struct StateFileLock(Option<fs::File>);
+
+impl StateFileLock {
+    fn acquire(state_path: &Path) -> Result<Self, RouteAuthError> {
+        let parent = state_path.parent().expect("state file path has a parent");
+        fs::create_dir_all(parent).map_err(|error| RouteAuthError::Materialize {
+            detail: format!("failed to create {}: {error}", parent.display()),
+        })?;
+        let path = parent.join(STATE_LOCK_FILE_NAME);
+        let file = match fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(error) => {
+                tracing::warn!(
+                    path = %path.display(),
+                    %error,
+                    "could not open the agent-auth state lock; applying unlocked"
+                );
+                return Ok(Self(None));
+            }
+        };
+        if let Err(error) = fs2::FileExt::lock_exclusive(&file) {
+            tracing::warn!(
+                path = %path.display(),
+                %error,
+                "could not lock the agent-auth state file; applying unlocked"
+            );
+            return Ok(Self(None));
+        }
+        Ok(Self(Some(file)))
+    }
+}
+
+impl Drop for StateFileLock {
+    fn drop(&mut self) {
+        if let Some(file) = self.0.as_ref() {
+            let _ = fs2::FileExt::unlock(file);
+        }
     }
 }
 
@@ -311,6 +542,9 @@ pub(super) fn load_state_from_path(path: &Path) -> Result<Option<AgentAuthState>
     Ok(Some(state))
 }
 
+#[cfg(test)]
+#[path = "state_apply_concurrency_tests.rs"]
+mod state_apply_concurrency_tests;
 #[cfg(test)]
 #[path = "state_tests.rs"]
 mod tests;

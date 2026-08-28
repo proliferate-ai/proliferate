@@ -48,6 +48,7 @@ ALWAYS_ENGINES: tuple[tuple[str, str], ...] = (
     ("migration heads", "python3 scripts/check_migration_heads.py"),
     ("anyharness old paths", "python3 scripts/check_anyharness_old_paths.py"),
     ("server old paths", "python3 scripts/check_server_old_paths.py"),
+    ("frontend old paths", "python3 scripts/check_frontend_old_paths.py"),
     ("worker structure", "python3 scripts/check_proliferate_worker_structure.py"),
     ("frontend boundaries", "python3 scripts/check_frontend_boundaries.py"),
     ("appearance scaling", "python3 scripts/check_appearance_scaling.py"),
@@ -72,6 +73,7 @@ ALWAYS_ENGINES: tuple[tuple[str, str], ...] = (
 SCRIPTS_PROOFS: tuple[tuple[str, str], ...] = (
     ("checker tests: lint records", "python3 -m unittest scripts/test_lint_records.py"),
     ("checker tests: server old paths", "python3 -m unittest scripts/test_check_server_old_paths.py"),
+    ("checker tests: frontend old paths", "python3 -m unittest scripts/test_check_frontend_old_paths.py"),
     ("checker tests: frontend boundaries", "python3 -m unittest scripts/test_check_frontend_boundaries.py"),
     ("checker tests: mobile export", "python3 -m unittest scripts/test_check_mobile_product_client_export.py"),
     ("checker tests: appearance scaling", "python3 -m unittest scripts/test_check_appearance_scaling.py"),

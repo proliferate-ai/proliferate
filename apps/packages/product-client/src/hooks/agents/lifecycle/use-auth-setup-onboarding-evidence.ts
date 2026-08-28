@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from "react";
-import { isFeatureEnabled } from "#product/config/feature-flags";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import {
   resolveAuthSetupEvidence,
@@ -8,25 +7,29 @@ import {
 import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
 
 /**
- * The evidence-bound onboarding "setting up" card (agent-auth.md rung 7, flag
- * agentAuthEvidencePanes). It replaces `useAuthSetupOnboardingStep`'s ~20s
- * timer with per-agent badges bound to the REAL install, ack, and probe states
- * off the agents projection.
+ * The state-bound onboarding "setting up" card (agent_auth §4 cell 4: "The
+ * onboarding card is state-bound, never timed"). It is the ONLY setup card —
+ * the ~20s timer step it replaced, and the flag that used to choose between
+ * them, are both gone.
  *
  * The adopted harness kinds still come from `useFirstRunAuthAdoption` via the
  * shared store, but the resolution is a pure fold of each adopted agent's
- * `installState` and derived `authState` — no grace window, no clock. The card
+ * `installState` and its status document — no grace window, no clock. The card
  * completes (and latches, so a later pending edit never resurrects it) once
- * every adopted agent reaches a terminal state: launchable or an actionable
- * next step. With the flag OFF this hook is dormant and returns null; the timer
- * step owns the card.
+ * every adopted agent reaches a terminal state, where terminal means "the card
+ * is no longer the thing waiting", not "finished": a stale or unobserved
+ * document is a state with an affordance, not a spinner.
  *
- * Returns null while there is no card to show (flag off, adoption undecided or
- * empty, or already settled); otherwise the badges and the completion flag.
+ * Returns null while there is no card to show (adoption undecided or empty, or
+ * already settled); otherwise the badges and the completion flag.
  */
 export function useAuthSetupOnboardingEvidence(): AuthSetupEvidence | null {
-  const evidenceOn = isFeatureEnabled("agentAuthEvidencePanes");
-  const { agentsByKind } = useAgentCatalog();
+  const catalog = useAgentCatalog();
+  const { agentsByKind } = catalog;
+  // Has the projection ANSWERED? A disabled query is `isPending` forever in
+  // react-query v5, so an idle fetch status counts as answered — otherwise a host
+  // with no runtime would keep the card pending for the rest of the session.
+  const projectionAnswered = !catalog.isPending || catalog.fetchStatus === "idle";
   const adoptedHarnessKinds = useAuthSetupOnboardingStore(
     (store) => store.adoptedHarnessKinds,
   );
@@ -34,26 +37,27 @@ export function useAuthSetupOnboardingEvidence(): AuthSetupEvidence | null {
   const markSettled = useAuthSetupOnboardingStore((store) => store.markSettled);
 
   const watching =
-    evidenceOn
-    && settled === null
-    && adoptedHarnessKinds !== null
-    && adoptedHarnessKinds.length > 0;
+    !settled && adoptedHarnessKinds !== null && adoptedHarnessKinds.length > 0;
 
   const evidence = useMemo(() => {
     if (!watching || adoptedHarnessKinds === null) {
       return null;
     }
-    return resolveAuthSetupEvidence(adoptedHarnessKinds, agentsByKind);
-  }, [watching, adoptedHarnessKinds, agentsByKind]);
+    return resolveAuthSetupEvidence(
+      adoptedHarnessKinds,
+      agentsByKind,
+      projectionAnswered,
+    );
+  }, [watching, adoptedHarnessKinds, agentsByKind, projectionAnswered]);
 
   useEffect(() => {
-    if (settled !== null || evidence === null) {
+    if (settled || evidence === null) {
       return;
     }
     if (evidence.done) {
-      // Completion is state-bound, never timer-bound. Latch "applied" so the
-      // card stays gone once every adopted agent is terminal.
-      markSettled("applied");
+      // Completion is state-bound, never timer-bound. Latch so the card stays
+      // gone once every adopted agent is terminal.
+      markSettled();
     }
   }, [markSettled, settled, evidence]);
 

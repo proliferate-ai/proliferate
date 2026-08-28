@@ -18,6 +18,8 @@
 //! - [`detail`] makes a harness's own error text safe to persist (pure),
 //! - [`backoff`] spreads the failure-retry window (pure),
 //! - [`live_state`] holds one slot's live phase and the RAII guard over it,
+//! - [`seat_trial_fold`] runs the seat tier-1 trial and folds its verdict onto
+//!   the harness's status document,
 //! - [`attempt`] executes one admitted attempt and persists its outcome,
 //! - [`universe`] serves the observation to launch validation,
 //! - this file is the reconciler: single-flight, the pokes, and the brakes.
@@ -35,27 +37,31 @@ mod backoff;
 pub mod config;
 mod live_state;
 mod phase;
+mod seat_trial_fold;
 use phase::abandoned_attempt_after;
-pub use phase::LivePhaseReading;
+pub use phase::{LivePhaseReading, ProbePhase};
 pub mod lock;
 pub mod probe;
 pub mod targets;
 
 #[cfg(test)]
+mod concurrency_tests;
+#[cfg(test)]
 mod contradiction_tests;
+#[cfg(test)]
+mod recovery_tests;
 #[cfg(test)]
 mod runner_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
 
-use crate::domains::agents::auth_state::{AuthRuntimeInputs, ProbeLifecycle, ProbePhase};
 use crate::domains::agents::route_auth::{self, GatewayModelResolve, RouteAuthError};
 
 pub use config::{PokeReason, ProbeEngineConfig, ProbeEngineMode, RefreshError};
@@ -96,11 +102,21 @@ pub struct LaunchProbeService {
     /// exclusively through this service.
     launch_options:
         Option<Arc<crate::domains::agents::launch_options::HarnessLaunchOptionsService>>,
+    /// Weak self-handle, bound once after `Arc` construction ([`Self::bind_self`]),
+    /// so `record_failure`'s one-shot backoff-expiry timer can re-enter the poke
+    /// path (`poke_harness` needs `Arc<Self>`, and the failure site only has
+    /// `&self`). Unbound — an engine a test constructed without calling
+    /// `bind_self` — means no timer is armed and a lapsed backoff waits for the
+    /// next external poke, the pre-recovery behavior.
+    self_handle: std::sync::OnceLock<std::sync::Weak<LaunchProbeService>>,
+    /// The status-document service's probe-evidence intake: attempt admission
+    /// marks the harness's document stale, completion writes the verdict.
+    /// Event-pushed from here rather than polled from there, so the document
+    /// can never claim a probe state the engine doesn't hold.
+    agent_status: Option<Arc<crate::domains::agents::status::AgentStatusService>>,
     /// The seat tier-1 trial ledger (founder ruling 2026-08-27): one verdict
-    /// per harness, produced at mint completion by the claim route, folded
-    /// into [`Self::auth_runtime_inputs`] only while the applied route selects
-    /// a seat. Lives on this service because this service already owns the
-    /// runtime home and produces the `AuthRuntimeInputs` the verdict rides.
+    /// per harness, produced at mint completion and folded onto that harness's
+    /// status document by [`seat_trial_fold`], which owns the rules.
     seat_trials: Arc<route_auth::SeatTrialLedger>,
 }
 
@@ -144,6 +160,8 @@ impl LaunchProbeService {
             startup_pass_dispatched: AtomicBool::new(false),
             started_at: Utc::now(),
             launch_options: None,
+            self_handle: std::sync::OnceLock::new(),
+            agent_status: None,
         };
         // The orphan sweep, live from the moment ownership is decided.
         //
@@ -172,27 +190,97 @@ impl LaunchProbeService {
         self
     }
 
-    /// Test seam: replace the seat-trial ledger, so a test can point the
-    /// trial at a local server instead of the real API.
-    #[cfg(test)]
-    pub(crate) fn with_seat_trials(
+    pub fn with_agent_status(
         mut self,
-        seat_trials: Arc<route_auth::SeatTrialLedger>,
+        agent_status: Arc<crate::domains::agents::status::AgentStatusService>,
     ) -> Self {
-        self.seat_trials = seat_trials;
+        self.agent_status = Some(agent_status);
         self
     }
 
-    pub fn runtime_home(&self) -> &Path {
-        &self.runtime_home
+    /// Bind the engine's own `Arc` so failure-armed backoff-expiry timers can
+    /// poke back into it. Called once at wiring (and by tests that exercise
+    /// the self-recovery); a second call is a no-op.
+    pub fn bind_self(self: &Arc<Self>) {
+        let _ = self.self_handle.set(Arc::downgrade(self));
     }
 
-    /// Runtime evidence used by the canonical agent-readiness projection.
-    /// Launch-option observation replaces the deleted model-snapshot/trial
-    /// authority; no catalog or trial verdict is folded here.
-    pub fn auth_runtime_inputs(&self, harness_kind: &str, now: DateTime<Utc>) -> AuthRuntimeInputs {
-        let (phase, next_attempt_at) = self.live_phase(harness_kind, now);
-        self.auth_runtime_inputs_from_options(harness_kind, now, phase, next_attempt_at)
+    /// Probe evidence intake (spec §3 flow 4, the serve-stale semantics): the
+    /// document goes stale the moment an attempt is admitted — queued counts —
+    /// and the last observation stays visible while the re-probe runs.
+    ///
+    /// Returns the RAII guard that takes the mark back off, so the caller must
+    /// hold it for the lifetime of the attempt: the document-side twin of
+    /// `LiveStateGuard`, covering the coalesce return, the backoff-refused
+    /// return, an early `run_attempt` error that never reaches a verdict, and
+    /// the whole future being dropped mid-refresh.
+    #[must_use = "dropping the guard is what releases the document's stale mark"]
+    fn notify_probe_admitted(
+        &self,
+        harness_kind: &str,
+    ) -> Option<crate::domains::agents::status::ProbeStaleGuard> {
+        self.agent_status
+            .as_ref()
+            .map(|agent_status| agent_status.admit_probe(harness_kind))
+    }
+
+    pub(super) fn notify_probe_verified(&self, harness_kind: &str, at: DateTime<Utc>) {
+        if let Some(agent_status) = self.agent_status.as_ref() {
+            agent_status.probe_verified(harness_kind, at);
+        }
+    }
+
+    pub(super) fn notify_probe_failed(&self, harness_kind: &str, at: DateTime<Utc>) {
+        if let Some(agent_status) = self.agent_status.as_ref() {
+            agent_status.probe_failed(harness_kind, at);
+        }
+    }
+
+    /// Arm the self-recovery for a failed attempt (spec §3 flow 4: the event
+    /// set contains its own recovery). One-shot: sleeps until the armed
+    /// `next_attempt_at`, then pokes `BackoffExpired` — but only if the slot
+    /// still carries EXACTLY the captured instant. A newer failure re-armed a
+    /// later timer (which took its own copy), and a success cleared the window
+    /// entirely; in both cases this timer is stale and dies silently. The
+    /// ordinary coalescing and backoff admission downstream do the rest.
+    fn arm_backoff_expiry(
+        &self,
+        harness_kind: &str,
+        slot: Arc<HarnessSlot>,
+        next_attempt_at: DateTime<Utc>,
+    ) {
+        let Some(weak) = self.self_handle.get().cloned() else {
+            return;
+        };
+        let harness = harness_kind.to_string();
+        tokio::spawn(async move {
+            // Sleep in a loop: chrono→std truncation can wake a hair early,
+            // and an early poke would be REFUSED by `backoff_admits` — killing
+            // the one recovery this timer exists to deliver.
+            loop {
+                let now = Utc::now();
+                if now >= next_attempt_at {
+                    break;
+                }
+                let wait = (next_attempt_at - now)
+                    .to_std()
+                    .unwrap_or(std::time::Duration::from_millis(1));
+                tokio::time::sleep(wait.max(std::time::Duration::from_millis(1))).await;
+            }
+            let still_armed = slot
+                .state
+                .lock()
+                .expect("launch probe slot poisoned")
+                .next_attempt_at
+                == Some(next_attempt_at);
+            if !still_armed {
+                return;
+            }
+            let Some(engine) = weak.upgrade() else {
+                return;
+            };
+            engine.poke_harness(&harness, PokeReason::BackoffExpired);
+        });
     }
 
     /// The slot read both phase surfaces share. An unknown harness has no slot
@@ -211,74 +299,6 @@ impl LaunchProbeService {
                 _ => (ProbePhase::Idle, None),
             },
         }
-    }
-
-    fn auth_runtime_inputs_from_options(
-        &self,
-        harness_kind: &str,
-        now: DateTime<Utc>,
-        phase: ProbePhase,
-        next_attempt_at: Option<String>,
-    ) -> AuthRuntimeInputs {
-        let response = self
-            .launch_options
-            .as_ref()
-            .and_then(|service| service.read(harness_kind).ok().flatten());
-        let last_success_age_seconds = response
-            .as_ref()
-            .and_then(|value| value.observed_at.as_deref())
-            .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
-            .map(|value| {
-                now.signed_duration_since(value.with_timezone(&Utc))
-                    .num_seconds()
-                    .max(0)
-            });
-        let last_failure_detail = response
-            .as_ref()
-            .and_then(|value| value.probe_failure_code.clone());
-        let observation_nonempty = response
-            .as_ref()
-            .and_then(|value| value.options.as_ref())
-            .is_some_and(|options| !options.models.is_empty());
-        AuthRuntimeInputs {
-            probe: ProbeLifecycle {
-                phase,
-                last_success_age_seconds,
-                last_failure_detail,
-                next_attempt_at,
-                observation_nonempty,
-            },
-            trial: self.seat_trial_fact(harness_kind, now),
-            gateway: None,
-            // Seat rotation facts are the HTTP read path's to fold in
-            // (api/http/agents.rs) — this service holds no Db/state handle.
-            seat_rotation: Default::default(),
-        }
-    }
-
-    /// The seat tier-1 trial verdict mapped onto the shared fact vocabulary
-    /// (auth_state owns the shape; producers map onto it). `None` whenever no
-    /// verdict exists or the applied route does not select a seat, so a seat
-    /// verdict can never color a gateway, BYOK, or native state.
-    fn seat_trial_fact(
-        &self,
-        harness_kind: &str,
-        now: DateTime<Utc>,
-    ) -> Option<crate::domains::agents::auth_state::Tier1TrialFact> {
-        use crate::domains::agents::auth_state::Tier1TrialFact;
-        use route_auth::SeatTrialVerdict;
-        let (verdict, age_seconds) =
-            self.seat_trials
-                .verdict_for_applied_seat(&self.runtime_home, harness_kind, now)?;
-        Some(match verdict {
-            SeatTrialVerdict::Verified => Tier1TrialFact::Green { age_seconds },
-            SeatTrialVerdict::Rejected => Tier1TrialFact::Expired,
-        })
-    }
-
-    /// The ledger handle for the mint-claim trigger (the ONE producer site).
-    pub fn seat_trials(&self) -> Arc<route_auth::SeatTrialLedger> {
-        self.seat_trials.clone()
     }
 
     pub fn mode(&self) -> ProbeEngineMode {
@@ -440,6 +460,20 @@ impl LaunchProbeService {
         // good. Every exit below drops the guard, including a coalesce return and
         // this future being abandoned mid-wait.
         let live_state = self.admit_attempt(slot.clone());
+        // Held to the end of this function: the coalesce return below, the
+        // backoff refusal below it, and this future being abandoned mid-wait
+        // all release the document's stale mark.
+        //
+        // Declared AFTER `live_state`, and the reverse-drop ordering ("mark
+        // released before the slot reports idle") holds only for THIS
+        // function's own exits — `live_state` is moved INTO `run_attempt`, so
+        // on its early-error returns the guard drops there first and the slot
+        // can read idle a beat before this mark releases. That inversion is
+        // benign: no await separates `run_attempt` returning from this
+        // function's exit, and the release restores exactly what the last
+        // completion chose (or the pre-admission staleness when none wrote),
+        // so the transient window never leaves a mark with nothing behind it.
+        let _status_stale = self.notify_probe_admitted(harness_kind);
         let _attempt_gate = slot.attempt_gate.lock().await;
         // The coalesce: the previous holder usually probed for this poke already.
         // Failed attempts count too — N pokes racing a failing probe coalesce
@@ -490,6 +524,10 @@ impl LaunchProbeService {
 
         let slot = self.slot(harness_kind);
         let live_state = self.admit_attempt(slot.clone());
+        // This whole function is awaited directly in an axum handler, so a
+        // client disconnecting mid-refresh drops the future here. The guard is
+        // what stops that from wedging the document stale-marked forever.
+        let _status_stale = self.notify_probe_admitted(harness_kind);
         let _attempt_gate = slot.attempt_gate.lock().await;
 
         self.run_attempt(harness_kind, &slot, PokeReason::Manual, live_state)

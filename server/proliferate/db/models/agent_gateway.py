@@ -193,9 +193,9 @@ class AgentAuthDeliveryAck(Base):
     cloud — the materialization operation completing against the sandbox;
     local — the desktop reporting its runtime's accepted state push. The UI's
     pending→applied truth is derived by comparing the surface's CURRENT
-    rendered (revision, fingerprint) against this stamp; the fingerprint is
-    the change detector, the revision only rejects an out-of-order (delayed)
-    ack for an older document.
+    rendered (sequence, fingerprint) against this stamp; an equal sequence
+    carries equal content by construction, so a re-ack is idempotent and an
+    older one is inert.
     """
 
     __tablename__ = "agent_auth_delivery_ack"
@@ -217,12 +217,12 @@ class AgentAuthDeliveryAck(Base):
         index=True,
     )
     surface: Mapped[str] = mapped_column(Text)
-    # The rendered document's revision (ms-epoch max(updated_at) over the
-    # surface's selection rows) at delivery time. BigInteger: ms epochs exceed
-    # int32 by six orders of magnitude.
-    acked_revision: Mapped[int] = mapped_column(BigInteger)
-    # sha256 hex of the canonical rendered document — the same fingerprint the
-    # renderer computes (materialize/agent_auth.py).
+    # The rendered document's sequence at delivery time (spec §2: monotonic
+    # per (user, surface), bumped only by content-changing renders).
+    # BigInteger: pre-slice-3 rows hold ms-epoch values that exceed int32.
+    acked_sequence: Mapped[int] = mapped_column(BigInteger)
+    # sha256 hex of the canonical rendered `harnesses` array — the same
+    # fingerprint the renderer computes (agent_auth/state_render.py).
     acked_fingerprint: Mapped[str] = mapped_column(String(128))
     acked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

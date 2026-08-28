@@ -5,7 +5,7 @@
 //! Rendering is PURE: [`render_profile`] performs no filesystem I/O. It returns
 //! a [`RenderedRouteAuth`] whose `files` describe the isolated config the
 //! launcher writes afterward (via [`super::materialize`], keeping the
-//! revision-dir naming + conservative GC unchanged). Isolated-home paths are
+//! sequence-dir naming + conservative GC unchanged). Isolated-home paths are
 //! computed by deterministic path joins so the env vars and the `files` agree
 //! without touching disk.
 //!
@@ -124,7 +124,7 @@ fn render_sources(
                 &sources.harness_kind,
                 profile,
                 plan,
-                sources.revision,
+                sources.sequence,
                 runtime_home,
                 &mut rendered,
             )?,
@@ -132,7 +132,7 @@ fn render_sources(
                 &sources.harness_kind,
                 profile,
                 plan,
-                sources.revision,
+                sources.sequence,
                 runtime_home,
                 &mut rendered,
                 &mut provider_config_keys,
@@ -169,18 +169,18 @@ fn render_gateway(
     harness_kind: &str,
     profile: &GatewayProfile,
     plan: &GatewayModelPlan,
-    revision: i64,
+    sequence: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
 ) -> Result<(), RouteAuthError> {
     let kind = parse_harness(harness_kind)?;
     match kind {
-        AgentKind::Claude => render_claude_gateway(profile, plan, revision, runtime_home, rendered),
+        AgentKind::Claude => render_claude_gateway(profile, plan, sequence, runtime_home, rendered),
         AgentKind::Codex => render_codex_gateway(
             harness_kind,
             profile,
             plan,
-            revision,
+            sequence,
             runtime_home,
             rendered,
         ),
@@ -188,11 +188,11 @@ fn render_gateway(
             harness_kind,
             profile,
             plan,
-            revision,
+            sequence,
             runtime_home,
             rendered,
         ),
-        AgentKind::Grok => render_grok_gateway(profile, revision, runtime_home, rendered),
+        AgentKind::Grok => render_grok_gateway(profile, sequence, runtime_home, rendered),
         AgentKind::Cursor => Err(RouteAuthError::UnsupportedRoute {
             harness_kind: harness_kind.to_string(),
             detail: "cursor has no gateway route".to_string(),
@@ -203,7 +203,7 @@ fn render_gateway(
 fn render_claude_gateway(
     profile: &GatewayProfile,
     plan: &GatewayModelPlan,
-    revision: i64,
+    sequence: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
 ) -> Result<(), RouteAuthError> {
@@ -214,13 +214,13 @@ fn render_claude_gateway(
     let _ = plan;
     // Point CLAUDE_CONFIG_DIR at an isolated dir (materialized) so the CLI does
     // not read an ambient `~/.claude` that could carry stale provider/auth
-    // settings and defeat the env sanitization below. Not revision-keyed — it
-    // holds no revision-specific content; the launch env is authoritative.
+    // settings and defeat the env sanitization below. Not sequence-keyed — it
+    // holds no sequence-specific content; the launch env is authoritative.
     let config_dir = materialize::claude_config_dir_path(runtime_home);
     rendered.set("CLAUDE_CONFIG_DIR", path_string(&config_dir));
     rendered.files.push(FileSpec {
         path_family: PathFamily::ClaudeConfig,
-        revision,
+        sequence,
         contents: None,
     });
     // Sanitization is applied once for the whole composed delta by
@@ -233,7 +233,7 @@ fn render_codex_gateway(
     harness_kind: &str,
     profile: &GatewayProfile,
     plan: &GatewayModelPlan,
-    revision: i64,
+    sequence: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
 ) -> Result<(), RouteAuthError> {
@@ -242,7 +242,7 @@ fn render_codex_gateway(
     // provider (wire_api=responses). The provider config references
     // PROLIFERATE_GATEWAY_KEY via env_key, so no `codex login` is needed.
     let codex_home =
-        materialize::revision_dir_path(runtime_home, materialize::CODEX_HOME_PREFIX, revision);
+        materialize::sequence_dir_path(runtime_home, materialize::CODEX_HOME_PREFIX, sequence);
     rendered.set("CODEX_HOME", path_string(&codex_home));
     rendered.set("PROLIFERATE_GATEWAY_KEY", &profile.key);
     // Ambient direct-provider keys would let the CLI bypass the provider
@@ -251,7 +251,7 @@ fn render_codex_gateway(
     rendered.remove("ANTHROPIC_API_KEY");
     rendered.files.push(FileSpec {
         path_family: PathFamily::CodexHome,
-        revision,
+        sequence,
         contents: Some(
             codex_config_toml(CodexConfigRecipe::Gateway {
                 base_url: &profile.base_url,
@@ -353,7 +353,7 @@ fn render_opencode_gateway(
     harness_kind: &str,
     profile: &GatewayProfile,
     plan: &GatewayModelPlan,
-    revision: i64,
+    sequence: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
 ) -> Result<(), RouteAuthError> {
@@ -371,9 +371,9 @@ fn render_opencode_gateway(
     // baseURL, apiKey {env:PROLIFERATE_GATEWAY_KEY}, explicit models map) into
     // an isolated dir and point OPENCODE_CONFIG at it.
     let config_dir =
-        materialize::revision_dir_path(runtime_home, materialize::OPENCODE_CONFIG_PREFIX, revision);
+        materialize::sequence_dir_path(runtime_home, materialize::OPENCODE_CONFIG_PREFIX, sequence);
     // Isolate XDG_CONFIG_HOME so opencode reads OUR injected provider config
-    // (revision-keyed, deterministic) rather than the user's global
+    // (sequence-keyed, deterministic) rather than the user's global
     // ~/.config/opencode. XDG_DATA_HOME is intentionally LEFT AMBIENT so that
     // opencode resolves auth at the real ~/.local/share/opencode/auth.json —
     // this lets natively-logged-in providers (via `opencode auth login`)
@@ -391,7 +391,7 @@ fn render_opencode_gateway(
     rendered.set("PROLIFERATE_GATEWAY_KEY", &profile.key);
     rendered.files.push(FileSpec {
         path_family: PathFamily::OpencodeConfig,
-        revision,
+        sequence,
         contents: Some(opencode_config_json(&profile.base_url, &plan.models)?),
     });
     Ok(())
@@ -425,12 +425,12 @@ fn opencode_config_json(base_url: &str, models: &[String]) -> Result<Vec<u8>, Ro
 
 fn render_grok_gateway(
     profile: &GatewayProfile,
-    revision: i64,
+    sequence: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
 ) -> Result<(), RouteAuthError> {
     let grok_home =
-        materialize::revision_dir_path(runtime_home, materialize::GROK_HOME_PREFIX, revision);
+        materialize::sequence_dir_path(runtime_home, materialize::GROK_HOME_PREFIX, sequence);
     rendered.set("HOME", path_string(&grok_home));
     rendered.set(
         "GROK_MODELS_BASE_URL",
@@ -439,7 +439,7 @@ fn render_grok_gateway(
     rendered.set("XAI_API_KEY", &profile.key);
     rendered.files.push(FileSpec {
         path_family: PathFamily::GrokHome,
-        revision,
+        sequence,
         contents: None,
     });
     Ok(())
@@ -482,7 +482,7 @@ fn render_seat(
                 path_family: PathFamily::ClaudeSeatConfig {
                     seat_id: profile.seat_id.clone(),
                 },
-                revision: 0,
+                sequence: 0,
                 contents: None,
             });
             // The serving-seat channel (data only): the seat this arm actually
@@ -535,7 +535,7 @@ fn render_provider_config(
     harness_kind: &str,
     profile: &ProviderConfigProfile,
     plan: &GatewayModelPlan,
-    revision: i64,
+    sequence: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
     provider_config_keys: &mut BTreeSet<String>,
@@ -554,10 +554,10 @@ fn render_provider_config(
         }
         (AgentKind::Codex, "aws_bedrock") => {
             let _ = plan;
-            let codex_home = materialize::revision_dir_path(
+            let codex_home = materialize::sequence_dir_path(
                 runtime_home,
                 materialize::CODEX_HOME_PREFIX,
-                revision,
+                sequence,
             );
             rendered.set("CODEX_HOME", path_string(&codex_home));
             // No ambient-key removals here, unlike `render_codex_gateway`: that
@@ -575,7 +575,7 @@ fn render_provider_config(
             }
             rendered.files.push(FileSpec {
                 path_family: PathFamily::CodexHome,
-                revision,
+                sequence,
                 contents: Some(codex_config_toml(CodexConfigRecipe::Bedrock).into_bytes()),
             });
             Ok(())
@@ -615,16 +615,16 @@ fn render_provider_config(
                         "codex azure_openai requires '{AZURE_OPENAI_DEPLOYMENT_ENV}' in the resolved env map"
                     ),
                 })?;
-            let codex_home = materialize::revision_dir_path(
+            let codex_home = materialize::sequence_dir_path(
                 runtime_home,
                 materialize::CODEX_HOME_PREFIX,
-                revision,
+                sequence,
             );
             rendered.set("CODEX_HOME", path_string(&codex_home));
             rendered.set_recorded(provider_config_keys, AZURE_OPENAI_API_KEY_ENV, api_key);
             rendered.files.push(FileSpec {
                 path_family: PathFamily::CodexHome,
-                revision,
+                sequence,
                 contents: Some(
                     codex_config_toml(CodexConfigRecipe::Azure {
                         base_url,

@@ -10,18 +10,21 @@ use super::probe::ProbeError;
 use crate::domains::agents::route_auth::RouteAuthError;
 
 /// Why a poke fired. **This is the closed event-driven trigger set**: the
-/// unconditional startup pass, auth apply,
-/// install completion, login-terminal exit, live contradiction, and manual
-/// refresh. There is no poll or timer — a poke probes, subject only to the
-/// engine's concurrency guards and the failure backoff.
+/// unconditional startup pass, auth apply, install completion, login-terminal
+/// exit, live contradiction, manual refresh, backoff expiry, and first
+/// detection. There is no poll — a poke probes, subject only to the engine's
+/// concurrency guards and the failure backoff. The set contains its own
+/// recovery (spec §3 flow 4): a missed probe re-enters through
+/// [`Self::BackoffExpired`], not through a human.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PokeReason {
     /// The unconditional startup pass — the safety net that catches everything
     /// that happened while the runtime was down or that had no event.
     Startup,
     InstallCompleted,
-    /// An applied `state.json` (including a clear, which is the widest possible
-    /// apply: it removes every harness's selection).
+    /// An applied `state.json` change. The apply site computes the per-harness
+    /// changed set and pokes ONLY those harnesses (a clear names every harness
+    /// the previous document carried).
     AuthApplied,
     /// A native login performed through the product's login terminal ended.
     LoginTerminal,
@@ -29,13 +32,21 @@ pub enum PokeReason {
     /// immutable launch intent.
     LiveContradiction,
     Manual,
+    /// A failed attempt's backoff window lapsed — the engine's self-recovery.
+    /// Armed by `record_failure`'s one-shot timer; retries exactly the harness
+    /// whose backoff expired, with no human in the loop.
+    BackoffExpired,
+    /// The status module's startup pass found an installed, auto-probeable
+    /// harness with no persisted status row — a harness that appeared without
+    /// an install event.
+    FirstDetected,
 }
 
 impl PokeReason {
     /// May this event re-observe a manual-refresh-only harness? A live
     /// contradiction is tied to a real session the product already launched,
     /// so it must repair that target even when routine unattended pokes are
-    /// suppressed.
+    /// suppressed. Neither recovery event qualifies: cursor stays manual-only.
     pub fn allows_manual_refresh_only_harness(self) -> bool {
         matches!(self, Self::LiveContradiction | Self::Manual)
     }
@@ -48,6 +59,8 @@ impl PokeReason {
             Self::LoginTerminal => "login_terminal",
             Self::LiveContradiction => "live_contradiction",
             Self::Manual => "manual",
+            Self::BackoffExpired => "backoff_expired",
+            Self::FirstDetected => "first_detected",
         }
     }
 }

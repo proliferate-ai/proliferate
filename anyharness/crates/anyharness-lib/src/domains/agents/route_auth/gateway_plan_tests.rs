@@ -28,7 +28,8 @@ impl TempHome {
     fn write_gateway_state(&self, harness_kind: &str, base_url: &str, key: &str) {
         let state = serde_json::json!({
             "version": 2,
-            "revision": 3,
+            "lineage": "test-lineage",
+            "sequence": 3,
             "harnesses": [{
                 "harness_kind": harness_kind,
                 "sources": [{
@@ -171,7 +172,8 @@ fn invalidation_refetches_the_named_harness_only() {
     let home = TempHome::new("invalidate");
     let state = serde_json::json!({
         "version": 2,
-        "revision": 3,
+        "lineage": "test-lineage",
+        "sequence": 3,
         "harnesses": [
             { "harness_kind": "opencode", "sources": [
                 { "kind": "gateway", "base_url": "https://gw.example", "key": "sk-a" }] },
@@ -236,7 +238,8 @@ fn a_harness_with_no_gateway_source_has_no_model_plan() {
     // A state file that mentions the harness with no sources at all.
     let state = serde_json::json!({
         "version": 2,
-        "revision": 1,
+        "lineage": "test-lineage",
+        "sequence": 1,
         "harnesses": [{ "harness_kind": "opencode", "sources": [] }],
     });
     let path = super::state::state_file_path(&home.path);

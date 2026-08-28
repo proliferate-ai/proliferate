@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from proliferate.db.models.agent_auth_delivery import AgentAuthRenderSequence
 from proliferate.db.models.agent_gateway import (
     AgentApiKey,
     AgentAuthDeliveryAck,
@@ -15,6 +16,7 @@ from proliferate.db.models.agent_gateway import (
 from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
     AgentAuthDeliveryAckRecord,
+    AgentAuthRenderSequenceRecord,
     AgentAuthSelectionRecord,
     AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
@@ -58,9 +60,23 @@ def delivery_ack_record(row: AgentAuthDeliveryAck) -> AgentAuthDeliveryAckRecord
         id=row.id,
         user_id=row.user_id,
         surface=row.surface,
-        acked_revision=row.acked_revision,
+        acked_sequence=row.acked_sequence,
         acked_fingerprint=row.acked_fingerprint,
         acked_at=row.acked_at,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def render_sequence_record(row: AgentAuthRenderSequence) -> AgentAuthRenderSequenceRecord:
+    return AgentAuthRenderSequenceRecord(
+        id=row.id,
+        user_id=row.user_id,
+        surface=row.surface,
+        sequence=row.sequence,
+        lineage=row.lineage,
+        fingerprint=row.fingerprint,
+        rendered_at=row.rendered_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

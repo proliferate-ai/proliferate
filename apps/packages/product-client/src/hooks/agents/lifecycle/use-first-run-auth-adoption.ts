@@ -68,7 +68,7 @@ export function useFirstRunAuthAdoption() {
     // a still-pending Desktop decision.
     if (!isDesktop) {
       attemptedRef.current = true;
-      recordAdoption([], Date.now());
+      recordAdoption([]);
       return;
     }
 
@@ -80,7 +80,6 @@ export function useFirstRunAuthAdoption() {
       settleFirstRunAuthAdoptionFailure(
         { stage, ...(error === undefined ? {} : { error }) },
         {
-          now: Date.now,
           recordAdoption,
           recordDiagnostic: recordRendererDiagnostic,
         },
@@ -141,7 +140,6 @@ export function useFirstRunAuthAdoption() {
         gatewayEnabled,
       },
       {
-        now: Date.now,
         recordAdoption,
         recordDiagnostic: recordRendererDiagnostic,
         readFreshAgents: async () => {

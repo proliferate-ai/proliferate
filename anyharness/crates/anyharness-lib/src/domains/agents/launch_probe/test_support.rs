@@ -82,10 +82,11 @@ impl Drop for TempRuntimeHome {
 }
 
 /// A gateway state document with one gateway source for each named harness.
-pub(crate) fn gateway_state(revision: i64, harnesses: &[(&str, &str)]) -> serde_json::Value {
+pub(crate) fn gateway_state(sequence: i64, harnesses: &[(&str, &str)]) -> serde_json::Value {
     serde_json::json!({
         "version": 2,
-        "revision": revision,
+        "lineage": "test-lineage",
+        "sequence": sequence,
         "harnesses": harnesses
             .iter()
             .map(|(kind, key)| serde_json::json!({
@@ -187,7 +188,7 @@ impl CountingPlanProducer {
 }
 
 impl GatewayModelResolve for CountingPlanProducer {
-    fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+    fn resolve_gateway_models(&self, harness_kind: &str, _sequence: i64) -> GatewayModelPlan {
         self.resolve_live(harness_kind)
     }
 
@@ -201,7 +202,7 @@ impl GatewayModelResolve for CountingPlanProducer {
     fn resolve_gateway_models_blocking(
         &self,
         harness_kind: &str,
-        _revision: i64,
+        _sequence: i64,
     ) -> GatewayModelPlan {
         self.resolve_live(harness_kind)
     }

@@ -42,7 +42,7 @@ fn the_contract_fixture_parses_as_a_v2_document() {
     let state = fixture_state();
 
     assert_eq!(state.version, 2);
-    assert_eq!(state.revision, 42);
+    assert_eq!(state.sequence, 42);
     assert_eq!(
         state.user_id.as_deref(),
         Some("20000000-0000-4000-8000-000000000001")
@@ -142,7 +142,7 @@ fn the_fixtures_empty_entry_fails_closed_while_an_absent_one_is_native() {
     let error = resolve_profile(Some(&state), "grok").expect_err("grok must fail closed");
     assert!(matches!(
         &error,
-        RouteAuthError::SelectionMissing { harness_kind, revision: 42, reason: Some(reason) }
+        RouteAuthError::SelectionMissing { harness_kind, sequence: 42, reason: Some(reason) }
             if harness_kind == "grok"
                 && reason == "managed model access isn't ready on this account yet"
     ));
@@ -170,7 +170,7 @@ fn the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles() {
 
     match resolve_profile(Some(&state), "codex").expect("resolve") {
         AgentRuntimeAuthProfile::Sources(sources) => {
-            assert_eq!(sources.revision, 42);
+            assert_eq!(sources.sequence, 42);
             assert_eq!(sources.sources.len(), 1);
             assert!(matches!(sources.sources[0], ResolvedSource::Gateway(_)));
         }
@@ -179,7 +179,7 @@ fn the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles() {
 
     match resolve_profile(Some(&state), "claude").expect("resolve") {
         AgentRuntimeAuthProfile::Sources(sources) => {
-            assert_eq!(sources.revision, 42);
+            assert_eq!(sources.sequence, 42);
             assert_eq!(sources.sources.len(), 3, "the three-seat pool");
             assert!(sources
                 .sources

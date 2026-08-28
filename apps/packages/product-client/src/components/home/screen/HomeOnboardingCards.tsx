@@ -4,14 +4,11 @@ import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 import { GitHub } from "#product/primitives/icons/platform";
 import { Settings, SlidersHorizontal, X } from "#product/primitives/icons/core";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
-import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
-import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
 import type {
   HomeOnboardingCardModel,
   HomeOnboardingIcon,
   HomeReadinessCardModel,
 } from "#product/lib/domain/home/home-screen";
-import type { AuthSetupStepState } from "#product/lib/domain/agents/auth-onboarding";
 import type { AuthSetupEvidence } from "#product/lib/domain/agents/auth-setup-badges";
 import { AuthSetupEvidenceCard } from "#product/components/home/screen/HomeOnboardingEvidenceCard";
 
@@ -105,32 +102,6 @@ function OnboardingCard({
 }
 
 /**
- * Ack-gated onboarding "setting up" step (agent-auth.md, Proof C7): visible
- * only while the first-run adoption's gateway selections await the runtime's
- * delivery ack (or the enrollment's keys). Resolution or the ~20s grace
- * window removes the card — pending beyond the grace lives on the harness
- * panes' ordinary indicator, never here, and there is no error state.
- */
-function AuthSetupCard({ state }: { state: AuthSetupStepState }) {
-  if (state !== "settingUp") {
-    return null;
-  }
-  return (
-    <OnboardingCard
-      icon={<Settings className="icon-paired" />}
-      title={(
-        <ThinkingText
-          text={HOME_SCREEN_LABELS.authSetupTitle}
-          className="text-ui font-medium"
-        />
-      )}
-      description={HOME_SCREEN_LABELS.authSetupDescription}
-      selectLabel={HOME_SCREEN_LABELS.authSetupTitle}
-    />
-  );
-}
-
-/**
  * Readiness card (UX spec §10 revision, ruling 4): replaces the deleted
  * "Processing your models…" probe card. Plain text throughout (no
  * ThinkingText, no spinner) — something is already ready, so there is
@@ -153,7 +124,6 @@ export function HomeOnboardingCards({
   cards,
   isAddingRepo,
   onSelect,
-  authSetup,
   authSetupEvidence,
   readinessCard,
   onOpenAgents,
@@ -161,25 +131,20 @@ export function HomeOnboardingCards({
   cards: HomeOnboardingCardModel[];
   isAddingRepo: boolean;
   onSelect: (card: HomeOnboardingCardModel) => void;
-  authSetup?: AuthSetupStepState;
   authSetupEvidence?: AuthSetupEvidence | null;
   readinessCard?: HomeReadinessCardModel | null;
   onOpenAgents?: () => void;
 }) {
-  // The timer card (flag off) and the evidence card (flag on) are mutually
-  // exclusive: the dormant hook yields nothing, so only one is ever truthy.
-  const hasAuthSetupCard = authSetup === "settingUp";
   const hasEvidenceCard =
     authSetupEvidence != null && authSetupEvidence.badges.length > 0;
   const hasReadinessCard = readinessCard != null;
-  if (cards.length === 0 && !hasReadinessCard && !hasAuthSetupCard && !hasEvidenceCard) {
+  if (cards.length === 0 && !hasReadinessCard && !hasEvidenceCard) {
     return null;
   }
 
-  // Max 3 cards (spec §10): the transient auth-setup step leads, setup cards
+  // Max 3 cards (spec §10): the transient auth-setup card leads, setup cards
   // take priority over the readiness card, which fills last.
-  const reservedSlots =
-    (hasAuthSetupCard || hasEvidenceCard ? 1 : 0) + (hasReadinessCard ? 1 : 0);
+  const reservedSlots = (hasEvidenceCard ? 1 : 0) + (hasReadinessCard ? 1 : 0);
   const visibleCards = cards.slice(0, 3 - reservedSlots);
 
   return (
@@ -190,7 +155,6 @@ export function HomeOnboardingCards({
           onOpenAgents={onOpenAgents ?? (() => {})}
         />
       ) : null}
-      {hasAuthSetupCard && authSetup ? <AuthSetupCard state={authSetup} /> : null}
       {visibleCards.map((card) => (
         <OnboardingCard
           key={card.id}

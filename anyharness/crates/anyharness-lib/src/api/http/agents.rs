@@ -24,9 +24,7 @@ use crate::domains::agents::auth::login_terminal::{
     get_agent_login_terminal as get_agent_login_terminal_session,
     start_agent_login_terminal_session, AgentLoginVariant as DomainLoginVariant, MintClaimError,
 };
-use crate::domains::agents::auth_state::AuthRuntimeInputs;
 use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
-use crate::domains::agents::route_auth::seat_rotation_readout_via_db;
 
 #[utoipa::path(
     get,
@@ -38,35 +36,22 @@ use crate::domains::agents::route_auth::seat_rotation_readout_via_db;
 )]
 pub async fn list_agents(State(state): State<AppState>) -> Json<Vec<AgentSummary>> {
     let snapshot = state.agent_runtime.list_agents().await;
-    let now = chrono::Utc::now();
-    // The auth runtime inputs are read from the in-memory launch-probe service
-    // before the blocking hop, so the closure below owns everything it needs.
-    // The seat-rotation readout folds in here too: applied document + the
-    // seat-cooling store (via the domain facade) → serving/next/cooling.
-    let auth_runtimes: Vec<AuthRuntimeInputs> = snapshot
-        .agents
-        .iter()
-        .map(|agent| {
-            let kind = agent.descriptor.kind.as_str();
-            let mut inputs = state.launch_probe_service.auth_runtime_inputs(kind, now);
-            inputs.seat_rotation = seat_rotation_readout_via_db(
-                &state.runtime_home,
-                state.db.clone(),
-                kind,
-                now.timestamp(),
-            );
-            inputs
-        })
-        .collect();
-    // to_summary probes PATH per agent (userPathCopyDetected); keep that
-    // synchronous IO off the async executor.
+    // The whole projection is one blocking hop: to_summary probes PATH per
+    // agent (userPathCopyDetected) and the status reads hit sqlite behind the
+    // shared connection mutex — synchronous IO that must not run on the axum
+    // task. The status documents are the persisted machine truth (agent_auth
+    // spec §2) — read, never recomputed: the projection carries EXACTLY what
+    // GET /v1/agent-auth/status serves, so the two surfaces cannot disagree.
+    let status_service = state.agent_status_service.clone();
     let summaries = tokio::task::spawn_blocking(move || {
         snapshot
             .agents
             .iter()
-            .zip(auth_runtimes.iter())
-            .map(|(agent, auth_runtime)| {
-                to_summary(agent, Some(&snapshot.reconcile_snapshot), auth_runtime)
+            .map(|agent| {
+                let auth_status = status_service
+                    .read(agent.descriptor.kind.as_str())
+                    .map(super::agent_auth_contract::status_doc_to_contract);
+                to_summary(agent, Some(&snapshot.reconcile_snapshot), auth_status)
             })
             .collect::<Vec<AgentSummary>>()
     })
@@ -90,19 +75,17 @@ pub async fn get_agent(
     Path(kind): Path<String>,
 ) -> Result<Json<AgentSummary>, ApiError> {
     let snapshot = state.agent_runtime.get_agent(&kind).await?;
-    let now = chrono::Utc::now();
-    let mut auth_runtime = state.launch_probe_service.auth_runtime_inputs(&kind, now);
-    auth_runtime.seat_rotation = seat_rotation_readout_via_db(
-        &state.runtime_home,
-        state.db.clone(),
-        &kind,
-        now.timestamp(),
-    );
+    // Same blocking hop as list_agents: the status read is sqlite behind the
+    // shared connection mutex, so it rides with the PATH-probing projection.
+    let status_service = state.agent_status_service.clone();
     let summary = tokio::task::spawn_blocking(move || {
+        let auth_status = status_service
+            .read(&kind)
+            .map(super::agent_auth_contract::status_doc_to_contract);
         to_summary(
             &snapshot.agent,
             Some(&snapshot.reconcile_snapshot),
-            &auth_runtime,
+            auth_status,
         )
     })
     .await
@@ -142,16 +125,30 @@ pub async fn install_agent(
         &kind,
         PokeReason::InstallCompleted,
     );
-    let now = chrono::Utc::now();
-    let mut auth_runtime = state.launch_probe_service.auth_runtime_inputs(&kind, now);
-    auth_runtime.seat_rotation = seat_rotation_readout_via_db(
-        &state.runtime_home,
-        state.db.clone(),
-        &kind,
-        now.timestamp(),
-    );
+    // An install is the other event that can create a harness's FIRST status
+    // document, and nothing else composed one: the poke above is refused
+    // outright for a manual-refresh-only harness (cursor) and is
+    // fire-and-forget even for an auto-probeable one, so `/status`, `/methods`
+    // and `AgentSummary.authStatus` all answered empty until the sidecar
+    // restarted and ran its startup pass. Composed synchronously and BEFORE the
+    // read, so a first install's own response already carries the document.
+    let status_service = state.agent_status_service.clone();
+    let refreshed = kind.clone();
+    let auth_status = super::blocking::run_blocking("agent install status refresh", move || {
+        status_service.refresh(
+            &refreshed,
+            crate::domains::agents::status::RefreshCause::InstallCompleted,
+        );
+        Ok::<_, std::convert::Infallible>(
+            status_service
+                .read(&refreshed)
+                .map(super::agent_auth_contract::status_doc_to_contract),
+        )
+    })
+    .await?
+    .unwrap_or_default();
     Ok(Json(InstallAgentResponse {
-        agent: to_summary(&outcome.agent, None, &auth_runtime),
+        agent: to_summary(&outcome.agent, None, auth_status),
         already_installed: outcome.already_installed,
         installed_artifacts: outcome
             .installed_artifacts
@@ -271,10 +268,13 @@ pub async fn claim_agent_login_terminal_mint_token(
                     .get_terminal(&terminal_id)
                     .await
                 {
-                    let ledger = engine.seat_trials();
+                    // `run_seat_trial`, not the bare ledger: the trial's
+                    // verdict must reach the harness's STATUS DOCUMENT, which
+                    // is where the pane reads it now.
+                    let engine = engine.clone();
                     let trial_token = token.clone();
                     tokio::spawn(async move {
-                        ledger.run_trial(&record.kind, trial_token).await;
+                        engine.run_seat_trial(&record.kind, trial_token).await;
                     });
                 }
             }
@@ -343,6 +343,24 @@ pub async fn close_agent_login_terminal(
         &terminal.kind,
         PokeReason::LoginTerminal,
     );
+    // A closed login terminal may have changed the harness's native world —
+    // the status document's detection row re-reads it now. The recomposition
+    // reads state.json, runs native detection over the real $HOME and touches
+    // sqlite behind the shared connection mutex, so it runs on the blocking
+    // pool (same as the install handler and the status doors). Awaited before
+    // the response: the 204 keeps meaning "the document already reflects this
+    // close", exactly as the previous inline call did.
+    let status_service = state.agent_status_service.clone();
+    let refreshed = terminal.kind.clone();
+    super::blocking::run_blocking("agent login-terminal status refresh", move || {
+        status_service.refresh(
+            &refreshed,
+            crate::domains::agents::status::RefreshCause::LoginTerminal,
+        );
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await?
+    .ok();
     Ok(StatusCode::NO_CONTENT)
 }
 

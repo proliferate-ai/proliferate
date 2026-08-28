@@ -128,7 +128,7 @@ fn owner_errors_keep_actionable_codes_and_redact_internal_details() {
             AgentOperationsError::Create(CreateOrdinaryAgentSessionError::Create(
                 CreateAndStartSessionError::RouteAuth(RouteAuthError::SelectionMissing {
                     harness_kind: "secret-harness".into(),
-                    revision: 7,
+                    sequence: 7,
                     reason: None,
                 }),
             )),

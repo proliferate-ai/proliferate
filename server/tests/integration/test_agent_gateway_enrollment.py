@@ -12,12 +12,12 @@ D3/D8).
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
@@ -28,7 +28,6 @@ from proliferate.constants.agent_gateway import (
 )
 from proliferate.db.models.auth import AuthIdentity, User
 from proliferate.db.models.agent_gateway import (
-    AgentAuthSelection,
     AgentGatewayEnrollment,
     AgentGatewayEnrollmentKey,
     LlmCreditGrant,
@@ -53,7 +52,6 @@ from proliferate.server.ai_gateway.enrollment import (
 from proliferate.server.agent_auth.state_render import (
     build_agent_auth_state,
 )
-from proliferate.lib.infra.time.wall_clock import utcnow
 
 
 async def _create_user(db_session: AsyncSession) -> uuid.UUID:
@@ -75,8 +73,6 @@ async def _no_personal_enrollment(db_session: AsyncSession, user_id: uuid.UUID) 
     The store has no personal lookup anymore (the resolver is org-only), so
     tests assert the row's absence against the table directly.
     """
-    from sqlalchemy import select
-
     row = (
         await db_session.execute(
             select(AgentGatewayEnrollment).where(
@@ -420,10 +416,10 @@ async def test_enrollment_sync_completion_pokes_the_local_delivery_surface(
     the key; sync completion re-renders the local surface with no unrelated
     mutation needed.
 
-    Cloud poke: reaching ``synced`` schedules agent-auth materialization into
-    the user's sandbox. Local poke: the local surface's revision seam is
-    bumped, so the desktop's next pull renders WITH the key at a strictly
-    newer revision than the keyless document it pulled mid-sync — no
+    Under content-hash sequencing (spec §2) no explicit poke exists: reaching
+    ``synced`` changes the rendered content — the waiting gateway selection
+    now renders WITH the key — so the desktop's next pull carries a strictly
+    newer sequence than the keyless document it pulled mid-sync, with no
     selection edit, vault mutation, or app restart in between.
     """
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
@@ -441,8 +437,7 @@ async def test_enrollment_sync_completion_pokes_the_local_delivery_surface(
     await _place_in_org(db_session, user_id=user_id)
 
     # Gateway selections on BOTH surfaces, made BEFORE enrollment sync lands
-    # (the desktop's "pulled too early" race). Backdate the rows so the
-    # revision comparison below cannot collapse into the same millisecond.
+    # (the desktop's "pulled too early" race).
     for surface in ("local", "cloud"):
         await store.put_auth_selections(
             db_session,
@@ -451,32 +446,28 @@ async def test_enrollment_sync_completion_pokes_the_local_delivery_surface(
             surface=surface,
             sources=[DesiredAuthSource(source_kind="gateway")],
         )
-    await db_session.execute(
-        update(AgentAuthSelection)
-        .where(AgentAuthSelection.user_id == user_id)
-        .values(updated_at=utcnow() - timedelta(seconds=5))
-    )
 
     pre_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
     assert [(h["harness_kind"], h["sources"]) for h in pre_state["harnesses"]] == [("claude", [])]
-    pre_revision = pre_state["revision"]
-    assert isinstance(pre_revision, int) and pre_revision > 0
+    pre_sequence = pre_state["sequence"]
+    assert isinstance(pre_sequence, int) and pre_sequence > 0
 
     enrollment = await ensure_signup_enrollment(db_session, user_id)
     assert enrollment is not None
     assert enrollment.sync_status == "synced"
 
     # Local surface: the SAME pull the desktop loops on now renders the key,
-    # at a strictly newer revision, with no unrelated mutation.
+    # at a strictly newer sequence, with no unrelated mutation — the content
+    # change (the key appearing) is itself what bumps the counter.
     post_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
     [harness] = post_state["harnesses"]
     [source] = harness["sources"]
     assert source["kind"] == "gateway"
     assert source["base_url"] == "https://llm.proliferate.ai"
     assert source["key"].startswith("sk-litellm-")
-    post_revision = post_state["revision"]
-    assert isinstance(post_revision, int)
-    assert post_revision > pre_revision
+    post_sequence = post_state["sequence"]
+    assert isinstance(post_sequence, int)
+    assert post_sequence > pre_sequence
 
 
 @pytest.mark.asyncio
@@ -485,9 +476,9 @@ async def test_already_synced_enrollment_does_not_re_poke(
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
 ) -> None:
-    """The pokes fire on the pending→synced TRANSITION, not on every ensure
-    pass — an already-synced enrollment (every login) must not churn the
-    local revision or schedule redundant sandbox writes."""
+    """An already-synced enrollment (every login) renders identical content,
+    so a repeat ensure pass must not churn the local sequence or schedule
+    redundant sandbox writes — the no-op-render law (spec §2)."""
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
     user_id = await _create_user(db_session)
     await _place_in_org(db_session, user_id=user_id)
@@ -501,18 +492,13 @@ async def test_already_synced_enrollment_does_not_re_poke(
     first = await ensure_signup_enrollment(db_session, user_id)
     assert first is not None
     assert first.sync_status == "synced"
-    await db_session.execute(
-        update(AgentAuthSelection)
-        .where(AgentAuthSelection.user_id == user_id)
-        .values(updated_at=utcnow() - timedelta(seconds=5))
-    )
     pre_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
 
     again = await ensure_signup_enrollment(db_session, user_id)
     assert again is not None
     assert again.sync_status == "synced"
     post_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
-    assert post_state["revision"] == pre_state["revision"]
+    assert post_state["sequence"] == pre_state["sequence"]
 
 
 @pytest.mark.asyncio

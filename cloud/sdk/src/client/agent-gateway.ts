@@ -108,7 +108,7 @@ export async function getAgentAuthState(
 /**
  * Report a surface runtime's delivery acknowledgement (agent-auth.md "Applied
  * means acknowledged"). The desktop calls this after its local runtime's
- * state PUT/DELETE succeeded, echoing the pushed document's `revision` and
+ * state PUT/DELETE succeeded, echoing the pushed document's `sequence` and
  * the served `fingerprint` from `getAgentAuthState` — never a
  * client-computed hash. This stamp flips the selections read from pending to
  * applied; the cloud surface's twin is stamped server-side by the

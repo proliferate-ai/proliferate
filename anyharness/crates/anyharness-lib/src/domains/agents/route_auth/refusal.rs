@@ -125,7 +125,12 @@ impl LaunchRefusal {
             // the HTTP surface renders its own Display until then.
             RouteAuthError::NoConfiguredSource { .. }
             | RouteAuthError::MalformedStateFile { .. }
-            | RouteAuthError::StaleStateRevision { .. }
+            | RouteAuthError::StaleStateSequence { .. }
+            // Foreign lineage is a delivery refusal, not a launch refusal: it
+            // only ever arises at the state PUT door, whose mapper renders
+            // the error's own plain-words Display. No launch surface can
+            // observe it (the persisted document always self-agrees).
+            | RouteAuthError::ForeignStateLineage { .. }
             | RouteAuthError::SelectionIncomplete { .. }
             | RouteAuthError::UnsupportedRoute { .. }
             | RouteAuthError::UnknownHarness { .. }
@@ -236,12 +241,12 @@ mod tests {
         let errors = [
             RouteAuthError::SelectionMissing {
                 harness_kind: "claude".into(),
-                revision: 7,
+                sequence: 7,
                 reason: None,
             },
             RouteAuthError::SelectionMissing {
                 harness_kind: "grok".into(),
-                revision: 7,
+                sequence: 7,
                 reason: Some("the credits behind it ran out".into()),
             },
             RouteAuthError::SeatCooling {

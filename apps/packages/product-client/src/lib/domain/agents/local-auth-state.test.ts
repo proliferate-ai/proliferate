@@ -10,7 +10,8 @@ import {
 function state(overrides: Partial<AgentAuthState> = {}): AgentAuthState {
   return {
     version: 2,
-    revision: 3,
+    sequence: 3,
+    lineage: "40000000-0000-4000-8000-000000000031",
     user_id: "user-1",
     harnesses: [
       {
@@ -44,7 +45,7 @@ describe("planLocalAuthStatePush", () => {
     expect(plan.action).toBeNull();
   });
 
-  it("re-pushes when content changes without a revision bump", () => {
+  it("re-pushes when content changes without a sequence bump", () => {
     const plan = planLocalAuthStatePush({
       state: state(),
       lastPushedFingerprint: localAuthStateFingerprint(
@@ -58,17 +59,17 @@ describe("planLocalAuthStatePush", () => {
     expect(plan.action).toBe("apply");
   });
 
-  it("clears a previously persisted route for the revision-0 native marker", () => {
+  it("clears a previously persisted route for the sequence-0 native marker", () => {
     const plan = planLocalAuthStatePush({
-      state: state({ revision: 0, harnesses: [] }),
+      state: state({ sequence: 0, harnesses: [] }),
       lastPushedFingerprint: null,
     });
     expect(plan.action).toBe("clear");
   });
 
-  it("clears native state even when disabled rows retain a positive revision", () => {
+  it("clears native state even when disabled rows retain a positive sequence", () => {
     const plan = planLocalAuthStatePush({
-      state: state({ revision: 8, harnesses: [] }),
+      state: state({ sequence: 8, harnesses: [] }),
       lastPushedFingerprint: null,
     });
     expect(plan.action).toBe("clear");
@@ -82,7 +83,8 @@ describe("localAuthStateFingerprint", () => {
       JSON.stringify({
         harnesses: state().harnesses,
         user_id: state().user_id,
-        revision: state().revision,
+        lineage: state().lineage,
+        sequence: state().sequence,
         version: state().version,
       }),
     ) as AgentAuthState;

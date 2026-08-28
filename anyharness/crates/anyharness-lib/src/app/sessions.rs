@@ -43,6 +43,7 @@ pub(super) struct LiveSessionsWiringDeps {
     pub activity_service: Arc<ActivityService>,
     pub product_context: Arc<dyn AgentProductContextResolver>,
     pub automatic_poke_engine: Option<Arc<LaunchProbeService>>,
+    pub agent_status_service: Arc<crate::domains::agents::status::AgentStatusService>,
 }
 
 struct LaunchObservationProbeQueue {
@@ -122,6 +123,7 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
         seat_cooling: Some(Arc::new(
             crate::domains::agents::seat_cooling::SeatCoolingStore::new(deps.db.clone()),
         )),
+        agent_status: Some(deps.agent_status_service.clone()),
     };
     let manager = LiveSessionManager::new(caps);
     // Runs on the application runtime, like the launch-observation probe

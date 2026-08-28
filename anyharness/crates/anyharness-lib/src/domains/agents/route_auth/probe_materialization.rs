@@ -12,18 +12,18 @@
 //!
 //! **The one substitution.** [`render_profile`] takes `runtime_home` purely as a
 //! materialization root: every path it emits is a deterministic join through
-//! [`materialize::revision_dir_path`] / [`materialize::claude_config_dir_path`].
+//! [`materialize::sequence_dir_path`] / [`materialize::claude_config_dir_path`].
 //! Handing it the scratch root relocates every routed env var and every
 //! [`FileSpec`] together, so the probe's auth configuration is byte-identical to
 //! the launch's with no branch in `render.rs`. Two consequences this buys for
 //! free:
 //!
-//! - The launch GC cannot see the scratch. `gc_old_revision_dirs` enumerates
+//! - The launch GC cannot see the scratch. `gc_old_sequence_dirs` enumerates
 //!   exactly `<runtime_home>/agent-auth`; `agent-auth-probe/` is a sibling.
-//! - The probe's own GC is a provable no-op: a fresh scratch holds one revision
-//!   dir per family, so "greatest revision strictly below current" finds nothing.
+//! - The probe's own GC is a provable no-op: a fresh scratch holds one sequence
+//!   dir per family, so "greatest sequence strictly below current" finds nothing.
 //!
-//! And the hazard it removes: `claude-config/` is deliberately NOT revision-keyed,
+//! And the hazard it removes: `claude-config/` is deliberately NOT sequence-keyed,
 //! so every running claude session shares it. A probe materializing into the live
 //! root would write into the config dir of in-flight sessions.
 //!
@@ -53,7 +53,7 @@ mod scratch;
 pub use scratch::{sweep_probe_scratch, ProbeScratch};
 
 /// Directory holding every probe's scratch root. A **sibling** of `agent-auth/`,
-/// never a child, so the launch-side revision GC never enumerates it.
+/// never a child, so the launch-side sequence GC never enumerates it.
 const PROBE_ROOT_DIR: &str = "agent-auth-probe";
 
 // ---------------------------------------------------------------------------
@@ -89,7 +89,7 @@ pub(crate) fn probe_auth_material_for_server(
     current_server_origin: Option<&str>,
 ) -> Result<ProbeAuthMaterial, RouteAuthError> {
     let state = load_effective_state(runtime_home, current_server_origin)?;
-    let state_revision = state.as_ref().map(|state| state.revision).unwrap_or(0);
+    let state_sequence = state.as_ref().map(|state| state.sequence).unwrap_or(0);
     // The BRIDGED resolution, same as the launcher's: probe env == launch env
     // must survive the zero-rows cutover — an absent harness the
     // native-migration bridge keeps native must probe native too, and an
@@ -126,7 +126,7 @@ pub(crate) fn probe_auth_material_for_server(
     Ok(ProbeAuthMaterial {
         harness_kind: harness_kind.to_string(),
         env_value_digests,
-        state_revision,
+        state_sequence,
         profile,
     })
 }
@@ -143,11 +143,11 @@ pub struct ProbeAuthMaterial {
     /// consumer is the failure-detail redactor, which needs to ask "is this token
     /// the credential we handed the harness?" without being given the credential.
     pub env_value_digests: Vec<String>,
-    /// The `state.json` revision this material was read at. Carried so ONE state
-    /// read serves the plan lookup, the scratch's revision-keyed dirs, and the
-    /// observation's `stateRevision` provenance — they cannot drift onto
-    /// different revisions.
-    pub state_revision: i64,
+    /// The `state.json` sequence this material was read at. Carried so ONE state
+    /// read serves the plan lookup, the scratch's sequence-keyed dirs, and the
+    /// observation's `stateSequence` provenance — they cannot drift onto
+    /// different sequences.
+    pub state_sequence: i64,
     /// The composed profile, retained privately so phase B never re-reads
     /// `state.json` and so the observation cannot disagree with the state the
     /// engine read.
@@ -156,13 +156,13 @@ pub struct ProbeAuthMaterial {
 
 impl std::fmt::Debug for ProbeAuthMaterial {
     /// Deliberately omits `profile`: it holds raw keys. Every other field is
-    /// already a digest or a revision number.
+    /// already a digest or a sequence number.
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("ProbeAuthMaterial")
             .field("harness_kind", &self.harness_kind)
             .field("env_value_digests", &self.env_value_digests)
-            .field("state_revision", &self.state_revision)
+            .field("state_sequence", &self.state_sequence)
             .field("profile", &"<redacted>")
             .finish()
     }
@@ -203,7 +203,7 @@ pub fn credential_value_digest(value: &str) -> String {
 /// Materialize exactly what a launch of this harness would get, with ONE
 /// substitution: every file lands under a probe-owned scratch root instead of
 /// the live runtime home. Takes the phase-A material so the observation and the
-/// recorded `stateRevision` are provably the same read.
+/// recorded `stateSequence` are provably the same read.
 ///
 /// `runtime_home` is READ-ONLY here apart from `agent-auth-probe/`: it is the
 /// `state.json` root, and the root `probe_agent` resolves the install from.

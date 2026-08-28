@@ -851,7 +851,7 @@ exit 0
     std::fs::create_dir_all(&agent_auth_dir).expect("create agent-auth dir");
     std::fs::write(
         agent_auth_dir.join("state.json"),
-        r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"opencode","sources":[]}]}"#,
+        r#"{"version":2,"sequence":1,"lineage":"test-lineage","harnesses":[{"harness_kind":"opencode","sources":[]}]}"#,
     )
     .expect("write agent-auth state");
 

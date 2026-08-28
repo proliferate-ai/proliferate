@@ -10,15 +10,8 @@ import {
 } from "#product/config/harness-env-vars";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
-import {
-  deriveProvidersStatus,
-  HarnessAuthStatusAction,
-} from "#product/components/settings/panes/agents/harness/HarnessAuthStatusBadge";
-import {
-  HarnessAuthEvidenceBadge,
-  HarnessAuthEvidenceSummary,
-} from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
-import { isFeatureEnabled } from "#product/config/feature-flags";
+import { HarnessAuthEvidenceBadge } from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
+import { useHarnessStatus } from "#product/hooks/access/anyharness/agent-auth/use-harness-status";
 
 // Lazy: the modal pulls in the vendored provider-logo asset map (170+ marks),
 // which must never reach the login-path chunk (login JS budget gate,
@@ -30,17 +23,29 @@ const ProviderPickerModal = lazy(async () => ({
 }));
 
 /**
- * OpenCode's providers-only section (design-handoff v2 §2): NO method chooser,
- * NO gateway. Header carries the one status badge + refresh; the body is a
- * summary row of overlapping provider icon tiles plus a Configure button that
- * opens the management modal. OpenCode's own CLI logins always apply alongside
- * these keys, so the quiet line says exactly that.
+ * The multi-source (providers-only) section, opencode's today (design-handoff v2
+ * §2): NO method chooser, NO gateway. Header carries the one status badge +
+ * refresh; the body is a summary row of overlapping provider icon tiles plus a
+ * Configure button that opens the management modal. The harness's own CLI logins
+ * always apply alongside these keys, so the quiet line says exactly that.
+ *
+ * The harness kind is a PROP, never a literal: this section mounts on
+ * `isMultiSourceHarness(kind)`, which derives from registry.json's
+ * `authCardinality` — so a data-only registry change adds a harness here, and a
+ * hardcoded "opencode" would have shown it opencode's status document, badge,
+ * and route readback.
  */
 export function HarnessProvidersSection({
+  harnessKind,
   editor,
 }: {
+  harnessKind: string;
   editor: HarnessAuthEditorApi;
 }) {
+  // The badge is the runtime's status document, killing the old
+  // `deriveProvidersStatus` unconditional green: a pane with no observation now
+  // says so instead of claiming "Authenticated".
+  const authStatus = useHarnessStatus(harnessKind);
   const [modalOpen, setModalOpen] = useState(false);
   // The Configure trigger, not the modal, is the Class B loading treatment
   // (UX Latency + Transitions ADR §4.3, Rung 3): the modal chunk carries the
@@ -81,21 +86,24 @@ export function HarnessProvidersSection({
         ?? null,
     }));
 
-  // Qualification readback (tests/release chat-authroute.ts): opencode's
+  // Qualification readback (tests/release chat-authroute.ts): this harness's
   // active routes as whitespace-separated `<kind>:<route>` tokens, matched
-  // with the exact-token `~=` selector. CLI is always active (opencode's
-  // native logins coexist); api_key joins when any bound row is enabled.
+  // with the exact-token `~=` selector. CLI is always active (a multi-source
+  // harness's native logins coexist); api_key joins when any bound row is
+  // enabled.
   const selectedRoute = rows.some((row) => row.enabled)
-    ? "opencode:cli opencode:api_key"
-    : "opencode:cli";
+    ? `${harnessKind}:cli ${harnessKind}:api_key`
+    : `${harnessKind}:cli`;
 
-  const status = deriveProvidersStatus();
-  const refreshing = editor.apiKeysQuery.isFetching || editor.selectionsQuery.isFetching;
-  // Flag-ON (ADR agent-auth rung 6): opencode's badge reads the runtime's
-  // derived authState, killing deriveProvidersStatus's unconditional green.
-  const evidenceOn = isFeatureEnabled("agentAuthEvidencePanes");
-  const authState = evidenceOn ? editor.localAgent?.authState ?? null : null;
+  // The status re-read counts too: the refresh affordance must not look inert
+  // while the document it re-reads is still in flight.
+  const refreshing =
+    authStatus.refreshing
+    || editor.apiKeysQuery.isFetching
+    || editor.selectionsQuery.isFetching;
   function handleRefresh() {
+    // Re-read the document; the runtime owns every observation behind it.
+    authStatus.refresh();
     void editor.apiKeysQuery.refetch();
     void editor.selectionsQuery.refetch();
   }
@@ -162,26 +170,18 @@ export function HarnessProvidersSection({
       description={HARNESS_PANE_COPY.providersDescription}
       titleWeight="emphasized"
       surface="plain"
-      action={authState ? (
+      action={(
         <HarnessAuthEvidenceBadge
-          authState={authState}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          data-harness-status="api_key"
-        />
-      ) : (
-        <HarnessAuthStatusAction
-          status={status}
+          status={authStatus}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           data-harness-status="api_key"
         />
       )}
-      data-harness-auth-section="opencode"
+      data-harness-auth-section={harnessKind}
       data-harness-auth-delivery={editor.deliveryPending ? "pending" : "applied"}
       data-harness-selected-route={selectedRoute}
     >
-      {authState ? <HarnessAuthEvidenceSummary authState={authState} /> : null}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           {configured.length > 0 ? (

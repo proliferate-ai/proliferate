@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use super::backoff::jittered_backoff_seconds;
 use super::live_state::LiveStateGuard;
 use super::probe::{ProbeError, ProbeRequest};
-use super::{HarnessRuntimeState, HarnessSlot, LaunchProbeService, PokeReason, RefreshError};
+use super::{HarnessSlot, LaunchProbeService, PokeReason, RefreshError};
 
 impl LaunchProbeService {
     pub(super) async fn run_attempt(
@@ -31,9 +31,24 @@ impl LaunchProbeService {
         let material = match self.material(harness_kind) {
             Ok(material) => material,
             Err(error) => {
+                // ONE timestamp for the durable row, the slot's failure record
+                // and the document, so `probe.at` and the recorded failure time
+                // cannot disagree by a scheduling hiccup.
+                let now = Utc::now();
                 let committed = service
-                    .record_failure(&started, &Utc::now().to_rfc3339(), "materialization_failed")
+                    .record_failure(&started, &now.to_rfc3339(), "materialization_failed")
                     .map_err(|write_error| RefreshError::Persistence(write_error.to_string()))?;
+                // Record the failure on the slot, exactly like the other two
+                // failure arms. Without it this arm defeated BOTH brakes and the
+                // self-recovery: `last_attempt_at` was never stamped, so
+                // `attempt_covers(None, poked_at)` is always false and N
+                // simultaneous pokes each ran a full attempt instead of
+                // coalescing; and `next_attempt_at` was never armed, so no
+                // `BackoffExpired` timer existed and the event set stopped
+                // containing its own recovery. The trigger is ordinary: a
+                // present-but-empty harness entry (exhausted gateway budget,
+                // revoked seat) resolves to `SelectionMissing` and lands here.
+                self.record_failure(harness_kind, slot, now);
                 tracing::info!(
                     harness = harness_kind,
                     harness_basis_revision = %started.basis_revision,
@@ -44,14 +59,15 @@ impl LaunchProbeService {
                     event = "agent.launch_options_probe.completed",
                     "launch-options probe materialization failed"
                 );
+                self.notify_probe_failed(harness_kind, now);
                 return Err(error.into());
             }
         };
         let plan_producer = self.plan_producer.clone();
         let plan_harness = harness_kind.to_string();
-        let plan_revision = material.state_revision;
+        let plan_sequence = material.state_sequence;
         let plan = tokio::task::spawn_blocking(move || {
-            plan_producer.resolve_gateway_models_blocking(&plan_harness, plan_revision)
+            plan_producer.resolve_gateway_models_blocking(&plan_harness, plan_sequence)
         })
         .await
         .unwrap_or_default();
@@ -88,11 +104,8 @@ impl LaunchProbeService {
                             .map_err(|write_error| {
                                 RefreshError::Persistence(write_error.to_string())
                             })?;
-                        self.record_failure(
-                            harness_kind,
-                            &mut slot.state.lock().expect("slot poisoned"),
-                            now,
-                        );
+                        self.record_failure(harness_kind, slot, now);
+                        self.notify_probe_failed(harness_kind, now);
                         tracing::info!(
                             harness = harness_kind,
                             harness_basis_revision = %started.basis_revision,
@@ -109,6 +122,7 @@ impl LaunchProbeService {
                     .record_success(&started, &options, &now.to_rfc3339())
                     .map_err(|error| RefreshError::Persistence(error.to_string()))?;
                 self.record_success(slot, now);
+                self.notify_probe_verified(harness_kind, now);
                 tracing::info!(
                     harness = harness_kind,
                     harness_basis_revision = %started.basis_revision,
@@ -129,11 +143,8 @@ impl LaunchProbeService {
                 let committed = service
                     .record_failure(&started, &now.to_rfc3339(), failure_code)
                     .map_err(|write_error| RefreshError::Persistence(write_error.to_string()))?;
-                self.record_failure(
-                    harness_kind,
-                    &mut slot.state.lock().expect("slot poisoned"),
-                    now,
-                );
+                self.record_failure(harness_kind, slot, now);
+                self.notify_probe_failed(harness_kind, now);
                 tracing::info!(
                     harness = harness_kind,
                     harness_basis_revision = %started.basis_revision,
@@ -158,22 +169,28 @@ impl LaunchProbeService {
         state.last_attempt_at = Some(now);
     }
 
-    fn record_failure(
-        &self,
-        harness_kind: &str,
-        state: &mut HarnessRuntimeState,
-        now: DateTime<Utc>,
-    ) {
-        state.last_attempt_at = Some(now);
-        state.consecutive_failures = state.consecutive_failures.saturating_add(1);
-        let attempt = state.consecutive_failures;
-        let exponent = attempt.saturating_sub(1).min(16);
-        let raw = self
-            .config
-            .backoff_base
-            .saturating_mul(2u32.saturating_pow(exponent));
-        let capped = raw.min(self.config.backoff_max).as_secs().max(1);
-        let delay = jittered_backoff_seconds(harness_kind, attempt, capped);
-        state.next_attempt_at = Some(now + chrono::Duration::seconds(delay));
+    fn record_failure(&self, harness_kind: &str, slot: &Arc<HarnessSlot>, now: DateTime<Utc>) {
+        let next_attempt_at = {
+            let mut state = slot
+                .state
+                .lock()
+                .expect("launch-options probe slot poisoned");
+            state.last_attempt_at = Some(now);
+            state.consecutive_failures = state.consecutive_failures.saturating_add(1);
+            let attempt = state.consecutive_failures;
+            let exponent = attempt.saturating_sub(1).min(16);
+            let raw = self
+                .config
+                .backoff_base
+                .saturating_mul(2u32.saturating_pow(exponent));
+            let capped = raw.min(self.config.backoff_max).as_secs().max(1);
+            let delay = jittered_backoff_seconds(harness_kind, attempt, capped);
+            let next_attempt_at = now + chrono::Duration::seconds(delay);
+            state.next_attempt_at = Some(next_attempt_at);
+            next_attempt_at
+        };
+        // The self-recovery: when the window lapses, the engine pokes itself
+        // (`PokeReason::BackoffExpired`) instead of waiting for a human.
+        self.arm_backoff_expiry(harness_kind, slot.clone(), next_attempt_at);
     }
 }

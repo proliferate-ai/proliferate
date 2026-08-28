@@ -85,84 +85,9 @@ export function resolveAgentAuthDisplay(
   return agentNeedsInstall(localAgent) ? "install-gate" : "auth-controls";
 }
 
-// --- Ack-gated onboarding "setting up" step (agent-auth.md, Proof C7) -------
-
-/**
- * Grace window for the onboarding "setting up" step. Signup/auth never waits
- * on LiteLLM provisioning — this step waits on the first-run adoption's
- * gateway selections reaching APPLIED (the runtime's delivery ack), and if
- * that has not happened within the window the step auto-advances anyway,
- * leaving the ordinary pending indicator to the harness panes. It never
- * hard-blocks and has no error state.
- */
-export const AUTH_SETUP_GRACE_MS = 20_000;
-
-/**
- * The step's resolution:
- * - "hidden": first-run adoption has not decided yet, or adopted nothing
- *   (native creds detected / gateway disabled) — there is no step to show.
- * - "settingUp": adopted selections exist whose delivery is not yet
- *   acknowledged (or the enrollment's keys are not minted yet) — show the
- *   "setting up your agents" card.
- * - "applied": every adopted selection reached APPLIED with a synced
- *   enrollment — the step resolved.
- * - "advanced": the grace window passed first — the step auto-advanced; the
- *   panes' pending indicator carries the state from here.
- */
-export type AuthSetupStepState = "hidden" | "settingUp" | "applied" | "advanced";
-
-/** The slice of a selection record the step reads (cloud-sdk's shape). */
-export interface AuthSetupSelectionRecord {
-  harnessKind: string;
-  surface: string;
-  /**
-   * Applied means acknowledged (agent-auth.md). Schema-optional: only an
-   * EXPLICIT `false` is pending — absent/null reads as applied, matching the
-   * harness panes' read.
-   */
-  applied?: boolean | null;
-}
-
-export function resolveAuthSetupStep(args: {
-  /** null until first-run adoption has decided; [] when it adopted nothing. */
-  adoptedHarnessKinds: readonly string[] | null;
-  /** Local-surface selection rows; undefined while loading (or errored). */
-  selections: readonly AuthSetupSelectionRecord[] | undefined;
-  /**
-   * The enrollment's sync status; anything but "synced" (including an
-   * errored/absent enrollment read) means the keys are not minted yet — the
-   * same pending state, never an error state.
-   */
-  enrollmentSyncStatus: string | undefined;
-  graceExpired: boolean;
-}): AuthSetupStepState {
-  const adopted = args.adoptedHarnessKinds;
-  if (adopted === null || adopted.length === 0) {
-    return "hidden";
-  }
-  const selections = args.selections;
-  const allApplied =
-    args.enrollmentSyncStatus === "synced"
-    && selections !== undefined
-    && adopted.every((harnessKind) =>
-      selections.some(
-        (record) =>
-          record.harnessKind === harnessKind
-          && record.surface === "local"
-          && record.applied !== false,
-      ),
-    );
-  if (allApplied) {
-    return "applied";
-  }
-  // No hard failure path: a missing record (failed PUT), an errored
-  // enrollment read, or slow provisioning all degrade to the grace-bounded
-  // pending state and then auto-advance.
-  if (args.graceExpired) {
-    return "advanced";
-  }
-  return "settingUp";
-}
+// The ack-gated, grace-windowed "setting up" step lived here. It is gone: the
+// onboarding card is state-bound, never timed (agent_auth §4 cell 4), and
+// `resolveAuthSetupEvidence` folds the runtime's status documents instead.
 
 export function planFirstRunAuthAdoption(
   input: FirstRunAuthAdoptionInput,

@@ -573,7 +573,7 @@ mod tests {
         let error = CoworkCreateThreadError::CreateSession(CreateAndStartSessionError::RouteAuth(
             RouteAuthError::SelectionMissing {
                 harness_kind: "claude".into(),
-                revision: 1,
+                sequence: 1,
                 reason: None,
             },
         ));

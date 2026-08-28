@@ -115,7 +115,7 @@ describe("buildDesiredSources", () => {
     ).toEqual([{ sourceKind: "gateway", enabled: true }]);
   });
 
-  it("retains a disabled gateway revision marker when the toggle is off", () => {
+  it("retains a disabled gateway sequence marker when the toggle is off", () => {
     expect(
       buildDesiredSources("claude", { gatewayEnabled: false, seatEnabled: false, rows: [] }),
     ).toEqual([{ sourceKind: "gateway", enabled: false }]);

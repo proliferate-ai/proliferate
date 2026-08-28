@@ -8,11 +8,30 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::domains::agents::auth_state::SeatRotationReadout;
 use crate::domains::agents::seat_cooling::SeatCoolingStore;
 
 use super::profile::{resolve_profile, AgentRuntimeAuthProfile, HarnessSources, ResolvedSource};
+use super::state::AgentAuthState;
+use super::RouteAuthError;
 use super::{current_server_origin, load_effective_state};
+
+/// The pane-facing seat rotation readout (agent_auth spec §4 cell 2's
+/// serving-now / next-up tags + the cooling banner). Plain data; the frozen
+/// semantics live on [`seat_rotation_readout`], its one producer. (Lived in
+/// the deleted `auth_state.rs` while the evidence model carried it; the
+/// status document is its only consumer now, so it lives with rotation, its
+/// producer.)
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SeatRotationReadout {
+    /// The seat currently considered serving (last served if still in the
+    /// applied pool, else the pool's first). `None` when the doc has no seats.
+    pub serving_seat_id: Option<String>,
+    /// The seat rotation would pick for the NEXT launch. `None` when the pool
+    /// has fewer than two seats, or when no seat could serve.
+    pub next_seat_id: Option<String>,
+    /// RFC3339 UTC deadline, non-`None` ONLY when no seat can serve right now.
+    pub cooling_until: Option<String>,
+}
 
 /// What the next launch should do about seats.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,9 +155,22 @@ pub fn seat_rotation_readout(
         Ok(state) => state,
         Err(_) => return SeatRotationReadout::default(),
     };
-    let Ok(AgentRuntimeAuthProfile::Sources(sources)) =
-        resolve_profile(state.as_ref(), harness_kind)
-    else {
+    seat_rotation_readout_for_state(state.as_ref(), harness_kind, store, now_epoch_s)
+}
+
+/// [`seat_rotation_readout`] over a state document the caller ALREADY loaded.
+///
+/// The status document's composition needs this arm: it derives the profile and
+/// the readout from the same applied document, and loading the file twice mixed
+/// two auth worlds into one document — `applied.seat_id` could name a seat with
+/// no method row at all, because a push landed between the two reads.
+pub fn seat_rotation_readout_for_state(
+    state: Option<&AgentAuthState>,
+    harness_kind: &str,
+    store: &SeatCoolingStore,
+    now_epoch_s: i64,
+) -> SeatRotationReadout {
+    let Ok(AgentRuntimeAuthProfile::Sources(sources)) = resolve_profile(state, harness_kind) else {
         return SeatRotationReadout::default();
     };
     let pool = seat_pool(&sources);
@@ -171,21 +203,87 @@ pub fn seat_rotation_readout(
     }
 }
 
-/// Facade for the HTTP read path (AH-API-2: handlers call domain facades,
-/// never stores): same derivation as [`seat_rotation_readout`], constructing
-/// the seat-cooling store on the app's shared `Db` handle internally.
-pub fn seat_rotation_readout_via_db(
-    runtime_home: &Path,
-    db: crate::persistence::Db,
-    harness_kind: &str,
-    now_epoch_s: i64,
-) -> SeatRotationReadout {
-    seat_rotation_readout(
-        runtime_home,
-        harness_kind,
-        &SeatCoolingStore::new(db),
-        now_epoch_s,
-    )
+/// The seat-rotation seam (work order G): run the pure decision over the
+/// profile's seat pool in DOCUMENT order (deduplicated — `rotation::seat_pool`),
+/// then reduce the sources so the chosen seat renders ALONE: every other
+/// source, seat or not, is dropped. A gateway/api_key/provider_config source
+/// beside a pool is fallback-only — rendering it next to the seat would hand
+/// the CLI two competing credentials (`ANTHROPIC_AUTH_TOKEN` +
+/// `CLAUDE_CODE_OAUTH_TOKEN`) while `serving_seat_id` names the seat, so a
+/// limit error would cool the seat no matter which credential the CLI used.
+/// When no seat can serve — the pool is all-cooling, or the pin is cooling —
+/// a profile that ALSO carries a non-seat source drops its seats and renders
+/// the rest (the gateway fallback, `serving_seat_id = None`); a seat-only
+/// profile refuses with the matching typed error.
+///
+/// Pure with respect to rotation state: reads the store, never writes it —
+/// which is what makes the create-time preview and the launch render safe to
+/// run any number of times.
+pub(super) fn apply_rotation_seam(
+    sources: &mut HarnessSources,
+    store: &SeatCoolingStore,
+) -> Result<(), RouteAuthError> {
+    let pool = seat_pool(sources);
+    if pool.is_empty() {
+        return Ok(());
+    }
+    let now_epoch_s = chrono::Utc::now().timestamp();
+    let cooling = store.cooling_map(&sources.harness_kind, now_epoch_s);
+    let last_served = store.last_served(&sources.harness_kind);
+    match decide_rotation(&pool, sources.rotate, last_served.as_deref(), &cooling) {
+        RotationDecision::Serve { seat_id } => {
+            // Exactly one source survives: the FIRST occurrence of the chosen
+            // seat (a repeated id must not render twice either).
+            let mut kept = false;
+            sources.sources.retain(|source| {
+                let hit = !kept
+                    && matches!(source, ResolvedSource::Seat(seat) if seat.seat_id == seat_id);
+                kept |= hit;
+                hit
+            });
+            Ok(())
+        }
+        RotationDecision::AllCooling {
+            earliest_reset_epoch_s,
+        } => {
+            let harness_kind = sources.harness_kind.clone();
+            drop_seats_or_refuse(sources, move || RouteAuthError::AllSeatsCooling {
+                harness_kind: harness_kind.clone(),
+                earliest_reset_epoch_s,
+            })
+        }
+        RotationDecision::PinnedCooling {
+            seat_id,
+            reset_at_epoch_s,
+        } => {
+            let harness_kind = sources.harness_kind.clone();
+            drop_seats_or_refuse(sources, move || RouteAuthError::SeatCooling {
+                harness_kind: harness_kind.clone(),
+                seat_id: seat_id.clone(),
+                reset_at_epoch_s,
+            })
+        }
+    }
+}
+
+/// The cooling fallback rule shared by both no-seat-can-serve outcomes: keep
+/// the profile's non-seat sources when any exist, else the given refusal.
+fn drop_seats_or_refuse(
+    sources: &mut HarnessSources,
+    refusal: impl Fn() -> RouteAuthError,
+) -> Result<(), RouteAuthError> {
+    let has_non_seat = sources
+        .sources
+        .iter()
+        .any(|source| !matches!(source, ResolvedSource::Seat(_)));
+    if has_non_seat {
+        sources
+            .sources
+            .retain(|source| !matches!(source, ResolvedSource::Seat(_)));
+        Ok(())
+    } else {
+        Err(refusal())
+    }
 }
 
 #[cfg(test)]
@@ -284,7 +382,7 @@ mod tests {
         };
         let sources = HarnessSources {
             harness_kind: "claude".into(),
-            revision: 1,
+            sequence: 1,
             sources: vec![seat("a"), seat("a"), seat("b"), seat("a")],
             rotate: true,
         };

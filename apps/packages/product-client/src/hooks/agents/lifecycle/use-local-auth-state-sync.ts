@@ -20,7 +20,9 @@ import {
   shouldSyncLocalAuthState,
   stampIssuingServerOrigin,
 } from "#product/lib/domain/agents/local-auth-state";
+import { AnyHarnessError } from "@anyharness/sdk";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useLocalAuthDeliveryStore } from "#product/stores/agents/local-auth-delivery-store";
 import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
 import {
   diagnosticField,
@@ -54,12 +56,12 @@ const ENROLLMENT_SYNCED = "synced";
  * re-runs whenever route selections or API keys mutate — those mutations
  * invalidate the agent-auth state query, so fresh data re-triggers the push.
  * An enrollment reaching `synced` is the same kind of poke (Proof C5): the
- * server re-renders with keys at a newer revision, and this hook invalidates
+ * server re-renders with keys at a newer sequence, and this hook invalidates
  * the state query so the re-pull happens now rather than at the next
  * unrelated mutation.
  *
  * Applied means acknowledged (Proof C1): after the runtime confirms a
- * push/clear, the hook reports the delivered document's (revision,
+ * push/clear, the hook reports the delivered document's (sequence,
  * fingerprint) through `POST /v1/cloud/agent-auth/state/ack` — that stamp is
  * what flips the settings panes from "Applying…" to applied. A failed push
  * records no ack, so the selection stays visibly pending and is retried on
@@ -95,11 +97,14 @@ export function useLocalAuthStateSync() {
   const state = stateQuery.data;
   const runtimeHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
 
-  // Enrollment-sync poke, client half (Proof C5): C-1's server half bumps the
-  // local-surface revision when an enrollment reaches `synced`, so the next
-  // pull renders WITH keys — this half makes that pull happen promptly by
-  // invalidating the state query on the observed →synced transition. Polling
-  // exists only to observe that transition and stops once synced.
+  // Enrollment-sync poke, client half (Proof C5): under content-hash
+  // sequencing there is no separate revision-touch to react to — an
+  // enrollment reaching `synced` changes what the renderer emits (the
+  // gateway source goes from dropped to present), so the next render bumps
+  // its own sequence. This half exists to make that next render happen
+  // promptly, by invalidating the state query on the observed →synced
+  // transition instead of waiting for an unrelated mutation. Polling exists
+  // only to observe that transition and stops once synced.
   const [enrollmentPollMs, setEnrollmentPollMs] = useState<number | false>(
     ENROLLMENT_SYNC_POLL_MS,
   );
@@ -150,9 +155,10 @@ export function useLocalAuthStateSync() {
     // The runtime confirmed the applied document — report the delivery ack
     // so the server's applied-vs-pending truth (and the settings panes)
     // flips to applied. Echo the SERVED document identity: the runtime's
-    // accepted revision is `state.revision` (a stale lower-revision push
+    // accepted sequence is `state.sequence` (a stale lower-sequence push
     // errors out at the runtime), and `state.fingerprint` is the
-    // server-computed hash riding the GET /state response.
+    // server-computed hash riding the GET /state response — never the local
+    // `localAuthStateFingerprint` dedupe key.
     const reportDeliveryAck = async () => {
       if (!(typeof state.fingerprint === "string" && state.fingerprint.length > 0)) {
         return;
@@ -160,7 +166,7 @@ export function useLocalAuthStateSync() {
       try {
         await ackAgentAuthState(
           "local",
-          { revision: state.revision, fingerprint: state.fingerprint },
+          { sequence: state.sequence, fingerprint: state.fingerprint },
           cloudClient,
         );
         lastAckedRef.current = plan.fingerprint;
@@ -168,7 +174,7 @@ export function useLocalAuthStateSync() {
       } catch (error: unknown) {
         // The runtime HAS the state; only the report failed. pushed !== acked
         // now, so the next sync pass retries the ack without re-pushing.
-        recordAgentAuthFailure("delivery_ack_failed", error, state.revision);
+        recordAgentAuthFailure("delivery_ack_failed", error, state.sequence);
         console.warn("[agent-auth] local state delivery ack failed", error);
       }
     };
@@ -205,16 +211,30 @@ export function useLocalAuthStateSync() {
           lastScheduledRef.current = lastPushedRef.current;
         }
         // No ack on failure (Proof C1): the selection stays visibly pending.
+        // The typed refusal additionally reaches the settings pane through
+        // the delivery store: a foreign-lineage 409's only recovery is an
+        // explicit user reset, so the pane must be able to show the
+        // runtime's words and offer that action — a silent retry loop never
+        // resolves it.
+        useLocalAuthDeliveryStore.getState().setLastPushFailure(
+          error instanceof AnyHarnessError
+            ? { code: error.problem.code ?? null, detail: error.problem.detail ?? null }
+            : { code: null, detail: null },
+        );
         recordAgentAuthFailure(
           "state_push_failed",
           error,
-          state.revision,
+          state.sequence,
           plan.action ?? undefined,
         );
         console.warn("[agent-auth] local state sync push failed", error);
         return;
       }
 
+      // The runtime accepted this document: any previously recorded refusal
+      // is resolved (the reset flow ends exactly here, when the re-triggered
+      // push adopts).
+      useLocalAuthDeliveryStore.getState().clearLastPushFailure();
       lastPushedRef.current = plan.fingerprint;
 
       await reportDeliveryAck();
@@ -222,7 +242,7 @@ export function useLocalAuthStateSync() {
       try {
         await invalidateAgentLaunchReadinessResources(runtimeUrl);
       } catch (error: unknown) {
-        recordAgentAuthFailure("launch_resource_refresh_failed", error, state.revision);
+        recordAgentAuthFailure("launch_resource_refresh_failed", error, state.sequence);
         console.warn("[agent-auth] local launch resource refresh failed", error);
       }
     });
@@ -245,7 +265,7 @@ function recordAgentAuthFailure(
     | "state_push_failed"
     | "launch_resource_refresh_failed",
   error: unknown,
-  revision: number,
+  sequence: number,
   action?: string,
 ): void {
   recordRendererDiagnostic({
@@ -254,7 +274,7 @@ function recordAgentAuthFailure(
     kind: "message",
     privacy: "operational",
     fields: {
-      revision: diagnosticField(revision, "operational"),
+      sequence: diagnosticField(sequence, "operational"),
       error_name: diagnosticField(safeRendererErrorName(error), "operational"),
       ...(action === undefined
         ? {}

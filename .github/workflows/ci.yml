@@ -52,6 +52,11 @@ jobs:
           python3 -m unittest scripts/test_check_server_old_paths.py
           python3 scripts/check_server_old_paths.py
 
+      - name: Check frontend old paths
+        run: |
+          python3 -m unittest scripts/test_check_frontend_old_paths.py
+          python3 scripts/check_frontend_old_paths.py
+
       - name: Check Proliferate Worker structure
         run: python3 scripts/check_proliferate_worker_structure.py
 

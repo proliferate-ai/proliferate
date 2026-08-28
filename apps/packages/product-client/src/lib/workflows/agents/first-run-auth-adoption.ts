@@ -30,8 +30,12 @@ type FirstRunAuthAdoptionPlanner = (
 ) => AuthAdoptionAction[];
 
 export interface FirstRunAuthAdoptionSettlementDeps {
-  now(): number;
-  recordAdoption(harnessKinds: readonly string[], settledAt: number): void;
+  /**
+   * Record the adopted kinds. No settlement TIMESTAMP rides along: the only
+   * thing that ever read one was the deleted ~20s onboarding timer, and the card
+   * is state-bound (agent_auth §4 cell 4) — nothing here advances on a clock.
+   */
+  recordAdoption(harnessKinds: readonly string[]): void;
   recordDiagnostic(input: RendererDiagnosticInput): void;
 }
 
@@ -88,7 +92,7 @@ export function settleFirstRunAuthAdoptionFailure(
   failure: FirstRunAuthAdoptionFailure,
   deps: FirstRunAuthAdoptionSettlementDeps,
 ): void {
-  deps.recordAdoption([], deps.now());
+  deps.recordAdoption([]);
   recordFirstRunAdoptionFailure(failure, deps.recordDiagnostic);
 }
 
@@ -138,10 +142,7 @@ export async function runFirstRunAuthAdoption(
     return;
   }
 
-  deps.recordAdoption(
-    actions.map((action) => action.harnessKind),
-    deps.now(),
-  );
+  deps.recordAdoption(actions.map((action) => action.harnessKind));
   for (const action of actions) {
     deps.writeSelection(action, (error) => {
       recordFirstRunAdoptionFailure(

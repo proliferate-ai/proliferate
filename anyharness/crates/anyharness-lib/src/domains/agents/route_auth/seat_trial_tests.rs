@@ -1,9 +1,16 @@
 //! Proofs for the seat tier-1 trial (founder ruling 2026-08-27): a dead seat
-//! token drives the derived display to the red `Expired` terminal through the
-//! REAL pipeline — HTTP classification → ledger → the probe engine's
-//! `auth_runtime_inputs` fold (with its applied-seat scope guard) → the shared
-//! facts derivation — and a live token reaches green `Authenticated` on trial
-//! evidence, never on file presence.
+//! token drives the harness's STATUS DOCUMENT to the red `failed` verdict
+//! through the REAL pipeline — HTTP classification → ledger → the probe
+//! engine's fold (with its applied-seat scope guard) → the persisted document
+//! — and a live token reaches a dated `verified`, never on file presence.
+//!
+//! The fold's destination is what the slice-3 forward merge moved. The
+//! verdict used to ride `AuthRuntimeInputs.trial` into the client-side
+//! derivation; that derivation is deleted and the status document is the one
+//! machine truth, so the trial lands as the credentialed observation it is.
+//! Everything the ruling fixed is asserted here on the new destination:
+//! classification, the wire shape, "inconclusive records nothing", and the
+//! scope guard that keeps seat machinery off a gateway or native route.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -11,16 +18,13 @@ use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
 
-use crate::domains::agents::auth_state::{
-    derive_agent_auth_state, facts_from_resolved_with_runtime, AuthDisplay, EvidenceRef,
-    Tier1TrialFact,
-};
 use crate::domains::agents::launch_probe::config::ProbeEngineConfig;
 use crate::domains::agents::launch_probe::test_support::{
     CountingPlanProducer, FakeRunner, FixedTargets, TempRuntimeHome,
 };
 use crate::domains::agents::launch_probe::LaunchProbeService;
-use crate::domains::agents::model::{CredentialState, ResolvedAgent, ResolvedAgentStatus};
+use crate::domains::agents::status::{AgentStatusService, ProbeVerdict, StatusDoc};
+use crate::persistence::Db;
 
 use super::seat_trial::SeatTrialLedger;
 
@@ -83,7 +87,8 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 fn seat_state_json() -> serde_json::Value {
     serde_json::json!({
         "version": 2,
-        "revision": 3,
+        "lineage": "seat-trial-lineage",
+        "sequence": 3,
         "harnesses": [{
             "harness_kind": "claude",
             "sources": [{
@@ -95,8 +100,20 @@ fn seat_state_json() -> serde_json::Value {
     })
 }
 
-fn engine_with(home: &TempRuntimeHome, ledger: Arc<SeatTrialLedger>) -> LaunchProbeService {
-    LaunchProbeService::with_parts(
+/// An engine wired exactly as production wires it for this path: the ledger it
+/// runs the trial through, and the status service the verdict must reach.
+fn engine_with(
+    home: &TempRuntimeHome,
+    ledger: Arc<SeatTrialLedger>,
+) -> (LaunchProbeService, Arc<AgentStatusService>) {
+    let status = Arc::new(AgentStatusService::with_parts(
+        Db::open(home.path()).expect("open db"),
+        home.path().to_path_buf(),
+        Arc::new(FixedTargets::single("claude")),
+        vec!["claude".to_string()],
+        home.path().join("detection-home"),
+    ));
+    let engine = LaunchProbeService::with_parts(
         home.path().to_path_buf(),
         Arc::new(CountingPlanProducer::new(vec![])),
         Arc::new(FixedTargets::single("claude")),
@@ -104,36 +121,29 @@ fn engine_with(home: &TempRuntimeHome, ledger: Arc<SeatTrialLedger>) -> LaunchPr
         ProbeEngineConfig::default(),
     )
     .with_seat_trials(ledger)
+    .with_agent_status(status.clone());
+    (engine, status)
 }
 
-/// A resolved claude whose credentials come from the applied route — the shape
-/// a seat-selected harness resolves to (same construction as auth_state_tests).
-fn seat_resolved() -> ResolvedAgent {
-    use crate::domains::agents::readiness::service::resolve_agent_unrouted;
-    use crate::domains::agents::registry::descriptor;
-    let home = std::env::temp_dir();
-    let desc = descriptor("claude").expect("claude descriptor");
-    let mut resolved = resolve_agent_unrouted(&desc, &home);
-    resolved.status = ResolvedAgentStatus::Ready;
-    resolved.credentials_from_route = true;
-    // A machine with the user's own native login present: exactly the shape
-    // that produced the false green — it must not matter on a seat route.
-    resolved.credential_state = CredentialState::ReadyViaLocalAuth;
-    resolved
+fn claude_doc(status: &Arc<AgentStatusService>) -> Option<StatusDoc> {
+    status.read("claude")
 }
 
 /// THE acceptance regression (2026-08-27): the pane said green while the seat
-/// 401'd. A dead token must now drive the display to the red Expired terminal
-/// through the full path — trial call, 401 classification, ledger, the probe
-/// engine's fold, the shared derivation.
+/// 401'd. A dead token must now drive the document to the red `failed` verdict
+/// through the full path — trial call, 401 classification, ledger, the engine's
+/// fold, the persisted status document.
 #[tokio::test]
-async fn a_dead_token_drives_the_full_path_to_the_red_expired_state() {
+async fn a_dead_token_drives_the_full_path_to_a_failed_status_document() {
     let home = TempRuntimeHome::new("seat-trial-dead");
     home.write_state_json(&seat_state_json());
     let (base_url, captured) = sequence_server(vec![(401, "Unauthorized")]);
 
     let ledger = Arc::new(SeatTrialLedger::with_base_url(&base_url));
-    ledger.run_trial("claude", DEAD_TOKEN.to_string()).await;
+    let (engine, status) = engine_with(&home, ledger);
+    engine
+        .run_seat_trial("claude", DEAD_TOKEN.to_string())
+        .await;
 
     // The wire shape is the one a `user:inference` setup token is scoped for.
     let request = String::from_utf8_lossy(&captured.lock().expect("capture")).to_lowercase();
@@ -149,49 +159,50 @@ async fn a_dead_token_drives_the_full_path_to_the_red_expired_state() {
     assert!(request.contains("anthropic-version: 2023-06-01"));
     assert!(request.contains("\"max_tokens\":1"), "one token, no more");
 
-    let engine = engine_with(&home, ledger);
-    let inputs = engine.auth_runtime_inputs("claude", Utc::now());
-    assert_eq!(inputs.trial, Some(Tier1TrialFact::Expired));
-
-    let facts = facts_from_resolved_with_runtime(&seat_resolved(), &inputs);
-    let derived = derive_agent_auth_state(&facts);
+    let doc = claude_doc(&status).expect("the fold composed a document");
     assert_eq!(
-        derived.display,
-        AuthDisplay::Expired,
-        "a 401-ing seat must land on the red Expired terminal"
+        doc.probe.verdict,
+        ProbeVerdict::Failed,
+        "a 401-ing seat must land on the red failed verdict"
+    );
+    assert!(doc.probe.at.is_some(), "the failure is dated");
+    // The seat STAYS SAVED (spec flow 2): only the light dims.
+    assert!(
+        doc.methods
+            .iter()
+            .any(|row| row.kind == "seat" && row.seat_id.is_some()),
+        "the seat row survives its own failed trial: {doc:?}"
     );
 }
 
-/// The other side: a token the API accepts reaches green `Authenticated` on
-/// TRIAL evidence (GatewayKeyCheck, with an age) — not on file presence.
+/// The other side: a token the API accepts reaches a dated `verified` on TRIAL
+/// evidence — not on file presence.
 #[tokio::test]
-async fn a_live_token_reaches_green_authenticated_on_trial_evidence() {
+async fn a_live_token_reaches_a_dated_verified_status_document() {
     let home = TempRuntimeHome::new("seat-trial-live");
     home.write_state_json(&seat_state_json());
     let (base_url, _captured) = sequence_server(vec![(200, "OK")]);
 
     let ledger = Arc::new(SeatTrialLedger::with_base_url(&base_url));
-    ledger
-        .run_trial(
+    let (engine, status) = engine_with(&home, ledger);
+    engine
+        .run_seat_trial(
             "claude",
             "sk-ant-oat01-live-testonly-0123456789abcdefghij".to_string(),
         )
         .await;
 
-    let engine = engine_with(&home, ledger);
-    let inputs = engine.auth_runtime_inputs("claude", Utc::now());
-    assert!(matches!(inputs.trial, Some(Tier1TrialFact::Green { .. })));
-
-    let derived =
-        derive_agent_auth_state(&facts_from_resolved_with_runtime(&seat_resolved(), &inputs));
-    assert_eq!(derived.display, AuthDisplay::Authenticated);
-    assert_eq!(derived.evidence_ref, Some(EvidenceRef::GatewayKeyCheck));
-    assert!(derived.evidence_age_seconds.is_some());
+    let doc = claude_doc(&status).expect("the fold composed a document");
+    assert_eq!(doc.probe.verdict, ProbeVerdict::Verified);
+    assert!(
+        doc.probe.at.is_some(),
+        "green needs dated evidence: {doc:?}"
+    );
 }
 
 /// Transport failures and non-auth statuses record NOTHING, and a re-mint's
-/// inconclusive trial CLEARS the previous token's verdict — the display stays
-/// the honest acknowledged-route state, claiming neither green nor expired.
+/// inconclusive trial CLEARS the previous token's verdict — the document keeps
+/// the last real observation instead of claiming a new one.
 #[tokio::test]
 async fn an_inconclusive_trial_records_nothing_and_clears_a_stale_verdict() {
     let home = TempRuntimeHome::new("seat-trial-inconclusive");
@@ -199,53 +210,60 @@ async fn an_inconclusive_trial_records_nothing_and_clears_a_stale_verdict() {
     let (base_url, _captured) =
         sequence_server(vec![(401, "Unauthorized"), (500, "Internal Server Error")]);
     let ledger = Arc::new(SeatTrialLedger::with_base_url(&base_url));
+    let (engine, status) = engine_with(&home, ledger.clone());
 
-    // Mint 1: a dead token leaves a Rejected verdict.
-    ledger.run_trial("claude", DEAD_TOKEN.to_string()).await;
-    let engine = engine_with(&home, ledger.clone());
+    // Mint 1: a dead token leaves a Rejected verdict, folded onto the document.
+    engine
+        .run_seat_trial("claude", DEAD_TOKEN.to_string())
+        .await;
     assert_eq!(
-        engine.auth_runtime_inputs("claude", Utc::now()).trial,
-        Some(Tier1TrialFact::Expired),
-        "sanity: the stale verdict exists before the re-mint"
+        claude_doc(&status).expect("document").probe.verdict,
+        ProbeVerdict::Failed,
+        "sanity: the verdict landed before the re-mint"
     );
 
     // Mint 2: the API answers 500 for the NEW token — learned nothing, and the
-    // old verdict (which judged a different token) must not linger.
-    ledger
-        .run_trial(
+    // old verdict (which judged a different token) must not linger in the
+    // ledger and re-assert itself as a fresh observation.
+    engine
+        .run_seat_trial(
             "claude",
             "sk-ant-oat01-second-testonly-0123456789abcdefghij".to_string(),
         )
         .await;
-    let inputs = engine.auth_runtime_inputs("claude", Utc::now());
-    assert_eq!(inputs.trial, None, "inconclusive must leave absence");
-
-    let derived =
-        derive_agent_auth_state(&facts_from_resolved_with_runtime(&seat_resolved(), &inputs));
-    assert_eq!(derived.display, AuthDisplay::Selected);
-    assert!(!derived.display.is_green());
+    assert_eq!(
+        ledger.verdict_for_applied_seat(home.path(), "claude", Utc::now()),
+        None,
+        "inconclusive must leave absence in the ledger"
+    );
 }
 
 /// The scope guard: a seat verdict folds ONLY while the applied route selects
-/// a seat. A native machine (no state file) and a gateway route must both see
-/// `None` — native is a permanently supported method (founder ruling) and seat
-/// machinery must never color it.
+/// a seat. A native machine (no state file) and a gateway route must both be
+/// left alone — native is a permanently supported method (founder ruling) and
+/// seat machinery must never color it.
 #[tokio::test]
 async fn a_seat_verdict_never_colors_a_non_seat_route() {
     let (base_url, _captured) = sequence_server(vec![(401, "Unauthorized")]);
-    let ledger = Arc::new(SeatTrialLedger::with_base_url(&base_url));
-    ledger.run_trial("claude", DEAD_TOKEN.to_string()).await;
 
     // No state file at all: the native world.
     let native_home = TempRuntimeHome::new("seat-trial-native");
-    let engine = engine_with(&native_home, ledger.clone());
-    assert_eq!(engine.auth_runtime_inputs("claude", Utc::now()).trial, None);
+    let native_ledger = Arc::new(SeatTrialLedger::with_base_url(&base_url));
+    let (engine, status) = engine_with(&native_home, native_ledger);
+    engine
+        .run_seat_trial("claude", DEAD_TOKEN.to_string())
+        .await;
+    assert!(
+        claude_doc(&status).is_none_or(|doc| doc.probe.verdict != ProbeVerdict::Failed),
+        "a seat verdict must not fail a native harness's document"
+    );
 
     // A gateway route for the same harness.
     let gateway_home = TempRuntimeHome::new("seat-trial-gateway");
     gateway_home.write_state_json(&serde_json::json!({
         "version": 2,
-        "revision": 4,
+        "lineage": "seat-trial-lineage",
+        "sequence": 4,
         "harnesses": [{
             "harness_kind": "claude",
             "sources": [{
@@ -255,6 +273,13 @@ async fn a_seat_verdict_never_colors_a_non_seat_route() {
             }],
         }],
     }));
-    let engine = engine_with(&gateway_home, ledger);
-    assert_eq!(engine.auth_runtime_inputs("claude", Utc::now()).trial, None);
+    let gateway_ledger = Arc::new(SeatTrialLedger::with_base_url(&base_url));
+    let (engine, status) = engine_with(&gateway_home, gateway_ledger);
+    engine
+        .run_seat_trial("claude", DEAD_TOKEN.to_string())
+        .await;
+    assert!(
+        claude_doc(&status).is_none_or(|doc| doc.probe.verdict != ProbeVerdict::Failed),
+        "a seat verdict must not fail a gateway harness's document"
+    );
 }

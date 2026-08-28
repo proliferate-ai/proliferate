@@ -1,4 +1,4 @@
-"""Focused CRUD and revision-lineage coverage for agent auth selections."""
+"""Focused CRUD coverage for agent auth selections."""
 
 from __future__ import annotations
 
@@ -142,46 +142,6 @@ async def test_put_normalizes_empty_sources_to_monotonic_disabled_gateway_marker
     assert cleared[0].id == gateway_id
     assert cleared[0].enabled is False
     assert cleared[0].updated_at == clear_write
-
-
-@pytest.mark.asyncio
-async def test_touch_bumps_one_surface_and_only_that_surface(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """`touch_auth_selection_revisions` is the out-of-band revision-bump seam
-    (enrollment-sync's local-surface poke, proof C5): it advances every row of
-    the named surface — enabled or not — and leaves sibling surfaces alone."""
-    user_id = await _create_user(db_session)
-    write_time = datetime(2026, 7, 15, tzinfo=UTC)
-    touch_time = write_time + timedelta(seconds=30)
-    monkeypatch.setattr(selections_store, "utcnow", lambda: write_time)
-    for surface in ("local", "cloud"):
-        await store.put_auth_selections(
-            db_session,
-            user_id=user_id,
-            harness_kind="claude",
-            surface=surface,
-            sources=[_gateway()],
-        )
-
-    monkeypatch.setattr(selections_store, "utcnow", lambda: touch_time)
-    touched = await store.touch_auth_selection_revisions(
-        db_session, user_id=user_id, surface="local"
-    )
-
-    # The local scope holds the enabled gateway row (put normalizes a marker
-    # into the same row here, so one row per surface).
-    assert touched == 1
-    local_rows = await store.list_auth_selections(db_session, user_id=user_id, surface="local")
-    assert {row.updated_at for row in local_rows} == {touch_time}
-    cloud_rows = await store.list_auth_selections(db_session, user_id=user_id, surface="cloud")
-    assert {row.updated_at for row in cloud_rows} == {write_time}
-
-    with pytest.raises(ValueError, match="Unknown agent auth surface"):
-        await store.touch_auth_selection_revisions(
-            db_session, user_id=user_id, surface="mainframe"
-        )
 
 
 def _typed(

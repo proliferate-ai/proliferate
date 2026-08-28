@@ -45,7 +45,24 @@ export interface AgentAuthStateHarness {
 /** The whole state.json v2 document (`route_auth/state.rs::AgentAuthState`). */
 export interface AgentAuthStateDocument {
   version: number;
-  revision: number;
+  /**
+   * Monotonic per (user, surface), bumped only by a render whose `harnesses`
+   * content changed (agent_auth spec §2, "How delivery is governed"). This is
+   * the ORDERING field: the runtime rejects a push whose sequence is below the
+   * one it persisted. The change-detection value is `fingerprint`, which is a
+   * `GET /state` rider and never appears in this document.
+   */
+  sequence: number;
+  /**
+   * The identity of the counter `sequence` counts in: the server's
+   * render-sequence row uuid, minted when the row was created and never
+   * updated — a rebuilt or switched server database is a new lineage. The
+   * runtime refuses a push whose lineage differs from its persisted one
+   * (409, code `AGENT_ROUTE_STATE_LINEAGE`); only an explicit reset (the
+   * state DELETE) adopts a new lineage. The courier carries it verbatim and
+   * never interprets it.
+   */
+  lineage: string;
   user_id?: string | null;
   /**
    * The origin (`scheme://host[:port]`) of the control-plane server that

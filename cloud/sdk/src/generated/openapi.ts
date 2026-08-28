@@ -1045,7 +1045,7 @@ export interface paths {
          * @description Record a surface runtime's delivery acknowledgement (the desktop seam).
          *
          *     The desktop calls this after its local runtime's state PUT/DELETE
-         *     succeeded, echoing the pushed document's ``revision`` and the served
+         *     succeeded, echoing the pushed document's ``sequence`` and the served
          *     ``fingerprint`` from ``GET /state``. This stamp is what flips the
          *     selections read from pending to applied (agent-auth.md "Applied means
          *     acknowledged"). The cloud surface's twin is stamped server-side by the
@@ -2347,8 +2347,8 @@ export interface components {
              * @enum {string}
              */
             surface: "local" | "cloud";
-            /** Ackedrevision */
-            ackedRevision: number;
+            /** Ackedsequence */
+            ackedSequence: number;
             /** Ackedat */
             ackedAt: string;
         };
@@ -2420,13 +2420,13 @@ export interface components {
          * AgentAuthStateAckRequest
          * @description Desktop delivery ack: the pushed document's identity, echoed back.
          *
-         *     ``revision`` is the revision the local runtime's state PUT/DELETE
+         *     ``sequence`` is the sequence the local runtime's state PUT/DELETE
          *     confirmed; ``fingerprint`` is the served document's fingerprint from
          *     ``GET /state`` (never client-computed).
          */
         AgentAuthStateAckRequest: {
-            /** Revision */
-            revision: number;
+            /** Sequence */
+            sequence: number;
             /** Fingerprint */
             fingerprint: string;
         };
@@ -2448,9 +2448,10 @@ export interface components {
          * @description The whole ``state.json`` v2 document (``route_auth/state.rs``).
          *
          *     ``fingerprint`` is a response-only rider (the renderer's sha256 of the
-         *     canonical document), NOT part of the state.json wire contract: the desktop
-         *     echoes it through ``POST /state/ack`` after a successful runtime push and
-         *     must strip it before pushing the document to the local runtime.
+         *     canonical ``harnesses`` array, spec §2), NOT part of the state.json wire
+         *     contract: the desktop echoes it through ``POST /state/ack`` after a
+         *     successful runtime push and must strip it before pushing the document to
+         *     the local runtime.
          *
          *     ``harness_settings`` is a second response-only rider: the surface's full
          *     persisted harness-settings map (``agent_auth_harness_settings``), keyed by
@@ -2464,8 +2465,10 @@ export interface components {
         AgentAuthStateResponse: {
             /** Version */
             version: number;
-            /** Revision */
-            revision: number;
+            /** Sequence */
+            sequence: number;
+            /** Lineage */
+            lineage: string;
             /** User Id */
             user_id?: string | null;
             /** Harnesses */

@@ -360,7 +360,7 @@ fn codex_provider_config_azure_openai_arm_renders_the_expected_toml_when_invoked
     let home = TempHome::new("codex-pc-azure-direct");
     let profile = AgentRuntimeAuthProfile::Sources(HarnessSources {
         harness_kind: "codex".to_string(),
-        revision: 3,
+        sequence: 3,
         rotate: true,
         sources: vec![ResolvedSource::ProviderConfig(ProviderConfigProfile {
             config_kind: "azure_openai".to_string(),
@@ -419,7 +419,7 @@ fn codex_provider_config_azure_openai_missing_endpoint_is_selection_incomplete()
     let home = TempHome::new("codex-pc-azure-missing-endpoint");
     let profile = AgentRuntimeAuthProfile::Sources(HarnessSources {
         harness_kind: "codex".to_string(),
-        revision: 1,
+        sequence: 1,
         rotate: true,
         sources: vec![ResolvedSource::ProviderConfig(ProviderConfigProfile {
             config_kind: "azure_openai".to_string(),
