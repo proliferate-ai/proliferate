@@ -52,7 +52,7 @@ One line per system. A spec marked *target* describes an accepted destination an
 - [desktop-host](systems/desktop-host/README.md) — the Desktop shell ↔ sidecar ↔ desktop worker seam; Desktop as a thin native shell over the same product code.
 - [environments](systems/environments/README.md) — *target.* The container a run executes in: provisioning, lifecycle, usage fencing, templates; personal and task classes. Its [seam](systems/environments/seam.md) is the one contract between the control plane and a runtime: enrollment, heartbeat; courier and event shipping as the target half.
 - [github](systems/github/README.md) — *target.* GitHub App authorization and installations, repository authority, webhook intake, the repo catalog — the identity of work.
-- [harnesses](systems/harnesses/README.md) — supported agent kinds, catalog and registry, install and distribution, readiness, launch options and probes; [skills](systems/harnesses/skills.md) as target.
+- [harnesses](systems/harnesses/README.md) — supported agent kinds, catalog and registry, install and distribution, readiness, launch options and probes; [skills](systems/harnesses/skills.md) and [native-integrations](systems/harnesses/native-integrations.md) as target.
 - [identity](systems/identity/README.md) — who acts: accounts (sign-in, linked identities, tokens) and organizations (tenancy, membership, roles, service subjects).
 - [integration_gateway](systems/integration_gateway/README.md) — *target.* Agents act on company systems without a credential entering the environment; connections, per-call capability, approvals, revocation, audit.
 - [onboarding](systems/onboarding/README.md) — install to first useful prompt with every blocked layer named; sequences readiness owned elsewhere.
