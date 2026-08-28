@@ -23,6 +23,14 @@ use crate::domains::agents::model::AgentKind;
 /// sanctioned re-admission of that capability, under Proliferate-owned names.
 pub(super) const NODE_REPL_SERVER_NAME: &str = "node_repl";
 
+/// Every `[mcp_servers.<name>]` entry the vendor's desktop app writes for its
+/// own computer-use plugin, none of which is a user integration: `node_repl`
+/// is the plugin's server, and `computer-use` is the plugin's on/off marker
+/// (`enabled = false` when the user toggles the plugin off in the vendor app).
+/// Listing either raw would show the capability twice — once as the curated
+/// bundle and once as a greyed-out plug row — so discovery skips them.
+const VENDOR_OWNED_SERVER_NAMES: [&str; 2] = [NODE_REPL_SERVER_NAME, "computer-use"];
+
 /// Discover the raw MCP entries of `<home>/.codex/config.toml`. A missing
 /// file means codex is not set up here: nothing to list. A file that is not
 /// valid TOML yields exactly one unavailable error entry, never a panic.
@@ -40,11 +48,12 @@ pub(super) fn discover(home: &Path) -> Vec<NativeIntegration> {
     };
     servers
         .iter()
-        // The vendor's own `node_repl` entry is skipped, not listed: injecting
-        // it raw would collide with the plugin-owned server (codex cancels the
-        // session-config copy), and the curated bundles already re-admit the
+        // The vendor's own entries are skipped, not listed: injecting
+        // `node_repl` raw would collide with the plugin-owned server (codex
+        // cancels the session-config copy), `computer-use` is only the
+        // plugin's toggle marker, and the curated bundles already re-admit the
         // capability under Proliferate-owned names.
-        .filter(|(name, _)| name.as_str() != NODE_REPL_SERVER_NAME)
+        .filter(|(name, _)| !VENDOR_OWNED_SERVER_NAMES.contains(&name.as_str()))
         .map(|(name, entry)| integration_for(name, entry))
         .collect()
 }
@@ -138,8 +147,7 @@ fn integration_for(name: &str, entry: &toml::Value) -> NativeIntegration {
     }
     if entry.get("enabled").and_then(toml::Value::as_bool) == Some(false) {
         integration.available = false;
-        integration.unavailable_reason =
-            Some("disabled in ~/.codex/config.toml (enabled = false)".to_string());
+        integration.unavailable_reason = Some("disabled natively (enabled = false)".to_string());
     }
     integration
 }
@@ -281,15 +289,18 @@ Authorization = "Bearer fixture-token"
     }
 
     #[test]
-    fn the_vendor_node_repl_entry_is_skipped_and_only_the_other_entries_list() {
+    fn the_vendor_owned_entries_are_skipped_and_only_the_other_entries_list() {
         let home = home_with_config(
-            "node-repl-skipped",
+            "vendor-owned-skipped",
             r#"
 [mcp_servers.node_repl]
 command = "/fixture/cua_node/bin/node_repl"
 
 [mcp_servers.node_repl.env]
 SKY_CUA_SERVICE_PATH = "/fixture/.codex/computer-use/Codex Computer Use.app"
+
+[mcp_servers.computer-use]
+enabled = false
 
 [mcp_servers.linear]
 url = "https://mcp.linear.app/mcp"
@@ -316,7 +327,7 @@ enabled = false
         assert!(!listed[0].available);
         assert_eq!(
             listed[0].unavailable_reason.as_deref(),
-            Some("disabled in ~/.codex/config.toml (enabled = false)")
+            Some("disabled natively (enabled = false)")
         );
     }
 

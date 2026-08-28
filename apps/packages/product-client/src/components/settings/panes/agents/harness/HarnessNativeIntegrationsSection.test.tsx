@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -134,6 +134,25 @@ describe("HarnessNativeIntegrationsSection", () => {
     expect((toggle as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Unavailable")).toBeTruthy();
     expect(screen.getByText("Codex desktop app not installed.")).toBeTruthy();
+  });
+
+  it("keeps an unavailable raw row's mono source and appends the reason after it", async () => {
+    clientMocks.listNativeIntegrations.mockResolvedValue(listing({
+      integrations: [{
+        ...rawLinearServer,
+        enabled: false,
+        available: false,
+        unavailableReason: "disabled natively (enabled = false)",
+      }],
+    }));
+    renderSection();
+
+    const row = await screen.findByTestId("native-integration-mcp:linear");
+    const source = within(row).getByText("~/.codex/config.toml · mcp_servers.linear");
+    expect(source.className).toContain("font-mono");
+    expect(row.textContent).toContain(
+      "~/.codex/config.toml · mcp_servers.linear · disabled natively (enabled = false)",
+    );
   });
 
   it("renders a stale selection with a Missing badge and its toggle still on", async () => {

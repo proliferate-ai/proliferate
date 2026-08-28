@@ -74,9 +74,13 @@ function LocalNativeIntegrationsSection({
 
   return (
     <>
+      {/* Emphasized like its neighbours (Authentication above, Models below):
+          the muted caption weight carries a px-0.5 inset that would leave
+          this one title sitting 2px right of the pane's other headings. */}
       <SettingsSection
         title={HARNESS_PANE_COPY.nativeIntegrationsTitle(displayName)}
         description={HARNESS_PANE_COPY.nativeIntegrationsDescription(displayName)}
+        titleWeight="emphasized"
         data-testid="harness-native-integrations"
       >
         {isError ? (
@@ -123,17 +127,24 @@ function LocalNativeIntegrationsSection({
 /**
  * The row's one subtitle line, by precedence. A stale row gets none — its
  * Missing badge is the whole story, and no discovered entry survives to
- * describe it. An unavailable row shows why it cannot be turned on. Any other
- * row shows its own secondary text: a description in the ordinary face, or a
- * config-file origin in mono.
+ * describe it. A raw row always keeps its config-file origin in mono — that
+ * line is what identifies the entry, so a column of raw rows reads uniformly
+ * — and an unavailable one appends why it cannot be turned on. A bundle row
+ * shows its description, or, when unavailable, the reason in its place: the
+ * reason names the missing artifact, which matters more than the blurb.
  */
 function secondaryTextFor(row: NativeIntegrationRow): ReactNode {
   if (row.stale) return undefined;
-  if (!row.available && row.unavailableReason) return row.unavailableReason;
-  if (!row.secondary) return undefined;
-  return (
-    <span className={row.secondaryIsSource ? "font-mono" : undefined}>{row.secondary}</span>
-  );
+  const reason = !row.available && row.unavailableReason ? row.unavailableReason : null;
+  if (row.secondaryIsSource && row.secondary) {
+    return (
+      <>
+        <span className="font-mono">{row.secondary}</span>
+        {reason ? ` · ${reason}` : null}
+      </>
+    );
+  }
+  return reason ?? row.secondary ?? undefined;
 }
 
 function NativeIntegrationRosterRow({
