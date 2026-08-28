@@ -12,7 +12,7 @@ use super::schema::{
 };
 use super::sync::CatalogSyncService;
 use crate::domains::agents::installer::install_policy::{
-    PinOverrides, ResolvedPinSource, ResolvedPinTarget,
+    PinOverrides, ResolvedPinCompanion, ResolvedPinSource, ResolvedPinTarget,
 };
 
 /// Read surface over the active catalog held by [`CatalogSyncService`].
@@ -88,9 +88,20 @@ fn project_source(pin: &AgentCatalogArtifactPin) -> Option<ResolvedPinSource> {
         AgentCatalogArtifactSource::Binary { targets: t } => ResolvedPinSource::Binary {
             targets: targets(t),
         },
-        AgentCatalogArtifactSource::Archive { targets: t, args } => ResolvedPinSource::Archive {
+        AgentCatalogArtifactSource::Archive {
+            targets: t,
+            args,
+            companions,
+        } => ResolvedPinSource::Archive {
             targets: targets(t),
             args: args.clone(),
+            companions: companions
+                .iter()
+                .map(|companion| ResolvedPinCompanion {
+                    name: companion.name.clone(),
+                    targets: targets(&companion.targets),
+                })
+                .collect(),
         },
         AgentCatalogArtifactSource::Npm {
             package,

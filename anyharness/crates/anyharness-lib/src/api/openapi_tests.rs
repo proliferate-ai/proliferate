@@ -24,6 +24,8 @@ fn openapi_registers_workspace_and_session_paths() {
         "/v1/workspaces/{workspace_id}/setup-start",
         "/v1/agents/{kind}/launch-options",
         "/v1/agents/{kind}/launch-options/refresh",
+        "/v1/agents/{kind}/native-integrations",
+        "/v1/agents/{kind}/native-integrations/{id}",
         "/v1/catalogs/agents/version",
         "/v1/sessions",
         "/v1/sessions/{session_id}",

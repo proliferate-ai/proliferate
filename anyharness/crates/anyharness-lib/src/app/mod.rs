@@ -27,6 +27,7 @@ use crate::domains::agents::installer::reconcile::execution::AgentReconcileServi
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
 use crate::domains::agents::launch_probe::LaunchProbeService;
+use crate::domains::agents::native_integrations::NativeIntegrationsService;
 use crate::domains::agents::runtime::AgentRuntime;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
@@ -124,6 +125,9 @@ pub struct AppState {
     pub agent_runtime: Arc<AgentRuntime>,
     pub catalog_sync_service: Arc<CatalogSyncService>,
     pub launch_options_service: Arc<HarnessLaunchOptionsService>,
+    /// Native integrations of the user's own harness installs: discovery merged
+    /// with the selections the user re-admitted into sessions.
+    pub native_integrations_service: Arc<NativeIntegrationsService>,
     /// The probe engine, for READS and for the user-initiated refresh: the status
     /// route and the launch-validation universe.
     pub launch_probe_service: Arc<LaunchProbeService>,
@@ -368,6 +372,8 @@ impl AppState {
         let integration_gateway_session_launch_extension = Arc::new(
             IntegrationGatewaySessionLaunchExtension::new(runtime_home.clone()),
         );
+        let (native_integrations_service, native_integrations_session_extension) =
+            agent_launch::build_native_integrations(&db, &runtime_home);
         let product_mcp_launch_catalog =
             product_mcp::build_product_mcp_launch_catalog(product_mcp::LaunchCatalogDeps {
                 runtime_base_url: runtime_base_url.clone(),
@@ -431,6 +437,7 @@ impl AppState {
             subagent_session_hooks.clone(),
             review_session_hooks.clone(),
             integration_gateway_session_launch_extension.clone(),
+            native_integrations_session_extension,
             goal_session_hooks,
             loop_session_hooks,
             activity_session_hooks,
@@ -585,6 +592,7 @@ impl AppState {
             agent_runtime,
             catalog_sync_service,
             launch_options_service,
+            native_integrations_service,
             launch_probe_service,
             automatic_poke_engine,
             agent_reconcile_service,

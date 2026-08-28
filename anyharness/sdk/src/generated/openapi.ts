@@ -233,6 +233,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{kind}/native-integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_native_integrations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{kind}/native-integrations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["set_native_integration_selection"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/revoked-jtis": {
         parameters: {
             query?: never;
@@ -3819,6 +3851,57 @@ export interface components {
              */
             seeded: boolean;
         };
+        /** @description One discovered integration, merged with whether the user has enabled it. */
+        NativeIntegration: {
+            agentKind: string;
+            /**
+             * @description Whether the artifacts the integration needs are present on disk. A
+             *     pure file check — discovery never spawns or probes.
+             */
+            available: boolean;
+            description?: string | null;
+            displayName: string;
+            /** @description Whether a selection row exists for this integration. */
+            enabled: boolean;
+            /**
+             * @description `bundle:<name>` for a curated bundle, `mcp:<server-name>` for a raw
+             *     config entry. Stable across reads so selections can reference it.
+             */
+            id: string;
+            kind: components["schemas"]["NativeIntegrationKind"];
+            risk: components["schemas"]["NativeIntegrationRisk"];
+            /**
+             * @description Human-readable origin of the entry, e.g.
+             *     `~/.codex/config.toml · mcp_servers.linear`. Never an env value.
+             */
+            source?: string | null;
+            unavailableReason?: string | null;
+        };
+        /**
+         * @description How a native integration reaches the session once selected.
+         * @enum {string}
+         */
+        NativeIntegrationKind: "mcp_stdio" | "mcp_http" | "bundle";
+        /**
+         * @description What a native integration can reach once it is running. Drives the consent
+         *     dialog a settings surface shows before enabling it.
+         * @enum {string}
+         */
+        NativeIntegrationRisk: "none" | "desktop_control" | "browser_control";
+        /** @description Body of `PUT /v1/agents/{kind}/native-integrations/{id}`. */
+        NativeIntegrationSelectionRequest: {
+            enabled: boolean;
+        };
+        /** @description Everything a settings surface needs to render one harness's section. */
+        NativeIntegrationsResponse: {
+            agentKind: string;
+            integrations: components["schemas"]["NativeIntegration"][];
+            /**
+             * @description Enabled integration ids that discovery no longer finds — a config entry
+             *     the user removed natively. Surfaced so the user sees what to fix.
+             */
+            staleSelections: string[];
+        };
         NodeModel: {
             agentKind: string;
             controlValues?: {
@@ -4890,7 +4973,7 @@ export interface components {
             loops: components["schemas"]["Loop"][];
         };
         /** @enum {string} */
-        SessionMcpBindingNotAppliedReason: "missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error";
+        SessionMcpBindingNotAppliedReason: "missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error" | "native_unavailable" | "native_stale" | "native_name_collision";
         /** @enum {string} */
         SessionMcpBindingOutcome: "applied" | "not_applied";
         SessionMcpBindingSummary: {
@@ -6304,6 +6387,76 @@ export interface operations {
             };
             /** @description Login command not found */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_native_integrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harness kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Discovered native integrations with selections */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeIntegrationsResponse"];
+                };
+            };
+            /** @description Unknown harness kind */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    set_native_integration_selection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harness kind identifier */
+                kind: string;
+                /** @description Integration id (`bundle:<name>` or `mcp:<server-name>`) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeIntegrationSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Selection applied; the refreshed listing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeIntegrationsResponse"];
+                };
+            };
+            /** @description Unknown harness kind */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

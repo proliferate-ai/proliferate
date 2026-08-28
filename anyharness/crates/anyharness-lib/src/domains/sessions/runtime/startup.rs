@@ -445,6 +445,7 @@ impl SessionRuntime {
             startup: startup_strategy,
             every_prompt_append: mcp_launch.system_prompt_append,
             first_prompt_append: mcp_launch.first_prompt_system_prompt_append,
+            harness_args: mcp_launch.harness_args,
         });
         let hooks = SessionHooks {
             on_turn_finish: Some(Arc::new({

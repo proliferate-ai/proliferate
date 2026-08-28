@@ -137,7 +137,7 @@ $(error PROFILE is required. Example: make dev PROFILE=main)
 endif
 endif
 
-.PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
+.PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-local-stop dev-local-restart dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
         server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install git-hooks \
@@ -397,10 +397,27 @@ dev-init: setup
 dev-list:
 	@node scripts/dev.mjs list
 
+# The preflight replaces the unconditional `sdk-build` dependency: it heals a
+# placeholder runtime binary, rebuilds the SDK and product-client dist only
+# when their inputs changed (mtime stamps under .dev-stamps/), and clears or
+# reports stale port holders — the four measured launch traps. SDK_FORCE=1
+# forces the SDK rebuild; scripts/dev-local-preflight.mjs owns the details.
 dev-local: export PROLIFERATE_DEV := 1
-dev-local: sdk-build
+dev-local:
+	node scripts/dev-local-preflight.mjs
 	@echo "Starting desktop app with the bundled AnyHarness sidecar and no control plane..."
 	cd apps/desktop && pnpm tauri dev --config src-tauri/tauri.dev.json
+
+# Stop everything a `make dev-local` started — the make process, `tauri dev`,
+# the debug desktop binary, its vite renderer, and the sidecar runtime — by
+# the process tree's own command lines. Needed because the desktop app is
+# single-instance: a second `tauri dev` hands off to the live window and
+# exits, so a "restart" is always stop-then-launch, never launch-over.
+dev-local-stop:
+	@node scripts/dev-local-preflight.mjs --stop
+
+dev-local-restart: dev-local-stop
+	@$(MAKE) dev-local
 
 # --- Individual dev targets ---
 

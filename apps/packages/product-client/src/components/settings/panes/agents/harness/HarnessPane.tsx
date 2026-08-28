@@ -22,6 +22,7 @@ import {
   HarnessAuthSection,
   deriveSelectedMethod,
 } from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
+import { HarnessNativeIntegrationsSection } from "#product/components/settings/panes/agents/harness/HarnessNativeIntegrationsSection";
 import { HarnessProvidersSection } from "#product/components/settings/panes/agents/harness/HarnessProvidersSection";
 import { HarnessConfigIssueBanner } from "#product/components/settings/panes/agents/harness/HarnessConfigIssueBanner";
 import { HarnessNativeBridgePrompt } from "#product/components/settings/panes/agents/harness/HarnessNativeBridgePrompt";
@@ -324,6 +325,15 @@ function HarnessAuthSurface({
 
       {/* Harness-specific options, AFTER auth: these are options on top of
           a working harness, so they sit below the thing that makes it work. */}
+
+      {/* Native integrations, between Authentication and Models
+          (native-integrations.md "Settings surface"). Renders only on the
+          local surface, and nothing at all when discovery finds nothing. */}
+      <HarnessNativeIntegrationsSection
+        harnessKind={harnessKind}
+        displayName={displayName}
+        surface={surface}
+      />
 
       {/* Model list, auto-collapsed. */}
       <HarnessAllModelsSection

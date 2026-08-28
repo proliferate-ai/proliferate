@@ -2,6 +2,7 @@
 //! process-local. This module owns the wire-ordering and durable dispatch
 //! boundary; ordinary load/new startup remains in `native_session.rs`.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -10,8 +11,8 @@ use anyharness_contract::v1::SessionActionCapabilities;
 use super::frame_observer::ForkWireResponse;
 use super::inbound::InboundDoor;
 use super::native_session::{
-    build_system_prompt_meta, merge_targeted_fork_anchor_meta,
-    native_fork_anchor_is_dispatch_ready, sanitized_native_fork_failure,
+    build_launch_meta, merge_targeted_fork_anchor_meta, native_fork_anchor_is_dispatch_ready,
+    sanitized_native_fork_failure,
 };
 use super::types::{NativeSessionStartupDisposition, NativeSessionStartupState};
 use super::{acp, to_acp_servers, SessionMcpServer};
@@ -39,6 +40,7 @@ pub(in crate::live::sessions) async fn hydrate_parent_and_fork(
     workspace_path: &Path,
     mcp_servers: &[SessionMcpServer],
     system_prompt_append: Option<&str>,
+    harness_args: &BTreeMap<String, String>,
     action_capabilities: SessionActionCapabilities,
     fork_operation_id: &str,
     parent_native_session_id: &str,
@@ -75,7 +77,7 @@ pub(in crate::live::sessions) async fn hydrate_parent_and_fork(
         phase = "started",
         "process-local fork phase"
     );
-    let system_prompt_meta = build_system_prompt_meta(system_prompt_append);
+    let system_prompt_meta = build_launch_meta(system_prompt_append, harness_args);
     let mut load_request = acp::schema::LoadSessionRequest::new(
         parent_native_session_id.to_string(),
         workspace_path.to_path_buf(),

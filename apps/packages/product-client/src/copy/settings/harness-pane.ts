@@ -281,6 +281,48 @@ export const HARNESS_PANE_COPY = {
     surface === "local"
       ? `Updating ${displayName} on this machine.`
       : `Updating ${displayName} in Proliferate Cloud.`,
+  // Native integrations ("From your <Harness> setup", native-integrations.md
+  // "Settings surface"): capabilities the user's own harness install already
+  // provides, re-admitted per row. Default off; enabled rows become ordinary
+  // session MCP bindings.
+  nativeIntegrationsTitle: (displayName: string) => `From your ${displayName} setup`,
+  nativeIntegrationsDescription: (displayName: string) =>
+    `MCP servers and capabilities from your own ${displayName} installation on this machine. `
+    + "Sessions only use the ones you turn on here.",
+  nativeIntegrationsLoadError: (displayName: string) =>
+    `Could not read this machine's ${displayName} setup.`,
+  nativeIntegrationsUpdateError: (displayName: string) =>
+    `Could not update ${displayName}.`,
+  // Risk/state badges. Risk names what the capability can reach once running;
+  // state names why a row cannot be turned on (Unavailable: required artifacts
+  // absent on disk; Missing: an enabled selection whose config entry is gone).
+  nativeIntegrationsBadgeDesktopControl: "Controls your desktop",
+  nativeIntegrationsBadgeBrowserControl: "Controls your browser",
+  nativeIntegrationsBadgeUnavailable: "Unavailable",
+  nativeIntegrationsBadgeMissing: "Missing",
+  // Consent dialog for any bundle with non-None risk (design-settled copy:
+  // three plain-language facts, stated before the capability can be enabled).
+  // Each risk gets its own body because the facts differ — including the
+  // injected server name: cua_repl for computer use, browser_repl for chrome.
+  nativeIntegrationsConsentTitle: (integrationName: string, displayName: string) =>
+    `Turn on ${integrationName} for ${displayName}?`,
+  nativeIntegrationsConsentBodyDesktop: (integrationName: string) =>
+    `macOS asks for its own approval the first time ${integrationName} controls each app. `
+    + "The agent works on your real desktop — press Esc at any time to stop it. "
+    + "In a session's tool list it appears as cua_repl.",
+  nativeIntegrationsConsentBodyBrowser: (integrationName: string, displayName: string) =>
+    `${integrationName} drives your real Chrome through the ${displayName} browser service. `
+    + "Actions run in your real browser session. "
+    + "In a session's tool list it appears as browser_repl.",
+  // The Claude bundle is the CLI's own Claude in Chrome integration: no
+  // Proliferate server, per-action approval in the session, and the CLI's
+  // own server name (native-integrations.md, "Claude in Chrome").
+  nativeIntegrationsConsentBodyClaudeChrome: (integrationName: string) =>
+    `${integrationName} drives your real Chrome through the Claude in Chrome extension. `
+    + "Each browser action asks for your approval in the session before it runs, "
+    + "and the extension's own site permissions still apply. "
+    + "In a session's tool list it appears as claude-in-chrome.",
+  nativeIntegrationsConsentConfirm: (integrationName: string) => `Turn on ${integrationName}`,
   // R2.0 (always-managed install): one-time notice when a managed copy lands
   // alongside a harness the user already had on PATH.
   managedNoticeTitle: "Proliferate now maintains its own managed copy",

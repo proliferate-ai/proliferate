@@ -16,12 +16,11 @@ use crate::domains::agents::registry::built_in_registry;
 use crate::domains::sessions::model::{SessionEventRecord, SessionRecord};
 use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::domains::sessions::store::SessionStore;
-use crate::live::sessions::actor::command::SessionCommand;
-use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::{
     LaunchEnv, SessionHooks, SessionLaunch, SessionStartupStrategy, SystemPromptAppends,
 };
 use crate::live::sessions::runtime_events::into_session_event;
+use crate::live::sessions::{actor::command::SessionCommand, handle::LiveSessionHandle};
 use crate::persistence::Db;
 mod startup_ownership;
 
@@ -110,6 +109,7 @@ fn test_launch(startup: SessionStartupStrategy) -> SessionLaunch {
         mcp_servers: vec![],
         startup,
         prompts: SystemPromptAppends::default(),
+        harness_args: Default::default(),
         last_seq: 0,
     }
 }

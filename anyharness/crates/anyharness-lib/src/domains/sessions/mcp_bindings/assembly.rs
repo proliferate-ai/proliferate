@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -27,6 +28,10 @@ pub struct SessionMcpLaunchAssembly {
     pub system_prompt_append: Option<String>,
     pub first_prompt_system_prompt_append: Option<String>,
     pub mcp_binding_summaries_json: Option<String>,
+    /// Harness launch arguments contributed by extensions (native-integrations
+    /// bundles whose server the harness spawns itself). Rendered by the
+    /// Claude driver path only; see `launch_policy::assemble_session_launch`.
+    pub harness_args: BTreeMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -132,6 +137,7 @@ pub fn assemble_session_mcp_launch(
         system_prompt_append,
         first_prompt_system_prompt_append,
         mcp_binding_summaries_json,
+        harness_args: launch_extras.harness_args,
     })
 }
 
@@ -198,6 +204,7 @@ fn resolve_extension_launch_extras(
         combined
             .mcp_binding_summaries
             .append(&mut extras.mcp_binding_summaries);
+        combined.harness_args.append(&mut extras.harness_args);
     }
     Ok(combined)
 }
@@ -386,6 +393,7 @@ mod tests {
                 first_prompt_system_prompt_append: vec!["first prompt".to_string()],
                 mcp_servers: vec![product_server],
                 mcp_binding_summaries: vec![summary("product-1", "product")],
+                harness_args: BTreeMap::new(),
             },
         });
 

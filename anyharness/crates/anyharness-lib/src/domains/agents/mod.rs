@@ -7,6 +7,7 @@ pub mod launch_probe;
 pub(crate) mod live_ports;
 pub mod model;
 pub mod model_catalog;
+pub mod native_integrations;
 pub mod portability;
 pub mod readiness;
 pub mod registry;
