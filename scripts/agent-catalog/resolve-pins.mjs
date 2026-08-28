@@ -72,7 +72,11 @@ const checksumManifestCache = new Map();
 const collectShas = (doc) => {
   for (const agent of doc.agents ?? []) {
     for (const pin of [agent.harness?.native, agent.harness?.agentProcess]) {
-      for (const t of Object.values(pin?.source?.targets ?? {})) {
+      const targetSets = [
+        pin?.source?.targets ?? {},
+        ...(pin?.source?.companions ?? []).map((companion) => companion.targets ?? {}),
+      ];
+      for (const t of targetSets.flatMap((set) => Object.values(set))) {
         if (t.url && t.sha256) knownSha.set(t.url, t.sha256);
         if (t.url && Number.isSafeInteger(t.downloadSizeBytes) && t.downloadSizeBytes > 0) {
           knownSize.set(t.url, t.downloadSizeBytes);
@@ -168,24 +172,45 @@ async function resolveNative(kind, install, currentVersion) {
       ? await githubReleaseByTag(install.versionedUrlTemplate, currentVersion)
       : await githubLatestRelease(install.versionedUrlTemplate);
     const version = release.tag_name;
-    const targets = {};
-    for (const [platKey, target] of Object.entries(install.platformMap)) {
-      if (!platforms.has(platKey)) continue;
-      const url = install.versionedUrlTemplate
-        .replaceAll("{version}", version)
-        .replaceAll("{target}", target);
-      const expectedBinary = install.expectedBinaryTemplate.replaceAll("{target}", target);
-      const publishedAsset = release.assets
-        ?.find((asset) => asset.browser_download_url === url);
-      const publishedDigest = publishedAsset?.digest?.replace(/^sha256:/, "");
-      targets[platKey] = withDownloadSize({
-        url,
-        sha256: await shaForPublished(url, publishedDigest),
-        expectedBinary,
-      }, url, publishedAsset?.size);
+    // One release, several assets: the CLI archive and each companion sidecar
+    // (codex-code-mode-host) resolve from the same tag with the same digest rule.
+    const resolveReleaseTargets = async (versionedUrlTemplate, expectedBinaryTemplate) => {
+      const targets = {};
+      for (const [platKey, target] of Object.entries(install.platformMap)) {
+        if (!platforms.has(platKey)) continue;
+        const url = versionedUrlTemplate
+          .replaceAll("{version}", version)
+          .replaceAll("{target}", target);
+        const expectedBinary = expectedBinaryTemplate.replaceAll("{target}", target);
+        const publishedAsset = release.assets
+          ?.find((asset) => asset.browser_download_url === url);
+        const publishedDigest = publishedAsset?.digest?.replace(/^sha256:/, "");
+        targets[platKey] = withDownloadSize({
+          url,
+          sha256: await shaForPublished(url, publishedDigest),
+          expectedBinary,
+        }, url, publishedAsset?.size);
+      }
+      return targets;
+    };
+    const targets = await resolveReleaseTargets(
+      install.versionedUrlTemplate,
+      install.expectedBinaryTemplate,
+    );
+    const companions = [];
+    for (const companion of install.companions ?? []) {
+      companions.push({
+        name: companion.name,
+        targets: await resolveReleaseTargets(
+          companion.versionedUrlTemplate,
+          companion.expectedBinaryTemplate,
+        ),
+      });
     }
     // A native CLI is invoked by the adapter, not directly — no ACP launch args.
-    return { version, source: { kind: "archive", targets, args: [] } };
+    const source = { kind: "archive", targets, args: [] };
+    if (companions.length > 0) source.companions = companions;
+    return { version, source };
   }
   throw new Error(`${kind}: native install kind '${install.kind}' is not resolvable`);
 }

@@ -328,6 +328,12 @@ pub(crate) fn plan_for_descriptor(
                 pinned_version: effective_pin(catalog_pins, descriptor, &role),
                 manifest_version: entry.and_then(|entry| entry.version.clone()),
                 checksum_matches,
+                missing_companion: missing_pinned_companion(
+                    runtime_home,
+                    &descriptor.kind,
+                    &role,
+                    catalog_pins,
+                ),
             };
             PlannedArtifact {
                 reinstall: plan_artifact(&facts, reinstall_requested),
@@ -336,6 +342,36 @@ pub(crate) fn plan_for_descriptor(
         })
         .collect();
     super::install_policy::InstallPlan { artifacts }
+}
+
+/// The first companion the active pin declares for this role that is not an
+/// executable on disk. Companions are pinned per platform; one the pin does
+/// not resolve for this platform is not "missing" — there is nothing to
+/// install.
+fn missing_pinned_companion(
+    runtime_home: &Path,
+    kind: &AgentKind,
+    role: &ArtifactRole,
+    catalog_pins: Option<&super::install_policy::PinOverrides>,
+) -> Option<String> {
+    let Some(super::install_policy::ResolvedPinSource::Archive { companions, .. }) =
+        super::install_policy::effective_source(catalog_pins, role)
+    else {
+        return None;
+    };
+    let platform_key = Platform::detect()?.registry_key().to_string();
+    companions
+        .iter()
+        .filter(|companion| companion.targets.contains_key(&platform_key))
+        .find(|companion| {
+            !is_valid_executable(&super::pinned::companion_path(
+                runtime_home,
+                kind,
+                role,
+                &companion.name,
+            ))
+        })
+        .map(|companion| companion.name.clone())
 }
 
 fn options_for_role(

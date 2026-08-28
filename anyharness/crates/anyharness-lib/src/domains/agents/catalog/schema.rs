@@ -99,6 +99,10 @@ pub enum AgentCatalogArtifactSource {
         /// for a registry-backed adapter binary). Empty for a native CLI.
         #[serde(default)]
         args: Vec<String>,
+        /// Sidecar archives installed beside the main binary, each pinned per
+        /// platform like `targets` (codex's `codex-code-mode-host`).
+        #[serde(default)]
+        companions: Vec<AgentCatalogArchiveCompanion>,
     },
     /// An npm-registry package pinned to an exact version.
     Npm {
@@ -118,6 +122,15 @@ pub enum AgentCatalogArtifactSource {
         package_subdir: Option<String>,
         executable_relpath: String,
     },
+}
+
+/// A sidecar archive of an `Archive` source: installed under `name` in the
+/// same managed directory, with its own per-platform url+sha.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCatalogArchiveCompanion {
+    pub name: String,
+    pub targets: BTreeMap<String, AgentCatalogPinTarget>,
 }
 
 /// One platform's resolved download for a `Binary`/`Archive` source.

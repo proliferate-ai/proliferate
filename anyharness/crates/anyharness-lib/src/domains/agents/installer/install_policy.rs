@@ -23,6 +23,9 @@ pub enum ReinstallReason {
     VersionDrift { pinned: String, recorded: String },
     /// The artifact on disk no longer matches the manifest's recorded hash.
     ChecksumMismatch,
+    /// The pin declares a companion binary that is not on disk — an install
+    /// made before the companion was pinned, or a deleted sidecar.
+    MissingCompanion { name: String },
 }
 
 impl std::fmt::Display for ReinstallReason {
@@ -36,6 +39,7 @@ impl std::fmt::Display for ReinstallReason {
                 write!(f, "version drift: pinned {pinned}, recorded {recorded}")
             }
             Self::ChecksumMismatch => write!(f, "checksum mismatch"),
+            Self::MissingCompanion { name } => write!(f, "companion binary missing: {name}"),
         }
     }
 }
@@ -48,6 +52,8 @@ pub struct ArtifactFacts {
     /// None when the manifest has no hash or the file is gone (mechanisms
     /// handle absence); Some(matches) when both sides were comparable.
     pub checksum_matches: Option<bool>,
+    /// The first pinned companion binary not present on disk, if any.
+    pub missing_companion: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +106,9 @@ pub fn plan_artifact(facts: &ArtifactFacts, reinstall_requested: bool) -> Option
     if facts.checksum_matches == Some(false) {
         return Some(ReinstallReason::ChecksumMismatch);
     }
+    if let Some(name) = &facts.missing_companion {
+        return Some(ReinstallReason::MissingCompanion { name: name.clone() });
+    }
     None
 }
 
@@ -136,6 +145,9 @@ pub enum ResolvedPinSource {
     Archive {
         targets: std::collections::BTreeMap<String, ResolvedPinTarget>,
         args: Vec<String>,
+        /// Sidecar archives installed beside the main binary under their own
+        /// `name`, each sha-pinned per platform like `targets`.
+        companions: Vec<ResolvedPinCompanion>,
     },
     Npm {
         package: String,
@@ -148,6 +160,12 @@ pub enum ResolvedPinSource {
         package_subdir: Option<String>,
         executable_relpath: String,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedPinCompanion {
+    pub name: String,
+    pub targets: std::collections::BTreeMap<String, ResolvedPinTarget>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,6 +242,7 @@ mod tests {
             pinned_version: pinned.map(String::from),
             manifest_version: recorded.map(String::from),
             checksum_matches,
+            missing_companion: None,
         }
     }
 
@@ -252,6 +271,21 @@ mod tests {
             plan_artifact(&facts(Some("0.25.0"), None, None), false),
             Some(ReinstallReason::MissingRecordedVersion {
                 pinned: "0.25.0".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn a_missing_pinned_companion_forces_reinstall() {
+        // An install made before the companion was pinned is version-current
+        // and checksum-clean, yet still incomplete: the sidecar must be
+        // materialized without the user pressing Reinstall.
+        let mut facts = facts(Some("rust-v0.147.0"), Some("rust-v0.147.0"), Some(true));
+        facts.missing_companion = Some("codex-code-mode-host".into());
+        assert_eq!(
+            plan_artifact(&facts, false),
+            Some(ReinstallReason::MissingCompanion {
+                name: "codex-code-mode-host".into(),
             })
         );
     }
