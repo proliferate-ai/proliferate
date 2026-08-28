@@ -86,6 +86,11 @@ fn runtime_event_command_error(
 
 pub struct LiveSessionHandle {
     pub session_id: String,
+    /// The vault seat id this actor's launch serves (`SessionLaunch::
+    /// serving_seat_id`, never token material). `None` for non-seat routes
+    /// and replay actors. Immutable for the actor's lifetime — the read path
+    /// threads it onto the wire `Session` (slice 7 data enabler 2).
+    pub serving_seat_id: Option<String>,
     pub(in crate::live::sessions) command_tx: mpsc::Sender<SessionCommand>,
     pub(in crate::live::sessions) event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub(in crate::live::sessions) busy: Arc<AtomicBool>,
@@ -161,6 +166,7 @@ impl LiveSessionExecutionSnapshot {
 impl LiveSessionHandle {
     pub(in crate::live::sessions) fn new(
         session_id: impl Into<String>,
+        serving_seat_id: Option<String>,
         command_tx: mpsc::Sender<SessionCommand>,
         event_tx: broadcast::Sender<SessionEventEnvelope>,
         native_session_id: Option<String>,
@@ -168,6 +174,7 @@ impl LiveSessionHandle {
     ) -> Self {
         Self {
             session_id: session_id.into(),
+            serving_seat_id,
             command_tx,
             event_tx,
             busy: Arc::new(AtomicBool::new(false)),
@@ -556,7 +563,14 @@ impl LiveSessionHandle {
         native_session_id: Option<String>,
         phase: SessionExecutionPhase,
     ) -> Self {
-        let handle = Self::new(session_id, command_tx, event_tx, native_session_id, phase);
+        let handle = Self::new(
+            session_id,
+            None,
+            command_tx,
+            event_tx,
+            native_session_id,
+            phase,
+        );
         handle.relinquish_event_sequence();
         handle.actor_finished.complete();
         handle

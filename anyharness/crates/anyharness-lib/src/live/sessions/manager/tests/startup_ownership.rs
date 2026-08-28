@@ -13,6 +13,7 @@ async fn ready_generation_does_not_remove_replacement_pending_startup() {
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let old_handle = Arc::new(LiveSessionHandle::new(
         "session-1",
+        None,
         old_command_tx,
         event_tx.clone(),
         None,

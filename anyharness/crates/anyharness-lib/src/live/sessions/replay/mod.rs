@@ -48,6 +48,9 @@ pub fn spawn_replay_actor(
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);
     let handle = Arc::new(LiveSessionHandle::new(
         session_id.clone(),
+        // A replay actor re-renders history; it launches no agent process
+        // and therefore serves no seat.
+        None,
         command_tx,
         config.event_tx.clone(),
         Some(native_session_id.clone()),

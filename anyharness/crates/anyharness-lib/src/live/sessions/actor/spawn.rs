@@ -109,6 +109,7 @@ pub fn spawn_session_actor_pending(
     let event_tx = config.event_tx.clone();
     let handle = Arc::new(LiveSessionHandle::new(
         session_id.clone(),
+        config.launch.serving_seat_id.clone(),
         command_tx,
         event_tx.clone(),
         None,

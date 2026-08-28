@@ -220,6 +220,10 @@ impl SessionRecord {
             active_goal: None,
             activity: None,
             origin: self.origin.as_ref().map(OriginContext::to_contract),
+            // Live-actor state, not a durable-row fact: `SessionView::
+            // into_contract` overwrites this from the live handle when one
+            // holds the session (slice 7 data enabler 2).
+            serving_seat_id: None,
         }
     }
 }

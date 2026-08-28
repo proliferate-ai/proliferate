@@ -137,6 +137,11 @@ pub struct Session {
     pub activity: Option<SessionActivity>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
+    /// The vault seat id the live actor is serving this session on — the
+    /// launch-confirmed fact, read-only (never token material). `None` for
+    /// non-seat routes and whenever no live actor holds the session.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub serving_seat_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -264,7 +269,10 @@ impl fmt::Debug for CreateSessionRequest {
             .field("agent_kind", &self.agent_kind)
             .field("model_id", &self.model_id)
             .field("mode_id", &self.mode_id)
-            .field("control_keys", &self.control_values.keys().collect::<Vec<_>>())
+            .field(
+                "control_keys",
+                &self.control_values.keys().collect::<Vec<_>>(),
+            )
             .field(
                 "system_prompt_append_count",
                 &self

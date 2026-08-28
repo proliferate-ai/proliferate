@@ -1,8 +1,8 @@
-use std::{path::PathBuf, sync::Arc};
 use anyharness_contract::v1::{
     SessionEvent, SessionEventEnvelope, SessionExecutionPhase, SessionInfoUpdatePayload,
     SubagentTurnCompletedPayload, SubagentTurnOutcome,
 };
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::time::{sleep, Duration};
 
@@ -441,6 +441,7 @@ async fn runtime_event_injection_waits_for_stale_finalizer_then_uses_replacement
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let stale_handle = Arc::new(LiveSessionHandle::new(
         "session-1",
+        None,
         stale_command_tx,
         event_tx.clone(),
         Some("native-stale".to_string()),

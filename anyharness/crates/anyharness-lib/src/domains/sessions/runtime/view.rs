@@ -29,6 +29,9 @@ pub struct SessionView {
     pub record: SessionRecord,
     pub live_config: Option<SessionLiveConfigSnapshot>,
     pub execution_summary: SessionExecutionSummary,
+    /// The live actor's serving seat (`LiveSessionHandle::serving_seat_id`).
+    /// `None` for non-seat routes and when no live actor holds the session.
+    pub serving_seat_id: Option<String>,
     pub pending_prompts: Vec<PendingPromptRecord>,
     pub active_goal: Option<Goal>,
     pub loops: Vec<Loop>,
@@ -42,6 +45,7 @@ impl SessionView {
         let mut session = self
             .record
             .to_contract_with_details(self.live_config, Some(self.execution_summary));
+        session.serving_seat_id = self.serving_seat_id;
         session.pending_prompts = self
             .pending_prompts
             .iter()
@@ -76,7 +80,7 @@ impl SessionRuntime {
         record: &SessionRecord,
         live_config: Option<SessionLiveConfigSnapshot>,
     ) -> anyhow::Result<SessionView> {
-        let execution_summary = self.session_execution_summary(record).await;
+        let (execution_summary, serving_seat_id) = self.live_session_facts(record).await;
         let pending_prompts = self
             .session_service
             .store()
@@ -88,6 +92,7 @@ impl SessionRuntime {
             record: record.clone(),
             live_config,
             execution_summary,
+            serving_seat_id,
             pending_prompts,
             active_goal,
             loops,
@@ -125,10 +130,12 @@ impl SessionRuntime {
         let mut views = Vec::with_capacity(records.len());
         for record in records {
             let (processes, agents) = rosters_by_session.remove(&record.id).unwrap_or_default();
+            let (execution_summary, serving_seat_id) = self.live_session_facts(record).await;
             views.push(SessionView {
                 record: record.clone(),
                 live_config: live_configs.remove(&record.id),
-                execution_summary: self.session_execution_summary(record).await,
+                execution_summary,
+                serving_seat_id,
                 pending_prompts: pending_prompts.remove(&record.id).unwrap_or_default(),
                 active_goal: active_goals.remove(&record.id),
                 loops: loops_by_session.remove(&record.id).unwrap_or_default(),
@@ -137,6 +144,25 @@ impl SessionRuntime {
             });
         }
         Ok(views)
+    }
+
+    /// One live-handle lookup serving both facts a view needs from the
+    /// actor: the execution summary and the seat the actor is serving
+    /// (`None` when no live actor holds the session).
+    async fn live_session_facts(
+        &self,
+        record: &SessionRecord,
+    ) -> (SessionExecutionSummary, Option<String>) {
+        match self.acp_manager.get_handle(&record.id).await {
+            Some(handle) => {
+                let snapshot = handle.execution_snapshot().await;
+                (
+                    summarize_session_record(record, Some(&snapshot)),
+                    handle.serving_seat_id.clone(),
+                )
+            }
+            None => (summarize_session_record(record, None), None),
+        }
     }
 
     pub async fn session_execution_summary(
@@ -292,6 +318,7 @@ mod tests {
                 record: record.clone(),
                 live_config,
                 execution_summary: execution_summary.clone(),
+                serving_seat_id: None,
                 pending_prompts: pending_prompts.clone(),
                 active_goal: None,
                 loops: Vec::new(),
@@ -304,6 +331,56 @@ mod tests {
                 serde_json::to_string(&view.into_contract()).expect("serialize view"),
             );
         }
+    }
+
+    /// Slice 7 data enabler 2: the live actor's serving seat rides the wire
+    /// `Session` through the one serializer, and a seatless session carries
+    /// no `servingSeatId` key at all (the durable record knows nothing of
+    /// seats — only the view's live-handle fact sets the field).
+    #[test]
+    fn into_contract_threads_the_live_actors_serving_seat() {
+        let record = session_record("claude");
+        let execution_summary = SessionExecutionSummary {
+            phase: SessionExecutionPhase::Running,
+            has_live_handle: true,
+            pending_interactions: Vec::new(),
+            updated_at: record.updated_at.clone(),
+        };
+
+        let seatless = SessionView {
+            record: record.clone(),
+            live_config: None,
+            execution_summary: execution_summary.clone(),
+            serving_seat_id: None,
+            pending_prompts: Vec::new(),
+            active_goal: None,
+            loops: Vec::new(),
+            processes: Vec::new(),
+            agents: Vec::new(),
+        }
+        .into_contract();
+        assert_eq!(seatless.serving_seat_id, None);
+        let json = serde_json::to_value(&seatless).expect("serialize seatless session");
+        assert!(json.get("servingSeatId").is_none());
+
+        let seated = SessionView {
+            record,
+            live_config: None,
+            execution_summary,
+            serving_seat_id: Some("seat-vault-id-1".to_string()),
+            pending_prompts: Vec::new(),
+            active_goal: None,
+            loops: Vec::new(),
+            processes: Vec::new(),
+            agents: Vec::new(),
+        }
+        .into_contract();
+        assert_eq!(seated.serving_seat_id.as_deref(), Some("seat-vault-id-1"));
+        let json = serde_json::to_value(&seated).expect("serialize seat-serving session");
+        assert_eq!(
+            json.get("servingSeatId"),
+            Some(&serde_json::json!("seat-vault-id-1"))
+        );
     }
 }
 

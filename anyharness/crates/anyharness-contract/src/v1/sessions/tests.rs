@@ -114,6 +114,7 @@ fn session_omits_removed_thinking_fields() {
         active_goal: None,
         activity: None,
         origin: None,
+        serving_seat_id: None,
     };
 
     let json = serde_json::to_value(&session).expect("serialize session");
@@ -124,6 +125,60 @@ fn session_omits_removed_thinking_fields() {
         json.get("title"),
         Some(&serde_json::json!("Fix auth refresh"))
     );
+    // A seatless session never carries the key at all — clients can treat
+    // absence and null alike, and non-seat wire payloads stay unchanged.
+    assert!(json.get("servingSeatId").is_none());
+}
+
+#[test]
+fn session_serving_seat_id_rides_the_wire_and_round_trips() {
+    let mut session = Session {
+        id: "session-1".to_string(),
+        workspace_id: "workspace-1".to_string(),
+        agent_kind: "claude".to_string(),
+        native_session_id: None,
+        model_id: None,
+        requested_model_id: None,
+        mode_id: None,
+        requested_mode_id: None,
+        title: None,
+        action_capabilities: SessionActionCapabilities::default(),
+        live_config: None,
+        execution_summary: None,
+        mcp_binding_summaries: None,
+        status: SessionStatus::Idle,
+        created_at: "2026-03-25T00:00:00Z".to_string(),
+        updated_at: "2026-03-25T00:00:00Z".to_string(),
+        last_prompt_at: None,
+        closed_at: None,
+        dismissed_at: None,
+        pending_prompts: vec![],
+        active_goal: None,
+        activity: None,
+        origin: None,
+        serving_seat_id: Some("01234567-89ab-4def-8123-456789abcdef".to_string()),
+    };
+
+    let json = serde_json::to_value(&session).expect("serialize session");
+    assert_eq!(
+        json.get("servingSeatId"),
+        Some(&serde_json::json!("01234567-89ab-4def-8123-456789abcdef"))
+    );
+
+    let round_tripped: Session =
+        serde_json::from_value(json).expect("deserialize session with a serving seat");
+    assert_eq!(
+        round_tripped.serving_seat_id.as_deref(),
+        Some("01234567-89ab-4def-8123-456789abcdef")
+    );
+
+    // A payload without the key (an older runtime, or a seatless route)
+    // deserializes to None rather than erroring.
+    session.serving_seat_id = None;
+    let json = serde_json::to_value(&session).expect("serialize seatless session");
+    let round_tripped: Session =
+        serde_json::from_value(json).expect("deserialize seatless session");
+    assert_eq!(round_tripped.serving_seat_id, None);
 }
 
 #[test]
