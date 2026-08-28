@@ -15,6 +15,14 @@ export interface FeatureFlags {
    * current panes untouched.
    */
   agentAuthEvidencePanes: boolean;
+  /**
+   * Workflows follow-up rung 8: offer the workspace's workflow-run context
+   * docs as a second candidate source in the composer's `@` mention menu. OFF
+   * leaves the menu file-only; the chip node and its serialization stay
+   * registered either way so an existing draft containing a context-doc
+   * mention still round-trips.
+   */
+  chatContextDocMentions: boolean;
 }
 
 function readEnvFlag(value: string | undefined): boolean {
@@ -24,6 +32,9 @@ function readEnvFlag(value: string | undefined): boolean {
 const DEFAULT_FLAGS: FeatureFlags = {
   agentAuthEvidencePanes: readEnvFlag(
     import.meta.env.VITE_AGENT_AUTH_EVIDENCE_PANES,
+  ),
+  chatContextDocMentions: readEnvFlag(
+    import.meta.env.VITE_CHAT_CONTEXT_DOC_MENTIONS,
   ),
 };
 

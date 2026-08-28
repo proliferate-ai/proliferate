@@ -19,7 +19,7 @@ import {
   findComposerMenuTrigger,
   type ComposerMenuTrigger,
 } from "#product/lib/domain/chat/composer/composer-menu-trigger";
-import type { FileMentionResult } from "#product/lib/domain/chat/composer/file-mention-search";
+import type { ChatMentionMenuItem } from "#product/lib/domain/chat/composer/chat-mention-items";
 import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 import {
   finishOrCancelMeasurementOperation,
@@ -32,6 +32,7 @@ import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug
 import { ComposerFileMentionSearch } from "#product/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
 import { $createComposerFileMentionNode } from "#product/components/workspace/chat/input/ComposerFileMentionNode";
+import { $createComposerContextDocMentionNode } from "#product/components/workspace/chat/input/ComposerContextDocMentionNode";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import {
   getComposerEditorContext,
@@ -153,19 +154,24 @@ export function ComposerCommandEditor({
     editorRef.current.focus();
   }, [replaceEndFor]);
 
-  const handleSelectFileMention = useCallback((result: FileMentionResult) => {
+  const handleSelectMention = useCallback((item: ChatMentionMenuItem) => {
     const activeTrigger = commandTriggerRef.current;
     if (activeTrigger?.kind !== "mention" || !editorRef.current) return;
     // The mention is inserted as a chip node plus a trailing space, not as
     // markdown text: markdown typed in one shot never reaches the shortcut
     // plugin, so building the node here is what makes the draft show a chip
-    // immediately. Serialization back to `[name](path)` is the node's job.
+    // immediately. Serialization back to the mention token is the node's job.
     replaceComposerRangeWithNodes(
       editorRef.current,
       activeTrigger.start,
       replaceEndFor(activeTrigger),
       () => [
-        $createComposerFileMentionNode(result.path, result.name),
+        item.kind === "contextDoc"
+          ? $createComposerContextDocMentionNode(
+              { runId: item.doc.runId, filename: item.doc.filename },
+              item.doc.filename,
+            )
+          : $createComposerFileMentionNode(item.file.path, item.file.name),
         $createTextNode(" "),
       ],
     );
@@ -181,13 +187,13 @@ export function ComposerCommandEditor({
   const mentions = useChatFileMentionMenu({
     open: !!mentionTrigger,
     query: mentionTrigger?.query ?? "",
-    onSelect: handleSelectFileMention,
+    onSelect: handleSelectMention,
   });
   const openMenu = slashTrigger ? search : mentionTrigger ? mentions : null;
   const openMenuItemCount = slashTrigger
     ? search.commands.length
     : mentionTrigger
-      ? mentions.results.length
+      ? mentions.items.length
       : 0;
 
   const handleKeyDown = useCallback((event: ChatComposerKeyboardEvent) => {
@@ -241,7 +247,7 @@ export function ComposerCommandEditor({
     />
   ) : mentionTrigger ? (
     <ComposerFileMentionSearch
-      results={mentions.results}
+      items={mentions.items}
       highlightedIndex={mentions.highlightedIndex}
       listRef={mentions.listRef}
       query={mentionTrigger.query}
@@ -249,7 +255,7 @@ export function ComposerCommandEditor({
       isError={mentions.isError}
       isPending={mentions.isPending}
       runtimeReady={mentions.runtimeReady}
-      onSelect={handleSelectFileMention}
+      onSelect={handleSelectMention}
       onRowMouseEnter={mentions.handleRowMouseEnter}
       setRowRef={mentions.setRowRef}
       getRowId={mentions.getRowId}

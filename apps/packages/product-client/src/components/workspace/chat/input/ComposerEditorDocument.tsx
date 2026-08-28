@@ -31,6 +31,10 @@ import {
   ComposerFileMentionNode,
 } from "#product/components/workspace/chat/input/ComposerFileMentionNode";
 import {
+  COMPOSER_CONTEXT_DOC_MENTION_TRANSFORMER,
+  ComposerContextDocMentionNode,
+} from "#product/components/workspace/chat/input/ComposerContextDocMentionNode";
+import {
   COMPOSER_CODE_TRANSFORMER,
   isComposerOffsetInsideOpenCodeFence,
 } from "#product/components/workspace/chat/input/ComposerCodeFenceMarkdown";
@@ -50,6 +54,7 @@ export const COMPOSER_NODES = [
   ListItemNode,
   LinkNode,
   ComposerFileMentionNode,
+  ComposerContextDocMentionNode,
 ];
 
 /**
@@ -71,6 +76,10 @@ export const COMPOSER_INPUT_TRANSFORMERS: Transformer[] = [
   BOLD_UNDERSCORE,
   ITALIC_STAR,
   ITALIC_UNDERSCORE,
+  // The context-doc transformer's `@doc:` destination contains a `:`, which the
+  // file transformer's body excludes, so the order of the two mention
+  // transformers carries no meaning — neither can match the other's text.
+  COMPOSER_CONTEXT_DOC_MENTION_TRANSFORMER,
   COMPOSER_FILE_MENTION_TRANSFORMER,
 ];
 

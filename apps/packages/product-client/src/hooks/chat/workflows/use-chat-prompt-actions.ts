@@ -19,10 +19,8 @@ import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use
 import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
 import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
-import {
-  EMPTY_CHAT_DRAFT,
-  serializeChatDraftToPrompt,
-} from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { EMPTY_CHAT_DRAFT } from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { serializeChatDraftToOutgoingPrompt } from "#product/lib/domain/chat/composer/outgoing-prompt";
 import {
   createEmptySessionRecord,
   putSessionRecord,
@@ -140,7 +138,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     const currentDraft = draftKey
       ? useChatInputStore.getState().draftByWorkspaceId[draftKey] ?? EMPTY_CHAT_DRAFT
       : EMPTY_CHAT_DRAFT;
-    const text = input?.text.trim() ?? serializeChatDraftToPrompt(currentDraft).trim();
+    const text = input?.text.trim() ?? serializeChatDraftToOutgoingPrompt(currentDraft).trim();
     const blocks = input?.blocks ?? [{ type: "text" as const, text }];
     const attachmentSnapshots = input?.attachmentSnapshots ?? [];
     const preserveDraft = input?.preserveDraft ?? false;
