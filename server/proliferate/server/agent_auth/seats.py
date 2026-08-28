@@ -74,8 +74,10 @@ def compose_seat_title(
 
     An explicit ``title`` wins verbatim. Otherwise the entered email becomes
     "Max seat · <email>" (the spec §2 DDL's example shape) and the optional
-    plan tier rides as a display tag — there is no plan column; the title IS
-    the label the pane renders. With nothing entered, seats number themselves.
+    plan tier rides as a display tag. The same sheet fields also persist
+    structurally (``seat_email``/``seat_plan``, slice 7) — the composed title
+    is the display fallback for seats minted before those columns and for
+    renamed seats' headline. With nothing entered, seats number themselves.
     """
     if title:
         base = title
@@ -162,6 +164,8 @@ async def create_seat(
         user_id=user_id,
         title=composed_title,
         value=token,
+        seat_email=email,
+        seat_plan=plan_tier,
     )
     log_cloud_event(
         "agent_seat_minted",

@@ -100,13 +100,17 @@ async def create_agent_seat(
     user_id: UUID,
     title: str,
     value: str,
+    seat_email: str | None = None,
+    seat_plan: str | None = None,
 ) -> AgentApiKeyRecord:
     """Create a seat vault entry (``kind='anthropic_subscription'``).
 
     ``value`` is the mint flow's captured ``claude setup-token`` credential —
     one opaque secret string, encrypted exactly like a bare key. The title is
     the user-entered seat identity (email + optional plan tag), composed by
-    the service layer; this store only persists it.
+    the service layer; ``seat_email``/``seat_plan`` persist the same sheet
+    fields structurally so a renamed seat keeps its identity without title
+    parsing. This store only persists all three.
     """
     if not title.strip():
         raise ValueError("Agent seat title must not be empty.")
@@ -119,6 +123,8 @@ async def create_agent_seat(
         value_ciphertext=encrypt_text(value, secret=settings.cloud_secret_key),
         encryption_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
         redacted_hint=build_redacted_hint(value),
+        seat_email=seat_email,
+        seat_plan=seat_plan,
         status=AGENT_API_KEY_STATUS_ACTIVE,
     )
     db.add(row)

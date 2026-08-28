@@ -64,6 +64,11 @@ class AgentApiKeyResponse(AgentGatewayBaseModel):
     title: str
     kind: AgentApiKeyKind
     redacted_hint: str = Field(alias="redactedHint")
+    # Structured seat identity (seat kind only; slice 7's mint sheet fields).
+    # Null for non-seat entries and for seats minted before the columns
+    # existed — rows then render the title fallback.
+    seat_email: str | None = Field(alias="seatEmail")
+    seat_plan: str | None = Field(alias="seatPlan")
     status: str
     created_at: str = Field(alias="createdAt")
 
@@ -382,6 +387,8 @@ def api_key_payload(record: AgentApiKeyRecord) -> AgentApiKeyResponse:
         title=record.title,
         kind=record.kind,  # type: ignore[arg-type]
         redacted_hint=record.redacted_hint,
+        seat_email=record.seat_email,
+        seat_plan=record.seat_plan,
         status=record.status,
         created_at=record.created_at.isoformat(),
     )

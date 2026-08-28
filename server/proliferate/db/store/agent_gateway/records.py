@@ -22,6 +22,11 @@ class AgentApiKeyRecord:
     # decrypted payload; that stays server-internal (materialization + the
     # authenticated GET /state read only).
     kind: str = "api_key"
+    # Structured seat identity (seat kind only): the mint sheet's email and
+    # plan tag. None for non-seat rows and for seats minted before the
+    # columns existed — readers fall back to the title.
+    seat_email: str | None = None
+    seat_plan: str | None = None
 
 
 @dataclass(frozen=True)

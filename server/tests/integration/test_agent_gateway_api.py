@@ -1283,15 +1283,22 @@ class TestSeatMintIntakeAndRender:
         seat = minted.json()
         assert seat["kind"] == "anthropic_subscription"
         assert seat["title"] == "Max seat · ops@acme.com · Max 20x"
+        # Structured seat identity (slice 7): the same sheet fields ride their
+        # own wire fields, so a renamed seat never needs title parsing.
+        assert seat["seatEmail"] == "ops@acme.com"
+        assert seat["seatPlan"] == "Max 20x"
         assert SEAT_TOKEN not in minted.text
 
-        # The token never lands in the DB in the clear.
+        # The token never lands in the DB in the clear; the sheet fields land
+        # in their own columns.
         row = (
             await db_session.execute(
                 select(AgentApiKey).where(AgentApiKey.id == uuid.UUID(str(seat["id"])))
             )
         ).scalar_one()
         assert SEAT_TOKEN not in row.value_ciphertext
+        assert row.seat_email == "ops@acme.com"
+        assert row.seat_plan == "Max 20x"
 
         # Wire the pool seat selection and render the surface.
         put = await _put_selections(
@@ -1339,6 +1346,10 @@ class TestSeatMintIntakeAndRender:
         )
         assert first.status_code == 200, first.text
         assert first.json()["title"] == "Max seat 1"
+        # No sheet fields entered → the structured identity stays null (the
+        # title is then the row's only label, same as pre-column seats).
+        assert first.json()["seatEmail"] is None
+        assert first.json()["seatPlan"] is None
         second = await client.post(
             "/v1/cloud/agent-auth/keys",
             headers=headers,

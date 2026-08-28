@@ -38,6 +38,8 @@ def api_key_record(row: AgentApiKey) -> AgentApiKeyRecord:
         created_at=row.created_at,
         updated_at=row.updated_at,
         kind=row.kind,
+        seat_email=row.seat_email,
+        seat_plan=row.seat_plan,
     )
 
 

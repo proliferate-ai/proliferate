@@ -75,6 +75,13 @@ class AgentApiKey(Base):
     value_ciphertext: Mapped[str] = mapped_column(Text)
     encryption_key_id: Mapped[str] = mapped_column(Text)
     redacted_hint: Mapped[str] = mapped_column(Text)
+    # Structured seat identity (seat mint sheet fields, slice 7): set only for
+    # kind='anthropic_subscription' rows minted with an email/plan tag, so a
+    # renamed seat keeps its identity without title parsing. NULL for every
+    # non-seat row and for seats minted before these columns existed — readers
+    # fall back to the title.
+    seat_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    seat_plan: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(Text, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
