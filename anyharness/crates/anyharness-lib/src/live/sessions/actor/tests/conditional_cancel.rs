@@ -146,6 +146,7 @@ async fn spawn_harness_with_capabilities(
     let (event_tx, _event_rx) = broadcast::channel::<SessionEventEnvelope>(64);
     let handle = Arc::new(LiveSessionHandle::new(
         SESSION_ID,
+        None,
         command_tx,
         event_tx.clone(),
         Some(NATIVE_SESSION_ID.to_string()),

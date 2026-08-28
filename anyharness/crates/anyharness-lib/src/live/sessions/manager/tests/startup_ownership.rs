@@ -116,6 +116,7 @@ async fn startup_timeout_keeps_generation_until_sequence_owner_finishes() {
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let handle = Arc::new(LiveSessionHandle::new(
         "session-1",
+        None,
         command_tx,
         event_tx,
         None,
@@ -269,6 +270,7 @@ async fn aborted_startup_waiter_does_not_strand_generation_registries() {
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let handle = Arc::new(LiveSessionHandle::new(
         "session-1",
+        None,
         command_tx,
         event_tx,
         None,

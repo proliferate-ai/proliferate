@@ -256,6 +256,7 @@ pub(super) async fn spawn_actor_with_real_child(agent_script: &str) -> RealChild
     let (event_tx, _event_rx) = broadcast::channel::<SessionEventEnvelope>(16);
     let handle = Arc::new(LiveSessionHandle::new(
         SESSION_ID,
+        None,
         command_tx.clone(),
         event_tx.clone(),
         Some(NATIVE_SESSION_ID.to_string()),

@@ -84,15 +84,15 @@ async def _seed_pre_revision_seat(database_url: str) -> uuid.UUID:
     return seat_id
 
 
-async def _seat_identity(database_url: str, seat_id: uuid.UUID) -> tuple[str, str | None, str | None]:
+async def _seat_identity(
+    database_url: str, seat_id: uuid.UUID
+) -> tuple[str, str | None, str | None]:
     engine = create_async_engine(database_url, echo=False)
     try:
         async with engine.begin() as conn:
             row = (
                 await conn.execute(
-                    text(
-                        f"SELECT title, seat_email, seat_plan FROM {_TABLE} WHERE id = :id"
-                    ),
+                    text(f"SELECT title, seat_email, seat_plan FROM {_TABLE} WHERE id = :id"),
                     {"id": seat_id},
                 )
             ).one()
@@ -111,7 +111,7 @@ async def test_seat_identity_upgrade_leaves_existing_seats_null() -> None:
         await asyncio.to_thread(_upgrade, database_url, "head")
 
         columns = await _columns(database_url)
-        assert _SEAT_COLUMNS <= columns.keys()
+        assert columns.keys() >= _SEAT_COLUMNS
         assert all(columns[name] for name in _SEAT_COLUMNS), "seat columns must be nullable"
         title, seat_email, seat_plan = await _seat_identity(database_url, seat_id)
         # No backfill, by ruling: the composed title stays the row's only
@@ -125,7 +125,7 @@ async def test_seat_identity_upgrade_leaves_existing_seats_null() -> None:
 async def test_seat_identity_downgrade_drops_the_columns() -> None:
     async with temporary_database("seat_identity_downgrade") as (_name, database_url):
         await asyncio.to_thread(_upgrade, database_url, _REVISION)
-        assert _SEAT_COLUMNS <= (await _columns(database_url)).keys()
+        assert (await _columns(database_url)).keys() >= _SEAT_COLUMNS
 
         await asyncio.to_thread(_downgrade, database_url, _DOWN_REVISION)
 

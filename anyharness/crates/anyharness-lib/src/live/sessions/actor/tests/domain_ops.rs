@@ -125,6 +125,7 @@ async fn live_plan_context(
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(16);
     let handle = Arc::new(LiveSessionHandle::new(
         "session-1",
+        None,
         command_tx,
         event_tx.clone(),
         Some("native-1".to_string()),
