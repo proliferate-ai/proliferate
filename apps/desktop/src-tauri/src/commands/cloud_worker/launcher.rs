@@ -427,13 +427,13 @@ fn development_worker_candidates() -> Vec<PathBuf> {
     for repo in repos {
         candidates.push(
             repo.join("target")
-                .join(&target)
+                .join(target)
                 .join("debug")
                 .join(WORKER_BINARY),
         );
         candidates.push(
             repo.join("target")
-                .join(&target)
+                .join(target)
                 .join("release")
                 .join(WORKER_BINARY),
         );

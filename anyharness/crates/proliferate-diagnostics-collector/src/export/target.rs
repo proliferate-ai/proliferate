@@ -27,7 +27,10 @@ impl fmt::Debug for ExportTarget {
         formatter
             .debug_struct("ExportTarget")
             .field("logs_url", &self.logs_url.as_str())
-            .field("headers", &format_args!("{} [REDACTED]", self.headers.len()))
+            .field(
+                "headers",
+                &format_args!("{} [REDACTED]", self.headers.len()),
+            )
             .finish()
     }
 }
@@ -129,11 +132,20 @@ mod tests {
     #[test]
     fn appends_the_logs_path_once() {
         let target = parse("https://collector.example", "").expect("valid endpoint");
-        assert_eq!(target.logs_url.as_str(), "https://collector.example/v1/logs");
+        assert_eq!(
+            target.logs_url.as_str(),
+            "https://collector.example/v1/logs"
+        );
         let target = parse("https://collector.example/", "").expect("valid endpoint");
-        assert_eq!(target.logs_url.as_str(), "https://collector.example/v1/logs");
+        assert_eq!(
+            target.logs_url.as_str(),
+            "https://collector.example/v1/logs"
+        );
         let target = parse("https://collector.example/v1/logs", "").expect("valid endpoint");
-        assert_eq!(target.logs_url.as_str(), "https://collector.example/v1/logs");
+        assert_eq!(
+            target.logs_url.as_str(),
+            "https://collector.example/v1/logs"
+        );
         let target = parse("https://collector.example/proxy", "").expect("valid endpoint");
         assert_eq!(
             target.logs_url.as_str(),
@@ -207,8 +219,8 @@ mod tests {
 
     #[test]
     fn debug_never_prints_a_header_value() {
-        let target = parse("https://collector.example", "x-team=secret-value")
-            .expect("valid destination");
+        let target =
+            parse("https://collector.example", "x-team=secret-value").expect("valid destination");
         let rendered = format!("{target:?}");
         assert!(!rendered.contains("secret-value"), "{rendered}");
         assert!(rendered.contains("[REDACTED]"), "{rendered}");

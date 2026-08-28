@@ -230,7 +230,10 @@ pub fn remove_worktree_force(
     repo_root_path: &str,
     worktree_path: &str,
 ) -> Result<WorktreeRemoveOutcome, WorktreeRemoveError> {
-    let fail = |detail: String| WorktreeRemoveError::Failed { path: worktree_path.to_string(), detail };
+    let fail = |detail: String| WorktreeRemoveError::Failed {
+        path: worktree_path.to_string(),
+        detail,
+    };
     let run = || {
         Command::new("git")
             .args(["worktree", "remove", "--force", "--force", worktree_path])
@@ -256,7 +259,9 @@ pub fn remove_worktree_force(
     if retry.status.success() || retry.status.code() == Some(128) {
         return Ok(WorktreeRemoveOutcome::Removed);
     }
-    Err(fail(String::from_utf8_lossy(&retry.stderr).trim().to_string()))
+    Err(fail(
+        String::from_utf8_lossy(&retry.stderr).trim().to_string(),
+    ))
 }
 
 pub fn ref_exists(repo_root: &Path, ref_name: &str) -> bool {

@@ -297,6 +297,10 @@ mod unix {
         Ok(())
     }
 
+    // `msg_controllen` is socklen_t (u32) on macOS but usize on Linux: the
+    // casts below are real on macOS and no-ops on Linux, where this lint
+    // fires. Platform skew — the Linux CI job is the clippy authority.
+    #[allow(clippy::unnecessary_cast)]
     fn collect_descriptors(
         message: &libc::msghdr,
         control_capacity: usize,

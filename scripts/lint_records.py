@@ -63,11 +63,7 @@ class RuleSet:
             ) from None
 
     def exception_sites(self, rule_id: str) -> set[tuple[str, str]]:
-        return {
-            (entry.path, entry.site)
-            for entry in self.exceptions
-            if entry.rule == rule_id
-        }
+        return {(entry.path, entry.site) for entry in self.exceptions if entry.rule == rule_id}
 
 
 def _display_path(path: Path) -> str:
@@ -100,7 +96,17 @@ def _load_rules_file(path: Path) -> list[Rule]:
     for raw in data.get("rule", []):
         missing = [
             key
-            for key in ("id", "title", "owner", "status", "enforced_by", "mode", "rule", "alternative", "why")
+            for key in (
+                "id",
+                "title",
+                "owner",
+                "status",
+                "enforced_by",
+                "mode",
+                "rule",
+                "alternative",
+                "why",
+            )
             if key not in raw
         ]
         if missing:
@@ -177,9 +183,11 @@ def load(owner: str | None = None) -> RuleSet:
                     if rule.id in ruleset.rules:
                         _fail(path, f"duplicate rule id {rule.id}")
                     ruleset.rules[rule.id] = rule
-    dangling = {
-        entry.rule for entry in ruleset.exceptions
-    } - set(ruleset.rules) if owner is None else set()
+    dangling = (
+        {entry.rule for entry in ruleset.exceptions} - set(ruleset.rules)
+        if owner is None
+        else set()
+    )
     if dangling:
         raise SystemExit(
             f"lint_records: exception ledger cites unknown rule ids: {sorted(dangling)}"

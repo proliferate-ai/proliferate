@@ -84,9 +84,7 @@ impl SessionEventSink {
                     // items that follow — land in their own turn group. The
                     // matching close happens in publish_persisted_events when
                     // the goal quiesces.
-                    if non_transcript_chunk_event(payload.meta.as_ref())
-                        == Some("goal_updated")
-                    {
+                    if non_transcript_chunk_event(payload.meta.as_ref()) == Some("goal_updated") {
                         self.ensure_open_turn();
                     }
                     outcome
@@ -241,8 +239,7 @@ impl SessionEventSink {
                 // id here. Only bind it when a prompt turn is genuinely open
                 // with a known user item — never misattribute a replayed
                 // history echo (no open turn). The actor persists opencode-only.
-                if let Some(vendor_message_id) =
-                    chunk.message_id.as_ref().map(|id| id.to_string())
+                if let Some(vendor_message_id) = chunk.message_id.as_ref().map(|id| id.to_string())
                 {
                     if let Some((turn_id, item_id)) = self.current_user_message_identity() {
                         outcome.needs_actor = Some(ActorBoundUpdate::OpencodeUserMessageId {

@@ -239,11 +239,10 @@ mod tests {
     #[test]
     fn ambient_flag_var_contributes_to_classification() {
         let composed: BTreeMap<String, String> = BTreeMap::new();
-        let ambient: BTreeMap<String, String> = [
-            ("CLAUDE_CODE_USE_BEDROCK".to_string(), "1".to_string()),
-        ]
-        .into_iter()
-        .collect();
+        let ambient: BTreeMap<String, String> =
+            [("CLAUDE_CODE_USE_BEDROCK".to_string(), "1".to_string())]
+                .into_iter()
+                .collect();
 
         let facts = collect_launch_env_facts_with_ambient("claude", &composed, &ambient);
 
@@ -259,18 +258,14 @@ mod tests {
     /// (b) Composed value beats ambient value for the same flag var.
     #[test]
     fn composed_flag_value_wins_over_ambient() {
-        let composed: BTreeMap<String, String> = [(
-            "CLAUDE_CODE_USE_BEDROCK".to_string(),
-            "0".to_string(),
-        )]
-        .into_iter()
-        .collect();
-        let ambient: BTreeMap<String, String> = [(
-            "CLAUDE_CODE_USE_BEDROCK".to_string(),
-            "1".to_string(),
-        )]
-        .into_iter()
-        .collect();
+        let composed: BTreeMap<String, String> =
+            [("CLAUDE_CODE_USE_BEDROCK".to_string(), "0".to_string())]
+                .into_iter()
+                .collect();
+        let ambient: BTreeMap<String, String> =
+            [("CLAUDE_CODE_USE_BEDROCK".to_string(), "1".to_string())]
+                .into_iter()
+                .collect();
 
         let facts = collect_launch_env_facts_with_ambient("claude", &composed, &ambient);
 
@@ -294,12 +289,10 @@ mod tests {
     #[test]
     fn ambient_non_registry_var_ignored() {
         let composed: BTreeMap<String, String> = BTreeMap::new();
-        let ambient: BTreeMap<String, String> = [(
-            "TOTALLY_UNKNOWN_VAR_XYZ".to_string(),
-            "secret".to_string(),
-        )]
-        .into_iter()
-        .collect();
+        let ambient: BTreeMap<String, String> =
+            [("TOTALLY_UNKNOWN_VAR_XYZ".to_string(), "secret".to_string())]
+                .into_iter()
+                .collect();
 
         let facts = collect_launch_env_facts_with_ambient("claude", &composed, &ambient);
 
@@ -345,12 +338,10 @@ mod tests {
     #[test]
     fn ambient_secret_var_contributes_presence_only() {
         let composed: BTreeMap<String, String> = BTreeMap::new();
-        let ambient: BTreeMap<String, String> = [(
-            "ANTHROPIC_API_KEY".to_string(),
-            "sk-ant-secret".to_string(),
-        )]
-        .into_iter()
-        .collect();
+        let ambient: BTreeMap<String, String> =
+            [("ANTHROPIC_API_KEY".to_string(), "sk-ant-secret".to_string())]
+                .into_iter()
+                .collect();
 
         let facts = collect_launch_env_facts_with_ambient("claude", &composed, &ambient);
 
@@ -362,20 +353,18 @@ mod tests {
         );
         // Value must NOT appear anywhere — secrets are presence-only.
         for fact in &facts {
-            match fact {
-                CredentialFact::EnvFlag { var, .. } => {
-                    assert_ne!(var, "ANTHROPIC_API_KEY", "secret var must not produce EnvFlag");
-                }
-                _ => {}
+            if let CredentialFact::EnvFlag { var, .. } = fact {
+                assert_ne!(
+                    var, "ANTHROPIC_API_KEY",
+                    "secret var must not produce EnvFlag"
+                );
             }
         }
     }
 
     fn temp_home() -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "anyharness-route-facts-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("anyharness-route-facts-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(path.join("agent-auth")).expect("create agent-auth dir");
         path
     }

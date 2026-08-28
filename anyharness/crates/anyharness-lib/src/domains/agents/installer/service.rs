@@ -102,9 +102,8 @@ impl InstallError {
 
 fn io_error_kind(error: &std::io::Error) -> InstallErrorKind {
     use std::io::ErrorKind;
-    match error.kind() {
-        ErrorKind::PermissionDenied => return InstallErrorKind::InUse,
-        _ => {}
+    if error.kind() == ErrorKind::PermissionDenied {
+        return InstallErrorKind::InUse;
     }
     if let Some(code) = error.raw_os_error() {
         // ENOSPC = disk full; ETXTBSY / EBUSY = live artifact in use.
@@ -206,14 +205,14 @@ pub fn install_agent_with_pins_and_progress(
             runtime_home,
             reporter,
         )? {
-            reporter.map(|reporter| {
+            if let Some(reporter) = reporter {
                 reporter.report(
                     &ArtifactRole::NativeCli,
                     InstallProgressPhase::Completed,
                     0,
                     None,
                 )
-            });
+            }
             tracing::info!(
                 agent = descriptor.kind.as_str(),
                 role = "native_cli",
@@ -244,14 +243,14 @@ pub fn install_agent_with_pins_and_progress(
             reporter,
         )?;
         if let Some(result) = result {
-            reporter.map(|reporter| {
+            if let Some(reporter) = reporter {
                 reporter.report(
                     &ArtifactRole::AgentProcess,
                     InstallProgressPhase::Completed,
                     0,
                     None,
                 )
-            });
+            }
             tracing::info!(
                 agent = descriptor.kind.as_str(),
                 role = "agent_process",
@@ -262,14 +261,14 @@ pub fn install_agent_with_pins_and_progress(
             );
             installed.push(result);
         } else {
-            reporter.map(|reporter| {
+            if let Some(reporter) = reporter {
                 reporter.report(
                     &ArtifactRole::AgentProcess,
                     InstallProgressPhase::Skipped,
                     0,
                     None,
                 )
-            });
+            }
         }
     }
 
@@ -382,7 +381,9 @@ fn install_pinned_role(
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
     let target_path = managed_pinned_binary_path(runtime_home, kind, role);
     if is_valid_executable(&target_path) && !options.reinstall {
-        reporter.map(|reporter| reporter.report(role, InstallProgressPhase::Skipped, 0, None));
+        if let Some(reporter) = reporter {
+            reporter.report(role, InstallProgressPhase::Skipped, 0, None)
+        }
         return Ok(None);
     }
     let result = pinned::install_binary_or_archive_from_pin(
@@ -450,10 +451,7 @@ mod install_error_kind_tests {
                 InstallErrorKind::Other,
             ),
             (
-                InstallError::Io(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "gone",
-                )),
+                InstallError::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "gone")),
                 InstallErrorKind::Other,
             ),
         ];

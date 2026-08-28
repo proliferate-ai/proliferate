@@ -94,12 +94,10 @@ pub struct Receiver {
 
 pub async fn start() -> Receiver {
     let state = Arc::new(ReceiverState::default());
-    let listener = tokio::net::TcpListener::bind(SocketAddrV4::new(
-        std::net::Ipv4Addr::LOCALHOST,
-        0,
-    ))
-    .await
-    .expect("receiver listener");
+    let listener =
+        tokio::net::TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 0))
+            .await
+            .expect("receiver listener");
     let address = listener.local_addr().expect("receiver address");
     let router = Router::new()
         .route("/v1/logs", post(logs))
@@ -241,10 +239,18 @@ pub fn validate_export_logs_service_request(payload: &Value) -> Result<(), Strin
 
 fn validate_resource_logs(entry: &Value) -> Result<(), String> {
     let entry = object(entry, "ResourceLogs")?;
-    only_keys(entry, "ResourceLogs", &["resource", "scopeLogs", "schemaUrl"])?;
+    only_keys(
+        entry,
+        "ResourceLogs",
+        &["resource", "scopeLogs", "schemaUrl"],
+    )?;
     if let Some(resource) = entry.get("resource") {
         let resource = object(resource, "Resource")?;
-        only_keys(resource, "Resource", &["attributes", "droppedAttributesCount"])?;
+        only_keys(
+            resource,
+            "Resource",
+            &["attributes", "droppedAttributesCount"],
+        )?;
         validate_attributes(resource.get("attributes"), "Resource.attributes")?;
     }
     let scope_logs = entry
@@ -384,7 +390,12 @@ fn validate_any_value(value: &Value, what: &str) -> Result<(), String> {
         "arrayValue" => {
             let array = object(inner, &format!("{what} arrayValue"))?;
             only_keys(array, &format!("{what} arrayValue"), &["values"])?;
-            for item in array.get("values").and_then(Value::as_array).into_iter().flatten() {
+            for item in array
+                .get("values")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
                 validate_any_value(item, what)?;
             }
             Ok(())
@@ -392,7 +403,12 @@ fn validate_any_value(value: &Value, what: &str) -> Result<(), String> {
         "kvlistValue" => {
             let list = object(inner, &format!("{what} kvlistValue"))?;
             only_keys(list, &format!("{what} kvlistValue"), &["values"])?;
-            for item in list.get("values").and_then(Value::as_array).into_iter().flatten() {
+            for item in list
+                .get("values")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
                 validate_key_value(item, &format!("{what} kvlistValue"))?;
             }
             Ok(())

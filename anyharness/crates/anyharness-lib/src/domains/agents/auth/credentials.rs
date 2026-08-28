@@ -208,7 +208,7 @@ fn aggregate_credential_state(auth: &AuthSpec, slots: &[ResolvedAuthSlot]) -> Cr
         }
         AuthReadinessPolicy::AllRequiredSlots => {
             let required = required_slots(slots);
-            if required.is_empty() || required.iter().all(|slot| slot_is_ready(slot)) {
+            if required.is_empty() || required.iter().all(slot_is_ready) {
                 return CredentialState::Ready;
             }
             preferred_missing_state(required)
@@ -284,6 +284,7 @@ fn detect_shared_local_auth(provider: ProviderId, home_dir: &Path) -> LocalAuthD
 /// Checks:
 /// - `~/.local/share/opencode/auth.json` for provider entries with `type: "api"` + `key`
 ///   or `type: "oauth"` + `access`, or `type: "wellknown"` + `token`.
+///
 /// OAuth entries with an `expires` field (seconds epoch) in the past are treated as expired.
 fn detect_opencode_local_auth(home_dir: &Path) -> LocalAuthDetection {
     let path = home_dir

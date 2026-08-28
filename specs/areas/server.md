@@ -160,13 +160,13 @@ Columns are domains and rows are layers. Within a column, API calls service, ser
 | Failure mode | Grid rule | Prevention |
 | --- | --- | --- |
 | Foreign writes corrupt shared state | `SRV-STORE-5` | Only the owner's service writes |
-| Store changes surprise foreign readers | `SRV-STORE-6` | Exact consumer ledger makes reads queryable |
+| Store changes surprise foreign readers | `GAP` #1714 | Target: an exact consumer ledger makes reads queryable — unbuilt gate, no record (the do-nothing gap records were deleted 2026-08-27; a record returns with its engine) |
 | Errors vary by call site | `SRV-ERR-1` | Product errors plus one transport handler |
-| Shared code becomes a junk drawer | `SRV-LIB-1` | Three audiences and a two-consumer entry ticket |
-| Auth decisions hide in orchestration | `SRV-SEAM-1` | Four endpoint-composed boundaries |
-| Background work has divergent failure models | `SRV-BG-1` | One Celery execution model |
-| Service cycles block refactors | `SRV-TOPO-1` | `GAP`: generated graph and acyclic-component gate are documented rules, not gates (#1714) |
-| Third-party packages leak into product code | `SRV-PKG-1` | `GAP`: explicit package-audience map is a documented rule, not a gate (#1714) |
+| Shared code becomes a junk drawer | `GAP` #1714 | Target: three lib/ audiences and a two-consumer entry ticket — unbuilt gate, no record |
+| Auth decisions hide in orchestration | `GAP` #1714 | Target: four endpoint-composed boundaries — unbuilt gate, no record |
+| Background work has divergent failure models | `GAP` #1714 | Target: one Celery execution model — unbuilt gate, no record |
+| Service cycles block refactors | `GAP` #1714 | Target: generated graph and acyclic-component gate — unbuilt gate, no record |
+| Third-party packages leak into product code | `GAP` #1714 | Target: explicit package-audience map — unbuilt gate, no record |
 
 ## Foreign-Read Doctrine
 
@@ -265,7 +265,7 @@ Everything above this section is the current operating model, with each rule's e
   `Billing reconciliation` (deleted, cull part 2),
   [anonymous telemetry](../../server/proliferate/server/anonymous_telemetry/worker.py),
   and three Agent Gateway loops in
-  [worker.py](../../server/proliferate/server/agent_auth/worker.py).
+  [worker.py](../../server/proliferate/server/ai_gateway/worker.py).
   The one-off
   [enqueue_health.py](../../server/proliferate/background/enqueue_health.py)
   command also remains a direct background-store client. These paths require a
@@ -1650,7 +1650,7 @@ Everything above this section is the current operating model, with each rule's e
       installations currently emit this heartbeat without a Celery worker or
       Beat process, so a Beat-only move would silently remove it.
 - [ ] **Agent Gateway enrollment backfill.**
-      [`_backfill_loop`](../../server/proliferate/server/agent_auth/worker.py)
+      [`_backfill_loop`](../../server/proliferate/server/ai_gateway/worker.py)
       is started by `start_agent_gateway_enrollment_backfill` from the
       [`main.py` lifespan](../../server/proliferate/main.py) when both
       Agent Gateway and `run_background_workers` are enabled. It runs
@@ -1661,7 +1661,7 @@ Everything above this section is the current operating model, with each rule's e
       the existing feature and worker gates, immediate-first-run cadence, and
       retry and replay behavior are characterized for a Beat-fired task.
 - [ ] **Agent Gateway usage import.**
-      [`_usage_import_loop`](../../server/proliferate/server/agent_auth/worker.py)
+      [`_usage_import_loop`](../../server/proliferate/server/ai_gateway/worker.py)
       is started by `start_agent_gateway_usage_import` from the
       [`main.py` lifespan](../../server/proliferate/main.py) under the
       same Agent Gateway and `run_background_workers` gates. It runs
@@ -1673,7 +1673,7 @@ Everything above this section is the current operating model, with each rule's e
       behavior are characterized for a Beat-fired task, including safe replay
       of LiteLLM spend-log paging and credit-exhaustion effects.
 - [ ] **Agent Gateway LLM top-up.**
-      [`_topup_loop`](../../server/proliferate/server/agent_auth/worker.py)
+      [`_topup_loop`](../../server/proliferate/server/ai_gateway/worker.py)
       is started by `start_agent_gateway_llm_topups` from the
       [`main.py` lifespan](../../server/proliferate/main.py) only when
       Agent Gateway, top-up configuration, and `run_background_workers` enable

@@ -12,8 +12,8 @@ use super::installer::reconcile::execution::{
 };
 use super::installer::seed::AgentSeedStore;
 use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
-use super::model::*;
 use super::launch_probe::{LaunchProbeService, PokeReason};
+use super::model::*;
 use super::readiness::service::resolve_agent;
 use super::registry::built_in_registry;
 
@@ -459,6 +459,19 @@ impl AgentRuntime {
     /// them rather than a redundant download.
     pub fn spawn_startup_pass(self: Arc<Self>) {
         tokio::spawn(async move {
+            // Zeroth step: the native-migration bridge's one-time seed pass
+            // (`route_auth::native_bridge`). Runs before any install so the
+            // "existing native harness" it reads is the machine as the user
+            // left it, not one this pass is about to change. One file read
+            // plus per-harness credential detection; inert after the first
+            // run on a runtime home.
+            {
+                let home = self.runtime_home.clone();
+                let _ = tokio::task::spawn_blocking(move || {
+                    super::route_auth::seed_native_bridge_at_startup(&home);
+                })
+                .await;
+            }
             if self.seed_store.hydration_pending() {
                 let home = self.runtime_home.clone();
                 let store = self.seed_store.clone();

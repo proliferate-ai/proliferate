@@ -17,19 +17,21 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,
     LLM_CREDIT_SOURCE_ADMIN,
+    LLM_CREDIT_SOURCE_FREE_SIGNUP,
 )
 from proliferate.db.models.auth import AuthIdentity, User
 from proliferate.db.models.agent_gateway import (
     AgentAuthSelection,
     AgentGatewayEnrollment,
     AgentGatewayEnrollmentKey,
+    LlmCreditGrant,
 )
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store
@@ -39,9 +41,9 @@ from proliferate.db.store.billing_subjects import (
     ensure_personal_billing_subject,
 )
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
-from proliferate.server.agent_auth import enrollment as enrollment_service
-from proliferate.server.agent_auth.budget import get_gateway_enrollment_for_user
-from proliferate.server.agent_auth.enrollment import (
+from proliferate.server.ai_gateway import enrollment as enrollment_service
+from proliferate.server.ai_gateway.budget import get_gateway_enrollment_for_user
+from proliferate.server.ai_gateway.enrollment import (
     _parse_budget,
     _remaining_credit_budget_raw,
     backfill_enrollments,
@@ -317,6 +319,49 @@ async def test_d1_signup_produces_the_org_only_shape(
     assert len(stub_litellm.minted) == len(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS)
     balance = await store.get_remaining_credit_usd(db_session, org_subject.id)
     assert balance.granted_usd == Decimal("5")
+
+
+@pytest.mark.asyncio
+async def test_enrollment_and_free_signup_grant_land_in_the_same_flow(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """Regression for the founder-org zero-grant miss (slice 5).
+
+    The founder org reached day 8 with an enrollment row and NO free_signup
+    grant row: the grant path silently skipped (its allocation was stranded
+    on a deleted account's orphaned org subject) and nothing ever revisited
+    the SYNCED enrollment. The signup-grant contract this pins: with the
+    gateway enabled and a linked GitHub identity, one ``ensure_org_enrollment``
+    call leaves BOTH the enrollment row and the free_signup grant row — the
+    grant lands in the same flow, never as a separable hook that can be lost.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id)
+    org_id = await _place_in_org(db_session, user_id=user_id)
+
+    enrollment = await ensure_org_enrollment(db_session, org_id, user_id)
+
+    assert enrollment.sync_status == "synced"
+    grants = (
+        (
+            await db_session.execute(
+                select(LlmCreditGrant).where(
+                    LlmCreditGrant.billing_subject_id == enrollment.billing_subject_id,
+                    LlmCreditGrant.source == LLM_CREDIT_SOURCE_FREE_SIGNUP,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(grants) == 1
+    assert grants[0].amount_usd == Decimal("5")
+    expected_ref = f"{LLM_CREDIT_SOURCE_FREE_SIGNUP}:{enrollment.billing_subject_id}"
+    assert grants[0].source_ref == expected_ref
 
 
 @pytest.mark.asyncio

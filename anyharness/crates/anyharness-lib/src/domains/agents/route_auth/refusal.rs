@@ -120,7 +120,11 @@ impl LaunchRefusal {
             } => Some(Self::AllSeatsCooling {
                 earliest_reset_epoch_s: *earliest_reset_epoch_s,
             }),
-            RouteAuthError::MalformedStateFile { .. }
+            // `NoConfiguredSource` stays outside the vocabulary map until the
+            // zero-rows cutover gives it a live producer (module doc above);
+            // the HTTP surface renders its own Display until then.
+            RouteAuthError::NoConfiguredSource { .. }
+            | RouteAuthError::MalformedStateFile { .. }
             | RouteAuthError::StaleStateRevision { .. }
             | RouteAuthError::SelectionIncomplete { .. }
             | RouteAuthError::UnsupportedRoute { .. }
@@ -174,7 +178,11 @@ pub(crate) fn all_seats_cooling_copy(earliest_reset_epoch_s: i64) -> String {
 /// Format a reset instant for refusal copy, in the machine's LOCAL time:
 /// same local day as now → "3:05 PM"; a different day → "Aug 27, 3:05 PM".
 pub(crate) fn format_reset_time(reset_epoch_s: i64) -> String {
-    format_reset_time_in(reset_epoch_s, chrono::Utc::now().timestamp(), &chrono::Local)
+    format_reset_time_in(
+        reset_epoch_s,
+        chrono::Utc::now().timestamp(),
+        &chrono::Local,
+    )
 }
 
 /// The injectable core of [`format_reset_time`]: `now` and the timezone are
@@ -260,10 +268,12 @@ mod tests {
              Pick or fix a method in Settings → Agents."
         );
         // Shape/IO problems are not refusals.
-        assert!(LaunchRefusal::from_route_auth_error(&RouteAuthError::Materialize {
-            detail: "disk full".into()
-        })
-        .is_none());
+        assert!(
+            LaunchRefusal::from_route_auth_error(&RouteAuthError::Materialize {
+                detail: "disk full".into()
+            })
+            .is_none()
+        );
     }
 
     /// The frozen `NoConfiguredSource` sentence names the product a person
@@ -335,7 +345,10 @@ mod tests {
             .unwrap()
             .timestamp();
         // In UTC these are the same day...
-        assert_eq!(format_reset_time_in(evening_utc, now, &chrono::Utc), "8:00 PM");
+        assert_eq!(
+            format_reset_time_in(evening_utc, now, &chrono::Utc),
+            "8:00 PM"
+        );
         // ...in IST the reset is already tomorrow (01:30 AM, Aug 27).
         assert_eq!(
             format_reset_time_in(evening_utc, now, &ist),

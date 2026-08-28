@@ -1,7 +1,7 @@
 /**
  * Shared admin/org handle for Tier-2 cell handlers (PR 4, workstream D).
  *
- * Adapted from `tests/intent/specs/billing/_fixtures.ts`'s `adminContext` /
+ * Adapted from the deleted intent suite's `_fixtures.ts` `adminContext` /
  * `adminUserId` — same claim-once-and-reuse idempotency, minus the Playwright
  * `test.beforeAll` skip wiring (the harness already returns every financial
  * cell `blocked` when Stripe is unresolved; a case handler only runs once the
@@ -16,8 +16,8 @@ import {
   ADMIN_PASSWORD,
   ensureInstanceClaimed,
   passwordLogin,
-} from "../../../../intent/stack/seed.ts";
-import { ensureProductReady } from "../../../../intent/stack/billing-seed.ts";
+} from "./stack/seed.ts";
+import { ensureProductReady } from "./stack/billing-seed.ts";
 
 export interface AdminContext {
   token: string;

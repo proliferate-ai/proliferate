@@ -219,7 +219,7 @@ impl SessionEventSink {
         let engine_terminal_outcome = envelopes
             .iter()
             .filter_map(|envelope| goal_event_terminal_outcome(&envelope.event))
-            .last();
+            .next_back();
         if self.engine_initiated_turn
             && envelopes
                 .iter()

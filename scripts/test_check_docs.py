@@ -60,12 +60,12 @@ class DocumentationIntegrityTest(unittest.TestCase):
             "specs/systems/workspaces/README.md",
             "specs/engineering/testing/README.md",
             "specs/engineering/observability/README.md",
-            "specs/engineering/shipping/README.md",
+            "specs/engineering/ci-cd/README.md",
             "specs/engineering/security/README.md",
             "specs/engineering/customer-loop/README.md",
             "guides/operating/README.md",
             "guides/operating/analytics/README.md",
-            "specs/engineering/testing/manual-release-qa.md",
+            "guides/deploying/manual-release-qa.md",
         }
 
         self.assertLessEqual(required_indexes, set(check_docs.REQUIRED_READMES))
@@ -79,20 +79,19 @@ class DocumentationIntegrityTest(unittest.TestCase):
         self.assertNotIn(legacy_testing_root, check_docs.REQUIRED_READMES)
 
     def test_specs_roots_are_closed(self) -> None:
-        self.assertEqual(
-            check_docs.SPECS_ROOTS, {"areas", "systems", "engineering"}
-        )
+        self.assertEqual(check_docs.SPECS_ROOTS, {"areas", "systems", "engineering"})
         self.assertEqual(
             check_docs.SPECS_ROOT_FILES,
             {
                 "README.md",
                 "ARCHITECTURE.md",
                 "DESIGN_SYSTEM.md",
+                "BUILDING.md",
                 "product-sense.md",
                 "authoring.md",
             },
         )
-        self.assertIn("specs/engineering/testing/standard.md", check_docs.REQUIRED_READMES)
+        self.assertIn("specs/engineering/testing/README.md", check_docs.REQUIRED_READMES)
         legacy_testing_standard = "specs/" + "TESTING.md"
         self.assertNotIn(legacy_testing_standard, check_docs.REQUIRED_READMES)
 
@@ -136,8 +135,9 @@ class DocumentationIntegrityTest(unittest.TestCase):
                 path.write_text(content, encoding="utf-8")
                 paths.append(path)
 
-            with patch.object(check_docs, "ROOT", root), patch.object(
-                check_docs, "tracked_files", return_value=paths
+            with (
+                patch.object(check_docs, "ROOT", root),
+                patch.object(check_docs, "tracked_files", return_value=paths),
             ):
                 return check_docs.check_markdown()
 
@@ -216,14 +216,10 @@ Setext Heading
                 "nested/guide.md": "# Present\n",
             }
         )
-        self.assertEqual(
-            {error.rule_id for error in errors}, {"PROD-DOCS-6", "PROD-DOCS-4"}
-        )
+        self.assertEqual({error.rule_id for error in errors}, {"PROD-DOCS-6", "PROD-DOCS-4"})
         diagnostics = rendered(errors)
         self.assertTrue(any("missing heading anchor" in error for error in diagnostics))
-        self.assertTrue(
-            any("leaves the repository" in error for error in diagnostics)
-        )
+        self.assertTrue(any("leaves the repository" in error for error in diagnostics))
 
     def test_structured_data(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -242,8 +238,9 @@ Setext Heading
                     return [valid_yaml]
                 return []
 
-            with patch.object(check_docs, "ROOT", root), patch.object(
-                check_docs, "tracked_files", side_effect=files
+            with (
+                patch.object(check_docs, "ROOT", root),
+                patch.object(check_docs, "tracked_files", side_effect=files),
             ):
                 errors = check_docs.check_structured_data()
 
@@ -318,8 +315,9 @@ Setext Heading
                     return [invalid_yaml]
                 return []
 
-            with patch.object(check_docs, "ROOT", root), patch.object(
-                check_docs, "tracked_files", side_effect=files
+            with (
+                patch.object(check_docs, "ROOT", root),
+                patch.object(check_docs, "tracked_files", side_effect=files),
             ):
                 errors = check_docs.check_structured_data()
 
@@ -343,8 +341,9 @@ Setext Heading
                     return [catalog]
                 return []
 
-            with patch.object(check_docs, "ROOT", root), patch.object(
-                check_docs, "tracked_files", side_effect=files
+            with (
+                patch.object(check_docs, "ROOT", root),
+                patch.object(check_docs, "tracked_files", side_effect=files),
             ):
                 errors = check_docs.check_structured_data()
 

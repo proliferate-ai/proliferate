@@ -1,6 +1,6 @@
 """Integration tests for the control-plane gateway verification loop (FR-3).
 
-Covers ``proliferate.server.agent_auth.verification.run_verification``
+Covers ``proliferate.server.ai_gateway.verification.run_verification``
 against a real Postgres session and a fake ``list_models``: the expected-set
 diff verdicts (ok / missing / extra), the config-unavailable degraded fallback,
 error-means-no-overwrite, key-material redaction, and the worker's flag gating.
@@ -14,7 +14,7 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
+from proliferate.config import Settings, settings
 from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED,
     AGENT_GATEWAY_VERIFICATION_STATUS_OK,
@@ -24,8 +24,9 @@ from proliferate.db.models.organizations import Organization
 from proliferate.db.store import agent_gateway as store
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.integrations import litellm
-from proliferate.server.agent_auth import verification
-from proliferate.server.agent_auth.worker import start_agent_gateway_verification
+from proliferate.server.ai_gateway import verification
+from proliferate.server.ai_gateway.verification import VerificationResult
+from proliferate.server.ai_gateway.worker import start_agent_gateway_verification
 
 
 async def _create_enrollment(db_session: AsyncSession) -> uuid.UUID:
@@ -210,11 +211,18 @@ async def test_error_does_not_overwrite_a_prior_verdict(
 
 @pytest.mark.asyncio
 async def test_reported_error_redacts_the_virtual_key_everywhere(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """Rewritten for the aggregated error shape (safety-panel MAJOR 3): the
+    old per-key report_critical is gone, so this now proves redaction on BOTH
+    surviving surfaces — the per-tick warning log and the aggregated
+    report_critical (forced by pinning the alert floor to 1)."""
     enrollment_id = await _create_enrollment(db_session)
     await _mint_key(db_session, enrollment_id, "claude")
     _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}})
+    monkeypatch.setattr(verification, "_ERROR_ALERT_FLOOR", 1)
 
     # An error whose message embeds the decrypted virtual key (as a stringified
     # HTTP client error carrying an Authorization header might).
@@ -222,10 +230,7 @@ async def test_reported_error_redacts_the_virtual_key_everywhere(
     _fake_list_models(monkeypatch, {"sk-litellm-claude": leaky})
 
     # Exercise the REAL report_critical logging path (not a stub) by capturing on
-    # its own logger ("proliferate.critical" does not propagate). report_critical
-    # calls logger.exception, which formats the AMBIENT exception's traceback, so
-    # the key must be absent from the message, the exc_info-formatted traceback,
-    # AND any chained __context__/__cause__.
+    # its own logger ("proliferate.critical" does not propagate).
     records: list[logging.LogRecord] = []
 
     class _Capture(logging.Handler):
@@ -243,20 +248,274 @@ async def test_reported_error_redacts_the_virtual_key_everywhere(
     # the real emit path (the one carrying the exc_info traceback) actually runs.
     critical_logger.disabled = False
     try:
-        await verification.run_verification(db_session)
+        with caplog.at_level(logging.WARNING, logger="proliferate.server.ai_gateway.verification"):
+            await verification.run_verification(db_session)
     finally:
         critical_logger.removeHandler(handler)
         critical_logger.setLevel(previous_level)
         critical_logger.disabled = previous_disabled
 
     critical_records = [r for r in records if "CRITICAL_FAILURE" in r.getMessage()]
-    assert critical_records, "an errored key must reach the critical logger"
+    assert critical_records, "an outage-shaped tick must reach the critical logger"
     for record in critical_records:
         rendered = record.getMessage()
         if record.exc_info is not None:
             rendered += "\n" + logging.Formatter().formatException(record.exc_info)
         assert "sk-litellm-claude" not in rendered, "the virtual key must never be logged"
         assert "[redacted]" in record.getMessage()
+    # The per-tick warning (the sub-threshold surface) must be redacted too.
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings, "an errored tick must log the aggregate warning"
+    for record in warnings:
+        assert "sk-litellm-claude" not in record.getMessage()
+        assert "sk-litellm-claude" not in str(getattr(record, "sample_error", ""))
+        assert "[redacted]" in str(getattr(record, "sample_error", ""))
+
+
+@pytest.mark.asyncio
+async def test_errors_below_the_floor_warn_without_paging(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A PARTIAL failure below the floor is a warning, never a page (MAJOR 3).
+
+    The old per-key report_critical turned a LiteLLM outage into hundreds of
+    fatal alerts per tick. One of two keys failing clears neither paging
+    condition — not the floor, and not the total-outage rule — so it only
+    aggregates into a single warning with counts.
+    """
+    enrollment_id = await _create_enrollment(db_session)
+    await _mint_key(db_session, enrollment_id, "claude")
+    await _mint_key(db_session, enrollment_id, "codex")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}, "codex": {"gpt-5"}})
+    _fake_list_models(
+        monkeypatch,
+        {
+            "sk-litellm-claude": litellm.LiteLLMIntegrationError("boom", "transient"),
+            "sk-litellm-codex": ["gpt-5"],
+        },
+    )
+    paged: list[Exception] = []
+    monkeypatch.setattr(
+        verification, "report_critical", lambda error, **kwargs: paged.append(error)
+    )
+
+    with caplog.at_level(logging.WARNING, logger="proliferate.server.ai_gateway.verification"):
+        result = await verification.run_verification(db_session)
+
+    assert result.checked == 2
+    assert result.errored == 1
+    assert result.ok == 1
+    assert paged == []  # below the floor, and not a total outage: no fatal alert
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings and any(getattr(r, "errored", None) == 1 for r in warnings)
+
+
+@pytest.mark.asyncio
+async def test_total_outage_pages_even_below_the_floor(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A small fleet at 100% failure pages regardless of the floor.
+
+    Safety-panel N2: with ``_ERROR_ALERT_FLOOR`` at 10, a deployment holding
+    nine or fewer active keys would never page even with every single key
+    failing — a total outage reported as a warning. Every-key-errored is now
+    its own paging condition.
+    """
+    enrollment_id = await _create_enrollment(db_session)
+    await _mint_key(db_session, enrollment_id, "claude")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}})
+    _fake_list_models(
+        monkeypatch,
+        {"sk-litellm-claude": litellm.LiteLLMIntegrationError("down", "transient")},
+    )
+    paged: list[tuple[Exception, dict[str, object]]] = []
+    monkeypatch.setattr(
+        verification,
+        "report_critical",
+        lambda error, **kwargs: paged.append((error, kwargs)),
+    )
+
+    result = await verification.run_verification(db_session)
+
+    assert result.checked == 1
+    assert result.errored == 1
+    assert len(paged) == 1  # one aggregated alert, not one per key
+    error, kwargs = paged[0]
+    assert isinstance(error, verification.AgentGatewayVerificationErrors)
+    assert kwargs["tags"] == {"domain": "agent_gateway", "action": "verification"}
+
+
+@pytest.mark.asyncio
+async def test_persistent_outage_pages_once_then_again_after_recovery(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit F4: page the OUTAGE, not every tick of it.
+
+    A persistent outage used to page on every interval (~96 pages/day at the
+    default), and N2 extended that population to small deployments where one
+    permanently broken key pages forever. The loop now carries an
+    already-paged flag: consecutive outage ticks page once, and the first
+    clean tick clears it so a LATER outage pages again.
+    """
+    enrollment_id = await _create_enrollment(db_session)
+    await _mint_key(db_session, enrollment_id, "claude")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet"}})
+    paged: list[Exception] = []
+    monkeypatch.setattr(
+        verification, "report_critical", lambda error, **kwargs: paged.append(error)
+    )
+    down = {"sk-litellm-claude": litellm.LiteLLMIntegrationError("down", "transient")}
+    healthy = {"sk-litellm-claude": ["claude-sonnet"]}
+
+    async def tick(mapping: dict[str, object], already_paged: bool) -> bool:
+        _fake_list_models(monkeypatch, mapping)
+        targets = await verification.collect_verification_targets(db_session)
+        observations = await verification.probe_verification_targets(targets)
+        result = await verification.record_verification_verdicts(
+            db_session, observations, outage_already_paged=already_paged
+        )
+        return result.outage_detected
+
+    # Two consecutive total-outage ticks: exactly one page.
+    outage_paged = await tick(down, False)
+    assert outage_paged is True
+    assert len(paged) == 1
+    outage_paged = await tick(down, outage_paged)
+    assert outage_paged is True
+    assert len(paged) == 1  # suppressed, not re-paged
+
+    # A clean tick clears the flag.
+    outage_paged = await tick(healthy, outage_paged)
+    assert outage_paged is False
+    assert len(paged) == 1
+
+    # A NEW outage pages again.
+    outage_paged = await tick(down, outage_paged)
+    assert outage_paged is True
+    assert len(paged) == 2
+
+
+@pytest.mark.asyncio
+async def test_flapping_provider_is_one_incident_not_two_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit F6: the flag releases on an ERROR-FREE tick, not any non-outage one.
+
+    Clearing on ``outage_detected`` alone let a provider flapping across the
+    outage bar (outage → partial → outage) page twice for a single incident.
+
+    This drives ``worker._verification_loop`` ITSELF — the seam that owns the
+    flag — rather than re-implementing its rule in the test. A test that copies
+    the expression asserts the copy against itself and would stay green if the
+    production line were reverted; this one fails.
+    """
+    from proliferate.server.ai_gateway import worker
+
+    # Each scripted tick is (errored, checked): a total outage, a partial
+    # failure that still errors, then a fully error-free pass.
+    script = [(2, 2), (1, 2), (2, 2), (0, 2), (2, 2)]
+    seen_flags: list[bool] = []
+    paged: list[bool] = []
+
+    class _Stop(Exception):
+        pass
+
+    async def fake_run_once(*, outage_already_paged: bool = False) -> VerificationResult:
+        seen_flags.append(outage_already_paged)
+        errored, checked = script[len(seen_flags) - 1]
+        # `outage_detected` comes from PRODUCTION's rule, not a copy of it, and
+        # the page decision mirrors phase 3's (outage and not already paged).
+        outage_detected = verification.is_outage(checked=checked, errored=errored)
+        if outage_detected and not outage_already_paged:
+            paged.append(True)
+        return VerificationResult(
+            checked=checked,
+            ok=checked - errored,
+            misconfigured=0,
+            errored=errored,
+            outage_detected=outage_detected,
+        )
+
+    async def fake_sleep(_seconds: float) -> None:
+        if len(seen_flags) >= len(script):
+            raise _Stop
+
+    monkeypatch.setattr(worker, "run_verification_once", fake_run_once)
+    monkeypatch.setattr(worker.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(_Stop):
+        await worker._verification_loop()
+
+    # The LOOP forwarded the flag: set by the first outage, HELD through the
+    # partial tick (same incident, still erroring), released only by the
+    # error-free tick — so the final outage is a new incident.
+    assert seen_flags == [False, True, True, True, False]
+    assert len(paged) == 2  # one page per incident, not one per outage tick
+
+
+def test_expected_config_resolves_from_source_tree() -> None:
+    """The expected-set source must resolve without monkeypatching.
+
+    Regression for the #2222 move: ``_CONFIG_PATH`` was born one directory
+    deeper and its ``parents[...]`` index silently pointed outside the tree
+    after the file moved, so ``load_expected_access_groups()`` degraded to
+    ``None`` forever and the misconfigured drift verdict could never fire
+    from real config. Pins the path (and a real parse) against the next move.
+    """
+    assert verification._CONFIG_PATH.exists(), (
+        f"verification expected-set config not found at {verification._CONFIG_PATH}"
+    )
+    expected = verification.load_expected_access_groups()
+    assert expected is not None
+    assert expected.get("claude"), "the claude access group must grant at least one model"
+
+
+def test_verification_enabled_by_default() -> None:
+    """Slice-5 pin: the verification loop is ON by default.
+
+    config.yaml is settled (#2249), so the drift detector runs unless a
+    deployment opts out. Pinned on the field DEFAULT (not a constructed
+    Settings(), which would absorb the ambient environment).
+    """
+    assert Settings.model_fields["agent_gateway_verification_enabled"].default is True
+
+
+@pytest.mark.asyncio
+async def test_corrected_config_clears_misconfigured(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The delivery spec's proof: corrected config → status clears.
+
+    One tick against a wrong observed set records ``misconfigured`` with its
+    delta; a second tick against the matching set flips the SAME key back to
+    ``ok`` with the delta cleared — the loop converges on the fix instead of
+    pinning the first bad verdict forever.
+    """
+    enrollment_id = await _create_enrollment(db_session)
+    key_id = await _mint_key(db_session, enrollment_id, "claude")
+    _fake_expected(monkeypatch, {"claude": {"claude-sonnet", "claude-opus"}})
+
+    # Tick 1: the key observes a wrong model set (claude-opus missing).
+    _fake_list_models(monkeypatch, {"sk-litellm-claude": ["claude-sonnet"]})
+    first = await verification.run_verification(db_session)
+    assert first.misconfigured == 1
+    keys = await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
+    verdict = next(k for k in keys if k.id == key_id)
+    assert verdict.verification_status == AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED
+    assert verdict.verification_delta is not None
+    assert "claude-opus" in verdict.verification_delta
+
+    # Tick 2: config.yaml was fixed and redeployed — the observed set matches.
+    _fake_list_models(monkeypatch, {"sk-litellm-claude": ["claude-sonnet", "claude-opus"]})
+    second = await verification.run_verification(db_session)
+    assert second.ok == 1
+    assert second.misconfigured == 0
+    keys = await store.list_active_enrollment_keys(db_session, enrollment_id=enrollment_id)
+    verdict = next(k for k in keys if k.id == key_id)
+    assert verdict.verification_status == AGENT_GATEWAY_VERIFICATION_STATUS_OK
+    assert verdict.verification_delta is None
 
 
 @pytest.mark.asyncio

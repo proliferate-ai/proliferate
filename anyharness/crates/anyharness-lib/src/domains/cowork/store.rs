@@ -222,7 +222,6 @@ impl CoworkStore {
                  WHERE parent_session_id = ?2",
                 params![closed_at, parent_session_id],
             )
-            .map_err(Into::into)
         })
     }
 

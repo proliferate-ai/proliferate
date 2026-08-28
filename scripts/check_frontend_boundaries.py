@@ -10,12 +10,12 @@ violation sites live in `lints/frontend/exceptions.toml` as fine-grained
 
 from __future__ import annotations
 
-from collections import defaultdict
-from dataclasses import dataclass
-from pathlib import Path
 import posixpath
 import re
 import sys
+from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
 
 try:
     from scripts.frontend_imports import (
@@ -46,9 +46,7 @@ from scripts import lint_records  # noqa: E402  (path shim must precede the impo
 
 CHECKER = "scripts/check_frontend_boundaries.py"
 RULES = lint_records.load("frontend")
-OWNED_RULE_IDS = frozenset(
-    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
-)
+OWNED_RULE_IDS = frozenset(rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER)
 
 DESKTOP_SRC = REPO_ROOT / "apps" / "desktop" / "src"
 WEB_SRC = REPO_ROOT / "apps" / "web" / "src"
@@ -97,13 +95,9 @@ WARNING_INK_RE = re.compile(
 RADIX_SPECIFIER_RE = re.compile(r"@radix-ui/[A-Za-z0-9._/-]+")
 OPENAPI_CLIENT_VERB_RE = re.compile(r"\bclient\.(GET|POST|PUT|PATCH|DELETE)\s*\(")
 QUERY_CACHE_CALL_RE = re.compile(
-    r"\bqueryClient\.("
-    + "|".join(sorted(QUERY_CACHE_METHODS))
-    + r")\s*\("
+    r"\bqueryClient\.(" + "|".join(sorted(QUERY_CACHE_METHODS)) + r")\s*\("
 )
-REACT_IMPORT_RE = re.compile(
-    r"^\s*import(?:\s+type)?(?:\s+[^;]*\s+from)?\s+['\"]react['\"]"
-)
+REACT_IMPORT_RE = re.compile(r"^\s*import(?:\s+type)?(?:\s+[^;]*\s+from)?\s+['\"]react['\"]")
 QUERY_HOOK_NAMES = {
     "useInfiniteQuery",
     "useMutation",
@@ -153,9 +147,7 @@ PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS = {
     "AnyHarnessTimingScope",
     "AnyHarnessTransport",
 }
-MOBILE_PRODUCT_CLIENT_DOMAIN_PREFIX = (
-    "@proliferate/product-client/internal/domain/"
-)
+MOBILE_PRODUCT_CLIENT_DOMAIN_PREFIX = "@proliferate/product-client/internal/domain/"
 PRODUCT_CLIENT_DOMAIN_STYLE_SUFFIXES = {
     ".css",
     ".less",
@@ -419,9 +411,7 @@ def resolve_product_client_import(path: Path, source: str) -> str | None:
     elif source == "@proliferate/product-client/ProductClient":
         target = "ProductClient"
     elif source.startswith("."):
-        target = posixpath.normpath(
-            posixpath.join(product_client_relative(path.parent), source)
-        )
+        target = posixpath.normpath(posixpath.join(product_client_relative(path.parent), source))
     else:
         return None
 
@@ -474,9 +464,12 @@ SET_STATE_CALL_RE = re.compile(r"[A-Za-z_$][\w$.]*\.setState\s*\(")
 
 def set_state_anchor(path: Path, lineno: int) -> str:
     """`<receiver>.setState` for a setState hit — the receiver names the store."""
-    return first_match(
-        strip_line_comment_safe(path, lineno), (SET_STATE_CALL_RE,)
-    ).removesuffix("(").strip() or "setState"
+    return (
+        first_match(strip_line_comment_safe(path, lineno), (SET_STATE_CALL_RE,))
+        .removesuffix("(")
+        .strip()
+        or "setState"
+    )
 
 
 def strip_line_comment_safe(path: Path, lineno: int) -> str:
@@ -526,10 +519,7 @@ def is_query_cache_owner_path(relative_path: str) -> bool:
     return (
         is_under(relative_path, "apps/desktop/src/hooks/access/")
         or is_under(relative_path, "apps/desktop/src/lib/infra/query/")
-        or (
-            is_under(relative_path, "apps/desktop/src/hooks/")
-            and "/cache/" in relative_path
-        )
+        or (is_under(relative_path, "apps/desktop/src/hooks/") and "/cache/" in relative_path)
         or is_under(relative_path, "apps/packages/product-client/src/hooks/access/")
         or is_under(relative_path, "apps/packages/product-client/src/lib/infra/query/")
         or (
@@ -599,9 +589,7 @@ def check_file(path: Path) -> list[Violation]:
         )
         add_if(
             violations,
-            in_desktop
-            and contains_anyharness_client
-            and not is_anyharness_client_path(rel),
+            in_desktop and contains_anyharness_client and not is_anyharness_client_path(rel),
             "FE-ACCESS-2",
             path,
             lineno,
@@ -713,11 +701,7 @@ def check_file(path: Path) -> list[Violation]:
             )
             add_if(
                 violations,
-                (
-                    "@/lib/access/" in line
-                    or contains_tauri_api
-                    or contains_anyharness_client
-                ),
+                ("@/lib/access/" in line or contains_tauri_api or contains_anyharness_client),
                 "FE-COMPONENT-1",
                 path,
                 lineno,
@@ -816,16 +800,11 @@ def product_client_domain_raw_capability_names(
     if source == "@proliferate/cloud-sdk":
         return imported_names & PRODUCT_CLIENT_DOMAIN_RAW_CLOUD_CLIENT_IMPORTS
     if source == "@anyharness/sdk":
-        return (
-            imported_names
-            & PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS
-        )
+        return imported_names & PRODUCT_CLIENT_DOMAIN_RAW_ANYHARNESS_CLIENT_CORE_IMPORTS
     return set()
 
 
-def permitted_product_client_domain_fixture(
-    path: Path, source: str, resolved: Path
-) -> bool:
+def permitted_product_client_domain_fixture(path: Path, source: str, resolved: Path) -> bool:
     if not is_test_path(path):
         return False
     expected_relative = PRODUCT_CLIENT_DOMAIN_FIXTURE_IMPORTS.get(
@@ -893,9 +872,7 @@ def find_product_client_domain_violations(path: Path) -> list[Violation]:
             continue
 
         if source in {"@proliferate/cloud-sdk", "@anyharness/sdk"}:
-            raw_capabilities = product_client_domain_raw_capability_names(
-                source, statement
-            )
+            raw_capabilities = product_client_domain_raw_capability_names(source, statement)
             if raw_capabilities:
                 violations.append(
                     Violation(
@@ -923,8 +900,7 @@ def find_product_client_domain_violations(path: Path) -> list[Violation]:
                         fingerprint(
                             path,
                             statement.lineno,
-                            f"{source}:"
-                            f"{','.join(sorted(statement.runtime_imported_names))}",
+                            f"{source}:{','.join(sorted(statement.runtime_imported_names))}",
                         ),
                         "domain imports Cloud SDK runtime values, not just contract "
                         f"types: {', '.join(sorted(statement.runtime_imported_names))}",
@@ -1086,14 +1062,8 @@ def namespace_member_identifiers(
             (tracked_import_starts or {}).get(token.value, set()),
         ):
             continue
-        member_cursor = _transparent_receiver_end(
-            tokens, index + 1, index, closing_parens
-        )
-        member = (
-            _member_name_after(tokens, member_cursor)
-            if member_cursor is not None
-            else None
-        )
+        member_cursor = _transparent_receiver_end(tokens, index + 1, index, closing_parens)
+        member = _member_name_after(tokens, member_cursor) if member_cursor is not None else None
         if member is not None:
             members.add(member[0])
         members.update(_namespace_destructure_names(tokens, index))
@@ -1118,9 +1088,7 @@ def _matching_token_pairs(
     return forward, reverse
 
 
-def _statement_import_index(
-    tokens: list[Token], statement: ImportStatement
-) -> int | None:
+def _statement_import_index(tokens: list[Token], statement: ImportStatement) -> int | None:
     return next(
         (
             index
@@ -1170,17 +1138,13 @@ def _function_body_ranges(tokens: list[Token]) -> list[tuple[int, int]]:
         if close_index + 1 >= len(tokens) or tokens[close_index + 1].value != "{":
             continue
         owner = tokens[open_index - 1] if open_index else None
-        if owner is None or (
-            owner.kind == "identifier" and owner.value in control_owners
-        ):
+        if owner is None or (owner.kind == "identifier" and owner.value in control_owners):
             continue
         if owner.kind == "identifier" or owner.value in {"]", ">"}:
             body_opens.add(close_index + 1)
 
     return sorted(
-        (body_open + 1, braces[body_open])
-        for body_open in body_opens
-        if body_open in braces
+        (body_open + 1, braces[body_open]) for body_open in body_opens if body_open in braces
     )
 
 
@@ -1193,9 +1157,7 @@ def _static_block_ranges(tokens: list[Token]) -> list[tuple[int, int]]:
     )
 
 
-def _var_scope_token_range(
-    tokens: list[Token], index: int
-) -> tuple[int, int] | None:
+def _var_scope_token_range(tokens: list[Token], index: int) -> tuple[int, int] | None:
     ranges = [
         scope
         for scope in _function_body_ranges(tokens) + _static_block_ranges(tokens)
@@ -1204,9 +1166,7 @@ def _var_scope_token_range(
     return max(ranges) if ranges else None
 
 
-def _enclosing_for_header(
-    tokens: list[Token], index: int
-) -> tuple[int, int] | None:
+def _enclosing_for_header(tokens: list[Token], index: int) -> tuple[int, int] | None:
     parens, _ = _matching_token_pairs(tokens, "(", ")")
     headers = []
     for open_index, close_index in parens.items():
@@ -1214,17 +1174,13 @@ def _enclosing_for_header(
             continue
         owner = tokens[open_index - 1].value
         if owner == "for" or (
-            owner == "await"
-            and open_index > 1
-            and tokens[open_index - 2].value == "for"
+            owner == "await" and open_index > 1 and tokens[open_index - 2].value == "for"
         ):
             headers.append((open_index, close_index))
     return max(headers) if headers else None
 
 
-def _controlled_statement_end(
-    tokens: list[Token], start: int
-) -> int:
+def _controlled_statement_end(tokens: list[Token], start: int) -> int:
     if start >= len(tokens):
         return len(tokens)
     parens, _ = _matching_token_pairs(tokens, "(", ")")
@@ -1247,11 +1203,7 @@ def _controlled_statement_end(
     matching = {")": "(", "]": "[", "}": "{"}
     cursor = start
     while cursor < len(tokens):
-        if (
-            cursor > start
-            and not nesting
-            and _line_starts_new_statement(tokens, cursor)
-        ):
+        if cursor > start and not nesting and _line_starts_new_statement(tokens, cursor):
             return cursor
         value = tokens[cursor].value
         if value in {"(", "[", "{"}:
@@ -1300,9 +1252,7 @@ def _line_starts_new_statement(tokens: list[Token], index: int) -> bool:
     )
 
 
-def _declaration_keyword_before(
-    tokens: list[Token], binding_start: int
-) -> tuple[str, int] | None:
+def _declaration_keyword_before(tokens: list[Token], binding_start: int) -> tuple[str, int] | None:
     if binding_start == 0:
         return None
     cursor = binding_start - 1
@@ -1331,9 +1281,7 @@ def _declaration_keyword_before(
     return None
 
 
-def _dynamic_import_declaration(
-    tokens: list[Token], import_index: int
-) -> tuple[str, int] | None:
+def _dynamic_import_declaration(tokens: list[Token], import_index: int) -> tuple[str, int] | None:
     _, brace_reverse = _matching_token_pairs(tokens, "{", "}")
     _, bracket_reverse = _matching_token_pairs(tokens, "[", "]")
     cursor = import_index - 1
@@ -1341,9 +1289,7 @@ def _dynamic_import_declaration(
         value = tokens[cursor].value
         if value in {";", "{"}:
             return None
-        if value == "=" and not (
-            cursor + 1 < len(tokens) and tokens[cursor + 1].value == ">"
-        ):
+        if value == "=" and not (cursor + 1 < len(tokens) and tokens[cursor + 1].value == ">"):
             binding_end = cursor - 1
             if binding_end < 0:
                 return None
@@ -1399,14 +1345,10 @@ def _statement_binding_scope(
         return 0, len(text)
 
     declaration = _dynamic_import_declaration(tokens, import_index)
-    return statement.start, _declaration_scope_end(
-        text, tokens, declaration, import_index
-    )
+    return statement.start, _declaration_scope_end(text, tokens, declaration, import_index)
 
 
-def _is_dynamic_import_statement(
-    tokens: list[Token], statement: ImportStatement
-) -> bool:
+def _is_dynamic_import_statement(tokens: list[Token], statement: ImportStatement) -> bool:
     import_index = _statement_import_index(tokens, statement)
     return (
         import_index is not None
@@ -1502,9 +1444,7 @@ def _binding_names_in_pattern(tokens: list[Token], bindings: set[str]) -> set[st
     return rebound
 
 
-def _binding_names_in_parameter_tokens(
-    tokens: list[Token], bindings: set[str]
-) -> set[str]:
+def _binding_names_in_parameter_tokens(tokens: list[Token], bindings: set[str]) -> set[str]:
     """Return imported names rebound by a function-like parameter list."""
 
     entries: list[list[Token]] = []
@@ -1537,11 +1477,7 @@ def _is_named_expression(tokens: list[Token], keyword_index: int) -> bool:
         cursor -= 1
     if cursor < 0:
         return False
-    if (
-        tokens[cursor].value == ">"
-        and cursor > 0
-        and tokens[cursor - 1].value == "="
-    ):
+    if tokens[cursor].value == ">" and cursor > 0 and tokens[cursor - 1].value == "=":
         return True
     return tokens[cursor].value in {
         "(",
@@ -1588,9 +1524,7 @@ def _function_shadow_ranges(
         body_end: int,
         extra_rebound: set[str] | None = None,
     ) -> None:
-        rebound = _binding_names_in_parameter_tokens(
-            tokens[param_start:param_end], bindings
-        )
+        rebound = _binding_names_in_parameter_tokens(tokens[param_start:param_end], bindings)
         rebound.update(extra_rebound or set())
         if rebound:
             ranges.append((body_start, body_end, rebound))
@@ -1755,10 +1689,10 @@ def _function_shadow_ranges(
                 break
 
         declaration_index = open_index + 1
-        if (
-            declaration_index >= initializer_end
-            or tokens[declaration_index].value not in {"const", "let"}
-        ):
+        if declaration_index >= initializer_end or tokens[declaration_index].value not in {
+            "const",
+            "let",
+        }:
             declaration_index = None
         rebound = (
             _binding_names_in_parameter_tokens(
@@ -1816,9 +1750,7 @@ def _declares_binding_in_scope(
             # nearest ordinary block. Descendant closures see it; sibling
             # functions and module code outside that owner do not.
             var_scope = _var_scope_token_range(tokens, index)
-            if var_scope is not None and not (
-                var_scope[0] <= candidate_index < var_scope[1]
-            ):
+            if var_scope is not None and not (var_scope[0] <= candidate_index < var_scope[1]):
                 continue
         else:
             # The declaration itself must begin inside one of the candidate's
@@ -1864,12 +1796,11 @@ def _declares_binding_in_scope(
                     break
                 cursor += 1
             declarator = tokens[declarator_start:cursor]
-            if binding in _binding_names_in_pattern(declarator, {binding}):
-                if not any(
-                    token.value == "import" and token.start in tracked_import_starts
-                    for token in declarator
-                ):
-                    return True
+            if binding in _binding_names_in_pattern(declarator, {binding}) and not any(
+                token.value == "import" and token.start in tracked_import_starts
+                for token in declarator
+            ):
+                return True
             if cursor >= len(tokens) or tokens[cursor].value == ";":
                 break
             cursor += 1
@@ -1878,9 +1809,7 @@ def _declares_binding_in_scope(
 
 def _is_property_identifier(tokens: list[Token], index: int) -> bool:
     return (index > 0 and tokens[index - 1].value == ".") or (
-        index > 1
-        and tokens[index - 2].value == "?"
-        and tokens[index - 1].value == "."
+        index > 1 and tokens[index - 2].value == "?" and tokens[index - 1].value == "."
     )
 
 
@@ -1895,8 +1824,7 @@ def _is_imported_binding_occurrence(
     if token.kind != "identifier" or _is_property_identifier(tokens, index):
         return False
     if any(
-        start <= index < end and token.value in rebound
-        for start, end, rebound in shadow_ranges
+        start <= index < end and token.value in rebound for start, end, rebound in shadow_ranges
     ):
         return False
     return not _declares_binding_in_scope(
@@ -1908,9 +1836,7 @@ def _is_imported_binding_occurrence(
     )
 
 
-def _member_name_after(
-    tokens: list[Token], cursor: int
-) -> tuple[str, int] | None:
+def _member_name_after(tokens: list[Token], cursor: int) -> tuple[str, int] | None:
     """Return a statically named member and the token after its access."""
 
     if cursor < len(tokens) and tokens[cursor].value == "!":
@@ -1932,18 +1858,12 @@ def _member_name_after(
         return None
     if cursor + 1 < len(tokens) and tokens[cursor].value == "[":
         name = tokens[cursor + 1]
-        if (
-            name.kind == "string"
-            and cursor + 2 < len(tokens)
-            and tokens[cursor + 2].value == "]"
-        ):
+        if name.kind == "string" and cursor + 2 < len(tokens) and tokens[cursor + 2].value == "]":
             return name.value, cursor + 3
     return None
 
 
-def _namespace_destructure_pattern(
-    tokens: list[Token], index: int
-) -> tuple[int, int, int] | None:
+def _namespace_destructure_pattern(tokens: list[Token], index: int) -> tuple[int, int, int] | None:
     cursor = index - 1
     receiver_groups = 0
     while cursor >= 0 and tokens[cursor].value == "(":
@@ -2077,9 +1997,7 @@ def _namespace_destructure_local_bindings(
     for entry in _split_top_level_tokens(tokens[open_index + 1 : close_index], ","):
         if not entry:
             continue
-        is_namespace = len(entry) >= 3 and all(
-            token.value == "." for token in entry[:3]
-        )
+        is_namespace = len(entry) >= 3 and all(token.value == "." for token in entry[:3])
         if is_namespace:
             binding_part = entry[3:]
         else:
@@ -2129,18 +2047,14 @@ def namespace_destructured_bindings(
             range_start = token.end
         declaration = _declaration_keyword_before(tokens, open_index)
         if declaration is not None:
-            range_end = _declaration_scope_end(
-                text, tokens, declaration, open_index
-            )
+            range_end = _declaration_scope_end(text, tokens, declaration, open_index)
         else:
             containers = [
                 (brace_open, brace_close)
                 for brace_close, brace_open in brace_reverse.items()
                 if brace_open < index < brace_close
             ]
-            range_end = (
-                tokens[max(containers)[1]].start if containers else len(text)
-            )
+            range_end = tokens[max(containers)[1]].start if containers else len(text)
         if range_start >= range_end:
             continue
         for name, namespace in _namespace_destructure_local_bindings(
@@ -2154,9 +2068,7 @@ def namespace_destructured_bindings(
                     namespace=namespace,
                 )
             )
-    return sorted(
-        derived, key=lambda binding: (binding.start, binding.end, binding.name)
-    )
+    return sorted(derived, key=lambda binding: (binding.start, binding.end, binding.name))
 
 
 def _simple_alias_declaration(
@@ -2178,10 +2090,7 @@ def _simple_alias_declaration(
             return None
         declaration_open, _ = max(comma_groups)
         receiver_groups += 1
-        while (
-            declaration_open > 0
-            and tokens[declaration_open - 1].value == "("
-        ):
+        while declaration_open > 0 and tokens[declaration_open - 1].value == "(":
             declaration_open -= 1
             receiver_groups += 1
         cursor = declaration_open - 1
@@ -2214,9 +2123,7 @@ def _simple_alias_receiver_end(
     return cursor if not receiver_groups else None
 
 
-def _alias_range_start(
-    tokens: list[Token], receiver_end: int
-) -> int | None:
+def _alias_range_start(tokens: list[Token], receiver_end: int) -> int | None:
     if receiver_end >= len(tokens):
         return tokens[-1].end if tokens else 0
     token = tokens[receiver_end]
@@ -2247,8 +2154,7 @@ def _alias_range_start(
         "in",
     }
     if token.value == "}" or (
-        token.lineno > previous.lineno
-        and token.value not in continuation_starters
+        token.lineno > previous.lineno and token.value not in continuation_starters
     ):
         return token.start
     return None
@@ -2285,18 +2191,12 @@ def simple_store_value_aliases(
 
         alias_name, declaration, receiver_groups = alias_declaration
         candidates: list[tuple[int | None, bool]] = []
-        direct_end = _simple_alias_receiver_end(
-            tokens, index + 1, receiver_groups
-        )
-        candidates.append(
-            (direct_end, token.value in (namespace_bindings or set()))
-        )
+        direct_end = _simple_alias_receiver_end(tokens, index + 1, receiver_groups)
+        candidates.append((direct_end, token.value in (namespace_bindings or set())))
         if token.value in (namespace_bindings or set()):
             member = _member_name_after(tokens, index + 1)
             if member is not None:
-                member_end = _simple_alias_receiver_end(
-                    tokens, member[1], receiver_groups
-                )
+                member_end = _simple_alias_receiver_end(tokens, member[1], receiver_groups)
                 candidates.append((member_end, False))
 
         for receiver_end, alias_is_namespace in candidates:
@@ -2305,9 +2205,7 @@ def simple_store_value_aliases(
             range_start = _alias_range_start(tokens, receiver_end)
             if range_start is None:
                 continue
-            range_end = _declaration_scope_end(
-                text, tokens, declaration, index
-            )
+            range_end = _declaration_scope_end(text, tokens, declaration, index)
             if range_start < range_end:
                 aliases.add(
                     ScopedLocalBinding(
@@ -2318,9 +2216,7 @@ def simple_store_value_aliases(
                     )
                 )
             break
-    return sorted(
-        aliases, key=lambda binding: (binding.start, binding.end, binding.name)
-    )
+    return sorted(aliases, key=lambda binding: (binding.start, binding.end, binding.name))
 
 
 def expanded_store_value_aliases(
@@ -2408,18 +2304,17 @@ def _skip_type_assertion(
         if not nesting:
             if value == "extends":
                 saw_conditional_extends = True
-            elif value in {"instanceof", "in", "+", "-", "*", "/", "%", "^"}:
-                return None
-            elif value in {"?", ":"} and not saw_conditional_extends:
-                return None
             elif (
-                value in {"&", "|"}
-                and cursor + 1 < len(tokens)
-                and tokens[cursor + 1].value == value
-            ):
-                return None
-            elif value == "=" and (
-                cursor + 1 >= len(tokens) or tokens[cursor + 1].value != ">"
+                value in {"instanceof", "in", "+", "-", "*", "/", "%", "^"}
+                or value in {"?", ":"}
+                and not saw_conditional_extends
+                or (
+                    value in {"&", "|"}
+                    and cursor + 1 < len(tokens)
+                    and tokens[cursor + 1].value == value
+                )
+                or value == "="
+                and (cursor + 1 >= len(tokens) or tokens[cursor + 1].value != ">")
             ):
                 return None
         if value in {"(", "[", "{", "<"}:
@@ -2442,9 +2337,7 @@ def _transparent_receiver_end(
         while cursor < len(tokens) and tokens[cursor].value == "!":
             cursor += 1
         if cursor < len(tokens) and tokens[cursor].value in {"as", "satisfies"}:
-            cursor = _skip_type_assertion(
-                tokens, cursor, receiver_index, closing_parens
-            )
+            cursor = _skip_type_assertion(tokens, cursor, receiver_index, closing_parens)
             if cursor is None:
                 return None
             continue
@@ -2458,9 +2351,7 @@ def _transparent_receiver_end(
     return cursor
 
 
-def _member_call_after(
-    tokens: list[Token], cursor: int, member: str
-) -> bool:
+def _member_call_after(tokens: list[Token], cursor: int, member: str) -> bool:
     access = _member_name_after(tokens, cursor)
     if access is None or access[0] != member:
         return False
@@ -2503,9 +2394,7 @@ def member_call_lines(
             (tracked_import_starts or {}).get(token.value, set()),
         ):
             continue
-        cursor = _transparent_receiver_end(
-            tokens, index + 1, index, closing_parens
-        )
+        cursor = _transparent_receiver_end(tokens, index + 1, index, closing_parens)
         if cursor is not None and _member_call_after(tokens, cursor, member):
             lines.append(token.lineno)
             continue
@@ -2515,9 +2404,7 @@ def member_call_lines(
         namespace_member = _member_name_after(tokens, index + 1)
         if namespace_member is None:
             continue
-        cursor = _transparent_receiver_end(
-            tokens, namespace_member[1], index, closing_parens
-        )
+        cursor = _transparent_receiver_end(tokens, namespace_member[1], index, closing_parens)
         if cursor is not None and _member_call_after(tokens, cursor, member):
             lines.append(token.lineno)
     return lines
@@ -2540,8 +2427,7 @@ def scoped_member_call_lines(
                 binding.tracked_import_start - start,
             }
         }
-        if binding.tracked_import_start is not None
-        and start <= binding.tracked_import_start < end
+        if binding.tracked_import_start is not None and start <= binding.tracked_import_start < end
         else None
     )
     return [
@@ -2597,11 +2483,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
     jsx = path.suffix == ".tsx"
     source_tokens = tokenize_typescript(text, jsx=jsx)
     source_layer = product_client_layer(product_client_relative(path))
-    lib_area = (
-        product_client_relative(path).split("/", 2)[1]
-        if source_layer == "lib"
-        else None
-    )
+    lib_area = product_client_relative(path).split("/", 2)[1] if source_layer == "lib" else None
     imported_store_bindings: set[str] = set()
     imported_store_namespace_bindings: set[str] = set()
     imported_store_binding_starts: dict[str, set[int]] = defaultdict(set)
@@ -2610,20 +2492,14 @@ def find_product_client_violations(path: Path) -> list[Violation]:
 
     for statement in statements:
         identifiers = statement_identifiers(statement)
-        statement_is_dynamic = _is_dynamic_import_statement(
-            source_tokens, statement
-        )
+        statement_is_dynamic = _is_dynamic_import_statement(source_tokens, statement)
         statement_namespaces = namespace_bindings(statement)
         statement_namespace_aliases: list[ScopedLocalBinding] = []
         if statement_namespaces:
-            scope_start, scope_end = _statement_binding_scope(
-                text, source_tokens, statement
-            )
+            scope_start, scope_end = _statement_binding_scope(text, source_tokens, statement)
             scope_text = text[scope_start:scope_end]
             relative_import_start = statement.start - scope_start
-            tracked_starts = {
-                binding: {relative_import_start} for binding in statement_namespaces
-            }
+            tracked_starts = {binding: {relative_import_start} for binding in statement_namespaces}
             identifiers.update(
                 namespace_member_identifiers(
                     scope_text,
@@ -2708,9 +2584,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
         if target_layer == "stores":
             statement_bindings = imported_bindings(statement)
             if statement_is_dynamic:
-                scope_start, scope_end = _statement_binding_scope(
-                    text, source_tokens, statement
-                )
+                scope_start, scope_end = _statement_binding_scope(text, source_tokens, statement)
                 dynamic_bindings = {
                     ScopedLocalBinding(
                         name=binding,
@@ -2770,9 +2644,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
             )
 
         internal_store_access = (
-            source_layer == "stores"
-            and target is not None
-            and target.startswith("lib/access/")
+            source_layer == "stores" and target is not None and target.startswith("lib/access/")
         )
 
         if (
@@ -2791,7 +2663,11 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                 )
             )
 
-        if source_layer == "components" and target is not None and target.startswith("lib/access/"):
+        if (
+            source_layer == "components"
+            and target is not None
+            and target.startswith("lib/access/")
+        ):
             violations.append(
                 Violation(
                     "FE-COMPONENT-1",
@@ -2819,9 +2695,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
             and not internal_store_access
             and (
                 is_package_source(statement.source, "@tanstack/react-query")
-                or is_package_source(
-                    statement.source, "@proliferate/cloud-sdk-react"
-                )
+                or is_package_source(statement.source, "@proliferate/cloud-sdk-react")
                 or is_package_source(statement.source, "@anyharness/sdk-react")
                 or bool(identifiers.intersection(RAW_CLIENT_BINDINGS))
             )
@@ -2845,13 +2719,10 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                 if lib_area == "workflows"
                 else None
             )
-            forbidden_lib_import = (
-                any(
-                    is_package_source(statement.source, package)
-                    for package in {"react", "react-dom", "@tanstack/react-query"}
-                )
-                or (target is not None and target.startswith("lib/access/"))
-            )
+            forbidden_lib_import = any(
+                is_package_source(statement.source, package)
+                for package in {"react", "react-dom", "@tanstack/react-query"}
+            ) or (target is not None and target.startswith("lib/access/"))
             if rule_id is not None and forbidden_lib_import:
                 violations.append(
                     Violation(
@@ -2863,9 +2734,7 @@ def find_product_client_violations(path: Path) -> list[Violation]:
                     )
                 )
 
-    scoped_store_bindings.update(
-        expanded_store_value_aliases(text, store_value_seeds, jsx=jsx)
-    )
+    scoped_store_bindings.update(expanded_store_value_aliases(text, store_value_seeds, jsx=jsx))
 
     for lineno in member_call_lines(
         text,
@@ -3043,9 +2912,7 @@ def find_warning_ink_violations() -> list[Violation]:
     every existing check, hence the gate.
     """
     violations: list[Violation] = []
-    for path in iter_files_in_roots(
-        [PRODUCT_CLIENT_SRC, DESKTOP_SRC, WEB_SRC]
-    ):
+    for path in iter_files_in_roots([PRODUCT_CLIENT_SRC, DESKTOP_SRC, WEB_SRC]):
         for lineno, line in enumerate(path.read_text().splitlines(), start=1):
             for match in WARNING_INK_RE.finditer(strip_line_comment(line)):
                 utility = match.group(0)
@@ -3109,9 +2976,7 @@ def find_lucide_icon_source_violations(
                         "LUCIDE_ICON_SOURCE",
                         path,
                         lineno,
-                        fingerprint(
-                            path, lineno, specifier_match.group(0).strip("\"'")
-                        ),
+                        fingerprint(path, lineno, specifier_match.group(0).strip("\"'")),
                         (
                             "glyphs come from apps/packages/product-client/src/"
                             "primitives/icons/**, never from lucide-react"
@@ -3122,13 +2987,9 @@ def find_lucide_icon_source_violations(
     for manifest in LUCIDE_SCANNED_MANIFESTS:
         if not manifest.exists():
             continue
-        for lineno, raw_line in enumerate(
-            manifest.read_text().splitlines(), start=1
-        ):
+        for lineno, raw_line in enumerate(manifest.read_text().splitlines(), start=1):
             if LUCIDE_MANIFEST_ENTRY_RE.search(raw_line):
-                dependency = (
-                    "lucide-react" if "lucide-react" in raw_line else "lucide"
-                )
+                dependency = "lucide-react" if "lucide-react" in raw_line else "lucide"
                 violations.append(
                     Violation(
                         "LUCIDE_PACKAGE_DEPENDENCY",
@@ -3158,10 +3019,7 @@ def find_primitives_top_level_violations() -> list[Violation]:
             continue
         if entry.is_file() and entry.suffix in EXTENSIONS:
             continue
-        if (
-            entry.is_dir()
-            and entry.name in PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES
-        ):
+        if entry.is_dir() and entry.name in PRODUCT_CLIENT_PRIMITIVES_ALLOWED_SUPPORT_DIRECTORIES:
             continue
         violations.append(
             Violation(
@@ -3197,9 +3055,7 @@ def disambiguate(violations: list[Violation]) -> list[Violation]:
         if len(group) == 1:
             out.extend(group)
             continue
-        for ordinal, violation in enumerate(
-            sorted(group, key=lambda item: item.lineno), start=1
-        ):
+        for ordinal, violation in enumerate(sorted(group, key=lambda item: item.lineno), start=1):
             out.append(
                 violation
                 if ordinal == 1
@@ -3211,9 +3067,7 @@ def disambiguate(violations: list[Violation]) -> list[Violation]:
                     violation.detail,
                 )
             )
-    return sorted(
-        out, key=lambda item: (item.relative_path, item.lineno, item.rule_id, item.site)
-    )
+    return sorted(out, key=lambda item: (item.relative_path, item.lineno, item.rule_id, item.site))
 
 
 def collect_violations() -> list[Violation]:
@@ -3221,20 +3075,14 @@ def collect_violations() -> list[Violation]:
     for path in iter_frontend_files():
         violations.extend(check_file(path))
         violations.extend(find_product_client_violations(path))
-    for path in iter_files_in_roots(
-        [PRODUCT_CLIENT_DOMAIN_SRC], include_tests=True
-    ):
+    for path in iter_files_in_roots([PRODUCT_CLIENT_DOMAIN_SRC], include_tests=True):
         violations.extend(find_product_client_domain_violations(path))
     for path in iter_files_in_roots([MOBILE_SRC], include_tests=True):
         violations.extend(find_mobile_product_client_import_violations(path))
-    all_frontend_paths = iter_files_in_roots(
-        ALL_FRONTEND_SRC_ROOTS, include_tests=True
-    )
+    all_frontend_paths = iter_files_in_roots(ALL_FRONTEND_SRC_ROOTS, include_tests=True)
     frontend_source_cache: dict[Path, str] = {}
     violations.extend(
-        find_radix_import_violations(
-            all_frontend_paths, source_cache=frontend_source_cache
-        )
+        find_radix_import_violations(all_frontend_paths, source_cache=frontend_source_cache)
     )
     violations.extend(
         find_tailwind_merge_import_violations(
@@ -3242,9 +3090,7 @@ def collect_violations() -> list[Violation]:
         )
     )
     violations.extend(
-        find_lucide_icon_source_violations(
-            all_frontend_paths, source_cache=frontend_source_cache
-        )
+        find_lucide_icon_source_violations(all_frontend_paths, source_cache=frontend_source_cache)
     )
     violations.extend(find_primitives_top_level_violations())
     violations.extend(find_warning_ink_violations())
@@ -3309,4 +3155,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except ValueError as error:
         print(error, file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(2) from error

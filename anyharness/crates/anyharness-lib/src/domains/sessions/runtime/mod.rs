@@ -87,8 +87,9 @@ pub(crate) mod view;
 mod workspace_mcp_attachment;
 
 pub use agent_creation::{CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError};
-pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
-pub(crate) use lifecycle::LiveTurnCancelOutcome;
+#[cfg(test)]
+pub(crate) use creation::InternalSessionCreateError;
+pub(crate) use creation::InternalSessionCreateInput;
 pub(crate) use prompt_dispatch::TextPromptDispatchError;
 
 pub struct SessionRuntime {

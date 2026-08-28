@@ -31,8 +31,12 @@ pub struct ClaudeMcpElicitationExtParams {
     #[serde(default)]
     pub title: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub display_name: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub description: Option<String>,
 }
 

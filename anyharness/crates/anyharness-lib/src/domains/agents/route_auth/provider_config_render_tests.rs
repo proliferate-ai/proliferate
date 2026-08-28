@@ -43,15 +43,27 @@ fn claude_provider_config_aws_bedrock_sets_the_already_resolved_env_map() {
         resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
 
     assert_eq!(
-        rendered.set.get("CLAUDE_CODE_USE_BEDROCK").map(String::as_str),
+        rendered
+            .set
+            .get("CLAUDE_CODE_USE_BEDROCK")
+            .map(String::as_str),
         Some("1")
     );
     assert_eq!(
-        rendered.set.get("AWS_BEARER_TOKEN_BEDROCK").map(String::as_str),
+        rendered
+            .set
+            .get("AWS_BEARER_TOKEN_BEDROCK")
+            .map(String::as_str),
         Some("bedrock-raw")
     );
-    assert_eq!(rendered.set.get("AWS_REGION").map(String::as_str), Some("us-east-1"));
-    assert!(rendered.files.is_empty(), "no config file for claude's env-only arm");
+    assert_eq!(
+        rendered.set.get("AWS_REGION").map(String::as_str),
+        Some("us-east-1")
+    );
+    assert!(
+        rendered.files.is_empty(),
+        "no config file for claude's env-only arm"
+    );
 }
 
 /// THE regression this brief's §3.4 calls out by name: a provider_config
@@ -83,21 +95,30 @@ fn claude_provider_config_bedrock_flag_survives_sanitization() {
 
     // Set, not removed: sanitize must not strip a flag this route explicitly set.
     assert_eq!(
-        rendered.set.get("CLAUDE_CODE_USE_BEDROCK").map(String::as_str),
+        rendered
+            .set
+            .get("CLAUDE_CODE_USE_BEDROCK")
+            .map(String::as_str),
         Some("1")
     );
     assert!(
-        !rendered.remove.contains(&"CLAUDE_CODE_USE_BEDROCK".to_string()),
+        !rendered
+            .remove
+            .contains(&"CLAUDE_CODE_USE_BEDROCK".to_string()),
         "the flag this route set must survive sanitize_claude_ambient, got removals {:?}",
         rendered.remove
     );
     assert!(
-        !rendered.remove.contains(&"AWS_BEARER_TOKEN_BEDROCK".to_string()),
+        !rendered
+            .remove
+            .contains(&"AWS_BEARER_TOKEN_BEDROCK".to_string()),
         "the credential this route set must survive sanitize_claude_ambient"
     );
     // Sanitize still removes the OTHER rerouting flags/selectors this route did
     // not set (e.g. Foundry, ANTHROPIC_*), proving sanitize still ran.
-    assert!(rendered.remove.contains(&"CLAUDE_CODE_USE_FOUNDRY".to_string()));
+    assert!(rendered
+        .remove
+        .contains(&"CLAUDE_CODE_USE_FOUNDRY".to_string()));
     assert!(rendered.remove.contains(&"ANTHROPIC_API_KEY".to_string()));
 }
 
@@ -116,7 +137,10 @@ fn claude_provider_config_azure_openai_foundry_flag_survives_generically() {
                 vec![
                     ("CLAUDE_CODE_USE_FOUNDRY", "1"),
                     ("ANTHROPIC_FOUNDRY_RESOURCE", "my-resource"),
-                    ("ANTHROPIC_FOUNDRY_BASE_URL", "https://my-resource.openai.azure.com"),
+                    (
+                        "ANTHROPIC_FOUNDRY_BASE_URL",
+                        "https://my-resource.openai.azure.com",
+                    ),
                     ("ANTHROPIC_FOUNDRY_API_KEY", "foundry-raw"),
                 ],
             )],
@@ -127,12 +151,20 @@ fn claude_provider_config_azure_openai_foundry_flag_survives_generically() {
         resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
 
     assert_eq!(
-        rendered.set.get("CLAUDE_CODE_USE_FOUNDRY").map(String::as_str),
+        rendered
+            .set
+            .get("CLAUDE_CODE_USE_FOUNDRY")
+            .map(String::as_str),
         Some("1")
     );
-    assert!(!rendered.remove.contains(&"CLAUDE_CODE_USE_FOUNDRY".to_string()));
+    assert!(!rendered
+        .remove
+        .contains(&"CLAUDE_CODE_USE_FOUNDRY".to_string()));
     assert_eq!(
-        rendered.set.get("ANTHROPIC_FOUNDRY_API_KEY").map(String::as_str),
+        rendered
+            .set
+            .get("ANTHROPIC_FOUNDRY_API_KEY")
+            .map(String::as_str),
         Some("foundry-raw")
     );
 }
@@ -207,11 +239,21 @@ fn opencode_provider_config_aws_bedrock_sets_the_already_resolved_env_map() {
         resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
 
     assert_eq!(
-        rendered.set.get("AWS_BEARER_TOKEN_BEDROCK").map(String::as_str),
+        rendered
+            .set
+            .get("AWS_BEARER_TOKEN_BEDROCK")
+            .map(String::as_str),
         Some("bedrock-raw")
     );
-    assert_eq!(rendered.set.get("AWS_REGION").map(String::as_str), Some("us-east-1"));
-    assert_eq!(rendered.set.len(), 2, "opencode's provider_config arm stays generic");
+    assert_eq!(
+        rendered.set.get("AWS_REGION").map(String::as_str),
+        Some("us-east-1")
+    );
+    assert_eq!(
+        rendered.set.len(),
+        2,
+        "opencode's provider_config arm stays generic"
+    );
     assert!(rendered.files.is_empty());
 }
 
@@ -245,7 +287,10 @@ fn opencode_provider_config_composes_with_a_direct_api_key_source() {
         Some("sk-ant-direct")
     );
     assert_eq!(
-        rendered.set.get("AWS_BEARER_TOKEN_BEDROCK").map(String::as_str),
+        rendered
+            .set
+            .get("AWS_BEARER_TOKEN_BEDROCK")
+            .map(String::as_str),
         Some("bedrock-raw")
     );
     assert!(rendered.remove.is_empty());
@@ -269,21 +314,26 @@ fn codex_provider_config_aws_bedrock_materializes_config_toml_and_sets_env() {
             )],
         )],
     ));
-    let rendered = resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver)
-        .expect("render");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("render");
 
     let codex_home = rendered.set.get("CODEX_HOME").expect("CODEX_HOME");
     assert!(codex_home.contains("codex-home-7"));
     assert_eq!(
-        rendered.set.get("AWS_BEARER_TOKEN_BEDROCK").map(String::as_str),
+        rendered
+            .set
+            .get("AWS_BEARER_TOKEN_BEDROCK")
+            .map(String::as_str),
         Some("bedrock-raw")
     );
-    assert_eq!(rendered.set.get("AWS_REGION").map(String::as_str), Some("us-east-1"));
+    assert_eq!(
+        rendered.set.get("AWS_REGION").map(String::as_str),
+        Some("us-east-1")
+    );
     let config = std::fs::read_to_string(std::path::Path::new(codex_home).join("config.toml"))
         .expect("read config.toml");
     assert_eq!(
-        config,
-        "model_provider = \"amazon-bedrock\"\n",
+        config, "model_provider = \"amazon-bedrock\"\n",
         "codex's built-in amazon-bedrock upstream needs no [model_providers.*] table"
     );
     assert!(
@@ -304,8 +354,8 @@ fn codex_provider_config_aws_bedrock_materializes_config_toml_and_sets_env() {
 #[test]
 fn codex_provider_config_azure_openai_arm_renders_the_expected_toml_when_invoked_directly() {
     use super::super::profile::ProviderConfigProfile;
-    use super::super::render::render_profile;
     use super::super::profile::{AgentRuntimeAuthProfile, HarnessSources, ResolvedSource};
+    use super::super::render::render_profile;
 
     let home = TempHome::new("codex-pc-azure-direct");
     let profile = AgentRuntimeAuthProfile::Sources(HarnessSources {
@@ -320,7 +370,10 @@ fn codex_provider_config_azure_openai_arm_renders_the_expected_toml_when_invoked
                     "AZURE_OPENAI_ENDPOINT".to_string(),
                     "https://my-resource.openai.azure.com".to_string(),
                 ),
-                ("AZURE_OPENAI_DEPLOYMENT".to_string(), "gpt-5-deployment".to_string()),
+                (
+                    "AZURE_OPENAI_DEPLOYMENT".to_string(),
+                    "gpt-5-deployment".to_string(),
+                ),
             ]
             .into_iter()
             .collect(),
@@ -360,8 +413,8 @@ fn codex_provider_config_azure_openai_arm_renders_the_expected_toml_when_invoked
 #[test]
 fn codex_provider_config_azure_openai_missing_endpoint_is_selection_incomplete() {
     use super::super::profile::ProviderConfigProfile;
-    use super::super::render::render_profile;
     use super::super::profile::{AgentRuntimeAuthProfile, HarnessSources, ResolvedSource};
+    use super::super::render::render_profile;
 
     let home = TempHome::new("codex-pc-azure-missing-endpoint");
     let profile = AgentRuntimeAuthProfile::Sources(HarnessSources {
@@ -390,7 +443,10 @@ fn cursor_provider_config_is_a_typed_unsupported_route() {
         1,
         vec![harness(
             "cursor",
-            vec![provider_config_source("aws_bedrock", vec![("AWS_REGION", "us-east-1")])],
+            vec![provider_config_source(
+                "aws_bedrock",
+                vec![("AWS_REGION", "us-east-1")],
+            )],
         )],
     ));
     let error = resolve_launch_route_auth(home.path(), "cursor", &HarnessPlanResolver)
@@ -405,7 +461,10 @@ fn grok_provider_config_is_a_typed_unsupported_route() {
         1,
         vec![harness(
             "grok",
-            vec![provider_config_source("aws_bedrock", vec![("AWS_REGION", "us-east-1")])],
+            vec![provider_config_source(
+                "aws_bedrock",
+                vec![("AWS_REGION", "us-east-1")],
+            )],
         )],
     ));
     let error = resolve_launch_route_auth(home.path(), "grok", &HarnessPlanResolver)
@@ -426,7 +485,10 @@ fn opencode_unknown_config_kind_still_sets_the_generic_env_map() {
         1,
         vec![harness(
             "opencode",
-            vec![provider_config_source("gcp_vertex", vec![("SOME_VAR", "x")])],
+            vec![provider_config_source(
+                "gcp_vertex",
+                vec![("SOME_VAR", "x")],
+            )],
         )],
     ));
     let rendered = resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver)
@@ -441,7 +503,10 @@ fn codex_unknown_config_kind_is_a_typed_unsupported_route() {
         1,
         vec![harness(
             "codex",
-            vec![provider_config_source("gcp_vertex", vec![("SOME_VAR", "x")])],
+            vec![provider_config_source(
+                "gcp_vertex",
+                vec![("SOME_VAR", "x")],
+            )],
         )],
     ));
     let error = resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver)
@@ -464,4 +529,61 @@ fn provider_config_with_empty_env_refuses_the_launch() {
     let error = resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver)
         .expect_err("empty env must refuse the launch");
     assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_INCOMPLETE");
+}
+
+/// The model-selector exemption mirrors the rerouting-flag one: a selector the
+/// `provider_config` arm ITSELF composed (a Bedrock route naming its model
+/// map) is the route, so sanitization must keep it — while the rest of the
+/// family is still stripped.
+#[test]
+fn a_provider_config_model_selector_survives_while_the_rest_are_stripped() {
+    let home = TempHome::new("claude-pc-model-selector");
+    home.write_state_json(&v2_state(
+        11,
+        vec![harness(
+            "claude",
+            vec![provider_config_source(
+                "aws_bedrock",
+                vec![
+                    ("CLAUDE_CODE_USE_BEDROCK", "1"),
+                    ("AWS_REGION", "us-east-1"),
+                    (
+                        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                        "global.anthropic.claude-sonnet-5",
+                    ),
+                ],
+            )],
+        )],
+    ));
+
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+
+    assert_eq!(
+        rendered
+            .set
+            .get("ANTHROPIC_DEFAULT_SONNET_MODEL")
+            .map(String::as_str),
+        Some("global.anthropic.claude-sonnet-5"),
+        "the arm's own selector is the route"
+    );
+    assert!(
+        !rendered
+            .remove
+            .contains(&"ANTHROPIC_DEFAULT_SONNET_MODEL".to_string()),
+        "sanitization must not strip the selector the provider_config arm set"
+    );
+    // The rest of the family is still stripped.
+    for key in [
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_BEDROCK_REGION_PREFIX",
+    ] {
+        assert!(
+            rendered.remove.contains(&key.to_string()),
+            "missing removal of {key}"
+        );
+    }
 }

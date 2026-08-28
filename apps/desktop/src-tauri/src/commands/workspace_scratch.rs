@@ -52,7 +52,7 @@ pub fn write_workspace_scratch_pad(
 }
 
 fn workspace_scratch_pad_path_for_key(workspace_key: &str) -> Result<PathBuf, String> {
-    Ok(workspace_scratch_pad_path(app_dir_path()?, workspace_key)?)
+    workspace_scratch_pad_path(app_dir_path()?, workspace_key)
 }
 
 fn workspace_scratch_pad_path(app_dir: PathBuf, workspace_key: &str) -> Result<PathBuf, String> {

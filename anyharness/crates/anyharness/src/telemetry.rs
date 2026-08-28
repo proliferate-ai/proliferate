@@ -4,9 +4,8 @@ use anyharness_lib::{
     app::default_runtime_home,
     observability::{
         AGENT_STDERR_TRACING_TARGET, PRODUCT_MCP_AUTH_REJECTED_TRACING_TARGET,
-        RUNTIME_INCIDENT_TRACING_TARGET,
-        WORKFLOW_BOOT_FENCE_TRACING_TARGET, WORKFLOW_INTERJECTION_HELD_TRACING_TARGET,
-        WORKFLOW_INVARIANT_VIOLATION_TRACING_TARGET,
+        RUNTIME_INCIDENT_TRACING_TARGET, WORKFLOW_BOOT_FENCE_TRACING_TARGET,
+        WORKFLOW_INTERJECTION_HELD_TRACING_TARGET, WORKFLOW_INVARIANT_VIOLATION_TRACING_TARGET,
         WORKFLOW_NODE_INTERACTION_REQUESTED_TRACING_TARGET,
         WORKFLOW_NODE_INTERACTION_RESOLVED_TRACING_TARGET, WORKFLOW_NODE_LAUNCHED_TRACING_TARGET,
         WORKFLOW_NODE_LAUNCH_FAILED_TRACING_TARGET, WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET,
@@ -35,6 +34,9 @@ use crate::{
 };
 
 mod scrub;
+mod session_tag;
+
+use session_tag::{session_id_for_event, SessionIdSpanLayer, SESSION_ID_SPAN_FIELD};
 
 const ANYHARNESS_TELEMETRY_MODE: &str = "hosted_product";
 const ANYHARNESS_RECORD_NAME_PREFIX: &str = "anyharness.";
@@ -173,6 +175,11 @@ where
             sentry_event.fingerprint =
                 Cow::Owned(vec![Cow::Borrowed(RUNTIME_INCIDENT_FINGERPRINT)]);
         }
+        if let Some(session_id) = session_id_for_event(event, &context) {
+            sentry_event
+                .tags
+                .insert(SESSION_ID_SPAN_FIELD.to_string(), session_id);
+        }
         mappings.push(sentry_tracing::EventMapping::Event(sentry_event));
     }
     if filter.contains(sentry_tracing::EventFilter::Log) {
@@ -242,7 +249,7 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
             dsn,
             sentry::ClientOptions {
                 environment: Some(
-                    env_or_default("ANYHARNESS_SENTRY_ENVIRONMENT", "trusted-beta").into(),
+                    env_or_default("ANYHARNESS_SENTRY_ENVIRONMENT", "production").into(),
                 ),
                 release: Some(
                     env_or_default("ANYHARNESS_SENTRY_RELEASE", &default_release()).into(),
@@ -330,6 +337,7 @@ pub fn init(command: &Commands, activation: DesktopDiagnosticsActivation) -> Tel
 
     tracing_subscriber::registry()
         .with(console_layer)
+        .with(SessionIdSpanLayer)
         .with(sentry_tracing::layer().event_mapper(sentry_event_mapper))
         .with(diagnostics_layer)
         .with(file_sink.as_ref().map(|sink| {

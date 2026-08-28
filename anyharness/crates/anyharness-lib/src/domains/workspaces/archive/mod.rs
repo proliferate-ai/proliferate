@@ -25,6 +25,10 @@
 //! injected dependencies, constructed directly in `app/mod.rs` — there is no
 //! separate wiring family struct for this pair (R5 retired `app/workspaces.rs`).
 
+// The R5 module family deliberately names the entry-point module after the
+// domain (`workspaces::archive::archive` = the archive operation itself,
+// beside its phases); renaming it would churn every consumer for a style lint.
+#[allow(clippy::module_inception)]
 pub mod archive;
 pub mod inflight;
 pub mod phase2;
@@ -214,7 +218,10 @@ impl WorkspaceArchiveService {
     /// observe the enqueue would test the runner, not the enqueue.
     #[cfg(test)]
     pub(crate) fn deferred_gc_for_tests(&self) -> BTreeSet<PathBuf> {
-        self.deferred_gc.lock().expect("deferred gc set poisoned").clone()
+        self.deferred_gc
+            .lock()
+            .expect("deferred gc set poisoned")
+            .clone()
     }
 
     /// Ask for a repo root's gc to run once nothing is working in it. R5's purge

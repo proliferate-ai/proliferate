@@ -83,6 +83,7 @@ pub struct SupportOptionalScrubbed<T> {
 }
 
 /// Stateless scrubber apart from an optional, caller-provided home prefix.
+#[derive(Default)]
 pub struct SupportExportScrubber {
     home_directory: Option<String>,
 }
@@ -96,7 +97,7 @@ impl SupportExportScrubber {
                 if home.is_empty() || home.len() > super::schema::limits::GENERIC_STRING_BYTES {
                     return Err(SupportScrubError::InvalidConfiguration);
                 }
-                let trimmed = home.trim_end_matches(|character| matches!(character, '/' | '\\'));
+                let trimmed = home.trim_end_matches(['/', '\\']);
                 if trimmed.is_empty() {
                     return Err(SupportScrubError::InvalidConfiguration);
                 }
@@ -125,14 +126,6 @@ impl SupportExportScrubber {
         source: SupportEvidenceSourceV1,
     ) -> Result<SupportOptionalScrubbed<SupportJsonValueV1>, SupportScrubError> {
         value::scrub_optional(self, value, source)
-    }
-}
-
-impl Default for SupportExportScrubber {
-    fn default() -> Self {
-        Self {
-            home_directory: None,
-        }
     }
 }
 

@@ -8,11 +8,12 @@
  * truthful `tier2_billing` evidence. Non-billing rows must use a future
  * domain-specific evidence collector and remain deferred until one exists.
  *
- * These modules import the ONE shared stack/billing implementation directly
- * from `tests/intent` (BRIEF §0 — cross-package relative import, no relocation).
+ * These modules import the ONE shared stack/billing implementation from
+ * `./stack` — relocated here from the deleted `tests/intent` suite (2026-08
+ * cull), because the Tier-2 billing qualification is its only consumer.
  */
 
-import type { BootedStack, StripeBillingEnv } from "../../../../intent/stack/boot.ts";
+import type { BootedStack, StripeBillingEnv } from "./stack/boot.ts";
 import type { Tier2BillingEvidenceV1 } from "../../evidence/schema.js";
 
 /** A ruled-value assertion recorder: proves the value against the running

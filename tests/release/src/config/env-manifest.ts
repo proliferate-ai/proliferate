@@ -1,6 +1,6 @@
 /**
  * Declared manifest of every environment variable the tier-3 release-e2e
- * runner needs. Per specs/engineering/testing/release-worlds-and-fixtures.md ("Local And
+ * runner needs. Per delivery/testing-cicd/archive/release-worlds-and-fixtures.md ("Local And
  * GitHub Actions Execution"): every key is inventoried here with where to
  * obtain it. A missing
  * credential does not fail the whole run — the runner reports just the
@@ -39,6 +39,15 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     whereItLives:
       "Staging: https://staging-app.proliferate.com/api (origin + /api prefix). " +
       "Local: the profile's API origin, printed by the tunnel tool when `make run PROFILE=<name>` is fronted by one.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_WEB_URL",
+    description:
+      "Origin of the deployed web app for the target lane (no path), read by the staging battery's thin " +
+      "web smoke (T3-BATT-WEB-1) to assert the shell and login route serve. Staging: the `staging` " +
+      "environment's WEB_URL variable.",
+    whereItLives: "Staging: https://staging.proliferate.com (GitHub `staging` environment variable WEB_URL).",
     secret: false,
   },
   {
@@ -449,7 +458,7 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "The webhook signing secret (whsec_…) the Tier-2 billing harness self-signs deliveries with and the " +
       "booted server verifies against. Generated per boot by bootBillingStack and exported to process.env; " +
       "declared here so it is redacted from the persisted report. Not a scenario requiredEnv.",
-    whereItLives: "Generated per run by tests/intent/stack/billing-boot.ts; never committed.",
+    whereItLives: "Generated per run by src/scenarios/tier2/stack/billing-boot.ts; never committed.",
     secret: true,
   },
   {

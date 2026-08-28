@@ -48,11 +48,7 @@ impl AgentOperations {
             .as_deref()
             .unwrap_or(&initial_caller.record.agent_kind);
         let selection = options
-            .validate_selection(
-                agent_kind,
-                input.model_id.as_deref(),
-                &input.control_values,
-            )
+            .validate_selection(agent_kind, input.model_id.as_deref(), &input.control_values)
             .map_err(AgentOperationsError::LaunchSelection)?;
 
         // A subagent is an atomic child+relationship mutation of its parent.

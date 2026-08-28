@@ -46,7 +46,8 @@ impl SeatCoolingStore {
         window: Option<&str>,
         now_epoch_s: i64,
     ) {
-        let cooling_until_epoch_s = super::clamp_cooling_deadline(now_epoch_s, cooling_until_epoch_s);
+        let cooling_until_epoch_s =
+            super::clamp_cooling_deadline(now_epoch_s, cooling_until_epoch_s);
         let result = self.db.with_conn(|conn| {
             // `seat_cooling.*` in the DO UPDATE arm is the pre-update row, so
             // the two CASEs judge the same existing deadline.
@@ -67,7 +68,13 @@ impl SeatCoolingStore {
                         THEN seat_cooling.window
                         ELSE excluded.window END,
                     observed_at_epoch_s = excluded.observed_at_epoch_s",
-                params![seat_id, harness_kind, cooling_until_epoch_s, window, now_epoch_s],
+                params![
+                    seat_id,
+                    harness_kind,
+                    cooling_until_epoch_s,
+                    window,
+                    now_epoch_s
+                ],
             )
         });
         if let Err(error) = result {

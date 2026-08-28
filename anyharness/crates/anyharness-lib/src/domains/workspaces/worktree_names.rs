@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WorktreeNameConflictPolicy {
+    #[default]
     Fail,
     SuffixPath,
     SuffixPathAndBranch,
@@ -23,12 +24,6 @@ pub enum WorktreeNameConflictError {
         #[source]
         source: anyhow::Error,
     },
-}
-
-impl Default for WorktreeNameConflictPolicy {
-    fn default() -> Self {
-        Self::Fail
-    }
 }
 
 #[derive(Debug, Clone)]

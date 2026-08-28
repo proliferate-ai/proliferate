@@ -5,6 +5,12 @@ use super::types::{ProcessServiceError, RunProcessRequest, RunProcessResult};
 
 pub struct ProcessService;
 
+impl Default for ProcessService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProcessService {
     pub fn new() -> Self {
         Self

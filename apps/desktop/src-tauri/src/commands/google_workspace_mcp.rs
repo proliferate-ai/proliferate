@@ -221,9 +221,7 @@ pub async fn start_google_workspace_mcp_auth(
 
     let uvx_path = resolve_command_path("uvx")
         .map_err(|_| LocalMcpOAuthError::new(LocalMcpOAuthCode::UvxMissing))?;
-    let port = lease_setup_port()
-        .await
-        .map_err(|code| LocalMcpOAuthError::new(code))?;
+    let port = lease_setup_port().await.map_err(LocalMcpOAuthError::new)?;
     let run_result = run_auth_flow(
         setup_id.clone(),
         expected_email,

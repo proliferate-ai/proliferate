@@ -379,10 +379,23 @@ pub struct AgentLoginTerminalRecord {
 /// The one-time handoff of a captured seat token to the courier (seats v1).
 /// Serving this response wipes the runtime's capture buffer; a second claim
 /// finds nothing.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaimAgentMintTokenResponse {
     pub token: String,
+}
+
+/// Hand-written so `token` (the minted seat credential — the one plaintext
+/// hop it makes on its way to the vault) can never reach `Debug` output;
+/// secrets must not be printable, even through a test panic. Length-only,
+/// per the telemetry law. The wire shape (`Serialize`) is unchanged.
+impl std::fmt::Debug for ClaimAgentMintTokenResponse {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ClaimAgentMintTokenResponse")
+            .field("token", &format!("<redacted {} bytes>", self.token.len()))
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -528,7 +541,33 @@ pub struct AgentReconcileSummary {
 mod tests {
     use std::collections::BTreeMap;
 
-    use crate::v1::{HarnessLaunchDefaults, HarnessLaunchModelControls, HarnessLaunchOptions};
+    use crate::v1::{
+        ClaimAgentMintTokenResponse, HarnessLaunchDefaults, HarnessLaunchModelControls,
+        HarnessLaunchOptions,
+    };
+
+    /// The claim response's `Debug` is hand-written to redact by construction
+    /// (repo law: never print a secret; length-only telemetry): the minted
+    /// seat token must not be reproducible through `{:?}`, while `Serialize`
+    /// (the wire handoff) is untouched.
+    #[test]
+    fn claim_mint_token_response_debug_redacts_the_token() {
+        let canary = "sk-canary-fixture"; // 17 bytes: pins the marker exactly.
+        let response = ClaimAgentMintTokenResponse {
+            token: canary.to_string(),
+        };
+
+        let debug = format!("{response:?}");
+        assert!(
+            !debug.contains(canary),
+            "Debug output leaked the minted token: {debug}"
+        );
+        assert!(debug.contains("<redacted 17 bytes>"), "got {debug}");
+
+        // The wire shape still carries the token — the redaction is Debug-only.
+        let wire = serde_json::to_value(&response).expect("serialize");
+        assert_eq!(wire["token"], canary);
+    }
 
     #[test]
     fn empty_observation_is_not_absent_options() {

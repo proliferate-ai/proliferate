@@ -138,6 +138,8 @@ vi.mock("@anyharness/sdk-react", () => ({
       claimMintToken: vi.fn(),
     },
   }),
+  // Consumed by the native-bridge prompt's query key (use-native-bridge.ts).
+  useAnyHarnessCacheScopeKey: () => "test-scope",
   useAgentLaunchOptionsQuery: ({ harnessKind }: { harnessKind: string }) => {
     const sourceModels = state.modelSnapshotStatus.data?.models ?? null;
     return {

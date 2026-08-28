@@ -4,9 +4,7 @@
 
 use std::path::Path;
 
-use super::definition::{
-    resolve_references, PromptReference, ResolveError, ResolveMode,
-};
+use super::definition::{resolve_references, PromptReference, ResolveError, ResolveMode};
 use super::model::{WorkflowNodeType, WorkflowRunDocRecord};
 use super::render::{node_session_title, render_envelope, RenderEnvelopeError, RenderInputs};
 use crate::domains::sessions::model::SESSION_TITLE_MAX_CHARS;
@@ -222,13 +220,16 @@ fn resolve_references_round_trips_text_without_references() {
 
 #[test]
 fn resolve_references_reports_the_offending_reference() {
-    let error = resolve_references("@input:a @doc:b", ResolveMode::Strict, |reference| {
-        match reference {
-            PromptReference::Input(name) => Some(format!("[{name}]")),
-            PromptReference::Doc(_) => None,
-        }
-    })
-    .expect_err("doc must fail");
+    let error =
+        resolve_references(
+            "@input:a @doc:b",
+            ResolveMode::Strict,
+            |reference| match reference {
+                PromptReference::Input(name) => Some(format!("[{name}]")),
+                PromptReference::Doc(_) => None,
+            },
+        )
+        .expect_err("doc must fail");
     assert_eq!(
         error,
         ResolveError::Unresolved(PromptReference::Doc("b".into()))
@@ -305,7 +306,10 @@ fn rendered_prompt_and_preamble_paths_are_run_scoped() {
         "update /ws/.proliferate/context/run-1/00-plan-doc.md and /ws/.proliferate/context/run-1/notes.md"
     );
     let preamble = &envelope.instruction_blocks[0];
-    for line in preamble.lines().filter(|line| line.contains(".proliferate/context")) {
+    for line in preamble
+        .lines()
+        .filter(|line| line.contains(".proliferate/context"))
+    {
         assert!(
             line.contains("/.proliferate/context/run-1"),
             "every preamble context path must be run-scoped, got: {line}"

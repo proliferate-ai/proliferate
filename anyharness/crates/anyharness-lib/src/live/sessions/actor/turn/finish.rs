@@ -290,13 +290,10 @@ impl SessionActor {
                 // session actually running on a recorded serving seat — a
                 // limit error on a non-seat route must never produce seat
                 // events or cooling.
-                let seat_usage_limit = self
-                    .serving_seat_id
-                    .as_ref()
-                    .and_then(|seat_id| {
-                        classify_seat_usage_limit_error(&error_message)
-                            .map(|observation| (seat_id.clone(), observation))
-                    });
+                let seat_usage_limit = self.serving_seat_id.as_ref().and_then(|seat_id| {
+                    classify_seat_usage_limit_error(&error_message)
+                        .map(|observation| (seat_id.clone(), observation))
+                });
                 let (error_details, error_code) = if let Some((seat_id, observation)) =
                     seat_usage_limit
                 {
@@ -393,7 +390,9 @@ impl SessionActor {
         seat_id: String,
         observation: crate::integrations::acp::provider_errors::SeatUsageLimitObservation,
     ) -> anyharness_contract::v1::ErrorEventDetails {
-        use crate::domains::agents::seat_cooling::{clamp_cooling_deadline, next_five_hour_window_top};
+        use crate::domains::agents::seat_cooling::{
+            clamp_cooling_deadline, next_five_hour_window_top,
+        };
         let now_epoch_s = chrono::Utc::now().timestamp();
         let cooling_until_epoch_s = clamp_cooling_deadline(
             now_epoch_s,

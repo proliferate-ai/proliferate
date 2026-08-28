@@ -245,7 +245,7 @@ fn degraded_session_event_and_raw_siblings_keep_positive_response_bytes() {
 fn input_for_tier(tier: usize) -> super::super::SupportAssemblyInputV1 {
     match tier {
         1 => session_input(false, false),
-        2 | 3 | 4 => collector_input(tier),
+        2..=4 => collector_input(tier),
         5 => fallback_input(),
         6 => session_input(true, false),
         7 => session_input(false, true),
@@ -290,7 +290,7 @@ fn production_cap_input() -> super::super::SupportAssemblyInputV1 {
         let bytes = encoded_len(&record);
         if collector_bytes
             .checked_add(bytes)
-            .map_or(true, |total| total > COLLECTOR_BYTES)
+            .is_none_or(|total| total > COLLECTOR_BYTES)
         {
             break;
         }

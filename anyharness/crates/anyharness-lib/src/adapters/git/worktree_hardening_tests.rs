@@ -97,7 +97,9 @@ fn delete_admin_registration_only(source: &Path, worktree: &Path) {
             continue;
         };
         let recorded_path = PathBuf::from(recorded.trim());
-        let recorded_parent = recorded_path.parent().and_then(|p| fs::canonicalize(p).ok());
+        let recorded_parent = recorded_path
+            .parent()
+            .and_then(|p| fs::canonicalize(p).ok());
         let target_canonical = fs::canonicalize(worktree).ok();
         if recorded_parent.is_some() && recorded_parent == target_canonical {
             fs::remove_dir_all(entry.path()).expect("remove admin registration");
@@ -116,7 +118,12 @@ fn remove_worktree_force_maps_missing_registration_and_directory_to_already_gone
     run(source.path(), &["branch", "archived"]);
     run(
         source.path(),
-        &["worktree", "add", &workspace.path().display().to_string(), "archived"],
+        &[
+            "worktree",
+            "add",
+            &workspace.path().display().to_string(),
+            "archived",
+        ],
     );
 
     // Genuinely remove it first, so a second call finds nothing at all —
@@ -150,7 +157,12 @@ fn remove_worktree_force_falls_back_to_rm_rf_when_exit_128_leaves_a_directory_be
     run(source.path(), &["branch", "archived"]);
     run(
         source.path(),
-        &["worktree", "add", &workspace.path().display().to_string(), "archived"],
+        &[
+            "worktree",
+            "add",
+            &workspace.path().display().to_string(),
+            "archived",
+        ],
     );
 
     // Corrupt just the admin registration; the directory (and its content)
@@ -191,11 +203,21 @@ fn remove_worktree_force_never_runs_a_repo_global_prune() {
     run(source.path(), &["branch", "branch-c"]);
     run(
         source.path(),
-        &["worktree", "add", &workspace_a.path().display().to_string(), "branch-a"],
+        &[
+            "worktree",
+            "add",
+            &workspace_a.path().display().to_string(),
+            "branch-a",
+        ],
     );
     run(
         source.path(),
-        &["worktree", "add", &workspace_c.path().display().to_string(), "branch-c"],
+        &[
+            "worktree",
+            "add",
+            &workspace_c.path().display().to_string(),
+            "branch-c",
+        ],
     );
 
     // Make C's registration stale/prunable WITHOUT going through
@@ -251,7 +273,10 @@ fn restore_worktree_no_checkout_and_no_branch_restores_detached_with_an_empty_in
     // Empty index and a bare directory: `restore_snapshot`/`restore_trees`
     // are what write both whole in the next step.
     let index_entries = stdout(target.path(), &["ls-files"]);
-    assert!(index_entries.is_empty(), "index must be empty, got: {index_entries}");
+    assert!(
+        index_entries.is_empty(),
+        "index must be empty, got: {index_entries}"
+    );
     assert!(
         !target.path().join("README.md").exists(),
         "the working directory must stay bare with --no-checkout"
@@ -321,7 +346,12 @@ fn restore_worktree_detached_with_prune_target_registration_prunes_the_targets_o
     run(source.path(), &["branch", "archived"]);
     run(
         source.path(),
-        &["worktree", "add", &target.path().display().to_string(), "archived"],
+        &[
+            "worktree",
+            "add",
+            &target.path().display().to_string(),
+            "archived",
+        ],
     );
     // The directory is gone but its registration survives, on a branch, at
     // the exact path the detached restore is aimed at.

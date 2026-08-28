@@ -191,7 +191,53 @@ Events include safe identifiers, basis/revision or source sequence, state, count
 
 Prompt-time provider rejection is not executable-membership authority. Known model-unavailable and model-configuration failures receive bounded error codes for actionable client presentation, while the original diagnostic stays behind the error's technical-details disclosure. Clients may offer the model picker; they do not remove an observed model, rewrite the saved selection, or retry the same non-retryable request automatically.
 
-Release coverage includes sparse/unknown Claude identifiers, model-scoped Claude controls (including the absence of `fast` under Fable), current Grok identifiers, both Codex controls, empty/failure/basis-change states, exact create rejection, startup contradiction, active-session isolation, and cloud target isolation. The deterministic gates and real-profile verifier are in [Testing](../../engineering/testing/standard.md).
+Release coverage includes sparse/unknown Claude identifiers, model-scoped Claude controls (including the absence of `fast` under Fable), current Grok identifiers, both Codex controls, empty/failure/basis-change states, exact create rejection, startup contradiction, active-session isolation, and cloud target isolation.
+
+## The launch-option authority gate
+
+(Relocated here 2026-08-26 from the retired per-PR testing standard — this
+gate is a harness law, so it lives with harnesses; the
+[testing spec](../../engineering/testing/README.md) fences it here.)
+
+Changes to harness observation, session create/configuration, cloud target
+copy, or first-party launch pickers must prove the complete authority
+chain: target observation covers non-empty, empty, same-basis failure,
+basis-change invalidation, unknown identifiers, and exact model-scoped
+control statements when the harness exposes them; create reloads
+current-basis state, validates against the selected model row when
+present, rejects exact non-members, and stores the complete resolved
+intent atomically; actor startup cannot publish ready until every explicit
+value is confirmed; live mutation advances the full session snapshot, and
+active UI ignores target/catalog state; Codex `collaboration_mode` and
+`mode` remain independent and obsolete `full-access` is absent; cloud copy
+is monotonic and isolated by cloud sandbox plus harness.
+
+The deterministic gate:
+
+```bash
+cargo test -p anyharness-contract -p anyharness-lib -p proliferate-worker
+pnpm --filter @anyharness/sdk test
+pnpm --filter @anyharness/tests test
+pnpm --filter @proliferate/product-client test
+pnpm --filter @proliferate/product-client typecheck
+(cd server && uv run pytest -q)
+python3 scripts/check_agent_auth_secret_logs.py
+python3 scripts/check_docs.py
+```
+
+Only one Cargo/Rust invocation may run on a machine at a time (check
+`pgrep -x cargo` / `pgrep -x rustc` first). The final manual proof attaches
+to an already-running named profile:
+
+```bash
+node scripts/verify-harness-launch-options.mjs \
+  --profile harness-launch-options \
+  --harness claude --harness grok --harness codex
+```
+
+The verifier never boots services, builds Rust, starts Docker, or prints
+credentials. Missing install/auth and `observed_empty` are incomplete
+proof, not a pass.
 
 ## Static agent data after the cutover
 

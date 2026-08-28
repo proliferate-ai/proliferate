@@ -86,11 +86,7 @@ impl SessionActor {
             config.launch.serving_seat_id.as_ref(),
             config.caps.seat_cooling.as_ref(),
         ) {
-            store.confirm_served(
-                &source_agent_kind,
-                seat_id,
-                chrono::Utc::now().timestamp(),
-            );
+            store.confirm_served(&source_agent_kind, seat_id, chrono::Utc::now().timestamp());
         }
         let mut child = spawned.child;
         let stdin = spawned.stdin;

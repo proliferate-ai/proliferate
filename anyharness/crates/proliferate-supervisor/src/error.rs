@@ -54,9 +54,15 @@ pub enum SupervisorError {
     #[error("update artifact exceeded max size {max} bytes")]
     ArtifactTooLarge { max: u64 },
     #[error("failed to activate update for {component}")]
-    Activate { component: String, source: io::Error },
+    Activate {
+        component: String,
+        source: io::Error,
+    },
     #[error("failed to roll back update for {component}")]
-    Rollback { component: String, source: io::Error },
+    Rollback {
+        component: String,
+        source: io::Error,
+    },
     #[error(transparent)]
     Protocol(#[from] proliferate_runtime_update_protocol::ProtocolError),
 }

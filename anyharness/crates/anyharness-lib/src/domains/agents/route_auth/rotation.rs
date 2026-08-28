@@ -41,7 +41,7 @@ pub fn seat_pool(sources: &HarnessSources) -> Vec<String> {
     let mut pool: Vec<String> = Vec::new();
     for source in &sources.sources {
         if let ResolvedSource::Seat(seat) = source {
-            if !pool.iter().any(|id| *id == seat.seat_id) {
+            if !pool.contains(&seat.seat_id) {
                 pool.push(seat.seat_id.clone());
             }
         }
@@ -166,9 +166,8 @@ pub fn seat_rotation_readout(
     SeatRotationReadout {
         serving_seat_id: Some(serving),
         next_seat_id: next.filter(|_| pool.len() >= 2),
-        cooling_until: cooling_until.and_then(|epoch| {
-            chrono::DateTime::from_timestamp(epoch, 0).map(|at| at.to_rfc3339())
-        }),
+        cooling_until: cooling_until
+            .and_then(|epoch| chrono::DateTime::from_timestamp(epoch, 0).map(|at| at.to_rfc3339())),
     }
 }
 
@@ -210,21 +209,29 @@ mod tests {
         let none = BTreeMap::new();
         assert_eq!(
             decide_rotation(&pool, true, None, &none),
-            RotationDecision::Serve { seat_id: "a".into() }
+            RotationDecision::Serve {
+                seat_id: "a".into()
+            }
         );
         assert_eq!(
             decide_rotation(&pool, true, Some("a"), &none),
-            RotationDecision::Serve { seat_id: "b".into() }
+            RotationDecision::Serve {
+                seat_id: "b".into()
+            }
         );
         // Cyclic: after the last seat comes the first.
         assert_eq!(
             decide_rotation(&pool, true, Some("c"), &none),
-            RotationDecision::Serve { seat_id: "a".into() }
+            RotationDecision::Serve {
+                seat_id: "a".into()
+            }
         );
         // A last-served seat no longer in the pool restarts at the first.
         assert_eq!(
             decide_rotation(&pool, true, Some("gone"), &none),
-            RotationDecision::Serve { seat_id: "a".into() }
+            RotationDecision::Serve {
+                seat_id: "a".into()
+            }
         );
     }
 
@@ -234,7 +241,9 @@ mod tests {
         let cooling = cooling(&[("b", 100)]);
         assert_eq!(
             decide_rotation(&pool, true, Some("a"), &cooling),
-            RotationDecision::Serve { seat_id: "c".into() }
+            RotationDecision::Serve {
+                seat_id: "c".into()
+            }
         );
     }
 
@@ -289,12 +298,16 @@ mod tests {
         // rotate=false: the applied seat keeps serving even though "b" exists.
         assert_eq!(
             decide_rotation(&pool, false, Some("a"), &none),
-            RotationDecision::Serve { seat_id: "a".into() }
+            RotationDecision::Serve {
+                seat_id: "a".into()
+            }
         );
         // Never served yet → the first seat is the pin.
         assert_eq!(
             decide_rotation(&pool, false, None, &none),
-            RotationDecision::Serve { seat_id: "a".into() }
+            RotationDecision::Serve {
+                seat_id: "a".into()
+            }
         );
         // A cooling pin refuses rather than rotating.
         let cooling = cooling(&[("a", 900)]);

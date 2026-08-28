@@ -7,10 +7,7 @@ use crate::domains::sessions::links::store::SessionLinkStore;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn app_wiring_enforces_reversible_subagent_operability() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state();
     test_support::seed_workspace_with_repo_root(&state.db, WS, "local", "/tmp/admission-subagent");
@@ -52,10 +49,7 @@ async fn app_wiring_enforces_reversible_subagent_operability() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn restore_cannot_reopen_a_reversibly_closed_dismissed_subagent() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state();
     test_support::seed_workspace_with_repo_root(&state.db, WS, "local", "/tmp/restore-subagent");
@@ -97,10 +91,7 @@ async fn restore_cannot_reopen_a_reversibly_closed_dismissed_subagent() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mobility_imported_closed_link_stays_closed_until_opened() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state();
     test_support::seed_workspace_with_repo_root(&state.db, WS, "local", "/tmp/mobility-closed");

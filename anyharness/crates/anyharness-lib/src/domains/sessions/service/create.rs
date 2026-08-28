@@ -185,9 +185,8 @@ impl SessionService {
         // the same seat-rotation decision as the launch (without advancing
         // anything), so an all-cooling pool 409s here with the cooling
         // sentence. The store rides the service's existing Db handle.
-        let seat_cooling_store = crate::domains::agents::seat_cooling::SeatCoolingStore::new(
-            self.session_store.db(),
-        );
+        let seat_cooling_store =
+            crate::domains::agents::seat_cooling::SeatCoolingStore::new(self.session_store.db());
         if let Some(error) =
             crate::domains::agents::route_auth::launch_route_selection_failure_rotated(
                 &self.runtime_home,

@@ -47,8 +47,14 @@ mod tests {
     fn clamp_bounds_only_deadlines_beyond_one_week() {
         let now = 1_756_220_400;
         assert_eq!(clamp_cooling_deadline(now, now + 3_600), now + 3_600);
-        assert_eq!(clamp_cooling_deadline(now, now + MAX_COOLING_S), now + MAX_COOLING_S);
-        assert_eq!(clamp_cooling_deadline(now, 9_999_999_999), now + MAX_COOLING_S);
+        assert_eq!(
+            clamp_cooling_deadline(now, now + MAX_COOLING_S),
+            now + MAX_COOLING_S
+        );
+        assert_eq!(
+            clamp_cooling_deadline(now, 9_999_999_999),
+            now + MAX_COOLING_S
+        );
         // A past deadline is not pulled forward — it just reads as expired.
         assert_eq!(clamp_cooling_deadline(now, now - 1), now - 1);
     }

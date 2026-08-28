@@ -16,7 +16,9 @@
 //! [`Native`]: AgentRuntimeAuthProfile::Native
 
 use std::collections::BTreeMap;
+use std::fmt;
 
+use super::redact::{redacted, RedactedEnv};
 use super::state::{
     AgentAuthState, AuthSource, SOURCE_KIND_API_KEY, SOURCE_KIND_GATEWAY,
     SOURCE_KIND_PROVIDER_CONFIG, SOURCE_KIND_SEAT,
@@ -59,20 +61,44 @@ pub enum ResolvedSource {
 
 /// A raw provider key destined for a free-form env var (contract §4: `api_key`
 /// source → `set[env_var_name] = value`, nothing else).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ApiKeyProfile {
     pub env_var_name: String,
     pub value: String,
 }
 
+/// Hand-written so `value` (a live provider key) can never reach `Debug`
+/// output — secrets must not be printable, even through a test panic.
+impl fmt::Debug for ApiKeyProfile {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ApiKeyProfile")
+            .field("env_var_name", &self.env_var_name)
+            .field("value", &redacted(&self.value))
+            .finish()
+    }
+}
+
 /// A LiteLLM virtual key + public gateway base URL. The per-harness gateway
 /// recipe (render.rs) decides how the CLI is pointed at it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct GatewayProfile {
     /// The public gateway base URL (root, no per-harness suffix — the recipes
     /// append `/v1`, etc. per the live matrix).
     pub base_url: String,
     pub key: String,
+}
+
+/// Hand-written so `key` (the live virtual key) can never reach `Debug`
+/// output — secrets must not be printable, even through a test panic.
+impl fmt::Debug for GatewayProfile {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("GatewayProfile")
+            .field("base_url", &self.base_url)
+            .field("key", &redacted(&self.key))
+            .finish()
+    }
 }
 
 /// A typed provider config (Track D: "use my own cloud provider account" —
@@ -81,10 +107,23 @@ pub struct GatewayProfile {
 /// before the source ever reached Rust (agent-auth.md's wire contract). The
 /// per-harness recipe (render.rs) consumes `config_kind` only to pick which
 /// arm to run — never to rename a field.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ProviderConfigProfile {
     pub config_kind: String,
     pub env: BTreeMap<String, String>,
+}
+
+/// Hand-written so `env`'s values (the user's own cloud-provider credentials)
+/// can never reach `Debug` output; the key NAMES are not secrets and stay
+/// readable for debugging.
+impl fmt::Debug for ProviderConfigProfile {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProviderConfigProfile")
+            .field("config_kind", &self.config_kind)
+            .field("env", &RedactedEnv(&self.env))
+            .finish()
+    }
 }
 
 /// A seat (seats v1): "run on this Max subscription". `env` is ALREADY the
@@ -94,10 +133,23 @@ pub struct ProviderConfigProfile {
 /// `seat_id` names the vault entry so status/refusals can identify the seat
 /// without ever echoing the token. The document carries the pool in vault
 /// order; the render plane serves the first (rotation is a later slice).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SeatProfile {
     pub seat_id: String,
     pub env: BTreeMap<String, String>,
+}
+
+/// Hand-written so `env`'s values (the seat's OAuth token) can never reach
+/// `Debug` output; `seat_id` and the key NAMES are not secrets and stay
+/// readable for debugging.
+impl fmt::Debug for SeatProfile {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SeatProfile")
+            .field("seat_id", &self.seat_id)
+            .field("env", &RedactedEnv(&self.env))
+            .finish()
+    }
 }
 
 /// Resolve the auth profile for `harness_kind` from the loaded state.
@@ -274,3 +326,7 @@ fn require_field(
 #[cfg(test)]
 #[path = "profile_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "profile_redaction_tests.rs"]
+mod redaction_tests;

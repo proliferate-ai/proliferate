@@ -44,8 +44,14 @@ async fn main() -> anyhow::Result<()> {
         // job asserts on, and the marker is the same string the job greps the
         // packaged binary for, which keeps the compiled constant reachable so
         // the linker cannot drop it.
-        println!("{}", proliferate_diagnostics_collector::export_policy_name());
-        eprintln!("{}", proliferate_diagnostics_collector::export_policy_marker());
+        println!(
+            "{}",
+            proliferate_diagnostics_collector::export_policy_name()
+        );
+        eprintln!(
+            "{}",
+            proliferate_diagnostics_collector::export_policy_marker()
+        );
         std::io::stdout().flush()?;
         return Ok(());
     }

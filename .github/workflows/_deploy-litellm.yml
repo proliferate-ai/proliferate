@@ -121,6 +121,7 @@ jobs:
 
       - name: Build and push LiteLLM image
         if: ${{ steps.switch.outputs.deploy == 'true' }}
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -129,6 +130,18 @@ jobs:
           tags: |
             ${{ steps.image.outputs.image_uri }}
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_LITELLM_REPOSITORY }}:${{ inputs.environment }}-latest
+
+      - name: Pin the image to its immutable digest
+        if: ${{ steps.switch.outputs.deploy == 'true' }}
+        id: pinned
+        # The task definition must reference repo@sha256:… like the server
+        # lane does: a tag is mutable, so a later push to the same short-SHA
+        # tag would silently change what a scale-up or task restart runs.
+        run: |
+          set -euo pipefail
+          digest="${{ steps.build.outputs.digest }}"
+          test -n "$digest"
+          echo "image_ref=${{ steps.ecr.outputs.registry }}/${ECR_LITELLM_REPOSITORY}@${digest}" >> "$GITHUB_OUTPUT"
 
       - name: Render ECS task definition
         if: ${{ steps.switch.outputs.deploy == 'true' }}
@@ -179,7 +192,7 @@ jobs:
 
           jq \
             --arg container "$ECS_LITELLM_CONTAINER_NAME" \
-            --arg image "${{ steps.image.outputs.image_uri }}" \
+            --arg image "${{ steps.pinned.outputs.image_ref }}" \
             --slurpfile updates env-updates.json \
             --slurpfile secret_updates secret-updates.json \
             '
@@ -247,7 +260,7 @@ jobs:
             echo "- Environment: $DEPLOY_ENVIRONMENT"
             echo "- Deploy switch: \`$LITELLM_DEPLOY_ENABLED\`"
             if [[ "${{ steps.switch.outputs.deploy }}" == "true" ]]; then
-              echo "- Image: \`${{ steps.image.outputs.image_uri }}\`"
+              echo "- Image: \`${{ steps.pinned.outputs.image_ref }}\` (tagged \`${{ steps.image.outputs.image_uri }}\`)"
               echo "- Task definition: \`${{ steps.task.outputs.task_definition_arn }}\`"
               echo "- Service: \`$ECS_CLUSTER/$ECS_LITELLM_SERVICE\`"
             fi

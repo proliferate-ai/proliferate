@@ -125,3 +125,4 @@ apps/packages/product-client/src/generated/
 # Local dev symlink into the root workspace node_modules (never committed)
 tests/release/node_modules
 tmp/
+.release-e2e/

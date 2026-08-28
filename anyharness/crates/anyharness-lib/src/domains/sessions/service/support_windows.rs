@@ -383,7 +383,7 @@ mod tests {
             SupportWindowPresentationOrder::UpdatedDescIdAsc,
             false,
             &cancellation,
-            |encoded| Ok(encoded),
+            Ok,
         )
         .expect("select empty window");
         guard.disarm();
@@ -413,7 +413,7 @@ mod tests {
             SupportWindowPresentationOrder::UpdatedDescIdAsc,
             false,
             &cancellation,
-            |encoded| Ok(encoded),
+            Ok,
         )
         .expect("select bounded window");
         guard.disarm();
@@ -480,7 +480,7 @@ mod tests {
             SupportWindowPresentationOrder::SeqAsc,
             true,
             &cancellation,
-            |encoded| Ok(encoded),
+            Ok,
         )
         .expect("select item-bounded evidence window");
         guard.disarm();
@@ -563,7 +563,7 @@ mod tests {
             SupportWindowPresentationOrder::SeqAsc,
             true,
             &cancellation,
-            |encoded| Ok(encoded),
+            Ok,
         )
         .expect("select bounded evidence window");
         guard.disarm();

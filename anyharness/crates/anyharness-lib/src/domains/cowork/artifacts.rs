@@ -89,9 +89,7 @@ fn ensure_cowork_workspace(workspace: &WorkspaceRecord) -> Result<(), ArtifactEr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::workspaces::model::{
-        WorkspaceKind, WorkspaceLifecycleState,
-    };
+    use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceLifecycleState};
     use uuid::Uuid;
 
     #[test]

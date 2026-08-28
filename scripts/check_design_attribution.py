@@ -40,9 +40,7 @@ from scripts import lint_records  # noqa: E402  (path shim must precede the impo
 
 CHECKER = "scripts/check_design_attribution.py"
 RULES = lint_records.load("product")
-OWNED_RULE_IDS = frozenset(
-    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
-)
+OWNED_RULE_IDS = frozenset(rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER)
 
 SCANNED_ROOTS = [
     "apps/packages",

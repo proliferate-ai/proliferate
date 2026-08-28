@@ -7,8 +7,9 @@ use crate::{
     error::WorkerError,
     identity,
     identity::credentials::WorkerIdentity,
-    integration_gateway, lifecycle,
+    integration_gateway,
     launch_options_sync::{self, LaunchOptionsSyncState},
+    lifecycle,
     process_lock::WorkerProcessLock,
     store::WorkerStore,
     supervisor_bridge, versions,
@@ -76,12 +77,12 @@ async fn heartbeat_and_converge(
     let anyharness_version = versions::running_anyharness_version(store);
     let response =
         match lifecycle::heartbeat::send_once(cloud, identity, config, anyharness_version).await {
-        Ok(response) => response,
-        Err(error) => {
-            warn!(?error, "worker heartbeat failed");
-            return;
-        }
-    };
+            Ok(response) => response,
+            Err(error) => {
+                warn!(?error, "worker heartbeat failed");
+                return;
+            }
+        };
 
     // Only the currently authorized Worker receives a successful heartbeat.
     // Reassert its gateway credential if a delayed predecessor overwrote the

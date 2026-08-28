@@ -37,7 +37,7 @@ readiness. Before readiness, also update the body with:
 - a plain summary of the change; and
 - the commands and other evidence that prove it.
 
-Use the proof depth required by [`../../specs/engineering/testing/standard.md`](../../specs/engineering/testing/standard.md).
+Use the proof depth required by [`../../specs/engineering/testing/README.md`](../../specs/engineering/testing/README.md).
 
 Do not include report, user, or support identifiers, report bodies, emails,
 private messages, telemetry identities, or other private source data in the
@@ -118,7 +118,7 @@ Current mechanical classification has three important edge cases:
 
 Many branches build from one `main` at once and one coordinator merges them
 serially. The laws are in the
-[Building Loop spec](../../specs/engineering/shipping/README.md);
+[Building Loop spec](../../specs/engineering/ci-cd/README.md);
 the procedure is:
 
 1. **Open with labels.** Use `node scripts/ci-cd/pr-open.mjs --release

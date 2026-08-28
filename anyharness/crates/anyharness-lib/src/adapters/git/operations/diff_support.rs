@@ -348,7 +348,7 @@ mod tests {
     #[test]
     fn parse_numstat_z_map_reads_plain_entries() {
         // `git diff --numstat -z`: "add\tdel\tpath\0" per plain entry.
-        let raw = "3\t1\tsrc/lib.rs\00\t2\tREADME.md\0";
+        let raw = "3\t1\tsrc/lib.rs\x000\t2\tREADME.md\0";
         let stats = parse_numstat_z_map(raw);
 
         let lib = stats

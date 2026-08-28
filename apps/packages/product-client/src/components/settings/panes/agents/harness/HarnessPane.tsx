@@ -24,6 +24,7 @@ import {
 } from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
 import { HarnessProvidersSection } from "#product/components/settings/panes/agents/harness/HarnessProvidersSection";
 import { HarnessConfigIssueBanner } from "#product/components/settings/panes/agents/harness/HarnessConfigIssueBanner";
+import { HarnessNativeBridgePrompt } from "#product/components/settings/panes/agents/harness/HarnessNativeBridgePrompt";
 import { HarnessManagedNotice } from "#product/components/settings/panes/agents/harness/HarnessManagedNotice";
 import { useHarnessAuthEditor } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-harness-install-action";
@@ -195,6 +196,16 @@ function HarnessRuntimeSurface({
         displayName={displayName}
         agent={runtimeAgent}
       />
+
+      {/* The native-migration bridge's one-time prompt (local machine truth;
+          the cloud surface has no bridge). Sits directly above Authentication
+          because acting on it IS picking a method there. */}
+      {surface === "local" ? (
+        <HarnessNativeBridgePrompt
+          harnessKind={harnessKind}
+          displayName={displayName}
+        />
+      ) : null}
 
       <HarnessAuthSurface
         harnessKind={harnessKind}

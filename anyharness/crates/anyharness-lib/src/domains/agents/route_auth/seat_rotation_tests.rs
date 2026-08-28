@@ -115,7 +115,10 @@ fn chosen_seat_renders_alone_beside_a_gateway_source() {
     .expect("seat render");
     assert_eq!(rendered.serving_seat_id.as_deref(), Some("seat-a"));
     assert_eq!(
-        rendered.set.get("CLAUDE_CODE_OAUTH_TOKEN").map(String::as_str),
+        rendered
+            .set
+            .get("CLAUDE_CODE_OAUTH_TOKEN")
+            .map(String::as_str),
         Some("sk-ant-oat01-seat-a")
     );
     assert!(
@@ -197,13 +200,9 @@ fn all_seats_cooling_falls_back_with_reason() {
         "the Display names the earliest reset: {error}"
     );
     // The create-time preview produces the same refusal.
-    let preview = launch_route_selection_failure_rotated_for_server(
-        seat_only.path(),
-        "claude",
-        &store,
-        None,
-    )
-    .expect("preview refuses too");
+    let preview =
+        launch_route_selection_failure_rotated_for_server(seat_only.path(), "claude", &store, None)
+            .expect("preview refuses too");
     assert_eq!(preview.code(), "AGENT_ROUTE_ALL_SEATS_COOLING");
 }
 
@@ -256,22 +255,36 @@ fn limit_error_marks_seat_cooling_until_reset() {
     let now_epoch_s = now();
     let carried_reset = now_epoch_s + 4_000;
 
-    let observation = classify_seat_usage_limit_error(&format!(
-        "Claude AI usage limit reached|{carried_reset}"
-    ))
-    .expect("classified");
+    let observation =
+        classify_seat_usage_limit_error(&format!("Claude AI usage limit reached|{carried_reset}"))
+            .expect("classified");
     let cooling_until = observation
         .reset_at_epoch_s
         .unwrap_or_else(|| next_five_hour_window_top(now_epoch_s));
-    store.mark_cooling("seat-a", "claude", cooling_until, Some(observation.window), now_epoch_s);
-    assert_eq!(store.cooling_until("seat-a", now_epoch_s), Some(carried_reset));
+    store.mark_cooling(
+        "seat-a",
+        "claude",
+        cooling_until,
+        Some(observation.window),
+        now_epoch_s,
+    );
+    assert_eq!(
+        store.cooling_until("seat-a", now_epoch_s),
+        Some(carried_reset)
+    );
 
     let observation =
         classify_seat_usage_limit_error("5-hour limit reached ∙ resets 3pm").expect("classified");
     let cooling_until = observation
         .reset_at_epoch_s
         .unwrap_or_else(|| next_five_hour_window_top(now_epoch_s));
-    store.mark_cooling("seat-b", "claude", cooling_until, Some(observation.window), now_epoch_s);
+    store.mark_cooling(
+        "seat-b",
+        "claude",
+        cooling_until,
+        Some(observation.window),
+        now_epoch_s,
+    );
     assert_eq!(
         store.cooling_until("seat-b", now_epoch_s),
         Some(next_five_hour_window_top(now_epoch_s))
@@ -288,7 +301,13 @@ fn absurd_reset_epoch_is_clamped_to_one_week() {
     let observation =
         classify_seat_usage_limit_error("usage limit reached|9999999999").expect("classified");
     let requested = observation.reset_at_epoch_s.expect("ten digits parse");
-    store.mark_cooling("seat-a", "claude", requested, Some(observation.window), now_epoch_s);
+    store.mark_cooling(
+        "seat-a",
+        "claude",
+        requested,
+        Some(observation.window),
+        now_epoch_s,
+    );
     assert_eq!(
         store.cooling_until("seat-a", now_epoch_s),
         Some(now_epoch_s + MAX_COOLING_S)
@@ -304,13 +323,28 @@ fn a_longer_unexpired_cooling_is_never_shortened() {
     let store = store();
     let now_epoch_s = now();
     let weekly_reset = now_epoch_s + 3 * 24 * 3_600;
-    store.mark_cooling("seat-a", "claude", weekly_reset, Some("seven_day"), now_epoch_s);
+    store.mark_cooling(
+        "seat-a",
+        "claude",
+        weekly_reset,
+        Some("seven_day"),
+        now_epoch_s,
+    );
 
     // A later, shorter observation (the 5-hour fallback) leaves the deadline.
     let five_hour_top = next_five_hour_window_top(now_epoch_s + 60);
     assert!(five_hour_top < weekly_reset);
-    store.mark_cooling("seat-a", "claude", five_hour_top, Some("five_hour"), now_epoch_s + 60);
-    assert_eq!(store.cooling_until("seat-a", now_epoch_s + 60), Some(weekly_reset));
+    store.mark_cooling(
+        "seat-a",
+        "claude",
+        five_hour_top,
+        Some("five_hour"),
+        now_epoch_s + 60,
+    );
+    assert_eq!(
+        store.cooling_until("seat-a", now_epoch_s + 60),
+        Some(weekly_reset)
+    );
     assert_eq!(
         store.cooling_map("claude", now_epoch_s + 60).get("seat-a"),
         Some(&weekly_reset)
@@ -318,8 +352,17 @@ fn a_longer_unexpired_cooling_is_never_shortened() {
 
     // A later, LONGER observation still extends.
     let extended = weekly_reset + 3_600;
-    store.mark_cooling("seat-a", "claude", extended, Some("seven_day"), now_epoch_s + 120);
-    assert_eq!(store.cooling_until("seat-a", now_epoch_s + 120), Some(extended));
+    store.mark_cooling(
+        "seat-a",
+        "claude",
+        extended,
+        Some("seven_day"),
+        now_epoch_s + 120,
+    );
+    assert_eq!(
+        store.cooling_until("seat-a", now_epoch_s + 120),
+        Some(extended)
+    );
 
     // Once the row has expired, a fresh (shorter) mark replaces it normally.
     let after_expiry = extended + 1;
@@ -367,7 +410,11 @@ fn last_served_advances_only_on_successful_spawn() {
 
     store.confirm_served("claude", "seat-a", now());
     assert_eq!(store.last_served("claude").as_deref(), Some("seat-a"));
-    assert_eq!(launch(&home, &store), "seat-b", "confirm advanced the wheel");
+    assert_eq!(
+        launch(&home, &store),
+        "seat-b",
+        "confirm advanced the wheel"
+    );
 }
 
 /// The frozen refusal copy, pinned exactly. The `{time}` piece is produced by
@@ -434,7 +481,10 @@ fn refusal_copy_is_pinned_exactly() {
 #[test]
 fn refusal_codes_and_route_auth_error_mapping() {
     assert_eq!(
-        LaunchRefusal::NoConfiguredSource { harness: "x".into() }.code(),
+        LaunchRefusal::NoConfiguredSource {
+            harness: "x".into()
+        }
+        .code(),
         "AGENT_AUTH_NOT_CONFIGURED"
     );
     assert_eq!(

@@ -1,6 +1,4 @@
-use super::super::model::{
-    ReviewAssignmentRecord, ReviewKind, ReviewLaunchVerificationStatus, ReviewRunRecord,
-};
+use super::super::model::{ReviewAssignmentRecord, ReviewKind, ReviewRunRecord};
 use super::super::service::ReviewError;
 use crate::domains::sessions::runtime::CreateAndStartSessionError;
 
@@ -59,7 +57,9 @@ fn review_markdown_instructions(kind: ReviewKind) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::model::{ReviewAssignmentStatus, ReviewRunStatus};
+    use super::super::super::model::{
+        ReviewAssignmentStatus, ReviewLaunchVerificationStatus, ReviewRunStatus,
+    };
     use super::*;
 
     #[test]

@@ -1,7 +1,6 @@
 //! Runtime-owned model registry catalog metadata, split from `model.rs`
 //! (re-exported there) to keep that file within the repo line ceiling.
 
-
 /// Runtime-owned model registry metadata used by session validation and launch defaults.
 #[derive(Debug, Clone)]
 pub struct ModelRegistryMetadata {

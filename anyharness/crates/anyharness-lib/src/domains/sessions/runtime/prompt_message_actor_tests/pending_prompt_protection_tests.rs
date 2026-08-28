@@ -11,7 +11,7 @@ use crate::domains::sessions::store::completion_deliveries::{
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn protected_edit_cleans_prepared_attachment_without_mutating_wake_or_outbox() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("protected-completion-edit");

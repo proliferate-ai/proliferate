@@ -19,9 +19,9 @@ import type {
 import type { Tier2BillingEvidenceV1 } from "../../evidence/schema.js";
 import type { ScenarioPlanContext, ScenarioRunContext } from "../types.js";
 import type { PlannedCellV1 } from "../../runner/result.js";
-import type { BillingBootResult } from "../../../../intent/stack/billing-boot.ts";
-import type { BootWithFakeResult, LitellmManagementFake } from "../../../../intent/stack/billing-usage-import.ts";
-import type { BootedStack, StripeBillingEnv } from "../../../../intent/stack/boot.ts";
+import type { BillingBootResult } from "./stack/billing-boot.ts";
+import type { BootWithFakeResult, LitellmManagementFake } from "./stack/billing-usage-import.ts";
+import type { BootedStack, StripeBillingEnv } from "./stack/boot.ts";
 
 // The harness ignores the scenario run/plan context (its work is against the
 // booted stack), so a bare cast is sufficient for these mechanism tests.
@@ -178,7 +178,7 @@ function fakeCell(caseId: string): PlannedCellV1 {
   return {
     cell_id: `T2-BILL/local/${TIER2_CASE_DIMENSION}=${caseId}`,
     scenario_id: "T2-BILL",
-    registry_flow_ref: "specs/engineering/testing/flows.md#tier2-billing",
+    registry_flow_ref: "tests/release/core-release-scenario-manifest.json#tier2-billing",
     runtime_lane: "local",
     dimensions: { [TIER2_CASE_DIMENSION]: caseId },
     required_env: [],
@@ -189,7 +189,7 @@ function fakeConfig(cases: Record<string, Tier2CellHandler>): Tier2ScenarioConfi
   return {
     id: "T2-BILL",
     title: "Tier-2 billing mechanism test",
-    registryFlowRef: "specs/engineering/testing/flows.md#tier2-billing",
+    registryFlowRef: "tests/release/core-release-scenario-manifest.json#tier2-billing",
     requiredEnv: ["TIER2_BILLING_STRIPE_SECRET_KEY"],
     requireStripe: true,
     cases,

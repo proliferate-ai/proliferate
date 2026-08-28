@@ -316,7 +316,10 @@ fn archived_at_is_backfilled_only_for_absorbed_rows() {
         chrono::DateTime::parse_from_rfc3339(&fallback).is_ok(),
         "migration timestamp must be RFC3339: {fallback}"
     );
-    assert_eq!(optional_text(&conn, "archived_at", "workspace-active"), None);
+    assert_eq!(
+        optional_text(&conn, "archived_at", "workspace-active"),
+        None
+    );
 }
 
 #[test]

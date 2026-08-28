@@ -5,7 +5,7 @@ import { ApiClient } from "../../fixtures/http.js";
 
 /**
  * T3-SH-4 — base-install capability contract holds on real infra.
- * specs/engineering/testing/self-hosting.md#T3-SH-4
+ * delivery/testing-cicd/archive/self-hosting.md#T3-SH-4
  *
  * server/tests/unit/test_meta_endpoint.py already pins the pure
  * `build_server_capabilities(Settings)` contract exhaustively (every field,
@@ -36,7 +36,7 @@ import { ApiClient } from "../../fixtures/http.js";
 export const t3Sh4: ScenarioDefinition = {
   id: "T3-SH-4",
   title: "base-install capability contract holds on real infra",
-  registryFlowRef: "specs/engineering/testing/self-hosting.md#T3-SH-4",
+  registryFlowRef: "delivery/testing-cicd/archive/self-hosting.md#T3-SH-4",
   lanes: ["local"],
   requiredEnv: ["RELEASE_E2E_SELFHOST_URL"],
   plan: () => [

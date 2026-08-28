@@ -190,8 +190,8 @@ Pinning suites (all in-crate, run with `cargo test -p anyharness-lib`):
   [store/tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/store/tests.rs).
 - Mobility: [mobility_policy_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/mobility/runtime/mobility_policy_tests.rs),
   [destroy_source_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/mobility/runtime/destroy_source_tests.rs).
-- Cross-plane: [workspace-entry.spec.ts](../../../tests/intent/specs/workspace-entry.spec.ts)
-  pins the client entry flow over a live runtime.
+- Cross-plane: workspace-entry.spec.ts pinned the client entry flow over a
+  live runtime until the `tests/intent` suite was deleted (2026-08 cull).
 - Fence: [check_anyharness_fences.py](../../../scripts/check_anyharness_fences.py)
   holds this domain's edge set; the sole-writer rule for the two ref
   namespaces is review-enforced (grep `update-ref|show-ref|for-each-ref`

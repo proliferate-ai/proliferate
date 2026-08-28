@@ -14,7 +14,7 @@ use crate::persistence::Db;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn concurrent_claim_has_one_winner_and_expired_foreign_lease_recovers_once() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("completion-concurrent-claim");

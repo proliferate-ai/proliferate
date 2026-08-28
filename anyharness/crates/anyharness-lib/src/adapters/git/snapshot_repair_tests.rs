@@ -123,9 +123,15 @@ fn stranded_rebase_sentinel_with_kill_evidence_is_aborted_and_capture_then_succe
     // Negative control: without repair, the sentinel survives and every
     // retry refuses forever.
     let refused_once = snapshot_workspace(repo.path()).expect_err("must refuse before repair");
-    assert!(matches!(refused_once, SnapshotError::GitOperationInProgress { .. }));
+    assert!(matches!(
+        refused_once,
+        SnapshotError::GitOperationInProgress { .. }
+    ));
     let refused_again = snapshot_workspace(repo.path()).expect_err("still refuses without repair");
-    assert!(matches!(refused_again, SnapshotError::GitOperationInProgress { .. }));
+    assert!(matches!(
+        refused_again,
+        SnapshotError::GitOperationInProgress { .. }
+    ));
 
     let report = quiesce(1, 1, SystemTime::now() + Duration::from_secs(2));
     let notices = repair_kill_debris(repo.path(), &report).expect("repair_kill_debris");
@@ -217,7 +223,10 @@ fn sentinel_with_zero_killed_git_is_not_aborted_even_with_a_nonzero_total_kill_c
     assert!(repo.path().join(".git/MERGE_HEAD").exists());
 
     let error = snapshot_workspace(repo.path()).expect_err("must still refuse");
-    assert!(matches!(error, SnapshotError::GitOperationInProgress { .. }));
+    assert!(matches!(
+        error,
+        SnapshotError::GitOperationInProgress { .. }
+    ));
 }
 
 #[test]
@@ -242,7 +251,9 @@ fn bisect_sentinel_is_never_auto_aborted_even_with_kill_evidence() {
     assert!(repo.path().join(".git/BISECT_LOG").exists());
 
     let error = snapshot_workspace(repo.path()).expect_err("bisect must always refuse");
-    assert!(matches!(error, SnapshotError::GitOperationInProgress { operation } if operation == "bisect"));
+    assert!(
+        matches!(error, SnapshotError::GitOperationInProgress { operation } if operation == "bisect")
+    );
 
     run(repo.path(), &["bisect", "reset"]);
 }
@@ -307,7 +318,12 @@ fn common_dir_lock_is_never_touched_regardless_of_age_or_evidence() {
     run(source.path(), &["branch", "topic"]);
     run(
         source.path(),
-        &["worktree", "add", &linked.path().display().to_string(), "topic"],
+        &[
+            "worktree",
+            "add",
+            &linked.path().display().to_string(),
+            "topic",
+        ],
     );
 
     let common_dir = PathBuf::from(stdout(

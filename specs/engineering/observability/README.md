@@ -79,7 +79,7 @@ Per-PR surface: every PR states its **observability delta** or an explicit "none
 | runtime [harnesses](../../systems/harnesses/README.md), [terminals](../../systems/workspaces/terminals.md), [artifacts](../../systems/sessions/artifacts.md), [desktop-host](../../systems/desktop-host/README.md) | runtime contracts | product-shaped | lifecycle records already exist for harness start (`anyharness.agent.start`); terminals/artifacts have none |
 | [agents](../../README.md), [auth](../../systems/identity/accounts.md), [clients](../../areas/frontend.md), [support](../../systems/support/README.md), [workflows](../../systems/automations/README.md) | — | **empty** | an Emits section; support in particular must emit `support.report.captured` (report id, session id, release id) — it is the system that ties a human complaint to a session |
 
-Also consumed: **release identity** from [delivery](../shipping/release-delivery.md) (`release_id` on every log record and Sentry release), and the **analytics fence** from [analytics](analytics.md) (which typed events may reach PostHog).
+Also consumed: **release identity** from [delivery](../ci-cd/release-delivery.md) (`release_id` on every log record and Sentry release), and the **analytics fence** from [analytics](analytics.md) (which typed events may reach PostHog).
 
 ## 5. Laws
 
@@ -138,7 +138,7 @@ These are **bounded correlation identifiers**, never license to copy content. Se
 - **Analytics** owns PostHog, anonymous telemetry, Metabase, and which
   product events are permitted ([analytics](analytics.md)).
 - **Delivery** owns release construction and the `release_id` identity
-  ([delivery](../shipping/release-delivery.md)).
+  ([delivery](../ci-cd/release-delivery.md)).
 - **Support** owns capture, S3 custody, redaction, and the Slack receipt
   ([support](../../systems/support/README.md)); observability consumes its
   report id as a correlation field.

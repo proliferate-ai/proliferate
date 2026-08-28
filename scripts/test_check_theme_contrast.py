@@ -41,9 +41,7 @@ class ColorMath(unittest.TestCase):
 
     def test_known_ratio(self) -> None:
         # #767676 on white is the canonical "just passes 4.5:1" grey.
-        self.assertAlmostEqual(
-            contrast(Rgb(0x76, 0x76, 0x76), Rgb(255, 255, 255)), 4.54, places=2
-        )
+        self.assertAlmostEqual(contrast(Rgb(0x76, 0x76, 0x76), Rgb(255, 255, 255)), 4.54, places=2)
 
     def test_hex_forms(self) -> None:
         self.assertEqual(parse_color("#fff")[0].hex(), "#ffffff")
@@ -359,9 +357,7 @@ class PlaneCoverage(unittest.TestCase):
         rail = Rgb(0xF6, 0xF6, 0xF6)
         rail_control = composite(ink, 0.049, rail)
         self.assertGreaterEqual(contrast(composite(ink, 0.62, rail), rail), 4.5)
-        self.assertGreaterEqual(
-            contrast(composite(ink, 0.62, rail_control), rail_control), 4.5
-        )
+        self.assertGreaterEqual(contrast(composite(ink, 0.62, rail_control), rail_control), 4.5)
         self.assertLess(contrast(composite(ink, 0.61, rail_control), rail_control), 4.5)
         self.assertLess(contrast(composite(ink, 0.60, rail), rail), 4.5)
 

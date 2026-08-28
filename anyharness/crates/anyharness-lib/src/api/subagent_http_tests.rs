@@ -18,10 +18,7 @@ const OTHER_WS: &str = "30000000-0000-4000-8000-000000000003";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn workspace_and_parent_rosters_project_only_current_subagents() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state();
     test_support::seed_workspace_with_repo_root(&state.db, WS, "local", "/tmp/roster-ws");
@@ -198,10 +195,7 @@ async fn workspace_and_parent_rosters_project_only_current_subagents() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn lifecycle_routes_preserve_identity_are_idempotent_and_hide_non_targets() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state();
     test_support::seed_workspace_with_repo_root(&state.db, WS, "local", "/tmp/lifecycle-ws");

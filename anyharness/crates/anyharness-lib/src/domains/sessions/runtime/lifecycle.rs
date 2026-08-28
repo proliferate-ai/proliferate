@@ -415,6 +415,7 @@ impl SessionRuntime {
     /// route already established authority from its durable run — and changes
     /// no session row. `Requested` proves only that the matching-turn cancel
     /// command was accepted, never provider cancellation.
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) async fn request_live_turn_cancel(
         &self,
         session_id: &str,
@@ -437,6 +438,7 @@ impl SessionRuntime {
 /// Result of [`SessionRuntime::request_live_turn_cancel`]. No variant
 /// terminalizes a workflow: only the exact correlated callback can.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(crate) enum LiveTurnCancelOutcome {
     Requested,
     NotActive,

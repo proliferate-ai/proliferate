@@ -283,10 +283,7 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
     const PARENT_ID: &str = "parent-session-1";
     const PARTIAL_TEXT: &str = "partial answer before reversible close";
 
-    let _lock = crate::app::test_support::ENV_MUTEX
-        .get_or_init(|| std::sync::Mutex::new(()))
-        .lock()
-        .unwrap();
+    let _lock = crate::app::test_support::lock_env().await;
     let _bearer_guard = crate::app::test_support::set_bearer_token_env(None);
     let _data_key_guard = crate::app::test_support::set_data_key_env(None);
     let local = tokio::task::LocalSet::new();

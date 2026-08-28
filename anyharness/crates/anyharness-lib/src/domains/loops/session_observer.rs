@@ -104,7 +104,9 @@ impl SessionEventObserver for LoopSessionObserver {
         obs: SessionObservation<'_>,
     ) -> ObserverEffects {
         match obs {
-            SessionObservation::NonTranscriptChunk(payload) => self.observe_loop_chunk(ctx, payload),
+            SessionObservation::NonTranscriptChunk(payload) => {
+                self.observe_loop_chunk(ctx, payload)
+            }
             // Loop state arrives only on tagged protocol chunks.
             SessionObservation::ToolCall { .. }
             | SessionObservation::AssistantMessageCompleted(_)
@@ -162,7 +164,10 @@ mod tests {
             }
         })));
         let anyharness = meta.anyharness.expect("anyharness meta");
-        assert_eq!(anyharness.transcript_event.as_deref(), Some("loop_upserted"));
+        assert_eq!(
+            anyharness.transcript_event.as_deref(),
+            Some("loop_upserted")
+        );
         let wire: LoopWire = serde_json::from_value(anyharness.r#loop.expect("loop payload"))
             .expect("parse loop wire");
         assert_eq!(wire.loop_id, "cron-1");

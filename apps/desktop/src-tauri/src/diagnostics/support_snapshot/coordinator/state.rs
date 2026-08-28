@@ -18,20 +18,20 @@ use super::control::{PreparationControl, PreparationInterruption};
 use super::model::BeginSupportSnapshotInput;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum ReadinessState {
+pub(crate) enum ReadinessState {
     Unreconciled,
     Reconciling,
     Ready,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PreparationPhase {
+pub(crate) enum PreparationPhase {
     Capturing,
     AwaitingFinish,
     Finishing,
 }
 
-pub(super) struct OpenPreparation {
+pub(crate) struct OpenPreparation {
     pub input: BeginSupportSnapshotInput,
     pub preparation_id: String,
     pub snapshot_id: String,
@@ -47,7 +47,7 @@ pub(super) struct OpenPreparation {
     pub session_phase_started_at: Option<String>,
 }
 
-pub(super) struct OpenSubmission {
+pub(crate) struct OpenSubmission {
     pub submission_id: String,
     pub artifact_id: String,
     pub client_job_id: String,
@@ -55,14 +55,14 @@ pub(super) struct OpenSubmission {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct ClosedPreparation {
+pub(crate) struct ClosedPreparation {
     pub preparation_id: String,
     pub consent_epoch: String,
     pub interruption: PreparationInterruption,
 }
 
 #[derive(Clone)]
-pub(super) struct ArtifactAuthorization {
+pub(crate) struct ArtifactAuthorization {
     pub reference: SupportArtifactReference,
     pub preparation_id: Option<String>,
     pub preparation_operation_id: Option<String>,
@@ -70,12 +70,12 @@ pub(super) struct ArtifactAuthorization {
 }
 
 #[derive(Clone)]
-pub(super) struct ReadVerificationProof {
+pub(crate) struct ReadVerificationProof {
     pub reference: SupportArtifactReference,
     pub expires_at: Instant,
 }
 
-pub(super) struct CoordinatorState {
+pub(crate) struct CoordinatorState {
     pub shutdown_armed: bool,
     pub readiness: ReadinessState,
     pub preparation: Option<OpenPreparation>,
@@ -103,7 +103,7 @@ impl Default for CoordinatorState {
     }
 }
 
-pub(super) struct ClosingPreparation {
+pub(crate) struct ClosingPreparation {
     pub preparation_id: String,
     pub consent_epoch: String,
     pub client_job_id: String,
@@ -118,7 +118,7 @@ pub(super) struct ClosingPreparation {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PreparationTerminal {
+pub(crate) enum PreparationTerminal {
     Succeeded,
     Cancelled,
     Abandoned,
@@ -126,13 +126,13 @@ pub(super) enum PreparationTerminal {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PreparationCleanup {
+pub(crate) enum PreparationCleanup {
     None,
     Interrupted,
     StagedArtifact,
 }
 
-pub(super) struct ClosingSubmission {
+pub(crate) struct ClosingSubmission {
     pub submission_id: String,
     pub artifact_id: String,
     pub operation: Arc<StdMutex<Option<SupportSubmissionOperation>>>,
@@ -142,7 +142,7 @@ pub(super) struct ClosingSubmission {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum SubmissionTerminal {
+pub(crate) enum SubmissionTerminal {
     Succeeded,
     Cancelled,
     Abandoned,

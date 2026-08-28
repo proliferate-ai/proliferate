@@ -64,7 +64,9 @@ fn restrict_root_mode(descriptor: &OwnedFd) -> Result<(), ArtifactStoreError> {
     if stat.st_mode & libc::S_IFMT != libc::S_IFDIR || stat.st_uid != euid {
         return Ok(());
     }
-    if u32::from(stat.st_mode) & 0o777 == 0o700 {
+    // mode_t-typed arithmetic: st_mode is u16 on macOS and u32 on Linux, so a
+    // literal-typed mask works on both without a platform-dependent conversion.
+    if stat.st_mode & 0o777 == 0o700 {
         return Ok(());
     }
     // SAFETY: the descriptor is open, owned, and was opened without following
@@ -142,7 +144,8 @@ fn validate_directory(descriptor: &OwnedFd, exact: bool) -> Result<(), ArtifactS
     let stat = descriptor_stat(descriptor)?;
     // SAFETY: geteuid has no preconditions.
     let euid = unsafe { libc::geteuid() };
-    let mode = u32::from(stat.st_mode) & 0o777;
+    // mode_t-typed mask; see restrict_root_mode.
+    let mode = stat.st_mode & 0o777;
     if stat.st_mode & libc::S_IFMT != libc::S_IFDIR
         || stat.st_uid != euid
         || (exact && mode != 0o700)
@@ -240,7 +243,8 @@ fn validate_private_file(descriptor: &OwnedFd) -> Result<u64, ArtifactStoreError
 fn validate_file_stat(stat: &libc::stat, exact_mode: bool) -> Result<u64, ArtifactStoreError> {
     // SAFETY: geteuid has no preconditions.
     let euid = unsafe { libc::geteuid() };
-    let mode = u32::from(stat.st_mode) & 0o777;
+    // mode_t-typed mask; see restrict_root_mode.
+    let mode = stat.st_mode & 0o777;
     if stat.st_mode & libc::S_IFMT != libc::S_IFREG
         || stat.st_uid != euid
         || stat.st_nlink != 1

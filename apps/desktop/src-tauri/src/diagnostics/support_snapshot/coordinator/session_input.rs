@@ -118,10 +118,16 @@ enum EndpointCaptureState {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum EndpointFailureReason {
-    SessionUnavailable,
-    SessionTimeout,
-    SessionInvalid,
-    SessionWindowLimitUncertain,
+    // Explicit renames pin the captured wire strings across the 2026-08-27
+    // variant de-prefixing (enum_variant_names).
+    #[serde(rename = "session_unavailable")]
+    Unavailable,
+    #[serde(rename = "session_timeout")]
+    Timeout,
+    #[serde(rename = "session_invalid")]
+    Invalid,
+    #[serde(rename = "session_window_limit_uncertain")]
+    WindowLimitUncertain,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -179,7 +185,7 @@ pub(super) fn parse_session_input(
             ))
         }
         (Some(text), SupportSessionCollectionManifestV1::Included { .. }) => {
-            if text.as_bytes().len() > SESSION_EVIDENCE_BYTES {
+            if text.len() > SESSION_EVIDENCE_BYTES {
                 return Err(SessionInputError::TooLarge);
             }
             let envelope: SessionCaptureEnvelopeV1 =
@@ -356,15 +362,12 @@ fn parse_included(
             )
         });
         if active_session.is_none() {
-            let current_time = summary_time
-                .as_ref()
-                .ok_or(SessionInputError::Incoherent)?
-                .clone();
+            let current_time = *summary_time.as_ref().ok_or(SessionInputError::Incoherent)?;
             if prior_recent_summary
                 .as_ref()
                 .is_some_and(|(prior_time, prior_id)| {
-                    current_time > prior_time.clone()
-                        || (current_time == prior_time.clone()
+                    current_time > *prior_time
+                        || (current_time == *prior_time
                             && session.session_id.as_str() <= prior_id.as_str())
                 })
             {
@@ -372,7 +375,7 @@ fn parse_included(
             }
             prior_recent_summary = Some((current_time, session.session_id.clone()));
         }
-        let mut summary = match session.summary.payload {
+        let summary = match session.summary.payload {
             Some(value)
                 if summary_state != SupportEndpointStateV1::Omitted
                     && session.summary.window.returned_items > 0

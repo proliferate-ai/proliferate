@@ -296,7 +296,10 @@ fn no_file_is_native_even_though_empty_entries_now_refuse() {
 fn single_gateway_source_resolves() {
     let state = state(
         3,
-        vec![harness("claude", vec![gateway_source("https://gw", "sk-vk")])],
+        vec![harness(
+            "claude",
+            vec![gateway_source("https://gw", "sk-vk")],
+        )],
     );
     let profile = resolve_profile(Some(&state), "claude").expect("resolve");
     match profile {
@@ -468,7 +471,10 @@ fn provider_config_source_resolves_with_its_already_resolved_env_map() {
                 ResolvedSource::ProviderConfig(profile) => {
                     assert_eq!(profile.config_kind, "aws_bedrock");
                     assert_eq!(
-                        profile.env.get("AWS_BEARER_TOKEN_BEDROCK").map(String::as_str),
+                        profile
+                            .env
+                            .get("AWS_BEARER_TOKEN_BEDROCK")
+                            .map(String::as_str),
                         Some("bedrock-raw")
                     );
                     assert_eq!(
@@ -487,7 +493,10 @@ fn provider_config_source_resolves_with_its_already_resolved_env_map() {
 fn provider_config_with_empty_env_is_selection_incomplete() {
     let state = state(
         1,
-        vec![harness("opencode", vec![provider_config_source("aws_bedrock", &[])])],
+        vec![harness(
+            "opencode",
+            vec![provider_config_source("aws_bedrock", &[])],
+        )],
     );
     let error = resolve_profile(Some(&state), "opencode").expect_err("empty env");
     assert!(matches!(error, RouteAuthError::SelectionIncomplete { .. }));
@@ -593,4 +602,35 @@ fn seat_with_empty_env_is_selection_incomplete() {
     let state = state(1, vec![harness("claude", vec![source])]);
     let error = resolve_profile(Some(&state), "claude").expect_err("empty env");
     assert!(matches!(error, RouteAuthError::SelectionIncomplete { .. }));
+}
+
+/// The redaction composes: a full resolved profile (the enum wrappers derive
+/// `Debug` and delegate to the hand-written leaf impls — see
+/// `profile_redaction_tests.rs` for the per-type proofs) cannot leak a secret.
+#[test]
+fn composed_profile_debug_redacts_every_source_kind() {
+    let canary = "sk-canary-fixture"; // 17 bytes: pins the marker exactly.
+    let state = state(
+        5,
+        vec![
+            harness(
+                "opencode",
+                vec![
+                    gateway_source("https://gw.example", canary),
+                    api_key_source("ANTHROPIC_API_KEY", canary),
+                    provider_config_source("aws_bedrock", &[("AWS_BEARER_TOKEN_BEDROCK", canary)]),
+                ],
+            ),
+            harness("claude", vec![seat_source("seat-uuid-1", canary)]),
+        ],
+    );
+    for harness_kind in ["opencode", "claude"] {
+        let profile = resolve_profile(Some(&state), harness_kind).expect("resolve");
+        let debug = format!("{profile:?}");
+        assert!(
+            !debug.contains(canary),
+            "composed {harness_kind} profile leaked a credential: {debug}"
+        );
+        assert!(debug.contains("<redacted 17 bytes>"), "got {debug}");
+    }
 }

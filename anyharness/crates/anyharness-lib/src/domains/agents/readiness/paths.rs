@@ -40,6 +40,9 @@ pub(crate) fn managed_registry_binary_for_names(
     find_executable_by_name(&storage, expected_names)
 }
 
+/// The pre-#723 managed npm layout (`agent_process/registry_npm/node_modules/
+/// .bin/`). No installer writes it any more; readers keep it only so a tree
+/// installed before the lockfile-installer landed still resolves.
 pub(crate) fn managed_registry_npm_binary_for_names(
     runtime_home: &Path,
     kind: &AgentKind,
@@ -47,6 +50,23 @@ pub(crate) fn managed_registry_npm_binary_for_names(
 ) -> Option<PathBuf> {
     let storage = artifact_root(runtime_home, kind, &ArtifactRole::AgentProcess)
         .join("registry_npm")
+        .join("node_modules")
+        .join(".bin");
+    find_executable_by_name(&storage, expected_names)
+}
+
+/// The CURRENT managed npm layout: `install_managed_npm_package` runs
+/// `npm install --prefix <agent_process dir> <package>`, so the package's own
+/// bin shims land at `agent_process/node_modules/.bin/<name>` beside the
+/// generated `<kind>-launcher`. The launcher bakes the ACP args (`agent
+/// stdio`), so an interactive vendor command such as `login` must exec the
+/// shim itself — this is the rung that finds it.
+pub(crate) fn managed_npm_binary_for_names(
+    runtime_home: &Path,
+    kind: &AgentKind,
+    expected_names: &[&str],
+) -> Option<PathBuf> {
+    let storage = artifact_root(runtime_home, kind, &ArtifactRole::AgentProcess)
         .join("node_modules")
         .join(".bin");
     find_executable_by_name(&storage, expected_names)

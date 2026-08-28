@@ -436,6 +436,19 @@ fn repo_root_to_contract(record: RepoRootRecord) -> RepoRoot {
     }
 }
 
+async fn load_repo_root(
+    state: &AppState,
+    repo_root_id: String,
+) -> Result<RepoRootRecord, ApiError> {
+    let repo_root_service = state.repo_root_service.clone();
+    run_blocking("get repo root", move || {
+        repo_root_service.get_repo_root(&repo_root_id)
+    })
+    .await?
+    .map_err(|error| ApiError::internal(error.to_string()))?
+    .ok_or_else(|| ApiError::not_found("Repo root not found", "REPO_ROOT_NOT_FOUND"))
+}
+
 #[cfg(test)]
 mod response_tests {
     use super::*;
@@ -469,17 +482,4 @@ mod response_tests {
             Some(safe)
         );
     }
-}
-
-async fn load_repo_root(
-    state: &AppState,
-    repo_root_id: String,
-) -> Result<RepoRootRecord, ApiError> {
-    let repo_root_service = state.repo_root_service.clone();
-    run_blocking("get repo root", move || {
-        repo_root_service.get_repo_root(&repo_root_id)
-    })
-    .await?
-    .map_err(|error| ApiError::internal(error.to_string()))?
-    .ok_or_else(|| ApiError::not_found("Repo root not found", "REPO_ROOT_NOT_FOUND"))
 }

@@ -67,7 +67,7 @@ pub(super) fn valid_finish_input(input: &Input) -> bool {
 }
 
 pub(super) fn valid_report_id(value: Option<&str>) -> bool {
-    value.map_or(true, |value| validate_id(value).is_ok())
+    value.is_none_or(|value| validate_id(value).is_ok())
 }
 
 #[cfg(test)]

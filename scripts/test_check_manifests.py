@@ -9,13 +9,13 @@ from scripts import check_manifests as check_module
 SERVER_RELATIVE = "server/proliferate/server"
 PACKAGE_RELATIVE = "server/proliferate"
 
-VALID_MANIFEST = '''
+VALID_MANIFEST = """
 name = "alpha"
 spec = "specs/alpha.md"
 owns = "The alpha system."
 public_surface = ["proliferate.server.alpha.service"]
 allowed_importers = [{importers}]
-'''
+"""
 
 
 class ManifestTestCase(unittest.TestCase):
@@ -31,9 +31,7 @@ class ManifestTestCase(unittest.TestCase):
                 path.write_text(content, encoding="utf-8")
             return check_module.collect_violations(root=root)
 
-    def sites(
-        self, violations: list[check_module.Violation], rule_id: str
-    ) -> set[str]:
+    def sites(self, violations: list[check_module.Violation], rule_id: str) -> set[str]:
         return {v.site for v in violations if v.rule_id == rule_id}
 
 
@@ -63,9 +61,7 @@ class SchemaTest(ManifestTestCase):
                 f"{SERVER_RELATIVE}/alpha/service.py": "x = 1\n",
             }
         )
-        self.assertEqual(
-            self.sites(violations, check_module.SCHEMA_RULE), {"missing-manifest"}
-        )
+        self.assertEqual(self.sites(violations, check_module.SCHEMA_RULE), {"missing-manifest"})
 
     def test_missing_field_and_dead_spec_fail(self) -> None:
         violations = self.scan(
@@ -75,8 +71,7 @@ class SchemaTest(ManifestTestCase):
                     "public_surface = []\nallowed_importers = []\n"
                 ),
                 f"{SERVER_RELATIVE}/beta/MANIFEST.toml": (
-                    'name = "beta"\nowns = "B."\npublic_surface = []\n'
-                    "allowed_importers = []\n"
+                    'name = "beta"\nowns = "B."\npublic_surface = []\nallowed_importers = []\n'
                 ),
             }
         )
@@ -86,12 +81,8 @@ class SchemaTest(ManifestTestCase):
         )
 
     def test_malformed_toml_fails(self) -> None:
-        violations = self.scan(
-            {f"{SERVER_RELATIVE}/alpha/MANIFEST.toml": 'name = "alpha\n'}
-        )
-        self.assertEqual(
-            self.sites(violations, check_module.SCHEMA_RULE), {"malformed-toml"}
-        )
+        violations = self.scan({f"{SERVER_RELATIVE}/alpha/MANIFEST.toml": 'name = "alpha\n'})
+        self.assertEqual(self.sites(violations, check_module.SCHEMA_RULE), {"malformed-toml"})
 
     def test_cloud_megadomain_is_skipped_but_live_subsystem_is_required(self) -> None:
         violations = self.scan(
@@ -111,9 +102,7 @@ class ImporterTruthTest(ManifestTestCase):
         violations = self.scan(
             {
                 "specs/alpha.md": "# Alpha\n",
-                f"{SERVER_RELATIVE}/alpha/MANIFEST.toml": VALID_MANIFEST.format(
-                    importers=""
-                ),
+                f"{SERVER_RELATIVE}/alpha/MANIFEST.toml": VALID_MANIFEST.format(importers=""),
                 f"{PACKAGE_RELATIVE}/background/tasks.py": (
                     "import proliferate.server.alpha.service\n"
                 ),
@@ -142,9 +131,7 @@ class ImporterTruthTest(ManifestTestCase):
         violations = self.scan(
             {
                 "specs/alpha.md": "# Alpha\n",
-                f"{SERVER_RELATIVE}/alpha/MANIFEST.toml": VALID_MANIFEST.format(
-                    importers=""
-                ),
+                f"{SERVER_RELATIVE}/alpha/MANIFEST.toml": VALID_MANIFEST.format(importers=""),
                 f"{SERVER_RELATIVE}/alpha/api.py": (
                     "from proliferate.server.alpha.service import x\n"
                 ),
@@ -156,9 +143,7 @@ class ImporterTruthTest(ManifestTestCase):
         violations = self.scan(
             {
                 "specs/alpha.md": "# Alpha\n",
-                f"{SERVER_RELATIVE}/alpha/MANIFEST.toml": VALID_MANIFEST.format(
-                    importers=""
-                ),
+                f"{SERVER_RELATIVE}/alpha/MANIFEST.toml": VALID_MANIFEST.format(importers=""),
                 f"{PACKAGE_RELATIVE}/background/tasks.py": (
                     "import proliferate.server.alphabet.service\n"
                 ),

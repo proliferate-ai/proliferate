@@ -139,7 +139,8 @@ impl CatalogSyncService {
         // have a pubkey provisioned) must not be able to activate on a build
         // that doesn't.
         let staged = if let (Some(base_url), false) = (base_url, pubkeys.is_empty()) {
-            match super::artifact::fetch_and_stage(base_url, channel, &staged_dir, client, pubkeys) {
+            match super::artifact::fetch_and_stage(base_url, channel, &staged_dir, client, pubkeys)
+            {
                 // M1(a): activate the in-memory, ALREADY-verified pair this
                 // boot just fetched directly. Do not round-trip it through
                 // disk and `load_staged_from_disk` — that would mean trusting
@@ -202,7 +203,7 @@ impl CatalogSyncService {
         let client = super::artifact::BoundedHttpFetchClient::new();
         Self::from_staged_or_bundled(
             runtime_home,
-            should_fetch.then(|| base_url.as_deref()).flatten(),
+            should_fetch.then_some(base_url.as_deref()).flatten(),
             &channel,
             &client,
             &pubkeys,

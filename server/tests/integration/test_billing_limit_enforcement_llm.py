@@ -25,11 +25,11 @@ from proliferate.db.store import billing as billing_store
 from proliferate.db.store.billing import BudgetLimitInput
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.integrations.litellm import LiteLLMSpendLogEntry, LiteLLMVirtualKey
-from proliferate.server.agent_auth import enrollment as enrollment_service
-from proliferate.server.agent_auth import topups as topups_service
-from proliferate.server.agent_auth import usage_import as usage_import_service
-from proliferate.server.agent_auth.enrollment import ensure_org_enrollment
-from proliferate.server.agent_auth.usage_import import run_usage_import
+from proliferate.server.ai_gateway import enrollment as enrollment_service
+from proliferate.server.ai_gateway import topups as topups_service
+from proliferate.server.ai_gateway import usage_import as usage_import_service
+from proliferate.server.ai_gateway.enrollment import ensure_org_enrollment
+from proliferate.server.ai_gateway.usage_import import run_usage_import
 
 NOW = datetime(2026, 7, 7, 12, 0, tzinfo=UTC)
 

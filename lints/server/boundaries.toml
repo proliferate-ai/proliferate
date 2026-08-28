@@ -279,11 +279,39 @@ diagnostic's owner-service hint."""
 why = """Unrestricted foreign writes make responsibility and schema-change
 blast radius unknowable. Only the owner's service writes, so invariant
 enforcement has one write boundary. The named table is a bounded migration;
-the repository-wide owner table is still debt — see SRV-STORE-6."""
+the repository-wide owner table is still debt (#1714 — its gap record was
+deleted 2026-08-27 with the other do-nothing records; it returns with an
+engine)."""
 
 [rule.example]
 bad = "organization_store.bind_team_checkout_session(...)  # from a billing service"
 good = "await organization_service.bind_team_checkout_session(...)"
+
+[[rule]]
+id = "SRV-STORE-8"
+title = "Credential-bearing store symbols are owner-locked"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/**"
+
+rule = """The agent-auth vault and selection stores' credential-bearing
+symbols (the decrypt accessors and write gates named in the checker's
+NamedStoreBoundary rows for proliferate.db.store.agent_gateway) may be
+referenced only from the owning systems (server/agent_auth, server/ai_gateway)
+and the store package itself — per the fence-enforcement table in
+specs/systems/agent_auth/README.md §0."""
+alternative = """Consume the owning system's service surface
+(proliferate.server.agent_auth.service) instead of reaching the store."""
+why = """Credential custody: a decrypt accessor or vault write reached from
+outside the owning system is an exfiltration or laundering path the agent_auth
+spec forbids; the lock makes that fence machine-held rather than review-held.
+Introduced with zero violations and, as law, admits no exceptions."""
+
+[rule.example]
+bad = "from proliferate.db.store.agent_gateway.api_keys import get_agent_api_key_decrypted  # in a billing service"
+good = "await agent_auth_service.get_agent_state(...)  # the owning service's surface"
 
 [[rule]]
 id = "SRV-DOMAIN-1"

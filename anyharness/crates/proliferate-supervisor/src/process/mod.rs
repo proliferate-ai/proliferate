@@ -317,7 +317,9 @@ impl ActivationHost for LiveHost<'_> {
         // blocking spawn off the async runtime (R9R3-002).
         let binary = self.config.worker_binary.clone();
         let output = tokio::task::spawn_blocking(move || {
-            std::process::Command::new(&binary).arg("--version").output()
+            std::process::Command::new(&binary)
+                .arg("--version")
+                .output()
         })
         .await
         .ok()?
@@ -444,7 +446,10 @@ mod tests {
         let mut prev = config.worker_binary.as_os_str().to_os_string();
         prev.push(".prev");
         std::fs::write(&prev, b"last-good-worker-bytes").unwrap();
-        assert!(!config.worker_binary.exists(), "active worker starts absent");
+        assert!(
+            !config.worker_binary.exists(),
+            "active worker starts absent"
+        );
 
         recover_missing_worker(&config);
 

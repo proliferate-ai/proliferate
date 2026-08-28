@@ -279,11 +279,11 @@ pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
     }
 
     for (name, apply) in CUSTOM_MIGRATIONS {
-        run_named_migration(conn, name, |tx| apply(tx))?;
+        run_named_migration(conn, name, apply)?;
     }
 
     for (name, apply) in CUSTOM_FOREIGN_KEY_MIGRATIONS {
-        run_named_foreign_key_migration(conn, name, |tx| apply(tx))?;
+        run_named_foreign_key_migration(conn, name, apply)?;
     }
 
     Ok(())

@@ -2,7 +2,7 @@
 
 Python produces the document, Rust consumes it
 (``route_auth/contract_fixture_tests.rs``). Per
-``specs/engineering/testing/standard.md``, the fixture is the shape's single
+``specs/engineering/testing/README.md``, the fixture is the shape's single
 definition: change it and whichever side lags breaks mechanically.
 
 Split out of ``test_agent_auth_materialization.py`` (which sat at its line-count

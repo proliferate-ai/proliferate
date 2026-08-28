@@ -14,8 +14,8 @@ use axum::{
 };
 
 use super::agents_contract::{
-    agent_login_terminal_to_contract, install_request,
-    reconcile_snapshot_to_contract, to_installed_artifact_status, to_summary,
+    agent_login_terminal_to_contract, install_request, reconcile_snapshot_to_contract,
+    to_installed_artifact_status, to_summary,
 };
 use super::error::ApiError;
 use crate::app::AppState;
@@ -256,7 +256,30 @@ pub async fn claim_agent_login_terminal_mint_token(
         .claim_mint_token(&terminal_id)
         .await
     {
-        Ok(token) => Ok(Json(ClaimAgentMintTokenResponse { token })),
+        Ok(token) => {
+            // Mint completion is the seat trial's ONE trigger (founder ruling
+            // 2026-08-27): fire-and-forget a credential-scoped one-token
+            // `/v1/messages` call so the seat's evidence is real. Gated on the
+            // automatic-engine handle — the same "may this site fire on its
+            // own?" answer that suppresses automatic pokes under `cfg(test)` —
+            // because this is an outbound call nobody asked this request for.
+            // The response never waits on it, and the trial owns (and scrubs)
+            // its own copy of the token.
+            if let Some(engine) = &state.automatic_poke_engine {
+                if let Some(record) = state
+                    .agent_login_terminal_service
+                    .get_terminal(&terminal_id)
+                    .await
+                {
+                    let ledger = engine.seat_trials();
+                    let trial_token = token.clone();
+                    tokio::spawn(async move {
+                        ledger.run_trial(&record.kind, trial_token).await;
+                    });
+                }
+            }
+            Ok(Json(ClaimAgentMintTokenResponse { token }))
+        }
         Err(MintClaimError::NotFound) => Err(ApiError::not_found(
             "Agent mint terminal not found",
             "AGENT_MINT_TERMINAL_NOT_FOUND",

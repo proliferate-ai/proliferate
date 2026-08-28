@@ -85,7 +85,7 @@ fn push_current_branch_inner(
         return Err(PushError::Failed { message });
     }
 
-    let published = if upstream.success { false } else { true };
+    let published = !upstream.success;
 
     Ok((remote_name.to_string(), branch, published))
 }

@@ -16,7 +16,6 @@ use super::output_sink::TerminalOutputHub;
 
 mod mint;
 
-pub use mint::MINT_POST_EXIT_CLAIM_WINDOW;
 use mint::{feed_mint_capture, MintRegistry, MintState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +73,12 @@ pub struct AgentLoginTerminalService {
     mint_by_kind: Arc<RwLock<HashMap<String, String>>>,
 }
 
+impl Default for AgentLoginTerminalService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentLoginTerminalService {
     pub fn new() -> Self {
         Self {
@@ -101,7 +106,10 @@ impl AgentLoginTerminalService {
         // lock is never held across an await other than the map inserts.
         let mut mint_guard = if options.mint.is_some() {
             let mut by_kind = self.mint_by_kind.write().await;
-            if let Some(existing) = self.check_mint_slot_locked(&mut by_kind, &options.kind).await {
+            if let Some(existing) = self
+                .check_mint_slot_locked(&mut by_kind, &options.kind)
+                .await
+            {
                 drop(by_kind);
                 if let Some(mint) = options.mint.as_ref() {
                     let _ = std::fs::remove_dir_all(&mint.scratch_dir);

@@ -66,6 +66,7 @@ pub(crate) struct RequestedModeApplyError {
 impl RequestedModeApplyError {
     pub(crate) const CODE: &'static str = "SESSION_MODE_UNSUPPORTED";
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn new(agent_kind: impl Into<String>, mode_id: impl Into<String>) -> Self {
         Self {
             agent_kind: agent_kind.into(),
@@ -73,6 +74,7 @@ impl RequestedModeApplyError {
         }
     }
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn clone_for_readiness(error: &anyhow::Error) -> anyhow::Error {
         error
             .downcast_ref::<Self>()

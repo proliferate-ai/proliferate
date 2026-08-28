@@ -446,7 +446,7 @@ async fn stop_and_await_kills_the_real_process_group_including_a_git_grandchild(
 }
 
 /// The spec's native-resume soak, reduced to what tier 1 can prove without a
-/// real agent CLI or a live model (`specs/engineering/testing/standard.md`'s hard gate rule bars
+/// real agent CLI or a live model (`specs/engineering/testing/README.md`'s hard gate rule bars
 /// both from the merge gate): that the KILL escalation `stop_and_await`
 /// falls through to when TERM is ignored CAN truncate the dummy agent's
 /// own append-only output file mid-record, leaving a torn trailing line -
@@ -479,15 +479,15 @@ async fn stop_and_await_kill_escalation_can_leave_the_agents_own_output_torn_mid
         .run_until(async move {
             let dir = temp_dir("resume-soak");
             let transcript = dir.join("transcript.jsonl");
-            // Two complete records, then a third that is deliberately left
-            // open (no closing quote/brace/newline) before the agent traps
-            // TERM and hangs - so any kill that reaches it lands mid-record,
-            // deterministically, rather than racing a timing window.
+            // Trap FIRST: the test polls for the third record as readiness, so
+            // TERM-immunity must precede it (trap-after left the 57ms gap that
+            // flaked #2279); the open third record makes the tear file-state.
             let script = format!(
-                "printf '{{\"type\":\"user\",\"line\":1}}\\n' >> {path}; \
+                "trap '' TERM; \
+                 printf '{{\"type\":\"user\",\"line\":1}}\\n' >> {path}; \
                  printf '{{\"type\":\"assistant\",\"line\":2}}\\n' >> {path}; \
                  printf '{{\"type\":\"assistant\",\"line\":3,\"partial\":\"' >> {path}; \
-                 trap '' TERM; sleep 300",
+                 sleep 300",
                 path = transcript.display()
             );
 

@@ -100,7 +100,7 @@ pub fn init(activation: DesktopDiagnosticsActivation) -> TelemetryGuards {
             dsn,
             sentry::ClientOptions {
                 environment: Some(
-                    env_or_default(TARGET_SENTRY_ENVIRONMENT_ENV, "trusted-beta").into(),
+                    env_or_default(TARGET_SENTRY_ENVIRONMENT_ENV, "production").into(),
                 ),
                 release: Some(env_or_default(WORKER_SENTRY_RELEASE_ENV, &default_release()).into()),
                 traces_sample_rate: sample_rate(TARGET_SENTRY_TRACES_SAMPLE_RATE_ENV, 1.0),

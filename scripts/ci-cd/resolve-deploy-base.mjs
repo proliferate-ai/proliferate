@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import { pathToFileURL } from "node:url";
 
 import {
   listSuccessfulWorkflowRuns,
@@ -71,12 +72,27 @@ function fallbackSha(parsed) {
   return parsed.fallback || parsed.head;
 }
 
-function writeGithubOutput(baseSha) {
+// The resolution contract: a real prior deploy yields `resolved`; every other
+// path (no token, no candidate run, no live artifact) is a `fallback` and the
+// caller must treat the base as unreliable — deploy-staging.yml forces the full
+// surface set on fallback so a long-idle environment cannot head^-diff to a
+// near-no-op.
+export function resolutionOutputs(deployHeadSha, parsed) {
+  if (deployHeadSha) {
+    return { baseSha: deployHeadSha, baseMode: "resolved" };
+  }
+  return { baseSha: fallbackSha(parsed), baseMode: "fallback" };
+}
+
+function writeGithubOutput(baseSha, baseMode, alreadyDeployed) {
   const outputPath = process.env.GITHUB_OUTPUT;
   if (!outputPath) {
     return;
   }
-  fs.appendFileSync(outputPath, `base_sha=${baseSha}\n`);
+  fs.appendFileSync(
+    outputPath,
+    `base_sha=${baseSha}\nbase_mode=${baseMode}\nalready_deployed=${alreadyDeployed}\n`
+  );
 }
 
 async function resolveCandidateDeployHeadSha(candidate, artifactName, token) {
@@ -111,8 +127,9 @@ async function main() {
 
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (!token) {
-    const baseSha = fallbackSha(parsed);
-    writeGithubOutput(baseSha);
+    const { baseSha, baseMode } = resolutionOutputs("", parsed);
+    writeGithubOutput(baseSha, baseMode, false);
+    console.error(`base_mode=${baseMode} (no token)`);
     console.log(baseSha);
     return;
   }
@@ -121,6 +138,11 @@ async function main() {
   const maxPages = readPositiveIntegerEnv("DEPLOY_RUN_SCAN_MAX_PAGES", 20);
   let run;
   let exhausted = false;
+  // Candidates arrive newest-first, so a head-matching artifact seen before
+  // the base is found means the NEWEST deployed head already equals --head:
+  // the caller's auto path uses this to refuse re-deploying an identical
+  // delta when both rollups' events resolve the same deploy head.
+  let alreadyDeployed = false;
   for (let page = 1; page <= maxPages && !run; page += 1) {
     const data = await listSuccessfulWorkflowRuns({
       workflow: parsed.workflow,
@@ -146,7 +168,11 @@ async function main() {
         parsed.requiredArtifact,
         token
       );
-      if (!deployHeadSha || deployHeadSha === parsed.head) {
+      if (deployHeadSha === parsed.head) {
+        alreadyDeployed = true;
+        continue;
+      }
+      if (!deployHeadSha) {
         continue;
       }
       run = { ...candidate, deployHeadSha };
@@ -160,9 +186,12 @@ async function main() {
     );
   }
 
-  const baseSha = run?.deployHeadSha || fallbackSha(parsed);
-  writeGithubOutput(baseSha);
+  const { baseSha, baseMode } = resolutionOutputs(run?.deployHeadSha || "", parsed);
+  writeGithubOutput(baseSha, baseMode, alreadyDeployed);
+  console.error(`base_mode=${baseMode} already_deployed=${alreadyDeployed}`);
   console.log(baseSha);
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

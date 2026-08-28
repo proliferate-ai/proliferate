@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentLoginTerminalRecord } from "@anyharness/sdk";
-import type { AgentApiKey } from "@proliferate/cloud-sdk";
+import { ProliferateClientError, type AgentApiKey } from "@proliferate/cloud-sdk";
 import { useMintAgentSeat } from "@proliferate/cloud-sdk-react";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import {
@@ -145,16 +145,26 @@ export function useSeatMintWorkflow(options: {
           activeTerminalRef.current = null;
           setState(IDLE_STATE);
           onSeatAdded(seat);
-        } catch {
+        } catch (error) {
           // No silent retry (the wiped buffer means there is nothing to
-          // retry WITH): tell the user to re-run the mint.
+          // retry WITH): tell the user to re-run the mint — EXCEPT when the
+          // vault upload was refused by the server's typed GitHub-link gate
+          // (403 `github_link_required`, auth/dependencies.py). "Re-run the
+          // sign-in" would burn another Claude.ai sign-in into the same 403;
+          // the real fix is connecting GitHub. Only the cloud upload speaks
+          // `ProliferateClientError`; a runtime claim failure is a different
+          // client and keeps the generic copy.
           await closeTerminal(terminalId);
           activeTerminalRef.current = null;
           setState({
             phase: "error",
             terminal: null,
             message: null,
-            error: HARNESS_PANE_COPY.seatUploadFailed,
+            error:
+              error instanceof ProliferateClientError
+                && error.code === "github_link_required"
+                ? HARNESS_PANE_COPY.seatUploadGithubLinkRequired
+                : HARNESS_PANE_COPY.seatUploadFailed,
           });
         }
         return;

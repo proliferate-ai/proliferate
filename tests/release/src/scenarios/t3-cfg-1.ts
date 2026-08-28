@@ -17,8 +17,8 @@ import { isWorldBackedRun } from "./local/world-boot.js";
 
 /**
  * T3-CFG-1 — live config options apply in an existing session.
- * specs/engineering/testing/scenarios.md#T3-CFG-1 (legacy diagnostic) and
- * specs/engineering/testing/tier-3-scenario-contract.md#local-4 (LOCAL-4).
+ * tests/release/core-release-scenario-manifest.json#T3-CFG-1 (legacy diagnostic) and
+ * delivery/testing-cicd/archive/tier-3-scenario-contract.md#local-4 (LOCAL-4).
  *
  * ── Leaf → matrix promotion (BRIEF §1a, disclosed) ──────────────────────────
  * This scenario was a leaf. It is now a MATRIX (one cell per catalog harness
@@ -47,7 +47,7 @@ export const CFG_REPRESENTATIVE_HARNESS = "claude";
 export const t3Cfg1: MatrixScenarioDefinition = {
   id: "T3-CFG-1",
   title: "live config options apply in an existing session",
-  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-CFG-1",
+  registryFlowRef: "tests/release/core-release-scenario-manifest.json#T3-CFG-1",
   lanes: ["local"],
   requiredEnv: [],
   kind: "matrix",

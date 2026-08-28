@@ -54,18 +54,21 @@ fn probe_env_equals_launch_env_for_every_harness_and_source_combination() {
         let scratch_root = materialized.scratch.root().to_path_buf();
 
         // The launch render of the same composed profile, at an arbitrary root.
-        let launch_rendered =
-            render_profile(material.profile(), harness, &plan, Path::new("/launch-root"))
-                .expect("launch render");
+        let launch_rendered = render_profile(
+            material.profile(),
+            harness,
+            &plan,
+            Path::new("/launch-root"),
+        )
+        .expect("launch render");
 
         // Env deltas agree exactly, modulo the root substitution in path values.
         assert_eq!(
             materialized.env_remove, launch_rendered.remove,
             "{label}: the removal list must be the launch's, untouched"
         );
-        let normalize = |value: &str, root: &Path| {
-            value.replace(&root.display().to_string(), "<root>")
-        };
+        let normalize =
+            |value: &str, root: &Path| value.replace(&root.display().to_string(), "<root>");
         let probe_set: Vec<(String, String)> = materialized
             .env_set
             .iter()
@@ -165,8 +168,11 @@ fn probe_gc_is_a_no_op_and_the_launch_gc_keeps_only_the_previous_on_disk_revisio
         json!([{ "harness_kind": "codex", "sources": [gateway_source(VK)] }]),
     ));
     for revision in [5, 6, 7] {
-        std::fs::create_dir_all(home.path().join(format!("agent-auth/codex-home-{revision}")))
-            .expect("seed live revision dir");
+        std::fs::create_dir_all(
+            home.path()
+                .join(format!("agent-auth/codex-home-{revision}")),
+        )
+        .expect("seed live revision dir");
     }
 
     let material = material_for(&home, "codex").expect("material");
@@ -312,7 +318,10 @@ fn scratch_is_0700_secret_files_are_0600_and_no_tmp_residue_remains() {
                 .is_some_and(|name| name.contains(".tmp-"))
         })
         .collect();
-    assert!(residue.is_empty(), "no tmp residue expected, found {residue:?}");
+    assert!(
+        residue.is_empty(),
+        "no tmp residue expected, found {residue:?}"
+    );
 }
 
 /// The guard removes the root on every exit path: success, an `Err` return,
@@ -418,7 +427,10 @@ fn the_material_carries_no_plaintext_credential() {
 
     let material = material_for(&home, "opencode").expect("material");
     let debug = format!("{material:?}");
-    assert!(!debug.contains(secret), "Debug output leaked the credential");
+    assert!(
+        !debug.contains(secret),
+        "Debug output leaked the credential"
+    );
     assert!(debug.contains("<redacted>"));
     for digest in &material.env_value_digests {
         assert!(!digest.contains(secret));

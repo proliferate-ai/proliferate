@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use super::*;
 use crate::app::{test_support, AppState};
@@ -80,10 +80,7 @@ fn create_known_record(runtime: &SessionRuntime, session_id: &str) -> SessionRec
 
 #[tokio::test(flavor = "current_thread")]
 async fn start_failure_retires_only_new_handle_and_deletes_new_row() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap();
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, _program_guard) = test_state("start-failure", "#!/bin/sh\nexit 1\n");
@@ -113,10 +110,7 @@ async fn start_failure_retires_only_new_handle_and_deletes_new_row() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn subagent_start_failure_compensates_both_child_and_relationship() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap();
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, _program_guard) = test_state("subagent-start-failure", "#!/bin/sh\nexit 1\n");
@@ -155,10 +149,7 @@ async fn subagent_start_failure_compensates_both_child_and_relationship() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn subagent_fanout_failure_rolls_back_the_atomic_child_insert() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap();
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, _program_guard) = test_state("subagent-fanout", "#!/bin/sh\nexit 0\n");
@@ -213,10 +204,7 @@ async fn subagent_fanout_failure_rolls_back_the_atomic_child_insert() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn concrete_subagent_close_open_and_live_promotion_preserve_session_state() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap();
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, _program_guard) = test_state("subagent-lifecycle", "#!/bin/sh\nexit 0\n");
@@ -361,10 +349,7 @@ async fn concrete_subagent_close_open_and_live_promotion_preserve_session_state(
 
 #[tokio::test(flavor = "current_thread")]
 async fn verified_initial_task_failure_removes_row_and_handle() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap();
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, _program_guard) = test_state("task-failure", "#!/bin/sh\nexit 0\n");
@@ -399,10 +384,7 @@ async fn verified_initial_task_failure_removes_row_and_handle() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn initial_task_persists_exact_caller_provenance_and_projects_task_output() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap();
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, _program_guard) = test_state("task-success", "#!/bin/sh\nexit 0\n");
@@ -489,10 +471,7 @@ async fn initial_task_persists_exact_caller_provenance_and_projects_task_output(
 
 #[tokio::test(flavor = "current_thread")]
 async fn ready_resume_reuses_handle_and_preserves_native_identity() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap();
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, _program_guard) = test_state("ready-resume", "#!/bin/sh\nexit 0\n");
@@ -530,10 +509,7 @@ async fn ready_resume_reuses_handle_and_preserves_native_identity() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn interrupt_requests_running_cancel_and_never_starts_idle_or_cold_sessions() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap();
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, _program_guard) = test_state("interrupt", "#!/bin/sh\nexit 0\n");
