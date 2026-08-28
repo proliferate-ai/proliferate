@@ -17555,6 +17555,13 @@
               "null"
             ]
           },
+          "servingSeatId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The vault seat id the live actor is serving this session on — the\nlaunch-confirmed fact, read-only (never token material). `None` for\nnon-seat routes and whenever no live actor holds the session."
+          },
           "status": {
             "$ref": "#/components/schemas/SessionStatus"
           },

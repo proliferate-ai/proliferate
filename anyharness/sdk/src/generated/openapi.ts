@@ -4665,6 +4665,12 @@ export interface components {
             pendingPrompts?: components["schemas"]["PendingPromptSummary"][];
             requestedModeId?: string | null;
             requestedModelId?: string | null;
+            /**
+             * @description The vault seat id the live actor is serving this session on — the
+             *     launch-confirmed fact, read-only (never token material). `None` for
+             *     non-seat routes and whenever no live actor holds the session.
+             */
+            servingSeatId?: string | null;
             status: components["schemas"]["SessionStatus"];
             title?: string | null;
             updatedAt: string;
