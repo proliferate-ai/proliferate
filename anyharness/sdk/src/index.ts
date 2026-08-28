@@ -582,8 +582,7 @@ export type {
   TerminalWebSocketAuthTransport,
 } from "./streams/terminals.js";
 
-export { WorkflowRunsV2Client } from "./client/workflow-runs-v2.js";
-export type { WorkflowRunsListResponseV2 } from "./client/workflow-runs-v2.js";
+export { WorkflowRunsV2Client, type WorkflowRunsListResponseV2 } from "./client/workflow-runs-v2.js";
 export * from "./types/workflow-runs-v2.js";
 
 export { streamSession } from "./streams/sessions.js";

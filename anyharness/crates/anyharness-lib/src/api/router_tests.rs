@@ -1631,8 +1631,7 @@ async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engi
                 .header(header::AUTHORIZATION, "Bearer secret-token")
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from(
-                    json!({ "version": 2, "lineage": "test-lineage", "sequence": 1, "harnesses": [] })
-                        .to_string(),
+                    json!({ "version": 2, "lineage": "test-lineage", "sequence": 1 }).to_string(),
                 ))
                 .expect("expected request"),
         )

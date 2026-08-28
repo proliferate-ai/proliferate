@@ -104,23 +104,16 @@ impl AgentReconcileJob {
     }
 }
 
+/// `Default` is derived: both fields' defaults ARE `new()`'s values — no drift.
+#[derive(Default)]
 pub struct AgentReconcileService {
     job: Arc<Mutex<Option<AgentReconcileJob>>>,
     execution_lock: Arc<Mutex<()>>,
 }
 
-impl Default for AgentReconcileService {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AgentReconcileService {
     pub fn new() -> Self {
-        Self {
-            job: Arc::new(Mutex::new(None)),
-            execution_lock: Arc::new(Mutex::new(())),
-        }
+        Self::default()
     }
 
     pub async fn snapshot(&self) -> AgentReconcileJobSnapshot {

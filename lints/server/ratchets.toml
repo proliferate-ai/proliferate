@@ -35,7 +35,7 @@ reason = "W-F2 period-boundary gate adds one guard clause (a billing_reason chec
 
 [[max_lines]]
 path = "server/proliferate/server/ai_gateway/enrollment.py"
-max_lines = 630
+max_lines = 618
 reason = "C-train composition re-attaches C-1 both-surface sync-completion pokes; D train: org-only ensure_signup_enrollment + per-(org,member) LiteLLM identity + fingerprint-driven per-key re-mint; shrank again when ensure_user_enrollment died (D-3), split pending ; -12: slice 3 content-hash sequencing deletes the C-1 sync-completion local-surface poke (reaching synced changes rendered content, so the next render bumps by itself) — the file moved to ai_gateway/ with the slice-5 code split, so the entry follows it"
 
 [[max_lines]]
@@ -45,7 +45,7 @@ reason = "C-train composition; P1 auth rebuild rewrote keys/selections/state cov
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_enrollment.py"
-max_lines = 895
+max_lines = 881
 reason = "C-train composition re-lands the C-1 poke coverage adapted org-only; D train rewrote the suite org-first (D1 proof, floor mirroring, signup shape); C-1 added the both-surfaces poke coverage; slice 5 adds the founder-org regression (one ensure_org_enrollment call leaves BOTH the enrollment row and the free_signup grant row — the grant is not a separable hook) ; -13: slice 3 content-hash sequencing drops the updated_at backdating scaffolding (the sequence no longer derives from timestamps)"
 
 [[max_lines]]

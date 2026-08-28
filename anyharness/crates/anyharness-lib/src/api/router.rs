@@ -1,14 +1,12 @@
 use axum::{
     extract::DefaultBodyLimit,
     extract::State,
-    http::{header, HeaderMap, Request},
+    http::Request,
     middleware::{self, Next},
     response::Response,
     routing::{delete, get, patch, post, put},
     Router,
 };
-use subtle::ConstantTimeEq;
-use url::form_urlencoded;
 
 use super::http::{
     agent_auth::{
@@ -28,11 +26,15 @@ use super::ws::activity as ws_activity;
 use super::ws::agent_login_terminals as ws_agent_login_terminals;
 use super::ws::feeds as ws_feeds;
 use super::ws::terminals as ws_terminals;
-use crate::api::auth::{user_route_allowed, AuthContext, AuthError};
+use crate::api::auth::{user_route_allowed, AuthContext};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
+use bearer::{auth_error_to_api, bearer_tokens_match, extract_bearer_token, token_is_jwt};
+
+mod bearer;
 mod pending_prompt_routes;
 mod support_window_routes;
+
 pub fn build_router(state: AppState) -> Router {
     let v1 = Router::new()
         // Agents
@@ -545,61 +547,4 @@ async fn require_bearer_auth(
         "A valid bearer token is required for this AnyHarness runtime.",
         "UNAUTHORIZED",
     ))
-}
-
-fn auth_error_to_api(error: AuthError) -> ApiError {
-    match error {
-        AuthError::InvalidToken | AuthError::Revoked | AuthError::NotConfigured => {
-            ApiError::unauthorized(
-                "A valid direct-attach token is required for this AnyHarness runtime.",
-                "UNAUTHORIZED",
-            )
-        }
-        AuthError::UnsupportedRoute => ApiError::forbidden(
-            "Direct-attach tokens cannot access this AnyHarness route.",
-            "DIRECT_ATTACH_ROUTE_FORBIDDEN",
-        ),
-        AuthError::InsufficientPermission => ApiError::forbidden(
-            "Direct-attach token does not grant the required permission.",
-            "DIRECT_ATTACH_PERMISSION_DENIED",
-        ),
-        AuthError::ScopeMismatch => ApiError::forbidden(
-            "Direct-attach token is not scoped to this resource.",
-            "DIRECT_ATTACH_SCOPE_MISMATCH",
-        ),
-    }
-}
-
-fn token_is_jwt(token: &str) -> bool {
-    token.split('.').count() == 3
-}
-
-fn bearer_tokens_match(provided: Option<&str>, expected: &str) -> bool {
-    let provided_bytes = provided.unwrap_or("").as_bytes();
-    let expected_bytes = expected.as_bytes();
-    bool::from(provided_bytes.ct_eq(expected_bytes))
-}
-
-fn extract_bearer_token(headers: &HeaderMap, query: Option<&str>) -> Option<String> {
-    if let Some(value) = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-    {
-        if let Some(token) = value.strip_prefix("Bearer ") {
-            let trimmed = token.trim();
-            if !trimmed.is_empty() {
-                return Some(trimmed.to_owned());
-            }
-        }
-    }
-
-    query.and_then(|query| {
-        form_urlencoded::parse(query.as_bytes()).find_map(|(key, value)| {
-            if key == "access_token" && !value.is_empty() {
-                Some(value.into_owned())
-            } else {
-                None
-            }
-        })
-    })
 }

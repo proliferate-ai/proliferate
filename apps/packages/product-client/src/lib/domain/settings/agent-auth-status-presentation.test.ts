@@ -142,6 +142,38 @@ describe("statusLabel", () => {
   });
 });
 
+// Founder ruling 2026-08-27, after the acceptance-gate false green (PR #2254):
+// an applied SEAT may never borrow the machine's own native login for its green.
+// The ruling was pinned on `deriveAuthStatus`, which slice 3 deleted with
+// `HarnessAuthStatusBadge.tsx` (FE-PATHS-1 keeps it deleted); it is re-homed
+// here, against the status document, because `nativeDetected` is the one field
+// in this shape through which the machine's own login could still leak into a
+// seat's badge. Hand-falsified: dropping the `applied === null` guard from
+// `statusLabel`'s green arm turns the first case green.
+describe("an applied seat never borrows the native login (ruled 2026-08-27)", () => {
+  it("stays Not verified with a detected native login and no observation of its own", () => {
+    const seatWithNativeLogin = facts({
+      applied: { kind: "seat", seat_id: "seat-1" },
+      nativeDetected: true,
+      probe: { verdict: "unverified", at: null, stale: false },
+    });
+    expect(isStatusGreen(seatWithNativeLogin)).toBe(false);
+    expect(statusTone(seatWithNativeLogin)).toBe("warning");
+    expect(statusLabel(seatWithNativeLogin)).toBe("Not verified");
+  });
+
+  it("reads red on a rejected seat trial, native login present or not", () => {
+    // The tier-1 trial's 401 folds onto the document as a dated `failed`.
+    const rejected = facts({
+      applied: { kind: "seat", seat_id: "seat-1" },
+      nativeDetected: true,
+      probe: { verdict: "failed", at: OBSERVED_AT, stale: false },
+    });
+    expect(statusTone(rejected)).toBe("destructive");
+    expect(statusLabel(rejected)).toBe("Not authenticated");
+  });
+});
+
 describe("formatEvidenceAge", () => {
   it("is coarse and never negative", () => {
     expect(formatEvidenceAge(0)).toBe("0s");

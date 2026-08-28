@@ -53,6 +53,7 @@ pub(crate) mod test_support;
 use std::path::{Path, PathBuf};
 
 use crate::domains::agents::seat_cooling::SeatCoolingStore;
+use rotation::apply_rotation_seam;
 
 pub use native_bridge::{
     clear_native_bridge_flag, clear_native_bridge_flags_for_document, launch_native_grant,
@@ -535,90 +536,5 @@ fn launch_route_selection_failure_rotated_for_server(
         }
         Ok(AgentRuntimeAuthProfile::Native) => None,
         Err(error) => Some(error),
-    }
-}
-
-/// The seat-rotation seam (work order G): run the pure decision over the
-/// profile's seat pool in DOCUMENT order (deduplicated — `rotation::seat_pool`),
-/// then reduce the sources so the chosen seat renders ALONE: every other
-/// source, seat or not, is dropped. A gateway/api_key/provider_config source
-/// beside a pool is fallback-only — rendering it next to the seat would hand
-/// the CLI two competing credentials (`ANTHROPIC_AUTH_TOKEN` +
-/// `CLAUDE_CODE_OAUTH_TOKEN`) while `serving_seat_id` names the seat, so a
-/// limit error would cool the seat no matter which credential the CLI used.
-/// When no seat can serve — the pool is all-cooling, or the pin is cooling —
-/// a profile that ALSO carries a non-seat source drops its seats and renders
-/// the rest (the gateway fallback, `serving_seat_id = None`); a seat-only
-/// profile refuses with the matching typed error.
-///
-/// Pure with respect to rotation state: reads the store, never writes it —
-/// which is what makes the create-time preview and the launch render safe to
-/// run any number of times.
-fn apply_rotation_seam(
-    sources: &mut profile::HarnessSources,
-    store: &SeatCoolingStore,
-) -> Result<(), RouteAuthError> {
-    use profile::ResolvedSource;
-    let pool = rotation::seat_pool(sources);
-    if pool.is_empty() {
-        return Ok(());
-    }
-    let now_epoch_s = chrono::Utc::now().timestamp();
-    let cooling = store.cooling_map(&sources.harness_kind, now_epoch_s);
-    let last_served = store.last_served(&sources.harness_kind);
-    match rotation::decide_rotation(&pool, sources.rotate, last_served.as_deref(), &cooling) {
-        RotationDecision::Serve { seat_id } => {
-            // Exactly one source survives: the FIRST occurrence of the chosen
-            // seat (a repeated id must not render twice either).
-            let mut kept = false;
-            sources.sources.retain(|source| {
-                let hit = !kept
-                    && matches!(source, ResolvedSource::Seat(seat) if seat.seat_id == seat_id);
-                kept |= hit;
-                hit
-            });
-            Ok(())
-        }
-        RotationDecision::AllCooling {
-            earliest_reset_epoch_s,
-        } => {
-            let harness_kind = sources.harness_kind.clone();
-            drop_seats_or_refuse(sources, move || RouteAuthError::AllSeatsCooling {
-                harness_kind: harness_kind.clone(),
-                earliest_reset_epoch_s,
-            })
-        }
-        RotationDecision::PinnedCooling {
-            seat_id,
-            reset_at_epoch_s,
-        } => {
-            let harness_kind = sources.harness_kind.clone();
-            drop_seats_or_refuse(sources, move || RouteAuthError::SeatCooling {
-                harness_kind: harness_kind.clone(),
-                seat_id: seat_id.clone(),
-                reset_at_epoch_s,
-            })
-        }
-    }
-}
-
-/// The cooling fallback rule shared by both no-seat-can-serve outcomes: keep
-/// the profile's non-seat sources when any exist, else the given refusal.
-fn drop_seats_or_refuse(
-    sources: &mut profile::HarnessSources,
-    refusal: impl Fn() -> RouteAuthError,
-) -> Result<(), RouteAuthError> {
-    use profile::ResolvedSource;
-    let has_non_seat = sources
-        .sources
-        .iter()
-        .any(|source| !matches!(source, ResolvedSource::Seat(_)));
-    if has_non_seat {
-        sources
-            .sources
-            .retain(|source| !matches!(source, ResolvedSource::Seat(_)));
-        Ok(())
-    } else {
-        Err(refusal())
     }
 }

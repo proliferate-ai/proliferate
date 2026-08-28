@@ -18,6 +18,8 @@
 //! - [`detail`] makes a harness's own error text safe to persist (pure),
 //! - [`backoff`] spreads the failure-retry window (pure),
 //! - [`live_state`] holds one slot's live phase and the RAII guard over it,
+//! - [`seat_trial_fold`] runs the seat tier-1 trial and folds its verdict onto
+//!   the harness's status document,
 //! - [`attempt`] executes one admitted attempt and persists its outcome,
 //! - [`universe`] serves the observation to launch validation,
 //! - this file is the reconciler: single-flight, the pokes, and the brakes.
@@ -35,6 +37,7 @@ mod backoff;
 pub mod config;
 mod live_state;
 mod phase;
+mod seat_trial_fold;
 use phase::abandoned_attempt_after;
 pub use phase::{LivePhaseReading, ProbePhase};
 pub mod lock;
@@ -53,7 +56,7 @@ mod runner_tests;
 pub(crate) mod test_support;
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -112,11 +115,8 @@ pub struct LaunchProbeService {
     /// can never claim a probe state the engine doesn't hold.
     agent_status: Option<Arc<crate::domains::agents::status::AgentStatusService>>,
     /// The seat tier-1 trial ledger (founder ruling 2026-08-27): one verdict
-    /// per harness, produced at mint completion by the claim route, folded
-    /// onto the harness's STATUS DOCUMENT by [`Self::run_seat_trial`] — and
-    /// only while the applied route selects a seat. Lives on this service
-    /// because this service already owns the runtime home the scope guard
-    /// reads and the status handle the verdict lands on.
+    /// per harness, produced at mint completion and folded onto that harness's
+    /// status document by [`seat_trial_fold`], which owns the rules.
     seat_trials: Arc<route_auth::SeatTrialLedger>,
 }
 
@@ -195,17 +195,6 @@ impl LaunchProbeService {
         agent_status: Arc<crate::domains::agents::status::AgentStatusService>,
     ) -> Self {
         self.agent_status = Some(agent_status);
-        self
-    }
-
-    /// Test seam: replace the seat-trial ledger, so a test can point the
-    /// trial at a local server instead of the real API.
-    #[cfg(test)]
-    pub(crate) fn with_seat_trials(
-        mut self,
-        seat_trials: Arc<route_auth::SeatTrialLedger>,
-    ) -> Self {
-        self.seat_trials = seat_trials;
         self
     }
 
@@ -294,10 +283,6 @@ impl LaunchProbeService {
         });
     }
 
-    pub fn runtime_home(&self) -> &Path {
-        &self.runtime_home
-    }
-
     /// The slot read both phase surfaces share. An unknown harness has no slot
     /// and therefore no attempt: `Idle`.
     fn live_phase(&self, harness_kind: &str, now: DateTime<Utc>) -> (ProbePhase, Option<String>) {
@@ -314,54 +299,6 @@ impl LaunchProbeService {
                 _ => (ProbePhase::Idle, None),
             },
         }
-    }
-
-    /// The seat tier-1 trial, run and then FOLDED (founder ruling 2026-08-27,
-    /// carried onto the status document by the slice-3 forward merge).
-    ///
-    /// The ledger's producer half is unchanged — one credential-scoped
-    /// `/v1/messages` call at mint completion, 2xx → verified, 401/403 →
-    /// rejected, anything else records nothing. What moved is the CONSUMER.
-    /// The verdict used to ride `AuthRuntimeInputs.trial` into the client-side
-    /// derivation; that derivation (`auth_state.rs`) is gone, and the status
-    /// document is the one machine truth now. A trial IS a credentialed
-    /// observation of this harness's auth, so it lands where every other
-    /// observation lands: `probe_verified` / `probe_failed`, dated at the
-    /// moment the trial concluded.
-    ///
-    /// [`SeatTrialLedger::verdict_for_applied_seat`] still gates the fold, so
-    /// the founder's scope rule survives verbatim: a seat verdict can never
-    /// color a gateway, BYOK, or native state, and an inconclusive trial —
-    /// which records nothing — leaves the document exactly as it was.
-    pub async fn run_seat_trial(&self, harness_kind: &str, token: String) {
-        self.seat_trials.run_trial(harness_kind, token).await;
-        self.fold_seat_trial_verdict(harness_kind, Utc::now());
-    }
-
-    /// The fold itself, split out so a test can drive it at a chosen instant.
-    fn fold_seat_trial_verdict(&self, harness_kind: &str, now: DateTime<Utc>) {
-        use route_auth::SeatTrialVerdict;
-        let Some(status) = self.agent_status.as_ref() else {
-            return;
-        };
-        let Some((verdict, age_seconds)) =
-            self.seat_trials
-                .verdict_for_applied_seat(&self.runtime_home, harness_kind, now)
-        else {
-            return;
-        };
-        let at = now - chrono::Duration::seconds(age_seconds);
-        match verdict {
-            SeatTrialVerdict::Verified => status.probe_verified(harness_kind, at),
-            // A dead seat token dims the light; it never deletes the seat
-            // (spec flow 2: a failed verification never removes the row).
-            SeatTrialVerdict::Rejected => status.probe_failed(harness_kind, at),
-        }
-    }
-
-    /// The ledger handle for the mint-claim trigger (the ONE producer site).
-    pub fn seat_trials(&self) -> Arc<route_auth::SeatTrialLedger> {
-        self.seat_trials.clone()
     }
 
     pub fn mode(&self) -> ProbeEngineMode {

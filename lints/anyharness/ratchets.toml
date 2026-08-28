@@ -9,14 +9,9 @@ max_lines = 1097
 reason = "existing AnyHarness contract oversized file ; +10: slice-2 rotation adds the ErrorEventDetails::SeatUsageLimit variant (seatId/window/resetAt)"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-contract/src/v1/agents.rs"
-max_lines = 613
-reason = "agent-auth contract surface: the slice-1 freshen union lands the hand-written redacting Debug for ClaimAgentMintTokenResponse (Serialize untouched) beside slice-2's rotation/limit contract additions; a split waits for the contract taxonomy pass"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/openapi.rs"
-max_lines = 675
-reason = "existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas + worktree restore path/schemas + WorktreeBaseFetch + RuntimeDiskPressure schemas (subagent registrations extracted to their owned OpenAPI document) ; -10: R1 archiving deletes the three retire path registrations, the three worktree-retention path registrations and the three WorkspaceRetire* schema registrations ; +22: R4 archiving registers the two lifecycle paths and the fourteen lifecycle schemas ; -4: R5 deletes the purge-preflight/retry path registrations and the WorkspaceCleanupOperation/WorkspacePurgePreflightResponse schema registrations ; -30: workflows gen-2 PR1 deletes the gen-1 workflow-runs and workflow-run-workspaces path/schema registrations ; +2: PR5a merges the workflow-runs OpenAPI document into the composed doc ; +16: agent-auth canonical evidence model registers the thirteen AgentAuth* schemas ; +4: slice 6a registers the two native-bridge paths, the NativeBridgeResponse schema, and its import ; +5: seats v1 registers the mint-token claim path and the AgentLoginVariant/AgentMintCaptureStatus/ClaimAgentMintTokenResponse schemas ; -7 net: slice 3 deletes the twelve evidence-model schema registrations (AgentAuthProbePhase stays for the launch-options response) and registers the two status/methods paths and the five status-document schemas ; the forward merge keeps the slice-6a native-bridge registrations beside them"
+max_lines = 679
+reason = "existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas + worktree restore path/schemas + WorktreeBaseFetch + RuntimeDiskPressure schemas (subagent registrations extracted to their owned OpenAPI document) ; -10: R1 archiving deletes the three retire path registrations, the three worktree-retention path registrations and the three WorkspaceRetire* schema registrations ; +22: R4 archiving registers the two lifecycle paths and the fourteen lifecycle schemas ; -4: R5 deletes the purge-preflight/retry path registrations and the WorkspaceCleanupOperation/WorkspacePurgePreflightResponse schema registrations ; -30: workflows gen-2 PR1 deletes the gen-1 workflow-runs and workflow-run-workspaces path/schema registrations ; +2: PR5a merges the workflow-runs OpenAPI document into the composed doc ; +16: agent-auth canonical evidence model registers the thirteen AgentAuth* schemas ; +4: slice 6a registers the two native-bridge paths, the NativeBridgeResponse schema, and its import ; +5: seats v1 registers the mint-token claim path and the AgentLoginVariant/AgentMintCaptureStatus/ClaimAgentMintTokenResponse schemas ; -7 net: slice 3 deletes the twelve evidence-model schema registrations (AgentAuthProbePhase stays for the launch-options response) and registers the two status/methods paths and the five status-document schemas ; +4 re-measured at the slice-3 forward merge: BOTH door sets now register here, so slice 6a's two native-bridge paths and NativeBridgeResponse schema sit beside slice 3's — 679 shrinks the base branch's recorded 686 and cannot go lower without dropping a door"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/router_tests.rs"
@@ -32,11 +27,6 @@ reason = "AnyHarness app wiring (+gateway model planner wiring; the gateway mode
 path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs"
 max_lines = 645
 reason = "classifier tests incl. gateway route activation + bedrock flag-only detection"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/agents/route_auth/profile_tests.rs"
-max_lines = 636
-reason = "profile resolution tests: the slice-1 freshen union keeps the redaction-era composed-profile Debug proof (composed_profile_debug_redacts_every_source_kind) beside slice-2's unsatisfied-reason and seat-pool coverage; a split waits for the route_auth test taxonomy pass"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/launch_facts.rs"
