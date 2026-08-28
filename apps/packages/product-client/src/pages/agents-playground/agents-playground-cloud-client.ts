@@ -102,6 +102,8 @@ export function createAgentsPlaygroundCloudTransport(
           title: body.title ?? "API key",
           kind: "api_key",
           redactedHint: redactSecret(body.value),
+          seatEmail: null,
+          seatPlan: null,
           status: "active",
           createdAt: FIXTURE_TIME,
         };

@@ -2379,6 +2379,10 @@ export interface components {
             kind: "api_key" | "aws_bedrock" | "azure_openai" | "anthropic_subscription";
             /** Redactedhint */
             redactedHint: string;
+            /** Seatemail */
+            seatEmail: string | null;
+            /** Seatplan */
+            seatPlan: string | null;
             /** Status */
             status: string;
             /** Createdat */
