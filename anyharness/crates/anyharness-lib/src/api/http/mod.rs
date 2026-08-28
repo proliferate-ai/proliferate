@@ -7,6 +7,7 @@ mod agent_launch_options_grace_tests;
 mod agent_launch_options_test_fixtures;
 #[cfg(test)]
 mod agent_launch_options_tests;
+pub mod agent_native_integrations;
 pub mod agents;
 mod agents_contract;
 mod agents_errors;

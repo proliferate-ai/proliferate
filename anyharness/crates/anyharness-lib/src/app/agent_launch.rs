@@ -4,6 +4,9 @@ use std::sync::Arc;
 use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
 use crate::domains::agents::launch_probe::targets::RuntimeProbeTargets;
 use crate::domains::agents::launch_probe::LaunchProbeService;
+use crate::domains::agents::native_integrations::{
+    NativeIntegrationSelectionStore, NativeIntegrationsService, NativeIntegrationsSessionExtension,
+};
 use crate::domains::agents::route_auth::gateway_plan::GatewayModelPlanner;
 use crate::persistence::Db;
 
@@ -37,4 +40,21 @@ pub(super) fn build_services(
         launch_probe_service,
         gateway_model_planner,
     )
+}
+
+/// The native-integrations service and the session extension that delivers
+/// its selections. Both discover against the user's home directory: that is
+/// where the harness's own config (`~/.codex`, `~/.claude.json`) lives, not
+/// the runtime home.
+pub(super) fn build_native_integrations(
+    db: &Db,
+) -> (
+    Arc<NativeIntegrationsService>,
+    Arc<NativeIntegrationsSessionExtension>,
+) {
+    let store = NativeIntegrationSelectionStore::new(db.clone());
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
+    let service = Arc::new(NativeIntegrationsService::new(store.clone(), home.clone()));
+    let extension = Arc::new(NativeIntegrationsSessionExtension::new(store, home));
+    (service, extension)
 }

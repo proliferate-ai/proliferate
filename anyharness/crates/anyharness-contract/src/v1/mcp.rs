@@ -135,6 +135,10 @@ pub enum SessionMcpBindingNotAppliedReason {
     WorkspacePathUnresolved,
     PolicyDisabled,
     ResolverError,
+    /// A selected native integration whose on-disk artifacts are missing.
+    NativeUnavailable,
+    /// A selected native integration that discovery no longer finds.
+    NativeStale,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
